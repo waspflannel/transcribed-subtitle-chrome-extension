@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/create-subtitle-job-request.schema.json",
+  "title": "CreateSubtitleJobRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "youtubeVideoId",
+    "sourceLanguage",
+    "targetLanguage",
+    "options"
+  ],
+  "properties": {
+    "youtubeVideoId": {
+      "type": "string",
+      "description": "Canonical 11-character YouTube video ID.",
+      "pattern": "^[A-Za-z0-9_-]{11}$"
+    },
+    "youtubeUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional watch URL captured by the extension for diagnostics and validation."
+    },
+    "videoDurationSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600,
+      "description": "Known YouTube video duration. Backend must still enforce the 60 minute limit."
+    },
+    "sourceLanguage": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "ar"
+      ],
+      "description": "Source language requested by the extension. Arabic is the first polished path."
+    },
+    "targetLanguage": {
+      "type": "string",
+      "const": "en",
+      "description": "English is the first release translation target."
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "includeRomanization",
+        "includeGloss"
+      ],
+      "properties": {
+        "includeRomanization": {
+          "type": "boolean",
+          "default": true
+        },
+        "includeGloss": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  }
+}

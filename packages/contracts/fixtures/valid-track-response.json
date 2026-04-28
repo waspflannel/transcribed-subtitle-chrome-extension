@@ -1,0 +1,46 @@
+{
+  "trackId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3002",
+  "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3001",
+  "youtubeVideoId": "dQw4w9WgXcQ",
+  "sourceLanguage": "ar",
+  "targetLanguage": "en",
+  "detectedDialect": {
+    "label": "Modern Standard Arabic",
+    "confidence": 0.82
+  },
+  "generatedAt": "2026-04-28T05:02:00Z",
+  "expiresAt": "2026-05-28T05:02:00Z",
+  "cues": [
+    {
+      "cueId": "cue-0001",
+      "index": 0,
+      "startMs": 1200,
+      "endMs": 4200,
+      "sourceText": "مرحبا بكم",
+      "translatedText": "Welcome everyone",
+      "romanization": "marhaban bikum",
+      "tokens": [
+        {
+          "index": 0,
+          "text": "مرحبا",
+          "normalizedText": "مرحبا",
+          "lemma": "مرحبا",
+          "partOfSpeech": "interjection",
+          "translation": "hello",
+          "gloss": "greeting",
+          "romanization": "marhaban"
+        },
+        {
+          "index": 1,
+          "text": "بكم",
+          "normalizedText": "بكم",
+          "lemma": "أنتم",
+          "partOfSpeech": "pronoun",
+          "translation": "you all",
+          "gloss": "with you",
+          "romanization": "bikum"
+        }
+      ]
+    }
+  ]
+}

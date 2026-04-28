@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/token.schema.json",
+  "title": "LearningToken",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "index",
+    "text"
+  ],
+  "properties": {
+    "index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "normalizedText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "lemma": {
+      "type": "string",
+      "minLength": 1
+    },
+    "partOfSpeech": {
+      "type": "string",
+      "minLength": 1
+    },
+    "translation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "gloss": {
+      "type": "string",
+      "minLength": 1
+    },
+    "romanization": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

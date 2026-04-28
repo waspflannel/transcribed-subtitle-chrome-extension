@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/job-response.schema.json",
+  "title": "JobResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "status",
+    "youtubeVideoId",
+    "sourceLanguage",
+    "targetLanguage",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "processing",
+        "completed",
+        "failed",
+        "expired"
+      ]
+    },
+    "youtubeVideoId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{11}$"
+    },
+    "sourceLanguage": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "ar"
+      ]
+    },
+    "targetLanguage": {
+      "type": "string",
+      "const": "en"
+    },
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage",
+        "percent"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "acquiring_audio",
+            "transcribing",
+            "segmenting",
+            "enriching",
+            "finalizing"
+          ]
+        },
+        "percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "trackId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "error": {
+      "$ref": "error-object.schema.json"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
