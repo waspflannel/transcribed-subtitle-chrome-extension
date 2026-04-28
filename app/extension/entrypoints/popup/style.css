@@ -1,0 +1,35 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-synthesis: none;
+  font-weight: 400;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #fbfbf8;
+  color: #1f2933;
+  margin: 0;
+  min-height: 160px;
+  min-width: 320px;
+}
+
+main {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+h1 {
+  font-size: 1rem;
+  line-height: 1.1;
+  margin: 0;
+}
+
+p {
+  color: #52616f;
+  margin: 0;
+}
