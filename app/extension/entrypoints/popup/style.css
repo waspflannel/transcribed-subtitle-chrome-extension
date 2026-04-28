@@ -10,17 +10,17 @@
 }
 
 body {
-  background: #fbfbf8;
+  background: #f8fafc;
   color: #1f2933;
   margin: 0;
-  min-height: 160px;
-  min-width: 320px;
+  min-height: 360px;
+  min-width: 340px;
 }
 
 main {
   display: grid;
-  gap: 0.5rem;
-  padding: 1rem;
+  gap: 0.75rem;
+  padding: 0.875rem;
 }
 
 h1 {
@@ -32,4 +32,128 @@ h1 {
 p {
   color: #52616f;
   margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+select {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #1e293b;
+  min-height: 32px;
+  padding: 0.25rem 0.45rem;
+}
+
+select:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.header {
+  align-items: start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.refresh-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #0f172a;
+  cursor: pointer;
+  display: inline-flex;
+  min-height: 32px;
+  justify-content: center;
+  padding: 0 0.6rem;
+}
+
+.section {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 0.625rem;
+  padding-top: 0.75rem;
+}
+
+.status {
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.5rem 0.625rem;
+}
+
+.status.ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status.idle {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.status.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.facts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.facts div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.facts dt {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field span,
+.toggle span {
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.toggle {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.toggle input {
+  height: 16px;
+  margin: 0;
+  width: 16px;
+}
+
+.muted {
+  color: #64748b;
+  font-size: 0.76rem;
 }
