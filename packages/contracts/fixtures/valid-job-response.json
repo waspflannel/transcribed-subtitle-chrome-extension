@@ -1,0 +1,14 @@
+{
+  "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3001",
+  "status": "processing",
+  "youtubeVideoId": "dQw4w9WgXcQ",
+  "sourceLanguage": "ar",
+  "targetLanguage": "en",
+  "progress": {
+    "stage": "transcribing",
+    "percent": 45,
+    "message": "Transcribing audio"
+  },
+  "createdAt": "2026-04-28T05:00:00Z",
+  "updatedAt": "2026-04-28T05:01:00Z"
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@transcribed-subtitle-extension/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Canonical API and subtitle track contracts for the YouTube AI subtitle learning extension.",
+  "type": "module",
+  "files": [
+    "dist",
+    "openapi.json",
+    "schemas"
+  ],
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node scripts/generate-types.mjs",
+    "check": "npm run validate && npm run build",
+    "validate": "node scripts/validate.mjs"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^10.1.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "json-schema-to-typescript": "^15.0.4"
+  }
+}

@@ -1,0 +1,247 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "YouTube AI Subtitle Learning Extension API",
+    "version": "0.1.0",
+    "description": "Phase 01 API contract for creating subtitle generation jobs, checking job status, and fetching generated subtitle tracks."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Local Laravel development server"
+    }
+  ],
+  "paths": {
+    "/v1/subtitle-jobs": {
+      "post": {
+        "operationId": "createSubtitleJob",
+        "summary": "Create a generated subtitle job for a public YouTube video.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/create-subtitle-job-request.schema.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Job accepted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/job-response.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/subtitle-jobs/{jobId}": {
+      "get": {
+        "operationId": "getSubtitleJob",
+        "summary": "Get subtitle job status.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/JobId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current job state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/job-response.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/tracks/{trackId}": {
+      "get": {
+        "operationId": "getSubtitleTrack",
+        "summary": "Fetch a completed generated subtitle track.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/TrackId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Generated subtitle track.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/track-response.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "410": {
+            "$ref": "#/components/responses/Expired"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Development health check.",
+        "responses": {
+          "200": {
+            "description": "Backend process is reachable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "const": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ExtensionInstallId": {
+        "name": "X-Extension-Install-Id",
+        "in": "header",
+        "required": true,
+        "description": "Anonymous extension installation identifier used for abuse controls. This is not a user account identifier.",
+        "schema": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "JobId": {
+        "name": "jobId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "TrackId": {
+        "name": "trackId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed request.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "description": "Request failed validation.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource was not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "Expired": {
+        "description": "Resource expired according to retention policy.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Rate limit exceeded.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      }
+    }
+  }
+}

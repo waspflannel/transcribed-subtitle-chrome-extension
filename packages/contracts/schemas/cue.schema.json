@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/cue.schema.json",
+  "title": "SubtitleCue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "cueId",
+    "index",
+    "startMs",
+    "endMs",
+    "sourceText",
+    "translatedText",
+    "tokens"
+  ],
+  "properties": {
+    "cueId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "startMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "endMs": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sourceText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "translatedText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "romanization": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tokens": {
+      "type": "array",
+      "items": {
+        "$ref": "token.schema.json"
+      }
+    }
+  }
+}
