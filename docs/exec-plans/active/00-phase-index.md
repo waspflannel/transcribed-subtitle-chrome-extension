@@ -24,7 +24,7 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 | Phase | Plan | Primary Outcome | Exit Gate |
 | --- | --- | --- | --- |
 | 01 | `../completed/phase-01-project-scaffold-and-contracts.md` | Working Laravel/WXT workspace and canonical contracts | Completed 2026-04-28 |
-| 02 | `phase-02-youtube-extension-shell.md` | Extension detects YouTube videos and renders a controlled overlay shell | Popup, content script, settings, and overlay shell work without backend AI |
+| 02 | `../completed/phase-02-youtube-extension-shell.md` | Extension detects YouTube videos and renders a controlled overlay shell | Completed 2026-04-28 |
 | 03 | `phase-03-laravel-job-api-and-persistence.md` | Laravel job API, queue, SQLite persistence, and mock track path | Extension can create/poll a job and load a mock ready track |
 | 04 | `phase-04-audio-acquisition-and-transcription-proof.md` | Public YouTube audio acquisition and timestamped transcription proof | Real timestamped transcript is normalized and raw audio is deleted |
 | 05 | `phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Source subtitle cues render in sync during play, pause, and seek |
@@ -62,3 +62,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | --- | --- | --- |
 | 2026-04-28 | Phase backlog created from the detailed design document. | `docs/exec-plans/active/` |
 | 2026-04-28 | Phase 01 completed and archived. | `docs/exec-plans/completed/phase-01-project-scaffold-and-contracts.md` |
+| 2026-04-28 | Phase 02 completed and archived. | `docs/exec-plans/completed/phase-02-youtube-extension-shell.md` |

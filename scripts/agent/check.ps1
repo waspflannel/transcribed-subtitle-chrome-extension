@@ -39,6 +39,7 @@ if (-not $SkipAppChecks) {
     if (Test-Path (Join-Path $Extension "package.json")) {
         Push-Location $Extension
         try {
+            npm test
             npm run compile
             npm run build
         } finally {
