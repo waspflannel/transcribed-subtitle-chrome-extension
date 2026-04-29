@@ -24,7 +24,7 @@ export type YoutubePageInfo =
 export function parseYoutubePage(input: string | URL): YoutubePageInfo {
   const url = toUrl(input);
 
-  if (!url) {
+  if (!isVideoUrlValid(url)) {
     return {
       supported: false,
       reason: 'invalid_url',
@@ -34,7 +34,7 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
 
   const canonicalUrl = url.toString();
 
-  if (!isYoutubeHost(url.hostname)) {
+  if (!isYoutubeUrl(url)) {
     return {
       supported: false,
       reason: 'not_youtube',
@@ -42,7 +42,7 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
     };
   }
 
-  if (url.pathname !== '/watch') {
+  if (!isYoutubeWatchPage(url)) {
     return {
       supported: false,
       reason: 'not_watch_page',
@@ -52,7 +52,7 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
 
   const videoId = url.searchParams.get('v')?.trim() ?? '';
 
-  if (videoId.length === 0) {
+  if (!hasVideoId(videoId)) {
     return {
       supported: false,
       reason: 'missing_video_id',
@@ -60,7 +60,7 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
     };
   }
 
-  if (!isYoutubeVideoId(videoId)) {
+  if (!isVideoIdValid(videoId)) {
     return {
       supported: false,
       reason: 'invalid_video_id',
@@ -76,12 +76,26 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
   };
 }
 
-export function isYoutubeVideoId(value: string): boolean {
-  return YOUTUBE_VIDEO_ID_PATTERN.test(value);
+function isVideoUrlValid(url: URL | null): url is URL {
+  return url !== null;
 }
 
-export function createYoutubeWatchUrl(videoId: string): string {
-  return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+function isYoutubeUrl(url: URL): boolean {
+  const hostname = url.hostname.toLowerCase();
+
+  return hostname === 'youtube.com' || hostname.endsWith('.youtube.com');
+}
+
+function isYoutubeWatchPage(url: URL): boolean {
+  return url.pathname === '/watch';
+}
+
+function hasVideoId(videoId: string): boolean {
+  return videoId.length > 0;
+}
+
+function isVideoIdValid(videoId: string): boolean {
+  return YOUTUBE_VIDEO_ID_PATTERN.test(videoId);
 }
 
 function toUrl(input: string | URL): URL | null {
@@ -96,8 +110,6 @@ function toUrl(input: string | URL): URL | null {
   }
 }
 
-function isYoutubeHost(hostname: string): boolean {
-  const normalizedHostname = hostname.toLowerCase();
-
-  return normalizedHostname === 'youtube.com' || normalizedHostname.endsWith('.youtube.com');
+export function createYoutubeWatchUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
 }

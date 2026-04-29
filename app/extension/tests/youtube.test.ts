@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createYoutubeWatchUrl, parseYoutubePage } from './youtube';
+import { createYoutubeWatchUrl, parseYoutubePage } from '../utils/youtube';
 
 describe('parseYoutubePage', () => {
   it('extracts a valid YouTube watch video ID', () => {
@@ -14,6 +14,13 @@ describe('parseYoutubePage', () => {
     expect(parseYoutubePage('https://www.youtube.com/results?search_query=arabic')).toMatchObject({
       supported: false,
       reason: 'not_watch_page',
+    });
+  });
+
+  it('rejects non-YouTube pages', () => {
+    expect(parseYoutubePage('https://example.com/watch?v=dQw4w9WgXcQ')).toMatchObject({
+      supported: false,
+      reason: 'not_youtube',
     });
   });
 
