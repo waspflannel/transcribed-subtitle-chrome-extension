@@ -3,7 +3,7 @@ import './style.css';
 import { browser } from 'wxt/browser';
 
 import { isOverlayMode, type OverlayMode, type PopupState } from '../../utils/messages';
-import { isOverlayPosition, type ExtensionSettings, type OverlayPosition } from '../../utils/settings-model';
+import type { ExtensionSettings, OverlayPosition } from '../../utils/settings-model';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -23,8 +23,13 @@ app.addEventListener('change', (event) => {
     return;
   }
 
-  if (target.name === 'overlayPosition' && isOverlayPosition(target.value)) {
-    void updateSettings({ overlayPosition: target.value });
+  const overlayPosition = target.value;
+
+  if (
+    target.name === 'overlayPosition' &&
+    (overlayPosition === 'bottom' || overlayPosition === 'top' || overlayPosition === 'compact')
+  ) {
+    void updateSettings({ overlayPosition });
 
     return;
   }

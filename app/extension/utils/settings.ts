@@ -2,9 +2,9 @@ import { storage } from 'wxt/utils/storage';
 
 import {
   DEFAULT_EXTENSION_SETTINGS,
+  createExtensionSettingsFromPartial,
   createAnonymousInstallId,
   isAnonymousInstallId,
-  normalizeExtensionSettings,
   type ExtensionSettings,
 } from './settings-model';
 
@@ -18,7 +18,7 @@ const installIdStorage = storage.defineItem<string | null>('local:installId', {
 
 export async function getExtensionSettings(): Promise<ExtensionSettings> {
   const storedSettings = await settingsStorage.getValue();
-  const settings = normalizeExtensionSettings(storedSettings);
+  const settings = createExtensionSettingsFromPartial(storedSettings);
 
   if (JSON.stringify(settings) !== JSON.stringify(storedSettings)) {
     await settingsStorage.setValue(settings);
@@ -29,7 +29,7 @@ export async function getExtensionSettings(): Promise<ExtensionSettings> {
 
 export async function updateExtensionSettings(patch: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
   const currentSettings = await getExtensionSettings();
-  const nextSettings = normalizeExtensionSettings({
+  const nextSettings = createExtensionSettingsFromPartial({
     ...currentSettings,
     ...patch,
   });

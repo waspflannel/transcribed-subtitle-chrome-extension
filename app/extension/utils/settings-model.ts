@@ -14,42 +14,37 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   showGloss: true,
 };
 
-export function normalizeExtensionSettings(value: Partial<ExtensionSettings> | null | undefined): ExtensionSettings {
-  return {
-    overlayVisible:
-      typeof value?.overlayVisible === 'boolean'
-        ? value.overlayVisible
-        : DEFAULT_EXTENSION_SETTINGS.overlayVisible,
-    overlayPosition: isOverlayPosition(value?.overlayPosition)
-      ? value.overlayPosition
-      : DEFAULT_EXTENSION_SETTINGS.overlayPosition,
-    showRomanization:
-      typeof value?.showRomanization === 'boolean'
-        ? value.showRomanization
-        : DEFAULT_EXTENSION_SETTINGS.showRomanization,
-    showGloss:
-      typeof value?.showGloss === 'boolean' ? value.showGloss : DEFAULT_EXTENSION_SETTINGS.showGloss,
-  };
+export function createExtensionSettingsFromPartial(value: Partial<ExtensionSettings> | null | undefined): ExtensionSettings {
+  const settings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
+
+  if (typeof value?.overlayVisible === 'boolean') {
+    settings.overlayVisible = value.overlayVisible;
+  }
+
+  if (
+    value?.overlayPosition === 'bottom' ||
+    value?.overlayPosition === 'top' ||
+    value?.overlayPosition === 'compact'
+  ) {
+    settings.overlayPosition = value.overlayPosition;
+  }
+
+  if (typeof value?.showRomanization === 'boolean') {
+    settings.showRomanization = value.showRomanization;
+  }
+
+  if (typeof value?.showGloss === 'boolean') {
+    settings.showGloss = value.showGloss;
+  }
+
+  return settings;
 }
 
-export function isOverlayPosition(value: unknown): value is OverlayPosition {
-  return value === 'bottom' || value === 'top' || value === 'compact';
+export function createAnonymousInstallId(): string {
+  return `install_${globalThis.crypto.randomUUID().replaceAll('-', '')}`;
 }
 
-export function createAnonymousInstallId(bytes?: Uint8Array): string {
-  const sourceBytes = bytes ?? createRandomBytes(16);
-
-  return `install_${Array.from(sourceBytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
-}
 
 export function isAnonymousInstallId(value: unknown): value is string {
   return typeof value === 'string' && /^install_[0-9a-f]{32}$/.test(value);
-}
-
-function createRandomBytes(length: number): Uint8Array {
-  const bytes = new Uint8Array(length);
-
-  globalThis.crypto.getRandomValues(bytes);
-
-  return bytes;
 }

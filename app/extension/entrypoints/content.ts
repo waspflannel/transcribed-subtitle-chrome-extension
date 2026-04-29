@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 
-import { DEFAULT_EXTENSION_SETTINGS, normalizeExtensionSettings } from '../utils/settings-model';
+import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
 import { DEFAULT_OVERLAY_MODE, isOverlayMode, isRuntimeMessage, type ContentPageStatus } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
 import { findActiveVideoElement } from '../utils/video';
@@ -81,7 +81,7 @@ export default defineContentScript({
       }
 
       if (message.type === 'background.settingsChanged') {
-        settings = normalizeExtensionSettings(message.settings);
+        settings = createExtensionSettingsFromPartial(message.settings);
         syncPageState();
         sendResponse({ ok: true });
 
@@ -106,7 +106,7 @@ export default defineContentScript({
       .sendMessage({ type: 'content.getState' })
       .then((state) => {
         if (state?.settings) {
-          settings = normalizeExtensionSettings(state.settings);
+          settings = createExtensionSettingsFromPartial(state.settings);
         }
 
         if (isOverlayMode(state?.overlayMode)) {
