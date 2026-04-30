@@ -1,4 +1,5 @@
 import type { ExtensionSettings } from './settings-model';
+import { escapeHtml } from './html';
 import type { OverlayMode } from './messages';
 import type { UnsupportedYoutubePageReason, YoutubePageInfo } from './youtube';
 
@@ -243,13 +244,4 @@ function unsupportedPageCopy(reason: UnsupportedYoutubePageReason): string {
   }
 
   return 'YouTube watch page required.';
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }
