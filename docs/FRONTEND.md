@@ -2,11 +2,14 @@
 
 ## Current State
 
-No frontend stack has been selected.
+- The browser-extension frontend is a WXT popup under `app/extension/entrypoints/popup`.
+- Popup markup is static in `index.html`; `main.ts` wires DOM events, sends background messages, and updates existing DOM nodes.
+- The in-page YouTube overlay is rendered by `app/extension/utils/overlay.ts` into an isolated Shadow DOM host.
+- A Laravel/web application frontend is outside the current release scope.
 
 ## Expectations
 
-- Make the app bootable from a single documented command once a stack exists.
+- Keep the WXT extension bootable from the documented `app/extension` package commands.
 - Add browser-driven validation for important user journeys.
 - Capture screenshots or videos for UI fixes and visual regressions.
 - Keep DOM state, routes, errors, and network failures legible to agents.
