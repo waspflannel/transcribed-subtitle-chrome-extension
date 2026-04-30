@@ -10,6 +10,7 @@ import {
   type RuntimeMessage,
 } from '../utils/messages';
 import { getExtensionSettings, getOrCreateInstallId, updateExtensionSettings } from '../utils/settings';
+import type { ExtensionSettings } from '../utils/settings-model';
 
 const tabStatuses = new Map<number, ContentPageStatus>();
 const tabOverlayModes = new Map<number, OverlayMode>();
@@ -38,77 +39,96 @@ export default defineBackground(() => {
   });
 });
 
-async function handleRuntimeMessage(
-  message: RuntimeMessage,
-  sender: Browser.runtime.MessageSender,
-): Promise<unknown> {
-  if (message.type === 'content.statusChanged') {
-    const tabId = sender.tab?.id;
+async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.runtime.MessageSender): Promise<unknown> {
+  switch (message.type) {
+    case 'content.statusChanged':
+      saveContentStatus(sender, message.status);
+      return { ok: true };
 
-    if (typeof tabId === 'number') {
-      tabStatuses.set(tabId, message.status);
-      ensureOverlayMode(tabId);
-    }
+    case 'content.getState':
+      return getContentState(sender);
 
-    return { ok: true };
+    case 'popup.getState':
+      return getPopupState();
+
+    case 'popup.updateSettings':
+      return updateSettingsFromPopup(message.patch);
+
+    case 'popup.setOverlayMode':
+      return setOverlayModeFromPopup(message.mode);
+
+    default:
+      return { ok: false, error: 'Unhandled extension message' };
   }
-
-  if (message.type === 'content.getState') {
-    const tabId = sender.tab?.id;
-
-    return {
-      installId: await getOrCreateInstallId(),
-      settings: await getExtensionSettings(),
-      overlayMode: typeof tabId === 'number' ? ensureOverlayMode(tabId) : DEFAULT_OVERLAY_MODE,
-    };
-  }
-
-  if (message.type === 'popup.getState') {
-    return getPopupState();
-  }
-
-  if (message.type === 'popup.updateSettings') {
-    const settings = await updateExtensionSettings(message.patch);
-    const activeTab = await getActiveTab();
-
-    if (typeof activeTab?.id === 'number') {
-      await sendTabMessage(activeTab.id, {
-        type: 'background.settingsChanged',
-        settings,
-      });
-    }
-
-    return getPopupState();
-  }
-
-  if (message.type === 'popup.setOverlayMode') {
-    const activeTab = await getActiveTab();
-
-    if (typeof activeTab?.id === 'number' && isOverlayMode(message.mode)) {
-      tabOverlayModes.set(activeTab.id, message.mode);
-      await sendTabMessage(activeTab.id, {
-        type: 'background.overlayModeChanged',
-        mode: message.mode,
-      });
-    }
-
-    return getPopupState();
-  }
-
-  return { ok: false, error: 'Unhandled extension message' };
 }
 
-async function getPopupState(): Promise<PopupState> {
-  const activeTab = await getActiveTab();
-  const activeTabId = activeTab?.id;
+function saveContentStatus(sender: Browser.runtime.MessageSender, status: ContentPageStatus): void {
+  const tabId = tabIdFromSender(sender);
+
+  if (tabId === null) {
+    return;
+  }
+
+  tabStatuses.set(tabId, status);
+  ensureOverlayMode(tabId);
+}
+
+async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
+  installId: string;
+  settings: ExtensionSettings;
+  overlayMode: OverlayMode;
+}> {
+  const tabId = tabIdFromSender(sender);
 
   return {
     installId: await getOrCreateInstallId(),
     settings: await getExtensionSettings(),
-    activeTabId,
-    pageStatus: typeof activeTabId === 'number' ? tabStatuses.get(activeTabId) : undefined,
-    overlayMode: typeof activeTabId === 'number' ? ensureOverlayMode(activeTabId) : DEFAULT_OVERLAY_MODE,
+    overlayMode: tabId === null ? DEFAULT_OVERLAY_MODE : ensureOverlayMode(tabId),
   };
+}
+
+async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promise<PopupState> {
+  const settings = await updateExtensionSettings(patch);
+  const activeTabId = await getActiveTabId();
+
+  if (activeTabId !== null) {
+    await sendTabMessage(activeTabId, {
+      type: 'background.settingsChanged',
+      settings,
+    });
+  }
+
+  return getPopupState();
+}
+
+async function setOverlayModeFromPopup(mode: unknown): Promise<PopupState> {
+  const activeTabId = await getActiveTabId();
+
+  if (activeTabId !== null && isOverlayMode(mode)) {
+    tabOverlayModes.set(activeTabId, mode);
+    await sendTabMessage(activeTabId, {
+      type: 'background.overlayModeChanged',
+      mode,
+    });
+  }
+
+  return getPopupState();
+}
+
+async function getPopupState(): Promise<PopupState> {
+  const activeTabId = await getActiveTabId();
+
+  return {
+    installId: await getOrCreateInstallId(),
+    settings: await getExtensionSettings(),
+    activeTabId: activeTabId ?? undefined,
+    pageStatus: activeTabId === null ? undefined : tabStatuses.get(activeTabId),
+    overlayMode: activeTabId === null ? DEFAULT_OVERLAY_MODE : ensureOverlayMode(activeTabId),
+  };
+}
+
+async function getActiveTabId(): Promise<number | null> {
+  return tabIdFromTab(await getActiveTab());
 }
 
 async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
@@ -118,6 +138,14 @@ async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
   });
 
   return activeTab;
+}
+
+function tabIdFromSender(sender: Browser.runtime.MessageSender): number | null {
+  return typeof sender.tab?.id === 'number' ? sender.tab.id : null;
+}
+
+function tabIdFromTab(tab: Browser.tabs.Tab | undefined): number | null {
+  return typeof tab?.id === 'number' ? tab.id : null;
 }
 
 function ensureOverlayMode(tabId: number): OverlayMode {

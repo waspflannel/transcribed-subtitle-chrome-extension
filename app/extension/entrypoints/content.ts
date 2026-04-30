@@ -6,6 +6,9 @@ import { OverlayShell } from '../utils/overlay';
 import { findActiveVideoElement } from '../utils/video';
 import { parseYoutubePage } from '../utils/youtube';
 
+const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
+const VIDEO_STATE_EVENTS = ['loadedmetadata', 'durationchange', 'emptied', 'play', 'pause', 'seeked'];
+
 export default defineContentScript({
   matches: ['*://*.youtube.com/watch*'],
   runAt: 'document_idle',
@@ -13,13 +16,13 @@ export default defineContentScript({
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let overlayMode = DEFAULT_OVERLAY_MODE;
     let activeVideoElement: HTMLVideoElement | null = null;
-    let cleanupVideoListeners: (() => void) | null = null;
+    let unbindVideoListeners: (() => void) | null = null;
     let lastStatusKey = '';
     let disposed = false;
 
     const overlay = new OverlayShell(document);
 
-    const syncPageState = () => {
+    function syncPageState(): void {
       if (disposed) {
         return;
       }
@@ -34,17 +37,13 @@ export default defineContentScript({
       });
 
       publishStatus(status);
-    };
+    }
 
-    const buildStatus = (): ContentPageStatus => {
+    function buildStatus(): ContentPageStatus {
       const page = parseYoutubePage(window.location.href);
       const video = page.supported ? findActiveVideoElement(document) : null;
 
-      if (video !== activeVideoElement) {
-        cleanupVideoListeners?.();
-        activeVideoElement = video;
-        cleanupVideoListeners = video ? bindVideoElement(video, syncPageState) : null;
-      }
+      trackVideoElement(video);
 
       return {
         page,
@@ -54,9 +53,19 @@ export default defineContentScript({
         videoCurrentTimeSeconds: activeVideoElement?.currentTime,
         updatedAt: Date.now(),
       };
-    };
+    }
 
-    const publishStatus = (status: ReturnType<typeof buildStatus>) => {
+    function trackVideoElement(video: HTMLVideoElement | null): void {
+      if (video === activeVideoElement) {
+        return;
+      }
+
+      unbindVideoListeners?.();
+      activeVideoElement = video;
+      unbindVideoListeners = video ? bindVideoElement(video, syncPageState) : null;
+    }
+
+    function publishStatus(status: ContentPageStatus): void {
       const statusKey = JSON.stringify({
         page: status.page,
         videoElementFound: status.videoElementFound,
@@ -71,7 +80,7 @@ export default defineContentScript({
       browser.runtime.sendMessage({ type: 'content.statusChanged', status }).catch(() => {
         // The service worker can be unavailable during reloads. The next state check will retry.
       });
-    };
+    }
 
     const stopRouteObserver = observeYoutubeRouteChanges(syncPageState);
 
@@ -124,7 +133,7 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       disposed = true;
       stopRouteObserver();
-      cleanupVideoListeners?.();
+      unbindVideoListeners?.();
       overlay.unmount();
     });
   },
@@ -151,9 +160,7 @@ function observeYoutubeRouteChanges(callback: () => void): () => void {
     }, 150);
   };
 
-  const events = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
-
-  for (const eventName of events) {
+  for (const eventName of YOUTUBE_ROUTE_EVENTS) {
     window.addEventListener(eventName, schedule);
   }
 
@@ -170,21 +177,19 @@ function observeYoutubeRouteChanges(callback: () => void): () => void {
     window.clearInterval(intervalId);
     observer.disconnect();
 
-    for (const eventName of events) {
+    for (const eventName of YOUTUBE_ROUTE_EVENTS) {
       window.removeEventListener(eventName, schedule);
     }
   };
 }
 
 function bindVideoElement(video: HTMLVideoElement, callback: () => void): () => void {
-  const events = ['loadedmetadata', 'durationchange', 'emptied', 'play', 'pause', 'seeked'];
-
-  for (const eventName of events) {
+  for (const eventName of VIDEO_STATE_EVENTS) {
     video.addEventListener(eventName, callback);
   }
 
   return () => {
-    for (const eventName of events) {
+    for (const eventName of VIDEO_STATE_EVENTS) {
       video.removeEventListener(eventName, callback);
     }
   };
