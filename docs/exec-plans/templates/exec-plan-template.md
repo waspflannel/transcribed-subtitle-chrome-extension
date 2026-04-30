@@ -22,6 +22,7 @@ Define the outcome in one or two concrete paragraphs.
 
 - Product docs:
 - Architecture docs:
+- Quality rules: `docs/quality/golden-principles.md`
 - Related plans:
 - Known risks:
 
@@ -31,6 +32,7 @@ Define the outcome in one or two concrete paragraphs.
 - [ ] Confirm or refine acceptance criteria.
 - [ ] Implement the smallest end-to-end slice.
 - [ ] Add or update validation.
+- [ ] Check the implementation against `docs/quality/golden-principles.md`.
 - [ ] Update docs and quality score if needed.
 - [ ] Run validation and record evidence.
 - [ ] Complete review notes.
@@ -66,5 +68,6 @@ Evidence to capture:
 
 - What changed:
 - Validation results:
+- Simplicity/readability review:
 - Residual risk:
 - Follow-up debt:

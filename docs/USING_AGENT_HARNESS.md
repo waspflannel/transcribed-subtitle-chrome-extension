@@ -57,9 +57,10 @@ Use this loop:
 3. Update or create an active plan when the work is nontrivial.
 4. Implement the smallest end-to-end slice.
 5. Add or update validation while changing behavior.
-6. Run `.\scripts\agent\check.ps1`.
-7. Record validation evidence in the plan.
-8. Update docs if behavior, architecture, contracts, or workflow changed.
+6. Check `docs/quality/golden-principles.md` for repeated readability and simplicity rules.
+7. Run `.\scripts\agent\check.ps1`.
+8. Record validation evidence in the plan.
+9. Update docs if behavior, architecture, contracts, or workflow changed.
 
 Keep decisions in the repo, not in chat history.
 
@@ -124,6 +125,8 @@ This surfaces placeholders, stale quality areas, and other cleanup signals. Trea
 ## Growing The Harness
 
 When an agent struggles, ask what durable support would prevent the same problem next time.
+
+Repeated simplification feedback belongs in `docs/quality/golden-principles.md` first. Promote it to a script, lint, test, or template only when a doc rule is not enough.
 
 Good upgrades:
 

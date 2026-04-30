@@ -13,6 +13,7 @@ This repository is designed for agentic development. Keep this file short; it is
 - Security expectations: `docs/SECURITY.md`
 - Observability expectations: `docs/OBSERVABILITY.md`
 - Review expectations: `docs/REVIEW.md`
+- Repeated quality rules: `docs/quality/golden-principles.md`
 - Project guardrails: `docs/references/project-guardrails.md`
 - Laravel Boost skill routing: `docs/references/boost-skill-routing.md`
 - Quality score: `docs/QUALITY_SCORE.md`

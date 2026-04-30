@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-28
+Last updated: 2026-04-30
 
 ## Goal
 
@@ -49,6 +49,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
+- Quality rules: `docs/quality/golden-principles.md`
 - Related plans: `phase-05-generated-track-and-overlay-sync.md`, `phase-07-hardening-and-release-readiness.md`
 - Known risks:
   - Model output may be incomplete or inconsistent without strict structured validation.
@@ -69,6 +70,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 - [ ] Implement hover preview.
 - [ ] Implement click/tap pinned detail.
 - [ ] Connect romanization/gloss settings to display.
+- [ ] Check the implementation against `docs/quality/golden-principles.md`.
 - [ ] Add tests and browser validation evidence.
 
 ## Validation Plan
@@ -104,5 +106,6 @@ Evidence to capture:
 
 - What changed:
 - Validation results:
+- Simplicity/readability review:
 - Residual risk:
 - Follow-up debt:

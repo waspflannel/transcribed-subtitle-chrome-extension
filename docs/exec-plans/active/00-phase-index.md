@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-29
+Last updated: 2026-04-30
 
 ## Goal
 
@@ -45,6 +45,7 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 - Raw audio is temporary and deleted immediately after processing.
 - Completed tracks are retained for 30 days.
 - No user accounts, subtitle editing, Netflix support, or vocabulary review in the first release.
+- Each phase must apply `docs/quality/golden-principles.md` before review so repeated simplicity and readability feedback does not need to be rediscovered.
 
 ## Cross-Phase Validation
 
@@ -64,3 +65,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-04-28 | Phase 01 completed and archived. | `docs/exec-plans/completed/phase-01-project-scaffold-and-contracts.md` |
 | 2026-04-28 | Phase 02 completed and archived. | `docs/exec-plans/completed/phase-02-youtube-extension-shell.md` |
 | 2026-04-29 | Phase 02 final readability cleanup and closeout validation completed. | `docs/exec-plans/completed/phase-02-youtube-extension-shell.md` |
+| 2026-04-30 | Added cross-phase simplicity and readability checks to future phase plans. | `docs/quality/golden-principles.md` |

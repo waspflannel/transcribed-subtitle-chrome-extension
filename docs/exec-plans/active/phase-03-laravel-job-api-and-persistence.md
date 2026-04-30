@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-28
+Last updated: 2026-04-30
 
 ## Goal
 
@@ -47,6 +47,7 @@ This phase proves the product control plane: extension to proxy layer, proxy lay
 
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
+- Quality rules: `docs/quality/golden-principles.md`
 - Related plans: `phase-01-project-scaffold-and-contracts.md`, `phase-02-youtube-extension-shell.md`, `phase-05-generated-track-and-overlay-sync.md`
 - Known risks:
   - If contracts are only validated in one language, PHP and TypeScript can drift.
@@ -67,6 +68,7 @@ This phase proves the product control plane: extension to proxy layer, proxy lay
 - [ ] Add popup/status polling behavior.
 - [ ] Add stable public error responses.
 - [ ] Add Laravel and extension tests.
+- [ ] Check the implementation against `docs/quality/golden-principles.md`.
 - [ ] Run validation and record evidence.
 
 ## Validation Plan
@@ -102,5 +104,6 @@ Evidence to capture:
 
 - What changed:
 - Validation results:
+- Simplicity/readability review:
 - Residual risk:
 - Follow-up debt:

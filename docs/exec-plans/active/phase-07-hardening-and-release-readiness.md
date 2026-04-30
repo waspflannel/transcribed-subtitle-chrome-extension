@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-28
+Last updated: 2026-04-30
 
 ## Goal
 
@@ -51,6 +51,7 @@ This phase should make the product explainable and diagnosable when real public 
 
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/OBSERVABILITY.md`, `docs/RELIABILITY.md`, `docs/QUALITY_SCORE.md`
+- Quality rules: `docs/quality/golden-principles.md`
 - Related plans: all prior phases
 - Known risks:
   - Long videos can increase provider cost and latency.
@@ -71,6 +72,7 @@ This phase should make the product explainable and diagnosable when real public 
 - [ ] Run acceptance tests and capture evidence.
 - [ ] Perform visual QA on popup and overlay.
 - [ ] Update docs, quality score, and technical debt tracker.
+- [ ] Check the implementation against `docs/quality/golden-principles.md`.
 - [ ] Run final validation.
 
 ## Validation Plan
@@ -106,5 +108,6 @@ Evidence to capture:
 
 - What changed:
 - Validation results:
+- Simplicity/readability review:
 - Residual risk:
 - Follow-up debt:

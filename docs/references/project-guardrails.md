@@ -35,6 +35,7 @@ WXT extension
   - extension-to-backend API requests
   - provider responses
   - stored/generated subtitle tracks
+- After boundary validation, trust the typed value inside the app instead of revalidating it in every handler.
 - Prefer one boring path before adding fallback paths.
 - Do not introduce distributed services, Redis, Postgres, WebSockets, or object storage until a phase has evidence that SQLite, queues, polling, or local files are insufficient.
 - Keep provider integrations behind small interfaces. The app should depend on our transcript/track contracts, not provider-native shapes.
@@ -80,14 +81,17 @@ WXT extension
   - job status
   - track metadata
   - user settings
-- Avoid fragile YouTube DOM coupling. Prefer URL state, the actual `HTMLVideoElement`, and defensive cleanup.
+- Avoid fragile YouTube DOM coupling. Prefer URL state, stable YouTube player selectors, the actual `HTMLVideoElement`, and cleanup on navigation.
+- Do not add YouTube fallback detection, DOM scoring, polling, or mutation observation until a real failure shows the direct path is insufficient.
 - Overlay UI must be isolated from YouTube styling with Shadow DOM or an equivalent boundary.
-- Avoid DOM churn during playback. Re-render only when the active cue or visible state changes.
+- Avoid DOM churn during playback. Keep render code direct first, and add diffing or caching only when profiling or visible behavior shows it is needed.
 
 ## Simplicity Guardrails
 
 - Start with the smallest end-to-end workflow that proves the next risk.
 - Prefer a clear service function over a new abstraction until there are at least two real call sites or a real boundary.
+- Prefer direct object construction and named helper functions over clever normalization layers.
+- Prefer built-in APIs and shared project utilities before custom local helpers.
 - Prefer polling before WebSockets.
 - Prefer preset overlay positions before drag/resize.
 - Prefer SQLite before production database infrastructure.
@@ -95,6 +99,7 @@ WXT extension
 - Prefer one enrichment agent before a multi-agent system.
 - Prefer readable code over clever generic helpers.
 - Do not build extension points for hypothetical platforms, providers, or review systems.
+- Do not keep scaffold tests, placeholder assertions, or smoke tests that no longer prove intentional product behavior.
 - Every new abstraction should answer: what complexity does this remove today?
 
 ## Review Guardrails

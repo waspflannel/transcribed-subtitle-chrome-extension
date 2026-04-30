@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-28
+Last updated: 2026-04-30
 
 ## Goal
 
@@ -49,6 +49,7 @@ This phase intentionally reaches real transcription early. It should answer whet
 
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
+- Quality rules: `docs/quality/golden-principles.md`
 - Related plans: `phase-03-laravel-job-api-and-persistence.md`, `phase-05-generated-track-and-overlay-sync.md`
 - Known risks:
   - YouTube audio acquisition can be brittle.
@@ -69,6 +70,7 @@ This phase intentionally reaches real transcription early. It should answer whet
 - [ ] If needed, implement a Laravel-side OpenAI adapter for verbose timestamped output.
 - [ ] Normalize provider output into `TimestampedTranscript`.
 - [ ] Add failure mapping and diagnostics.
+- [ ] Check the implementation against `docs/quality/golden-principles.md`.
 - [ ] Run real-provider proof cases and record results.
 
 ## Validation Plan
@@ -103,5 +105,6 @@ Evidence to capture:
 
 - What changed:
 - Validation results:
+- Simplicity/readability review:
 - Residual risk:
 - Follow-up debt:

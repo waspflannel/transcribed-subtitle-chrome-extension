@@ -11,7 +11,7 @@ Update this file when meaningful product, architecture, reliability, security, o
 | Tests | B | Harness now runs contracts, Laravel tests, WXT tests, compile, and build. Extension utility coverage includes URL parsing, settings, and shared HTML escaping. | Add API validation tests when job routes are introduced. |
 | Observability | C | Scaffold validation output exists; runtime logging begins with job processing. | Define job and provider logging in the first backend runtime phase. |
 | Security | C | Secret handling guardrails and environment examples exist; detailed threat model still needs a dedicated pass. | Fill `docs/SECURITY.md` before real provider calls or user data. |
-| Agent Harness | B+ | Scaffold exists and `check.ps1` runs stack-specific checks. | Add CI once a remote branch workflow exists. |
+| Agent Harness | A- | Scaffold exists, `check.ps1` runs stack-specific checks, and repeated simplicity/readability feedback is now promoted through golden principles, review guidance, the plan template, and future phase plans. | Add CI once a remote branch workflow exists. |
 
 ## Known Gaps
 
