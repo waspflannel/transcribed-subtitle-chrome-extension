@@ -7,7 +7,66 @@
     <meta name="manifest.type" content="browser_action" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <main>
+        <header class="header">
+          <div>
+            <h1>AI Subtitles</h1>
+            <p class="muted" data-install-id hidden></p>
+          </div>
+          <button type="button" class="refresh-button" data-action="refresh">Refresh</button>
+        </header>
+
+        <section class="section">
+          <p class="status idle" data-status>Loading</p>
+          <dl class="facts">
+            <div>
+              <dt>Video</dt>
+              <dd data-video-label>Loading</dd>
+            </div>
+            <div>
+              <dt>Track</dt>
+              <dd data-track-label>No track</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="section">
+          <label class="field">
+            <span>Overlay state</span>
+            <select name="overlayMode" disabled>
+              <option value="no-track">No track</option>
+              <option value="processing">Processing</option>
+              <option value="ready">Ready placeholder</option>
+              <option value="error">Error placeholder</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="section">
+          <label class="toggle">
+            <input type="checkbox" name="overlayVisible" disabled />
+            <span>Show overlay</span>
+          </label>
+          <label class="field">
+            <span>Position</span>
+            <select name="overlayPosition" disabled>
+              <option value="bottom">Bottom</option>
+              <option value="top">Top</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" name="showRomanization" disabled />
+            <span>Romanization</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" name="showGloss" disabled />
+            <span>Gloss</span>
+          </label>
+        </section>
+      </main>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

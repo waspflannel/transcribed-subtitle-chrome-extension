@@ -5,193 +5,140 @@ import { browser } from 'wxt/browser';
 import { isOverlayMode, type OverlayMode, type PopupState } from '../../utils/messages';
 import type { ExtensionSettings, OverlayPosition } from '../../utils/settings-model';
 
-const app = document.querySelector<HTMLDivElement>('#app')!;
+type PopupRequest =
+  | {
+      type: 'popup.getState';
+    }
+  | {
+      type: 'popup.updateSettings';
+      patch: Partial<ExtensionSettings>;
+    }
+  | {
+      type: 'popup.setOverlayMode';
+      mode: OverlayMode;
+    };
 
-let popupState: PopupState | null = null;
-let popupError: string | null = null;
+const installIdText = document.querySelector<HTMLParagraphElement>('[data-install-id]')!;
+const statusText = document.querySelector<HTMLParagraphElement>('[data-status]')!;
+const videoText = document.querySelector<HTMLElement>('[data-video-label]')!;
+const trackText = document.querySelector<HTMLElement>('[data-track-label]')!;
+const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="refresh"]')!;
+const overlayModeSelect = document.querySelector<HTMLSelectElement>('select[name="overlayMode"]')!;
+const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
+const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
+const showRomanizationInput = document.querySelector<HTMLInputElement>('input[name="showRomanization"]')!;
+const showGlossInput = document.querySelector<HTMLInputElement>('input[name="showGloss"]')!;
 
-app.addEventListener('change', (event) => {
-  const target = event.target;
+refreshButton.addEventListener('click', () => void loadPopupState());
+overlayModeSelect.addEventListener('change', handleOverlayModeChange);
+overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
+overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
+showRomanizationInput.addEventListener('change', () =>
+  void updateSettings({ showRomanization: showRomanizationInput.checked }),
+);
+showGlossInput.addEventListener('change', () => void updateSettings({ showGloss: showGlossInput.checked }));
 
-  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
-    return;
-  }
+void loadPopupState();
 
-  if (target.name === 'overlayMode' && isOverlayMode(target.value)) {
-    void setOverlayMode(target.value);
-
-    return;
-  }
-
-  const overlayPosition = target.value;
-
-  if (
-    target.name === 'overlayPosition' &&
-    (overlayPosition === 'bottom' || overlayPosition === 'top' || overlayPosition === 'compact')
-  ) {
-    void updateSettings({ overlayPosition });
-
-    return;
-  }
-
-  if (target instanceof HTMLInputElement && target.name === 'overlayVisible') {
-    void updateSettings({ overlayVisible: target.checked });
-
-    return;
-  }
-
-  if (target instanceof HTMLInputElement && target.name === 'showRomanization') {
-    void updateSettings({ showRomanization: target.checked });
-
-    return;
-  }
-
-  if (target instanceof HTMLInputElement && target.name === 'showGloss') {
-    void updateSettings({ showGloss: target.checked });
-  }
-});
-
-app.addEventListener('click', (event) => {
-  const target = event.target;
-
-  if (target instanceof HTMLButtonElement && target.dataset.action === 'refresh') {
-    void refreshState();
-  }
-});
-
-void refreshState();
-
-async function refreshState(): Promise<void> {
-  try {
-    popupState = await browser.runtime.sendMessage({ type: 'popup.getState' });
-    popupError = null;
-  } catch (error) {
-    popupError = error instanceof Error ? error.message : 'Unable to load extension state';
-  }
-
-  render();
+async function loadPopupState(): Promise<void> {
+  await sendPopupRequest({ type: 'popup.getState' });
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  popupState = await browser.runtime.sendMessage({ type: 'popup.updateSettings', patch });
-  popupError = null;
-  render();
+  await sendPopupRequest({ type: 'popup.updateSettings', patch });
 }
 
 async function setOverlayMode(mode: OverlayMode): Promise<void> {
-  popupState = await browser.runtime.sendMessage({ type: 'popup.setOverlayMode', mode });
-  popupError = null;
-  render();
+  await sendPopupRequest({ type: 'popup.setOverlayMode', mode });
 }
 
-function render(): void {
-  if (popupError) {
-    app.innerHTML = `
-      <main>
-        <header class="header">
-          <h1>AI Subtitles</h1>
-          <button type="button" class="refresh-button" data-action="refresh">Refresh</button>
-        </header>
-        <p class="status error">${escapeHtml(popupError)}</p>
-      </main>
-    `;
+async function sendPopupRequest(request: PopupRequest): Promise<void> {
+  try {
+    const state = (await browser.runtime.sendMessage(request)) as PopupState;
+    showPopupState(state);
+  } catch (error) {
+    showError(error);
+  }
+}
 
-    return;
+function handleOverlayModeChange(): void {
+  if (isOverlayMode(overlayModeSelect.value)) {
+    void setOverlayMode(overlayModeSelect.value);
+  }
+}
+
+function handleOverlayPositionChange(): void {
+  const overlayPosition = overlayPositionFromValue(overlayPositionSelect.value);
+
+  if (overlayPosition) {
+    void updateSettings({ overlayPosition });
+  }
+}
+
+function showPopupState(state: PopupState): void {
+  const pageStatus = state.pageStatus;
+  const supported = isSupportedVideoPage(pageStatus);
+
+  installIdText.hidden = false;
+  installIdText.textContent = shortInstallId(state.installId);
+  statusText.className = `status ${supported ? 'ok' : 'idle'}`;
+  statusText.textContent = videoStateLabel(pageStatus);
+  videoText.textContent = videoLabel(pageStatus);
+  trackText.textContent = overlayModeLabel(state.overlayMode);
+  overlayModeSelect.value = state.overlayMode;
+  overlayModeSelect.disabled = !supported;
+
+  showSettings(state.settings);
+  setSettingsDisabled(false);
+}
+
+function showSettings(settings: ExtensionSettings): void {
+  overlayVisibleInput.checked = settings.overlayVisible;
+  overlayPositionSelect.value = settings.overlayPosition;
+  showRomanizationInput.checked = settings.showRomanization;
+  showGlossInput.checked = settings.showGloss;
+}
+
+function showError(error: unknown): void {
+  installIdText.hidden = true;
+  statusText.className = 'status error';
+  statusText.textContent = error instanceof Error ? error.message : 'Unable to load extension state';
+  videoText.textContent = 'No supported video';
+  trackText.textContent = 'No track';
+  overlayModeSelect.value = 'no-track';
+  overlayModeSelect.disabled = true;
+  setSettingsDisabled(true);
+}
+
+function setSettingsDisabled(disabled: boolean): void {
+  overlayVisibleInput.disabled = disabled;
+  overlayPositionSelect.disabled = disabled;
+  showRomanizationInput.disabled = disabled;
+  showGlossInput.disabled = disabled;
+}
+
+function overlayPositionFromValue(value: string): OverlayPosition | null {
+  if (value === 'bottom' || value === 'top' || value === 'compact') {
+    return value;
   }
 
-  if (!popupState) {
-    app.innerHTML = `
-      <main>
-        <header class="header">
-          <h1>AI Subtitles</h1>
-        </header>
-        <p class="muted">Loading</p>
-      </main>
-    `;
+  return null;
+}
 
-    return;
+function isSupportedVideoPage(pageStatus: PopupState['pageStatus']): boolean {
+  return Boolean(pageStatus?.page.supported);
+}
+
+function videoLabel(pageStatus: PopupState['pageStatus']): string {
+  return pageStatus?.page.supported ? pageStatus.page.videoId : 'No supported video';
+}
+
+function videoStateLabel(pageStatus: PopupState['pageStatus']): string {
+  if (!isSupportedVideoPage(pageStatus)) {
+    return 'Unsupported page';
   }
 
-  const pageStatus = popupState.pageStatus;
-  const supported = Boolean(pageStatus?.page.supported);
-  const settings = popupState.settings;
-  const videoLabel = pageStatus?.page.supported ? pageStatus.page.videoId : 'No supported video';
-  const videoState = supported
-    ? pageStatus?.videoElementFound
-      ? 'Video element detected'
-      : 'Waiting for video element'
-    : 'Unsupported page';
-
-  app.innerHTML = `
-    <main>
-      <header class="header">
-        <div>
-          <h1>AI Subtitles</h1>
-          <p class="muted">${escapeHtml(shortInstallId(popupState.installId))}</p>
-        </div>
-        <button type="button" class="refresh-button" data-action="refresh">Refresh</button>
-      </header>
-
-      <section class="section">
-        <p class="status ${supported ? 'ok' : 'idle'}">${escapeHtml(videoState)}</p>
-        <dl class="facts">
-          <div>
-            <dt>Video</dt>
-            <dd>${escapeHtml(videoLabel)}</dd>
-          </div>
-          <div>
-            <dt>Track</dt>
-            <dd>${escapeHtml(overlayModeLabel(popupState.overlayMode))}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="section">
-        <label class="field">
-          <span>Overlay state</span>
-          <select name="overlayMode" ${supported ? '' : 'disabled'}>
-            ${overlayModeOption('no-track', popupState.overlayMode)}
-            ${overlayModeOption('processing', popupState.overlayMode)}
-            ${overlayModeOption('ready', popupState.overlayMode)}
-            ${overlayModeOption('error', popupState.overlayMode)}
-          </select>
-        </label>
-      </section>
-
-      <section class="section">
-        <label class="toggle">
-          <input type="checkbox" name="overlayVisible" ${settings.overlayVisible ? 'checked' : ''} />
-          <span>Show overlay</span>
-        </label>
-        <label class="field">
-          <span>Position</span>
-          <select name="overlayPosition">
-            ${positionOption('bottom', settings.overlayPosition)}
-            ${positionOption('top', settings.overlayPosition)}
-            ${positionOption('compact', settings.overlayPosition)}
-          </select>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" name="showRomanization" ${settings.showRomanization ? 'checked' : ''} />
-          <span>Romanization</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" name="showGloss" ${settings.showGloss ? 'checked' : ''} />
-          <span>Gloss</span>
-        </label>
-      </section>
-    </main>
-  `;
-}
-
-function overlayModeOption(value: OverlayMode, current: OverlayMode): string {
-  return `<option value="${value}" ${value === current ? 'selected' : ''}>${escapeHtml(overlayModeLabel(value))}</option>`;
-}
-
-function positionOption(value: OverlayPosition, current: OverlayPosition): string {
-  const label = value[0].toUpperCase() + value.slice(1);
-
-  return `<option value="${value}" ${value === current ? 'selected' : ''}>${label}</option>`;
+  return pageStatus?.videoElementFound ? 'Video element detected' : 'Waiting for video element';
 }
 
 function overlayModeLabel(mode: OverlayMode): string {
@@ -212,13 +159,4 @@ function overlayModeLabel(mode: OverlayMode): string {
 
 function shortInstallId(installId: string): string {
   return installId.length > 16 ? `${installId.slice(0, 15)}...` : installId;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
 }
