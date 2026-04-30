@@ -10,6 +10,7 @@ const distDir = path.join(root, 'dist');
 const schemaFiles = [
   'create-subtitle-job-request.schema.json',
   'job-response.schema.json',
+  'track-lookup-response.schema.json',
   'track-response.schema.json',
   'cue.schema.json',
   'token.schema.json',

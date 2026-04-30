@@ -62,6 +62,14 @@ export interface ErrorObject {
   };
 }
 
+// Source: schemas/track-lookup-response.schema.json
+export interface TrackLookupResponse {
+  found: boolean;
+  trackId?: string;
+  status?: 'ready';
+  expiresAt?: string;
+}
+
 // Source: schemas/track-response.schema.json
 export interface TrackResponse {
   trackId: string;

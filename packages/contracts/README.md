@@ -7,6 +7,7 @@ This package is the canonical boundary between the WXT extension and Laravel bac
 - `openapi.json` defines the first API surface.
 - `schemas/*.schema.json` defines the payload contracts.
 - `dist/index.d.ts` is generated from JSON Schema for TypeScript consumers.
+- Phase 03 includes create job, job status, ready-track lookup, get track, and stable error response contracts.
 
 ## Commands
 

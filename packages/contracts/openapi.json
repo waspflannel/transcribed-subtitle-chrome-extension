@@ -121,6 +121,65 @@
         }
       }
     },
+    "/v1/tracks/lookup": {
+      "get": {
+        "operationId": "lookupSubtitleTrack",
+        "summary": "Look up a ready generated subtitle track by YouTube video and language.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "name": "youtubeVideoId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{11}$"
+            }
+          },
+          {
+            "name": "sourceLanguage",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "ar"
+              ]
+            }
+          },
+          {
+            "name": "targetLanguage",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "const": "en"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ready-track lookup result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/track-lookup-response.schema.json"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health",
