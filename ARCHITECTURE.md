@@ -13,6 +13,8 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Agent harness scripts live in `scripts/agent/`.
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
+- The Phase 03 backend exposes the local `/v1/subtitle-jobs`, `/v1/subtitle-jobs/{jobId}`, `/v1/tracks/lookup`, and `/v1/tracks/{trackId}` JSON API.
+- Subtitle jobs and mock tracks persist in Laravel SQLite tables and are connected by a Laravel queue job skeleton.
 
 ## Selected Stack
 
@@ -77,7 +79,7 @@ Current local enforcement:
 
 - `packages/contracts`: `npm run check`
 - `app/backend`: `php artisan test --compact`
-- `app/extension`: `npm run compile` and `npm run build`
+- `app/extension`: `npm test`, `npm run compile`, and `npm run build`
 - repository harness: `.\scripts\agent\check.ps1`
 
 Promote these into CI when a remote repository workflow is introduced.

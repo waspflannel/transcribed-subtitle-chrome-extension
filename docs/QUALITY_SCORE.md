@@ -6,17 +6,17 @@ Update this file when meaningful product, architecture, reliability, security, o
 
 | Area | Grade | Notes | Next Action |
 | --- | --- | --- | --- |
-| Product | B+ | Product baseline exists and the YouTube extension shell now detects watch pages, tracks video state, renders a controlled overlay shell, and exposes popup settings. Runtime transcription behavior is deferred to later phases. | Start Phase 03 job API and mock track path. |
-| Architecture | B+ | Laravel, WXT, and contracts package exist with a simple boundary model; Phase 02 keeps extension-only logic inside background/content/popup/util boundaries. | Keep Phase 03 API work schema-first and avoid provider coupling in extension code. |
-| Tests | B | Harness now runs contracts, Laravel tests, WXT tests, compile, and build. Extension utility coverage includes URL parsing, settings, and shared HTML escaping. | Add API validation tests when job routes are introduced. |
-| Observability | C | Scaffold validation output exists; runtime logging begins with job processing. | Define job and provider logging in the first backend runtime phase. |
-| Security | C | Secret handling guardrails and environment examples exist; detailed threat model still needs a dedicated pass. | Fill `docs/SECURITY.md` before real provider calls or user data. |
+| Product | A- | The extension can now trigger the backend mock subtitle flow: lookup ready tracks, create jobs, poll status, fetch a mock track, and render a ready overlay state. Real audio/transcription behavior is deferred to Phase 04. | Start Phase 04 audio acquisition and transcription proof. |
+| Architecture | A- | Laravel, WXT, and contracts package now share schema-first create/status/lookup/track contracts. Backend persistence, service, queue, and HTTP layers follow the documented direction. | Keep Phase 04 provider/audio work behind narrow Laravel services. |
+| Tests | A- | Harness runs contracts, Laravel feature/job tests, WXT tests, compile, and build. Phase 03 added API validation, duplicate job coalescing, track lookup/fetch, expiration, queue processing, and extension API client tests. | Add real provider/audio failure tests in Phase 04. |
+| Observability | C+ | Runtime logging begins with structured mock job failure logs keyed by public job ID. Provider tracing and richer queue diagnostics are still future work. | Expand logs around audio acquisition and transcription provider calls in Phase 04. |
+| Security | C+ | Extension-facing `/v1/*` routes validate payloads, require anonymous install IDs, throttle by install ID and IP, and keep provider secrets out of the extension. A full threat model is still needed before real provider/user data work. | Fill `docs/SECURITY.md` before real provider calls or user data. |
 | Agent Harness | A- | Scaffold exists, `check.ps1` runs stack-specific checks, and repeated simplicity/readability feedback is now promoted through golden principles, review guidance, the plan template, and future phase plans. | Add CI once a remote branch workflow exists. |
 
 ## Known Gaps
 
 - CI checks are not configured.
-- Runtime observability starts with job processing.
+- Runtime observability is minimal and needs provider/audio coverage.
 - Architecture linting is not configured.
 - WXT template dependencies currently report moderate npm audit advisories in dev/build tooling; `npm audit fix --force` proposes a breaking change and is tracked as `TD-002`.
 

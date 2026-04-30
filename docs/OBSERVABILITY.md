@@ -6,13 +6,14 @@ Make application state legible to agents and humans through inspectable signals.
 
 ## Current State
 
-Phase 01 has scaffold validation output only. Runtime product observability starts when job processing and provider calls are introduced.
+Phase 03 introduced the first runtime product path. The mock subtitle queue job records persisted job status and logs `subtitle_job_failed` with the public job ID if processing fails.
 
 ## Logging
 
 - Prefer structured logs.
 - Include request or operation identifiers when workflows span boundaries.
 - Log enough context to explain failures without leaking secrets.
+- For subtitle processing, use public job IDs in logs rather than install IDs, raw transcript text, audio paths, prompts, or provider secrets.
 
 ## Metrics
 
