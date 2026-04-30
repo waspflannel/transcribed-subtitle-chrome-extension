@@ -1,12 +1,19 @@
 <?php
 
+use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        apiPrefix: '',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -14,5 +21,46 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (ValidationException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make(
+                'validation_failed',
+                'Request validation failed.',
+                422,
+                ['errors' => $exception->errors()],
+            );
+        });
+
+        $exceptions->render(function (ThrottleRequestsException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            $response = ApiErrorResponse::make('rate_limited', 'Too many requests.', 429);
+
+            foreach ($exception->getHeaders() as $name => $value) {
+                $response->headers->set($name, $value);
+            }
+
+            return $response;
+        });
+
+        $exceptions->render(function (NotFoundHttpException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make('not_found', 'Resource not found.', 404);
+        });
+
+        $exceptions->render(function (Throwable $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make('internal_error', 'Unexpected backend error.', 500);
+        });
     })->create();
