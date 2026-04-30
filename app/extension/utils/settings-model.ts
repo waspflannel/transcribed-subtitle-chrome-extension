@@ -44,7 +44,6 @@ export function createAnonymousInstallId(): string {
   return `install_${globalThis.crypto.randomUUID().replaceAll('-', '')}`;
 }
 
-
 export function isAnonymousInstallId(value: unknown): value is string {
   return typeof value === 'string' && /^install_[0-9a-f]{32}$/.test(value);
 }

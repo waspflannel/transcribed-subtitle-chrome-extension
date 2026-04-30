@@ -2,7 +2,6 @@ import { browser, type Browser } from 'wxt/browser';
 
 import {
   DEFAULT_OVERLAY_MODE,
-  isOverlayMode,
   isRuntimeMessage,
   type ContentPageStatus,
   type OverlayMode,
@@ -101,10 +100,10 @@ async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promi
   return getPopupState();
 }
 
-async function setOverlayModeFromPopup(mode: unknown): Promise<PopupState> {
+async function setOverlayModeFromPopup(mode: OverlayMode): Promise<PopupState> {
   const activeTabId = await getActiveTabId();
 
-  if (activeTabId !== null && isOverlayMode(mode)) {
+  if (activeTabId !== null) {
     tabOverlayModes.set(activeTabId, mode);
     await sendTabMessage(activeTabId, {
       type: 'background.overlayModeChanged',

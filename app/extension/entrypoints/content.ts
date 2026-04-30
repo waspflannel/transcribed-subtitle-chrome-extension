@@ -140,45 +140,13 @@ export default defineContentScript({
 });
 
 function observeYoutubeRouteChanges(callback: () => void): () => void {
-  let lastHref = window.location.href;
-  let lastHadVideo = Boolean(document.querySelector('video'));
-  let debounceId: number | undefined;
-
-  const schedule = () => {
-    window.clearTimeout(debounceId);
-    debounceId = window.setTimeout(() => {
-      const hrefChanged = window.location.href !== lastHref;
-      const hasVideo = Boolean(document.querySelector('video'));
-      const videoPresenceChanged = hasVideo !== lastHadVideo;
-
-      lastHref = window.location.href;
-      lastHadVideo = hasVideo;
-
-      if (hrefChanged || videoPresenceChanged || !hasVideo) {
-        callback();
-      }
-    }, 150);
-  };
-
   for (const eventName of YOUTUBE_ROUTE_EVENTS) {
-    window.addEventListener(eventName, schedule);
+    window.addEventListener(eventName, callback);
   }
 
-  const observer = new MutationObserver(schedule);
-  observer.observe(document.body ?? document.documentElement, {
-    childList: true,
-    subtree: true,
-  });
-
-  const intervalId = window.setInterval(schedule, 1_000);
-
   return () => {
-    window.clearTimeout(debounceId);
-    window.clearInterval(intervalId);
-    observer.disconnect();
-
     for (const eventName of YOUTUBE_ROUTE_EVENTS) {
-      window.removeEventListener(eventName, schedule);
+      window.removeEventListener(eventName, callback);
     }
   };
 }

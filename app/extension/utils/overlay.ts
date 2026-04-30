@@ -13,7 +13,6 @@ export interface OverlayRenderState {
 export class OverlayShell {
   private host: HTMLDivElement | null = null;
   private content: HTMLDivElement | null = null;
-  private renderedKey = '';
 
   public constructor(private readonly documentRef: Document = document) {}
 
@@ -29,19 +28,6 @@ export class OverlayShell {
     this.host.dataset.position = state.settings.overlayPosition;
     this.host.style.display = state.settings.overlayVisible ? 'block' : 'none';
     this.positionHost(state.settings.overlayPosition);
-
-    const renderKey = JSON.stringify({
-      page: state.page,
-      videoElementFound: state.videoElementFound,
-      mode: state.mode,
-      settings: state.settings,
-    });
-
-    if (renderKey === this.renderedKey) {
-      return;
-    }
-
-    this.renderedKey = renderKey;
     this.content.innerHTML = renderOverlayContent(state);
   }
 
@@ -49,7 +35,6 @@ export class OverlayShell {
     this.host?.remove();
     this.host = null;
     this.content = null;
-    this.renderedKey = '';
   }
 
   private mount(): void {
