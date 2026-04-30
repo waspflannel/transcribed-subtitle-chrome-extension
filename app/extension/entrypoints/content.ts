@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 
 import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
-import { DEFAULT_OVERLAY_MODE, isOverlayMode, isRuntimeMessage, type ContentPageStatus } from '../utils/messages';
+import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type ContentPageStatus, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
 import { findActiveVideoElement } from '../utils/video';
 import { parseYoutubePage } from '../utils/youtube';
@@ -14,7 +14,7 @@ export default defineContentScript({
   runAt: 'document_idle',
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
-    let overlayMode = DEFAULT_OVERLAY_MODE;
+    let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
     let activeVideoElement: HTMLVideoElement | null = null;
     let unbindVideoListeners: (() => void) | null = null;
     let lastStatusKey = '';
@@ -32,7 +32,7 @@ export default defineContentScript({
       overlay.update({
         page: status.page,
         videoElementFound: status.videoElementFound,
-        mode: overlayMode,
+        subtitleState,
         settings,
       });
 
@@ -97,12 +97,9 @@ export default defineContentScript({
         return false;
       }
 
-      if (message.type === 'background.overlayModeChanged') {
-        if (isOverlayMode(message.mode)) {
-          overlayMode = message.mode;
-          syncPageState();
-        }
-
+      if (message.type === 'background.subtitleStateChanged') {
+        subtitleState = message.subtitleState;
+        syncPageState();
         sendResponse({ ok: true });
 
         return false;
@@ -118,8 +115,8 @@ export default defineContentScript({
           settings = createExtensionSettingsFromPartial(state.settings);
         }
 
-        if (isOverlayMode(state?.overlayMode)) {
-          overlayMode = state.overlayMode;
+        if (state?.subtitleState) {
+          subtitleState = state.subtitleState;
         }
 
         syncPageState();

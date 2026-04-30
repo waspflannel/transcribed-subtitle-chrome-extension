@@ -1,9 +1,26 @@
 import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
+import type { JobResponse, TrackResponse } from './contracts';
 
-export type OverlayMode = 'no-track' | 'processing' | 'ready' | 'error';
+export type SubtitleState =
+  | {
+      type: 'no-track';
+    }
+  | {
+      type: 'processing';
+      job: JobResponse;
+    }
+  | {
+      type: 'ready';
+      track: TrackResponse;
+    }
+  | {
+      type: 'error';
+      message: string;
+      job?: JobResponse;
+    };
 
-export const DEFAULT_OVERLAY_MODE: OverlayMode = 'no-track';
+export const DEFAULT_SUBTITLE_STATE: SubtitleState = { type: 'no-track' };
 
 export interface ContentPageStatus {
   page: YoutubePageInfo;
@@ -18,7 +35,7 @@ export interface PopupState {
   settings: ExtensionSettings;
   activeTabId?: number;
   pageStatus?: ContentPageStatus;
-  overlayMode: OverlayMode;
+  subtitleState: SubtitleState;
 }
 
 export type RuntimeMessage =
@@ -37,16 +54,15 @@ export type RuntimeMessage =
       patch: Partial<ExtensionSettings>;
     }
   | {
-      type: 'popup.setOverlayMode';
-      mode: OverlayMode;
+      type: 'popup.generateSubtitles';
     }
   | {
       type: 'background.settingsChanged';
       settings: ExtensionSettings;
     }
   | {
-      type: 'background.overlayModeChanged';
-      mode: OverlayMode;
+      type: 'background.subtitleStateChanged';
+      subtitleState: SubtitleState;
     };
 
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
@@ -56,8 +72,4 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     'type' in value &&
     typeof (value as { type?: unknown }).type === 'string'
   );
-}
-
-export function isOverlayMode(value: unknown): value is OverlayMode {
-  return value === 'no-track' || value === 'processing' || value === 'ready' || value === 'error';
 }

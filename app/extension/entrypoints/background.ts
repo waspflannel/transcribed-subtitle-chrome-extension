@@ -1,18 +1,24 @@
 import { browser, type Browser } from 'wxt/browser';
 
+import { SubtitleApiClient } from '../utils/api';
+import type { CreateSubtitleJobRequest, JobResponse } from '../utils/contracts';
 import {
-  DEFAULT_OVERLAY_MODE,
+  DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
   type ContentPageStatus,
-  type OverlayMode,
   type PopupState,
   type RuntimeMessage,
+  type SubtitleState,
 } from '../utils/messages';
 import { getExtensionSettings, getOrCreateInstallId, updateExtensionSettings } from '../utils/settings';
 import type { ExtensionSettings } from '../utils/settings-model';
 
+const JOB_POLL_INTERVAL_MS = 1500;
+
+const subtitleApi = new SubtitleApiClient();
 const tabStatuses = new Map<number, ContentPageStatus>();
-const tabOverlayModes = new Map<number, OverlayMode>();
+const tabSubtitleStates = new Map<number, SubtitleState>();
+const tabPollingTimeouts = new Map<number, ReturnType<typeof globalThis.setTimeout>>();
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -34,7 +40,8 @@ export default defineBackground(() => {
 
   browser.tabs.onRemoved.addListener((tabId) => {
     tabStatuses.delete(tabId);
-    tabOverlayModes.delete(tabId);
+    tabSubtitleStates.delete(tabId);
+    stopPolling(tabId);
   });
 });
 
@@ -53,8 +60,8 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
     case 'popup.updateSettings':
       return updateSettingsFromPopup(message.patch);
 
-    case 'popup.setOverlayMode':
-      return setOverlayModeFromPopup(message.mode);
+    case 'popup.generateSubtitles':
+      return generateSubtitlesFromPopup();
 
     default:
       return { ok: false, error: 'Unhandled extension message' };
@@ -68,21 +75,26 @@ function saveContentStatus(sender: Browser.runtime.MessageSender, status: Conten
     return;
   }
 
+  const previousStatus = tabStatuses.get(tabId);
   tabStatuses.set(tabId, status);
-  ensureOverlayMode(tabId);
+
+  if (didPageVideoChange(previousStatus, status)) {
+    stopPolling(tabId);
+    saveSubtitleState(tabId, DEFAULT_SUBTITLE_STATE);
+  }
 }
 
 async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
   installId: string;
   settings: ExtensionSettings;
-  overlayMode: OverlayMode;
+  subtitleState: SubtitleState;
 }> {
   const tabId = tabIdFromSender(sender);
 
   return {
     installId: await getOrCreateInstallId(),
     settings: await getExtensionSettings(),
-    overlayMode: tabId === null ? DEFAULT_OVERLAY_MODE : ensureOverlayMode(tabId),
+    subtitleState: tabId === null ? DEFAULT_SUBTITLE_STATE : getSubtitleState(tabId),
   };
 }
 
@@ -100,18 +112,118 @@ async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promi
   return getPopupState();
 }
 
-async function setOverlayModeFromPopup(mode: OverlayMode): Promise<PopupState> {
+async function generateSubtitlesFromPopup(): Promise<PopupState> {
   const activeTabId = await getActiveTabId();
 
-  if (activeTabId !== null) {
-    tabOverlayModes.set(activeTabId, mode);
-    await sendTabMessage(activeTabId, {
-      type: 'background.overlayModeChanged',
-      mode,
-    });
+  if (activeTabId === null) {
+    throw new Error('Open a YouTube watch tab before generating subtitles.');
   }
 
-  return getPopupState();
+  const pageStatus = tabStatuses.get(activeTabId);
+
+  if (!pageStatus?.page.supported) {
+    const subtitleState: SubtitleState = {
+      type: 'error',
+      message: 'Open a supported YouTube watch page before generating subtitles.',
+    };
+
+    saveSubtitleState(activeTabId, subtitleState);
+
+    return getPopupState();
+  }
+
+  const installId = await getOrCreateInstallId();
+  const settings = await getExtensionSettings();
+
+  try {
+    const request = createSubtitleJobRequest(pageStatus, settings);
+    const lookup = await subtitleApi.lookupSubtitleTrack(installId, request);
+
+    if (lookup.found && lookup.trackId) {
+      saveSubtitleState(activeTabId, {
+        type: 'ready',
+        track: await subtitleApi.getSubtitleTrack(installId, lookup.trackId),
+      });
+
+      return getPopupState();
+    }
+
+    const job = await subtitleApi.createSubtitleJob(installId, request);
+    await applyJobState(activeTabId, installId, job);
+
+    return getPopupState();
+  } catch (error) {
+    saveSubtitleState(activeTabId, {
+      type: 'error',
+      message: error instanceof Error ? error.message : 'Unable to generate subtitles.',
+    });
+
+    return getPopupState();
+  }
+}
+
+async function applyJobState(tabId: number, installId: string, job: JobResponse): Promise<void> {
+  const pageStatus = tabStatuses.get(tabId);
+
+  if (!pageStatus?.page.supported || pageStatus.page.videoId !== job.youtubeVideoId) {
+    stopPolling(tabId);
+
+    return;
+  }
+
+  if (job.status === 'completed' && job.trackId) {
+    saveSubtitleState(tabId, {
+      type: 'ready',
+      track: await subtitleApi.getSubtitleTrack(installId, job.trackId),
+    });
+    stopPolling(tabId);
+
+    return;
+  }
+
+  if (job.status === 'failed' || job.status === 'expired') {
+    saveSubtitleState(tabId, {
+      type: 'error',
+      message: job.error?.message ?? `Subtitle job ${job.status}.`,
+      job,
+    });
+    stopPolling(tabId);
+
+    return;
+  }
+
+  saveSubtitleState(tabId, { type: 'processing', job });
+  startPolling(tabId, installId, job.jobId);
+}
+
+function startPolling(tabId: number, installId: string, jobId: string): void {
+  stopPolling(tabId);
+
+  const poll = async (): Promise<void> => {
+    try {
+      await applyJobState(tabId, installId, await subtitleApi.getSubtitleJob(installId, jobId));
+    } catch (error) {
+      saveSubtitleState(tabId, {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unable to check subtitle job status.',
+      });
+      stopPolling(tabId);
+    }
+  };
+
+  tabPollingTimeouts.set(
+    tabId,
+    globalThis.setTimeout(() => void poll(), JOB_POLL_INTERVAL_MS),
+  );
+}
+
+function stopPolling(tabId: number): void {
+  const timeoutId = tabPollingTimeouts.get(tabId);
+
+  if (timeoutId !== undefined) {
+    globalThis.clearTimeout(timeoutId);
+    tabPollingTimeouts.delete(tabId);
+  }
 }
 
 async function getPopupState(): Promise<PopupState> {
@@ -122,8 +234,53 @@ async function getPopupState(): Promise<PopupState> {
     settings: await getExtensionSettings(),
     activeTabId: activeTabId ?? undefined,
     pageStatus: activeTabId === null ? undefined : tabStatuses.get(activeTabId),
-    overlayMode: activeTabId === null ? DEFAULT_OVERLAY_MODE : ensureOverlayMode(activeTabId),
+    subtitleState: activeTabId === null ? DEFAULT_SUBTITLE_STATE : getSubtitleState(activeTabId),
   };
+}
+
+function createSubtitleJobRequest(
+  pageStatus: ContentPageStatus,
+  settings: ExtensionSettings,
+): CreateSubtitleJobRequest {
+  if (!pageStatus.page.supported) {
+    throw new Error('Cannot create a subtitle job for an unsupported page.');
+  }
+
+  const request: CreateSubtitleJobRequest = {
+    youtubeVideoId: pageStatus.page.videoId,
+    youtubeUrl: pageStatus.page.url,
+    sourceLanguage: 'ar',
+    targetLanguage: 'en',
+    options: {
+      includeRomanization: settings.showRomanization,
+      includeGloss: settings.showGloss,
+    },
+  };
+
+  if (typeof pageStatus.videoDurationSeconds === 'number' && Number.isFinite(pageStatus.videoDurationSeconds)) {
+    request.videoDurationSeconds = Math.max(1, Math.round(pageStatus.videoDurationSeconds));
+  }
+
+  return request;
+}
+
+function saveSubtitleState(tabId: number, subtitleState: SubtitleState): void {
+  tabSubtitleStates.set(tabId, subtitleState);
+  void sendTabMessage(tabId, {
+    type: 'background.subtitleStateChanged',
+    subtitleState,
+  });
+}
+
+function getSubtitleState(tabId: number): SubtitleState {
+  return tabSubtitleStates.get(tabId) ?? DEFAULT_SUBTITLE_STATE;
+}
+
+function didPageVideoChange(previousStatus: ContentPageStatus | undefined, nextStatus: ContentPageStatus): boolean {
+  const previousVideoId = previousStatus?.page.supported ? previousStatus.page.videoId : null;
+  const nextVideoId = nextStatus.page.supported ? nextStatus.page.videoId : null;
+
+  return previousVideoId !== nextVideoId;
 }
 
 async function getActiveTabId(): Promise<number | null> {
@@ -145,18 +302,6 @@ function tabIdFromSender(sender: Browser.runtime.MessageSender): number | null {
 
 function tabIdFromTab(tab: Browser.tabs.Tab | undefined): number | null {
   return typeof tab?.id === 'number' ? tab.id : null;
-}
-
-function ensureOverlayMode(tabId: number): OverlayMode {
-  const existingMode = tabOverlayModes.get(tabId);
-
-  if (existingMode) {
-    return existingMode;
-  }
-
-  tabOverlayModes.set(tabId, DEFAULT_OVERLAY_MODE);
-
-  return DEFAULT_OVERLAY_MODE;
 }
 
 async function sendTabMessage(tabId: number, message: RuntimeMessage): Promise<void> {

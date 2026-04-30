@@ -1,12 +1,12 @@
 import type { ExtensionSettings } from './settings-model';
 import { escapeHtml } from './html';
-import type { OverlayMode } from './messages';
+import type { SubtitleState } from './messages';
 import type { UnsupportedYoutubePageReason, YoutubePageInfo } from './youtube';
 
 export interface OverlayRenderState {
   page: YoutubePageInfo;
   videoElementFound: boolean;
-  mode: OverlayMode;
+  subtitleState: SubtitleState;
   settings: ExtensionSettings;
 }
 
@@ -165,37 +165,42 @@ function renderOverlayContent(state: OverlayRenderState): string {
     });
   }
 
-  if (state.mode === 'processing') {
+  if (state.subtitleState.type === 'processing') {
+    const progress = state.subtitleState.job.progress;
+
     return renderShell({
       eyebrow: 'AI subtitles',
       title: 'Generating subtitles',
-      detail: 'Processing is in progress.',
-      meta: [`Video ${state.page.videoId}`],
+      detail: progress?.message ?? 'Processing is in progress.',
+      meta: [`Video ${state.page.videoId}`, progress ? `${progress.percent}%` : 'Queued'],
     });
   }
 
-  if (state.mode === 'ready') {
+  if (state.subtitleState.type === 'ready') {
+    const [cue] = state.subtitleState.track.cues;
     const optionalRows = [
-      state.settings.showRomanization ? '<div class="detail">Romanization placeholder enabled.</div>' : '',
-      state.settings.showGloss ? '<div class="detail">Gloss placeholder enabled.</div>' : '',
+      state.settings.showRomanization && cue.romanization
+        ? `<div class="detail">${escapeHtml(cue.romanization)}</div>`
+        : '',
+      state.settings.showGloss ? renderTokenGloss(cue.tokens) : '',
     ].join('');
 
     return `
       <section class="shell" role="status">
         <div class="eyebrow">AI subtitles</div>
-        <div class="line">Generated subtitle placeholder</div>
-        <div class="translation">English translation placeholder</div>
+        <div class="line">${escapeHtml(cue.sourceText)}</div>
+        <div class="translation">${escapeHtml(cue.translatedText)}</div>
         ${optionalRows}
-        <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span></div>
+        <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Mock track</span></div>
       </section>
     `;
   }
 
-  if (state.mode === 'error') {
+  if (state.subtitleState.type === 'error') {
     return renderShell({
       eyebrow: 'AI subtitles',
       title: 'Subtitle generation failed',
-      detail: 'An error placeholder is active.',
+      detail: state.subtitleState.message,
       meta: [`Video ${state.page.videoId}`],
     });
   }
@@ -206,6 +211,18 @@ function renderOverlayContent(state: OverlayRenderState): string {
     detail: 'This video does not have a generated subtitle track yet.',
     meta: [`Video ${state.page.videoId}`],
   });
+}
+
+function renderTokenGloss(tokens: { text: string; translation?: string; gloss?: string }[]): string {
+  const gloss = tokens
+    .map((token) => {
+      const detail = token.gloss ?? token.translation;
+
+      return detail ? `${token.text}: ${detail}` : token.text;
+    })
+    .join(' | ');
+
+  return gloss ? `<div class="detail">${escapeHtml(gloss)}</div>` : '';
 }
 
 function renderShell(input: { eyebrow: string; title: string; detail: string; meta: string[] }): string {

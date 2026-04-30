@@ -2,7 +2,7 @@ import './style.css';
 
 import { browser } from 'wxt/browser';
 
-import { isOverlayMode, type OverlayMode, type PopupState } from '../../utils/messages';
+import type { PopupState, SubtitleState } from '../../utils/messages';
 import type { ExtensionSettings, OverlayPosition } from '../../utils/settings-model';
 
 type PopupRequest =
@@ -14,8 +14,7 @@ type PopupRequest =
       patch: Partial<ExtensionSettings>;
     }
   | {
-      type: 'popup.setOverlayMode';
-      mode: OverlayMode;
+      type: 'popup.generateSubtitles';
     };
 
 const installIdText = document.querySelector<HTMLParagraphElement>('[data-install-id]')!;
@@ -23,14 +22,14 @@ const statusText = document.querySelector<HTMLParagraphElement>('[data-status]')
 const videoText = document.querySelector<HTMLElement>('[data-video-label]')!;
 const trackText = document.querySelector<HTMLElement>('[data-track-label]')!;
 const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="refresh"]')!;
-const overlayModeSelect = document.querySelector<HTMLSelectElement>('select[name="overlayMode"]')!;
+const generateButton = document.querySelector<HTMLButtonElement>('[data-action="generate"]')!;
 const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
 const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
 const showRomanizationInput = document.querySelector<HTMLInputElement>('input[name="showRomanization"]')!;
 const showGlossInput = document.querySelector<HTMLInputElement>('input[name="showGloss"]')!;
 
 refreshButton.addEventListener('click', () => void loadPopupState());
-overlayModeSelect.addEventListener('change', handleOverlayModeChange);
+generateButton.addEventListener('click', () => void generateSubtitles());
 overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 showRomanizationInput.addEventListener('change', () =>
@@ -44,12 +43,12 @@ async function loadPopupState(): Promise<void> {
   await sendPopupRequest({ type: 'popup.getState' });
 }
 
-async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  await sendPopupRequest({ type: 'popup.updateSettings', patch });
+async function generateSubtitles(): Promise<void> {
+  await sendPopupRequest({ type: 'popup.generateSubtitles' });
 }
 
-async function setOverlayMode(mode: OverlayMode): Promise<void> {
-  await sendPopupRequest({ type: 'popup.setOverlayMode', mode });
+async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
+  await sendPopupRequest({ type: 'popup.updateSettings', patch });
 }
 
 async function sendPopupRequest(request: PopupRequest): Promise<void> {
@@ -58,12 +57,6 @@ async function sendPopupRequest(request: PopupRequest): Promise<void> {
     showPopupState(state);
   } catch (error) {
     showError(error);
-  }
-}
-
-function handleOverlayModeChange(): void {
-  if (isOverlayMode(overlayModeSelect.value)) {
-    void setOverlayMode(overlayModeSelect.value);
   }
 }
 
@@ -81,12 +74,11 @@ function showPopupState(state: PopupState): void {
 
   installIdText.hidden = false;
   installIdText.textContent = shortInstallId(state.installId);
-  statusText.className = `status ${supported ? 'ok' : 'idle'}`;
+  statusText.className = `status ${statusClass(state.subtitleState, supported)}`;
   statusText.textContent = videoStateLabel(pageStatus);
   videoText.textContent = videoLabel(pageStatus);
-  trackText.textContent = overlayModeLabel(state.overlayMode);
-  overlayModeSelect.value = state.overlayMode;
-  overlayModeSelect.disabled = !supported;
+  trackText.textContent = subtitleStateLabel(state.subtitleState);
+  generateButton.disabled = !supported || state.subtitleState.type === 'processing';
 
   showSettings(state.settings);
   setSettingsDisabled(false);
@@ -105,8 +97,7 @@ function showError(error: unknown): void {
   statusText.textContent = error instanceof Error ? error.message : 'Unable to load extension state';
   videoText.textContent = 'No supported video';
   trackText.textContent = 'No track';
-  overlayModeSelect.value = 'no-track';
-  overlayModeSelect.disabled = true;
+  generateButton.disabled = true;
   setSettingsDisabled(true);
 }
 
@@ -141,20 +132,30 @@ function videoStateLabel(pageStatus: PopupState['pageStatus']): string {
   return pageStatus?.videoElementFound ? 'Video element detected' : 'Waiting for video element';
 }
 
-function overlayModeLabel(mode: OverlayMode): string {
-  if (mode === 'processing') {
-    return 'Processing';
+function subtitleStateLabel(state: SubtitleState): string {
+  if (state.type === 'processing') {
+    const progress = state.job.progress;
+
+    return progress ? `${progress.stage} ${progress.percent}%` : 'Processing';
   }
 
-  if (mode === 'ready') {
-    return 'Ready placeholder';
+  if (state.type === 'ready') {
+    return `Ready ${shortInstallId(state.track.trackId)}`;
   }
 
-  if (mode === 'error') {
-    return 'Error placeholder';
+  if (state.type === 'error') {
+    return state.message;
   }
 
   return 'No track';
+}
+
+function statusClass(state: SubtitleState, supported: boolean): string {
+  if (state.type === 'error') {
+    return 'error';
+  }
+
+  return supported ? 'ok' : 'idle';
 }
 
 function shortInstallId(installId: string): string {
