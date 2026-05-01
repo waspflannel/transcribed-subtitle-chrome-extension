@@ -16,24 +16,16 @@ class SubtitleJobResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $response = [
+        return [
             'jobId' => $this->public_id,
-            'status' => $this->status->value,
+            'status' => 'completed',
             'youtubeVideoId' => $this->youtube_video_id,
             'sourceLanguage' => $this->source_language,
             'targetLanguage' => $this->target_language,
+            'track' => SubtitleTrackResource::make($this->track)->resolve(),
             'createdAt' => $this->created_at->toJSON(),
             'updatedAt' => $this->updated_at->toJSON(),
+            'expiresAt' => $this->expires_at->toJSON(),
         ];
-
-        if ($this->track !== null && ! $this->track->isExpired()) {
-            $response['track'] = SubtitleTrackResource::make($this->track)->resolve();
-        }
-
-        if ($this->expires_at !== null) {
-            $response['expiresAt'] = $this->expires_at->toJSON();
-        }
-
-        return $response;
     }
 }

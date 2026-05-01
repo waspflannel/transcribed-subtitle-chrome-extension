@@ -12,7 +12,8 @@
     "targetLanguage",
     "track",
     "createdAt",
-    "updatedAt"
+    "updatedAt",
+    "expiresAt"
   ],
   "properties": {
     "jobId": {

@@ -36,7 +36,7 @@ export interface JobResponse {
   track: TrackResponse;
   createdAt: string;
   updatedAt: string;
-  expiresAt?: string;
+  expiresAt: string;
 }
 export interface TrackResponse {
   trackId: string;

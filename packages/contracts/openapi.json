@@ -119,16 +119,6 @@
           }
         }
       },
-      "NotFound": {
-        "description": "Resource was not found.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "./schemas/api-error.schema.json"
-            }
-          }
-        }
-      },
       "RateLimited": {
         "description": "Rate limit exceeded.",
         "headers": {

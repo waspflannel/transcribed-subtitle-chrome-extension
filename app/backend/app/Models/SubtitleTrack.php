@@ -26,11 +26,6 @@ class SubtitleTrack extends Model
         'cues',
     ];
 
-    public function getRouteKeyName(): string
-    {
-        return 'public_id';
-    }
-
     public function job(): BelongsTo
     {
         return $this->belongsTo(SubtitleJob::class, 'subtitle_job_id');

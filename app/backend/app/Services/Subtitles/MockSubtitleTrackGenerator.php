@@ -10,12 +10,6 @@ class MockSubtitleTrackGenerator
 {
     public function generate(SubtitleJob $job): SubtitleTrack
     {
-        $existingTrack = $job->track;
-
-        if ($existingTrack) {
-            return $existingTrack;
-        }
-
         $generatedAt = now();
 
         return SubtitleTrack::create([

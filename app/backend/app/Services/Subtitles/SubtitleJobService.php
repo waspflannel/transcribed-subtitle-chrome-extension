@@ -3,8 +3,6 @@
 namespace App\Services\Subtitles;
 
 use App\Models\SubtitleJob;
-use App\Models\SubtitleTrack;
-use App\SubtitleJobStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -38,37 +36,11 @@ class SubtitleJobService
                 $job = $this->createJob($payload, $installId, $requestIp);
             }
 
-            $this->markProcessing($job);
-
             $track = $this->tracks->generate($job->refresh());
-            $this->markCompleted($job, $track);
+            $job->update(['expires_at' => $track->expires_at]);
 
             return $job->refresh()->load('track');
         });
-    }
-
-    private function markProcessing(SubtitleJob $job): void
-    {
-        $job->update([
-            'status' => SubtitleJobStatus::Processing,
-            'progress_stage' => 'acquiring_audio',
-            'progress_percent' => 15,
-            'progress_message' => 'Preparing mock subtitle generation',
-        ]);
-    }
-
-    private function markCompleted(SubtitleJob $job, SubtitleTrack $track): void
-    {
-        $job->update([
-            'status' => SubtitleJobStatus::Completed,
-            'progress_stage' => 'finalizing',
-            'progress_percent' => 100,
-            'progress_message' => 'Mock subtitle track ready',
-            'error_code' => null,
-            'error_message' => null,
-            'error_details' => null,
-            'expires_at' => $track->expires_at,
-        ]);
     }
 
     /**
@@ -85,10 +57,6 @@ class SubtitleJobService
             'target_language' => $payload['targetLanguage'],
             'options' => $payload['options'],
             'processing_version' => self::PROCESSING_VERSION,
-            'status' => SubtitleJobStatus::Queued,
-            'progress_stage' => 'queued',
-            'progress_percent' => 0,
-            'progress_message' => 'Queued',
             'install_id' => $installId,
             'request_ip' => $requestIp,
         ]);
@@ -106,13 +74,6 @@ class SubtitleJobService
             'youtube_url' => $payload['youtubeUrl'] ?? null,
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'options' => $payload['options'],
-            'status' => SubtitleJobStatus::Queued,
-            'progress_stage' => 'queued',
-            'progress_percent' => 0,
-            'progress_message' => 'Queued',
-            'error_code' => null,
-            'error_message' => null,
-            'error_details' => null,
             'install_id' => $installId,
             'request_ip' => $requestIp,
             'expires_at' => null,
@@ -121,9 +82,7 @@ class SubtitleJobService
 
     private function hasReadyTrack(SubtitleJob $job): bool
     {
-        return $job->status === SubtitleJobStatus::Completed
-            && $job->expires_at?->isFuture()
-            && $job->track !== null
+        return $job->track !== null
             && ! $job->track->isExpired();
     }
 }

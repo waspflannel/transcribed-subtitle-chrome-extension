@@ -16,6 +16,7 @@ describe('SubtitleApiClient', () => {
       track: trackResponse(),
       createdAt: '2026-04-30T00:00:00Z',
       updatedAt: '2026-04-30T00:00:00Z',
+      expiresAt: '2026-05-30T00:00:00Z',
     };
     const fetchMock = vi.fn(async () => jsonResponse(jobResponse, 200));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);

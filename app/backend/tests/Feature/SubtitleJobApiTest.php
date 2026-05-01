@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
-use App\SubtitleJobStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -31,7 +30,6 @@ class SubtitleJobApiTest extends TestCase
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'ar',
             'target_language' => 'en',
-            'status' => 'completed',
         ]);
     }
 
@@ -61,7 +59,6 @@ class SubtitleJobApiTest extends TestCase
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'ar',
             'target_language' => 'en',
-            'status' => SubtitleJobStatus::Completed,
             'expires_at' => now()->subMinute(),
         ]);
 
@@ -87,8 +84,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, SubtitleJob::count());
         $this->assertSame(1, SubtitleTrack::count());
         $this->assertDatabaseMissing('subtitle_tracks', ['id' => $expiredTrack->id]);
-        $this->assertSame(SubtitleJobStatus::Completed, $job->refresh()->status);
-        $this->assertNotNull($job->expires_at);
+        $this->assertTrue($job->refresh()->expires_at->isFuture());
     }
 
     public function test_create_subtitle_job_returns_stable_validation_errors(): void
