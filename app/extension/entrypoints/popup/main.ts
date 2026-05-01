@@ -2,8 +2,8 @@ import './style.css';
 
 import { browser } from 'wxt/browser';
 
-import type { PopupState, SubtitleState } from '../../utils/messages';
-import type { ExtensionSettings, OverlayPosition } from '../../utils/settings-model';
+import type { PopupState } from '../../utils/messages';
+import type { ExtensionSettings } from '../../utils/settings-model';
 
 type PopupRequest =
   | {
@@ -58,7 +58,7 @@ async function sendPopupRequest(request: PopupRequest): Promise<void> {
   try {
     const response = (await browser.runtime.sendMessage(request)) as PopupResponse;
 
-    if (isPopupErrorResponse(response)) {
+    if ('ok' in response) {
       showError(response.error);
 
       return;
@@ -71,38 +71,40 @@ async function sendPopupRequest(request: PopupRequest): Promise<void> {
 }
 
 function handleOverlayPositionChange(): void {
-  const overlayPosition = overlayPositionFromValue(overlayPositionSelect.value);
+  const { value } = overlayPositionSelect;
 
-  if (overlayPosition) {
-    void updateSettings({ overlayPosition });
+  if (value === 'bottom' || value === 'top' || value === 'compact') {
+    void updateSettings({ overlayPosition: value });
   }
-}
-
-function isPopupErrorResponse(response: PopupResponse): response is PopupErrorResponse {
-  return 'ok' in response;
 }
 
 function showPopupState(state: PopupState): void {
   const pageStatus = state.pageStatus;
-  const supported = isSupportedVideoPage(pageStatus);
+  const subtitleState = state.subtitleState;
+  const settings = state.settings;
+  const supported = Boolean(pageStatus?.supported);
 
   installIdText.hidden = false;
   installIdText.textContent = shortInstallId(state.installId);
-  statusText.className = `status ${statusClass(state.subtitleState, supported)}`;
-  statusText.textContent = videoStateLabel(pageStatus);
-  videoText.textContent = videoLabel(pageStatus);
-  trackText.textContent = subtitleStateLabel(state.subtitleState);
+  statusText.className = `status ${subtitleState.type === 'error' ? 'error' : supported ? 'ok' : 'idle'}`;
+  statusText.textContent = supported ? 'Ready to generate' : 'Unsupported page';
+  videoText.textContent = pageStatus?.supported ? pageStatus.videoId : 'No supported video';
+
+  if (subtitleState.type === 'ready') {
+    trackText.textContent = `Ready ${shortInstallId(subtitleState.track.trackId)}`;
+  } else if (subtitleState.type === 'error') {
+    trackText.textContent = subtitleState.message;
+  } else {
+    trackText.textContent = 'No track';
+  }
+
   generateButton.disabled = !supported;
 
-  showSettings(state.settings);
-  setSettingsDisabled(false);
-}
-
-function showSettings(settings: ExtensionSettings): void {
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
   showRomanizationInput.checked = settings.showRomanization;
   showGlossInput.checked = settings.showGloss;
+  setSettingsDisabled(false);
 }
 
 function showError(error: unknown): void {
@@ -121,50 +123,6 @@ function setSettingsDisabled(disabled: boolean): void {
   overlayPositionSelect.disabled = disabled;
   showRomanizationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
-}
-
-function overlayPositionFromValue(value: string): OverlayPosition | null {
-  if (value === 'bottom' || value === 'top' || value === 'compact') {
-    return value;
-  }
-
-  return null;
-}
-
-function isSupportedVideoPage(pageStatus: PopupState['pageStatus']): boolean {
-  return Boolean(pageStatus?.supported);
-}
-
-function videoLabel(pageStatus: PopupState['pageStatus']): string {
-  return pageStatus?.supported ? pageStatus.videoId : 'No supported video';
-}
-
-function videoStateLabel(pageStatus: PopupState['pageStatus']): string {
-  if (!isSupportedVideoPage(pageStatus)) {
-    return 'Unsupported page';
-  }
-
-  return 'Ready to generate';
-}
-
-function subtitleStateLabel(state: SubtitleState): string {
-  if (state.type === 'ready') {
-    return `Ready ${shortInstallId(state.track.trackId)}`;
-  }
-
-  if (state.type === 'error') {
-    return state.message;
-  }
-
-  return 'No track';
-}
-
-function statusClass(state: SubtitleState, supported: boolean): string {
-  if (state.type === 'error') {
-    return 'error';
-  }
-
-  return supported ? 'ok' : 'idle';
 }
 
 function shortInstallId(installId: string): string {
