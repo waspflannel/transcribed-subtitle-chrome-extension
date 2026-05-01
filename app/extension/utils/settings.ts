@@ -17,14 +17,7 @@ const installIdStorage = storage.defineItem<string | null>('local:installId', {
 });
 
 export async function getExtensionSettings(): Promise<ExtensionSettings> {
-  const storedSettings = await settingsStorage.getValue();
-  const settings = createExtensionSettingsFromPartial(storedSettings);
-
-  if (JSON.stringify(settings) !== JSON.stringify(storedSettings)) {
-    await settingsStorage.setValue(settings);
-  }
-
-  return settings;
+  return createExtensionSettingsFromPartial(await settingsStorage.getValue());
 }
 
 export async function updateExtensionSettings(patch: Partial<ExtensionSettings>): Promise<ExtensionSettings> {

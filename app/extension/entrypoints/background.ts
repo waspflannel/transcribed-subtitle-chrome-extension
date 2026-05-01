@@ -51,9 +51,6 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
 
     case 'popup.generateSubtitles':
       return generateSubtitlesFromPopup();
-
-    default:
-      return { ok: false, error: 'Unhandled extension message' };
   }
 }
 
@@ -96,63 +93,48 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
   }
 
   const pageStatus = parseYoutubePage(activeTab?.url ?? '');
+  let subtitleState: SubtitleState;
 
   if (!pageStatus.supported) {
-    const subtitleState: SubtitleState = {
+    subtitleState = {
       type: 'error',
       message: 'Open a supported YouTube watch page before generating subtitles.',
     };
+  } else {
+    const installId = await getOrCreateInstallId();
+    const settings = await getExtensionSettings();
 
-    tabSubtitleStates.set(activeTabId, subtitleState);
-    void sendTabMessage(activeTabId, {
-      type: 'background.subtitleStateChanged',
-      subtitleState,
-    });
+    try {
+      const job = await subtitleApi.createSubtitleJob(installId, {
+        youtubeVideoId: pageStatus.videoId,
+        youtubeUrl: pageStatus.url,
+        sourceLanguage: 'ar',
+        targetLanguage: 'en',
+        options: {
+          includeRomanization: settings.showRomanization,
+          includeGloss: settings.showGloss,
+        },
+      });
 
-    return getPopupState();
+      subtitleState = {
+        type: 'ready',
+        track: job.track,
+      };
+    } catch (error) {
+      subtitleState = {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unable to generate subtitles.',
+      };
+    }
   }
 
-  const installId = await getOrCreateInstallId();
-  const settings = await getExtensionSettings();
+  tabSubtitleStates.set(activeTabId, subtitleState);
+  void sendTabMessage(activeTabId, {
+    type: 'background.subtitleStateChanged',
+    subtitleState,
+  });
 
-  try {
-    const job = await subtitleApi.createSubtitleJob(installId, {
-      youtubeVideoId: pageStatus.videoId,
-      youtubeUrl: pageStatus.url,
-      sourceLanguage: 'ar',
-      targetLanguage: 'en',
-      options: {
-        includeRomanization: settings.showRomanization,
-        includeGloss: settings.showGloss,
-      },
-    });
-
-    const subtitleState: SubtitleState = {
-      type: 'ready',
-      track: job.track,
-    };
-
-    tabSubtitleStates.set(activeTabId, subtitleState);
-    void sendTabMessage(activeTabId, {
-      type: 'background.subtitleStateChanged',
-      subtitleState,
-    });
-
-    return getPopupState();
-  } catch (error) {
-    const subtitleState: SubtitleState = {
-      type: 'error',
-      message: error instanceof Error ? error.message : 'Unable to generate subtitles.',
-    };
-
-    tabSubtitleStates.set(activeTabId, subtitleState);
-    void sendTabMessage(activeTabId, {
-      type: 'background.subtitleStateChanged',
-      subtitleState,
-    });
-
-    return getPopupState();
-  }
+  return getPopupState();
 }
 
 async function getPopupState(): Promise<PopupState> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createYoutubeWatchUrl, parseYoutubePage } from '../utils/youtube';
+import { parseYoutubePage } from '../utils/youtube';
 
 describe('parseYoutubePage', () => {
   it('extracts a valid YouTube watch video ID', () => {
@@ -35,9 +35,5 @@ describe('parseYoutubePage', () => {
       reason: 'invalid_video_id',
       videoId: 'bad',
     });
-  });
-
-  it('creates canonical watch URLs', () => {
-    expect(createYoutubeWatchUrl('dQw4w9WgXcQ')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   });
 });

@@ -24,26 +24,16 @@ export class SubtitleApiClient {
     private readonly fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
 
-  public createSubtitleJob(installId: string, payload: CreateSubtitleJobRequest): Promise<JobResponse> {
-    return this.requestJson<JobResponse>('subtitle-jobs', installId, {
+  public async createSubtitleJob(installId: string, payload: CreateSubtitleJobRequest): Promise<JobResponse> {
+    const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
+    const response = await this.fetchImpl(new URL('subtitle-jobs', baseUrl).toString(), {
       method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  }
-
-  private async requestJson<T>(
-    path: string,
-    installId: string,
-    options: { method?: string; body?: string } = {},
-  ): Promise<T> {
-    const response = await this.fetchImpl(this.urlFor(path), {
-      method: options.method ?? 'GET',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
         'X-Extension-Install-Id': installId,
       },
-      body: options.body,
+      body: JSON.stringify(payload),
     });
 
     const body = await response.json().catch(() => null);
@@ -60,12 +50,6 @@ export class SubtitleApiClient {
       );
     }
 
-    return body as T;
-  }
-
-  private urlFor(path: string): string {
-    const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-
-    return new URL(path.replace(/^\/+/, ''), baseUrl).toString();
+    return body as JobResponse;
   }
 }

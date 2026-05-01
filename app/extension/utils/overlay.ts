@@ -1,7 +1,7 @@
 import type { ExtensionSettings } from './settings-model';
 import { escapeHtml } from './html';
 import type { SubtitleState } from './messages';
-import type { UnsupportedYoutubePageReason, YoutubePageInfo } from './youtube';
+import type { YoutubePageInfo } from './youtube';
 
 export interface OverlayRenderState {
   page: YoutubePageInfo;
@@ -20,14 +20,10 @@ export class OverlayShell {
       this.mount();
     }
 
-    if (!this.host || !this.content) {
-      return;
-    }
-
-    this.host.dataset.position = state.settings.overlayPosition;
-    this.host.style.display = state.settings.overlayVisible ? 'block' : 'none';
+    this.host!.dataset.position = state.settings.overlayPosition;
+    this.host!.style.display = state.settings.overlayVisible ? 'block' : 'none';
     this.positionHost(state.settings.overlayPosition);
-    this.content.innerHTML = renderOverlayContent(state);
+    this.content!.innerHTML = renderOverlayContent(state);
   }
 
   public unmount(): void {
@@ -41,7 +37,7 @@ export class OverlayShell {
 
     if (existingHost?.shadowRoot) {
       this.host = existingHost;
-      this.content = existingHost.shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]');
+      this.content = existingHost.shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
 
       return;
     }
@@ -113,7 +109,7 @@ export class OverlayShell {
     `;
 
     this.host = host;
-    this.content = shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]');
+    this.content = shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
     (this.documentRef.body ?? this.documentRef.documentElement).append(host);
   }
 
@@ -150,7 +146,10 @@ function renderOverlayContent(state: OverlayRenderState): string {
     return renderShell({
       eyebrow: 'AI subtitles',
       title: 'Unsupported page',
-      detail: unsupportedPageCopy(state.page.reason),
+      detail:
+        state.page.reason === 'missing_video_id' || state.page.reason === 'invalid_video_id'
+          ? 'The current YouTube watch URL has no valid video ID.'
+          : 'YouTube watch page required.',
       meta: [],
     });
   }
@@ -217,12 +216,4 @@ function renderShell(input: { eyebrow: string; title: string; detail: string; me
       ${meta}
     </section>
   `;
-}
-
-function unsupportedPageCopy(reason: UnsupportedYoutubePageReason): string {
-  if (reason === 'missing_video_id' || reason === 'invalid_video_id') {
-    return 'The current YouTube watch URL has no valid video ID.';
-  }
-
-  return 'YouTube watch page required.';
 }

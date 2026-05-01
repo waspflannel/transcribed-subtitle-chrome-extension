@@ -49,10 +49,20 @@ export type RuntimeMessage =
     };
 
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'type' in value &&
-    typeof (value as { type?: unknown }).type === 'string'
-  );
+  if (typeof value !== 'object' || value === null || !('type' in value)) {
+    return false;
+  }
+
+  switch ((value as { type: unknown }).type) {
+    case 'content.getState':
+    case 'popup.getState':
+    case 'popup.updateSettings':
+    case 'popup.generateSubtitles':
+    case 'background.settingsChanged':
+    case 'background.subtitleStateChanged':
+      return true;
+
+    default:
+      return false;
+  }
 }
