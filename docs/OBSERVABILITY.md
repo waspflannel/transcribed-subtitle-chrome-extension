@@ -6,7 +6,7 @@ Make application state legible to agents and humans through inspectable signals.
 
 ## Current State
 
-Phase 03 introduced the first runtime product path. The backend records persisted subtitle job and track rows, and public API failures use stable error responses.
+Phase 04 introduced the first real backend processing path. The backend records persisted subtitle job and track rows, acquires YouTube audio into temporary storage, deletes raw audio after processing succeeds or fails, and returns stable public errors for validation, acquisition, and transcription failures.
 
 ## Logging
 
@@ -14,6 +14,7 @@ Phase 03 introduced the first runtime product path. The backend records persiste
 - Include request or operation identifiers when workflows span boundaries.
 - Log enough context to explain failures without leaking secrets.
 - For subtitle processing, use public job IDs in logs rather than install IDs, raw transcript text, audio paths, prompts, or provider secrets.
+- Audio acquisition and transcription emit stage-specific start, completed, and failed log events with public job ID, video ID, duration, byte count, provider name, segment count, and stable error code where available.
 
 ## Metrics
 

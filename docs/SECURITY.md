@@ -40,6 +40,8 @@ Project-specific security defaults:
 - Provider keys stay only in Laravel environment/config.
 - Extension code must never call AI providers directly.
 - Raw audio is temporary and must be deleted after processing succeeds or fails.
+- YouTube audio acquisition writes only to controlled backend temporary storage.
 - Logs must not include secrets, raw audio, full prompts, or full transcripts by default.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - Phase 03 `/v1/*` API routes require `X-Extension-Install-Id`, throttle by anonymous install ID and IP, and return stable public error objects.
+- Phase 04 transcription uses backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.

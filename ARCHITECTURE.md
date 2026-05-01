@@ -13,8 +13,9 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Agent harness scripts live in `scripts/agent/`.
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
-- The Phase 03 backend exposes the local `POST /v1/subtitle-jobs` JSON API.
-- Subtitle jobs and mock tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
+- The backend exposes the local `POST /v1/subtitle-jobs` JSON API.
+- Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
+- Phase 04 replaces the mock generation path with backend YouTube audio acquisition, raw audio cleanup, and timestamped transcription proof output.
 
 ## Selected Stack
 
@@ -29,6 +30,7 @@ Backend
   - Laravel migrations and Eloquent
   - SQLite first
   - Laravel AI SDK 0.x
+  - Configurable `yt-dlp` binary for the first YouTube audio acquisition proof
   - Laravel Boost 2.x as development tooling
   - Local Boost skills routed by `docs/references/boost-skill-routing.md`
 
@@ -44,8 +46,8 @@ Contracts
 Chrome Extension
   -> proxy-facing Laravel API routes
     -> Laravel application services
-      -> YouTube audio acquisition
-      -> transcription provider
+      -> YouTube audio acquisition in controlled temporary storage
+      -> transcription provider normalized to timestamped transcript segments
       -> cue segmentation
       -> Laravel AI SDK enrichment
       -> SQLite track storage
