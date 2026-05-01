@@ -10,6 +10,7 @@
     "youtubeVideoId",
     "sourceLanguage",
     "targetLanguage",
+    "track",
     "createdAt",
     "updatedAt"
   ],
@@ -20,13 +21,7 @@
     },
     "status": {
       "type": "string",
-      "enum": [
-        "queued",
-        "processing",
-        "completed",
-        "failed",
-        "expired"
-      ]
+      "const": "completed"
     },
     "youtubeVideoId": {
       "type": "string",
@@ -43,42 +38,8 @@
       "type": "string",
       "const": "en"
     },
-    "progress": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "stage",
-        "percent"
-      ],
-      "properties": {
-        "stage": {
-          "type": "string",
-          "enum": [
-            "queued",
-            "acquiring_audio",
-            "transcribing",
-            "segmenting",
-            "enriching",
-            "finalizing"
-          ]
-        },
-        "percent": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "message": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "trackId": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "error": {
-      "$ref": "error-object.schema.json"
+    "track": {
+      "$ref": "track-response.schema.json"
     },
     "createdAt": {
       "type": "string",

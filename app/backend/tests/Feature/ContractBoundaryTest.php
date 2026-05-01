@@ -15,7 +15,6 @@ class ContractBoundaryTest extends TestCase
             $contractsPath.DIRECTORY_SEPARATOR.'openapi.json',
             $schemaPath.DIRECTORY_SEPARATOR.'create-subtitle-job-request.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'job-response.schema.json',
-            $schemaPath.DIRECTORY_SEPARATOR.'track-lookup-response.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'track-response.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'cue.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'token.schema.json',
@@ -35,6 +34,7 @@ class ContractBoundaryTest extends TestCase
 
         $this->assertSame('3.1.0', $openApi['openapi']);
         $this->assertArrayHasKey('/v1/subtitle-jobs', $openApi['paths']);
-        $this->assertArrayHasKey('/v1/tracks/lookup', $openApi['paths']);
+        $this->assertArrayNotHasKey('/v1/subtitle-jobs/{jobId}', $openApi['paths']);
+        $this->assertArrayNotHasKey('/v1/tracks/lookup', $openApi['paths']);
     }
 }

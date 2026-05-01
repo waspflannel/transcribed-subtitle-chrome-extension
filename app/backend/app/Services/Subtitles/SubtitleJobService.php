@@ -2,7 +2,6 @@
 
 namespace App\Services\Subtitles;
 
-use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\SubtitleJobStatus;
@@ -13,13 +12,16 @@ class SubtitleJobService
 {
     public const PROCESSING_VERSION = 'mock-subtitles-v1';
 
+    public function __construct(private readonly MockSubtitleTrackGenerator $tracks) {}
+
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function createOrReuse(array $payload, string $installId, ?string $requestIp): SubtitleJob
+    public function generate(array $payload, string $installId, ?string $requestIp): SubtitleJob
     {
         return DB::transaction(function () use ($payload, $installId, $requestIp): SubtitleJob {
             $job = SubtitleJob::query()
+                ->with('track')
                 ->where('youtube_video_id', $payload['youtubeVideoId'])
                 ->where('source_language', $payload['sourceLanguage'])
                 ->where('target_language', $payload['targetLanguage'])
@@ -27,48 +29,25 @@ class SubtitleJobService
                 ->first();
 
             if ($job) {
-                if ($job->status === SubtitleJobStatus::Expired || $job->expires_at?->isPast()) {
-                    $this->requeueExpiredJob($job, $payload, $installId, $requestIp);
+                if ($this->hasReadyTrack($job)) {
+                    return $job;
                 }
 
-                return $job->refresh()->load('track');
+                $this->resetJob($job, $payload, $installId, $requestIp);
+            } else {
+                $job = $this->createJob($payload, $installId, $requestIp);
             }
 
-            $job = SubtitleJob::create([
-                'public_id' => (string) Str::uuid(),
-                'youtube_video_id' => $payload['youtubeVideoId'],
-                'youtube_url' => $payload['youtubeUrl'] ?? null,
-                'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
-                'source_language' => $payload['sourceLanguage'],
-                'target_language' => $payload['targetLanguage'],
-                'options' => $payload['options'],
-                'processing_version' => self::PROCESSING_VERSION,
-                'status' => SubtitleJobStatus::Queued,
-                'progress_stage' => 'queued',
-                'progress_percent' => 0,
-                'progress_message' => 'Queued',
-                'install_id' => $installId,
-                'request_ip' => $requestIp,
-            ]);
+            $this->markProcessing($job);
 
-            ProcessSubtitleJob::dispatch($job)->afterCommit();
+            $track = $this->tracks->generate($job->refresh());
+            $this->markCompleted($job, $track);
 
-            return $job->load('track');
+            return $job->refresh()->load('track');
         });
     }
 
-    public function findReadyTrack(string $youtubeVideoId, string $sourceLanguage, string $targetLanguage): ?SubtitleTrack
-    {
-        return SubtitleTrack::query()
-            ->where('youtube_video_id', $youtubeVideoId)
-            ->where('source_language', $sourceLanguage)
-            ->where('target_language', $targetLanguage)
-            ->where('processing_version', self::PROCESSING_VERSION)
-            ->where('expires_at', '>', now())
-            ->first();
-    }
-
-    public function markProcessing(SubtitleJob $job): void
+    private function markProcessing(SubtitleJob $job): void
     {
         $job->update([
             'status' => SubtitleJobStatus::Processing,
@@ -78,7 +57,7 @@ class SubtitleJobService
         ]);
     }
 
-    public function markCompleted(SubtitleJob $job, SubtitleTrack $track): void
+    private function markCompleted(SubtitleJob $job, SubtitleTrack $track): void
     {
         $job->update([
             'status' => SubtitleJobStatus::Completed,
@@ -95,9 +74,33 @@ class SubtitleJobService
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function requeueExpiredJob(SubtitleJob $job, array $payload, string $installId, ?string $requestIp): void
+    private function createJob(array $payload, string $installId, ?string $requestIp): SubtitleJob
+    {
+        return SubtitleJob::create([
+            'public_id' => (string) Str::uuid(),
+            'youtube_video_id' => $payload['youtubeVideoId'],
+            'youtube_url' => $payload['youtubeUrl'] ?? null,
+            'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
+            'source_language' => $payload['sourceLanguage'],
+            'target_language' => $payload['targetLanguage'],
+            'options' => $payload['options'],
+            'processing_version' => self::PROCESSING_VERSION,
+            'status' => SubtitleJobStatus::Queued,
+            'progress_stage' => 'queued',
+            'progress_percent' => 0,
+            'progress_message' => 'Queued',
+            'install_id' => $installId,
+            'request_ip' => $requestIp,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function resetJob(SubtitleJob $job, array $payload, string $installId, ?string $requestIp): void
     {
         $job->track()->delete();
+        $job->unsetRelation('track');
 
         $job->update([
             'youtube_url' => $payload['youtubeUrl'] ?? null,
@@ -114,7 +117,13 @@ class SubtitleJobService
             'request_ip' => $requestIp,
             'expires_at' => null,
         ]);
+    }
 
-        ProcessSubtitleJob::dispatch($job)->afterCommit();
+    private function hasReadyTrack(SubtitleJob $job): bool
+    {
+        return $job->status === SubtitleJobStatus::Completed
+            && $job->expires_at?->isFuture()
+            && $job->track !== null
+            && ! $job->track->isExpired();
     }
 }

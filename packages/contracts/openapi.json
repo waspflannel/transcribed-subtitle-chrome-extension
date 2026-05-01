@@ -3,7 +3,7 @@
   "info": {
     "title": "YouTube AI Subtitle Learning Extension API",
     "version": "0.1.0",
-    "description": "Phase 01 API contract for creating subtitle generation jobs, checking job status, and fetching generated subtitle tracks."
+    "description": "API contract for requesting subtitle generation and receiving a completed generated track."
   },
   "servers": [
     {
@@ -32,8 +32,8 @@
           }
         },
         "responses": {
-          "202": {
-            "description": "Job accepted.",
+          "200": {
+            "description": "Subtitle generation completed.",
             "content": {
               "application/json": {
                 "schema": {
@@ -44,132 +44,6 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/subtitle-jobs/{jobId}": {
-      "get": {
-        "operationId": "getSubtitleJob",
-        "summary": "Get subtitle job status.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/JobId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Current job state.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./schemas/job-response.schema.json"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/tracks/{trackId}": {
-      "get": {
-        "operationId": "getSubtitleTrack",
-        "summary": "Fetch a completed generated subtitle track.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/TrackId"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Generated subtitle track.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./schemas/track-response.schema.json"
-                }
-              }
-            }
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "410": {
-            "$ref": "#/components/responses/Expired"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/tracks/lookup": {
-      "get": {
-        "operationId": "lookupSubtitleTrack",
-        "summary": "Look up a ready generated subtitle track by YouTube video and language.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "name": "youtubeVideoId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_-]{11}$"
-            }
-          },
-          {
-            "name": "sourceLanguage",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "auto",
-                "ar"
-              ]
-            }
-          },
-          {
-            "name": "targetLanguage",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "const": "en"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Ready-track lookup result.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./schemas/track-lookup-response.schema.json"
-                }
-              }
-            }
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
@@ -222,24 +96,6 @@
           "maxLength": 128,
           "pattern": "^[A-Za-z0-9_-]+$"
         }
-      },
-      "JobId": {
-        "name": "jobId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "format": "uuid"
-        }
-      },
-      "TrackId": {
-        "name": "trackId",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "format": "uuid"
-        }
       }
     },
     "responses": {
@@ -265,16 +121,6 @@
       },
       "NotFound": {
         "description": "Resource was not found.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "./schemas/api-error.schema.json"
-            }
-          }
-        }
-      },
-      "Expired": {
-        "description": "Resource expired according to retention policy.",
         "content": {
           "application/json": {
             "schema": {

@@ -39,7 +39,6 @@ for (const [file, schema] of schemas) {
 const fixtures = [
   ['create-subtitle-job-request.schema.json', 'valid-create-subtitle-job-request.json'],
   ['job-response.schema.json', 'valid-job-response.json'],
-  ['track-lookup-response.schema.json', 'valid-track-lookup-response.json'],
   ['track-response.schema.json', 'valid-track-response.json'],
   ['api-error.schema.json', 'valid-api-error.json'],
 ];

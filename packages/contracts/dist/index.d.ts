@@ -29,45 +29,51 @@ export interface CreateSubtitleJobRequest {
 // Source: schemas/job-response.schema.json
 export interface JobResponse {
   jobId: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'expired';
+  status: 'completed';
   youtubeVideoId: string;
   sourceLanguage: 'auto' | 'ar';
   targetLanguage: 'en';
-  progress?: {
-    stage: 'queued' | 'acquiring_audio' | 'transcribing' | 'segmenting' | 'enriching' | 'finalizing';
-    percent: number;
-    message?: string;
-  };
-  trackId?: string;
-  error?: ErrorObject;
+  track: TrackResponse;
   createdAt: string;
   updatedAt: string;
   expiresAt?: string;
 }
-export interface ErrorObject {
-  code:
-    | 'validation_failed'
-    | 'unsupported_video'
-    | 'video_too_long'
-    | 'audio_acquisition_failed'
-    | 'transcription_failed'
-    | 'enrichment_failed'
-    | 'rate_limited'
-    | 'not_found'
-    | 'expired'
-    | 'internal_error';
-  message: string;
-  details?: {
-    [k: string]: unknown;
+export interface TrackResponse {
+  trackId: string;
+  jobId: string;
+  youtubeVideoId: string;
+  sourceLanguage: 'auto' | 'ar';
+  targetLanguage: 'en';
+  detectedDialect?: {
+    label: string;
+    confidence: number;
   };
+  generatedAt: string;
+  expiresAt: string;
+  /**
+   * @minItems 1
+   */
+  cues: [SubtitleCue, ...SubtitleCue[]];
 }
-
-// Source: schemas/track-lookup-response.schema.json
-export interface TrackLookupResponse {
-  found: boolean;
-  trackId?: string;
-  status?: 'ready';
-  expiresAt?: string;
+export interface SubtitleCue {
+  cueId: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  sourceText: string;
+  translatedText: string;
+  romanization?: string;
+  tokens: LearningToken[];
+}
+export interface LearningToken {
+  index: number;
+  text: string;
+  normalizedText?: string;
+  lemma?: string;
+  partOfSpeech?: string;
+  translation?: string;
+  gloss?: string;
+  romanization?: string;
 }
 
 // Source: schemas/track-response.schema.json

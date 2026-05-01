@@ -2,46 +2,41 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\SubtitleJobStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_create_subtitle_job_validates_and_dispatches_processing(): void
+    public function test_create_subtitle_job_returns_completed_track(): void
     {
-        Queue::fake();
-
         $response = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
-            ->assertAccepted()
-            ->assertJsonPath('status', 'queued')
+            ->assertOk()
+            ->assertJsonPath('status', 'completed')
             ->assertJsonPath('youtubeVideoId', 'dQw4w9WgXcQ')
-            ->assertJsonPath('progress.stage', 'queued');
+            ->assertJsonPath('track.youtubeVideoId', 'dQw4w9WgXcQ')
+            ->assertJsonStructure($this->completedJobShape());
 
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertSame(1, SubtitleTrack::count());
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'ar',
             'target_language' => 'en',
-            'status' => 'queued',
+            'status' => 'completed',
         ]);
-
-        Queue::assertPushed(ProcessSubtitleJob::class);
     }
 
-    public function test_duplicate_subtitle_job_request_reuses_existing_job(): void
+    public function test_duplicate_subtitle_job_request_reuses_existing_completed_job(): void
     {
-        Queue::fake();
-
         $firstResponse = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
@@ -50,19 +45,18 @@ class SubtitleJobApiTest extends TestCase
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
-        $firstResponse->assertAccepted();
+        $firstResponse->assertOk();
         $secondResponse
-            ->assertAccepted()
-            ->assertJsonPath('jobId', $firstResponse->json('jobId'));
+            ->assertOk()
+            ->assertJsonPath('jobId', $firstResponse->json('jobId'))
+            ->assertJsonPath('track.trackId', $firstResponse->json('track.trackId'));
 
         $this->assertSame(1, SubtitleJob::count());
-        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+        $this->assertSame(1, SubtitleTrack::count());
     }
 
-    public function test_expired_subtitle_job_request_requeues_existing_job(): void
+    public function test_expired_subtitle_job_request_regenerates_existing_job(): void
     {
-        Queue::fake();
-
         $job = SubtitleJob::factory()->create([
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'ar',
@@ -71,7 +65,7 @@ class SubtitleJobApiTest extends TestCase
             'expires_at' => now()->subMinute(),
         ]);
 
-        $track = SubtitleTrack::factory()
+        $expiredTrack = SubtitleTrack::factory()
             ->for($job, 'job')
             ->create([
                 'youtube_video_id' => 'dQw4w9WgXcQ',
@@ -85,31 +79,16 @@ class SubtitleJobApiTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
-            ->assertAccepted()
-            ->assertJsonPath('jobId', $job->public_id)
-            ->assertJsonPath('status', 'queued')
-            ->assertJsonPath('progress.stage', 'queued');
-
-        $this->assertSame(1, SubtitleJob::count());
-        $this->assertDatabaseMissing('subtitle_tracks', ['id' => $track->id]);
-        $this->assertSame(SubtitleJobStatus::Queued, $job->refresh()->status);
-        $this->assertNull($job->expires_at);
-
-        Queue::assertPushed(ProcessSubtitleJob::class, 1);
-    }
-
-    public function test_job_status_route_returns_current_job_state(): void
-    {
-        $job = SubtitleJob::factory()->create([
-            'public_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
-        ]);
-
-        $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->getJson("/v1/subtitle-jobs/{$job->public_id}")
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id)
-            ->assertJsonPath('status', 'queued');
+            ->assertJsonPath('status', 'completed')
+            ->assertJsonStructure($this->completedJobShape());
+
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertSame(1, SubtitleTrack::count());
+        $this->assertDatabaseMissing('subtitle_tracks', ['id' => $expiredTrack->id]);
+        $this->assertSame(SubtitleJobStatus::Completed, $job->refresh()->status);
+        $this->assertNotNull($job->expires_at);
     }
 
     public function test_create_subtitle_job_returns_stable_validation_errors(): void
@@ -152,6 +131,35 @@ class SubtitleJobApiTest extends TestCase
             'options' => [
                 'includeRomanization' => true,
                 'includeGloss' => true,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function completedJobShape(): array
+    {
+        return [
+            'jobId',
+            'status',
+            'youtubeVideoId',
+            'sourceLanguage',
+            'targetLanguage',
+            'createdAt',
+            'updatedAt',
+            'expiresAt',
+            'track' => [
+                'trackId',
+                'jobId',
+                'youtubeVideoId',
+                'sourceLanguage',
+                'targetLanguage',
+                'generatedAt',
+                'expiresAt',
+                'cues' => [
+                    '*' => ['cueId', 'index', 'startMs', 'endMs', 'sourceText', 'translatedText', 'tokens'],
+                ],
             ],
         ];
     }

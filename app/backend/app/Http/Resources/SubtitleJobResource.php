@@ -26,30 +26,8 @@ class SubtitleJobResource extends JsonResource
             'updatedAt' => $this->updated_at->toJSON(),
         ];
 
-        if ($this->progress_stage !== null && $this->progress_percent !== null) {
-            $response['progress'] = [
-                'stage' => $this->progress_stage,
-                'percent' => $this->progress_percent,
-            ];
-
-            if ($this->progress_message !== null) {
-                $response['progress']['message'] = $this->progress_message;
-            }
-        }
-
-        if ($this->track !== null) {
-            $response['trackId'] = $this->track->public_id;
-        }
-
-        if ($this->error_code !== null && $this->error_message !== null) {
-            $response['error'] = [
-                'code' => $this->error_code,
-                'message' => $this->error_message,
-            ];
-
-            if ($this->error_details !== null) {
-                $response['error']['details'] = $this->error_details;
-            }
+        if ($this->track !== null && ! $this->track->isExpired()) {
+            $response['track'] = SubtitleTrackResource::make($this->track)->resolve();
         }
 
         if ($this->expires_at !== null) {
