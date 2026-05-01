@@ -17,6 +17,9 @@ type PopupRequest =
       type: 'popup.generateSubtitles';
     };
 
+type PopupErrorResponse = { ok: false; error: string };
+type PopupResponse = PopupState | PopupErrorResponse;
+
 const installIdText = document.querySelector<HTMLParagraphElement>('[data-install-id]')!;
 const statusText = document.querySelector<HTMLParagraphElement>('[data-status]')!;
 const videoText = document.querySelector<HTMLElement>('[data-video-label]')!;
@@ -53,8 +56,15 @@ async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> 
 
 async function sendPopupRequest(request: PopupRequest): Promise<void> {
   try {
-    const state = (await browser.runtime.sendMessage(request)) as PopupState;
-    showPopupState(state);
+    const response = (await browser.runtime.sendMessage(request)) as PopupResponse;
+
+    if (isPopupErrorResponse(response)) {
+      showError(response.error);
+
+      return;
+    }
+
+    showPopupState(response);
   } catch (error) {
     showError(error);
   }
@@ -66,6 +76,10 @@ function handleOverlayPositionChange(): void {
   if (overlayPosition) {
     void updateSettings({ overlayPosition });
   }
+}
+
+function isPopupErrorResponse(response: PopupResponse): response is PopupErrorResponse {
+  return 'ok' in response;
 }
 
 function showPopupState(state: PopupState): void {
@@ -94,7 +108,8 @@ function showSettings(settings: ExtensionSettings): void {
 function showError(error: unknown): void {
   installIdText.hidden = true;
   statusText.className = 'status error';
-  statusText.textContent = error instanceof Error ? error.message : 'Unable to load extension state';
+  statusText.textContent =
+    typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unable to load extension state';
   videoText.textContent = 'No supported video';
   trackText.textContent = 'No track';
   generateButton.disabled = true;
