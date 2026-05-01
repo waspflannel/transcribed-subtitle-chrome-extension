@@ -4,6 +4,5 @@ export type {
   JobResponse,
   LearningToken,
   SubtitleCue,
-  TrackLookupResponse,
   TrackResponse,
 } from '@transcribed-subtitle-extension/contracts';

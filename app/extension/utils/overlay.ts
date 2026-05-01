@@ -5,7 +5,6 @@ import type { UnsupportedYoutubePageReason, YoutubePageInfo } from './youtube';
 
 export interface OverlayRenderState {
   page: YoutubePageInfo;
-  videoElementFound: boolean;
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
 }
@@ -153,26 +152,6 @@ function renderOverlayContent(state: OverlayRenderState): string {
       title: 'Unsupported page',
       detail: unsupportedPageCopy(state.page.reason),
       meta: [],
-    });
-  }
-
-  if (!state.videoElementFound) {
-    return renderShell({
-      eyebrow: 'AI subtitles',
-      title: 'Waiting for video',
-      detail: 'The YouTube player is still loading.',
-      meta: [`Video ${state.page.videoId}`],
-    });
-  }
-
-  if (state.subtitleState.type === 'processing') {
-    const progress = state.subtitleState.job.progress;
-
-    return renderShell({
-      eyebrow: 'AI subtitles',
-      title: 'Generating subtitles',
-      detail: progress?.message ?? 'Processing is in progress.',
-      meta: [`Video ${state.page.videoId}`, progress ? `${progress.percent}%` : 'Queued'],
     });
   }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { SubtitleApiClient, SubtitleApiError } from '../utils/api';
-import type { CreateSubtitleJobRequest, JobResponse } from '../utils/contracts';
+import type { CreateSubtitleJobRequest, JobResponse, TrackResponse } from '../utils/contracts';
 
 const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -9,14 +9,15 @@ describe('SubtitleApiClient', () => {
   it('creates subtitle jobs with the extension install header', async () => {
     const jobResponse: JobResponse = {
       jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
-      status: 'queued',
+      status: 'completed',
       youtubeVideoId: 'dQw4w9WgXcQ',
       sourceLanguage: 'ar',
       targetLanguage: 'en',
+      track: trackResponse(),
       createdAt: '2026-04-30T00:00:00Z',
       updatedAt: '2026-04-30T00:00:00Z',
     };
-    const fetchMock = vi.fn(async () => jsonResponse(jobResponse, 202));
+    const fetchMock = vi.fn(async () => jsonResponse(jobResponse, 200));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
 
     const payload: CreateSubtitleJobRequest = {
@@ -55,14 +56,46 @@ describe('SubtitleApiClient', () => {
       ),
     );
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+    const payload: CreateSubtitleJobRequest = {
+      youtubeVideoId: 'bad-job-id',
+      sourceLanguage: 'ar',
+      targetLanguage: 'en',
+      options: {
+        includeRomanization: true,
+        includeGloss: true,
+      },
+    };
 
-    await expect(client.getSubtitleJob(installId, 'bad-job-id')).rejects.toMatchObject({
+    await expect(client.createSubtitleJob(installId, payload)).rejects.toMatchObject({
       name: 'SubtitleApiError',
       code: 'validation_failed',
       status: 422,
     } satisfies Partial<SubtitleApiError>);
   });
 });
+
+function trackResponse(): TrackResponse {
+  return {
+    trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
+    jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+    youtubeVideoId: 'dQw4w9WgXcQ',
+    sourceLanguage: 'ar',
+    targetLanguage: 'en',
+    generatedAt: '2026-04-30T00:00:00Z',
+    expiresAt: '2026-05-30T00:00:00Z',
+    cues: [
+      {
+        cueId: 'cue-0001',
+        index: 0,
+        startMs: 0,
+        endMs: 1000,
+        sourceText: 'marhaban',
+        translatedText: 'hello',
+        tokens: [],
+      },
+    ],
+  };
+}
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {

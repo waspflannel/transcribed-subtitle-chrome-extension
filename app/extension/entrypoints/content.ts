@@ -1,13 +1,11 @@
 import { browser } from 'wxt/browser';
 
 import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
-import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type ContentPageStatus, type SubtitleState } from '../utils/messages';
+import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
-import { findActiveVideoElement } from '../utils/video';
 import { parseYoutubePage } from '../utils/youtube';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
-const VIDEO_STATE_EVENTS = ['loadedmetadata', 'durationchange', 'emptied', 'play', 'pause', 'seeked'];
 
 export default defineContentScript({
   matches: ['*://*.youtube.com/watch*'],
@@ -15,74 +13,28 @@ export default defineContentScript({
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
-    let activeVideoElement: HTMLVideoElement | null = null;
-    let unbindVideoListeners: (() => void) | null = null;
-    let lastStatusKey = '';
     let disposed = false;
 
     const overlay = new OverlayShell(document);
 
-    function syncPageState(): void {
+    function updateOverlay(): void {
       if (disposed) {
         return;
       }
 
-      const status = buildStatus();
-
       overlay.update({
-        page: status.page,
-        videoElementFound: status.videoElementFound,
+        page: parseYoutubePage(window.location.href),
         subtitleState,
         settings,
       });
-
-      publishStatus(status);
     }
 
-    function buildStatus(): ContentPageStatus {
-      const page = parseYoutubePage(window.location.href);
-      const video = page.supported ? findActiveVideoElement(document) : null;
-
-      trackVideoElement(video);
-
-      return {
-        page,
-        videoElementFound: Boolean(activeVideoElement),
-        videoDurationSeconds:
-          activeVideoElement && Number.isFinite(activeVideoElement.duration) ? activeVideoElement.duration : undefined,
-        videoCurrentTimeSeconds: activeVideoElement?.currentTime,
-        updatedAt: Date.now(),
-      };
+    function resetOverlayForRouteChange(): void {
+      subtitleState = DEFAULT_SUBTITLE_STATE;
+      updateOverlay();
     }
 
-    function trackVideoElement(video: HTMLVideoElement | null): void {
-      if (video === activeVideoElement) {
-        return;
-      }
-
-      unbindVideoListeners?.();
-      activeVideoElement = video;
-      unbindVideoListeners = video ? bindVideoElement(video, syncPageState) : null;
-    }
-
-    function publishStatus(status: ContentPageStatus): void {
-      const statusKey = JSON.stringify({
-        page: status.page,
-        videoElementFound: status.videoElementFound,
-        videoDurationSeconds: status.videoDurationSeconds,
-      });
-
-      if (statusKey === lastStatusKey) {
-        return;
-      }
-
-      lastStatusKey = statusKey;
-      browser.runtime.sendMessage({ type: 'content.statusChanged', status }).catch(() => {
-        // The service worker can be unavailable during reloads. The next state check will retry.
-      });
-    }
-
-    const stopRouteObserver = observeYoutubeRouteChanges(syncPageState);
+    const stopRouteObserver = observeYoutubeRouteChanges(resetOverlayForRouteChange);
 
     browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (!isRuntimeMessage(message)) {
@@ -91,7 +43,7 @@ export default defineContentScript({
 
       if (message.type === 'background.settingsChanged') {
         settings = createExtensionSettingsFromPartial(message.settings);
-        syncPageState();
+        updateOverlay();
         sendResponse({ ok: true });
 
         return false;
@@ -99,7 +51,7 @@ export default defineContentScript({
 
       if (message.type === 'background.subtitleStateChanged') {
         subtitleState = message.subtitleState;
-        syncPageState();
+        updateOverlay();
         sendResponse({ ok: true });
 
         return false;
@@ -119,18 +71,17 @@ export default defineContentScript({
           subtitleState = state.subtitleState;
         }
 
-        syncPageState();
+        updateOverlay();
       })
       .catch(() => {
-        syncPageState();
+        updateOverlay();
       });
 
-    syncPageState();
+    updateOverlay();
 
     ctx.onInvalidated(() => {
       disposed = true;
       stopRouteObserver();
-      unbindVideoListeners?.();
       overlay.unmount();
     });
   },
@@ -144,18 +95,6 @@ function observeYoutubeRouteChanges(callback: () => void): () => void {
   return () => {
     for (const eventName of YOUTUBE_ROUTE_EVENTS) {
       window.removeEventListener(eventName, callback);
-    }
-  };
-}
-
-function bindVideoElement(video: HTMLVideoElement, callback: () => void): () => void {
-  for (const eventName of VIDEO_STATE_EVENTS) {
-    video.addEventListener(eventName, callback);
-  }
-
-  return () => {
-    for (const eventName of VIDEO_STATE_EVENTS) {
-      video.removeEventListener(eventName, callback);
     }
   };
 }

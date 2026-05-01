@@ -92,7 +92,7 @@ function showPopupState(state: PopupState): void {
   statusText.textContent = videoStateLabel(pageStatus);
   videoText.textContent = videoLabel(pageStatus);
   trackText.textContent = subtitleStateLabel(state.subtitleState);
-  generateButton.disabled = !supported || state.subtitleState.type === 'processing';
+  generateButton.disabled = !supported;
 
   showSettings(state.settings);
   setSettingsDisabled(false);
@@ -132,11 +132,11 @@ function overlayPositionFromValue(value: string): OverlayPosition | null {
 }
 
 function isSupportedVideoPage(pageStatus: PopupState['pageStatus']): boolean {
-  return Boolean(pageStatus?.page.supported);
+  return Boolean(pageStatus?.supported);
 }
 
 function videoLabel(pageStatus: PopupState['pageStatus']): string {
-  return pageStatus?.page.supported ? pageStatus.page.videoId : 'No supported video';
+  return pageStatus?.supported ? pageStatus.videoId : 'No supported video';
 }
 
 function videoStateLabel(pageStatus: PopupState['pageStatus']): string {
@@ -144,16 +144,10 @@ function videoStateLabel(pageStatus: PopupState['pageStatus']): string {
     return 'Unsupported page';
   }
 
-  return pageStatus?.videoElementFound ? 'Video element detected' : 'Waiting for video element';
+  return 'Ready to generate';
 }
 
 function subtitleStateLabel(state: SubtitleState): string {
-  if (state.type === 'processing') {
-    const progress = state.job.progress;
-
-    return progress ? `${progress.stage} ${progress.percent}%` : 'Processing';
-  }
-
   if (state.type === 'ready') {
     return `Ready ${shortInstallId(state.track.trackId)}`;
   }

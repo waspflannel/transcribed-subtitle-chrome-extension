@@ -2,17 +2,9 @@ import type {
   ApiError,
   CreateSubtitleJobRequest,
   JobResponse,
-  TrackLookupResponse,
-  TrackResponse,
 } from './contracts';
 
 export const DEFAULT_BACKEND_API_BASE_URL = 'http://localhost:8000/v1';
-
-export interface TrackLookupRequest {
-  youtubeVideoId: string;
-  sourceLanguage: CreateSubtitleJobRequest['sourceLanguage'];
-  targetLanguage: CreateSubtitleJobRequest['targetLanguage'];
-}
 
 export class SubtitleApiError extends Error {
   public constructor(
@@ -39,30 +31,12 @@ export class SubtitleApiClient {
     });
   }
 
-  public getSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
-    return this.requestJson<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId);
-  }
-
-  public lookupSubtitleTrack(installId: string, request: TrackLookupRequest): Promise<TrackLookupResponse> {
-    return this.requestJson<TrackLookupResponse>('tracks/lookup', installId, {
-      query: {
-        youtubeVideoId: request.youtubeVideoId,
-        sourceLanguage: request.sourceLanguage,
-        targetLanguage: request.targetLanguage,
-      },
-    });
-  }
-
-  public getSubtitleTrack(installId: string, trackId: string): Promise<TrackResponse> {
-    return this.requestJson<TrackResponse>(`tracks/${encodeURIComponent(trackId)}`, installId);
-  }
-
   private async requestJson<T>(
     path: string,
     installId: string,
-    options: { method?: string; body?: string; query?: Record<string, string> } = {},
+    options: { method?: string; body?: string } = {},
   ): Promise<T> {
-    const response = await this.fetchImpl(this.urlFor(path, options.query), {
+    const response = await this.fetchImpl(this.urlFor(path), {
       method: options.method ?? 'GET',
       headers: {
         Accept: 'application/json',
@@ -89,14 +63,9 @@ export class SubtitleApiClient {
     return body as T;
   }
 
-  private urlFor(path: string, query: Record<string, string> | undefined): string {
+  private urlFor(path: string): string {
     const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const url = new URL(path.replace(/^\/+/, ''), baseUrl);
 
-    for (const [key, value] of Object.entries(query ?? {})) {
-      url.searchParams.set(key, value);
-    }
-
-    return url.toString();
+    return new URL(path.replace(/^\/+/, ''), baseUrl).toString();
   }
 }
