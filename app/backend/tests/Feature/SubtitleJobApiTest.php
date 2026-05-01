@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrack;
+use App\SubtitleJobStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -54,6 +56,45 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobId', $firstResponse->json('jobId'));
 
         $this->assertSame(1, SubtitleJob::count());
+        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+    }
+
+    public function test_expired_subtitle_job_request_requeues_existing_job(): void
+    {
+        Queue::fake();
+
+        $job = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'source_language' => 'ar',
+            'target_language' => 'en',
+            'status' => SubtitleJobStatus::Completed,
+            'expires_at' => now()->subMinute(),
+        ]);
+
+        $track = SubtitleTrack::factory()
+            ->for($job, 'job')
+            ->create([
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'source_language' => 'ar',
+                'target_language' => 'en',
+                'expires_at' => now()->subMinute(),
+            ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $response
+            ->assertAccepted()
+            ->assertJsonPath('jobId', $job->public_id)
+            ->assertJsonPath('status', 'queued')
+            ->assertJsonPath('progress.stage', 'queued');
+
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertDatabaseMissing('subtitle_tracks', ['id' => $track->id]);
+        $this->assertSame(SubtitleJobStatus::Queued, $job->refresh()->status);
+        $this->assertNull($job->expires_at);
+
         Queue::assertPushed(ProcessSubtitleJob::class, 1);
     }
 

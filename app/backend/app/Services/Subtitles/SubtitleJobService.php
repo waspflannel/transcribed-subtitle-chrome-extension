@@ -27,7 +27,11 @@ class SubtitleJobService
                 ->first();
 
             if ($job) {
-                return $this->refreshExpiredJob($job)->load('track');
+                if ($job->status === SubtitleJobStatus::Expired || $job->expires_at?->isPast()) {
+                    $this->requeueExpiredJob($job, $payload, $installId, $requestIp);
+                }
+
+                return $job->refresh()->load('track');
             }
 
             $job = SubtitleJob::create([
@@ -88,12 +92,29 @@ class SubtitleJobService
         ]);
     }
 
-    private function refreshExpiredJob(SubtitleJob $job): SubtitleJob
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function requeueExpiredJob(SubtitleJob $job, array $payload, string $installId, ?string $requestIp): void
     {
-        if ($job->expires_at?->isPast() && $job->status !== SubtitleJobStatus::Expired) {
-            $job->update(['status' => SubtitleJobStatus::Expired]);
-        }
+        $job->track()->delete();
 
-        return $job;
+        $job->update([
+            'youtube_url' => $payload['youtubeUrl'] ?? null,
+            'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
+            'options' => $payload['options'],
+            'status' => SubtitleJobStatus::Queued,
+            'progress_stage' => 'queued',
+            'progress_percent' => 0,
+            'progress_message' => 'Queued',
+            'error_code' => null,
+            'error_message' => null,
+            'error_details' => null,
+            'install_id' => $installId,
+            'request_ip' => $requestIp,
+            'expires_at' => null,
+        ]);
+
+        ProcessSubtitleJob::dispatch($job)->afterCommit();
     }
 }
