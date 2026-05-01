@@ -78,7 +78,7 @@ npm run build
 
 Evidence to capture:
 
-- Tests: Laravel route tests, job state transition tests, schema validation tests, extension API client tests.
+- Tests: Laravel route/regeneration tests, schema validation tests, extension API client tests.
 - Screenshots or video: extension shows ready status using mock backend.
 - Logs: no unexpected backend errors.
 - Metrics or traces: not required.
@@ -103,13 +103,14 @@ Evidence to capture:
 | 2026-04-30 | Removed separate extension-facing track lookup/fetch routes to keep the workflow aligned with the product flow. | `.\scripts\agent\check.ps1` |
 | 2026-04-30 | Removed proactive content page-status reporting and active video-element tracking from the extension flow. | `npm run compile`; `npm run test`; `.\scripts\agent\check.ps1` |
 | 2026-04-30 | Removed extension polling and the backend queue job skeleton; the generate route now returns the completed mock track directly. | `npm run check`; focused Laravel tests |
+| 2026-04-30 | Removed persisted job status/progress fields after the API contract settled on completed-job-or-error responses. | `.\scripts\agent\check.ps1` |
 
 ## Completion Notes
 
 - What changed:
   - Added Laravel `POST /v1/subtitle-jobs`.
   - Added SQLite migrations, Eloquent models/factories, resources, form requests, stable API error rendering, install-ID middleware, and rate limits by install ID and IP.
-  - Added synchronous mock generation that persists a canonical mock track and moves jobs to `completed`.
+  - Added synchronous mock generation that persists a canonical mock track and returns a completed response.
   - Replaced the popup's manual overlay-state selector with an explicit Generate subtitles action wired to one backend request.
   - Simplified extension state so the background reads the active tab URL on popup/generate, while content only renders settings and subtitle state.
   - Updated content overlay rendering to show stable errors and the first mock cue when ready.
@@ -119,8 +120,8 @@ Evidence to capture:
   - Baseline `.\scripts\agent\check.ps1` passed before implementation.
   - `npm run check` in `packages/contracts` passed.
   - `php artisan route:list --path=v1` showed the single Phase 03 generation route.
-  - `php artisan test --compact` passed: 12 tests, 68 assertions.
-  - `npm run test` in `app/extension` passed: 4 files, 10 tests.
+  - `php artisan test --compact` passed: 7 tests, 92 assertions.
+  - `npm run test` in `app/extension` passed: 4 files, 9 tests.
   - `npm run compile` in `app/extension` passed.
   - `npm run build` in `app/extension` passed.
   - `php artisan migrate --force` applied the two Phase 03 migrations to local SQLite.
@@ -131,11 +132,11 @@ Evidence to capture:
 - Simplicity/readability review:
   - Kept one documented product path: YouTube video, local Laravel API, SQLite job/track rows, synchronous mock generation, ready overlay.
   - Avoided provider abstractions, auth systems, Redis/Horizon, WebSockets, and generalized platform handling.
-  - Added only one small Laravel service because job creation/coalescing, cache reuse, and generation state transitions would otherwise crowd controllers.
+  - Added only one small Laravel service because job creation/coalescing, cache reuse, and generation would otherwise crowd controllers.
   - Reused the canonical contracts package for TypeScript types and kept PHP validation directly aligned with the schema fields.
 - Residual risk:
   - The generate request is synchronous; Phase 04 must keep real processing within acceptable request time or deliberately reintroduce an async delivery mechanism.
   - PHP response validation is covered by feature tests and canonical shape construction, not by a PHP JSON Schema validator.
-  - Expired jobs are reset and requeued when the same compatibility key is requested again.
+  - Expired compatibility records are reset and regenerated when requested again.
 - Follow-up debt:
   - Phase 04 should add real audio/provider failure paths, raw audio cleanup evidence, provider-timeout diagnostics, and stronger runtime observability.
