@@ -6,7 +6,7 @@ Make application state legible to agents and humans through inspectable signals.
 
 ## Current State
 
-Phase 03 introduced the first runtime product path. The mock subtitle queue job records persisted job status and logs `subtitle_job_failed` with the public job ID if processing fails.
+Phase 03 introduced the first runtime product path. The backend records persisted subtitle job and track rows, and public API failures use stable error responses.
 
 ## Logging
 
@@ -22,7 +22,7 @@ Define metrics for:
 - Startup time.
 - Critical workflow latency.
 - Error rates.
-- Queue or background task health, if applicable.
+- Background task health, if applicable.
 
 ## Traces
 

@@ -18,7 +18,7 @@ This phase should make the product explainable and diagnosable when real public 
   - Duplicate job coalescing verification.
   - Final rate limits by install ID and IP.
   - User-facing failure states.
-  - Structured logs for extension, proxy layer, backend jobs, providers, and overlay sync.
+    - Structured logs for extension, proxy layer, backend generation, providers, and overlay sync.
   - Privacy copy explaining backend and AI processing.
   - Local clear-state control.
   - Real public-video acceptance test set.
@@ -88,7 +88,7 @@ npm run build
 Evidence to capture:
 
 - Tests: expiration, rate limits, duplicate jobs, error states, cleanup, extension settings.
-- Screenshots or video: popup and overlay in ready, processing, error, and compact states.
+- Screenshots or video: popup and overlay in ready, error, and compact states.
 - Logs: successful job, provider failure, unsupported video, rate limit, sync diagnostics.
 - Metrics or traces: processing latency and failure counts for acceptance videos.
 

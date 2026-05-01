@@ -61,7 +61,7 @@ This phase connects real backend transcription output to the extension overlay. 
 - [ ] Validate cue timing, ordering, duration, and text.
 - [ ] Create generated track records from cue output.
 - [ ] Add compatibility-key lookup and track reuse.
-- [ ] Update job processing to write real source-only tracks.
+- [ ] Update subtitle generation to write real source-only tracks.
 - [ ] Update extension API client to load real tracks.
 - [ ] Implement active cue selection.
 - [ ] Render source cue in overlay.

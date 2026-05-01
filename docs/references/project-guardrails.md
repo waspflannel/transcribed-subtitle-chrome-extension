@@ -24,12 +24,11 @@ These guardrails apply to the YouTube AI Subtitle Learning Extension. Use them w
 WXT extension
   -> Laravel proxy-facing API routes
     -> Laravel services
-      -> Laravel queued jobs
-        -> providers/storage
+      -> providers/storage
 ```
 
 - Preserve the extension/proxy/backend boundary in code, even while the proxy and backend live in one Laravel app.
-- Treat `packages/contracts` as the product boundary. Laravel models, queue payloads, provider responses, and UI state are not API contracts.
+- Treat `packages/contracts` as the product boundary. Laravel models, provider responses, and UI state are not API contracts.
 - Validate data at every external boundary:
   - extension input from YouTube
   - extension-to-backend API requests
@@ -37,7 +36,7 @@ WXT extension
   - stored/generated subtitle tracks
 - After boundary validation, trust the typed value inside the app instead of revalidating it in every handler.
 - Prefer one boring path before adding fallback paths.
-- Do not introduce distributed services, Redis, Postgres, WebSockets, or object storage until a phase has evidence that SQLite, queues, polling, or local files are insufficient.
+- Do not introduce distributed services, Redis, Postgres, WebSockets, queues, or object storage until a phase has evidence that SQLite, synchronous requests, or local files are insufficient.
 - Keep provider integrations behind small interfaces. The app should depend on our transcript/track contracts, not provider-native shapes.
 
 ## Laravel Guardrails
@@ -47,18 +46,17 @@ WXT extension
   - Form Requests or equivalent validation for API inputs.
   - Controllers as thin HTTP adapters.
   - Services for product workflow.
-  - Jobs for long-running subtitle processing.
   - Migrations and Eloquent for persistence.
   - Scheduler for cleanup.
-  - Tests for job state, validation, persistence, and provider failures.
+  - Tests for generation behavior, validation, persistence, and provider failures.
 - Use Laravel AI SDK before custom AI integration.
 - If Laravel AI SDK cannot expose timestamped transcription output, add a Laravel-side transcription adapter only for that gap.
 - Keep AI agents/prompts narrow:
   - translate finalized cues
   - return structured learning metadata
-  - do not own job state, storage, retries, rate limits, or UI decisions
+  - do not own generation state, storage, retries, rate limits, or UI decisions
 - Keep controllers small. If a controller starts coordinating multiple steps, move that workflow into an application service.
-- Do not put provider calls, audio filesystem work, or queue orchestration inside Eloquent models.
+- Do not put provider calls or audio filesystem work inside Eloquent models.
 - Do not log secrets, raw audio, full prompts, or full transcripts by default.
 
 ## TypeScript And WXT Guardrails
@@ -70,18 +68,15 @@ WXT extension
 - Keep content scripts focused on browser integration:
   - detect YouTube watch pages
   - parse video ID
-  - find the active video element
   - mount/update/unmount overlay
-  - read playback time
 - Do not put AI logic, provider assumptions, or backend orchestration in the extension.
 - Derive TypeScript API types from shared schemas or keep them mechanically checked against those schemas.
 - Keep state explicit:
   - install ID
   - current page/video state
-  - job status
   - track metadata
   - user settings
-- Avoid fragile YouTube DOM coupling. Prefer URL state, stable YouTube player selectors, the actual `HTMLVideoElement`, and cleanup on navigation.
+- Avoid fragile YouTube DOM coupling. Prefer URL state and cleanup on navigation.
 - Do not add YouTube fallback detection, DOM scoring, polling, or mutation observation until a real failure shows the direct path is insufficient.
 - Overlay UI must be isolated from YouTube styling with Shadow DOM or an equivalent boundary.
 - Avoid DOM churn during playback. Keep render code direct first, and add diffing or caching only when profiling or visible behavior shows it is needed.
@@ -92,7 +87,7 @@ WXT extension
 - Prefer a clear service function over a new abstraction until there are at least two real call sites or a real boundary.
 - Prefer direct object construction and named helper functions over clever normalization layers.
 - Prefer built-in APIs and shared project utilities before custom local helpers.
-- Prefer polling before WebSockets.
+- Prefer one synchronous generation request before async delivery mechanisms.
 - Prefer preset overlay positions before drag/resize.
 - Prefer SQLite before production database infrastructure.
 - Prefer one transcription candidate before a provider comparison framework.

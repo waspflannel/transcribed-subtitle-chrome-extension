@@ -59,7 +59,7 @@ This phase intentionally reaches real transcription early. It should answer whet
 
 ## Implementation Steps
 
-- [ ] Inspect the job skeleton from Phase 03.
+- [ ] Inspect the synchronous generation service from Phase 03.
 - [ ] Implement an audio source service for backend YouTube acquisition.
 - [ ] Add video metadata/duration validation.
 - [ ] Enforce 60-minute max duration before provider calls.

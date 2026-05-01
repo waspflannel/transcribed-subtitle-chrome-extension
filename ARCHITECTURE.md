@@ -13,8 +13,8 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Agent harness scripts live in `scripts/agent/`.
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
-- The Phase 03 backend exposes the local `/v1/subtitle-jobs`, `/v1/subtitle-jobs/{jobId}`, `/v1/tracks/lookup`, and `/v1/tracks/{trackId}` JSON API.
-- Subtitle jobs and mock tracks persist in Laravel SQLite tables and are connected by a Laravel queue job skeleton.
+- The Phase 03 backend exposes the local `POST /v1/subtitle-jobs` JSON API.
+- Subtitle jobs and mock tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
 
 ## Selected Stack
 
@@ -25,7 +25,6 @@ Extension
 
 Backend
   - Laravel 13.x
-  - Laravel queues
   - Laravel scheduler
   - Laravel migrations and Eloquent
   - SQLite first
@@ -45,12 +44,11 @@ Contracts
 Chrome Extension
   -> proxy-facing Laravel API routes
     -> Laravel application services
-      -> Laravel queued subtitle job
-        -> YouTube audio acquisition
-        -> transcription provider
-        -> cue segmentation
-        -> Laravel AI SDK enrichment
-        -> SQLite track storage
+      -> YouTube audio acquisition
+      -> transcription provider
+      -> cue segmentation
+      -> Laravel AI SDK enrichment
+      -> SQLite track storage
   <- generated subtitle track
 ```
 
@@ -59,7 +57,7 @@ Chrome Extension
 Use this directional model unless a later decision record changes it:
 
 ```text
-Contracts -> Config -> Persistence -> Services -> Jobs -> HTTP/UI
+Contracts -> Config -> Persistence -> Services -> HTTP/UI
 ```
 
 Rules:
@@ -71,7 +69,7 @@ Rules:
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
 - Laravel AI SDK/provider responses must be normalized before storage or extension exposure.
-- Eloquent models and queue payloads are internal details, not API contracts.
+- Eloquent models are internal details, not API contracts.
 
 ## Mechanical Enforcement Targets
 
