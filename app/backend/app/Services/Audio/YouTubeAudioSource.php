@@ -1,0 +1,258 @@
+<?php
+
+namespace App\Services\Audio;
+
+use App\Exceptions\SubtitleProcessingException;
+use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
+use Throwable;
+
+class YouTubeAudioSource implements AudioSource
+{
+    public function acquire(string $videoId, ?string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
+    {
+        $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
+
+        if ($requestDurationSeconds !== null && $requestDurationSeconds > $maxDurationSeconds) {
+            throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
+        }
+
+        $url = $this->canonicalUrl($videoId, $youtubeUrl);
+        $workDirectory = $this->createWorkDirectory();
+
+        try {
+            $metadata = $this->fetchMetadata($url);
+            $durationSeconds = $this->validatedDuration($metadata, $maxDurationSeconds);
+            $this->ensurePublicVideo($metadata);
+
+            $path = $this->downloadAudio($url, $workDirectory);
+            $realPath = realpath($path);
+
+            if ($realPath === false || ! Str::startsWith($realPath, realpath($workDirectory).DIRECTORY_SEPARATOR)) {
+                throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition produced an unexpected file path.');
+            }
+
+            $sizeBytes = File::size($realPath);
+
+            if ($sizeBytes < 1) {
+                throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition produced an empty file.');
+            }
+
+            return new TemporaryAudioFile(
+                path: $realPath,
+                directory: $workDirectory,
+                durationSeconds: $durationSeconds,
+                sizeBytes: $sizeBytes,
+                mimeType: $this->mimeType($realPath),
+            );
+        } catch (SubtitleProcessingException $exception) {
+            File::deleteDirectory($workDirectory);
+
+            throw $exception;
+        } catch (Throwable $exception) {
+            File::deleteDirectory($workDirectory);
+
+            throw SubtitleProcessingException::audioAcquisitionFailed(
+                context: ['exception' => $exception::class],
+                previous: $exception,
+            );
+        }
+    }
+
+    private function canonicalUrl(string $videoId, ?string $youtubeUrl): string
+    {
+        if ($youtubeUrl === null || $youtubeUrl === '') {
+            return "https://www.youtube.com/watch?v={$videoId}";
+        }
+
+        return $youtubeUrl;
+    }
+
+    private function createWorkDirectory(): string
+    {
+        $directory = rtrim((string) config('subtitles.youtube.temp_directory'), DIRECTORY_SEPARATOR)
+            .DIRECTORY_SEPARATOR.(string) Str::uuid();
+
+        File::ensureDirectoryExists($directory, 0700);
+
+        return $directory;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchMetadata(string $url): array
+    {
+        $result = $this->runProcess([
+            (string) config('subtitles.youtube.binary'),
+            '--dump-single-json',
+            '--no-warnings',
+            '--no-playlist',
+            '--skip-download',
+            $url,
+        ], (int) config('subtitles.youtube.metadata_timeout_seconds'));
+
+        if ($result->failed()) {
+            throw SubtitleProcessingException::audioUnavailable(context: [
+                'exit_code' => $result->exitCode(),
+                'stage' => 'metadata',
+            ]);
+        }
+
+        try {
+            $metadata = json_decode($result->output(), associative: true, flags: JSON_THROW_ON_ERROR);
+        } catch (Throwable $exception) {
+            throw SubtitleProcessingException::audioAcquisitionFailed('Video metadata could not be parsed.', [
+                'stage' => 'metadata',
+            ], $exception);
+        }
+
+        if (! is_array($metadata)) {
+            throw SubtitleProcessingException::audioAcquisitionFailed('Video metadata had an unexpected shape.', [
+                'stage' => 'metadata',
+            ]);
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function validatedDuration(array $metadata, int $maxDurationSeconds): int
+    {
+        $duration = $metadata['duration'] ?? null;
+
+        if (! is_int($duration) && ! is_float($duration)) {
+            throw SubtitleProcessingException::audioUnavailable('Video duration could not be determined.');
+        }
+
+        $durationSeconds = (int) ceil($duration);
+
+        if ($durationSeconds < 1) {
+            throw SubtitleProcessingException::audioUnavailable('Video duration could not be determined.');
+        }
+
+        if ($durationSeconds > $maxDurationSeconds) {
+            throw SubtitleProcessingException::videoTooLong($durationSeconds, $maxDurationSeconds);
+        }
+
+        return $durationSeconds;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function ensurePublicVideo(array $metadata): void
+    {
+        $availability = $metadata['availability'] ?? null;
+
+        if (is_string($availability) && $availability !== 'public') {
+            throw SubtitleProcessingException::audioUnavailable('Only public YouTube videos are supported.', [
+                'availability' => $availability,
+            ]);
+        }
+
+        if (($metadata['is_live'] ?? false) === true) {
+            throw SubtitleProcessingException::audioUnavailable('Live videos are not supported.');
+        }
+    }
+
+    private function downloadAudio(string $url, string $workDirectory): string
+    {
+        $result = $this->runProcess([
+            (string) config('subtitles.youtube.binary'),
+            '--no-playlist',
+            '--no-warnings',
+            '--format',
+            'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
+            '--paths',
+            $workDirectory,
+            '--output',
+            '%(id)s.%(ext)s',
+            '--print',
+            'after_move:filepath',
+            $url,
+        ], (int) config('subtitles.youtube.download_timeout_seconds'));
+
+        if ($result->failed()) {
+            throw SubtitleProcessingException::audioAcquisitionFailed(context: [
+                'exit_code' => $result->exitCode(),
+                'stage' => 'download',
+            ]);
+        }
+
+        $reportedPath = collect(preg_split('/\R/', trim($result->output())) ?: [])
+            ->filter()
+            ->last();
+
+        if (is_string($reportedPath) && $reportedPath !== '') {
+            $path = $this->absolutePath($reportedPath, $workDirectory);
+
+            if (File::exists($path)) {
+                return $path;
+            }
+        }
+
+        $file = collect(File::files($workDirectory))->first();
+
+        if ($file === null) {
+            throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition did not produce a file.', [
+                'stage' => 'download',
+            ]);
+        }
+
+        return $file->getRealPath();
+    }
+
+    /**
+     * @param  array<int, string>  $command
+     */
+    private function runProcess(array $command, int $timeoutSeconds): ProcessResult
+    {
+        try {
+            return Process::timeout($timeoutSeconds)->run($command);
+        } catch (Throwable $exception) {
+            throw SubtitleProcessingException::audioAcquisitionFailed(
+                'Audio acquisition command could not run.',
+                ['exception' => $exception::class],
+                $exception,
+            );
+        }
+    }
+
+    private function absolutePath(string $path, string $workDirectory): string
+    {
+        if (preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1 || Str::startsWith($path, ['/', '\\\\'])) {
+            return $path;
+        }
+
+        return $workDirectory.DIRECTORY_SEPARATOR.$path;
+    }
+
+    private function mimeType(string $path): string
+    {
+        $extensionMimeType = match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
+            'm4a', 'mp4' => 'audio/mp4',
+            'webm' => 'audio/webm',
+            'mp3', 'mpeg', 'mpga' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'ogg' => 'audio/ogg',
+            default => null,
+        };
+
+        if ($extensionMimeType !== null) {
+            return $extensionMimeType;
+        }
+
+        $mimeType = File::mimeType($path);
+
+        if (is_string($mimeType) && $mimeType !== '') {
+            return $mimeType;
+        }
+
+        return 'application/octet-stream';
+    }
+}

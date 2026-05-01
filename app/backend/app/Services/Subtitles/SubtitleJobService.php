@@ -2,22 +2,33 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Services\Audio\AudioSource;
+use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Transcription\TranscriptionOptions;
+use App\Services\Transcription\TranscriptionProvider;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION = 'mock-subtitles-v1';
+    public const PROCESSING_VERSION = 'audio-transcription-proof-v1';
 
-    public function __construct(private readonly MockSubtitleTrackGenerator $tracks) {}
+    public function __construct(
+        private readonly AudioSource $audioSource,
+        private readonly TranscriptionProvider $transcriptionProvider,
+        private readonly TimestampedSubtitleTrackGenerator $tracks,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
      */
     public function generate(array $payload, string $installId, ?string $requestIp): SubtitleJob
     {
-        return DB::transaction(function () use ($payload, $installId, $requestIp): SubtitleJob {
+        $job = DB::transaction(function () use ($payload, $installId, $requestIp): SubtitleJob {
             $job = SubtitleJob::query()
                 ->with('track')
                 ->where('youtube_video_id', $payload['youtubeVideoId'])
@@ -36,11 +47,93 @@ class SubtitleJobService
                 $job = $this->createJob($payload, $installId, $requestIp);
             }
 
-            $track = $this->tracks->generate($job->refresh());
-            $job->update(['expires_at' => $track->expires_at]);
+            return $job->refresh();
+        });
+
+        if ($this->hasReadyTrack($job->load('track'))) {
+            return $job;
+        }
+
+        return $this->generateTrack($job, $payload);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function generateTrack(SubtitleJob $job, array $payload): SubtitleJob
+    {
+        $audio = null;
+        $stage = 'audio_acquisition';
+
+        try {
+            Log::info('backend.audio_acquisition_started', [
+                'job_id' => $job->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+            ]);
+
+            $audio = $this->audioSource->acquire(
+                videoId: $payload['youtubeVideoId'],
+                youtubeUrl: $payload['youtubeUrl'] ?? null,
+                requestDurationSeconds: $payload['videoDurationSeconds'] ?? null,
+            );
+
+            Log::info('backend.audio_acquisition_completed', [
+                'job_id' => $job->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'duration_seconds' => $audio->durationSeconds,
+                'audio_bytes' => $audio->sizeBytes,
+            ]);
+
+            $stage = 'transcription';
+
+            Log::info('backend.transcription_started', [
+                'job_id' => $job->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'provider' => config('subtitles.transcription.provider'),
+            ]);
+
+            $transcript = $this->transcriptionProvider->transcribe(
+                audio: $audio,
+                options: new TranscriptionOptions($payload['sourceLanguage']),
+            );
+
+            Log::info('backend.transcription_completed', [
+                'job_id' => $job->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'segment_count' => count($transcript->segments),
+                'duration_seconds' => $transcript->durationSeconds ?? $audio->durationSeconds,
+            ]);
+
+            $stage = 'track_generation';
+            $track = $this->tracks->generate($job->refresh(), $transcript);
+            $job->update([
+                'video_duration_seconds' => $audio->durationSeconds,
+                'expires_at' => $track->expires_at,
+            ]);
 
             return $job->refresh()->load('track');
-        });
+        } catch (SubtitleProcessingException $exception) {
+            Log::warning("backend.{$stage}_failed", [
+                'job_id' => $job->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'error_code' => $exception->publicCode,
+                ...$exception->context,
+            ]);
+
+            throw $exception;
+        } catch (Throwable $exception) {
+            Log::error("backend.{$stage}_failed", [
+                'job_id' => $job->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'exception' => $exception::class,
+            ]);
+
+            throw $exception;
+        } finally {
+            if ($audio instanceof TemporaryAudioFile) {
+                $audio->delete();
+            }
+        }
     }
 
     /**

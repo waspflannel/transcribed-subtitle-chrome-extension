@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class CreateSubtitleJobRequest extends FormRequest
 {
@@ -35,5 +36,49 @@ class CreateSubtitleJobRequest extends FormRequest
     public function extensionInstallId(): string
     {
         return (string) $this->header('X-Extension-Install-Id');
+    }
+
+    /**
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $url = $this->input('youtubeUrl');
+
+                if (! is_string($url) || $url === '') {
+                    return;
+                }
+
+                if (! $this->youtubeUrlMatchesVideoId($url, (string) $this->input('youtubeVideoId'))) {
+                    $validator->errors()->add('youtubeUrl', 'The YouTube URL must be a supported watch URL for the requested video ID.');
+                }
+            },
+        ];
+    }
+
+    private function youtubeUrlMatchesVideoId(string $url, string $videoId): bool
+    {
+        $parts = parse_url($url);
+
+        if (! is_array($parts) || ($parts['scheme'] ?? null) !== 'https') {
+            return false;
+        }
+
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $path = (string) ($parts['path'] ?? '');
+
+        if ($host === 'youtu.be') {
+            return trim($path, '/') === $videoId;
+        }
+
+        if (! in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com'], true) || $path !== '/watch') {
+            return false;
+        }
+
+        parse_str((string) ($parts['query'] ?? ''), $query);
+
+        return ($query['v'] ?? null) === $videoId;
     }
 }

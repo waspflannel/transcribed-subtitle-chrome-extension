@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -54,6 +55,14 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return ApiErrorResponse::make('not_found', 'Resource not found.', 404);
+        });
+
+        $exceptions->render(function (SubtitleProcessingException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status);
         });
 
         $exceptions->render(function (Throwable $exception, Request $request) {
