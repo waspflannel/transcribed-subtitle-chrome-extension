@@ -15,7 +15,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Canonical API/data contracts live in `packages/contracts`.
 - The backend exposes the local `POST /v1/subtitle-jobs` JSON API.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
-- Phase 04 replaced the mock generation path with backend YouTube audio acquisition, raw audio cleanup, Laravel AI SDK transcription, and source-timed proof track output.
+- Phase 05 turns timestamped transcription segments into validated generated subtitle cues, persists source-only tracks with 30-day expiration metadata, reuses compatible completed tracks, and renders the active source cue in the YouTube overlay using video playback time.
 
 ## Selected Stack
 
@@ -48,7 +48,7 @@ Chrome Extension
     -> Laravel application services
       -> YouTube audio acquisition in controlled temporary storage
       -> Laravel AI SDK OpenAI transcription normalized to timestamped transcript segments
-      -> cue segmentation
+      -> cue segmentation and validation
       -> Laravel AI SDK enrichment
       -> SQLite track storage
   <- generated subtitle track

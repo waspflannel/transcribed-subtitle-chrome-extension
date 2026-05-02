@@ -27,7 +27,7 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 | 02 | `../completed/phase-02-youtube-extension-shell.md` | Extension detects YouTube videos and renders a controlled overlay shell | Completed 2026-04-28 |
 | 03 | `../completed/phase-03-laravel-job-api-and-persistence.md` | Laravel generation API, SQLite persistence, and mock track path | Completed 2026-04-30 |
 | 04 | `../completed/phase-04-audio-acquisition-and-transcription-proof.md` | Public YouTube audio acquisition and timestamped transcription proof | Completed 2026-05-02 |
-| 05 | `phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Source subtitle cues render in sync during play, pause, and seek |
+| 05 | `../completed/phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Completed 2026-05-02 |
 | 06 | `phase-06-translation-and-arabic-learning-data.md` | Translation and Arabic token learning data | Overlay supports translation plus hover/click token details |
 | 07 | `phase-07-hardening-and-release-readiness.md` | Reliability, privacy, rate limits, diagnostics, and acceptance tests | First release criteria are validated against real public videos |
 
@@ -68,3 +68,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-04-30 | Added cross-phase simplicity and readability checks to future phase plans. | `docs/quality/golden-principles.md` |
 | 2026-04-30 | Phase 03 completed and archived. | `docs/exec-plans/completed/phase-03-laravel-job-api-and-persistence.md` |
 | 2026-05-02 | Phase 04 completed and archived. | `docs/exec-plans/completed/phase-04-audio-acquisition-and-transcription-proof.md` |
+| 2026-05-02 | Phase 05 completed and archived. | `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md` |
