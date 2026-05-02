@@ -102,7 +102,6 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
     };
   } else {
     const installId = await getOrCreateInstallId();
-    const settings = await getExtensionSettings();
 
     try {
       const job = await subtitleApi.createSubtitleJob(installId, {
@@ -110,10 +109,6 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
         youtubeUrl: pageStatus.url,
         sourceLanguage: 'ar',
         targetLanguage: 'en',
-        options: {
-          includeRomanization: settings.showRomanization,
-          includeGloss: settings.showGloss,
-        },
       });
 
       subtitleState = {

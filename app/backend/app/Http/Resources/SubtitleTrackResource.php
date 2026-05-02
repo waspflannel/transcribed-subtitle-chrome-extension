@@ -16,7 +16,7 @@ class SubtitleTrackResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $response = [
+        return [
             'trackId' => $this->public_id,
             'jobId' => $this->job->public_id,
             'youtubeVideoId' => $this->youtube_video_id,
@@ -26,14 +26,5 @@ class SubtitleTrackResource extends JsonResource
             'expiresAt' => $this->expires_at->toJSON(),
             'cues' => $this->cues,
         ];
-
-        if ($this->detected_dialect_label !== null && $this->detected_dialect_confidence !== null) {
-            $response['detectedDialect'] = [
-                'label' => $this->detected_dialect_label,
-                'confidence' => $this->detected_dialect_confidence,
-            ];
-        }
-
-        return $response;
     }
 }

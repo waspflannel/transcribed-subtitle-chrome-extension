@@ -19,8 +19,6 @@ class SubtitleTrack extends Model
         'source_language',
         'target_language',
         'processing_version',
-        'detected_dialect_label',
-        'detected_dialect_confidence',
         'generated_at',
         'expires_at',
         'cues',
@@ -40,7 +38,6 @@ class SubtitleTrack extends Model
     {
         return [
             'cues' => 'array',
-            'detected_dialect_confidence' => 'float',
             'expires_at' => 'immutable_datetime',
             'generated_at' => 'immutable_datetime',
         ];

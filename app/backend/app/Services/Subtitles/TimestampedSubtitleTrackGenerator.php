@@ -21,8 +21,6 @@ class TimestampedSubtitleTrackGenerator
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'processing_version' => $job->processing_version,
-            'detected_dialect_label' => null,
-            'detected_dialect_confidence' => null,
             'generated_at' => $generatedAt,
             'expires_at' => $generatedAt->copy()->addDays(30),
             'cues' => $this->cues($transcript),

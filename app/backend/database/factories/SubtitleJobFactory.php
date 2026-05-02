@@ -26,10 +26,6 @@ class SubtitleJobFactory extends Factory
             'video_duration_seconds' => 213,
             'source_language' => 'ar',
             'target_language' => 'en',
-            'options' => [
-                'includeRomanization' => true,
-                'includeGloss' => true,
-            ],
             'processing_version' => SubtitleJobService::PROCESSING_VERSION,
             'install_id' => 'install_'.str_repeat('a', 32),
             'request_ip' => '127.0.0.1',

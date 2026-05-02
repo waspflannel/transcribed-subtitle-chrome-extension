@@ -16,7 +16,6 @@ return new class extends Migration
             $table->unsignedInteger('video_duration_seconds')->nullable();
             $table->string('source_language', 8);
             $table->string('target_language', 8);
-            $table->json('options');
             $table->string('processing_version', 64);
             $table->string('install_id', 128)->index();
             $table->string('request_ip', 45)->nullable();

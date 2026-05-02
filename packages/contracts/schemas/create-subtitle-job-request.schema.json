@@ -7,8 +7,7 @@
   "required": [
     "youtubeVideoId",
     "sourceLanguage",
-    "targetLanguage",
-    "options"
+    "targetLanguage"
   ],
   "properties": {
     "youtubeVideoId": {
@@ -39,24 +38,6 @@
       "type": "string",
       "const": "en",
       "description": "English is the first release translation target."
-    },
-    "options": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "includeRomanization",
-        "includeGloss"
-      ],
-      "properties": {
-        "includeRomanization": {
-          "type": "boolean",
-          "default": true
-        },
-        "includeGloss": {
-          "type": "boolean",
-          "default": true
-        }
-      }
     }
   }
 }

@@ -25,10 +25,6 @@ describe('SubtitleApiClient', () => {
       youtubeVideoId: 'dQw4w9WgXcQ',
       sourceLanguage: 'ar',
       targetLanguage: 'en',
-      options: {
-        includeRomanization: true,
-        includeGloss: true,
-      },
     };
 
     await expect(client.createSubtitleJob(installId, payload)).resolves.toEqual(jobResponse);
@@ -61,10 +57,6 @@ describe('SubtitleApiClient', () => {
       youtubeVideoId: 'bad-job-id',
       sourceLanguage: 'ar',
       targetLanguage: 'en',
-      options: {
-        includeRomanization: true,
-        includeGloss: true,
-      },
     };
 
     await expect(client.createSubtitleJob(installId, payload)).rejects.toMatchObject({

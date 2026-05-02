@@ -20,10 +20,6 @@ export interface CreateSubtitleJobRequest {
    * English is the first release translation target.
    */
   targetLanguage: 'en';
-  options: {
-    includeRomanization: boolean;
-    includeGloss: boolean;
-  };
 }
 
 // Source: schemas/job-response.schema.json
@@ -44,10 +40,6 @@ export interface TrackResponse {
   youtubeVideoId: string;
   sourceLanguage: 'auto' | 'ar';
   targetLanguage: 'en';
-  detectedDialect?: {
-    label: string;
-    confidence: number;
-  };
   generatedAt: string;
   expiresAt: string;
   /**
@@ -83,10 +75,6 @@ export interface TrackResponse {
   youtubeVideoId: string;
   sourceLanguage: 'auto' | 'ar';
   targetLanguage: 'en';
-  detectedDialect?: {
-    label: string;
-    confidence: number;
-  };
   generatedAt: string;
   expiresAt: string;
   /**

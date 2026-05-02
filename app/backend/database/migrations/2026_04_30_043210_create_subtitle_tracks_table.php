@@ -16,8 +16,6 @@ return new class extends Migration
             $table->string('source_language', 8);
             $table->string('target_language', 8);
             $table->string('processing_version', 64);
-            $table->string('detected_dialect_label')->nullable();
-            $table->decimal('detected_dialect_confidence', 4, 3)->nullable();
             $table->timestamp('generated_at')->index();
             $table->timestamp('expires_at')->index();
             $table->json('cues');

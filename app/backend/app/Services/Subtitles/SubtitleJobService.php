@@ -149,7 +149,6 @@ class SubtitleJobService
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'source_language' => $payload['sourceLanguage'],
             'target_language' => $payload['targetLanguage'],
-            'options' => $payload['options'],
             'processing_version' => self::PROCESSING_VERSION,
             'install_id' => $installId,
             'request_ip' => $requestIp,
@@ -167,7 +166,6 @@ class SubtitleJobService
         $job->update([
             'youtube_url' => $payload['youtubeUrl'] ?? null,
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
-            'options' => $payload['options'],
             'install_id' => $installId,
             'request_ip' => $requestIp,
             'expires_at' => null,

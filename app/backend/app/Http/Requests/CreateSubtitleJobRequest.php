@@ -27,9 +27,6 @@ class CreateSubtitleJobRequest extends FormRequest
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
             'sourceLanguage' => ['required', 'string', Rule::in(['auto', 'ar'])],
             'targetLanguage' => ['required', 'string', Rule::in(['en'])],
-            'options' => ['required', 'array:includeRomanization,includeGloss'],
-            'options.includeRomanization' => ['required', 'boolean'],
-            'options.includeGloss' => ['required', 'boolean'],
         ];
     }
 

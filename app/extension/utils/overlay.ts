@@ -169,7 +169,7 @@ function renderOverlayContent(state: OverlayRenderState): string {
         <div class="line">${escapeHtml(cue.sourceText)}</div>
         <div class="translation">${escapeHtml(cue.translatedText)}</div>
         ${optionalRows}
-        <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Mock track</span></div>
+        <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Transcribed track</span></div>
       </section>
     `;
   }

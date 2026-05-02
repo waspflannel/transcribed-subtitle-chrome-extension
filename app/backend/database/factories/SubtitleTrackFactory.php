@@ -27,8 +27,6 @@ class SubtitleTrackFactory extends Factory
             'source_language' => 'ar',
             'target_language' => 'en',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION,
-            'detected_dialect_label' => 'Modern Standard Arabic',
-            'detected_dialect_confidence' => 0.82,
             'generated_at' => now(),
             'expires_at' => now()->addDays(30),
             'cues' => [

@@ -138,10 +138,6 @@ class SubtitleJobApiTest extends TestCase
                 'youtubeVideoId' => 'bad',
                 'sourceLanguage' => 'fr',
                 'targetLanguage' => 'en',
-                'options' => [
-                    'includeRomanization' => true,
-                    'includeGloss' => true,
-                ],
             ])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'validation_failed')
@@ -195,10 +191,6 @@ class SubtitleJobApiTest extends TestCase
             'videoDurationSeconds' => 213,
             'sourceLanguage' => 'ar',
             'targetLanguage' => 'en',
-            'options' => [
-                'includeRomanization' => true,
-                'includeGloss' => true,
-            ],
         ];
     }
 
