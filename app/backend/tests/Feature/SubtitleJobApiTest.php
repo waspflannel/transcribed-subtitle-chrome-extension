@@ -10,7 +10,6 @@ use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\LaravelAiTranscriptionService;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
-use App\Services\Transcription\TranscriptionOptions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -271,14 +270,14 @@ class RecordingTranscriptionService extends LaravelAiTranscriptionService
 
     public function __construct() {}
 
-    public function transcribe(TemporaryAudioFile $audio, TranscriptionOptions $options): TimestampedTranscript
+    public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
     {
         if ($this->shouldFail) {
             throw SubtitleProcessingException::transcriptionFailed();
         }
 
         return new TimestampedTranscript(
-            language: $options->sourceLanguage,
+            language: $sourceLanguage,
             durationSeconds: 42.0,
             segments: [
                 new TimestampedTranscriptSegment(0.5, 1.75, 'first transcript segment'),

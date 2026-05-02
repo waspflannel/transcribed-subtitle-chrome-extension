@@ -7,7 +7,6 @@ use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\LaravelAiTranscriptionService;
-use App\Services\Transcription\TranscriptionOptions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -96,7 +95,7 @@ class SubtitleJobService
 
             $transcript = $this->transcriptionService->transcribe(
                 audio: $audio,
-                options: new TranscriptionOptions($payload['sourceLanguage']),
+                sourceLanguage: $payload['sourceLanguage'],
             );
 
             Log::info('backend.transcription_completed', [

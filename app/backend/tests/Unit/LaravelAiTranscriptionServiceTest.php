@@ -5,8 +5,6 @@ namespace Tests\Unit;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\LaravelAiTranscriptionService;
-use App\Services\Transcription\TimestampedTranscriptNormalizer;
-use App\Services\Transcription\TranscriptionOptions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Laravel\Ai\Enums\Lab;
@@ -70,7 +68,7 @@ class LaravelAiTranscriptionServiceTest extends TestCase
             ),
         ])->preventStrayTranscriptions();
 
-        $transcript = $this->service()->transcribe($this->audio, new TranscriptionOptions('ar'));
+        $transcript = $this->service()->transcribe($this->audio, 'ar');
 
         $this->assertSame('ar', $transcript->language);
         $this->assertSame(12.0, $transcript->durationSeconds);
@@ -92,7 +90,7 @@ class LaravelAiTranscriptionServiceTest extends TestCase
         })->preventStrayTranscriptions();
 
         try {
-            $this->service()->transcribe($this->audio, new TranscriptionOptions('ar'));
+            $this->service()->transcribe($this->audio, 'ar');
             $this->fail('Expected provider failure to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -101,12 +99,35 @@ class LaravelAiTranscriptionServiceTest extends TestCase
         }
     }
 
+    public function test_it_rejects_transcripts_without_valid_segments(): void
+    {
+        Transcription::fake([
+            new TranscriptionResponse(
+                'full text',
+                new Collection([
+                    new TranscriptionSegment('', 'Speaker 1', 0.0, 1.0),
+                    new TranscriptionSegment('bad timing', 'Speaker 1', 2.0, 1.0),
+                ]),
+                new Usage,
+                new Meta('openai', 'gpt-4o-transcribe-diarize'),
+            ),
+        ])->preventStrayTranscriptions();
+
+        try {
+            $this->service()->transcribe($this->audio, 'ar');
+            $this->fail('Expected invalid timestamped segments to throw a stable transcription exception.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('Transcription did not return timestamped segments.', $exception->getMessage());
+        }
+    }
+
     public function test_it_requires_backend_provider_configuration(): void
     {
         config(['ai.providers.openai.key' => null]);
 
         try {
-            $this->service()->transcribe($this->audio, new TranscriptionOptions('ar'));
+            $this->service()->transcribe($this->audio, 'ar');
             $this->fail('Expected missing provider configuration to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -116,6 +137,6 @@ class LaravelAiTranscriptionServiceTest extends TestCase
 
     private function service(): LaravelAiTranscriptionService
     {
-        return new LaravelAiTranscriptionService(new TimestampedTranscriptNormalizer);
+        return new LaravelAiTranscriptionService;
     }
 }
