@@ -11,8 +11,7 @@ return [
     ],
 
     'transcription' => [
-        'model' => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
+        'model' => env('OPENAI_TRANSCRIPTION_MODEL', 'gpt-4o-transcribe-diarize'),
         'timeout_seconds' => (int) env('OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
-        'connect_timeout_seconds' => (int) env('OPENAI_TRANSCRIPTION_CONNECT_TIMEOUT_SECONDS', 10),
     ],
 ];

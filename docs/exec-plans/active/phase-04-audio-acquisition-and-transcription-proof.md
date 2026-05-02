@@ -9,7 +9,7 @@ Last updated: 2026-05-01
 
 Validate the highest-risk backend path: acquiring audio for public YouTube videos, enforcing duration limits, deleting raw audio, and producing timestamped transcription output suitable for subtitle synchronization.
 
-This phase intentionally reaches real transcription early. It should answer whether Laravel AI SDK can provide the timestamped output we need, and if not, introduce a Laravel-side OpenAI transcription adapter without changing product contracts.
+This phase intentionally reaches real transcription early. It uses Laravel AI SDK transcription with OpenAI and normalizes the SDK's timestamped segments into the product subtitle contract.
 
 ## Scope
 
@@ -19,8 +19,7 @@ This phase intentionally reaches real transcription early. It should answer whet
   - 60-minute maximum duration enforcement.
   - Temporary raw audio storage during processing only.
   - Raw audio deletion on success and failure.
-  - Laravel AI SDK transcription proof.
-  - Laravel-side OpenAI adapter because Laravel AI SDK cannot expose subtitle-ready timestamp output for the chosen OpenAI proof path.
+  - Laravel AI SDK transcription proof through OpenAI.
   - Timestamped transcript normalization.
   - Provider timeout and failure handling.
   - Real-provider proof tests on selected public videos.
@@ -53,8 +52,8 @@ This phase intentionally reaches real transcription early. It should answer whet
 - Known risks:
   - YouTube audio acquisition can be brittle.
   - Long videos can exceed provider file size or duration limits.
-  - Laravel AI SDK transcription examples may not expose segment timestamps; the product still requires them.
-  - OpenAI `whisper-1` supports verbose timestamped output, but adapter behavior must be verified during implementation.
+  - Laravel AI SDK segment behavior must be verified with a real provider call, because subtitle sync requires stable start/end timestamps.
+  - The SDK's OpenAI gateway currently requests diarized JSON when `diarize()` is enabled and maps returned segments into `TranscriptionSegment` objects.
 
 ## Implementation Steps
 
@@ -64,9 +63,8 @@ This phase intentionally reaches real transcription early. It should answer whet
 - [x] Enforce 60-minute max duration before provider calls.
 - [x] Store raw audio in a controlled temporary location.
 - [x] Ensure cleanup runs on success, failure, and thrown exceptions.
-- [x] Implement Laravel-side OpenAI verbose transcription adapter.
-- [x] Attempt timestamped transcription through Laravel AI SDK.
-- [x] If needed, implement a Laravel-side OpenAI adapter for verbose timestamped output.
+- [x] Implement Laravel AI SDK transcription service.
+- [x] Request timestamped segments through Laravel AI SDK diarized transcription.
 - [x] Normalize provider output into `TimestampedTranscript`.
 - [x] Add failure mapping and diagnostics.
 - [x] Check the implementation against `docs/quality/golden-principles.md`.
@@ -95,7 +93,8 @@ Evidence to capture:
 | 2026-04-28 | Keep timestamped transcript as the contract even if the SDK wrapper is simpler. | Subtitle sync depends on timing, so the integration must adapt to the product contract rather than weakening it. |
 | 2026-05-01 | Use the Phase 04 Laravel Boost lenses: `laravel-best-practices`, `laravel-specialist`, `laravel-security`, and `ai-sdk-development`. | The phase touches Laravel services, API validation, raw audio storage, provider secrets, external process execution, logs, and transcription behavior. Generic auth, Horizon, Redis, and user-account recommendations remain out of scope. |
 | 2026-05-01 | Keep the synchronous completed-job API from Phase 03 for this proof. | The current product contract returns a completed track or stable error. Real processing may force async delivery later, but Phase 04 can still prove audio acquisition, cleanup, and timestamped transcription without changing extension-facing contracts. |
-| 2026-05-01 | Use a narrow OpenAI verbose transcription adapter rather than a Laravel AI SDK adapter. | Laravel AI SDK is a framework integration layer over providers, not a product transcription provider. Context7 and installed code show the SDK's OpenAI gateway requests `response_format=json` for `whisper-1`, which does not reliably expose segment timestamps. OpenAI's current API supports `verbose_json` with `timestamp_granularities[]=segment`, which satisfies the `TimestampedTranscript` contract. |
+| 2026-05-01 | Use Laravel AI SDK for transcription and request diarized OpenAI output. | The Laravel 13 AI SDK docs expose `Transcription::fromPath(...)->diarize()->generate(...)`; the installed SDK OpenAI gateway maps returned `segments` into timestamped `TranscriptionSegment` objects, which preserves the `TimestampedTranscript` contract without a custom HTTP adapter. |
+| 2026-05-01 | Default `OPENAI_TRANSCRIPTION_MODEL` to `gpt-4o-transcribe-diarize`. | This matches the installed Laravel AI SDK OpenAI provider default for transcription and the `diarize()` request path used to obtain timestamped segments. |
 | 2026-05-01 | Use `yt-dlp` as the first backend YouTube acquisition mechanism and keep it configurable. | Laravel has no built-in YouTube audio acquisition. A single external binary is the smallest inspectable proof path and avoids adding PHP package dependencies during this phase. |
 
 ## Progress Log
@@ -106,7 +105,8 @@ Evidence to capture:
 | 2026-05-01 | Started Phase 04 implementation. Loaded project docs, Phase 03 completion notes, Laravel Boost skills, Context7 docs for Laravel AI SDK and Laravel 13 process/HTTP testing, and current OpenAI audio transcription docs. Baseline harness check passed before implementation. | `.\scripts\agent\doctor.ps1`; `.\scripts\agent\check.ps1` |
 | 2026-05-01 | Confirmed local proof blockers before implementation: `yt-dlp`/`ffmpeg` are not installed and `.env` has no `OPENAI_API_KEY`. Code and automated fakes can validate behavior locally; real-provider proof remains blocked until those environment pieces exist. | `Get-Command yt-dlp`; `Get-Command ffmpeg`; `.env` inspection |
 | 2026-05-01 | Implemented configurable YouTube audio acquisition with metadata/duration/public-video checks, controlled temporary audio storage, cleanup on success/failure, stable public errors, and structured stage logs. | `YouTubeAudioSourceTest`; `SubtitleJobApiTest` |
-| 2026-05-01 | Implemented the OpenAI verbose adapter, timestamped transcript normalization, and source-timed proof track generation through the existing synchronous job API. Removed the obsolete mock generator path. | `OpenAiVerboseTranscriptionProviderTest`; `TimestampedTranscriptNormalizerTest`; `php artisan test --compact` passed: 18 tests, 145 assertions |
+| 2026-05-01 | Implemented Laravel AI SDK transcription, timestamped transcript normalization, and source-timed proof track generation through the existing synchronous job API. Removed the obsolete mock generator path. | `LaravelAiTranscriptionServiceTest`; `TimestampedTranscriptNormalizerTest`; `php artisan test --compact` passed: 18 tests, 145 assertions |
+| 2026-05-01 | Rechecked Laravel 13 AI SDK docs and installed package code, then replaced the direct OpenAI HTTP transcription adapter with `Laravel\Ai\Transcription::fromPath(...)->diarize()->generate(provider: 'openai', model: ...)`. | Context7 `/laravel/ai`; Laravel 13 AI SDK docs; `vendor/laravel/ai/src/Gateway/OpenAi/OpenAiGateway.php`; `LaravelAiTranscriptionServiceTest` |
 | 2026-05-01 | Ran repository validation and docs checks after implementation. Real acquisition/transcription proof remains the only open Phase 04 slice because the local machine lacks `yt-dlp` and backend OpenAI credentials. | `.\scripts\agent\check.ps1`; `.\scripts\agent\doc-gardening.ps1`; `.\scripts\agent\verify-pr.ps1` |
 
 ## Completion Notes

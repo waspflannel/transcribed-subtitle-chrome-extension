@@ -4,15 +4,21 @@ namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
-use App\Services\Transcription\OpenAiVerboseTranscriptionProvider;
+use App\Services\Transcription\LaravelAiTranscriptionService;
 use App\Services\Transcription\TimestampedTranscriptNormalizer;
 use App\Services\Transcription\TranscriptionOptions;
-use Illuminate\Http\Client\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Prompts\TranscriptionPrompt;
+use Laravel\Ai\Responses\Data\Meta;
+use Laravel\Ai\Responses\Data\TranscriptionSegment;
+use Laravel\Ai\Responses\Data\Usage;
+use Laravel\Ai\Responses\TranscriptionResponse;
+use Laravel\Ai\Transcription;
+use RuntimeException;
 use Tests\TestCase;
 
-class OpenAiVerboseTranscriptionProviderTest extends TestCase
+class LaravelAiTranscriptionServiceTest extends TestCase
 {
     private string $directory;
 
@@ -22,7 +28,7 @@ class OpenAiVerboseTranscriptionProviderTest extends TestCase
     {
         parent::setUp();
 
-        $this->directory = storage_path('framework/testing/openai-transcription');
+        $this->directory = storage_path('framework/testing/laravel-ai-transcription');
         File::ensureDirectoryExists($this->directory);
         $path = $this->directory.DIRECTORY_SEPARATOR.'audio.m4a';
         File::put($path, 'fake-audio');
@@ -37,10 +43,8 @@ class OpenAiVerboseTranscriptionProviderTest extends TestCase
 
         config([
             'ai.providers.openai.key' => 'test-key',
-            'ai.providers.openai.url' => 'https://api.openai.com/v1',
-            'subtitles.transcription.model' => 'whisper-1',
+            'subtitles.transcription.model' => 'gpt-4o-transcribe-diarize',
             'subtitles.transcription.timeout_seconds' => 30,
-            'subtitles.transcription.connect_timeout_seconds' => 5,
         ]);
     }
 
@@ -51,56 +55,57 @@ class OpenAiVerboseTranscriptionProviderTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_requests_verbose_json_and_normalizes_segments(): void
+    public function test_it_uses_laravel_ai_transcription_and_normalizes_segments(): void
     {
-        Http::preventStrayRequests();
-        Http::fake([
-            'https://api.openai.com/v1/audio/transcriptions' => Http::response([
-                'language' => 'ar',
-                'duration' => 12.0,
-                'text' => 'full text',
-                'segments' => [
-                    ['start' => 2.0, 'end' => 3.0, 'text' => 'second'],
-                    ['start' => 0.25, 'end' => 1.25, 'text' => 'first'],
-                ],
-            ]),
-        ]);
+        Transcription::fake([
+            new TranscriptionResponse(
+                'full text',
+                new Collection([
+                    new TranscriptionSegment('second', 'Speaker 1', 2.0, 3.0),
+                    new TranscriptionSegment('first', 'Speaker 1', 0.25, 1.25),
+                ]),
+                new Usage,
+                new Meta('openai', 'gpt-4o-transcribe-diarize'),
+            ),
+        ])->preventStrayTranscriptions();
 
-        $transcript = $this->provider()->transcribe($this->audio, new TranscriptionOptions('ar'));
+        $transcript = $this->service()->transcribe($this->audio, new TranscriptionOptions('ar'));
 
         $this->assertSame('ar', $transcript->language);
         $this->assertSame(12.0, $transcript->durationSeconds);
         $this->assertSame('first', $transcript->segments[0]->text);
         $this->assertSame('second', $transcript->segments[1]->text);
 
-        Http::assertSent(function (Request $request): bool {
-            return $request->url() === 'https://api.openai.com/v1/audio/transcriptions'
-                && $request->hasHeader('Authorization', 'Bearer test-key');
+        Transcription::assertGenerated(function (TranscriptionPrompt $prompt): bool {
+            return $prompt->language === 'ar'
+                && $prompt->isDiarized()
+                && $prompt->provider->name() === 'openai'
+                && $prompt->model === 'gpt-4o-transcribe-diarize';
         });
     }
 
-    public function test_it_maps_provider_failure_to_stable_error(): void
+    public function test_it_maps_sdk_failure_to_stable_error(): void
     {
-        Http::fake([
-            'https://api.openai.com/v1/audio/transcriptions' => Http::response(['error' => 'bad'], 500),
-        ]);
+        Transcription::fake(function (): never {
+            throw new RuntimeException('provider unavailable');
+        })->preventStrayTranscriptions();
 
         try {
-            $this->provider()->transcribe($this->audio, new TranscriptionOptions('ar'));
+            $this->service()->transcribe($this->audio, new TranscriptionOptions('ar'));
             $this->fail('Expected provider failure to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
             $this->assertSame(502, $exception->status);
+            $this->assertSame('laravel-ai', $exception->context['sdk']);
         }
     }
 
     public function test_it_requires_backend_provider_configuration(): void
     {
         config(['ai.providers.openai.key' => null]);
-        Http::preventStrayRequests();
 
         try {
-            $this->provider()->transcribe($this->audio, new TranscriptionOptions('ar'));
+            $this->service()->transcribe($this->audio, new TranscriptionOptions('ar'));
             $this->fail('Expected missing provider configuration to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -108,8 +113,8 @@ class OpenAiVerboseTranscriptionProviderTest extends TestCase
         }
     }
 
-    private function provider(): OpenAiVerboseTranscriptionProvider
+    private function service(): LaravelAiTranscriptionService
     {
-        return new OpenAiVerboseTranscriptionProvider(new TimestampedTranscriptNormalizer);
+        return new LaravelAiTranscriptionService(new TimestampedTranscriptNormalizer);
     }
 }

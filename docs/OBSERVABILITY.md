@@ -14,7 +14,7 @@ Phase 04 introduced the first real backend processing path. The backend records 
 - Include request or operation identifiers when workflows span boundaries.
 - Log enough context to explain failures without leaking secrets.
 - For subtitle processing, use public job IDs in logs rather than install IDs, raw transcript text, audio paths, prompts, or provider secrets.
-- Audio acquisition and transcription emit stage-specific start, completed, and failed log events with public job ID, video ID, duration, byte count, provider name, segment count, and stable error code where available.
+- Audio acquisition and transcription emit stage-specific start, completed, and failed log events with public job ID, video ID, duration, byte count, provider name, SDK name, segment count, and stable error code where available.
 
 ## Metrics
 

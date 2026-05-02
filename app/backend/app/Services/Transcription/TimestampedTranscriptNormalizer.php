@@ -3,7 +3,6 @@
 namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
-use Illuminate\Support\Collection;
 
 class TimestampedTranscriptNormalizer
 {
@@ -50,8 +49,11 @@ class TimestampedTranscriptNormalizer
         );
     }
 
-    public function fromLaravelAiResponse(object $response, ?float $fallbackDurationSeconds): TimestampedTranscript
-    {
+    public function fromLaravelAiResponse(
+        object $response,
+        ?float $fallbackDurationSeconds,
+        ?string $language = null,
+    ): TimestampedTranscript {
         $segments = collect($response->segments ?? [])
             ->map(function (mixed $segment): array {
                 if (is_array($segment)) {
@@ -70,28 +72,8 @@ class TimestampedTranscriptNormalizer
             });
 
         return $this->normalize(
-            language: null,
+            language: $language,
             durationSeconds: $fallbackDurationSeconds,
-            segments: $segments,
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    public function fromOpenAiVerboseJson(array $data): TimestampedTranscript
-    {
-        $segments = $data['segments'] ?? [];
-
-        if (! $segments instanceof Collection && ! is_array($segments)) {
-            $segments = [];
-        }
-
-        return $this->normalize(
-            language: is_string($data['language'] ?? null) ? $data['language'] : null,
-            durationSeconds: is_int($data['duration'] ?? null) || is_float($data['duration'] ?? null)
-                ? (float) $data['duration']
-                : null,
             segments: $segments,
         );
     }

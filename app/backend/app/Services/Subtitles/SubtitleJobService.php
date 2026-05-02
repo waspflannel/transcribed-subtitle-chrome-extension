@@ -6,7 +6,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Transcription\OpenAiVerboseTranscriptionProvider;
+use App\Services\Transcription\LaravelAiTranscriptionService;
 use App\Services\Transcription\TranscriptionOptions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +19,7 @@ class SubtitleJobService
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
-        private readonly OpenAiVerboseTranscriptionProvider $transcriptionProvider,
+        private readonly LaravelAiTranscriptionService $transcriptionService,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
     ) {}
 
@@ -90,9 +90,10 @@ class SubtitleJobService
                 'job_id' => $job->public_id,
                 'youtube_video_id' => $job->youtube_video_id,
                 'provider' => 'openai',
+                'sdk' => 'laravel-ai',
             ]);
 
-            $transcript = $this->transcriptionProvider->transcribe(
+            $transcript = $this->transcriptionService->transcribe(
                 audio: $audio,
                 options: new TranscriptionOptions($payload['sourceLanguage']),
             );

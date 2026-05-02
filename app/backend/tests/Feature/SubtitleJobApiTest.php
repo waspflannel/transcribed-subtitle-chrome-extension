@@ -7,7 +7,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Transcription\OpenAiVerboseTranscriptionProvider;
+use App\Services\Transcription\LaravelAiTranscriptionService;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\Transcription\TranscriptionOptions;
@@ -22,17 +22,17 @@ class SubtitleJobApiTest extends TestCase
 
     private RecordingYouTubeAudioSource $audioSource;
 
-    private RecordingTranscriptionProvider $transcriptionProvider;
+    private RecordingTranscriptionService $transcriptionService;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->audioSource = new RecordingYouTubeAudioSource;
-        $this->transcriptionProvider = new RecordingTranscriptionProvider;
+        $this->transcriptionService = new RecordingTranscriptionService;
 
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
-        $this->app->instance(OpenAiVerboseTranscriptionProvider::class, $this->transcriptionProvider);
+        $this->app->instance(LaravelAiTranscriptionService::class, $this->transcriptionService);
     }
 
     public function test_create_subtitle_job_returns_completed_track(): void
@@ -118,7 +118,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_transcription_failure_returns_stable_error_and_deletes_raw_audio(): void
     {
-        $this->transcriptionProvider->shouldFail = true;
+        $this->transcriptionService->shouldFail = true;
 
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
@@ -265,7 +265,7 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
     }
 }
 
-class RecordingTranscriptionProvider extends OpenAiVerboseTranscriptionProvider
+class RecordingTranscriptionService extends LaravelAiTranscriptionService
 {
     public bool $shouldFail = false;
 

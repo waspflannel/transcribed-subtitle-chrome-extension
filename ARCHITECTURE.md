@@ -47,7 +47,7 @@ Chrome Extension
   -> proxy-facing Laravel API routes
     -> Laravel application services
       -> YouTube audio acquisition in controlled temporary storage
-      -> transcription provider normalized to timestamped transcript segments
+      -> Laravel AI SDK OpenAI transcription normalized to timestamped transcript segments
       -> cue segmentation
       -> Laravel AI SDK enrichment
       -> SQLite track storage
@@ -70,7 +70,7 @@ Rules:
 - Runtime side effects should be isolated from pure domain logic.
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
-- Laravel AI SDK/provider responses must be normalized before storage or extension exposure.
+- Laravel AI SDK provider responses must be normalized before storage or extension exposure.
 - Eloquent models are internal details, not API contracts.
 
 ## Mechanical Enforcement Targets
