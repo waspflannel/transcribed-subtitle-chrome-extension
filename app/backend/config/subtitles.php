@@ -11,7 +11,6 @@ return [
     ],
 
     'transcription' => [
-        'provider' => env('TRANSCRIPTION_PROVIDER', 'openai_verbose'),
         'model' => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
         'timeout_seconds' => (int) env('OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
         'connect_timeout_seconds' => (int) env('OPENAI_TRANSCRIPTION_CONNECT_TIMEOUT_SECONDS', 10),

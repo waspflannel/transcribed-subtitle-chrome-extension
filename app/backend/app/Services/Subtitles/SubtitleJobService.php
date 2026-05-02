@@ -6,8 +6,8 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Transcription\OpenAiVerboseTranscriptionProvider;
 use App\Services\Transcription\TranscriptionOptions;
-use App\Services\Transcription\TranscriptionProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -19,7 +19,7 @@ class SubtitleJobService
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
-        private readonly TranscriptionProvider $transcriptionProvider,
+        private readonly OpenAiVerboseTranscriptionProvider $transcriptionProvider,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
     ) {}
 
@@ -89,7 +89,7 @@ class SubtitleJobService
             Log::info('backend.transcription_started', [
                 'job_id' => $job->public_id,
                 'youtube_video_id' => $job->youtube_video_id,
-                'provider' => config('subtitles.transcription.provider'),
+                'provider' => 'openai',
             ]);
 
             $transcript = $this->transcriptionProvider->transcribe(

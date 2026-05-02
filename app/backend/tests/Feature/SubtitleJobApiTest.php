@@ -7,10 +7,10 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Transcription\OpenAiVerboseTranscriptionProvider;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\Transcription\TranscriptionOptions;
-use App\Services\Transcription\TranscriptionProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -32,7 +32,7 @@ class SubtitleJobApiTest extends TestCase
         $this->transcriptionProvider = new RecordingTranscriptionProvider;
 
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
-        $this->app->instance(TranscriptionProvider::class, $this->transcriptionProvider);
+        $this->app->instance(OpenAiVerboseTranscriptionProvider::class, $this->transcriptionProvider);
     }
 
     public function test_create_subtitle_job_returns_completed_track(): void
@@ -265,9 +265,11 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
     }
 }
 
-class RecordingTranscriptionProvider implements TranscriptionProvider
+class RecordingTranscriptionProvider extends OpenAiVerboseTranscriptionProvider
 {
     public bool $shouldFail = false;
+
+    public function __construct() {}
 
     public function transcribe(TemporaryAudioFile $audio, TranscriptionOptions $options): TimestampedTranscript
     {

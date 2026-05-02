@@ -7,7 +7,7 @@ use App\Services\Audio\TemporaryAudioFile;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
-class OpenAiVerboseTranscriptionProvider implements TranscriptionProvider
+class OpenAiVerboseTranscriptionProvider
 {
     public function __construct(private readonly TimestampedTranscriptNormalizer $normalizer) {}
 
