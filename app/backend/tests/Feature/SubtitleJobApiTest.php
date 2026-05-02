@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
-use App\Services\Audio\AudioSource;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\Transcription\TranscriptionOptions;
@@ -20,7 +20,7 @@ class SubtitleJobApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    private RecordingAudioSource $audioSource;
+    private RecordingYouTubeAudioSource $audioSource;
 
     private RecordingTranscriptionProvider $transcriptionProvider;
 
@@ -28,10 +28,10 @@ class SubtitleJobApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->audioSource = new RecordingAudioSource;
+        $this->audioSource = new RecordingYouTubeAudioSource;
         $this->transcriptionProvider = new RecordingTranscriptionProvider;
 
-        $this->app->instance(AudioSource::class, $this->audioSource);
+        $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
         $this->app->instance(TranscriptionProvider::class, $this->transcriptionProvider);
     }
 
@@ -238,7 +238,7 @@ class SubtitleJobApiTest extends TestCase
     }
 }
 
-class RecordingAudioSource implements AudioSource
+class RecordingYouTubeAudioSource extends YouTubeAudioSource
 {
     public int $calls = 0;
 

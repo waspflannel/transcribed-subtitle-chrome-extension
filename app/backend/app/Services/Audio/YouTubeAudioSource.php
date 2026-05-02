@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Throwable;
 
-class YouTubeAudioSource implements AudioSource
+class YouTubeAudioSource
 {
     public function acquire(string $videoId, ?string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
     {

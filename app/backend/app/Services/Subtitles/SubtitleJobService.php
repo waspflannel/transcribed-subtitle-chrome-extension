@@ -4,8 +4,8 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
-use App\Services\Audio\AudioSource;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\TranscriptionOptions;
 use App\Services\Transcription\TranscriptionProvider;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +18,7 @@ class SubtitleJobService
     public const PROCESSING_VERSION = 'audio-transcription-proof-v1';
 
     public function __construct(
-        private readonly AudioSource $audioSource,
+        private readonly YouTubeAudioSource $audioSource,
         private readonly TranscriptionProvider $transcriptionProvider,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
     ) {}

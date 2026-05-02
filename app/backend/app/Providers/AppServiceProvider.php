@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Services\Audio\AudioSource;
-use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\LaravelAiTranscriptionProvider;
 use App\Services\Transcription\OpenAiVerboseTranscriptionProvider;
 use App\Services\Transcription\TranscriptionProvider;
@@ -20,8 +18,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(AudioSource::class, YouTubeAudioSource::class);
-
         $this->app->bind(TranscriptionProvider::class, function () {
             return match (config('subtitles.transcription.provider')) {
                 'laravel_ai_sdk' => $this->app->make(LaravelAiTranscriptionProvider::class),
