@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-30
+Last updated: 2026-05-02
 
 ## Goal
 
@@ -48,7 +48,7 @@ This phase connects real backend transcription output to the extension overlay. 
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
 - Quality rules: `docs/quality/golden-principles.md`
-- Related plans: `phase-04-audio-acquisition-and-transcription-proof.md`, `phase-06-translation-and-arabic-learning-data.md`
+- Related plans: `../completed/phase-04-audio-acquisition-and-transcription-proof.md`, `phase-06-translation-and-arabic-learning-data.md`
 - Known risks:
   - Provider segment timing may be too coarse or poorly segmented for readable subtitles.
   - Generated audio timeline may differ from YouTube playback timeline.

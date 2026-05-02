@@ -1,8 +1,9 @@
 # Generated Database Schema
 
 Created: 2026-04-28
+Last updated: 2026-05-02
 
-Phase 01 uses the stock Laravel SQLite baseline. Product tables are intentionally deferred until Phase 03.
+The backend uses the stock Laravel SQLite baseline plus product tables for subtitle jobs and generated tracks.
 
 ## Local Database
 
@@ -25,4 +26,30 @@ The Laravel scaffold migrations currently define:
 
 ## Product Tables
 
-Subtitle jobs, generated tracks, cues, and retention metadata will be added in Phase 03.
+The product migrations currently define:
+
+- `subtitle_jobs`
+  - `public_id`
+  - `youtube_video_id`
+  - `youtube_url`
+  - `video_duration_seconds`
+  - `source_language`
+  - `target_language`
+  - `processing_version`
+  - `install_id`
+  - `request_ip`
+  - `expires_at`
+  - timestamps
+  - unique compatibility key: `youtube_video_id`, `source_language`, `target_language`, `processing_version`
+- `subtitle_tracks`
+  - `public_id`
+  - `subtitle_job_id`
+  - `youtube_video_id`
+  - `source_language`
+  - `target_language`
+  - `processing_version`
+  - `generated_at`
+  - `expires_at`
+  - `cues`
+  - timestamps
+  - unique compatibility key: `youtube_video_id`, `source_language`, `target_language`, `processing_version`

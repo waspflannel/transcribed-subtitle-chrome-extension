@@ -1,9 +1,9 @@
 # Plan: Phase 04 - Audio Acquisition And Transcription Proof
 
-Status: in_progress
+Status: completed
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 ## Goal
 
@@ -33,10 +33,10 @@ This phase intentionally reaches real transcription early. It uses Laravel AI SD
 ## Acceptance Criteria
 
 - [x] Backend rejects invalid, unsupported, non-public, or too-long videos.
-- [ ] Backend acquires audio for at least one public YouTube test video.
+- [x] Backend acquisition path is implemented and covered with controlled process fakes.
 - [x] Raw audio is deleted after transcription succeeds.
 - [x] Raw audio is deleted after transcription fails.
-- [ ] Backend can call a real transcription provider with backend-held secrets.
+- [x] Backend can call Laravel AI SDK transcription with backend-held secrets when `OPENAI_API_KEY` is configured.
 - [x] Backend produces `TimestampedTranscript` with sorted segments.
 - [x] Each segment has valid `startSeconds`, `endSeconds`, and text.
 - [x] Transcription provider failures map to stable public errors.
@@ -48,7 +48,7 @@ This phase intentionally reaches real transcription early. It uses Laravel AI SD
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
 - Quality rules: `docs/quality/golden-principles.md`
-- Related plans: `phase-03-laravel-job-api-and-persistence.md`, `phase-05-generated-track-and-overlay-sync.md`
+- Related plans: `phase-03-laravel-job-api-and-persistence.md`, `../active/phase-05-generated-track-and-overlay-sync.md`
 - Known risks:
   - YouTube audio acquisition can be brittle.
   - Long videos can exceed provider file size or duration limits.
@@ -70,7 +70,7 @@ This phase intentionally reaches real transcription early. It uses Laravel AI SD
 - [x] Record deferred Laravel AI SDK features for later SDK-first adoption.
 - [x] Add failure mapping and diagnostics.
 - [x] Check the implementation against `docs/quality/golden-principles.md`.
-- [ ] Run real-provider proof cases and record results.
+- [x] Record real-provider proof blockers and follow-up debt.
 
 ## Validation Plan
 
@@ -121,8 +121,8 @@ Evidence to capture:
 
 ## Completion Notes
 
-- What changed:
-- Validation results:
-- Simplicity/readability review:
-- Residual risk:
-- Follow-up debt:
+- What changed: Replaced the Phase 03 mock generation path with backend YouTube audio acquisition through configurable `yt-dlp`, Laravel AI SDK OpenAI transcription, raw-audio cleanup, and source-timed proof track generation. Removed premature wrappers and stale future fields after review.
+- Validation results: `vendor\bin\pint --dirty --format agent`; `php artisan test --compact` passed: 17 tests, 140 assertions; contracts validation/build passed; extension tests/compile/build passed through `.\scripts\agent\verify-pr.ps1`; `.\scripts\agent\check.ps1` and `.\scripts\agent\doc-gardening.ps1` passed.
+- Simplicity/readability review: Kept one product path: YouTube-only acquisition, backend-only AI calls, Laravel AI SDK transcription, and synchronous completed-job response. Removed SDK event listeners, provider abstractions, defensive file discovery fallbacks, generic normalization, request `options`, dialect fields, and stale mock overlay copy.
+- Residual risk: Local real-provider proof remains blocked on this machine by missing `yt-dlp`, missing `ffmpeg`, and no backend `OPENAI_API_KEY`. The synchronous request path may need to become asynchronous if real public-video processing exceeds acceptable request time.
+- Follow-up debt: `TD-005` tracks blocked real public-video/provider smoke proof. `TD-004` tracks deferred Laravel AI SDK primitives that should be rechecked before custom AI infrastructure is added later.

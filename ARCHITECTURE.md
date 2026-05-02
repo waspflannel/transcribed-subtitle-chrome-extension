@@ -15,7 +15,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Canonical API/data contracts live in `packages/contracts`.
 - The backend exposes the local `POST /v1/subtitle-jobs` JSON API.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
-- Phase 04 replaces the mock generation path with backend YouTube audio acquisition, raw audio cleanup, and timestamped transcription proof output.
+- Phase 04 replaced the mock generation path with backend YouTube audio acquisition, raw audio cleanup, Laravel AI SDK transcription, and source-timed proof track output.
 
 ## Selected Stack
 
