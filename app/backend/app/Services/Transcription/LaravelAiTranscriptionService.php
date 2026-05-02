@@ -4,6 +4,7 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Transcription;
 use Throwable;
 
@@ -13,11 +14,12 @@ class LaravelAiTranscriptionService
 
     public function transcribe(TemporaryAudioFile $audio, TranscriptionOptions $options): TimestampedTranscript
     {
-        $apiKey = config('ai.providers.openai.key');
+        $provider = Lab::OpenAI;
+        $apiKey = config('ai.providers.'.$provider->value.'.key');
 
         if (! is_string($apiKey) || $apiKey === '') {
             throw SubtitleProcessingException::transcriptionFailed('Transcription provider is not configured.', [
-                'provider' => 'openai',
+                'provider' => $provider->value,
                 'sdk' => 'laravel-ai',
             ]);
         }
@@ -34,8 +36,7 @@ class LaravelAiTranscriptionService
             }
 
             $response = $pending->generate(
-                provider: 'openai',
-                model: (string) config('subtitles.transcription.model'),
+                provider: $provider,
             );
 
             return $this->normalizer->fromLaravelAiResponse(
@@ -48,7 +49,7 @@ class LaravelAiTranscriptionService
         } catch (Throwable $exception) {
             throw SubtitleProcessingException::transcriptionFailed(
                 context: [
-                    'provider' => 'openai',
+                    'provider' => $provider->value,
                     'sdk' => 'laravel-ai',
                     'exception' => $exception::class,
                 ],

@@ -15,6 +15,7 @@ Phase 04 introduced the first real backend processing path. The backend records 
 - Log enough context to explain failures without leaking secrets.
 - For subtitle processing, use public job IDs in logs rather than install IDs, raw transcript text, audio paths, prompts, or provider secrets.
 - Audio acquisition and transcription emit stage-specific start, completed, and failed log events with public job ID, video ID, duration, byte count, provider name, SDK name, segment count, and stable error code where available.
+- Laravel AI SDK transcription events are a future observability hook if stage-level job logs are not enough. Do not add SDK event listeners unless they provide concrete debugging value, and never log raw audio paths, prompts, full transcripts, or segment payloads.
 
 ## Metrics
 

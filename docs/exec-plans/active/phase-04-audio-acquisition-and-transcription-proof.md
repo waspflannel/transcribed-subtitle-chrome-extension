@@ -66,6 +66,8 @@ This phase intentionally reaches real transcription early. It uses Laravel AI SD
 - [x] Implement Laravel AI SDK transcription service.
 - [x] Request timestamped segments through Laravel AI SDK diarized transcription.
 - [x] Normalize provider output into `TimestampedTranscript`.
+- [x] Move provider identity and model defaults to Laravel AI SDK-native configuration.
+- [x] Record deferred Laravel AI SDK features for later SDK-first adoption.
 - [x] Add failure mapping and diagnostics.
 - [x] Check the implementation against `docs/quality/golden-principles.md`.
 - [ ] Run real-provider proof cases and record results.
@@ -96,6 +98,7 @@ Evidence to capture:
 | 2026-05-01 | Use Laravel AI SDK for transcription and request diarized OpenAI output. | The Laravel 13 AI SDK docs expose `Transcription::fromPath(...)->diarize()->generate(...)`; the installed SDK OpenAI gateway maps returned `segments` into timestamped `TranscriptionSegment` objects, which preserves the `TimestampedTranscript` contract without a custom HTTP adapter. |
 | 2026-05-01 | Default `OPENAI_TRANSCRIPTION_MODEL` to `gpt-4o-transcribe-diarize`. | This matches the installed Laravel AI SDK OpenAI provider default for transcription and the `diarize()` request path used to obtain timestamped segments. |
 | 2026-05-01 | Use `yt-dlp` as the first backend YouTube acquisition mechanism and keep it configurable. | Laravel has no built-in YouTube audio acquisition. A single external binary is the smallest inspectable proof path and avoids adding PHP package dependencies during this phase. |
+| 2026-05-01 | Prefer Laravel AI SDK primitives before custom AI abstractions. | The SDK already provides provider enums, provider/model config, custom base URLs, transcription, events, fakes, agents, structured output, queues, files, vector stores, embeddings, reranking, tools, and failover. Phase 04 adopts the primitives needed for transcription and records the rest as deferred SDK-first integration points. |
 
 ## Progress Log
 
@@ -108,6 +111,10 @@ Evidence to capture:
 | 2026-05-01 | Implemented Laravel AI SDK transcription, timestamped transcript normalization, and source-timed proof track generation through the existing synchronous job API. Removed the obsolete mock generator path. | `LaravelAiTranscriptionServiceTest`; `TimestampedTranscriptNormalizerTest`; `php artisan test --compact` passed: 18 tests, 145 assertions |
 | 2026-05-01 | Rechecked Laravel 13 AI SDK docs and installed package code, then replaced the direct OpenAI HTTP transcription adapter with `Laravel\Ai\Transcription::fromPath(...)->diarize()->generate(provider: 'openai', model: ...)`. | Context7 `/laravel/ai`; Laravel 13 AI SDK docs; `vendor/laravel/ai/src/Gateway/OpenAi/OpenAiGateway.php`; `LaravelAiTranscriptionServiceTest` |
 | 2026-05-01 | Ran repository validation and docs checks after implementation. Real acquisition/transcription proof remains the only open Phase 04 slice because the local machine lacks `yt-dlp` and backend OpenAI credentials. | `.\scripts\agent\check.ps1`; `.\scripts\agent\doc-gardening.ps1`; `.\scripts\agent\verify-pr.ps1` |
+| 2026-05-01 | Started Laravel AI SDK-native cleanup slice. Baseline harness check passed before edits. | `.\scripts\agent\check.ps1` |
+| 2026-05-01 | Moved transcription model defaults into `config/ai.php`, switched provider identity to `Lab::OpenAI`, added project Boost subtitle-pipeline guidance, and recorded deferred SDK features as future SDK-first integration points. | `LaravelAiTranscriptionServiceTest` |
+| 2026-05-01 | Removed Laravel AI SDK transcription event listeners to keep the proof path simple. Job-level stage logs remain the active observability surface; SDK events are documented as a future option only if needed. | User simplification review |
+| 2026-05-01 | Validated the SDK-native cleanup slice. Real acquisition/transcription proof remains blocked by missing local `yt-dlp`/`ffmpeg` and backend OpenAI credentials. | `vendor\bin\pint --dirty --format agent`; `php artisan test --compact` passed: 20 tests, 148 assertions; `.\scripts\agent\check.ps1`; `.\scripts\agent\doc-gardening.ps1`; `.\scripts\agent\verify-pr.ps1` |
 
 ## Completion Notes
 

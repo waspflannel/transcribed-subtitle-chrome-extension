@@ -41,6 +41,7 @@ Pop-Location
 | `laravel-specialist` | Concrete Laravel implementation: migrations, Eloquent, jobs, routes, API resources, tests. | Avoid optional stack suggestions like Sanctum, Horizon, Livewire, Redis, or coverage targets unless the phase asks for them. |
 | `laravel-security` | Validation, rate limits, provider keys, raw audio, transcript handling, logs, CORS, deployment hardening, abuse controls. | Provider secrets never reach the extension; raw audio is temporary; logs must not contain secrets, raw audio, full prompts, or full transcripts by default. |
 | `ai-sdk-development` | Laravel AI SDK usage, transcription, enrichment agents, structured output, provider behavior. | Use Laravel AI SDK first; add a narrow transcription adapter only if timestamped output cannot be exposed through the SDK. |
+| `subtitle-pipeline` | Subtitle jobs, YouTube audio acquisition, transcription, translation, Arabic learning data, generated tracks, and Laravel AI SDK product boundaries. | YouTube is the only audio source; use Laravel AI SDK primitives before custom AI infrastructure; normalize SDK responses before storage or extension exposure. |
 
 ## Phase Defaults
 
@@ -48,9 +49,9 @@ Pop-Location
 | --- | --- |
 | Phase 02: YouTube Extension Shell | Usually none. Use Laravel skills only if backend config changes. |
 | Phase 03: Laravel Job API And Persistence | `laravel-best-practices`, `laravel-patterns`, `laravel-specialist`, `laravel-security`. |
-| Phase 04: Audio Acquisition And Transcription Proof | `laravel-best-practices`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`. |
+| Phase 04: Audio Acquisition And Transcription Proof | `laravel-best-practices`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`, `subtitle-pipeline`. |
 | Phase 05: Generated Track And Overlay Sync | Use Laravel skills only for backend track endpoint or persistence changes. |
-| Phase 06: Translation And Arabic Learning Data | `laravel-best-practices`, `laravel-patterns`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`. |
+| Phase 06: Translation And Arabic Learning Data | `laravel-best-practices`, `laravel-patterns`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`, `subtitle-pipeline`. |
 | Phase 07: Hardening And Release Readiness | `laravel-security`, plus `laravel-patterns` and `laravel-specialist` for cleanup. |
 
 ## Evidence

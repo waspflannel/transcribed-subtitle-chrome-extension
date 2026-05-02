@@ -11,6 +11,7 @@ use App\Services\Transcription\TranscriptionOptions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 class SubtitleJobService
@@ -89,7 +90,7 @@ class SubtitleJobService
             Log::info('backend.transcription_started', [
                 'job_id' => $job->public_id,
                 'youtube_video_id' => $job->youtube_video_id,
-                'provider' => 'openai',
+                'provider' => Lab::OpenAI->value,
                 'sdk' => 'laravel-ai',
             ]);
 

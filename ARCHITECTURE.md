@@ -71,6 +71,7 @@ Rules:
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
 - Laravel AI SDK provider responses must be normalized before storage or extension exposure.
+- Before adding custom AI infrastructure, verify whether Laravel AI SDK provides a native primitive for the capability.
 - Eloquent models are internal details, not API contracts.
 
 ## Mechanical Enforcement Targets

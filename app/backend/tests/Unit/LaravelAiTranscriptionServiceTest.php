@@ -9,6 +9,7 @@ use App\Services\Transcription\TimestampedTranscriptNormalizer;
 use App\Services\Transcription\TranscriptionOptions;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Prompts\TranscriptionPrompt;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\TranscriptionSegment;
@@ -43,7 +44,7 @@ class LaravelAiTranscriptionServiceTest extends TestCase
 
         config([
             'ai.providers.openai.key' => 'test-key',
-            'subtitles.transcription.model' => 'gpt-4o-transcribe-diarize',
+            'ai.providers.openai.models.transcription.default' => 'gpt-4o-transcribe-diarize',
             'subtitles.transcription.timeout_seconds' => 30,
         ]);
     }
@@ -79,7 +80,7 @@ class LaravelAiTranscriptionServiceTest extends TestCase
         Transcription::assertGenerated(function (TranscriptionPrompt $prompt): bool {
             return $prompt->language === 'ar'
                 && $prompt->isDiarized()
-                && $prompt->provider->name() === 'openai'
+                && $prompt->provider->name() === Lab::OpenAI->value
                 && $prompt->model === 'gpt-4o-transcribe-diarize';
         });
     }
