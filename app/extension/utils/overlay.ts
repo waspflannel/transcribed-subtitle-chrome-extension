@@ -1,17 +1,20 @@
 import type { ExtensionSettings } from './settings-model';
 import { escapeHtml } from './html';
 import type { SubtitleState } from './messages';
+import type { SubtitleCue } from './contracts';
 import type { YoutubePageInfo } from './youtube';
 
 export interface OverlayRenderState {
   page: YoutubePageInfo;
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
+  activeCue?: SubtitleCue | null;
 }
 
 export class OverlayShell {
   private host: HTMLDivElement | null = null;
   private content: HTMLDivElement | null = null;
+  private renderedHtml: string | null = null;
 
   public constructor(private readonly documentRef: Document = document) {}
 
@@ -23,13 +26,20 @@ export class OverlayShell {
     this.host!.dataset.position = state.settings.overlayPosition;
     this.host!.style.display = state.settings.overlayVisible ? 'block' : 'none';
     this.positionHost(state.settings.overlayPosition);
-    this.content!.innerHTML = renderOverlayContent(state);
+
+    const html = renderOverlayContent(state);
+
+    if (html !== this.renderedHtml) {
+      this.content!.innerHTML = html;
+      this.renderedHtml = html;
+    }
   }
 
   public unmount(): void {
     this.host?.remove();
     this.host = null;
     this.content = null;
+    this.renderedHtml = null;
   }
 
   private mount(): void {
@@ -38,6 +48,7 @@ export class OverlayShell {
     if (existingHost?.shadowRoot) {
       this.host = existingHost;
       this.content = existingHost.shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
+      this.renderedHtml = null;
 
       return;
     }
@@ -155,11 +166,17 @@ function renderOverlayContent(state: OverlayRenderState): string {
   }
 
   if (state.subtitleState.type === 'ready') {
-    const [cue] = state.subtitleState.track.cues;
+    const cue = state.activeCue;
+
+    if (!cue) {
+      return '';
+    }
+
     const optionalRows = [
       state.settings.showRomanization && cue.romanization
         ? `<div class="detail">${escapeHtml(cue.romanization)}</div>`
         : '',
+      cue.translatedText !== cue.sourceText ? `<div class="translation">${escapeHtml(cue.translatedText)}</div>` : '',
       state.settings.showGloss ? renderTokenGloss(cue.tokens) : '',
     ].join('');
 
@@ -167,7 +184,6 @@ function renderOverlayContent(state: OverlayRenderState): string {
       <section class="shell" role="status">
         <div class="eyebrow">AI subtitles</div>
         <div class="line">${escapeHtml(cue.sourceText)}</div>
-        <div class="translation">${escapeHtml(cue.translatedText)}</div>
         ${optionalRows}
         <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Transcribed track</span></div>
       </section>

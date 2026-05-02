@@ -3,6 +3,8 @@ import { browser } from 'wxt/browser';
 import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
+import { bindSubtitleTrackToVideo, type SubtitleSyncDiagnostic } from '../utils/subtitle-sync';
+import type { SubtitleCue, TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
@@ -13,6 +15,8 @@ export default defineContentScript({
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
+    let activeCue: SubtitleCue | null = null;
+    let stopSubtitleSync: (() => void) | null = null;
     let disposed = false;
 
     const overlay = new OverlayShell(document);
@@ -26,12 +30,46 @@ export default defineContentScript({
         page: parseYoutubePage(window.location.href),
         subtitleState,
         settings,
+        activeCue,
+      });
+    }
+
+    function configureSubtitleSync(): void {
+      stopSubtitleSync?.();
+      stopSubtitleSync = null;
+      activeCue = null;
+
+      const page = parseYoutubePage(window.location.href);
+
+      if (!page.supported || subtitleState.type !== 'ready') {
+        updateOverlay();
+
+        return;
+      }
+
+      const video = findPrimaryVideo(document);
+
+      if (!video) {
+        logVideoMissingDiagnostic(subtitleState.track);
+        updateOverlay();
+
+        return;
+      }
+
+      stopSubtitleSync = bindSubtitleTrackToVideo({
+        video,
+        track: subtitleState.track,
+        onCueChange(change) {
+          activeCue = change.cue;
+          updateOverlay();
+        },
+        onDiagnostic: logSubtitleSyncDiagnostic,
       });
     }
 
     function resetOverlayForRouteChange(): void {
       subtitleState = DEFAULT_SUBTITLE_STATE;
-      updateOverlay();
+      configureSubtitleSync();
     }
 
     const stopRouteObserver = observeYoutubeRouteChanges(resetOverlayForRouteChange);
@@ -51,7 +89,7 @@ export default defineContentScript({
 
       if (message.type === 'background.subtitleStateChanged') {
         subtitleState = message.subtitleState;
-        updateOverlay();
+        configureSubtitleSync();
         sendResponse({ ok: true });
 
         return false;
@@ -71,17 +109,18 @@ export default defineContentScript({
           subtitleState = state.subtitleState;
         }
 
-        updateOverlay();
+        configureSubtitleSync();
       })
       .catch(() => {
         updateOverlay();
       });
 
-    updateOverlay();
+    configureSubtitleSync();
 
     ctx.onInvalidated(() => {
       disposed = true;
       stopRouteObserver();
+      stopSubtitleSync?.();
       overlay.unmount();
     });
   },
@@ -97,4 +136,20 @@ function observeYoutubeRouteChanges(callback: () => void): () => void {
       window.removeEventListener(eventName, callback);
     }
   };
+}
+
+function findPrimaryVideo(documentRef: Document): HTMLVideoElement | null {
+  return documentRef.querySelector('video');
+}
+
+function logSubtitleSyncDiagnostic(diagnostic: SubtitleSyncDiagnostic): void {
+  console.warn(`extension.subtitle_sync_${diagnostic.type}`, diagnostic);
+}
+
+function logVideoMissingDiagnostic(track: TrackResponse): void {
+  console.warn('extension.subtitle_sync_video_missing', {
+    type: 'video_missing',
+    trackId: track.trackId,
+    youtubeVideoId: track.youtubeVideoId,
+  });
 }
