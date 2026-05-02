@@ -23,17 +23,11 @@ class YouTubeAudioSource
         $workDirectory = $this->createWorkDirectory();
 
         try {
-            $metadata = $this->fetchMetadata($url);
-            $durationSeconds = $this->validatedDuration($metadata, $maxDurationSeconds);
-            $this->ensurePublicVideo($metadata);
+            $metadata = $this->metadata($url);
+            $durationSeconds = $this->durationSeconds($metadata, $maxDurationSeconds);
+            $this->assertSupportedVideo($metadata);
 
-            $path = $this->downloadAudio($url, $workDirectory);
-            $realPath = realpath($path);
-
-            if ($realPath === false || ! Str::startsWith($realPath, realpath($workDirectory).DIRECTORY_SEPARATOR)) {
-                throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition produced an unexpected file path.');
-            }
-
+            $realPath = $this->downloadAudio($url, $workDirectory);
             $sizeBytes = File::size($realPath);
 
             if ($sizeBytes < 1) {
@@ -83,7 +77,7 @@ class YouTubeAudioSource
     /**
      * @return array<string, mixed>
      */
-    private function fetchMetadata(string $url): array
+    private function metadata(string $url): array
     {
         $result = $this->runProcess([
             (string) config('subtitles.youtube.binary'),
@@ -121,7 +115,7 @@ class YouTubeAudioSource
     /**
      * @param  array<string, mixed>  $metadata
      */
-    private function validatedDuration(array $metadata, int $maxDurationSeconds): int
+    private function durationSeconds(array $metadata, int $maxDurationSeconds): int
     {
         $duration = $metadata['duration'] ?? null;
 
@@ -145,7 +139,7 @@ class YouTubeAudioSource
     /**
      * @param  array<string, mixed>  $metadata
      */
-    private function ensurePublicVideo(array $metadata): void
+    private function assertSupportedVideo(array $metadata): void
     {
         $availability = $metadata['availability'] ?? null;
 
@@ -184,27 +178,24 @@ class YouTubeAudioSource
             ]);
         }
 
-        $reportedPath = collect(preg_split('/\R/', trim($result->output())) ?: [])
-            ->filter()
-            ->last();
+        $reportedPath = trim($result->output());
 
-        if (is_string($reportedPath) && $reportedPath !== '') {
-            $path = $this->absolutePath($reportedPath, $workDirectory);
-
-            if (File::exists($path)) {
-                return $path;
-            }
-        }
-
-        $file = collect(File::files($workDirectory))->first();
-
-        if ($file === null) {
-            throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition did not produce a file.', [
+        if ($reportedPath === '') {
+            throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition did not report an output file.', [
                 'stage' => 'download',
             ]);
         }
 
-        return $file->getRealPath();
+        $realPath = realpath($reportedPath);
+        $realWorkDirectory = realpath($workDirectory);
+
+        if ($realPath === false || $realWorkDirectory === false || ! File::isFile($realPath) || ! Str::startsWith($realPath, $realWorkDirectory.DIRECTORY_SEPARATOR)) {
+            throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition produced an unexpected file path.', [
+                'stage' => 'download',
+            ]);
+        }
+
+        return $realPath;
     }
 
     /**
@@ -221,15 +212,6 @@ class YouTubeAudioSource
                 $exception,
             );
         }
-    }
-
-    private function absolutePath(string $path, string $workDirectory): string
-    {
-        if (preg_match('/^[A-Za-z]:[\\\\\\/]/', $path) === 1 || Str::startsWith($path, ['/', '\\\\'])) {
-            return $path;
-        }
-
-        return $workDirectory.DIRECTORY_SEPARATOR.$path;
     }
 
     private function mimeType(string $path): string

@@ -115,6 +115,7 @@ Evidence to capture:
 | 2026-05-01 | Moved transcription model defaults into `config/ai.php`, switched provider identity to `Lab::OpenAI`, added project Boost subtitle-pipeline guidance, and recorded deferred SDK features as future SDK-first integration points. | `LaravelAiTranscriptionServiceTest` |
 | 2026-05-01 | Removed Laravel AI SDK transcription event listeners to keep the proof path simple. Job-level stage logs remain the active observability surface; SDK events are documented as a future option only if needed. | User simplification review |
 | 2026-05-01 | Validated the SDK-native cleanup slice. Real acquisition/transcription proof remains blocked by missing local `yt-dlp`/`ffmpeg` and backend OpenAI credentials. | `vendor\bin\pint --dirty --format agent`; `php artisan test --compact` passed: 20 tests, 148 assertions; `.\scripts\agent\check.ps1`; `.\scripts\agent\doc-gardening.ps1`; `.\scripts\agent\verify-pr.ps1` |
+| 2026-05-01 | Simplified YouTube audio acquisition by requiring `yt-dlp` to report the downloaded file path and removing the fallback directory scan/path helper. Kept duration/public/live validation, temp containment, cleanup, MIME detection, and stable errors. | `YouTubeAudioSourceTest`; `SubtitleJobApiTest`; `php artisan test --compact` passed: 18 tests, 146 assertions; `.\scripts\agent\check.ps1` |
 
 ## Completion Notes
 
