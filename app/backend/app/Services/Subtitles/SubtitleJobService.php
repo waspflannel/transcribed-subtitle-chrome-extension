@@ -4,6 +4,7 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\LaravelAiTranscriptionService;
@@ -15,7 +16,7 @@ use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION = 'audio-transcription-proof-v1';
+    public const PROCESSING_VERSION = 'generated-track-sync-v1';
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
@@ -51,6 +52,13 @@ class SubtitleJobService
         });
 
         if ($this->hasReadyTrack($job->load('track'))) {
+            Log::info('backend.track_reused', [
+                'job_id' => $job->public_id,
+                'track_id' => $job->track->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'processing_version' => self::PROCESSING_VERSION,
+            ]);
+
             return $job;
         }
 
@@ -111,6 +119,7 @@ class SubtitleJobService
                 'video_duration_seconds' => $audio->durationSeconds,
                 'expires_at' => $track->expires_at,
             ]);
+            $this->logGeneratedTrack($job->refresh(), $track, $audio->durationSeconds);
 
             return $job->refresh()->load('track');
         } catch (SubtitleProcessingException $exception) {
@@ -176,5 +185,35 @@ class SubtitleJobService
     {
         return $job->track !== null
             && ! $job->track->isExpired();
+    }
+
+    private function logGeneratedTrack(SubtitleJob $job, SubtitleTrack $track, int $audioDurationSeconds): void
+    {
+        $cues = $track->cues;
+        $lastCue = $cues[array_key_last($cues)] ?? null;
+        $trackDurationSeconds = is_array($lastCue) ? ((int) ($lastCue['endMs'] ?? 0)) / 1000 : 0.0;
+        $durationDeltaSeconds = abs($audioDurationSeconds - $trackDurationSeconds);
+
+        Log::info('backend.track_generation_completed', [
+            'job_id' => $job->public_id,
+            'track_id' => $track->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'cue_count' => count($cues),
+            'track_duration_seconds' => round($trackDurationSeconds, 3),
+            'audio_duration_seconds' => $audioDurationSeconds,
+            'processing_version' => self::PROCESSING_VERSION,
+            'expires_at' => $track->expires_at->toJSON(),
+        ]);
+
+        if ($durationDeltaSeconds > max(5, $audioDurationSeconds * 0.05)) {
+            Log::warning('backend.track_duration_mismatch', [
+                'job_id' => $job->public_id,
+                'track_id' => $track->public_id,
+                'youtube_video_id' => $job->youtube_video_id,
+                'track_duration_seconds' => round($trackDurationSeconds, 3),
+                'audio_duration_seconds' => $audioDurationSeconds,
+                'delta_seconds' => round($durationDeltaSeconds, 3),
+            ]);
+        }
     }
 }

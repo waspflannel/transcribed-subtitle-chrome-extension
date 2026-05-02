@@ -46,7 +46,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('youtubeVideoId', 'dQw4w9WgXcQ')
             ->assertJsonPath('track.youtubeVideoId', 'dQw4w9WgXcQ')
             ->assertJsonPath('track.cues.0.startMs', 500)
-            ->assertJsonPath('track.cues.0.endMs', 1750)
+            ->assertJsonPath('track.cues.0.endMs', 2100)
             ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
             ->assertJsonStructure($this->completedJobShape());
 
@@ -79,6 +79,39 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, SubtitleJob::count());
         $this->assertSame(1, SubtitleTrack::count());
         $this->assertSame(1, $this->audioSource->calls);
+    }
+
+    public function test_compatible_completed_track_is_reused_without_audio_acquisition(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'source_language' => 'ar',
+            'target_language' => 'en',
+            'expires_at' => now()->addDays(30),
+        ]);
+
+        $track = SubtitleTrack::factory()
+            ->for($job, 'job')
+            ->create([
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'source_language' => 'ar',
+                'target_language' => 'en',
+                'expires_at' => now()->addDays(30),
+            ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id)
+            ->assertJsonPath('track.trackId', $track->public_id)
+            ->assertJsonPath('track.cues.0.sourceText', 'mock source text');
+
+        $this->assertSame(0, $this->audioSource->calls);
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertSame(1, SubtitleTrack::count());
     }
 
     public function test_expired_subtitle_job_request_regenerates_existing_job(): void
@@ -272,8 +305,8 @@ class RecordingTranscriptionService extends LaravelAiTranscriptionService
             language: $sourceLanguage,
             durationSeconds: 42.0,
             segments: [
-                new TimestampedTranscriptSegment(0.5, 1.75, 'first transcript segment'),
-                new TimestampedTranscriptSegment(2.0, 3.25, 'second transcript segment'),
+                new TimestampedTranscriptSegment(0.5, 2.1, 'first transcript segment'),
+                new TimestampedTranscriptSegment(2.4, 4.0, 'second transcript segment'),
             ],
         );
     }
