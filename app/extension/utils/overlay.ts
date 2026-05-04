@@ -1,14 +1,13 @@
 import type { ExtensionSettings } from './settings-model';
 import { escapeHtml } from './html';
 import type { SubtitleState } from './messages';
-import type { SubtitleCue } from './contracts';
 import type { YoutubePageInfo } from './youtube';
 
 export interface OverlayRenderState {
   page: YoutubePageInfo;
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
-  activeCue?: SubtitleCue | null;
+  activeSourceText?: string | null;
 }
 
 export class OverlayShell {
@@ -166,25 +165,16 @@ function renderOverlayContent(state: OverlayRenderState): string {
   }
 
   if (state.subtitleState.type === 'ready') {
-    const cue = state.activeCue;
+    const sourceText = state.activeSourceText?.trim();
 
-    if (!cue) {
+    if (!sourceText) {
       return '';
     }
-
-    const optionalRows = [
-      state.settings.showRomanization && cue.romanization
-        ? `<div class="detail">${escapeHtml(cue.romanization)}</div>`
-        : '',
-      cue.translatedText !== cue.sourceText ? `<div class="translation">${escapeHtml(cue.translatedText)}</div>` : '',
-      state.settings.showGloss ? renderTokenGloss(cue.tokens) : '',
-    ].join('');
 
     return `
       <section class="shell" role="status">
         <div class="eyebrow">AI subtitles</div>
-        <div class="line">${escapeHtml(cue.sourceText)}</div>
-        ${optionalRows}
+        <div class="line">${escapeHtml(sourceText)}</div>
         <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Transcribed track</span></div>
       </section>
     `;
@@ -205,18 +195,6 @@ function renderOverlayContent(state: OverlayRenderState): string {
     detail: 'This video does not have a generated subtitle track yet.',
     meta: [`Video ${state.page.videoId}`],
   });
-}
-
-function renderTokenGloss(tokens: { text: string; translation?: string; gloss?: string }[]): string {
-  const gloss = tokens
-    .map((token) => {
-      const detail = token.gloss ?? token.translation;
-
-      return detail ? `${token.text}: ${detail}` : token.text;
-    })
-    .join(' | ');
-
-  return gloss ? `<div class="detail">${escapeHtml(gloss)}</div>` : '';
 }
 
 function renderShell(input: { eyebrow: string; title: string; detail: string; meta: string[] }): string {

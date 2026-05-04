@@ -3,8 +3,8 @@ import { browser } from 'wxt/browser';
 import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
-import { bindSubtitleTrackToVideo, type SubtitleSyncDiagnostic } from '../utils/subtitle-sync';
-import type { SubtitleCue, TrackResponse } from '../utils/contracts';
+import { bindWebVttTrackToVideo, type WebVttTrackDiagnostic } from '../utils/webvtt-track';
+import type { TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
@@ -15,8 +15,8 @@ export default defineContentScript({
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
-    let activeCue: SubtitleCue | null = null;
-    let stopSubtitleSync: (() => void) | null = null;
+    let activeSourceText: string | null = null;
+    let stopWebVttTrack: (() => void) | null = null;
     let disposed = false;
 
     const overlay = new OverlayShell(document);
@@ -30,14 +30,14 @@ export default defineContentScript({
         page: parseYoutubePage(window.location.href),
         subtitleState,
         settings,
-        activeCue,
+        activeSourceText,
       });
     }
 
-    function configureSubtitleSync(): void {
-      stopSubtitleSync?.();
-      stopSubtitleSync = null;
-      activeCue = null;
+    function configureWebVttTrack(): void {
+      stopWebVttTrack?.();
+      stopWebVttTrack = null;
+      activeSourceText = null;
 
       const page = parseYoutubePage(window.location.href);
 
@@ -56,20 +56,20 @@ export default defineContentScript({
         return;
       }
 
-      stopSubtitleSync = bindSubtitleTrackToVideo({
+      stopWebVttTrack = bindWebVttTrackToVideo({
         video,
         track: subtitleState.track,
         onCueChange(change) {
-          activeCue = change.cue;
+          activeSourceText = change.activeSourceText;
           updateOverlay();
         },
-        onDiagnostic: logSubtitleSyncDiagnostic,
+        onDiagnostic: logWebVttTrackDiagnostic,
       });
     }
 
     function resetOverlayForRouteChange(): void {
       subtitleState = DEFAULT_SUBTITLE_STATE;
-      configureSubtitleSync();
+      configureWebVttTrack();
     }
 
     const stopRouteObserver = observeYoutubeRouteChanges(resetOverlayForRouteChange);
@@ -89,7 +89,7 @@ export default defineContentScript({
 
       if (message.type === 'background.subtitleStateChanged') {
         subtitleState = message.subtitleState;
-        configureSubtitleSync();
+        configureWebVttTrack();
         sendResponse({ ok: true });
 
         return false;
@@ -109,18 +109,18 @@ export default defineContentScript({
           subtitleState = state.subtitleState;
         }
 
-        configureSubtitleSync();
+        configureWebVttTrack();
       })
       .catch(() => {
         updateOverlay();
       });
 
-    configureSubtitleSync();
+    configureWebVttTrack();
 
     ctx.onInvalidated(() => {
       disposed = true;
       stopRouteObserver();
-      stopSubtitleSync?.();
+      stopWebVttTrack?.();
       overlay.unmount();
     });
   },
@@ -142,12 +142,12 @@ function findPrimaryVideo(documentRef: Document): HTMLVideoElement | null {
   return documentRef.querySelector('video');
 }
 
-function logSubtitleSyncDiagnostic(diagnostic: SubtitleSyncDiagnostic): void {
-  console.warn(`extension.subtitle_sync_${diagnostic.type}`, diagnostic);
+function logWebVttTrackDiagnostic(diagnostic: WebVttTrackDiagnostic): void {
+  console.warn(`extension.webvtt_track_${diagnostic.type}`, diagnostic);
 }
 
 function logVideoMissingDiagnostic(track: TrackResponse): void {
-  console.warn('extension.subtitle_sync_video_missing', {
+  console.warn('extension.webvtt_track_video_missing', {
     type: 'video_missing',
     trackId: track.trackId,
     youtubeVideoId: track.youtubeVideoId,
