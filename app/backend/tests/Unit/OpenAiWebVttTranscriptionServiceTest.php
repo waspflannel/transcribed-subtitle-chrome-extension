@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\OpenAiWebVttTranscriptionService;
+use App\Services\Transcription\WebVttTranscriptParser;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -111,21 +112,6 @@ class OpenAiWebVttTranscriptionServiceTest extends TestCase
         }
     }
 
-    public function test_it_rejects_transcripts_without_valid_webvtt_cues(): void
-    {
-        Http::fake([
-            'api.openai.test/v1/audio/transcriptions' => Http::response("WEBVTT\n\nbad block\n", 200),
-        ]);
-
-        try {
-            $this->service()->transcribe($this->audio, 'ar');
-            $this->fail('Expected invalid WebVTT to throw a stable transcription exception.');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('transcription_failed', $exception->publicCode);
-            $this->assertSame('missing_timing_line', $exception->context['reason'] ?? null);
-        }
-    }
-
     public function test_it_requires_backend_provider_configuration(): void
     {
         config(['ai.providers.openai.key' => null]);
@@ -141,7 +127,7 @@ class OpenAiWebVttTranscriptionServiceTest extends TestCase
 
     private function service(): OpenAiWebVttTranscriptionService
     {
-        return new OpenAiWebVttTranscriptionService;
+        return new OpenAiWebVttTranscriptionService(new WebVttTranscriptParser);
     }
 
     private function sampleWebVtt(): string

@@ -36,29 +36,29 @@ class TimestampedSubtitleTrackGenerator
     private function cues(TimestampedTranscript $transcript): array
     {
         $previousEndMs = null;
+        $cues = [];
 
-        return collect($transcript->segments)
-            ->map(function (TimestampedTranscriptSegment $segment, int $index) use (&$previousEndMs): array {
-                $sourceText = $this->normalizeText($segment->text);
-                $startMs = (int) round($segment->startSeconds * 1000);
-                $endMs = (int) round($segment->endSeconds * 1000);
+        foreach ($transcript->segments as $index => $segment) {
+            $sourceText = $this->normalizeText($segment->text);
+            $startMs = (int) round($segment->startSeconds * 1000);
+            $endMs = (int) round($segment->endSeconds * 1000);
 
-                $this->validateCue($sourceText, $startMs, $endMs, $index, $previousEndMs);
-                $previousEndMs = $endMs;
+            $this->validateCue($sourceText, $startMs, $endMs, $index, $previousEndMs);
+            $previousEndMs = $endMs;
 
-                return [
-                    'cueId' => sprintf('cue-%04d', $index + 1),
-                    'index' => $index,
-                    'startMs' => $startMs,
-                    'endMs' => $endMs,
-                    'sourceText' => $sourceText,
-                    // Phase 05 is source-only; Phase 06 replaces this with real translation.
-                    'translatedText' => $sourceText,
-                    'tokens' => [],
-                ];
-            })
-            ->values()
-            ->all();
+            $cues[] = [
+                'cueId' => sprintf('cue-%04d', $index + 1),
+                'index' => $index,
+                'startMs' => $startMs,
+                'endMs' => $endMs,
+                'sourceText' => $sourceText,
+                // Phase 05 is source-only; Phase 06 replaces this with real translation.
+                'translatedText' => $sourceText,
+                'tokens' => [],
+            ];
+        }
+
+        return $cues;
     }
 
     private function validatedWebVtt(TimestampedTranscript $transcript): string
