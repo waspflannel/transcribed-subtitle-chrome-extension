@@ -25,7 +25,6 @@ export interface CreateSubtitleJobRequest {
 // Source: schemas/job-response.schema.json
 export interface JobResponse {
   jobId: string;
-  status: 'completed';
   youtubeVideoId: string;
   sourceLanguage: 'auto' | 'ar';
   targetLanguage: 'en';

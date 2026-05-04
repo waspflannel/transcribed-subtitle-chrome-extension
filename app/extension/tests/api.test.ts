@@ -9,7 +9,6 @@ describe('SubtitleApiClient', () => {
   it('creates subtitle jobs with the extension install header', async () => {
     const jobResponse: JobResponse = {
       jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
-      status: 'completed',
       youtubeVideoId: 'dQw4w9WgXcQ',
       sourceLanguage: 'ar',
       targetLanguage: 'en',

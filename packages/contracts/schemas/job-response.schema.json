@@ -6,7 +6,6 @@
   "additionalProperties": false,
   "required": [
     "jobId",
-    "status",
     "youtubeVideoId",
     "sourceLanguage",
     "targetLanguage",
@@ -19,10 +18,6 @@
     "jobId": {
       "type": "string",
       "format": "uuid"
-    },
-    "status": {
-      "type": "string",
-      "const": "completed"
     },
     "youtubeVideoId": {
       "type": "string",

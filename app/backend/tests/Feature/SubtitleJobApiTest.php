@@ -42,7 +42,6 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('status', 'completed')
             ->assertJsonPath('youtubeVideoId', 'dQw4w9WgXcQ')
             ->assertJsonPath('track.youtubeVideoId', 'dQw4w9WgXcQ')
             ->assertJsonPath('track.cues.0.startMs', 500)
@@ -141,7 +140,6 @@ class SubtitleJobApiTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id)
-            ->assertJsonPath('status', 'completed')
             ->assertJsonStructure($this->completedJobShape());
 
         $this->assertSame(1, SubtitleJob::count());
@@ -236,7 +234,6 @@ class SubtitleJobApiTest extends TestCase
     {
         return [
             'jobId',
-            'status',
             'youtubeVideoId',
             'sourceLanguage',
             'targetLanguage',
