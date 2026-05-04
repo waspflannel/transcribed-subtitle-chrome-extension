@@ -14,7 +14,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 ## Scope
 
 - In scope:
-  - OpenAI-backed enrichment provider using the narrowest backend-only integration that supports structured output.
+  - Laravel AI SDK OpenAI-backed enrichment provider using structured output where it fits the cue contract.
   - Dedicated cue-enrichment agent or prompt with structured output.
   - Translation from source cue text to target language.
   - Arabic token metadata for text, lemma, root, part of speech, romanization, gloss, and usage note when available.
@@ -33,7 +33,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 
 ## Acceptance Criteria
 
-- [ ] Laravel enrichment service uses OpenAI as the first target provider without exposing provider credentials to the extension.
+- [ ] Laravel enrichment service uses Laravel AI SDK with OpenAI as the first target provider.
 - [ ] Enrichment output is structured and validated before storage.
 - [ ] Each cue has an English translation when enrichment succeeds.
 - [ ] Arabic cues include token metadata where available.
@@ -60,7 +60,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 
 - [ ] Inspect track/cue schema from Phase 05.
 - [ ] Define enrichment structured output schema.
-- [ ] Implement OpenAI enrichment provider.
+- [ ] Implement Laravel AI SDK enrichment provider.
 - [ ] Add provider fakes for tests.
 - [ ] Add output validation and retry/failure policy.
 - [ ] Store enriched tracks.

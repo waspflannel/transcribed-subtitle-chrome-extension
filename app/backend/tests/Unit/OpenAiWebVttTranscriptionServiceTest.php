@@ -105,7 +105,8 @@ class OpenAiWebVttTranscriptionServiceTest extends TestCase
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
             $this->assertSame(502, $exception->status);
-            $this->assertSame('openai-http', $exception->context['sdk']);
+            $this->assertSame('openai', $exception->context['provider']);
+            $this->assertSame('openai-http', $exception->context['adapter']);
             $this->assertSame(429, $exception->context['status']);
         }
     }

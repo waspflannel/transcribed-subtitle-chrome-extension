@@ -29,7 +29,8 @@ Backend
   - Laravel scheduler
   - Laravel migrations and Eloquent
   - SQLite first
-  - Laravel HTTP client for OpenAI transcription requests
+  - Laravel AI SDK for provider identity and future enrichment primitives
+  - Laravel HTTP client for the OpenAI Whisper WebVTT transcription request
   - Configurable `yt-dlp` binary for the first YouTube audio acquisition proof
   - Laravel Boost 2.x as development tooling
   - Local Boost skills routed by `docs/references/boost-skill-routing.md`
@@ -47,7 +48,7 @@ Chrome Extension
   -> proxy-facing Laravel API routes
       -> Laravel application services
       -> YouTube audio acquisition in controlled temporary storage
-      -> OpenAI Whisper WebVTT transcription normalized to timestamped transcript segments
+      -> OpenAI provider / Whisper model WebVTT transcription normalized to timestamped transcript segments
       -> WebVTT-backed cue validation
       -> enrichment services
       -> SQLite track storage
@@ -71,7 +72,7 @@ Rules:
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
 - OpenAI provider responses must be normalized before storage or extension exposure.
-- Before adding custom AI infrastructure, verify whether the current framework or SDK provides a native primitive for the capability.
+- Use Laravel AI SDK provider identity and primitives where they fit; keep narrow provider requests only for capabilities the SDK wrapper does not expose.
 - Eloquent models are internal details, not API contracts.
 
 ## Mechanical Enforcement Targets

@@ -7,6 +7,7 @@ use App\Services\Audio\TemporaryAudioFile;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 class OpenAiWebVttTranscriptionService
@@ -98,24 +99,24 @@ class OpenAiWebVttTranscriptionService
 
     public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
     {
-        $provider = 'openai';
-        $apiKey = config('ai.providers.openai.key');
-        $model = (string) config('ai.providers.openai.models.transcription.default', 'whisper-1');
+        $provider = Lab::OpenAI;
+        $apiKey = config('ai.providers.'.$provider->value.'.key');
+        $model = (string) config('ai.providers.'.$provider->value.'.models.transcription.default', 'whisper-1');
 
         if (! is_string($apiKey) || $apiKey === '') {
             throw SubtitleProcessingException::transcriptionFailed('Transcription provider is not configured.', [
-                'provider' => $provider,
-                'sdk' => 'openai-http',
+                'provider' => $provider->value,
+                'adapter' => 'openai-http',
             ]);
         }
 
         try {
-            $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $apiKey, $model);
+            $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
 
             if ($response->failed()) {
                 throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
-                    'provider' => $provider,
-                    'sdk' => 'openai-http',
+                    'provider' => $provider->value,
+                    'adapter' => 'openai-http',
                     'model' => $model,
                     'status' => $response->status(),
                 ]);
@@ -135,8 +136,8 @@ class OpenAiWebVttTranscriptionService
         } catch (Throwable $exception) {
             throw SubtitleProcessingException::transcriptionFailed(
                 context: [
-                    'provider' => $provider,
-                    'sdk' => 'openai-http',
+                    'provider' => $provider->value,
+                    'adapter' => 'openai-http',
                     'model' => $model,
                     'exception' => $exception::class,
                 ],
@@ -148,6 +149,7 @@ class OpenAiWebVttTranscriptionService
     private function sendTranscriptionRequest(
         TemporaryAudioFile $audio,
         string $sourceLanguage,
+        Lab $provider,
         string $apiKey,
         string $model,
     ): Response {
@@ -168,12 +170,12 @@ class OpenAiWebVttTranscriptionService
                 $this->audioFilename($audio),
                 ['Content-Type' => $audio->mimeType],
             )
-            ->post($this->transcriptionUrl(), $payload);
+            ->post($this->transcriptionUrl($provider), $payload);
     }
 
-    private function transcriptionUrl(): string
+    private function transcriptionUrl(Lab $provider): string
     {
-        return rtrim((string) config('ai.providers.openai.url', 'https://api.openai.com/v1'), '/').'/audio/transcriptions';
+        return rtrim((string) config('ai.providers.'.$provider->value.'.url', 'https://api.openai.com/v1'), '/').'/audio/transcriptions';
     }
 
     private function audioFilename(TemporaryAudioFile $audio): string

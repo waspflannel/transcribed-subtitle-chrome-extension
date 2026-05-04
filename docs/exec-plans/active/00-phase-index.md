@@ -39,7 +39,8 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 - Backend stack is Laravel.
 - Extension stack is WXT and TypeScript.
 - AI provider calls must stay backend-only behind narrow services.
-- Use framework or SDK primitives when they simplify the current phase, but do not add provider infrastructure without a concrete product need.
+- Use Laravel AI SDK provider identity and primitives before custom AI integration.
+- If Laravel AI SDK cannot expose a required provider option, use a Laravel-side adapter only for that gap.
 - Laravel Boost is development tooling, not product runtime behavior.
 - Contracts are schema-first and shared by Laravel and TypeScript.
 - Raw audio is temporary and deleted immediately after processing.
@@ -70,3 +71,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-02 | Phase 04 completed and archived. | `docs/exec-plans/completed/phase-04-audio-acquisition-and-transcription-proof.md` |
 | 2026-05-02 | Phase 05 completed and archived. | `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md` |
 | 2026-05-03 | Phase 05 sync path refactored to OpenAI WebVTT and browser-native `TextTrack` timing. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |
+| 2026-05-04 | Corrected Phase 05 provider/model framing so Laravel AI `Lab::OpenAI` remains the provider identity and Whisper remains the transcription model. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |
