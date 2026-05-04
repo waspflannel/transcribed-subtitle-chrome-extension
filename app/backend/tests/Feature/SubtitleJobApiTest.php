@@ -7,7 +7,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Transcription\LaravelAiTranscriptionService;
+use App\Services\Transcription\OpenAiWebVttTranscriptionService;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,7 +31,7 @@ class SubtitleJobApiTest extends TestCase
         $this->transcriptionService = new RecordingTranscriptionService;
 
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
-        $this->app->instance(LaravelAiTranscriptionService::class, $this->transcriptionService);
+        $this->app->instance(OpenAiWebVttTranscriptionService::class, $this->transcriptionService);
     }
 
     public function test_create_subtitle_job_returns_completed_track(): void
@@ -48,6 +48,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.startMs', 500)
             ->assertJsonPath('track.cues.0.endMs', 2100)
             ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('track.webVtt', $this->sampleWebVtt())
             ->assertJsonStructure($this->completedJobShape());
 
         $this->assertSame(1, SubtitleJob::count());
@@ -107,6 +108,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id)
             ->assertJsonPath('track.trackId', $track->public_id)
+            ->assertJsonPath('track.webVtt', "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nmock source text\n")
             ->assertJsonPath('track.cues.0.sourceText', 'mock source text');
 
         $this->assertSame(0, $this->audioSource->calls);
@@ -249,6 +251,7 @@ class SubtitleJobApiTest extends TestCase
                 'targetLanguage',
                 'generatedAt',
                 'expiresAt',
+                'webVtt',
                 'cues' => [
                     '*' => ['cueId', 'index', 'startMs', 'endMs', 'sourceText', 'translatedText', 'tokens'],
                 ],
@@ -259,6 +262,11 @@ class SubtitleJobApiTest extends TestCase
     private function installId(): string
     {
         return 'install_'.str_repeat('a', 32);
+    }
+
+    private function sampleWebVtt(): string
+    {
+        return "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n";
     }
 }
 
@@ -289,7 +297,7 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
     }
 }
 
-class RecordingTranscriptionService extends LaravelAiTranscriptionService
+class RecordingTranscriptionService extends OpenAiWebVttTranscriptionService
 {
     public bool $shouldFail = false;
 
@@ -308,6 +316,7 @@ class RecordingTranscriptionService extends LaravelAiTranscriptionService
                 new TimestampedTranscriptSegment(0.5, 2.1, 'first transcript segment'),
                 new TimestampedTranscriptSegment(2.4, 4.0, 'second transcript segment'),
             ],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n",
         );
     }
 }

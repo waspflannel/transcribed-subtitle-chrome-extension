@@ -42,6 +42,7 @@ export interface TrackResponse {
   targetLanguage: 'en';
   generatedAt: string;
   expiresAt: string;
+  webVtt: string;
   /**
    * @minItems 1
    */
@@ -77,6 +78,7 @@ export interface TrackResponse {
   targetLanguage: 'en';
   generatedAt: string;
   expiresAt: string;
+  webVtt: string;
   /**
    * @minItems 1
    */

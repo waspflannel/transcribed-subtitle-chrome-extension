@@ -16,7 +16,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_generates_validated_source_only_cues_from_timestamped_transcript(): void
+    public function test_generates_validated_source_only_cues_and_persists_webvtt(): void
     {
         Carbon::setTestNow('2026-05-02 12:00:00');
 
@@ -30,38 +30,30 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
             Carbon::setTestNow();
         }
 
-        $this->assertCount(2, $track->cues);
+        $this->assertSame($this->sampleWebVtt(), $track->web_vtt);
+        $this->assertCount(3, $track->cues);
         $this->assertSame([
             'cueId' => 'cue-0001',
             'index' => 0,
             'startMs' => 0,
-            'endMs' => 2000,
-            'sourceText' => 'first segment second segment',
-            'translatedText' => 'first segment second segment',
+            'endMs' => 800,
+            'sourceText' => 'first segment',
+            'translatedText' => 'first segment',
             'tokens' => [],
         ], $track->cues[0]);
         $this->assertSame('cue-0002', $track->cues[1]['cueId']);
-        $this->assertSame('third segment', $track->cues[1]['sourceText']);
+        $this->assertSame('second segment', $track->cues[1]['sourceText']);
+        $this->assertSame('third segment', $track->cues[2]['sourceText']);
         $this->assertTrue($track->expires_at->isSameSecond(Carbon::parse('2026-06-01 12:00:00')));
     }
 
-    public function test_splits_overly_long_cues_when_word_boundaries_are_available(): void
+    public function test_rejects_transcripts_without_webvtt(): void
     {
-        $track = $this->generateTrack([
-            new TimestampedTranscriptSegment(
-                0.0,
-                12.0,
-                implode(' ', array_fill(0, 45, 'word')),
-            ),
-        ]);
-
-        $this->assertCount(2, $track->cues);
-        $this->assertSame(0, $track->cues[0]['startMs']);
-        $this->assertSame(6000, $track->cues[0]['endMs']);
-        $this->assertSame(6000, $track->cues[1]['startMs']);
-        $this->assertSame(12000, $track->cues[1]['endMs']);
-        $this->assertLessThanOrEqual(180, mb_strlen($track->cues[0]['sourceText']));
-        $this->assertLessThanOrEqual(180, mb_strlen($track->cues[1]['sourceText']));
+        $this->assertInvalidTranscriptReason(
+            'invalid_web_vtt',
+            [new TimestampedTranscriptSegment(0.0, 2.0, 'source text')],
+            '',
+        );
     }
 
     public function test_rejects_empty_source_text(): void
@@ -82,7 +74,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
     /**
      * @param  array<int, TimestampedTranscriptSegment>  $segments
      */
-    private function generateTrack(array $segments): SubtitleTrack
+    private function generateTrack(array $segments, ?string $webVtt = null): SubtitleTrack
     {
         $job = SubtitleJob::factory()->create();
 
@@ -92,6 +84,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
                 language: 'ar',
                 durationSeconds: 8.0,
                 segments: $segments,
+                webVtt: $webVtt ?? $this->sampleWebVtt(),
             ),
         );
     }
@@ -99,10 +92,10 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
     /**
      * @param  array<int, TimestampedTranscriptSegment>  $segments
      */
-    private function assertInvalidTranscriptReason(string $reason, array $segments): void
+    private function assertInvalidTranscriptReason(string $reason, array $segments, ?string $webVtt = null): void
     {
         try {
-            $this->generateTrack($segments);
+            $this->generateTrack($segments, $webVtt);
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
             $this->assertSame($reason, $exception->context['reason'] ?? null);
@@ -111,5 +104,10 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         }
 
         $this->fail('Expected subtitle cue validation to fail.');
+    }
+
+    private function sampleWebVtt(): string
+    {
+        return "WEBVTT\n\n00:00:00.000 --> 00:00:00.800\nfirst segment\n\n00:00:00.850 --> 00:00:02.000\nsecond segment\n\n00:00:03.000 --> 00:00:05.000\nthird segment\n";
     }
 }

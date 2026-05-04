@@ -7,20 +7,19 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Transcription\LaravelAiTranscriptionService;
+use App\Services\Transcription\OpenAiWebVttTranscriptionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION = 'generated-track-sync-v1';
+    public const PROCESSING_VERSION = 'generated-webvtt-sync-v1';
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
-        private readonly LaravelAiTranscriptionService $transcriptionService,
+        private readonly OpenAiWebVttTranscriptionService $transcriptionService,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
     ) {}
 
@@ -97,8 +96,9 @@ class SubtitleJobService
             Log::info('backend.transcription_started', [
                 'job_id' => $job->public_id,
                 'youtube_video_id' => $job->youtube_video_id,
-                'provider' => Lab::OpenAI->value,
-                'sdk' => 'laravel-ai',
+                'provider' => 'openai',
+                'sdk' => 'openai-http',
+                'response_format' => 'vtt',
             ]);
 
             $transcript = $this->transcriptionService->transcribe(
