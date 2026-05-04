@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Goal
 
@@ -38,8 +38,8 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 - Maximum video length is 60 minutes.
 - Backend stack is Laravel.
 - Extension stack is WXT and TypeScript.
-- AI integration should use Laravel AI SDK before custom provider code.
-- If Laravel AI SDK cannot expose timestamped transcription output, use a Laravel-side OpenAI transcription adapter for that single path.
+- AI provider calls must stay backend-only behind narrow services.
+- Use framework or SDK primitives when they simplify the current phase, but do not add provider infrastructure without a concrete product need.
 - Laravel Boost is development tooling, not product runtime behavior.
 - Contracts are schema-first and shared by Laravel and TypeScript.
 - Raw audio is temporary and deleted immediately after processing.
@@ -69,3 +69,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-04-30 | Phase 03 completed and archived. | `docs/exec-plans/completed/phase-03-laravel-job-api-and-persistence.md` |
 | 2026-05-02 | Phase 04 completed and archived. | `docs/exec-plans/completed/phase-04-audio-acquisition-and-transcription-proof.md` |
 | 2026-05-02 | Phase 05 completed and archived. | `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md` |
+| 2026-05-03 | Phase 05 sync path refactored to OpenAI WebVTT and browser-native `TextTrack` timing. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |

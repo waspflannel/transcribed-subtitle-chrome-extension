@@ -50,8 +50,8 @@ WXT extension
   - Migrations and Eloquent for persistence.
   - Scheduler for cleanup.
   - Tests for generation behavior, validation, persistence, and provider failures.
-- Use Laravel AI SDK before custom AI integration.
-- If Laravel AI SDK cannot expose timestamped transcription output, add a Laravel-side transcription adapter only for that gap.
+- Keep AI provider calls backend-only and hidden behind narrow services.
+- Use framework or SDK primitives when they simplify the current phase, but do not re-add provider infrastructure unless it removes real current complexity.
 - Keep AI agents/prompts narrow:
   - translate finalized cues
   - return structured learning metadata
