@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-04-30
+Last updated: 2026-05-03
 
 ## Goal
 
@@ -14,7 +14,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 ## Scope
 
 - In scope:
-  - Laravel AI SDK OpenAI-backed enrichment provider.
+  - Laravel AI SDK OpenAI-backed enrichment provider using structured output where it fits the cue contract.
   - Dedicated cue-enrichment agent or prompt with structured output.
   - Translation from source cue text to target language.
   - Arabic token metadata for text, lemma, root, part of speech, romanization, gloss, and usage note when available.

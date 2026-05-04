@@ -18,7 +18,6 @@ class SubtitleJobResource extends JsonResource
     {
         return [
             'jobId' => $this->public_id,
-            'status' => 'completed',
             'youtubeVideoId' => $this->youtube_video_id,
             'sourceLanguage' => $this->source_language,
             'targetLanguage' => $this->target_language,

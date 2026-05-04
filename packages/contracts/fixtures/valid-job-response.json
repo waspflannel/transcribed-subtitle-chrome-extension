@@ -1,6 +1,5 @@
 {
   "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3001",
-  "status": "completed",
   "youtubeVideoId": "dQw4w9WgXcQ",
   "sourceLanguage": "ar",
   "targetLanguage": "en",
@@ -12,6 +11,7 @@
     "targetLanguage": "en",
     "generatedAt": "2026-04-28T05:02:00Z",
     "expiresAt": "2026-05-28T05:02:00Z",
+    "webVtt": "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nmarhaban bikum\n",
     "cues": [
       {
         "cueId": "cue-0001",

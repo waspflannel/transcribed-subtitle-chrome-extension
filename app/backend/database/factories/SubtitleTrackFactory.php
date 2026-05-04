@@ -29,6 +29,7 @@ class SubtitleTrackFactory extends Factory
             'processing_version' => SubtitleJobService::PROCESSING_VERSION,
             'generated_at' => now(),
             'expires_at' => now()->addDays(30),
+            'web_vtt' => "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nmock source text\n",
             'cues' => [
                 [
                     'cueId' => 'cue-0001',

@@ -40,8 +40,8 @@ Pop-Location
 | `laravel-patterns` | Backend architecture shape, API boundaries, controllers, services/actions, models, queues, caching, resources. | Do not add layers just because the skill lists them; add a layer only when it removes current complexity. |
 | `laravel-specialist` | Concrete Laravel implementation: migrations, Eloquent, jobs, routes, API resources, tests. | Avoid optional stack suggestions like Sanctum, Horizon, Livewire, Redis, or coverage targets unless the phase asks for them. |
 | `laravel-security` | Validation, rate limits, provider keys, raw audio, transcript handling, logs, CORS, deployment hardening, abuse controls. | Provider secrets never reach the extension; raw audio is temporary; logs must not contain secrets, raw audio, full prompts, or full transcripts by default. |
-| `ai-sdk-development` | Laravel AI SDK usage, transcription, enrichment agents, structured output, provider behavior. | Use Laravel AI SDK first; add a narrow transcription adapter only if timestamped output cannot be exposed through the SDK. |
-| `subtitle-pipeline` | Subtitle jobs, YouTube audio acquisition, transcription, translation, Arabic learning data, generated tracks, and Laravel AI SDK product boundaries. | YouTube is the only audio source; use Laravel AI SDK primitives before custom AI infrastructure; normalize SDK responses before storage or extension exposure. |
+| `ai-sdk-development` | Laravel AI SDK provider identity, enrichment agents, structured output, transcription, and provider behavior. | Use `Lab` for provider identity; keep the narrow OpenAI HTTP transcription request only for WebVTT output while the SDK wrapper cannot expose that provider option. |
+| `subtitle-pipeline` | Subtitle jobs, YouTube audio acquisition, transcription, translation, Arabic learning data, generated tracks, and provider boundaries. | YouTube is the only audio source; keep provider calls backend-only; normalize provider responses before storage or extension exposure. |
 
 ## Phase Defaults
 

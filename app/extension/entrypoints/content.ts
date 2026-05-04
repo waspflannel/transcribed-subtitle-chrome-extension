@@ -1,8 +1,11 @@
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 
 import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
+import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
+import { webVttTrackLogger } from '../utils/webvtt-track-logger';
+import type { TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
@@ -13,30 +16,37 @@ export default defineContentScript({
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
+    let activeSourceText: string | null = null;
+    let stopWebVttTrack: (() => void) | null = null;
     let disposed = false;
 
     const overlay = new OverlayShell(document);
+    const handleYoutubeRouteChange = (): void => clearSubtitles();
 
-    function updateOverlay(): void {
-      if (disposed) {
-        return;
+    for (const eventName of YOUTUBE_ROUTE_EVENTS) {
+      window.addEventListener(eventName, handleYoutubeRouteChange);
+    }
+
+    browser.runtime.onMessage.addListener(handleRuntimeMessage);
+    void hydrateContentState();
+
+    updateOverlay();
+
+    ctx.onInvalidated(() => {
+      disposed = true;
+      for (const eventName of YOUTUBE_ROUTE_EVENTS) {
+        window.removeEventListener(eventName, handleYoutubeRouteChange);
       }
+      browser.runtime.onMessage.removeListener(handleRuntimeMessage);
+      clearBoundWebVttTrack();
+      overlay.unmount();
+    });
 
-      overlay.update({
-        page: parseYoutubePage(window.location.href),
-        subtitleState,
-        settings,
-      });
-    }
-
-    function resetOverlayForRouteChange(): void {
-      subtitleState = DEFAULT_SUBTITLE_STATE;
-      updateOverlay();
-    }
-
-    const stopRouteObserver = observeYoutubeRouteChanges(resetOverlayForRouteChange);
-
-    browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    function handleRuntimeMessage(
+      message: unknown,
+      _sender: Browser.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ): boolean {
       if (!isRuntimeMessage(message)) {
         return false;
       }
@@ -50,51 +60,101 @@ export default defineContentScript({
       }
 
       if (message.type === 'background.subtitleStateChanged') {
-        subtitleState = message.subtitleState;
-        updateOverlay();
+        applySubtitleState(message.subtitleState);
         sendResponse({ ok: true });
 
         return false;
       }
 
       return false;
-    });
+    }
 
-    browser.runtime
-      .sendMessage({ type: 'content.getState' })
-      .then((state) => {
+    async function hydrateContentState(): Promise<void> {
+      try {
+        const state = await browser.runtime.sendMessage({ type: 'content.getState' });
+
         if (state?.settings) {
           settings = createExtensionSettingsFromPartial(state.settings);
         }
 
         if (state?.subtitleState) {
-          subtitleState = state.subtitleState;
+          applySubtitleState(state.subtitleState);
+
+          return;
         }
+      } catch {
+        // The overlay can still render its default local state when background state is unavailable.
+      }
 
-        updateOverlay();
-      })
-      .catch(() => {
-        updateOverlay();
+      updateOverlay();
+    }
+
+    function updateOverlay(): void {
+      if (disposed) {
+        return;
+      }
+
+      overlay.update({
+        page: parseYoutubePage(window.location.href),
+        subtitleState,
+        settings,
+        activeSourceText,
       });
+    }
 
-    updateOverlay();
+    function clearBoundWebVttTrack(): void {
+      stopWebVttTrack?.();
+      stopWebVttTrack = null;
+      activeSourceText = null;
+    }
 
-    ctx.onInvalidated(() => {
-      disposed = true;
-      stopRouteObserver();
-      overlay.unmount();
-    });
+    function clearSubtitles(): void {
+      clearBoundWebVttTrack();
+      subtitleState = DEFAULT_SUBTITLE_STATE;
+      updateOverlay();
+    }
+
+    function applySubtitleState(nextSubtitleState: SubtitleState): void {
+      clearBoundWebVttTrack();
+      subtitleState = nextSubtitleState;
+
+      if (nextSubtitleState.type !== 'ready') {
+        updateOverlay();
+
+        return;
+      }
+
+      bindGeneratedSubtitles(nextSubtitleState.track);
+    }
+
+    function bindGeneratedSubtitles(track: TrackResponse): void {
+      const page = parseYoutubePage(window.location.href);
+
+      if (!page.supported || page.videoId !== track.youtubeVideoId) {
+        subtitleState = DEFAULT_SUBTITLE_STATE;
+        updateOverlay();
+
+        return;
+      }
+
+      const video = document.querySelector('video');
+
+      if (!video) {
+        webVttTrackLogger.videoMissing(track);
+        updateOverlay();
+
+        return;
+      }
+
+      stopWebVttTrack = bindWebVttTrackToVideo({
+        video,
+        track,
+        onCueChange(change) {
+          activeSourceText = change.activeSourceText;
+          updateOverlay();
+        },
+        logger: webVttTrackLogger,
+      });
+    }
   },
 });
-
-function observeYoutubeRouteChanges(callback: () => void): () => void {
-  for (const eventName of YOUTUBE_ROUTE_EVENTS) {
-    window.addEventListener(eventName, callback);
-  }
-
-  return () => {
-    for (const eventName of YOUTUBE_ROUTE_EVENTS) {
-      window.removeEventListener(eventName, callback);
-    }
-  };
-}

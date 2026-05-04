@@ -3,7 +3,7 @@
 Status: planned
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Goal
 
@@ -27,7 +27,7 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 | 02 | `../completed/phase-02-youtube-extension-shell.md` | Extension detects YouTube videos and renders a controlled overlay shell | Completed 2026-04-28 |
 | 03 | `../completed/phase-03-laravel-job-api-and-persistence.md` | Laravel generation API, SQLite persistence, and mock track path | Completed 2026-04-30 |
 | 04 | `../completed/phase-04-audio-acquisition-and-transcription-proof.md` | Public YouTube audio acquisition and timestamped transcription proof | Completed 2026-05-02 |
-| 05 | `phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Source subtitle cues render in sync during play, pause, and seek |
+| 05 | `../completed/phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Completed 2026-05-02 |
 | 06 | `phase-06-translation-and-arabic-learning-data.md` | Translation and Arabic token learning data | Overlay supports translation plus hover/click token details |
 | 07 | `phase-07-hardening-and-release-readiness.md` | Reliability, privacy, rate limits, diagnostics, and acceptance tests | First release criteria are validated against real public videos |
 
@@ -38,8 +38,9 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 - Maximum video length is 60 minutes.
 - Backend stack is Laravel.
 - Extension stack is WXT and TypeScript.
-- AI integration should use Laravel AI SDK before custom provider code.
-- If Laravel AI SDK cannot expose timestamped transcription output, use a Laravel-side OpenAI transcription adapter for that single path.
+- AI provider calls must stay backend-only behind narrow services.
+- Use Laravel AI SDK provider identity and primitives before custom AI integration.
+- If Laravel AI SDK cannot expose a required provider option, use a Laravel-side adapter only for that gap.
 - Laravel Boost is development tooling, not product runtime behavior.
 - Contracts are schema-first and shared by Laravel and TypeScript.
 - Raw audio is temporary and deleted immediately after processing.
@@ -68,3 +69,6 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-04-30 | Added cross-phase simplicity and readability checks to future phase plans. | `docs/quality/golden-principles.md` |
 | 2026-04-30 | Phase 03 completed and archived. | `docs/exec-plans/completed/phase-03-laravel-job-api-and-persistence.md` |
 | 2026-05-02 | Phase 04 completed and archived. | `docs/exec-plans/completed/phase-04-audio-acquisition-and-transcription-proof.md` |
+| 2026-05-02 | Phase 05 completed and archived. | `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md` |
+| 2026-05-03 | Phase 05 sync path refactored to OpenAI WebVTT and browser-native `TextTrack` timing. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |
+| 2026-05-04 | Corrected Phase 05 provider/model framing so Laravel AI `Lab::OpenAI` remains the provider identity and Whisper remains the transcription model. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |

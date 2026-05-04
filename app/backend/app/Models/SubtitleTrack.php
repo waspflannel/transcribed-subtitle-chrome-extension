@@ -22,6 +22,7 @@ class SubtitleTrack extends Model
         'generated_at',
         'expires_at',
         'cues',
+        'web_vtt',
     ];
 
     public function job(): BelongsTo

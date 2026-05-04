@@ -25,7 +25,6 @@ export interface CreateSubtitleJobRequest {
 // Source: schemas/job-response.schema.json
 export interface JobResponse {
   jobId: string;
-  status: 'completed';
   youtubeVideoId: string;
   sourceLanguage: 'auto' | 'ar';
   targetLanguage: 'en';
@@ -42,6 +41,7 @@ export interface TrackResponse {
   targetLanguage: 'en';
   generatedAt: string;
   expiresAt: string;
+  webVtt: string;
   /**
    * @minItems 1
    */
@@ -77,6 +77,7 @@ export interface TrackResponse {
   targetLanguage: 'en';
   generatedAt: string;
   expiresAt: string;
+  webVtt: string;
   /**
    * @minItems 1
    */

@@ -7,11 +7,13 @@ export interface OverlayRenderState {
   page: YoutubePageInfo;
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
+  activeSourceText?: string | null;
 }
 
 export class OverlayShell {
   private host: HTMLDivElement | null = null;
   private content: HTMLDivElement | null = null;
+  private renderedHtml: string | null = null;
 
   public constructor(private readonly documentRef: Document = document) {}
 
@@ -22,14 +24,20 @@ export class OverlayShell {
 
     this.host!.dataset.position = state.settings.overlayPosition;
     this.host!.style.display = state.settings.overlayVisible ? 'block' : 'none';
-    this.positionHost(state.settings.overlayPosition);
-    this.content!.innerHTML = renderOverlayContent(state);
+
+    const html = renderOverlayContent(state);
+
+    if (html !== this.renderedHtml) {
+      this.content!.innerHTML = html;
+      this.renderedHtml = html;
+    }
   }
 
   public unmount(): void {
     this.host?.remove();
     this.host = null;
     this.content = null;
+    this.renderedHtml = null;
   }
 
   private mount(): void {
@@ -38,6 +46,7 @@ export class OverlayShell {
     if (existingHost?.shadowRoot) {
       this.host = existingHost;
       this.content = existingHost.shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
+      this.renderedHtml = null;
 
       return;
     }
@@ -51,6 +60,25 @@ export class OverlayShell {
       <style>
         :host {
           all: initial;
+          bottom: 84px;
+          left: 16px;
+          pointer-events: none;
+          position: fixed;
+          right: 16px;
+          top: auto;
+          width: auto;
+          z-index: 2147483647;
+        }
+
+        :host([data-position="top"]) {
+          bottom: auto;
+          top: 72px;
+        }
+
+        :host([data-position="compact"]) {
+          left: auto;
+          right: 16px;
+          width: min(360px, calc(100vw - 32px));
         }
 
         .shell {
@@ -112,33 +140,6 @@ export class OverlayShell {
     this.content = shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
     (this.documentRef.body ?? this.documentRef.documentElement).append(host);
   }
-
-  private positionHost(position: ExtensionSettings['overlayPosition']): void {
-    if (!this.host) {
-      return;
-    }
-
-    const style = this.host.style;
-    style.bottom = '84px';
-    style.left = '16px';
-    style.pointerEvents = 'none';
-    style.position = 'fixed';
-    style.right = '16px';
-    style.top = 'auto';
-    style.width = 'auto';
-    style.zIndex = '2147483647';
-
-    if (position === 'top') {
-      style.bottom = 'auto';
-      style.top = '72px';
-    }
-
-    if (position === 'compact') {
-      style.left = 'auto';
-      style.right = '16px';
-      style.width = 'min(360px, calc(100vw - 32px))';
-    }
-  }
 }
 
 function renderOverlayContent(state: OverlayRenderState): string {
@@ -155,20 +156,16 @@ function renderOverlayContent(state: OverlayRenderState): string {
   }
 
   if (state.subtitleState.type === 'ready') {
-    const [cue] = state.subtitleState.track.cues;
-    const optionalRows = [
-      state.settings.showRomanization && cue.romanization
-        ? `<div class="detail">${escapeHtml(cue.romanization)}</div>`
-        : '',
-      state.settings.showGloss ? renderTokenGloss(cue.tokens) : '',
-    ].join('');
+    const sourceText = state.activeSourceText?.trim();
+
+    if (!sourceText) {
+      return '';
+    }
 
     return `
       <section class="shell" role="status">
         <div class="eyebrow">AI subtitles</div>
-        <div class="line">${escapeHtml(cue.sourceText)}</div>
-        <div class="translation">${escapeHtml(cue.translatedText)}</div>
-        ${optionalRows}
+        <div class="line">${escapeHtml(sourceText)}</div>
         <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Transcribed track</span></div>
       </section>
     `;
@@ -189,18 +186,6 @@ function renderOverlayContent(state: OverlayRenderState): string {
     detail: 'This video does not have a generated subtitle track yet.',
     meta: [`Video ${state.page.videoId}`],
   });
-}
-
-function renderTokenGloss(tokens: { text: string; translation?: string; gloss?: string }[]): string {
-  const gloss = tokens
-    .map((token) => {
-      const detail = token.gloss ?? token.translation;
-
-      return detail ? `${token.text}: ${detail}` : token.text;
-    })
-    .join(' | ');
-
-  return gloss ? `<div class="detail">${escapeHtml(gloss)}</div>` : '';
 }
 
 function renderShell(input: { eyebrow: string; title: string; detail: string; meta: string[] }): string {

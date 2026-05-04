@@ -4,23 +4,23 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Transcription\LaravelAiTranscriptionService;
+use App\Services\Transcription\OpenAiWebVttTranscriptionService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION = 'audio-transcription-proof-v1';
+    public const PROCESSING_VERSION = 'generated-webvtt-sync-v1';
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
-        private readonly LaravelAiTranscriptionService $transcriptionService,
+        private readonly OpenAiWebVttTranscriptionService $transcriptionService,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
+        private readonly SubtitleWorkflowLogger $logger,
     ) {}
 
     /**
@@ -51,6 +51,8 @@ class SubtitleJobService
         });
 
         if ($this->hasReadyTrack($job->load('track'))) {
+            $this->logger->trackReused($job);
+
             return $job;
         }
 
@@ -66,10 +68,7 @@ class SubtitleJobService
         $stage = 'audio_acquisition';
 
         try {
-            Log::info('backend.audio_acquisition_started', [
-                'job_id' => $job->public_id,
-                'youtube_video_id' => $job->youtube_video_id,
-            ]);
+            $this->logger->audioAcquisitionStarted($job);
 
             $audio = $this->audioSource->acquire(
                 videoId: $payload['youtubeVideoId'],
@@ -77,33 +76,18 @@ class SubtitleJobService
                 requestDurationSeconds: $payload['videoDurationSeconds'] ?? null,
             );
 
-            Log::info('backend.audio_acquisition_completed', [
-                'job_id' => $job->public_id,
-                'youtube_video_id' => $job->youtube_video_id,
-                'duration_seconds' => $audio->durationSeconds,
-                'audio_bytes' => $audio->sizeBytes,
-            ]);
+            $this->logger->audioAcquisitionCompleted($job, $audio);
 
             $stage = 'transcription';
 
-            Log::info('backend.transcription_started', [
-                'job_id' => $job->public_id,
-                'youtube_video_id' => $job->youtube_video_id,
-                'provider' => Lab::OpenAI->value,
-                'sdk' => 'laravel-ai',
-            ]);
+            $this->logger->transcriptionStarted($job);
 
             $transcript = $this->transcriptionService->transcribe(
                 audio: $audio,
                 sourceLanguage: $payload['sourceLanguage'],
             );
 
-            Log::info('backend.transcription_completed', [
-                'job_id' => $job->public_id,
-                'youtube_video_id' => $job->youtube_video_id,
-                'segment_count' => count($transcript->segments),
-                'duration_seconds' => $transcript->durationSeconds ?? $audio->durationSeconds,
-            ]);
+            $this->logger->transcriptionCompleted($job, $transcript, $audio);
 
             $stage = 'track_generation';
             $track = $this->tracks->generate($job->refresh(), $transcript);
@@ -111,23 +95,15 @@ class SubtitleJobService
                 'video_duration_seconds' => $audio->durationSeconds,
                 'expires_at' => $track->expires_at,
             ]);
+            $this->logger->trackGenerated($job->refresh(), $track, $audio->durationSeconds);
 
             return $job->refresh()->load('track');
         } catch (SubtitleProcessingException $exception) {
-            Log::warning("backend.{$stage}_failed", [
-                'job_id' => $job->public_id,
-                'youtube_video_id' => $job->youtube_video_id,
-                'error_code' => $exception->publicCode,
-                ...$exception->context,
-            ]);
+            $this->logger->processingFailed($job, $stage, $exception);
 
             throw $exception;
         } catch (Throwable $exception) {
-            Log::error("backend.{$stage}_failed", [
-                'job_id' => $job->public_id,
-                'youtube_video_id' => $job->youtube_video_id,
-                'exception' => $exception::class,
-            ]);
+            $this->logger->unexpectedFailure($job, $stage, $exception);
 
             throw $exception;
         } finally {

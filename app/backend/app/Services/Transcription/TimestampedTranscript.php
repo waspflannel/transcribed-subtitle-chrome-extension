@@ -11,5 +11,6 @@ class TimestampedTranscript
         public readonly ?string $language,
         public readonly ?float $durationSeconds,
         public readonly array $segments,
+        public readonly string $webVtt,
     ) {}
 }

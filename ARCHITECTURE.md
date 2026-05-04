@@ -15,7 +15,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Canonical API/data contracts live in `packages/contracts`.
 - The backend exposes the local `POST /v1/subtitle-jobs` JSON API.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
-- Phase 04 replaced the mock generation path with backend YouTube audio acquisition, raw audio cleanup, Laravel AI SDK transcription, and source-timed proof track output.
+- Phase 05 requests Whisper WebVTT, parses it into validated generated subtitle cues, persists the raw WebVTT plus source-only cues with 30-day expiration metadata, reuses compatible completed tracks, and renders the active source cue from browser `TextTrack` timing.
 
 ## Selected Stack
 
@@ -29,7 +29,8 @@ Backend
   - Laravel scheduler
   - Laravel migrations and Eloquent
   - SQLite first
-  - Laravel AI SDK 0.x
+  - Laravel AI SDK for provider identity and future enrichment primitives
+  - Laravel HTTP client for the OpenAI Whisper WebVTT transcription request
   - Configurable `yt-dlp` binary for the first YouTube audio acquisition proof
   - Laravel Boost 2.x as development tooling
   - Local Boost skills routed by `docs/references/boost-skill-routing.md`
@@ -45,11 +46,11 @@ Contracts
 ```text
 Chrome Extension
   -> proxy-facing Laravel API routes
-    -> Laravel application services
+      -> Laravel application services
       -> YouTube audio acquisition in controlled temporary storage
-      -> Laravel AI SDK OpenAI transcription normalized to timestamped transcript segments
-      -> cue segmentation
-      -> Laravel AI SDK enrichment
+      -> OpenAI provider / Whisper model WebVTT transcription normalized to timestamped transcript segments
+      -> WebVTT-backed cue validation
+      -> enrichment services
       -> SQLite track storage
   <- generated subtitle track
 ```
@@ -70,8 +71,8 @@ Rules:
 - Runtime side effects should be isolated from pure domain logic.
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
-- Laravel AI SDK provider responses must be normalized before storage or extension exposure.
-- Before adding custom AI infrastructure, verify whether Laravel AI SDK provides a native primitive for the capability.
+- OpenAI provider responses must be normalized before storage or extension exposure.
+- Use Laravel AI SDK provider identity and primitives where they fit; keep narrow provider requests only for capabilities the SDK wrapper does not expose.
 - Eloquent models are internal details, not API contracts.
 
 ## Mechanical Enforcement Targets

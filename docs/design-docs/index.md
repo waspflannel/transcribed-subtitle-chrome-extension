@@ -25,7 +25,8 @@ Each decision should include context, decision, consequences, validation expecta
 - Backend audio acquisition is the first implementation path.
 - Backend stack is Laravel.
 - Extension stack is WXT and TypeScript.
-- Laravel AI SDK is the preferred AI integration layer.
+- Laravel AI SDK is the preferred AI provider identity and enrichment primitive layer.
+- OpenAI transcription uses `Lab::OpenAI` plus the Whisper model through a narrow backend HTTP adapter when WebVTT output is required.
 - Laravel Boost is required development tooling after the Laravel app is scaffolded.
 - Contracts are schema-first and shared across Laravel and TypeScript.
 - Completed tracks are retained for 30 days.

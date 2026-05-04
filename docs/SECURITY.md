@@ -44,4 +44,4 @@ Project-specific security defaults:
 - Logs must not include secrets, raw audio, full prompts, or full transcripts by default.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - Phase 03 `/v1/*` API routes require `X-Extension-Install-Id`, throttle by anonymous install ID and IP, and return stable public error objects.
-- Phase 04 transcription uses Laravel AI SDK with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
+- Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.

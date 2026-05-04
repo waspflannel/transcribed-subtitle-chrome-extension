@@ -125,7 +125,7 @@ return [
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
             'models' => [
                 'transcription' => [
-                    'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'gpt-4o-transcribe-diarize'),
+                    'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
                 ],
             ],
         ],

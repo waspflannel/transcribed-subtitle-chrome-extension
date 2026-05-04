@@ -1,12 +1,12 @@
 ---
 name: subtitle-pipeline
-description: Project-specific rules for subtitle acquisition, transcription, enrichment, and Laravel AI SDK usage.
+description: Project-specific rules for subtitle acquisition, transcription, enrichment, and Laravel AI/OpenAI provider usage.
 origin: project
 ---
 
 # Subtitle Pipeline
 
-Use this skill whenever backend work touches subtitle jobs, YouTube audio acquisition, transcription, translation, Arabic learning data, generated tracks, or Laravel AI SDK integrations.
+Use this skill whenever backend work touches subtitle jobs, YouTube audio acquisition, transcription, translation, Arabic learning data, generated tracks, or AI provider integrations.
 
 ## Hard Rules
 
@@ -14,19 +14,20 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 - Extension code must never call AI providers directly; all provider secrets stay in Laravel environment/config.
 - Raw audio must be written only to controlled backend temporary storage and deleted after success or failure.
 - Logs must not include provider keys, raw audio paths, prompts, full transcripts, segment payloads, or generated learning content by default.
-- Laravel AI SDK responses must be normalized before storage or extension exposure.
-- Before adding a custom AI abstraction, check whether Laravel AI SDK already provides a native primitive.
+- Provider responses must be normalized before storage or extension exposure.
+- Use Laravel AI SDK provider identity and primitives where they fit; add narrow provider requests only for capabilities the SDK wrapper does not expose.
 
-## Current Native SDK Choices
+## Current Provider Choices
 
-- Use `Laravel\Ai\Transcription` for speech-to-text.
-- Use `Laravel\Ai\Enums\Lab` for provider identity.
+- Use `Laravel\Ai\Enums\Lab::OpenAI` for OpenAI provider identity.
+- Use the OpenAI Whisper transcription model (`whisper-1`) for WebVTT speech-to-text because the current sync path needs `response_format=vtt`.
+- Use a narrow Laravel HTTP request for this transcription call while Laravel AI's transcription wrapper does not expose the WebVTT response format.
 - Use `config/ai.php` for provider keys, custom base URLs, and model defaults.
-- Prefer job-level stage logs for current transcription observability. Reconsider SDK transcription events only if they add concrete debugging value.
+- Prefer job-level stage logs for current transcription observability.
 
 ## Deferred SDK Features
 
-Reconsider these Laravel AI SDK features before implementing any custom equivalent:
+Reconsider current Laravel AI/OpenAI SDK options before implementing any custom equivalent:
 
 - Agents and prompting for translation, token analysis, romanization, glosses, dialect labels, and confidence.
 - Structured output for typed generated subtitle enrichment.

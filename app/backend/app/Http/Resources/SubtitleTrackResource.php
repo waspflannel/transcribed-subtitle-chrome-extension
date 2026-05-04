@@ -24,6 +24,7 @@ class SubtitleTrackResource extends JsonResource
             'targetLanguage' => $this->target_language,
             'generatedAt' => $this->generated_at->toJSON(),
             'expiresAt' => $this->expires_at->toJSON(),
+            'webVtt' => $this->web_vtt,
             'cues' => $this->cues,
         ];
     }

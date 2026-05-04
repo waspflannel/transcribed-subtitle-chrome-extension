@@ -9,7 +9,6 @@ describe('SubtitleApiClient', () => {
   it('creates subtitle jobs with the extension install header', async () => {
     const jobResponse: JobResponse = {
       jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
-      status: 'completed',
       youtubeVideoId: 'dQw4w9WgXcQ',
       sourceLanguage: 'ar',
       targetLanguage: 'en',
@@ -76,6 +75,7 @@ function trackResponse(): TrackResponse {
     targetLanguage: 'en',
     generatedAt: '2026-04-30T00:00:00Z',
     expiresAt: '2026-05-30T00:00:00Z',
+    webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nmarhaban\n",
     cues: [
       {
         cueId: 'cue-0001',
