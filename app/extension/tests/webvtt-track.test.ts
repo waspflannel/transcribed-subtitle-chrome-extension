@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { bindWebVttTrackToVideo, type WebVttTrackDiagnostic } from '../utils/webvtt-track';
+import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
 import type { TrackResponse } from '../utils/contracts';
 
 describe('bindWebVttTrackToVideo', () => {
@@ -43,60 +43,54 @@ describe('bindWebVttTrackToVideo', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-track');
   });
 
-  it('emits a duration mismatch diagnostic after the track loads', () => {
+  it('notifies the logger after the track loads', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const video = new FakeVideoElement();
-    video.duration = 20;
-    const diagnostics: WebVttTrackDiagnostic[] = [];
+    const track = trackResponse();
+    const logger = {
+      trackLoaded: vi.fn(),
+      trackLoadError: vi.fn(),
+    };
 
     const cleanup = bindWebVttTrackToVideo({
       video: video as unknown as HTMLVideoElement,
-      track: trackResponse(),
+      track,
       onCueChange: () => undefined,
-      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+      logger,
     });
 
-    video.appendedTrack!.track.cues = new FakeCueList([
-      new FakeTextCue(0, 3, 'first'),
-      new FakeTextCue(6, 7, 'second'),
-    ]);
     video.appendedTrack!.dispatchEvent(new Event('load'));
 
-    expect(diagnostics).toEqual([
-      expect.objectContaining({
-        type: 'duration_mismatch',
-        videoDurationSeconds: 20,
-        trackDurationSeconds: 7,
-        deltaSeconds: 13,
-      }),
-    ]);
+    expect(logger.trackLoaded).toHaveBeenCalledWith({
+      video,
+      textTrack: video.appendedTrack!.track,
+      track,
+    });
 
     cleanup();
   });
 
-  it('emits a load error diagnostic when the WebVTT track fails', () => {
+  it('notifies the logger when the WebVTT track fails', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const video = new FakeVideoElement();
-    const diagnostics: WebVttTrackDiagnostic[] = [];
+    const track = trackResponse();
+    const logger = {
+      trackLoaded: vi.fn(),
+      trackLoadError: vi.fn(),
+    };
 
     const cleanup = bindWebVttTrackToVideo({
       video: video as unknown as HTMLVideoElement,
-      track: trackResponse(),
+      track,
       onCueChange: () => undefined,
-      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+      logger,
     });
 
     video.appendedTrack!.dispatchEvent(new Event('error'));
 
-    expect(diagnostics).toEqual([
-      {
-        type: 'track_load_error',
-        trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
-        youtubeVideoId: 'dQw4w9WgXcQ',
-      },
-    ]);
+    expect(logger.trackLoadError).toHaveBeenCalledWith(track);
 
     cleanup();
   });

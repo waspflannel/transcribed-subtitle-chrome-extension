@@ -24,7 +24,6 @@ export class OverlayShell {
 
     this.host!.dataset.position = state.settings.overlayPosition;
     this.host!.style.display = state.settings.overlayVisible ? 'block' : 'none';
-    this.positionHost(state.settings.overlayPosition);
 
     const html = renderOverlayContent(state);
 
@@ -61,6 +60,25 @@ export class OverlayShell {
       <style>
         :host {
           all: initial;
+          bottom: 84px;
+          left: 16px;
+          pointer-events: none;
+          position: fixed;
+          right: 16px;
+          top: auto;
+          width: auto;
+          z-index: 2147483647;
+        }
+
+        :host([data-position="top"]) {
+          bottom: auto;
+          top: 72px;
+        }
+
+        :host([data-position="compact"]) {
+          left: auto;
+          right: 16px;
+          width: min(360px, calc(100vw - 32px));
         }
 
         .shell {
@@ -121,33 +139,6 @@ export class OverlayShell {
     this.host = host;
     this.content = shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
     (this.documentRef.body ?? this.documentRef.documentElement).append(host);
-  }
-
-  private positionHost(position: ExtensionSettings['overlayPosition']): void {
-    if (!this.host) {
-      return;
-    }
-
-    const style = this.host.style;
-    style.bottom = '84px';
-    style.left = '16px';
-    style.pointerEvents = 'none';
-    style.position = 'fixed';
-    style.right = '16px';
-    style.top = 'auto';
-    style.width = 'auto';
-    style.zIndex = '2147483647';
-
-    if (position === 'top') {
-      style.bottom = 'auto';
-      style.top = '72px';
-    }
-
-    if (position === 'compact') {
-      style.left = 'auto';
-      style.right = '16px';
-      style.width = 'min(360px, calc(100vw - 32px))';
-    }
   }
 }
 

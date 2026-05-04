@@ -1,36 +1,19 @@
 import type { TrackResponse } from './contracts';
+import type { WebVttTrackLogger } from './webvtt-track-logger';
 
 export interface WebVttCueChange {
   activeSourceText: string | null;
 }
 
-export type WebVttTrackDiagnostic =
-  | {
-      type: 'duration_mismatch';
-      trackId: string;
-      youtubeVideoId: string;
-      videoDurationSeconds: number;
-      trackDurationSeconds: number;
-      deltaSeconds: number;
-    }
-  | {
-      type: 'track_load_error';
-      trackId: string;
-      youtubeVideoId: string;
-    };
-
 export interface WebVttVideoTrackOptions {
   video: HTMLVideoElement;
   track: TrackResponse;
   onCueChange: (change: WebVttCueChange) => void;
-  onDiagnostic?: (diagnostic: WebVttTrackDiagnostic) => void;
+  logger?: Pick<WebVttTrackLogger, 'trackLoaded' | 'trackLoadError'>;
 }
 
-const DURATION_MISMATCH_MIN_SECONDS = 5;
-const DURATION_MISMATCH_RATIO = 0.05;
-
 export function bindWebVttTrackToVideo(options: WebVttVideoTrackOptions): () => void {
-  const { video, track, onCueChange, onDiagnostic } = options;
+  const { video, track, onCueChange, logger } = options;
   const trackElement = video.ownerDocument.createElement('track');
   const objectUrl = URL.createObjectURL(new Blob([track.webVtt], { type: 'text/vtt' }));
   let disposed = false;
@@ -53,16 +36,12 @@ export function bindWebVttTrackToVideo(options: WebVttVideoTrackOptions): () => 
   };
 
   const handleLoad = (): void => {
-    emitDurationDiagnostic(video, textTrack, track, onDiagnostic);
+    logger?.trackLoaded({ video, textTrack, track });
     emitCueChange();
   };
 
   const handleError = (): void => {
-    onDiagnostic?.({
-      type: 'track_load_error',
-      trackId: track.trackId,
-      youtubeVideoId: track.youtubeVideoId,
-    });
+    logger?.trackLoadError(track);
   };
 
   textTrack.mode = 'hidden';
@@ -92,36 +71,4 @@ function activeCueText(textTrack: TextTrack): string | null {
   const text = String((cue as VTTCue).text ?? '').trim();
 
   return text === '' ? null : text;
-}
-
-function emitDurationDiagnostic(
-  video: HTMLVideoElement,
-  textTrack: TextTrack,
-  track: TrackResponse,
-  onDiagnostic?: (diagnostic: WebVttTrackDiagnostic) => void,
-): void {
-  if (!onDiagnostic || !Number.isFinite(video.duration) || video.duration <= 0 || !textTrack.cues?.length) {
-    return;
-  }
-
-  const lastCue = textTrack.cues[textTrack.cues.length - 1];
-  const trackDurationSeconds = lastCue.endTime;
-  const deltaSeconds = Math.abs(video.duration - trackDurationSeconds);
-
-  if (deltaSeconds <= Math.max(DURATION_MISMATCH_MIN_SECONDS, video.duration * DURATION_MISMATCH_RATIO)) {
-    return;
-  }
-
-  onDiagnostic({
-    type: 'duration_mismatch',
-    trackId: track.trackId,
-    youtubeVideoId: track.youtubeVideoId,
-    videoDurationSeconds: roundSeconds(video.duration),
-    trackDurationSeconds: roundSeconds(trackDurationSeconds),
-    deltaSeconds: roundSeconds(deltaSeconds),
-  });
-}
-
-function roundSeconds(seconds: number): number {
-  return Math.round(seconds * 1000) / 1000;
 }
