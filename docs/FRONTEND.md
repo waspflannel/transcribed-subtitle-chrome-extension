@@ -7,6 +7,8 @@
 - The in-page YouTube overlay is rendered by `app/extension/utils/overlay.ts` into an isolated Shadow DOM host.
 - The content script binds ready tracks to the page's primary `<video>` element, resolves browser `TextTrack` cue changes back to the matching API cue, and avoids replacing overlay HTML when rendered content has not changed.
 - The overlay renders source tokens, English translation, optional romanization/gloss metadata, hover preview, and click/tap pinned token detail inside Shadow DOM.
+- The popup shows privacy copy before generation, maps backend error codes to stable public copy, and exposes a local clear-state control.
+- The popup exposes a manual subtitle timing delay from -10s to +10s. The content script applies it locally by rebinding the generated WebVTT track with shifted cue timings.
 - A Laravel/web application frontend is outside the current release scope.
 
 ## Expectations
@@ -15,6 +17,7 @@
 - Add browser-driven validation for important user journeys.
 - Capture screenshots or videos for UI fixes and visual regressions.
 - Keep DOM state, routes, errors, and network failures legible to agents.
+- Keep privacy and failure copy visible in the popup or overlay when video-derived audio/text leaves the browser or generation fails.
 - Keep playback sync listeners direct and inspectable; add YouTube DOM fallbacks only after a concrete failure.
 - Prefer reusable components once a pattern repeats.
 

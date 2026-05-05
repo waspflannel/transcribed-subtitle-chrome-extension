@@ -13,7 +13,7 @@ Priority order:
 1. User request and current phase plan.
 2. `docs/references/project-guardrails.md`.
 3. `ARCHITECTURE.md`, `docs/SECURITY.md`, and active execution plan.
-4. Laravel Boost skills under `app/backend/.ai/skills`.
+4. Local backend skill files under `app/backend/.ai/skills` and `app/backend/.agents/skills`.
 5. Generic examples inside a skill.
 
 If a skill suggests Sanctum, Horizon, Livewire, Redis, user auth, or extra infrastructure, do not add it unless the current phase explicitly requires it.
@@ -29,7 +29,7 @@ php artisan boost:list-skills
 Pop-Location
 ```
 
-3. Load only the relevant skill files from `app/backend/.ai/skills`.
+3. Load only the relevant local skill files. Project-specific skills such as `laravel-security` and `subtitle-pipeline` live under `app/backend/.ai/skills`; agent-facing Boost skills such as `ai-sdk-development` and `laravel-best-practices` live under `app/backend/.agents/skills`.
 4. Record material skill-driven decisions in the active phase plan.
 
 ## Skill Map

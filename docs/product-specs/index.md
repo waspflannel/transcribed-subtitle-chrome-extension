@@ -11,6 +11,8 @@
 
 Add one file per meaningful product area or workflow.
 
+- First release readiness: `release-readiness.md`
+
 Recommended format:
 
 - User problem.
