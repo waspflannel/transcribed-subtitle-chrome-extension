@@ -25,6 +25,10 @@
       "type": "string",
       "minLength": 1
     },
+    "root": {
+      "type": "string",
+      "minLength": 1
+    },
     "partOfSpeech": {
       "type": "string",
       "minLength": 1
@@ -38,6 +42,10 @@
       "minLength": 1
     },
     "romanization": {
+      "type": "string",
+      "minLength": 1
+    },
+    "usageNote": {
       "type": "string",
       "minLength": 1
     }

@@ -26,6 +26,7 @@ class SubtitleTrackFactory extends Factory
             'youtube_video_id' => Str::random(11),
             'source_language' => 'ar',
             'target_language' => 'en',
+            'source_dialect' => 'unknown',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION,
             'generated_at' => now(),
             'expires_at' => now()->addDays(30),

@@ -62,10 +62,12 @@ export interface LearningToken {
   text: string;
   normalizedText?: string;
   lemma?: string;
+  root?: string;
   partOfSpeech?: string;
   translation?: string;
   gloss?: string;
   romanization?: string;
+  usageNote?: string;
 }
 
 // Source: schemas/track-response.schema.json
@@ -98,10 +100,12 @@ export interface LearningToken {
   text: string;
   normalizedText?: string;
   lemma?: string;
+  root?: string;
   partOfSpeech?: string;
   translation?: string;
   gloss?: string;
   romanization?: string;
+  usageNote?: string;
 }
 
 // Source: schemas/cue.schema.json
@@ -120,10 +124,12 @@ export interface LearningToken {
   text: string;
   normalizedText?: string;
   lemma?: string;
+  root?: string;
   partOfSpeech?: string;
   translation?: string;
   gloss?: string;
   romanization?: string;
+  usageNote?: string;
 }
 
 // Source: schemas/token.schema.json
@@ -132,10 +138,12 @@ export interface LearningToken {
   text: string;
   normalizedText?: string;
   lemma?: string;
+  root?: string;
   partOfSpeech?: string;
   translation?: string;
   gloss?: string;
   romanization?: string;
+  usageNote?: string;
 }
 
 // Source: schemas/api-error.schema.json

@@ -1,7 +1,7 @@
 # Generated Database Schema
 
 Created: 2026-04-28
-Last updated: 2026-05-02
+Last updated: 2026-05-04
 
 The backend uses the stock Laravel SQLite baseline plus product tables for subtitle jobs and generated tracks.
 
@@ -47,9 +47,11 @@ The product migrations currently define:
   - `youtube_video_id`
   - `source_language`
   - `target_language`
+  - `source_dialect`
   - `processing_version`
   - `generated_at`
   - `expires_at`
   - `cues`
+  - `web_vtt`
   - timestamps
   - unique compatibility key: `youtube_video_id`, `source_language`, `target_language`, `processing_version`
