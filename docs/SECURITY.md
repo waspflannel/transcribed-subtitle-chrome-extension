@@ -45,3 +45,4 @@ Project-specific security defaults:
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - Phase 03 `/v1/*` API routes require `X-Extension-Install-Id`, throttle by anonymous install ID and IP, and return stable public error objects.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
+- Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.
