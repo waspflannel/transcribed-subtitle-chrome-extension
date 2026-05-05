@@ -119,6 +119,11 @@ select:disabled {
   color: #334155;
 }
 
+.status.loading {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .status.error {
   background: #fee2e2;
   color: #991b1b;

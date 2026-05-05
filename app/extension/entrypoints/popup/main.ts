@@ -86,19 +86,22 @@ function showPopupState(state: PopupState): void {
 
   installIdText.hidden = false;
   installIdText.textContent = shortInstallId(state.installId);
-  statusText.className = `status ${subtitleState.type === 'error' ? 'error' : supported ? 'ok' : 'idle'}`;
-  statusText.textContent = supported ? 'Ready to generate' : 'Unsupported page';
+  statusText.className = `status ${statusClass(subtitleState.type, supported)}`;
+  statusText.textContent = statusLabel(subtitleState.type, supported);
   videoText.textContent = pageStatus?.supported ? pageStatus.videoId : 'No supported video';
 
   if (subtitleState.type === 'ready') {
     trackText.textContent = `Ready ${shortInstallId(subtitleState.track.trackId)}`;
+  } else if (subtitleState.type === 'loading') {
+    trackText.textContent = subtitleState.message;
   } else if (subtitleState.type === 'error') {
     trackText.textContent = subtitleState.message;
   } else {
     trackText.textContent = 'No track';
   }
 
-  generateButton.disabled = !supported;
+  generateButton.disabled = !supported || subtitleState.type === 'loading';
+  generateButton.textContent = subtitleState.type === 'loading' ? 'Generating...' : 'Generate subtitles';
 
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
@@ -115,7 +118,32 @@ function showError(error: unknown): void {
   videoText.textContent = 'No supported video';
   trackText.textContent = 'No track';
   generateButton.disabled = true;
+  generateButton.textContent = 'Generate subtitles';
   setSettingsDisabled(true);
+}
+
+function statusClass(subtitleStateType: PopupState['subtitleState']['type'], supported: boolean): string {
+  if (subtitleStateType === 'error') {
+    return 'error';
+  }
+
+  if (subtitleStateType === 'loading') {
+    return 'loading';
+  }
+
+  return supported ? 'ok' : 'idle';
+}
+
+function statusLabel(subtitleStateType: PopupState['subtitleState']['type'], supported: boolean): string {
+  if (subtitleStateType === 'error') {
+    return 'Generation failed';
+  }
+
+  if (subtitleStateType === 'loading') {
+    return 'Generating subtitles';
+  }
+
+  return supported ? 'Ready to generate' : 'Unsupported page';
 }
 
 function setSettingsDisabled(disabled: boolean): void {

@@ -5,7 +5,7 @@ import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '..
 import { OverlayShell } from '../utils/overlay';
 import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
-import type { TrackResponse } from '../utils/contracts';
+import type { SubtitleCue, TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
@@ -16,7 +16,7 @@ export default defineContentScript({
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
-    let activeSourceText: string | null = null;
+    let activeCue: SubtitleCue | null = null;
     let stopWebVttTrack: (() => void) | null = null;
     let disposed = false;
 
@@ -98,14 +98,14 @@ export default defineContentScript({
         page: parseYoutubePage(window.location.href),
         subtitleState,
         settings,
-        activeSourceText,
+        activeCue,
       });
     }
 
     function clearBoundWebVttTrack(): void {
       stopWebVttTrack?.();
       stopWebVttTrack = null;
-      activeSourceText = null;
+      activeCue = null;
     }
 
     function clearSubtitles(): void {
@@ -116,6 +116,14 @@ export default defineContentScript({
 
     function applySubtitleState(nextSubtitleState: SubtitleState): void {
       clearBoundWebVttTrack();
+
+      if (!subtitleStateMatchesCurrentPage(nextSubtitleState)) {
+        subtitleState = DEFAULT_SUBTITLE_STATE;
+        updateOverlay();
+
+        return;
+      }
+
       subtitleState = nextSubtitleState;
 
       if (nextSubtitleState.type !== 'ready') {
@@ -125,6 +133,24 @@ export default defineContentScript({
       }
 
       bindGeneratedSubtitles(nextSubtitleState.track);
+    }
+
+    function subtitleStateMatchesCurrentPage(nextSubtitleState: SubtitleState): boolean {
+      const page = parseYoutubePage(window.location.href);
+
+      if (nextSubtitleState.type === 'no-track') {
+        return true;
+      }
+
+      if (!page.supported) {
+        return false;
+      }
+
+      if (nextSubtitleState.type === 'ready') {
+        return nextSubtitleState.track.youtubeVideoId === page.videoId;
+      }
+
+      return nextSubtitleState.youtubeVideoId === page.videoId;
     }
 
     function bindGeneratedSubtitles(track: TrackResponse): void {
@@ -150,7 +176,7 @@ export default defineContentScript({
         video,
         track,
         onCueChange(change) {
-          activeSourceText = change.activeSourceText;
+          activeCue = change.activeCue;
           updateOverlay();
         },
         logger: webVttTrackLogger,

@@ -7,11 +7,17 @@ export type SubtitleState =
       type: 'no-track';
     }
   | {
+      type: 'loading';
+      youtubeVideoId: string;
+      message: string;
+    }
+  | {
       type: 'ready';
       track: TrackResponse;
     }
   | {
       type: 'error';
+      youtubeVideoId?: string;
       message: string;
     };
 

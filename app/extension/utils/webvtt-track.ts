@@ -1,8 +1,8 @@
-import type { TrackResponse } from './contracts';
+import type { SubtitleCue, TrackResponse } from './contracts';
 import type { WebVttTrackLogger } from './webvtt-track-logger';
 
 export interface WebVttCueChange {
-  activeSourceText: string | null;
+  activeCue: SubtitleCue | null;
 }
 
 export interface WebVttVideoTrackOptions {
@@ -30,8 +30,10 @@ export function bindWebVttTrackToVideo(options: WebVttVideoTrackOptions): () => 
       return;
     }
 
+    const activeTextCue = findActiveTextCue(textTrack);
+
     onCueChange({
-      activeSourceText: activeCueText(textTrack),
+      activeCue: activeTextCue ? findTrackCue(track, activeTextCue) : null,
     });
   };
 
@@ -61,7 +63,7 @@ export function bindWebVttTrackToVideo(options: WebVttVideoTrackOptions): () => 
   };
 }
 
-function activeCueText(textTrack: TextTrack): string | null {
+function findActiveTextCue(textTrack: TextTrack): VTTCue | null {
   const cue = textTrack.activeCues?.[0] ?? null;
 
   if (!cue || !('text' in cue)) {
@@ -70,5 +72,20 @@ function activeCueText(textTrack: TextTrack): string | null {
 
   const text = String((cue as VTTCue).text ?? '').trim();
 
-  return text === '' ? null : text;
+  return text === '' ? null : (cue as VTTCue);
+}
+
+function findTrackCue(track: TrackResponse, textCue: VTTCue): SubtitleCue | null {
+  const startMs = Math.round(textCue.startTime * 1000);
+  const endMs = Math.round(textCue.endTime * 1000);
+  const text = textCue.text.trim();
+  const timingMatch = track.cues.find(
+    (cue) => Math.abs(cue.startMs - startMs) <= 25 && Math.abs(cue.endMs - endMs) <= 25,
+  );
+
+  if (timingMatch) {
+    return timingMatch;
+  }
+
+  return track.cues.find((cue) => cue.sourceText.trim() === text) ?? null;
 }
