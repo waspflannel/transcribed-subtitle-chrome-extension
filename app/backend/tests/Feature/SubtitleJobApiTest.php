@@ -10,6 +10,8 @@ use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\OpenAiWebVttTranscriptionService;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
+use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -23,15 +25,19 @@ class SubtitleJobApiTest extends TestCase
 
     private RecordingTranscriptionService $transcriptionService;
 
+    private RecordingTranslationAnalysisProvider $translationAnalysis;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->audioSource = new RecordingYouTubeAudioSource;
         $this->transcriptionService = new RecordingTranscriptionService;
+        $this->translationAnalysis = new RecordingTranslationAnalysisProvider;
 
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
         $this->app->instance(OpenAiWebVttTranscriptionService::class, $this->transcriptionService);
+        $this->app->instance(TranslationAnalysisProvider::class, $this->translationAnalysis);
     }
 
     public function test_create_subtitle_job_returns_completed_track(): void
@@ -47,6 +53,8 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.startMs', 500)
             ->assertJsonPath('track.cues.0.endMs', 2100)
             ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('track.cues.0.translatedText', 'Translated first transcript segment')
+            ->assertJsonPath('track.cues.0.tokens.0.gloss', 'first')
             ->assertJsonPath('track.webVtt', $this->sampleWebVtt())
             ->assertJsonStructure($this->completedJobShape());
 
@@ -56,6 +64,10 @@ class SubtitleJobApiTest extends TestCase
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'ar',
             'target_language' => 'en',
+        ]);
+        $this->assertDatabaseHas('subtitle_tracks', [
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'source_dialect' => 'unknown',
         ]);
         $this->assertFalse(File::exists($this->audioSource->lastAudioPath));
     }
@@ -79,6 +91,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, SubtitleJob::count());
         $this->assertSame(1, SubtitleTrack::count());
         $this->assertSame(1, $this->audioSource->calls);
+        $this->assertSame(1, $this->translationAnalysis->calls);
     }
 
     public function test_compatible_completed_track_is_reused_without_audio_acquisition(): void
@@ -157,6 +170,21 @@ class SubtitleJobApiTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertStatus(502)
             ->assertJsonPath('error.code', 'transcription_failed');
+
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertSame(0, SubtitleTrack::count());
+        $this->assertFalse(File::exists($this->audioSource->lastAudioPath));
+    }
+
+    public function test_enrichment_failure_returns_stable_error_and_deletes_raw_audio(): void
+    {
+        $this->translationAnalysis->shouldFail = true;
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertStatus(502)
+            ->assertJsonPath('error.code', 'enrichment_failed');
 
         $this->assertSame(1, SubtitleJob::count());
         $this->assertSame(0, SubtitleTrack::count());
@@ -314,6 +342,48 @@ class RecordingTranscriptionService extends OpenAiWebVttTranscriptionService
                 new TimestampedTranscriptSegment(2.4, 4.0, 'second transcript segment'),
             ],
             webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n",
+        );
+    }
+}
+
+class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvider
+{
+    public int $calls = 0;
+
+    public bool $shouldFail = false;
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    public function enrich(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    {
+        $this->calls++;
+
+        if ($this->shouldFail) {
+            throw SubtitleProcessingException::enrichmentFailed();
+        }
+
+        return new CueEnrichmentResult(
+            array_map(
+                function (array $cue): array {
+                    $firstToken = strtok((string) $cue['sourceText'], ' ') ?: (string) $cue['sourceText'];
+
+                    return [
+                        ...$cue,
+                        'translatedText' => 'Translated '.$cue['sourceText'],
+                        'tokens' => [
+                            [
+                                'index' => 0,
+                                'text' => $firstToken,
+                                'gloss' => $firstToken,
+                                'romanization' => $firstToken,
+                            ],
+                        ],
+                    ];
+                },
+                $cues,
+            ),
+            'unknown',
         );
     }
 }

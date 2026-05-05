@@ -32,3 +32,5 @@ The contract check:
 - Laravel treats these schemas as the extension-facing boundary. Future request validation and API resources must conform to these shapes.
 - The WXT extension imports generated contract types through `app/extension/utils/contracts.ts`.
 - Provider-native objects, Eloquent models, queue payloads, and UI state are internal and must not become API contracts.
+- Cue token metadata supports optional `root` and `usageNote` fields. Missing learning fields are omitted from responses and UI rather than serialized as `null`.
+- Source dialect is stored on backend tracks for diagnostics and future product use, but it is not part of the extension-facing track response in the first release UI.

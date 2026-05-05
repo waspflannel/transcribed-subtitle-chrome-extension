@@ -2,6 +2,7 @@
 
 return [
     'max_video_duration_seconds' => (int) env('SUBTITLE_MAX_VIDEO_DURATION_SECONDS', 3600),
+    'processing_timeout_seconds' => (int) env('SUBTITLE_PROCESSING_TIMEOUT_SECONDS', 0),
 
     'youtube' => [
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
@@ -12,5 +13,10 @@ return [
 
     'transcription' => [
         'timeout_seconds' => (int) env('OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
+    ],
+
+    'enrichment' => [
+        'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
+        'cue_batch_size' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE', 10),
     ],
 ];

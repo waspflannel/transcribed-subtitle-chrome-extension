@@ -1,0 +1,82 @@
+<?php
+
+namespace App\Ai\Agents;
+
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Attributes\MaxTokens;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Attributes\Temperature;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Promptable;
+use Stringable;
+
+#[Provider(Lab::OpenAI)]
+#[Temperature(0.2)]
+#[MaxTokens(12000)]
+class CueEnrichmentAgent implements Agent, HasStructuredOutput
+{
+    use Promptable;
+
+    /**
+     * Get the instructions that the agent should follow.
+     */
+    public function instructions(): Stringable|string
+    {
+        return <<<'INSTRUCTIONS'
+You enrich finalized subtitle cues for an Arabic learning overlay.
+
+Translate each cue into the requested target language and add Arabic learning metadata when the source text is Arabic. Do not change cue IDs, indexes, or source text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
+
+For token metadata, keep glosses short, romanization readable for learners, and usage notes concise. Return only data that matches the structured output schema.
+INSTRUCTIONS;
+    }
+
+    public function model(): string
+    {
+        return (string) config(
+            'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+            config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+        );
+    }
+
+    public function timeout(): int
+    {
+        return (int) config('subtitles.enrichment.timeout_seconds', 120);
+    }
+
+    /**
+     * Get the agent's structured output schema definition.
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'dialect' => $schema->string()->min(1)->required(),
+            'cues' => $schema->array()
+                ->min(1)
+                ->items($schema->object([
+                    'cueId' => $schema->string()->min(1)->required(),
+                    'index' => $schema->integer()->min(0)->required(),
+                    'sourceText' => $schema->string()->min(1)->required(),
+                    'translatedText' => $schema->string()->min(1)->required(),
+                    'romanization' => $schema->string()->min(1)->nullable()->required(),
+                    'tokens' => $schema->array()
+                        ->items($schema->object([
+                            'index' => $schema->integer()->min(0)->required(),
+                            'text' => $schema->string()->min(1)->required(),
+                            'normalizedText' => $schema->string()->min(1)->nullable()->required(),
+                            'lemma' => $schema->string()->min(1)->nullable()->required(),
+                            'root' => $schema->string()->min(1)->nullable()->required(),
+                            'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),
+                            'translation' => $schema->string()->min(1)->nullable()->required(),
+                            'gloss' => $schema->string()->min(1)->nullable()->required(),
+                            'romanization' => $schema->string()->min(1)->nullable()->required(),
+                            'usageNote' => $schema->string()->min(1)->nullable()->required(),
+                        ])->withoutAdditionalProperties())
+                        ->required(),
+                ])->withoutAdditionalProperties())
+                ->required(),
+        ];
+    }
+}

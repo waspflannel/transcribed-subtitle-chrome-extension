@@ -1,9 +1,9 @@
 # Phase Plan Index
 
-Status: planned
+Status: in_progress
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-03
+Last updated: 2026-05-05
 
 ## Goal
 
@@ -28,7 +28,7 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 | 03 | `../completed/phase-03-laravel-job-api-and-persistence.md` | Laravel generation API, SQLite persistence, and mock track path | Completed 2026-04-30 |
 | 04 | `../completed/phase-04-audio-acquisition-and-transcription-proof.md` | Public YouTube audio acquisition and timestamped transcription proof | Completed 2026-05-02 |
 | 05 | `../completed/phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Completed 2026-05-02 |
-| 06 | `phase-06-translation-and-arabic-learning-data.md` | Translation and Arabic token learning data | Overlay supports translation plus hover/click token details |
+| 06 | `../completed/phase-06-translation-and-arabic-learning-data.md` | Translation and Arabic token learning data | Completed 2026-05-04 |
 | 07 | `phase-07-hardening-and-release-readiness.md` | Reliability, privacy, rate limits, diagnostics, and acceptance tests | First release criteria are validated against real public videos |
 
 ## Global Constraints
@@ -72,3 +72,5 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-02 | Phase 05 completed and archived. | `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md` |
 | 2026-05-03 | Phase 05 sync path refactored to OpenAI WebVTT and browser-native `TextTrack` timing. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |
 | 2026-05-04 | Corrected Phase 05 provider/model framing so Laravel AI `Lab::OpenAI` remains the provider identity and Whisper remains the transcription model. | `docs/exec-plans/completed/2026-05-03-refactor-subtitle-sync-to-webvtt.md` |
+| 2026-05-04 | Phase 06 completed and archived. | `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md` |
+| 2026-05-05 | Phase 06 live proof completed; real provider failures drove split-retry hardening and closed `TD-005`. | `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md`; `docs/exec-plans/tech-debt-tracker.md` |

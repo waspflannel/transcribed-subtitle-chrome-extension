@@ -14,6 +14,7 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
+type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -93,43 +94,58 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
   }
 
   const pageStatus = parseYoutubePage(activeTab?.url ?? '');
-  let subtitleState: SubtitleState;
 
   if (!pageStatus.supported) {
-    subtitleState = {
+    const subtitleState: SubtitleState = {
       type: 'error',
       message: 'Open a supported YouTube watch page before generating subtitles.',
     };
-  } else {
-    const installId = await getOrCreateInstallId();
 
-    try {
-      const job = await subtitleApi.createSubtitleJob(installId, {
-        youtubeVideoId: pageStatus.videoId,
-        youtubeUrl: pageStatus.url,
-        sourceLanguage: 'ar',
-        targetLanguage: 'en',
-      });
+    await publishSubtitleState(activeTabId, subtitleState);
 
-      subtitleState = {
-        type: 'ready',
-        track: job.track,
-      };
-    } catch (error) {
-      subtitleState = {
-        type: 'error',
-        message: error instanceof Error ? error.message : 'Unable to generate subtitles.',
-      };
-    }
+    return getPopupState();
   }
 
-  tabSubtitleStates.set(activeTabId, subtitleState);
-  void sendTabMessage(activeTabId, {
-    type: 'background.subtitleStateChanged',
-    subtitleState,
-  });
+  const currentState = getSubtitleStateForPage(activeTabId, pageStatus);
+
+  if (currentState.type !== 'loading') {
+    await publishSubtitleState(activeTabId, {
+      type: 'loading',
+      youtubeVideoId: pageStatus.videoId,
+      message: 'Generating subtitles...',
+    });
+
+    void generateSubtitlesForTab(activeTabId, pageStatus);
+  }
 
   return getPopupState();
+}
+
+async function generateSubtitlesForTab(tabId: number, pageStatus: SupportedYoutubePageInfo): Promise<void> {
+  try {
+    const installId = await getOrCreateInstallId();
+    const job = await subtitleApi.createSubtitleJob(installId, {
+      youtubeVideoId: pageStatus.videoId,
+      youtubeUrl: pageStatus.url,
+      sourceLanguage: 'ar',
+      targetLanguage: 'en',
+    });
+
+    if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+      await publishSubtitleState(tabId, {
+        type: 'ready',
+        track: job.track,
+      });
+    }
+  } catch (error) {
+    if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+      await publishSubtitleState(tabId, {
+        type: 'error',
+        youtubeVideoId: pageStatus.videoId,
+        message: error instanceof Error ? error.message : 'Unable to generate subtitles.',
+      });
+    }
+  }
 }
 
 async function getPopupState(): Promise<PopupState> {
@@ -156,15 +172,38 @@ function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInfo): Su
     return DEFAULT_SUBTITLE_STATE;
   }
 
-  if (subtitleState.type !== 'ready') {
-    return DEFAULT_SUBTITLE_STATE;
-  }
+  return isSubtitleStateForVideo(subtitleState, pageStatus.videoId) ? subtitleState : DEFAULT_SUBTITLE_STATE;
+}
 
-  if (subtitleState.track.youtubeVideoId !== pageStatus.videoId) {
-    return DEFAULT_SUBTITLE_STATE;
-  }
+function isSubtitleStateForVideo(subtitleState: SubtitleState, youtubeVideoId: string): boolean {
+  switch (subtitleState.type) {
+    case 'loading':
+      return subtitleState.youtubeVideoId === youtubeVideoId;
 
-  return subtitleState;
+    case 'ready':
+      return subtitleState.track.youtubeVideoId === youtubeVideoId;
+
+    case 'error':
+      return subtitleState.youtubeVideoId === youtubeVideoId;
+
+    case 'no-track':
+      return true;
+  }
+}
+
+function isCurrentLoadingState(tabId: number, youtubeVideoId: string): boolean {
+  const currentState = tabSubtitleStates.get(tabId);
+
+  return currentState?.type === 'loading' && currentState.youtubeVideoId === youtubeVideoId;
+}
+
+async function publishSubtitleState(tabId: number, subtitleState: SubtitleState): Promise<void> {
+  tabSubtitleStates.set(tabId, subtitleState);
+
+  await sendTabMessage(tabId, {
+    type: 'background.subtitleStateChanged',
+    subtitleState,
+  });
 }
 
 async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {

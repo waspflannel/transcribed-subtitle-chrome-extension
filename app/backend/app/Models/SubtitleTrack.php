@@ -18,6 +18,7 @@ class SubtitleTrack extends Model
         'youtube_video_id',
         'source_language',
         'target_language',
+        'source_dialect',
         'processing_version',
         'generated_at',
         'expires_at',

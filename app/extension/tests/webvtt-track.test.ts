@@ -12,12 +12,15 @@ describe('bindWebVttTrackToVideo', () => {
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     const video = new FakeVideoElement();
-    const changes: (string | null)[] = [];
+    const changes: { cueId: string | null }[] = [];
 
     const cleanup = bindWebVttTrackToVideo({
       video: video as unknown as HTMLVideoElement,
       track: trackResponse(),
-      onCueChange: (change) => changes.push(change.activeSourceText),
+      onCueChange: (change) =>
+        changes.push({
+          cueId: change.activeCue?.cueId ?? null,
+        }),
     });
 
     const trackElement = video.appendedTrack!;
@@ -27,18 +30,24 @@ describe('bindWebVttTrackToVideo', () => {
     expect(trackElement.src).toBe('blob:test-track');
     expect(trackElement.track.mode).toBe('hidden');
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-    expect(changes).toEqual([null]);
+    expect(changes).toEqual([{ cueId: null }]);
 
     trackElement.track.activeCues = new FakeCueList([new FakeTextCue(0.5, 2.1, 'first transcript segment')]);
     trackElement.track.dispatchEvent(new Event('cuechange'));
 
-    expect(changes).toEqual([null, 'first transcript segment']);
+    expect(changes).toEqual([
+      { cueId: null },
+      { cueId: 'cue-0001' },
+    ]);
 
     cleanup();
     trackElement.track.activeCues = new FakeCueList([new FakeTextCue(2.4, 4.0, 'second transcript segment')]);
     trackElement.track.dispatchEvent(new Event('cuechange'));
 
-    expect(changes).toEqual([null, 'first transcript segment']);
+    expect(changes).toEqual([
+      { cueId: null },
+      { cueId: 'cue-0001' },
+    ]);
     expect(trackElement.removed).toBe(true);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-track');
   });

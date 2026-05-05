@@ -15,7 +15,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Canonical API/data contracts live in `packages/contracts`.
 - The backend exposes the local `POST /v1/subtitle-jobs` JSON API.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
-- Phase 05 requests Whisper WebVTT, parses it into validated generated subtitle cues, persists the raw WebVTT plus source-only cues with 30-day expiration metadata, reuses compatible completed tracks, and renders the active source cue from browser `TextTrack` timing.
+- Phase 06 requests Whisper WebVTT, parses it into validated generated subtitle cue drafts, enriches each cue through a Laravel AI SDK OpenAI structured-output agent, persists the raw WebVTT plus translated/tokenized cues with 30-day expiration and hidden dialect metadata, reuses compatible completed tracks, and renders the active translated learning cue from browser `TextTrack` timing.
 
 ## Selected Stack
 
@@ -50,7 +50,7 @@ Chrome Extension
       -> YouTube audio acquisition in controlled temporary storage
       -> OpenAI provider / Whisper model WebVTT transcription normalized to timestamped transcript segments
       -> WebVTT-backed cue validation
-      -> enrichment services
+      -> OpenAI/Laravel AI structured cue enrichment
       -> SQLite track storage
   <- generated subtitle track
 ```

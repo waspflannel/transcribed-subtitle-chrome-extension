@@ -56,4 +56,12 @@ class SubtitleProcessingException extends Exception
     {
         return new self('transcription_failed', $message, 502, $context, $previous);
     }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public static function enrichmentFailed(string $message = 'Subtitle enrichment failed.', array $context = [], ?Throwable $previous = null): self
+    {
+        return new self('enrichment_failed', $message, 502, $context, $previous);
+    }
 }

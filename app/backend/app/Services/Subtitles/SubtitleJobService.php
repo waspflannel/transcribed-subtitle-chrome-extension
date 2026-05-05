@@ -4,21 +4,22 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
-use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Transcription\OpenAiWebVttTranscriptionService;
+use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION = 'generated-webvtt-sync-v1';
+    public const PROCESSING_VERSION = 'generated-webvtt-enriched-v1';
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
         private readonly OpenAiWebVttTranscriptionService $transcriptionService,
+        private readonly TranslationAnalysisProvider $translationAnalysis,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
         private readonly SubtitleWorkflowLogger $logger,
     ) {}
@@ -64,6 +65,8 @@ class SubtitleJobService
      */
     private function generateTrack(SubtitleJob $job, array $payload): SubtitleJob
     {
+        $this->extendProcessingTimeLimit();
+
         $audio = null;
         $stage = 'audio_acquisition';
 
@@ -89,8 +92,22 @@ class SubtitleJobService
 
             $this->logger->transcriptionCompleted($job, $transcript, $audio);
 
+            $draftCues = $this->tracks->draftCues($transcript);
+
+            $stage = 'enrichment';
+
+            $this->logger->enrichmentStarted($job, count($draftCues));
+
+            $enrichment = $this->translationAnalysis->enrich(
+                cues: $draftCues,
+                sourceLanguage: $job->source_language,
+                targetLanguage: $job->target_language,
+            );
+
+            $this->logger->enrichmentCompleted($job, $enrichment);
+
             $stage = 'track_generation';
-            $track = $this->tracks->generate($job->refresh(), $transcript);
+            $track = $this->tracks->generate($job->refresh(), $transcript, $enrichment);
             $job->update([
                 'video_duration_seconds' => $audio->durationSeconds,
                 'expires_at' => $track->expires_at,
@@ -98,6 +115,7 @@ class SubtitleJobService
             $this->logger->trackGenerated($job->refresh(), $track, $audio->durationSeconds);
 
             return $job->refresh()->load('track');
+
         } catch (SubtitleProcessingException $exception) {
             $this->logger->processingFailed($job, $stage, $exception);
 
@@ -152,5 +170,14 @@ class SubtitleJobService
     {
         return $job->track !== null
             && ! $job->track->isExpired();
+    }
+
+    private function extendProcessingTimeLimit(): void
+    {
+        if (! function_exists('set_time_limit')) {
+            return;
+        }
+
+        @set_time_limit((int) config('subtitles.processing_timeout_seconds', 0));
     }
 }
