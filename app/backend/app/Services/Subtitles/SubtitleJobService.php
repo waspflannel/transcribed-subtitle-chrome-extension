@@ -43,9 +43,11 @@ class SubtitleJobService
                     return $job;
                 }
 
+                $this->logger->incompleteJobReused($job);
                 $this->resetJob($job, $payload, $installId, $requestIp);
             } else {
                 $job = $this->createJob($payload, $installId, $requestIp);
+                $this->logger->jobCreated($job);
             }
 
             return $job->refresh();
