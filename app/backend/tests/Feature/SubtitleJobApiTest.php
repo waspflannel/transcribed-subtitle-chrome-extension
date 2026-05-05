@@ -14,6 +14,7 @@ use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -128,6 +129,29 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, SubtitleTrack::count());
     }
 
+    public function test_incomplete_compatible_job_is_reused_for_retry(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'source_language' => 'ar',
+            'target_language' => 'en',
+            'expires_at' => null,
+        ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id)
+            ->assertJsonStructure($this->completedJobShape());
+
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertSame(1, SubtitleTrack::count());
+        $this->assertSame(1, $this->audioSource->calls);
+    }
+
     public function test_expired_subtitle_job_request_regenerates_existing_job(): void
     {
         $job = SubtitleJob::factory()->create([
@@ -202,7 +226,7 @@ class SubtitleJobApiTest extends TestCase
             ])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'validation_failed')
-            ->assertJsonStructure(['error' => ['code', 'message', 'details']]);
+            ->assertJsonStructure(['error' => ['code', 'message', 'details'], 'requestId']);
     }
 
     public function test_create_subtitle_job_rejects_unsupported_youtube_url(): void
@@ -235,10 +259,64 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_api_requires_extension_install_id(): void
     {
+        Log::spy();
+
         $this
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertStatus(422)
-            ->assertJsonPath('error.code', 'validation_failed');
+            ->assertJsonPath('error.code', 'validation_failed')
+            ->assertJsonStructure(['requestId']);
+
+        Log::shouldHaveReceived('warning')
+            ->with('backend.proxy_invalid_install_id', \Mockery::on(
+                fn (array $context): bool => isset($context['request_id'], $context['ip']),
+            ));
+    }
+
+    public function test_api_rate_limits_by_extension_install_id(): void
+    {
+        config([
+            'subtitles.rate_limits.per_install_per_minute' => 1,
+            'subtitles.rate_limits.per_ip_per_minute' => 100,
+        ]);
+
+        $installId = $this->installId('b');
+
+        $this
+            ->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertOk();
+
+        $this
+            ->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertStatus(429)
+            ->assertJsonPath('error.code', 'rate_limited')
+            ->assertJsonStructure(['requestId']);
+    }
+
+    public function test_api_rate_limits_by_ip_address(): void
+    {
+        config([
+            'subtitles.rate_limits.per_install_per_minute' => 100,
+            'subtitles.rate_limits.per_ip_per_minute' => 1,
+        ]);
+
+        $this
+            ->withServerVariables(['REMOTE_ADDR' => '203.0.113.20'])
+            ->withHeader('X-Extension-Install-Id', $this->installId('c'))
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertOk();
+
+        $this
+            ->withServerVariables(['REMOTE_ADDR' => '203.0.113.20'])
+            ->withHeader('X-Extension-Install-Id', $this->installId('d'))
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertStatus(429)
+            ->assertJsonPath('error.code', 'rate_limited')
+            ->assertJsonStructure(['requestId']);
     }
 
     /**
@@ -284,9 +362,9 @@ class SubtitleJobApiTest extends TestCase
         ];
     }
 
-    private function installId(): string
+    private function installId(string $character = 'a'): string
     {
-        return 'install_'.str_repeat('a', 32);
+        return 'install_'.str_repeat($character, 32);
     }
 
     private function sampleWebVtt(): string

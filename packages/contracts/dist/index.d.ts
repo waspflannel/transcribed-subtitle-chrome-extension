@@ -158,6 +158,7 @@ export interface ErrorObject {
   code:
     | 'validation_failed'
     | 'unsupported_video'
+    | 'audio_unavailable'
     | 'video_too_long'
     | 'audio_acquisition_failed'
     | 'transcription_failed'
@@ -177,6 +178,7 @@ export interface ErrorObject {
   code:
     | 'validation_failed'
     | 'unsupported_video'
+    | 'audio_unavailable'
     | 'video_too_long'
     | 'audio_acquisition_failed'
     | 'transcription_failed'

@@ -33,6 +33,10 @@
 
         <section class="section">
           <button type="button" class="primary-button" data-action="generate" disabled>Generate subtitles</button>
+          <p class="privacy-copy">
+            Generation sends this public video's audio and subtitle text to your local Laravel backend, which uses the
+            configured AI services for transcription and translation. Generated tracks expire after 30 days.
+          </p>
         </section>
 
         <section class="section">
@@ -56,6 +60,16 @@
             <input type="checkbox" name="showGloss" disabled />
             <span>Gloss</span>
           </label>
+          <label class="field">
+            <span>Timing delay</span>
+            <div class="timing-control">
+              <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled />
+              <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled />
+              <output data-timing-offset>0.0s</output>
+            </div>
+          </label>
+          <button type="button" class="secondary-button" data-action="reset-timing" disabled>Reset timing</button>
+          <button type="button" class="secondary-button" data-action="clear-state" disabled>Clear local state</button>
         </section>
       </main>
     </div>

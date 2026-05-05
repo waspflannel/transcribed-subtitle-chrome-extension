@@ -3,7 +3,7 @@ import './style.css';
 import { browser } from 'wxt/browser';
 
 import type { PopupState } from '../../utils/messages';
-import type { ExtensionSettings } from '../../utils/settings-model';
+import { normalizeSubtitleTimingOffsetSeconds, type ExtensionSettings } from '../../utils/settings-model';
 
 type PopupRequest =
   | {
@@ -15,6 +15,9 @@ type PopupRequest =
     }
   | {
       type: 'popup.generateSubtitles';
+    }
+  | {
+      type: 'popup.clearLocalState';
     };
 
 type PopupErrorResponse = { ok: false; error: string };
@@ -26,19 +29,30 @@ const videoText = document.querySelector<HTMLElement>('[data-video-label]')!;
 const trackText = document.querySelector<HTMLElement>('[data-track-label]')!;
 const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="refresh"]')!;
 const generateButton = document.querySelector<HTMLButtonElement>('[data-action="generate"]')!;
+const clearStateButton = document.querySelector<HTMLButtonElement>('[data-action="clear-state"]')!;
+const resetTimingButton = document.querySelector<HTMLButtonElement>('[data-action="reset-timing"]')!;
 const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
 const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
 const showRomanizationInput = document.querySelector<HTMLInputElement>('input[name="showRomanization"]')!;
 const showGlossInput = document.querySelector<HTMLInputElement>('input[name="showGloss"]')!;
+const timingOffsetRangeInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetSeconds"]')!;
+const timingOffsetNumberInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetNumber"]')!;
+const timingOffsetOutput = document.querySelector<HTMLOutputElement>('[data-timing-offset]')!;
 
 refreshButton.addEventListener('click', () => void loadPopupState());
 generateButton.addEventListener('click', () => void generateSubtitles());
+clearStateButton.addEventListener('click', () => void clearLocalState());
+resetTimingButton.addEventListener('click', () => void updateTimingOffset(0));
 overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 showRomanizationInput.addEventListener('change', () =>
   void updateSettings({ showRomanization: showRomanizationInput.checked }),
 );
 showGlossInput.addEventListener('change', () => void updateSettings({ showGloss: showGlossInput.checked }));
+timingOffsetRangeInput.addEventListener('input', () => void updateTimingOffset(Number(timingOffsetRangeInput.value)));
+timingOffsetNumberInput.addEventListener('change', () =>
+  void updateTimingOffset(Number(timingOffsetNumberInput.value)),
+);
 
 void loadPopupState();
 
@@ -52,6 +66,17 @@ async function generateSubtitles(): Promise<void> {
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
   await sendPopupRequest({ type: 'popup.updateSettings', patch });
+}
+
+async function clearLocalState(): Promise<void> {
+  await sendPopupRequest({ type: 'popup.clearLocalState' });
+}
+
+async function updateTimingOffset(value: number): Promise<void> {
+  const subtitleTimingOffsetSeconds = normalizeSubtitleTimingOffsetSeconds(value);
+
+  showTimingOffset(subtitleTimingOffsetSeconds);
+  await updateSettings({ subtitleTimingOffsetSeconds });
 }
 
 async function sendPopupRequest(request: PopupRequest): Promise<void> {
@@ -107,6 +132,7 @@ function showPopupState(state: PopupState): void {
   overlayPositionSelect.value = settings.overlayPosition;
   showRomanizationInput.checked = settings.showRomanization;
   showGlossInput.checked = settings.showGloss;
+  showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
 }
 
@@ -119,6 +145,7 @@ function showError(error: unknown): void {
   trackText.textContent = 'No track';
   generateButton.disabled = true;
   generateButton.textContent = 'Generate subtitles';
+  showTimingOffset(0);
   setSettingsDisabled(true);
 }
 
@@ -151,8 +178,22 @@ function setSettingsDisabled(disabled: boolean): void {
   overlayPositionSelect.disabled = disabled;
   showRomanizationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
+  clearStateButton.disabled = disabled;
+  resetTimingButton.disabled = disabled;
+  timingOffsetRangeInput.disabled = disabled;
+  timingOffsetNumberInput.disabled = disabled;
 }
 
 function shortInstallId(installId: string): string {
   return installId.length > 16 ? `${installId.slice(0, 15)}...` : installId;
+}
+
+function showTimingOffset(value: number): void {
+  const normalized = normalizeSubtitleTimingOffsetSeconds(value);
+  const label = `${normalized >= 0 ? '+' : ''}${normalized.toFixed(1)}s`;
+
+  timingOffsetRangeInput.value = String(normalized);
+  timingOffsetNumberInput.value = normalized.toFixed(1);
+  timingOffsetOutput.value = label;
+  timingOffsetOutput.textContent = label;
 }

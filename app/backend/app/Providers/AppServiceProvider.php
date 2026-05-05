@@ -31,8 +31,10 @@ class AppServiceProvider extends ServiceProvider
             $installId = (string) $request->header('X-Extension-Install-Id', 'missing');
 
             return [
-                Limit::perMinute(30)->by('install:'.$installId),
-                Limit::perMinute(120)->by('ip:'.$request->ip()),
+                Limit::perMinute((int) config('subtitles.rate_limits.per_install_per_minute', 30))
+                    ->by('install:'.$installId),
+                Limit::perMinute((int) config('subtitles.rate_limits.per_ip_per_minute', 120))
+                    ->by('ip:'.$request->ip()),
             ];
         });
     }

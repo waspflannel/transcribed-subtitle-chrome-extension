@@ -48,7 +48,7 @@ This phase intentionally reaches real transcription early. It uses Laravel AI SD
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
 - Quality rules: `docs/quality/golden-principles.md`
-- Related plans: `phase-03-laravel-job-api-and-persistence.md`, `../active/phase-05-generated-track-and-overlay-sync.md`
+- Related plans: `phase-03-laravel-job-api-and-persistence.md`, `phase-05-generated-track-and-overlay-sync.md`
 - Known risks:
   - YouTube audio acquisition can be brittle.
   - Long videos can exceed provider file size or duration limits.

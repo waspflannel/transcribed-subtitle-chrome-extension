@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { SubtitleApiClient, SubtitleApiError } from '../utils/api';
+import { SubtitleApiClient, SubtitleApiError, publicSubtitleErrorMessage } from '../utils/api';
 import type { CreateSubtitleJobRequest, JobResponse, TrackResponse } from '../utils/contracts';
 
 const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -62,7 +62,19 @@ describe('SubtitleApiClient', () => {
       name: 'SubtitleApiError',
       code: 'validation_failed',
       status: 422,
-    } satisfies Partial<SubtitleApiError>);
+      } satisfies Partial<SubtitleApiError>);
+  });
+
+  it('maps stable backend errors to public release copy', () => {
+    expect(
+      publicSubtitleErrorMessage(new SubtitleApiError('rate_limited', 'Too many requests.', 429)),
+    ).toBe('Subtitle generation is temporarily rate limited. Wait a minute and try again.');
+    expect(
+      publicSubtitleErrorMessage(new SubtitleApiError('audio_unavailable', 'Private video.', 422)),
+    ).toBe('This video is not available for subtitle generation. Use a public non-live YouTube video.');
+    expect(
+      publicSubtitleErrorMessage(new SubtitleApiError('internal_error', 'Stack trace here.', 500)),
+    ).toBe('The backend hit an unexpected error. Try again later.');
   });
 });
 

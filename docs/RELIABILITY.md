@@ -27,6 +27,12 @@ Extension playback sync is local and browser-native. It attaches generated WebVT
 
 Provider queueing and failover are intentionally deferred for this proof. Revisit framework or SDK-native queueing before adding asynchronous transcription, but keep product-owned job state and raw audio cleanup explicit. Revisit provider/model failover only after the product supports more than one provider.
 
+Phase 07 release hardening keeps the synchronous request path. Compatible completed tracks are reused, incomplete compatible jobs are reused for retry instead of creating duplicate rows, and Laravel route throttling enforces both per-install and per-IP limits. Public failures map to stable popup and overlay messages.
+
+Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` command deletes expired tracks and their now-empty expired jobs daily; extension requests also ignore expired tracks and regenerate through the existing compatible job row.
+
+The popup local clear-state action removes local extension settings and anonymous install ID, clears in-memory tab subtitle state, and republishes default settings/no-track state to the active YouTube tab. It does not delete backend tracks because the first release has no user account or ownership model.
+
 ## Future Harness Targets
 
 - Local app startup per worktree.

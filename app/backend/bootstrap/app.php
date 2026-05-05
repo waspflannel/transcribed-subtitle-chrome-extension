@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 'Request validation failed.',
                 422,
                 ['errors' => $exception->errors()],
+                $request,
             );
         });
 
@@ -40,7 +42,15 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            $response = ApiErrorResponse::make('rate_limited', 'Too many requests.', 429);
+            $installId = $request->header('X-Extension-Install-Id');
+
+            Log::warning('backend.proxy_rate_limited', [
+                'request_id' => ApiErrorResponse::requestId($request),
+                'ip' => $request->ip(),
+                'install_id_hash' => is_string($installId) ? substr(hash('sha256', $installId), 0, 16) : null,
+            ]);
+
+            $response = ApiErrorResponse::make('rate_limited', 'Too many requests.', 429, request: $request);
 
             foreach ($exception->getHeaders() as $name => $value) {
                 $response->headers->set($name, $value);
@@ -54,7 +64,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiErrorResponse::make('not_found', 'Resource not found.', 404);
+            return ApiErrorResponse::make('not_found', 'Resource not found.', 404, request: $request);
         });
 
         $exceptions->render(function (SubtitleProcessingException $exception, Request $request) {
@@ -62,7 +72,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status);
+            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status, request: $request);
         });
 
         $exceptions->render(function (Throwable $exception, Request $request) {
@@ -70,6 +80,11 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiErrorResponse::make('internal_error', 'Unexpected backend error.', 500);
+            Log::error('backend.proxy_internal_error', [
+                'request_id' => ApiErrorResponse::requestId($request),
+                'exception' => $exception::class,
+            ]);
+
+            return ApiErrorResponse::make('internal_error', 'Unexpected backend error.', 500, request: $request);
         });
     })->create();

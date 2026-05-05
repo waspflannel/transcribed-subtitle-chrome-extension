@@ -14,6 +14,24 @@ use Throwable;
 
 class SubtitleWorkflowLogger
 {
+    public function jobCreated(SubtitleJob $job): void
+    {
+        Log::info('backend.subtitle_job_created', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+        ]);
+    }
+
+    public function incompleteJobReused(SubtitleJob $job): void
+    {
+        Log::info('backend.subtitle_job_reused_for_retry', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+        ]);
+    }
+
     public function trackReused(SubtitleJob $job): void
     {
         Log::info('backend.track_reused', [

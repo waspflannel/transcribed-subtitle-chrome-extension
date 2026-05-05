@@ -53,3 +53,48 @@ export class SubtitleApiClient {
     return body as JobResponse;
   }
 }
+
+export function publicSubtitleErrorMessage(error: unknown): string {
+  if (error instanceof SubtitleApiError) {
+    return messageForApiErrorCode(error.code);
+  }
+
+  if (error instanceof TypeError) {
+    return 'Could not reach the subtitle backend. Make sure it is running and try again.';
+  }
+
+  return 'Unable to generate subtitles. Try again later.';
+}
+
+function messageForApiErrorCode(code: ApiError['error']['code']): string {
+  switch (code) {
+    case 'validation_failed':
+      return 'The video details could not be validated. Refresh the YouTube tab and try again.';
+
+    case 'unsupported_video':
+    case 'audio_unavailable':
+      return 'This video is not available for subtitle generation. Use a public non-live YouTube video.';
+
+    case 'video_too_long':
+      return 'This video is over the 60 minute release limit.';
+
+    case 'audio_acquisition_failed':
+      return 'The backend could not extract audio from this video. Try another public video or check local backend setup.';
+
+    case 'transcription_failed':
+      return 'The AI transcription step failed. Try again later.';
+
+    case 'enrichment_failed':
+      return 'The AI translation step failed. Try again later.';
+
+    case 'rate_limited':
+      return 'Subtitle generation is temporarily rate limited. Wait a minute and try again.';
+
+    case 'not_found':
+    case 'expired':
+      return 'The generated subtitle track is no longer available. Generate subtitles again.';
+
+    case 'internal_error':
+      return 'The backend hit an unexpected error. Try again later.';
+  }
+}

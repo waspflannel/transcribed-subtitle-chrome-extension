@@ -48,7 +48,7 @@ This phase connects real backend transcription output to the extension overlay. 
 - Product docs: `detailed-design-document.md`
 - Architecture docs: `ARCHITECTURE.md`
 - Quality rules: `docs/quality/golden-principles.md`
-- Related plans: `phase-04-audio-acquisition-and-transcription-proof.md`, `../active/phase-06-translation-and-arabic-learning-data.md`
+- Related plans: `phase-04-audio-acquisition-and-transcription-proof.md`, `phase-06-translation-and-arabic-learning-data.md`
 - Known risks:
   - Provider segment timing may be too coarse or poorly segmented for readable subtitles.
   - Generated audio timeline may differ from YouTube playback timeline.
