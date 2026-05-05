@@ -34,8 +34,11 @@ class YouTubeAudioSourceTest extends TestCase
 
     public function test_it_acquires_audio_from_public_video_metadata(): void
     {
+        $processEnvironments = [];
         Process::preventStrayProcesses();
-        Process::fake(function (PendingProcess $process) {
+        Process::fake(function (PendingProcess $process) use (&$processEnvironments) {
+            $processEnvironments[] = $process->environment;
+
             if (in_array('--dump-single-json', $process->command, true)) {
                 return Process::result(json_encode([
                     'duration' => 42.3,
@@ -62,6 +65,12 @@ class YouTubeAudioSourceTest extends TestCase
         $this->assertSame(43, $audio->durationSeconds);
         $this->assertSame('audio/mp4', $audio->mimeType);
 
+        foreach ($processEnvironments as $environment) {
+            $this->assertSame($this->tempDirectory.DIRECTORY_SEPARATOR.'process-temp', $environment['TEMP']);
+            $this->assertSame($this->tempDirectory.DIRECTORY_SEPARATOR.'process-temp', $environment['TMP']);
+            $this->assertSame($this->tempDirectory.DIRECTORY_SEPARATOR.'process-temp', $environment['TMPDIR']);
+        }
+
         $audio->delete();
 
         $this->assertFileDoesNotExist($audio->path);
@@ -82,6 +91,27 @@ class YouTubeAudioSourceTest extends TestCase
             $this->fail('Expected audio acquisition to reject private video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_unavailable', $exception->publicCode);
+        }
+    }
+
+    public function test_it_reports_missing_downloader_as_configuration_failure(): void
+    {
+        Process::fake([
+            '*' => Process::result(
+                output: '',
+                errorOutput: "'yt-dlp' is not recognized as an internal or external command,\r\noperable program or batch file.",
+                exitCode: 1,
+            ),
+        ]);
+
+        try {
+            (new YouTubeAudioSource)->acquire('dQw4w9WgXcQ', null, 42);
+            $this->fail('Expected audio acquisition to report missing downloader configuration.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('audio_acquisition_failed', $exception->publicCode);
+            $this->assertSame('Audio downloader is not installed or not available on PATH.', $exception->getMessage());
+            $this->assertSame('youtube_downloader_missing', $exception->context['reason']);
+            $this->assertSame('metadata', $exception->context['stage']);
         }
     }
 

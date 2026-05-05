@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -10,6 +12,14 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        $this->app->bind(TranslationAnalysisProvider::class, LaravelAiTranslationAnalysisProvider::class);
+    }
+
     /**
      * Bootstrap any application services.
      */

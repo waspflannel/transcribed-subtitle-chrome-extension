@@ -6,15 +6,14 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Transcription\TimestampedTranscript;
-use App\Services\Transcription\TimestampedTranscriptSegment;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Str;
 
 class TimestampedSubtitleTrackGenerator
 {
-    public function generate(SubtitleJob $job, TimestampedTranscript $transcript): SubtitleTrack
+    public function generate(SubtitleJob $job, TimestampedTranscript $transcript, CueEnrichmentResult $enrichment): SubtitleTrack
     {
         $generatedAt = now();
-        $cues = $this->cues($transcript);
 
         return SubtitleTrack::create([
             'public_id' => (string) Str::uuid(),
@@ -22,18 +21,19 @@ class TimestampedSubtitleTrackGenerator
             'youtube_video_id' => $job->youtube_video_id,
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
+            'source_dialect' => $enrichment->sourceDialect,
             'processing_version' => $job->processing_version,
             'generated_at' => $generatedAt,
             'expires_at' => $generatedAt->copy()->addDays(30),
             'web_vtt' => $this->validatedWebVtt($transcript),
-            'cues' => $cues,
+            'cues' => $this->validatedEnrichedCues($enrichment->cues),
         ]);
     }
 
     /**
      * @return array<int, array{cueId: string, index: int, startMs: int, endMs: int, sourceText: string, translatedText: string, tokens: array<int, mixed>}>
      */
-    private function cues(TimestampedTranscript $transcript): array
+    public function draftCues(TimestampedTranscript $transcript): array
     {
         $previousEndMs = null;
         $cues = [];
@@ -52,8 +52,7 @@ class TimestampedSubtitleTrackGenerator
                 'startMs' => $startMs,
                 'endMs' => $endMs,
                 'sourceText' => $sourceText,
-                // Phase 05 is source-only; Phase 06 replaces this with real translation.
-                'translatedText' => $sourceText,
+                'translatedText' => '',
                 'tokens' => [],
             ];
         }
@@ -74,6 +73,50 @@ class TimestampedSubtitleTrackGenerator
         }
 
         return $webVtt."\n";
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     * @return array<int, array<string, mixed>>
+     */
+    private function validatedEnrichedCues(array $cues): array
+    {
+        if ($cues === []) {
+            $this->failInvalidEnrichedCue('empty_enriched_cues');
+        }
+
+        foreach ($cues as $position => $cue) {
+            if (! is_array($cue)) {
+                $this->failInvalidEnrichedCue('invalid_enriched_cue', ['cue_position' => $position]);
+            }
+
+            foreach (['cueId', 'sourceText', 'translatedText'] as $field) {
+                if (! is_string($cue[$field] ?? null) || trim($cue[$field]) === '') {
+                    $this->failInvalidEnrichedCue('invalid_enriched_cue', [
+                        'cue_position' => $position,
+                        'field' => $field,
+                    ]);
+                }
+            }
+
+            foreach (['index', 'startMs', 'endMs'] as $field) {
+                if (! is_int($cue[$field] ?? null)) {
+                    $this->failInvalidEnrichedCue('invalid_enriched_cue', [
+                        'cue_position' => $position,
+                        'field' => $field,
+                    ]);
+                }
+            }
+
+            if (! is_array($cue['tokens'] ?? null)) {
+                $this->failInvalidEnrichedCue('invalid_enriched_cue', [
+                    'cue_position' => $position,
+                    'field' => 'tokens',
+                ]);
+            }
+        }
+
+        return array_values($cues);
     }
 
     private function validateCue(
@@ -118,6 +161,22 @@ class TimestampedSubtitleTrackGenerator
     {
         throw SubtitleProcessingException::transcriptionFailed(
             'Transcription could not be converted into valid subtitle cues.',
+            [
+                'reason' => $reason,
+                ...$context,
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     *
+     * @throws SubtitleProcessingException
+     */
+    private function failInvalidEnrichedCue(string $reason, array $context = []): never
+    {
+        throw SubtitleProcessingException::enrichmentFailed(
+            'Subtitle enrichment produced invalid output.',
             [
                 'reason' => $reason,
                 ...$context,

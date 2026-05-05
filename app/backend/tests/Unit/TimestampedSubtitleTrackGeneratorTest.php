@@ -8,6 +8,7 @@ use App\Models\SubtitleTrack;
 use App\Services\Subtitles\TimestampedSubtitleTrackGenerator;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -16,7 +17,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_generates_validated_source_only_cues_and_persists_webvtt(): void
+    public function test_generates_validated_enriched_cues_and_persists_webvtt(): void
     {
         Carbon::setTestNow('2026-05-02 12:00:00');
 
@@ -31,6 +32,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         }
 
         $this->assertSame($this->sampleWebVtt(), $track->web_vtt);
+        $this->assertSame('unknown', $track->source_dialect);
         $this->assertCount(3, $track->cues);
         $this->assertSame([
             'cueId' => 'cue-0001',
@@ -38,8 +40,14 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
             'startMs' => 0,
             'endMs' => 800,
             'sourceText' => 'first segment',
-            'translatedText' => 'first segment',
-            'tokens' => [],
+            'translatedText' => 'Translation 1',
+            'tokens' => [
+                [
+                    'index' => 0,
+                    'text' => 'first',
+                    'gloss' => 'first',
+                ],
+            ],
         ], $track->cues[0]);
         $this->assertSame('cue-0002', $track->cues[1]['cueId']);
         $this->assertSame('second segment', $track->cues[1]['sourceText']);
@@ -77,15 +85,33 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
     private function generateTrack(array $segments, ?string $webVtt = null): SubtitleTrack
     {
         $job = SubtitleJob::factory()->create();
+        $generator = app(TimestampedSubtitleTrackGenerator::class);
+        $transcript = new TimestampedTranscript(
+            language: 'ar',
+            durationSeconds: 8.0,
+            segments: $segments,
+            webVtt: $webVtt ?? $this->sampleWebVtt(),
+        );
+        $draftCues = $generator->draftCues($transcript);
+        $enrichedCues = array_map(
+            fn (array $cue): array => [
+                ...$cue,
+                'translatedText' => 'Translation '.($cue['index'] + 1),
+                'tokens' => [
+                    [
+                        'index' => 0,
+                        'text' => strtok($cue['sourceText'], ' ') ?: $cue['sourceText'],
+                        'gloss' => strtok($cue['sourceText'], ' ') ?: $cue['sourceText'],
+                    ],
+                ],
+            ],
+            $draftCues,
+        );
 
-        return app(TimestampedSubtitleTrackGenerator::class)->generate(
+        return $generator->generate(
             $job,
-            new TimestampedTranscript(
-                language: 'ar',
-                durationSeconds: 8.0,
-                segments: $segments,
-                webVtt: $webVtt ?? $this->sampleWebVtt(),
-            ),
+            $transcript,
+            new CueEnrichmentResult($enrichedCues, 'unknown'),
         );
     }
 

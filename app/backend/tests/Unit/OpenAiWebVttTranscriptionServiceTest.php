@@ -125,6 +125,23 @@ class OpenAiWebVttTranscriptionServiceTest extends TestCase
         }
     }
 
+    public function test_it_rejects_models_that_do_not_support_webvtt_output(): void
+    {
+        config(['ai.providers.openai.models.transcription.default' => 'gpt-4o-transcribe']);
+
+        try {
+            $this->service()->transcribe($this->audio, 'ar');
+            $this->fail('Expected incompatible transcription model to throw a stable exception.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('Configured transcription model does not support WebVTT output.', $exception->getMessage());
+            $this->assertSame('gpt-4o-transcribe', $exception->context['model']);
+            $this->assertSame('vtt', $exception->context['response_format']);
+        }
+
+        Http::assertNothingSent();
+    }
+
     private function service(): OpenAiWebVttTranscriptionService
     {
         return new OpenAiWebVttTranscriptionService(new WebVttTranscriptParser);

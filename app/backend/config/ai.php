@@ -124,6 +124,12 @@ return [
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
             'models' => [
+                'text' => [
+                    'default' => env('OPENAI_TEXT_MODEL', 'gpt-4o-mini'),
+                ],
+                'enrichment' => [
+                    'default' => env('OPENAI_ENRICHMENT_MODEL', env('OPENAI_TEXT_MODEL', 'gpt-4o-mini')),
+                ],
                 'transcription' => [
                     'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
                 ],

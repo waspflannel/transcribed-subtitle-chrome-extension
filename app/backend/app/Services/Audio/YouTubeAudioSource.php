@@ -89,10 +89,7 @@ class YouTubeAudioSource
         ], (int) config('subtitles.youtube.metadata_timeout_seconds'));
 
         if ($result->failed()) {
-            throw SubtitleProcessingException::audioUnavailable(context: [
-                'exit_code' => $result->exitCode(),
-                'stage' => 'metadata',
-            ]);
+            $this->throwProcessFailure($result, 'metadata');
         }
 
         try {
@@ -172,10 +169,7 @@ class YouTubeAudioSource
         ], (int) config('subtitles.youtube.download_timeout_seconds'));
 
         if ($result->failed()) {
-            throw SubtitleProcessingException::audioAcquisitionFailed(context: [
-                'exit_code' => $result->exitCode(),
-                'stage' => 'download',
-            ]);
+            $this->throwProcessFailure($result, 'download');
         }
 
         $reportedPath = trim($result->output());
@@ -204,7 +198,9 @@ class YouTubeAudioSource
     private function runProcess(array $command, int $timeoutSeconds): ProcessResult
     {
         try {
-            return Process::timeout($timeoutSeconds)->run($command);
+            return Process::timeout($timeoutSeconds)
+                ->env($this->processEnvironment())
+                ->run($command);
         } catch (Throwable $exception) {
             throw SubtitleProcessingException::audioAcquisitionFailed(
                 'Audio acquisition command could not run.',
@@ -212,6 +208,79 @@ class YouTubeAudioSource
                 $exception,
             );
         }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function processEnvironment(): array
+    {
+        $tempDirectory = rtrim((string) config('subtitles.youtube.temp_directory'), DIRECTORY_SEPARATOR)
+            .DIRECTORY_SEPARATOR.'process-temp';
+
+        File::ensureDirectoryExists($tempDirectory, 0700);
+
+        $environment = [];
+
+        foreach (['SystemRoot', 'WINDIR', 'COMSPEC', 'Path', 'PATH', 'PATHEXT', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'PROGRAMDATA'] as $name) {
+            $value = getenv($name);
+
+            if (is_string($value) && $value !== '') {
+                $environment[$name] = $value;
+            }
+        }
+
+        return [
+            ...$environment,
+            'TEMP' => $tempDirectory,
+            'TMP' => $tempDirectory,
+            'TMPDIR' => $tempDirectory,
+        ];
+    }
+
+    private function throwProcessFailure(ProcessResult $result, string $stage): never
+    {
+        $context = [
+            'exit_code' => $result->exitCode(),
+            'stage' => $stage,
+            'command' => $result->command(),
+            'stdout_excerpt' => $this->outputExcerpt($result->output()),
+            'stderr_excerpt' => $this->outputExcerpt($result->errorOutput()),
+        ];
+
+        if ($this->isMissingBinaryFailure($result)) {
+            throw SubtitleProcessingException::audioAcquisitionFailed(
+                'Audio downloader is not installed or not available on PATH.',
+                [
+                    ...$context,
+                    'reason' => 'youtube_downloader_missing',
+                    'binary' => (string) config('subtitles.youtube.binary'),
+                ],
+            );
+        }
+
+        if ($stage === 'metadata') {
+            throw SubtitleProcessingException::audioUnavailable(context: $context);
+        }
+
+        throw SubtitleProcessingException::audioAcquisitionFailed(context: $context);
+    }
+
+    private function isMissingBinaryFailure(ProcessResult $result): bool
+    {
+        $errorOutput = strtolower($result->errorOutput());
+
+        return str_contains($errorOutput, 'not recognized as an internal or external command')
+            || str_contains($errorOutput, 'command not found')
+            || str_contains($errorOutput, 'no such file or directory')
+            || str_contains($errorOutput, 'the system cannot find the file specified');
+    }
+
+    private function outputExcerpt(string $output): string
+    {
+        $cleaned = trim((string) preg_replace('/\s+/u', ' ', $output));
+
+        return mb_substr($cleaned, 0, 500);
     }
 
     private function mimeType(string $path): string

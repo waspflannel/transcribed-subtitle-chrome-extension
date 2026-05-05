@@ -7,6 +7,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\TimestampedTranscript;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
@@ -60,6 +61,45 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'segment_count' => count($transcript->segments),
             'duration_seconds' => $transcript->durationSeconds ?? $audio->durationSeconds,
+        ]);
+    }
+
+    public function enrichmentStarted(SubtitleJob $job, int $cueCount): void
+    {
+        Log::info('backend.enrichment_started', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => (string) config(
+                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+            ),
+            'source_language' => $job->source_language,
+            'target_language' => $job->target_language,
+            'cue_count' => $cueCount,
+        ]);
+    }
+
+    public function enrichmentCompleted(SubtitleJob $job, CueEnrichmentResult $enrichment): void
+    {
+        Log::info('backend.enrichment_completed', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => (string) config(
+                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+            ),
+            'source_language' => $job->source_language,
+            'target_language' => $job->target_language,
+            'source_dialect' => $enrichment->sourceDialect,
+            'cue_count' => count($enrichment->cues),
+            'token_count' => array_sum(array_map(
+                fn (array $cue): int => is_array($cue['tokens'] ?? null) ? count($cue['tokens']) : 0,
+                $enrichment->cues,
+            )),
         ]);
     }
 

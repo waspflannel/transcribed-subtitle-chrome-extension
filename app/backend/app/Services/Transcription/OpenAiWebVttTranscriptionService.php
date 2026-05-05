@@ -27,6 +27,8 @@ class OpenAiWebVttTranscriptionService
             ]);
         }
 
+        $this->ensureModelSupportsWebVtt($provider, $model);
+
         try {
             $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
 
@@ -87,6 +89,20 @@ class OpenAiWebVttTranscriptionService
                 ['Content-Type' => $audio->mimeType],
             )
             ->post($this->transcriptionUrl($provider), $payload);
+    }
+
+    private function ensureModelSupportsWebVtt(Lab $provider, string $model): void
+    {
+        if (! str_starts_with($model, 'gpt-4o-transcribe') && ! str_starts_with($model, 'gpt-4o-mini-transcribe')) {
+            return;
+        }
+
+        throw SubtitleProcessingException::transcriptionFailed('Configured transcription model does not support WebVTT output.', [
+            'provider' => $provider->value,
+            'adapter' => 'openai-http',
+            'model' => $model,
+            'response_format' => 'vtt',
+        ]);
     }
 
     private function transcriptionUrl(Lab $provider): string
