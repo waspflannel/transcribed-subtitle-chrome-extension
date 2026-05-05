@@ -1,6 +1,6 @@
 import { browser, type Browser } from 'wxt/browser';
 
-import { SubtitleApiClient } from '../utils/api';
+import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from '../utils/api';
 import {
   DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
@@ -8,7 +8,12 @@ import {
   type RuntimeMessage,
   type SubtitleState,
 } from '../utils/messages';
-import { getExtensionSettings, getOrCreateInstallId, updateExtensionSettings } from '../utils/settings';
+import {
+  clearLocalExtensionState,
+  getExtensionSettings,
+  getOrCreateInstallId,
+  updateExtensionSettings,
+} from '../utils/settings';
 import type { ExtensionSettings } from '../utils/settings-model';
 import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
@@ -52,6 +57,9 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
 
     case 'popup.generateSubtitles':
       return generateSubtitlesFromPopup();
+
+    case 'popup.clearLocalState':
+      return clearLocalStateFromPopup();
   }
 }
 
@@ -123,6 +131,10 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
 
 async function generateSubtitlesForTab(tabId: number, pageStatus: SupportedYoutubePageInfo): Promise<void> {
   try {
+    console.info('extension.subtitle_generation_started', {
+      youtubeVideoId: pageStatus.videoId,
+    });
+
     const installId = await getOrCreateInstallId();
     const job = await subtitleApi.createSubtitleJob(installId, {
       youtubeVideoId: pageStatus.videoId,
@@ -137,15 +149,51 @@ async function generateSubtitlesForTab(tabId: number, pageStatus: SupportedYoutu
         track: job.track,
       });
     }
+
+    console.info('extension.subtitle_generation_completed', {
+      youtubeVideoId: pageStatus.videoId,
+      jobId: job.jobId,
+      trackId: job.track.trackId,
+    });
   } catch (error) {
+    console.warn('extension.subtitle_generation_failed', {
+      youtubeVideoId: pageStatus.videoId,
+      errorCode: error instanceof SubtitleApiError ? error.code : 'extension_error',
+      status: error instanceof SubtitleApiError ? error.status : undefined,
+    });
+
     if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
       await publishSubtitleState(tabId, {
         type: 'error',
         youtubeVideoId: pageStatus.videoId,
-        message: error instanceof Error ? error.message : 'Unable to generate subtitles.',
+        message: publicSubtitleErrorMessage(error),
       });
     }
   }
+}
+
+async function clearLocalStateFromPopup(): Promise<PopupState> {
+  await clearLocalExtensionState();
+  tabSubtitleStates.clear();
+
+  const activeTab = await getActiveTab();
+  const activeTabId = activeTab?.id ?? null;
+  const settings = await getExtensionSettings();
+
+  console.info('extension.local_state_cleared', {
+    activeTabId,
+  });
+
+  if (activeTabId !== null) {
+    await sendTabMessage(activeTabId, {
+      type: 'background.settingsChanged',
+      settings,
+    });
+
+    await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
+  }
+
+  return getPopupState();
 }
 
 async function getPopupState(): Promise<PopupState> {

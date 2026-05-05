@@ -32,6 +32,10 @@ export async function updateExtensionSettings(patch: Partial<ExtensionSettings>)
   return nextSettings;
 }
 
+export async function clearLocalExtensionState(): Promise<void> {
+  await Promise.all([settingsStorage.removeValue(), installIdStorage.removeValue()]);
+}
+
 export async function getOrCreateInstallId(): Promise<string> {
   const storedInstallId = await installIdStorage.getValue();
 

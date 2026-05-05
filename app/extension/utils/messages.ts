@@ -46,6 +46,9 @@ export type RuntimeMessage =
       type: 'popup.generateSubtitles';
     }
   | {
+      type: 'popup.clearLocalState';
+    }
+  | {
       type: 'background.settingsChanged';
       settings: ExtensionSettings;
     }
@@ -64,6 +67,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'popup.getState':
     case 'popup.updateSettings':
     case 'popup.generateSubtitles':
+    case 'popup.clearLocalState':
     case 'background.settingsChanged':
     case 'background.subtitleStateChanged':
       return true;
