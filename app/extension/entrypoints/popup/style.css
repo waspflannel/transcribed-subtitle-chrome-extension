@@ -88,6 +88,26 @@ select:disabled {
   padding: 0 0.75rem;
 }
 
+.secondary-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 700;
+  min-height: 34px;
+  justify-content: center;
+  padding: 0 0.75rem;
+}
+
+.secondary-button:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .primary-button:disabled {
   background: #cbd5e1;
   border-color: #cbd5e1;
@@ -160,6 +180,39 @@ select:disabled {
   gap: 0.35rem;
 }
 
+.timing-control {
+  align-items: center;
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: 1fr 68px 48px;
+}
+
+.timing-control input[type="range"] {
+  min-width: 0;
+}
+
+.timing-control input[type="number"] {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #1e293b;
+  min-height: 30px;
+  padding: 0.15rem 0.35rem;
+}
+
+.timing-control input:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.timing-control output {
+  color: #334155;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: right;
+}
+
 .field span,
 .toggle span {
   color: #334155;
@@ -182,4 +235,10 @@ select:disabled {
 .muted {
   color: #64748b;
   font-size: 0.76rem;
+}
+
+.privacy-copy {
+  color: #475569;
+  font-size: 0.76rem;
+  line-height: 1.4;
 }

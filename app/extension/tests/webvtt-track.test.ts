@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
+import { bindWebVttTrackToVideo, offsetTrackTiming } from '../utils/webvtt-track';
 import type { TrackResponse } from '../utils/contracts';
 
 describe('bindWebVttTrackToVideo', () => {
@@ -78,6 +78,22 @@ describe('bindWebVttTrackToVideo', () => {
     });
 
     cleanup();
+  });
+
+  it('offsets WebVTT and cue timings for manual sync adjustment', () => {
+    const shifted = offsetTrackTiming(trackResponse(), 4.5);
+
+    expect(shifted.webVtt).toContain('00:00:05.000 --> 00:00:06.600');
+    expect(shifted.cues[0].startMs).toBe(5000);
+    expect(shifted.cues[0].endMs).toBe(6600);
+  });
+
+  it('clamps negative offsets at zero while preserving positive cue duration', () => {
+    const shifted = offsetTrackTiming(trackResponse(), -2);
+
+    expect(shifted.webVtt).toContain('00:00:00.000 --> 00:00:00.100');
+    expect(shifted.cues[0].startMs).toBe(0);
+    expect(shifted.cues[0].endMs).toBe(100);
   });
 
   it('notifies the logger when the WebVTT track fails', () => {

@@ -52,8 +52,19 @@ export default defineContentScript({
       }
 
       if (message.type === 'background.settingsChanged') {
-        settings = createExtensionSettingsFromPartial(message.settings);
-        updateOverlay();
+        const nextSettings = createExtensionSettingsFromPartial(message.settings);
+        const timingOffsetChanged =
+          nextSettings.subtitleTimingOffsetSeconds !== settings.subtitleTimingOffsetSeconds;
+
+        settings = nextSettings;
+
+        if (timingOffsetChanged && subtitleState.type === 'ready') {
+          clearBoundWebVttTrack();
+          bindGeneratedSubtitles(subtitleState.track);
+        } else {
+          updateOverlay();
+        }
+
         sendResponse({ ok: true });
 
         return false;
@@ -175,12 +186,21 @@ export default defineContentScript({
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
         track,
+        timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
         onCueChange(change) {
           activeCue = change.activeCue;
           updateOverlay();
         },
         logger: webVttTrackLogger,
       });
+
+      if (settings.subtitleTimingOffsetSeconds !== 0) {
+        console.info('extension.subtitle_timing_offset_applied', {
+          youtubeVideoId: track.youtubeVideoId,
+          trackId: track.trackId,
+          offsetSeconds: settings.subtitleTimingOffsetSeconds,
+        });
+      }
     }
   },
 });
