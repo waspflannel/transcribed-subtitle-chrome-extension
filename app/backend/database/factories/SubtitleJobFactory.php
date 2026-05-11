@@ -27,6 +27,9 @@ class SubtitleJobFactory extends Factory
             'source_language' => 'ar',
             'target_language' => 'en',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+            'status' => 'running',
+            'stage' => 'preparing',
+            'progress_percent' => 5,
             'install_id' => 'install_'.str_repeat('a', 32),
             'request_ip' => '127.0.0.1',
         ];

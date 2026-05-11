@@ -16,7 +16,7 @@ return [
     'default' => 'openai',
     'default_for_images' => 'gemini',
     'default_for_audio' => 'openai',
-    'default_for_transcription' => 'openai',
+    'default_for_transcription' => 'eleven',
     'default_for_embeddings' => 'openai',
     'default_for_reranking' => 'cohere',
 
@@ -89,6 +89,12 @@ return [
         'eleven' => [
             'driver' => 'eleven',
             'key' => env('ELEVENLABS_API_KEY'),
+            'url' => env('ELEVENLABS_URL', 'https://api.elevenlabs.io/v1'),
+            'models' => [
+                'transcription' => [
+                    'default' => env('ELEVENLABS_TRANSCRIPTION_MODEL', 'scribe_v2'),
+                ],
+            ],
         ],
 
         'gemini' => [
@@ -129,9 +135,6 @@ return [
                 ],
                 'enrichment' => [
                     'default' => env('OPENAI_ENRICHMENT_MODEL', env('OPENAI_TEXT_MODEL', 'gpt-4o-mini')),
-                ],
-                'transcription' => [
-                    'default' => env('OPENAI_TRANSCRIPTION_MODEL', 'whisper-1'),
                 ],
             ],
         ],

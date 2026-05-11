@@ -3,14 +3,20 @@
 namespace Tests\Unit;
 
 use App\Ai\Agents\CueEnrichmentAgent;
+use App\Ai\Agents\CueRomanizationAgent;
+use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use GuzzleHttp\Psr7\Response as PsrResponse;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use RuntimeException;
 use Tests\TestCase;
 
 class CueEnrichmentServiceTest extends TestCase
 {
-    public function test_enriches_cues_with_translation_tokens_and_dialect(): void
+    public function test_enriches_full_cues_with_translation_word_cards_and_dialect(): void
     {
         CueEnrichmentAgent::fake([
             [
@@ -26,14 +32,16 @@ class CueEnrichmentServiceTest extends TestCase
                             [
                                 'index' => 0,
                                 'text' => 'marhaban',
-                                'normalizedText' => 'marhaban',
-                                'lemma' => 'marhaban',
-                                'root' => null,
-                                'partOfSpeech' => 'interjection',
-                                'translation' => 'hello',
-                                'gloss' => 'greeting',
+                                'gloss' => 'welcome',
                                 'romanization' => 'marhaban',
-                                'usageNote' => '',
+                                'usageNote' => 'Common greeting.',
+                            ],
+                            [
+                                'index' => 1,
+                                'text' => 'bikum',
+                                'gloss' => 'to you all',
+                                'romanization' => 'bikum',
+                                'usageNote' => null,
                             ],
                         ],
                     ],
@@ -49,70 +57,117 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame([
             'index' => 0,
             'text' => 'marhaban',
-            'normalizedText' => 'marhaban',
-            'lemma' => 'marhaban',
-            'partOfSpeech' => 'interjection',
-            'translation' => 'hello',
-            'gloss' => 'greeting',
+            'gloss' => 'welcome',
             'romanization' => 'marhaban',
+            'usageNote' => 'Common greeting.',
         ], $result->cues[0]['tokens'][0]);
 
         CueEnrichmentAgent::assertPrompted(
             fn ($prompt): bool => $prompt->contains('"targetLanguage":"en"')
                 && $prompt->contains('"cueId":"cue-0001"')
-                && $prompt->contains('"sourceText":"marhaban bikum"'),
+                && $prompt->contains('Return one lightweight token'),
         );
     }
 
-    public function test_rejects_cue_identity_mismatches(): void
+    public function test_romanizes_transcript_first_arabic_cues_without_word_card_metadata(): void
     {
-        CueEnrichmentAgent::fake([
+        CueRomanizationAgent::fake([
             [
                 'dialect' => 'unknown',
                 'cues' => [
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'changed source',
-                        'translatedText' => 'Welcome everyone',
-                        'tokens' => [],
+                        'sourceText' => 'مرحبا بكم',
+                        'translatedText' => 'مرحبا بكم',
+                        'romanization' => 'marhaban bikum',
+                        'tokens' => [
+                            [
+                                'index' => 0,
+                                'text' => 'مرحبا',
+                                'romanization' => 'marhaban',
+                            ],
+                            [
+                                'index' => 1,
+                                'text' => 'بكم',
+                                'romanization' => 'bikum',
+                            ],
+                        ],
                     ],
                 ],
             ],
         ])->preventStrayPrompts();
 
-        try {
-            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('enrichment_failed', $exception->publicCode);
-            $this->assertSame('cue_identity_mismatch', $exception->context['reason'] ?? null);
-            $this->assertSame('sourceText', $exception->context['field'] ?? null);
+        $sourceCue = [
+            ...$this->sourceCue('cue-0001', 0, 'مرحبا بكم'),
+            'translatedText' => 'مرحبا بكم',
+            'tokens' => [
+                ['index' => 0, 'text' => 'مرحبا', 'normalizedText' => 'مرحبا'],
+                ['index' => 1, 'text' => 'بكم', 'normalizedText' => 'بكم'],
+            ],
+        ];
 
-            return;
-        }
+        $result = $this->provider()->romanize([$sourceCue], 'ar');
 
-        $this->fail('Expected enrichment validation to fail.');
+        $this->assertSame('مرحبا بكم', $result->cues[0]['translatedText']);
+        $this->assertSame('marhaban bikum', $result->cues[0]['romanization']);
+        $this->assertSame([
+            'index' => 0,
+            'text' => 'مرحبا',
+            'normalizedText' => 'مرحبا',
+            'romanization' => 'marhaban',
+        ], $result->cues[0]['tokens'][0]);
+        $this->assertArrayNotHasKey('gloss', $result->cues[0]['tokens'][0]);
+
+        CueRomanizationAgent::assertPrompted(
+            fn ($prompt): bool => $prompt->contains('Romanize Arabic subtitle cues')
+                && $prompt->contains('Do not translate')
+                && $prompt->contains('"text":"مرحبا"'),
+        );
     }
 
-    public function test_provider_failures_map_to_stable_public_errors(): void
+    public function test_enriches_one_requested_token_for_on_demand_word_cards(): void
     {
-        CueEnrichmentAgent::fake(fn (): never => throw new RuntimeException('provider unavailable'))
-            ->preventStrayPrompts();
+        LearningTokenCardAgent::fake([
+            [
+                'token' => [
+                    'index' => 0,
+                    'text' => 'Hola',
+                    'normalizedText' => 'hola',
+                    'lemma' => 'hola',
+                    'root' => null,
+                    'partOfSpeech' => null,
+                    'translation' => null,
+                    'gloss' => 'hello',
+                    'romanization' => null,
+                    'usageNote' => 'Common greeting.',
+                ],
+            ],
+        ])->preventStrayPrompts();
 
-        try {
-            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('enrichment_failed', $exception->publicCode);
-            $this->assertSame('laravel-ai-sdk', $exception->context['adapter'] ?? null);
-            $this->assertSame(RuntimeException::class, $exception->context['exception'] ?? null);
+        $token = $this->provider()->enrichToken(
+            cue: $this->sourceCue('cue-0001', 0, 'Hola a todos'),
+            token: ['index' => 0, 'text' => 'Hola', 'normalizedText' => 'hola'],
+            sourceLanguage: 'es',
+            targetLanguage: 'en',
+        );
 
-            return;
-        }
+        $this->assertSame([
+            'index' => 0,
+            'text' => 'Hola',
+            'normalizedText' => 'hola',
+            'lemma' => 'hola',
+            'gloss' => 'hello',
+            'usageNote' => 'Common greeting.',
+        ], $token);
 
-        $this->fail('Expected provider failure to map to a subtitle processing exception.');
+        LearningTokenCardAgent::assertPrompted(
+            fn ($prompt): bool => $prompt->contains('"requestedToken":{"index":0,"text":"Hola","normalizedText":"hola"}')
+                && $prompt->contains('Return exactly one token object'),
+        );
     }
 
-    public function test_enriches_cues_in_configured_batches(): void
+    public function test_enriches_cues_in_configured_batches_without_recursive_split_retry(): void
     {
         config(['subtitles.enrichment.cue_batch_size' => 2]);
 
@@ -152,7 +207,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_splits_invalid_multi_cue_batches_and_preserves_order(): void
+    public function test_invalid_full_batch_fails_without_split_retry(): void
     {
         config(['subtitles.enrichment.cue_batch_size' => 2]);
 
@@ -163,59 +218,115 @@ class CueEnrichmentServiceTest extends TestCase
                     $this->outputCue('cue-0001', 0, 'source one'),
                 ],
             ],
-            [
-                'dialect' => 'egyptian',
-                'cues' => [
-                    $this->outputCue('cue-0001', 0, 'source one'),
-                ],
-            ],
+        ])->preventStrayPrompts();
+
+        try {
+            $this->provider()->enrich([
+                $this->sourceCue('cue-0001', 0, 'source one'),
+                $this->sourceCue('cue-0002', 1, 'source two'),
+            ], 'ar', 'en');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('cue_count_mismatch', $exception->context['reason'] ?? null);
+
+            return;
+        }
+
+        $this->fail('Expected invalid batch to fail without recursive splitting.');
+    }
+
+    public function test_rejects_cue_identity_mismatches(): void
+    {
+        CueEnrichmentAgent::fake([
             [
                 'dialect' => 'unknown',
                 'cues' => [
-                    $this->outputCue('cue-0002', 1, 'source two'),
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'changed source',
+                        'translatedText' => 'Welcome everyone',
+                        'tokens' => [],
+                    ],
                 ],
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->enrich([
-            $this->sourceCue('cue-0001', 0, 'source one'),
-            $this->sourceCue('cue-0002', 1, 'source two'),
-        ], 'ar', 'en');
+        try {
+            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('cue_identity_mismatch', $exception->context['reason'] ?? null);
+            $this->assertSame('sourceText', $exception->context['field'] ?? null);
 
-        $this->assertSame('egyptian', $result->sourceDialect);
-        $this->assertSame(['cue-0001', 'cue-0002'], array_column($result->cues, 'cueId'));
+            return;
+        }
+
+        $this->fail('Expected enrichment validation to fail.');
     }
 
-    public function test_splits_multi_cue_batches_after_provider_timeout(): void
+    public function test_provider_request_errors_map_without_split_retry(): void
     {
-        config(['subtitles.enrichment.cue_batch_size' => 2]);
         $calls = 0;
 
-        CueEnrichmentAgent::fake(function (string $prompt) use (&$calls): array {
+        CueEnrichmentAgent::fake(function () use (&$calls): never {
             $calls++;
 
-            if ($calls === 1) {
-                throw new RuntimeException('provider timed out');
-            }
-
-            $input = json_decode($prompt, true, flags: JSON_THROW_ON_ERROR);
-
-            return [
-                'dialect' => 'unknown',
-                'cues' => array_map(
-                    fn (array $cue): array => $this->outputCue($cue['cueId'], $cue['index'], $cue['sourceText']),
-                    $input['cues'],
-                ),
-            ];
+            throw new RequestException(new Response(new PsrResponse(400)));
         })->preventStrayPrompts();
 
-        $result = $this->provider()->enrich([
-            $this->sourceCue('cue-0001', 0, 'source one'),
-            $this->sourceCue('cue-0002', 1, 'source two'),
-        ], 'ar', 'en');
+        try {
+            $this->provider()->enrich([
+                $this->sourceCue('cue-0001', 0, 'source one'),
+                $this->sourceCue('cue-0002', 1, 'source two'),
+            ], 'en', 'en');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame(RequestException::class, $exception->context['exception'] ?? null);
+            $this->assertSame(400, $exception->context['status'] ?? null);
+            $this->assertSame(1, $calls);
 
-        $this->assertSame(['cue-0001', 'cue-0002'], array_column($result->cues, 'cueId'));
-        $this->assertSame(3, $calls);
+            return;
+        }
+
+        $this->fail('Expected provider request failure to map without split retries.');
+    }
+
+    public function test_provider_rate_limits_map_to_stable_rate_limited_error(): void
+    {
+        CueEnrichmentAgent::fake(
+            fn (): never => throw RateLimitedException::forProvider('openai', 429),
+        )->preventStrayPrompts();
+
+        try {
+            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('rate_limited', $exception->publicCode);
+            $this->assertSame(429, $exception->status);
+            $this->assertSame(RateLimitedException::class, $exception->context['exception'] ?? null);
+
+            return;
+        }
+
+        $this->fail('Expected provider rate limit to map to a subtitle processing exception.');
+    }
+
+    public function test_provider_failures_map_to_stable_public_errors(): void
+    {
+        CueEnrichmentAgent::fake(fn (): never => throw new RuntimeException('provider unavailable'))
+            ->preventStrayPrompts();
+
+        try {
+            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('laravel-ai-sdk', $exception->context['adapter'] ?? null);
+            $this->assertSame(RuntimeException::class, $exception->context['exception'] ?? null);
+
+            return;
+        }
+
+        $this->fail('Expected provider failure to map to a subtitle processing exception.');
     }
 
     private function provider(): LaravelAiTranslationAnalysisProvider

@@ -25,8 +25,9 @@ class CreateSubtitleJobRequest extends FormRequest
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'youtubeUrl' => ['sometimes', 'string', 'url', 'max:2048'],
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
-            'sourceLanguage' => ['required', 'string', Rule::in(['auto', 'ar'])],
+            'sourceLanguage' => ['required', 'string', Rule::in(['auto', 'ar', 'en', 'es', 'pt', 'fr', 'de', 'it'])],
             'targetLanguage' => ['required', 'string', Rule::in(['en'])],
+            'enrichmentMode' => ['sometimes', 'string', Rule::in(['on_demand', 'full'])],
         ];
     }
 

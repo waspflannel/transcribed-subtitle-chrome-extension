@@ -13,23 +13,18 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 #[Provider(Lab::OpenAI)]
-#[Temperature(0.2)]
-#[MaxTokens(8000)]
-class CueEnrichmentAgent implements Agent, HasStructuredOutput
+#[Temperature(0.1)]
+#[MaxTokens(5000)]
+class CueRomanizationAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
 
-    /**
-     * Get the instructions that the agent should follow.
-     */
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-You enrich finalized subtitle cues for a language-learning overlay.
+Romanize Arabic subtitle cues for display in transcript-first mode.
 
-Translate each cue into the requested target language and create concise word-card metadata. Do not change cue IDs, indexes, or source text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
-
-Keep glosses short, romanization readable for learners, and usage notes concise. Return only data that matches the structured output schema.
+Do not translate, explain grammar, or create word-card metadata. Preserve cue and token identity exactly. Return readable Latin-script pronunciation only.
 INSTRUCTIONS;
     }
 
@@ -46,9 +41,6 @@ INSTRUCTIONS;
         return (int) config('subtitles.enrichment.timeout_seconds', 120);
     }
 
-    /**
-     * Get the agent's structured output schema definition.
-     */
     public function schema(JsonSchema $schema): array
     {
         return [
@@ -60,19 +52,12 @@ INSTRUCTIONS;
                     'index' => $schema->integer()->min(0)->required(),
                     'sourceText' => $schema->string()->min(1)->required(),
                     'translatedText' => $schema->string()->min(1)->required(),
-                    'romanization' => $schema->string()->min(1)->nullable()->required(),
+                    'romanization' => $schema->string()->min(1)->required(),
                     'tokens' => $schema->array()
                         ->items($schema->object([
                             'index' => $schema->integer()->min(0)->required(),
                             'text' => $schema->string()->min(1)->required(),
-                            'normalizedText' => $schema->string()->min(1)->nullable()->required(),
-                            'lemma' => $schema->string()->min(1)->nullable()->required(),
-                            'root' => $schema->string()->min(1)->nullable()->required(),
-                            'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),
-                            'translation' => $schema->string()->min(1)->nullable()->required(),
-                            'gloss' => $schema->string()->min(1)->nullable()->required(),
-                            'romanization' => $schema->string()->min(1)->nullable()->required(),
-                            'usageNote' => $schema->string()->min(1)->nullable()->required(),
+                            'romanization' => $schema->string()->min(1)->required(),
                         ])->withoutAdditionalProperties())
                         ->required(),
                 ])->withoutAdditionalProperties())

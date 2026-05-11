@@ -65,10 +65,10 @@ class SubtitleWorkflowLogger
         Log::info('backend.transcription_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
-            'adapter' => 'openai-http',
-            'model' => (string) config('ai.providers.'.Lab::OpenAI->value.'.models.transcription.default', 'whisper-1'),
-            'response_format' => 'vtt',
+            'provider' => Lab::ElevenLabs->value,
+            'adapter' => 'elevenlabs-http',
+            'model' => (string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default', 'scribe_v2'),
+            'timestamps_granularity' => 'word',
         ]);
     }
 
@@ -118,6 +118,46 @@ class SubtitleWorkflowLogger
                 fn (array $cue): int => is_array($cue['tokens'] ?? null) ? count($cue['tokens']) : 0,
                 $enrichment->cues,
             )),
+        ]);
+    }
+
+    public function romanizationStarted(SubtitleJob $job, int $cueCount): void
+    {
+        Log::info('backend.romanization_started', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => (string) config(
+                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+            ),
+            'cue_count' => $cueCount,
+        ]);
+    }
+
+    public function romanizationCompleted(SubtitleJob $job, CueEnrichmentResult $enrichment): void
+    {
+        Log::info('backend.romanization_completed', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => (string) config(
+                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+            ),
+            'cue_count' => count($enrichment->cues),
+        ]);
+    }
+
+    public function romanizationSkipped(SubtitleJob $job, SubtitleProcessingException $exception): void
+    {
+        Log::warning('backend.romanization_skipped', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'error_code' => $exception->publicCode,
+            ...$exception->context,
         ]);
     }
 

@@ -17,7 +17,7 @@ return [
     ],
 
     'transcription' => [
-        'timeout_seconds' => (int) env('OPENAI_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
+        'timeout_seconds' => (int) env('ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
     ],
 
     'enrichment' => [
