@@ -145,6 +145,26 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(1, $this->translationAnalysis->calls);
         $this->assertSame(['ar'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['en'], $this->translationAnalysis->targetLanguages);
+    }
+
+    public function test_full_same_language_generation_skips_translation_enrichment(): void
+    {
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'en',
+                'targetLanguage' => 'en',
+                'enrichmentMode' => 'full',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('track.cues.0.translatedText', 'first transcript segment');
+
+        $this->assertSame(0, $this->translationAnalysis->calls);
+        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
 
     public function test_full_enrichment_and_on_demand_tracks_are_cached_separately(): void
@@ -166,9 +186,9 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(2, SubtitleTrack::count());
     }
 
-    public function test_create_subtitle_job_accepts_supported_source_languages(): void
+    public function test_create_subtitle_job_accepts_catalog_source_languages(): void
     {
-        $sourceLanguages = ['auto', 'ar', 'en', 'es', 'pt', 'fr', 'de', 'it'];
+        $sourceLanguages = ['auto', 'en', 'zh', 'ja', 'ar', 'pt', 'it', 'sw'];
 
         foreach ($sourceLanguages as $index => $sourceLanguage) {
             $videoId = 'vid'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
@@ -185,6 +205,60 @@ class SubtitleJobApiTest extends TestCase
         }
 
         $this->assertSame($sourceLanguages, $this->transcriptionService->sourceLanguages);
+    }
+
+    public function test_create_subtitle_job_accepts_catalog_target_languages(): void
+    {
+        foreach (['en', 'zh', 'ja', 'fr', 'sw'] as $index => $targetLanguage) {
+            $videoId = 'tgt'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
+
+            $this
+                ->withHeader('X-Extension-Install-Id', $this->installId(chr(97 + $index)))
+                ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                    'youtubeVideoId' => $videoId,
+                    'targetLanguage' => $targetLanguage,
+                ]))
+                ->assertOk()
+                ->assertJsonPath('targetLanguage', $targetLanguage)
+                ->assertJsonPath('track.targetLanguage', $targetLanguage);
+        }
+    }
+
+    public function test_auto_source_persists_detected_source_language(): void
+    {
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'jpn',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'konnichiwa')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nkonnichiwa\n",
+        );
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'auto',
+                'targetLanguage' => 'en',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('sourceLanguage', 'auto')
+            ->assertJsonPath('detectedSourceLanguage', 'ja')
+            ->assertJsonPath('track.sourceLanguage', 'auto')
+            ->assertJsonPath('track.detectedSourceLanguage', 'ja');
+
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'source_language' => 'auto',
+            'detected_source_language' => 'ja',
+            'target_language' => 'en',
+        ]);
+        $this->assertDatabaseHas('subtitle_tracks', [
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'source_language' => 'auto',
+            'detected_source_language' => 'ja',
+            'target_language' => 'en',
+        ]);
     }
 
     public function test_duplicate_default_request_reuses_completed_on_demand_track(): void
@@ -238,6 +312,7 @@ class SubtitleJobApiTest extends TestCase
             'status' => 'completed',
             'stage' => 'finalizing',
             'progress_percent' => 100,
+            'detected_source_language' => 'ar',
             'updated_at' => now(),
         ]);
         $track = SubtitleTrack::factory()
@@ -280,11 +355,15 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.0.youtubeVideoId', 'dQw4w9WgXcQ')
             ->assertJsonPath('jobs.0.status', 'completed')
             ->assertJsonPath('jobs.0.trackId', $track->public_id)
+            ->assertJsonPath('jobs.0.sourceLanguage', 'ar')
+            ->assertJsonPath('jobs.0.detectedSourceLanguage', 'ar')
+            ->assertJsonPath('jobs.0.targetLanguage', 'en')
             ->assertJsonPath('jobs.1.youtubeVideoId', 'run00000001')
             ->assertJsonPath('jobs.1.status', 'running')
             ->assertJsonPath('jobs.1.stage', 'transcribing')
             ->assertJsonPath('jobs.1.progressPercent', 45)
             ->assertJsonPath('jobs.1.jobId', $runningJob->public_id)
+            ->assertJsonPath('jobs.1.targetLanguage', 'en')
             ->assertJsonPath('jobs.2.youtubeVideoId', 'fail0000001')
             ->assertJsonPath('jobs.2.status', 'failed')
             ->assertJsonPath('jobs.2.stage', 'enriching')
@@ -327,6 +406,29 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame('first gloss', $track->cues[0]['tokens'][0]['gloss']);
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
+    }
+
+    public function test_learning_token_enrichment_skips_provider_for_same_language_track(): void
+    {
+        $jobResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'en',
+                'targetLanguage' => 'en',
+            ]))
+            ->assertOk();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/learning-tokens', [
+                'trackId' => $jobResponse->json('track.trackId'),
+                'cueId' => 'cue-0001',
+                'tokenIndex' => 0,
+            ])
+            ->assertOk()
+            ->assertJsonPath('token.text', 'first');
+
+        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
 
     public function test_learning_token_enrichment_requires_owning_install(): void
@@ -391,9 +493,9 @@ class SubtitleJobApiTest extends TestCase
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', [
-                'youtubeVideoId' => 'bad',
-                'sourceLanguage' => 'ja',
-                'targetLanguage' => 'en',
+                'youtubeVideoId' => 'dQw4w9WgXcQ',
+                'sourceLanguage' => 'zz',
+                'targetLanguage' => 'auto',
             ])
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'validation_failed')
@@ -562,12 +664,18 @@ class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvide
     public array $sourceLanguages = [];
 
     /**
+     * @var array<int, string>
+     */
+    public array $targetLanguages = [];
+
+    /**
      * @param  array<int, array<string, mixed>>  $cues
      */
     public function enrich(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
     {
         $this->calls++;
         $this->sourceLanguages[] = $sourceLanguage;
+        $this->targetLanguages[] = $targetLanguage;
 
         if ($this->shouldFail) {
             throw SubtitleProcessingException::enrichmentFailed();
@@ -637,6 +745,7 @@ class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvide
     {
         $this->tokenCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
+        $this->targetLanguages[] = $targetLanguage;
 
         if ($this->shouldFail) {
             throw SubtitleProcessingException::enrichmentFailed();

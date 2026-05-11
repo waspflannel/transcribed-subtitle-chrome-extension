@@ -79,6 +79,7 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'segment_count' => count($transcript->segments),
             'duration_seconds' => $transcript->durationSeconds ?? $audio->durationSeconds,
+            'detected_source_language' => $transcript->language,
         ]);
     }
 

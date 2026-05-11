@@ -25,6 +25,7 @@ class SubtitleTrackFactory extends Factory
             'subtitle_job_id' => SubtitleJob::factory(),
             'youtube_video_id' => Str::random(11),
             'source_language' => 'ar',
+            'detected_source_language' => null,
             'target_language' => 'en',
             'source_dialect' => 'unknown',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,

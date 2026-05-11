@@ -18,6 +18,7 @@ class SubtitleJob extends Model
         'youtube_url',
         'video_duration_seconds',
         'source_language',
+        'detected_source_language',
         'target_language',
         'processing_version',
         'status',

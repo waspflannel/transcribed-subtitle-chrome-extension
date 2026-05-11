@@ -3,6 +3,7 @@
 namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Languages\LanguageCatalog;
 
 class ScribeTranscriptNormalizer
 {
@@ -23,10 +24,15 @@ class ScribeTranscriptNormalizer
     {
         $webVtt = $this->webVttFromWords($this->timedWords($payload));
         $parsed = $this->webVttParser->parse($webVtt);
-        $detectedLanguage = is_string($payload['language_code'] ?? null) ? $payload['language_code'] : null;
+        $detectedLanguage = is_string($payload['language_code'] ?? null)
+            ? LanguageCatalog::normalizeCode($payload['language_code'])
+            : null;
+        $language = $requestedSourceLanguage === 'auto'
+            ? $detectedLanguage
+            : LanguageCatalog::normalizeCode($requestedSourceLanguage);
 
         return new TimestampedTranscript(
-            language: $requestedSourceLanguage === 'auto' ? $detectedLanguage : $requestedSourceLanguage,
+            language: $language,
             durationSeconds: $durationSeconds,
             segments: $parsed['segments'],
             webVtt: $parsed['webVtt'],

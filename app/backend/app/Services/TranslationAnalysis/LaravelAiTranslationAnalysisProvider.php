@@ -6,6 +6,7 @@ use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Languages\LanguageCatalog;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
@@ -161,18 +162,20 @@ class LaravelAiTranslationAnalysisProvider implements TranslationAnalysisProvide
     {
         return json_encode([
             'sourceLanguage' => $sourceLanguage,
+            'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
+            'targetLanguageName' => LanguageCatalog::label($targetLanguage),
             'instructions' => [
                 'Return one enriched cue for each input cue in the same order.',
                 'Do not change cueId, index, or sourceText.',
-                'Translate into the target language.',
-                'If sourceLanguage and targetLanguage are both en, set translatedText to sourceText.',
+                'Translate each cue into targetLanguageName.',
+                'If sourceLanguage and targetLanguage are the same language, set translatedText to sourceText.',
                 'Return one lightweight token for each visible source word or meaningful short phrase.',
                 'Use token indexes as zero-based source order within each cue.',
                 'Do not skip ordinary words; the UI uses tokens to render clickable cards.',
-                'Include exact token text and a short English gloss or translation.',
+                'Include exact token text and short gloss or translation metadata for the target language.',
                 'Add concise usage notes only when useful.',
-                'For Arabic source text, include cue and token romanization when helpful.',
+                'For Arabic-script source text, include cue and token romanization when helpful.',
                 'For Latin-script source languages, omit romanization unless it helps pronunciation.',
                 'Leave lemma, root, and partOfSpeech null unless useful.',
                 'Use unknown for dialect when it cannot be detected.',
@@ -193,9 +196,11 @@ class LaravelAiTranslationAnalysisProvider implements TranslationAnalysisProvide
     {
         return json_encode([
             'sourceLanguage' => $sourceLanguage,
+            'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $sourceLanguage,
+            'targetLanguageName' => LanguageCatalog::label($sourceLanguage),
             'instructions' => [
-                'Romanize Arabic subtitle cues for transcript-first display.',
+                'Romanize subtitle cues written in Arabic script for transcript-first display.',
                 'Do not translate or create learner cards.',
                 'Return one cue for each input cue in the same order.',
                 'Do not change cueId, index, sourceText, token indexes, or token text.',
@@ -227,13 +232,15 @@ class LaravelAiTranslationAnalysisProvider implements TranslationAnalysisProvide
     {
         return json_encode([
             'sourceLanguage' => $sourceLanguage,
+            'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
+            'targetLanguageName' => LanguageCatalog::label($targetLanguage),
             'instructions' => [
                 'Return exactly one token object for requestedToken.',
                 'The returned token text must match requestedToken.text.',
-                'Include a short English gloss or translation.',
+                'Include short gloss or translation metadata for the target language.',
                 'Add lemma, root, partOfSpeech, romanization, or usageNote only when useful.',
-                'For Arabic, include romanization when helpful.',
+                'For Arabic-script source text, include romanization when helpful.',
                 'For Latin-script languages, omit romanization unless it helps pronunciation.',
             ],
             'cue' => Arr::only($cue, ['cueId', 'index', 'sourceText', 'romanization']),

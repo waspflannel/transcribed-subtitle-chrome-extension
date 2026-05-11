@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Languages\LanguageCatalog;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -25,8 +26,8 @@ class CreateSubtitleJobRequest extends FormRequest
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'youtubeUrl' => ['sometimes', 'string', 'url', 'max:2048'],
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
-            'sourceLanguage' => ['required', 'string', Rule::in(['auto', 'ar', 'en', 'es', 'pt', 'fr', 'de', 'it'])],
-            'targetLanguage' => ['required', 'string', Rule::in(['en'])],
+            'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
+            'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
             'enrichmentMode' => ['sometimes', 'string', Rule::in(['on_demand', 'full'])],
         ];
     }

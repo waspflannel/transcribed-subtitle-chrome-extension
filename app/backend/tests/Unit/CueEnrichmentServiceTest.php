@@ -49,7 +49,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+        $result = $this->provider()->enrich($this->sourceCues(), 'ar', 'fr');
 
         $this->assertSame('egyptian', $result->sourceDialect);
         $this->assertSame('Welcome everyone', $result->cues[0]['translatedText']);
@@ -63,7 +63,9 @@ class CueEnrichmentServiceTest extends TestCase
         ], $result->cues[0]['tokens'][0]);
 
         CueEnrichmentAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"targetLanguage":"en"')
+            fn ($prompt): bool => $prompt->contains('"targetLanguage":"fr"')
+                && $prompt->contains('"targetLanguageName":"French"')
+                && $prompt->contains('"sourceLanguageName":"Arabic"')
                 && $prompt->contains('"cueId":"cue-0001"')
                 && $prompt->contains('Return one lightweight token'),
         );
@@ -120,7 +122,7 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertArrayNotHasKey('gloss', $result->cues[0]['tokens'][0]);
 
         CueRomanizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('Romanize Arabic subtitle cues')
+            fn ($prompt): bool => $prompt->contains('Romanize subtitle cues written in Arabic script')
                 && $prompt->contains('Do not translate')
                 && $prompt->contains('"text":"مرحبا"'),
         );
@@ -149,7 +151,7 @@ class CueEnrichmentServiceTest extends TestCase
             cue: $this->sourceCue('cue-0001', 0, 'Hola a todos'),
             token: ['index' => 0, 'text' => 'Hola', 'normalizedText' => 'hola'],
             sourceLanguage: 'es',
-            targetLanguage: 'en',
+            targetLanguage: 'ja',
         );
 
         $this->assertSame([
@@ -163,6 +165,7 @@ class CueEnrichmentServiceTest extends TestCase
 
         LearningTokenCardAgent::assertPrompted(
             fn ($prompt): bool => $prompt->contains('"requestedToken":{"index":0,"text":"Hola","normalizedText":"hola"}')
+                && $prompt->contains('"targetLanguageName":"Japanese"')
                 && $prompt->contains('Return exactly one token object'),
         );
     }

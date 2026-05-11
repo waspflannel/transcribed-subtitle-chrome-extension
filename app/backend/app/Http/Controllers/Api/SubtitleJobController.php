@@ -74,8 +74,13 @@ class SubtitleJobController extends Controller
             'startedAt' => $job->created_at->toJSON(),
             'lastUpdatedAt' => $job->updated_at->toJSON(),
             'sourceLanguage' => $job->source_language,
+            'targetLanguage' => $job->target_language,
             'jobId' => $job->public_id,
         ];
+
+        if (is_string($job->detected_source_language) && $job->detected_source_language !== '') {
+            $item['detectedSourceLanguage'] = $job->detected_source_language;
+        }
 
         if (is_string($job->stage) && $job->stage !== '') {
             $item['stage'] = $job->stage;

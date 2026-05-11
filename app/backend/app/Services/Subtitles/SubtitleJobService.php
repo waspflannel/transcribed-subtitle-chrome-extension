@@ -6,6 +6,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Languages\LanguageCatalog;
 use App\Services\Transcription\TranscriptionService;
 use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
 use Illuminate\Support\Facades\DB;
@@ -14,9 +15,9 @@ use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION_ON_DEMAND = 'elevenlabs-scribe-v2-transcript-first-romanized-v1';
+    public const PROCESSING_VERSION_ON_DEMAND = 'elevenlabs-scribe-v2-transcript-first-romanized-v2';
 
-    public const PROCESSING_VERSION_FULL = 'elevenlabs-scribe-v2-full-enriched-v1';
+    public const PROCESSING_VERSION_FULL = 'elevenlabs-scribe-v2-full-enriched-v2';
 
     public const COMPATIBLE_PROCESSING_VERSIONS = [
         self::PROCESSING_VERSION_ON_DEMAND,
@@ -107,16 +108,18 @@ class SubtitleJobService
 
             $this->logger->transcriptionCompleted($job, $transcript, $audio);
 
+            $this->recordDetectedSourceLanguage($job, $payload['sourceLanguage'], $transcript->language);
+            $job = $job->refresh();
             $draftCues = $this->tracks->draftCues($transcript);
 
-            if ($enrichmentMode === 'full') {
+            if ($enrichmentMode === 'full' && ! $this->isSameLanguageGeneration($job)) {
                 $stage = 'enriching';
                 $this->markJobRunning($job, $stage, 75);
                 $this->logger->enrichmentStarted($job, count($draftCues));
 
                 $enrichment = $this->translationAnalysis->enrich(
                     cues: $draftCues,
-                    sourceLanguage: $job->source_language,
+                    sourceLanguage: $this->effectiveSourceLanguage($job),
                     targetLanguage: $job->target_language,
                 );
 
@@ -132,7 +135,7 @@ class SubtitleJobService
                     try {
                         $enrichment = $this->translationAnalysis->romanize(
                             cues: $enrichment->cues,
-                            sourceLanguage: 'ar',
+                            sourceLanguage: $this->effectiveSourceLanguage($job),
                         );
 
                         $this->logger->romanizationCompleted($job, $enrichment);
@@ -186,6 +189,7 @@ class SubtitleJobService
             'youtube_url' => $payload['youtubeUrl'] ?? null,
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'source_language' => $payload['sourceLanguage'],
+            'detected_source_language' => null,
             'target_language' => $payload['targetLanguage'],
             'processing_version' => $processingVersion,
             'status' => 'running',
@@ -207,6 +211,7 @@ class SubtitleJobService
         $job->update([
             'youtube_url' => $payload['youtubeUrl'] ?? null,
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
+            'detected_source_language' => null,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
@@ -245,6 +250,31 @@ class SubtitleJobService
         }
 
         return false;
+    }
+
+    private function recordDetectedSourceLanguage(SubtitleJob $job, mixed $requestedSourceLanguage, ?string $transcriptLanguage): void
+    {
+        if ($requestedSourceLanguage !== 'auto') {
+            return;
+        }
+
+        $detectedSourceLanguage = LanguageCatalog::normalizeCode($transcriptLanguage);
+
+        if ($detectedSourceLanguage === null) {
+            return;
+        }
+
+        $job->update(['detected_source_language' => $detectedSourceLanguage]);
+    }
+
+    private function effectiveSourceLanguage(SubtitleJob $job): string
+    {
+        return $job->detected_source_language ?: $job->source_language;
+    }
+
+    private function isSameLanguageGeneration(SubtitleJob $job): bool
+    {
+        return $this->effectiveSourceLanguage($job) === $job->target_language;
     }
 
     private function markJobRunning(SubtitleJob $job, string $stage, int $progressPercent): void

@@ -25,6 +25,7 @@ class SubtitleJobFactory extends Factory
             'youtube_url' => null,
             'video_duration_seconds' => 213,
             'source_language' => 'ar',
+            'detected_source_language' => null,
             'target_language' => 'en',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,
             'status' => 'running',

@@ -12,7 +12,7 @@ class ScribeTranscriptNormalizerTest extends TestCase
     public function test_it_converts_scribe_words_to_valid_webvtt_cues(): void
     {
         $transcript = $this->normalizer()->normalize([
-            'language_code' => 'en',
+            'language_code' => 'eng',
             'words' => [
                 ['text' => 'Hello', 'start' => 0.1, 'end' => 0.4, 'type' => 'word'],
                 ['text' => ' ', 'start' => 0.4, 'end' => 0.5, 'type' => 'spacing'],

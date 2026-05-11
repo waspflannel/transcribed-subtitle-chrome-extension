@@ -28,6 +28,10 @@ class LearningTokenEnrichmentService
             return $this->response($track, $cue, $token);
         }
 
+        if ($this->isSameLanguageTrack($track)) {
+            return $this->response($track, $cue, $token);
+        }
+
         Log::info('backend.learning_token_enrichment_started', [
             'track_id' => $track->public_id,
             'job_id' => $track->job->public_id,
@@ -42,7 +46,7 @@ class LearningTokenEnrichmentService
             fn (): array => $this->translationAnalysis->enrichToken(
                 cue: $cue,
                 token: $token,
-                sourceLanguage: $track->source_language,
+                sourceLanguage: $this->effectiveSourceLanguage($track),
                 targetLanguage: $track->target_language,
             ),
         );
@@ -136,12 +140,23 @@ class LearningTokenEnrichmentService
     {
         return 'learning-token:'.hash('sha256', json_encode([
             'sourceLanguage' => $track->source_language,
+            'detectedSourceLanguage' => $track->detected_source_language,
             'targetLanguage' => $track->target_language,
             'token' => $token['normalizedText'] ?? $token['text'] ?? '',
             'context' => $cue['sourceText'] ?? '',
             'model' => config('ai.providers.openai.models.enrichment.default', 'gpt-4o-mini'),
             'version' => 'v1',
         ], JSON_THROW_ON_ERROR));
+    }
+
+    private function effectiveSourceLanguage(SubtitleTrack $track): string
+    {
+        return $track->detected_source_language ?: $track->source_language;
+    }
+
+    private function isSameLanguageTrack(SubtitleTrack $track): bool
+    {
+        return $this->effectiveSourceLanguage($track) === $track->target_language;
     }
 
     /**

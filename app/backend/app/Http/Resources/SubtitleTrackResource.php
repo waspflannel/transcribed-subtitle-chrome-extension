@@ -16,7 +16,7 @@ class SubtitleTrackResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $resource = [
             'trackId' => $this->public_id,
             'jobId' => $this->job->public_id,
             'youtubeVideoId' => $this->youtube_video_id,
@@ -27,5 +27,11 @@ class SubtitleTrackResource extends JsonResource
             'webVtt' => $this->web_vtt,
             'cues' => $this->cues,
         ];
+
+        if (is_string($this->detected_source_language) && $this->detected_source_language !== '') {
+            $resource['detectedSourceLanguage'] = $this->detected_source_language;
+        }
+
+        return $resource;
     }
 }

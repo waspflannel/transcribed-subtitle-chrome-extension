@@ -76,8 +76,25 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
                 && str_contains($request->body(), 'name="timestamps_granularity"')
                 && str_contains($request->body(), 'word')
                 && str_contains($request->body(), 'name="language_code"')
-                && str_contains($request->body(), 'spa');
+                && str_contains($request->body(), 'es');
         });
+    }
+
+    public function test_it_passes_catalog_language_codes_directly_to_scribe(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                ...$this->sampleScribePayload(),
+                'language_code' => 'jpn',
+            ], 200),
+        ]);
+
+        $transcript = $this->service()->transcribe($this->audio, 'ja');
+
+        $this->assertSame('ja', $transcript->language);
+
+        Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'name="language_code"')
+            && str_contains($request->body(), 'ja'));
     }
 
     public function test_it_omits_language_for_auto_detection(): void

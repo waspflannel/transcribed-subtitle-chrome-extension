@@ -13,6 +13,7 @@ class ContractBoundaryTest extends TestCase
 
         $requiredFiles = [
             $contractsPath.DIRECTORY_SEPARATOR.'openapi.json',
+            $contractsPath.DIRECTORY_SEPARATOR.'languages.json',
             $schemaPath.DIRECTORY_SEPARATOR.'create-subtitle-job-request.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'job-response.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'track-response.schema.json',

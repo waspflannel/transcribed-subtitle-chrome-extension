@@ -16,7 +16,7 @@ class SubtitleJobResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $resource = [
             'jobId' => $this->public_id,
             'youtubeVideoId' => $this->youtube_video_id,
             'sourceLanguage' => $this->source_language,
@@ -26,5 +26,11 @@ class SubtitleJobResource extends JsonResource
             'updatedAt' => $this->updated_at->toJSON(),
             'expiresAt' => $this->expires_at->toJSON(),
         ];
+
+        if (is_string($this->detected_source_language) && $this->detected_source_language !== '') {
+            $resource['detectedSourceLanguage'] = $this->detected_source_language;
+        }
+
+        return $resource;
     }
 }

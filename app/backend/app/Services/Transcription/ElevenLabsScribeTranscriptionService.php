@@ -4,6 +4,7 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Languages\LanguageCatalog;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -12,19 +13,6 @@ use Throwable;
 
 class ElevenLabsScribeTranscriptionService implements TranscriptionService
 {
-    /**
-     * @var array<string, string>
-     */
-    private const LANGUAGE_CODES = [
-        'ar' => 'ara',
-        'en' => 'eng',
-        'es' => 'spa',
-        'pt' => 'por',
-        'fr' => 'fra',
-        'de' => 'deu',
-        'it' => 'ita',
-    ];
-
     public function __construct(private readonly ScribeTranscriptNormalizer $normalizer) {}
 
     public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
@@ -121,7 +109,7 @@ class ElevenLabsScribeTranscriptionService implements TranscriptionService
             return null;
         }
 
-        return self::LANGUAGE_CODES[$sourceLanguage] ?? null;
+        return LanguageCatalog::normalizeCode($sourceLanguage);
     }
 
     private function transcriptionUrl(Lab $provider): string
