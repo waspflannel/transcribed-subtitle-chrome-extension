@@ -26,7 +26,7 @@ class SubtitleJobFactory extends Factory
             'video_duration_seconds' => 213,
             'source_language' => 'ar',
             'target_language' => 'en',
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+            'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,

@@ -207,6 +207,26 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, $this->translationAnalysis->calls);
     }
 
+    public function test_completed_tracks_are_cached_per_install(): void
+    {
+        $firstResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $secondResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId('b'))
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $firstResponse->assertOk();
+        $secondResponse->assertOk();
+
+        $this->assertNotSame($firstResponse->json('jobId'), $secondResponse->json('jobId'));
+        $this->assertNotSame($firstResponse->json('track.trackId'), $secondResponse->json('track.trackId'));
+        $this->assertSame(2, SubtitleJob::count());
+        $this->assertSame(2, SubtitleTrack::count());
+        $this->assertSame(2, $this->audioSource->calls);
+    }
+
     public function test_list_subtitle_jobs_returns_current_install_history(): void
     {
         $installId = $this->installId();

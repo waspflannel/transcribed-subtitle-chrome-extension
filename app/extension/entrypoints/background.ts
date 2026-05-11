@@ -332,16 +332,12 @@ function stateWithBackendProgress(
     type: 'loading',
     youtubeVideoId: job.youtubeVideoId,
     youtubeUrl: job.youtubeUrl,
-    message: loadingMessage(job),
+    message: loadingMessageForStage(job.stage),
     stage: job.stage,
     progressPercent: job.progressPercent,
     startedAt: job.startedAt,
     lastUpdatedAt: job.lastUpdatedAt,
   };
-}
-
-function loadingMessage(job: SubtitleJobHistoryItem): string {
-  return loadingMessageForStage(job.stage);
 }
 
 function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string {

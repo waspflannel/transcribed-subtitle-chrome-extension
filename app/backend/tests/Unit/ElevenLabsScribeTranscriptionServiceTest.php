@@ -10,6 +10,7 @@ use App\Services\Transcription\WebVttTranscriptParser;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ElevenLabsScribeTranscriptionServiceTest extends TestCase
@@ -22,7 +23,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
     {
         parent::setUp();
 
-        $this->directory = storage_path('framework/testing/elevenlabs-scribe-transcription');
+        $this->directory = storage_path('framework/testing/elevenlabs-scribe-transcription/'.(string) Str::uuid());
         File::ensureDirectoryExists($this->directory);
         $path = $this->directory.DIRECTORY_SEPARATOR.'audio.m4a';
         File::put($path, 'fake-audio');

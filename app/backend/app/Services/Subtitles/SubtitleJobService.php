@@ -18,8 +18,6 @@ class SubtitleJobService
 
     public const PROCESSING_VERSION_FULL = 'elevenlabs-scribe-v2-full-enriched-v1';
 
-    public const PROCESSING_VERSION = self::PROCESSING_VERSION_ON_DEMAND;
-
     public const COMPATIBLE_PROCESSING_VERSIONS = [
         self::PROCESSING_VERSION_ON_DEMAND,
         self::PROCESSING_VERSION_FULL,
@@ -48,6 +46,7 @@ class SubtitleJobService
                 ->where('source_language', $payload['sourceLanguage'])
                 ->where('target_language', $payload['targetLanguage'])
                 ->where('processing_version', $processingVersion)
+                ->where('install_id', $installId)
                 ->first();
 
             if ($job) {

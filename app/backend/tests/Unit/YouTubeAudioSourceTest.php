@@ -7,6 +7,7 @@ use App\Services\Audio\YouTubeAudioSource;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class YouTubeAudioSourceTest extends TestCase
@@ -17,8 +18,7 @@ class YouTubeAudioSourceTest extends TestCase
     {
         parent::setUp();
 
-        $this->tempDirectory = storage_path('framework/testing/youtube-audio');
-        File::deleteDirectory($this->tempDirectory);
+        $this->tempDirectory = storage_path('framework/testing/youtube-audio/'.(string) Str::uuid());
         config([
             'subtitles.youtube.temp_directory' => $this->tempDirectory,
             'subtitles.max_video_duration_seconds' => 3600,
