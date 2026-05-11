@@ -101,15 +101,16 @@ export class OverlayShell {
       button.addEventListener('click', () => {
         const cue = this.currentState?.activeCue;
         const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
-        const failedTokenKey = cue && token ? tokenKey(cue.cueId, token.index) : null;
+        const selectedTokenKey = cue && token ? tokenKey(cue.cueId, token.index) : null;
         const isFailedToken =
-          failedTokenKey !== null && (this.currentState?.failedTokenKeys?.has(failedTokenKey) ?? false);
+          selectedTokenKey !== null && (this.currentState?.failedTokenKeys?.has(selectedTokenKey) ?? false);
         const wasPinned = this.pinnedTokenIndex === tokenIndex;
+        const shouldRetryFailedToken = wasPinned && isFailedToken;
+        const shouldOpenToken = !wasPinned || shouldRetryFailedToken;
 
-        this.pinnedTokenIndex = wasPinned && !isFailedToken ? null : tokenIndex;
-        const shouldRequestToken = this.pinnedTokenIndex === tokenIndex && (!wasPinned || isFailedToken);
+        this.pinnedTokenIndex = shouldOpenToken ? tokenIndex : null;
 
-        if (shouldRequestToken && cue && token && !hasLearningMetadata(token)) {
+        if (shouldOpenToken && cue && token && !hasLearningMetadata(token)) {
           this.options.onTokenClick?.(cue, token);
         }
 
@@ -713,7 +714,7 @@ function renderTokenInteraction(
 
   if (!hasMetadata || isPending || isFailed) {
     const detail = isFailed
-      ? 'Word card generation failed.'
+      ? 'Word card generation failed. Select the word again to retry.'
       : 'Loading word card...';
 
     return `

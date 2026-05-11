@@ -55,6 +55,7 @@ export type RuntimeMessage =
     }
   | {
       type: 'content.enrichLearningToken';
+      youtubeVideoId: string;
       trackId: string;
       cueId: string;
       tokenIndex: number;

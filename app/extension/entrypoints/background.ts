@@ -209,7 +209,7 @@ async function enrichLearningTokenFromContent(
     throw new Error('Learning token enrichment requires an active content tab.');
   }
 
-  const currentState = await readySubtitleStateForEnrichment(tabId, sender.tab?.url ?? '', message.trackId);
+  const currentState = await readySubtitleStateForEnrichment(tabId, message.youtubeVideoId, message.trackId);
 
   if (!currentState) {
     throw new Error('No generated subtitle track is active for this tab.');
@@ -238,7 +238,7 @@ async function enrichLearningTokenFromContent(
 
 async function readySubtitleStateForEnrichment(
   tabId: number,
-  tabUrl: string,
+  youtubeVideoId: string,
   trackId: string,
 ): Promise<Extract<SubtitleState, { type: 'ready' }> | null> {
   const currentState = tabSubtitleStates.get(tabId);
@@ -247,10 +247,16 @@ async function readySubtitleStateForEnrichment(
     return currentState;
   }
 
-  const pageStatus = parseYoutubePage(tabUrl);
-  const restoredState = await getSubtitleStateForPage(tabId, pageStatus);
+  if (currentState && currentState.type !== 'no-track' && isSubtitleStateForVideo(currentState, youtubeVideoId)) {
+    return null;
+  }
 
-  if (restoredState.type === 'ready' && restoredState.track.trackId === trackId) {
+  const rememberedTrack = await getRememberedTrack(youtubeVideoId);
+
+  if (rememberedTrack?.trackId === trackId) {
+    const restoredState: Extract<SubtitleState, { type: 'ready' }> = { type: 'ready', track: rememberedTrack };
+    tabSubtitleStates.set(tabId, restoredState);
+
     return restoredState;
   }
 

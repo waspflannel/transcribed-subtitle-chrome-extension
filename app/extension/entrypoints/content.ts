@@ -234,6 +234,7 @@ export default defineContentScript({
       try {
         const response = (await browser.runtime.sendMessage({
           type: 'content.enrichLearningToken',
+          youtubeVideoId: subtitleState.track.youtubeVideoId,
           trackId: subtitleState.track.trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,

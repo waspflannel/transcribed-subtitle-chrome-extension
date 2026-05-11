@@ -120,7 +120,7 @@ describe('renderOverlayContent', () => {
       },
     );
 
-    expect(html).toContain('Word card generation failed.');
+    expect(html).toContain('Word card generation failed. Select the word again to retry.');
     expect(html).toContain('class="token-popover"');
     expect(html).not.toContain('null');
   });
