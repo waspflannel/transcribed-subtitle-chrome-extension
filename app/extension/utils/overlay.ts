@@ -138,11 +138,11 @@ export class OverlayShell {
       <style>
         :host {
           all: initial;
-          bottom: 112px;
-          left: clamp(12px, 9vw, 160px);
+          bottom: 84px;
+          left: 16px;
           pointer-events: none;
           position: fixed;
-          right: clamp(12px, 9vw, 160px);
+          right: 16px;
           top: auto;
           width: auto;
           z-index: 2147483647;
@@ -164,24 +164,24 @@ export class OverlayShell {
           backdrop-filter: blur(18px) saturate(120%);
           border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
-          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+          box-shadow: 0 14px 42px rgba(0, 0, 0, 0.34);
           color: #f8fafc;
           display: grid;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          gap: 18px;
-          grid-template-columns: minmax(128px, 210px) minmax(0, 1fr) auto;
+          gap: 12px;
+          grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
           line-height: 1.35;
           margin: 0 auto;
-          max-width: min(1280px, calc(100vw - 32px));
-          min-height: 178px;
-          padding: 26px 34px 28px;
+          max-width: min(820px, calc(100vw - 32px));
+          min-height: auto;
+          padding: 12px 16px;
           pointer-events: auto;
         }
 
         .rail--message {
-          grid-template-columns: minmax(128px, 210px) minmax(0, 1fr);
+          grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
           min-height: auto;
-          max-width: min(860px, calc(100vw - 32px));
+          max-width: min(720px, calc(100vw - 32px));
         }
 
         :host([data-position="compact"]) .rail {
@@ -201,7 +201,7 @@ export class OverlayShell {
 
         .eyebrow {
           color: #2dd4bf;
-          font-size: 18px;
+          font-size: 13px;
           font-weight: 650;
           letter-spacing: 0;
           white-space: nowrap;
@@ -209,7 +209,7 @@ export class OverlayShell {
 
         .cue-time {
           color: #a7b0bd;
-          font-size: 18px;
+          font-size: 13px;
           font-weight: 500;
           white-space: nowrap;
         }
@@ -217,7 +217,7 @@ export class OverlayShell {
         .rail-main {
           align-content: center;
           display: grid;
-          gap: 18px;
+          gap: 8px;
           min-width: 0;
         }
 
@@ -227,13 +227,13 @@ export class OverlayShell {
 
         .title {
           color: #f8fafc;
-          font-size: 18px;
+          font-size: 15px;
           font-weight: 700;
         }
 
         .detail {
           color: #cbd5e1;
-          font-size: 14px;
+          font-size: 13px;
         }
 
         .meta {
@@ -248,21 +248,21 @@ export class OverlayShell {
           align-items: center;
           display: flex;
           flex-wrap: wrap;
-          gap: 12px;
+          gap: 6px;
           justify-content: center;
           min-width: 0;
         }
 
         .source-text {
           color: #f8fafc;
-          font-size: 32px;
+          font-size: 24px;
           font-weight: 700;
           overflow-wrap: anywhere;
         }
 
         .translation {
           color: #f8fafc;
-          font-size: 29px;
+          font-size: 17px;
           font-weight: 500;
           line-height: 1.25;
           overflow-wrap: anywhere;
@@ -270,7 +270,7 @@ export class OverlayShell {
 
         .cue-romanization {
           color: #b9d8dc;
-          font-size: 16px;
+          font-size: 13px;
           font-weight: 500;
         }
 
@@ -289,11 +289,11 @@ export class OverlayShell {
           cursor: pointer;
           display: inline-grid;
           font: inherit;
-          gap: 8px;
+          gap: 3px;
           line-height: 1;
-          min-height: 96px;
-          min-width: 220px;
-          padding: 16px 20px;
+          min-height: 42px;
+          min-width: 0;
+          padding: 7px 12px;
           position: relative;
           text-align: center;
           transition:
@@ -320,7 +320,7 @@ export class OverlayShell {
 
         .token-text {
           color: #f8fafc;
-          font-size: 42px;
+          font-size: 22px;
           font-weight: 650;
           line-height: 1;
           overflow-wrap: anywhere;
@@ -328,7 +328,7 @@ export class OverlayShell {
 
         .token-extra {
           color: #b9d8dc;
-          font-size: 16px;
+          font-size: 11px;
           font-weight: 500;
           line-height: 1.3;
           overflow-wrap: anywhere;
@@ -442,46 +442,22 @@ export class OverlayShell {
           overflow-wrap: anywhere;
         }
 
-        .rail-controls {
-          align-content: start;
-          display: flex;
-          gap: 10px;
-          justify-content: end;
-        }
-
-        .rail-control {
-          align-items: center;
-          border-radius: 8px;
-          color: #cbd5e1;
-          display: inline-flex;
-          font-size: 19px;
-          height: 34px;
-          justify-content: center;
-          opacity: 0.78;
-          width: 34px;
-        }
-
-        :host([data-position="compact"]) .rail-controls {
-          display: none;
-        }
-
         :host([data-position="compact"]) .rail-meta,
         :host([data-position="compact"]) .token-area {
           justify-content: flex-start;
         }
 
         :host([data-position="compact"]) .token-card {
-          min-height: 78px;
-          min-width: min(190px, 100%);
-          padding: 12px 14px;
+          min-height: 38px;
+          padding: 6px 10px;
         }
 
         :host([data-position="compact"]) .token-text {
-          font-size: 30px;
+          font-size: 20px;
         }
 
         :host([data-position="compact"]) .translation {
-          font-size: 20px;
+          font-size: 16px;
         }
 
         :host([data-position="compact"]) .token-popover {
@@ -504,31 +480,25 @@ export class OverlayShell {
           }
 
           .rail {
-            grid-template-columns: minmax(0, 1fr) auto;
+            grid-template-columns: minmax(0, 1fr);
             min-height: auto;
-            padding: 18px;
+            padding: 12px 14px;
           }
 
           .rail-main {
             grid-column: 1 / -1;
           }
 
-          .rail-controls {
-            grid-column: 2;
-            grid-row: 1;
-          }
-
           .translation {
-            font-size: 23px;
+            font-size: 16px;
           }
 
           .token-card {
-            min-height: 86px;
-            min-width: min(190px, 100%);
+            min-height: 40px;
           }
 
           .token-text {
-            font-size: 34px;
+            font-size: 21px;
           }
         }
 
@@ -544,9 +514,9 @@ export class OverlayShell {
           }
 
           .rail {
-            gap: 12px;
+            gap: 8px;
             grid-template-columns: minmax(0, 1fr);
-            padding: 14px;
+            padding: 10px 12px;
           }
 
           .rail-meta {
@@ -558,10 +528,6 @@ export class OverlayShell {
             font-size: 13px;
           }
 
-          .rail-controls {
-            display: none;
-          }
-
           .token-area {
             flex-wrap: nowrap;
             justify-content: flex-start;
@@ -571,17 +537,15 @@ export class OverlayShell {
 
           .token-slot {
             flex: 0 0 auto;
-            width: min(172px, 70vw);
           }
 
           .token-card {
-            min-height: 74px;
-            min-width: 100%;
-            padding: 12px;
+            min-height: 38px;
+            padding: 6px 10px;
           }
 
           .token-text {
-            font-size: 30px;
+            font-size: 19px;
           }
 
           .token-extra,
@@ -590,11 +554,11 @@ export class OverlayShell {
           }
 
           .translation {
-            font-size: 19px;
+            font-size: 15px;
           }
 
           .source-text {
-            font-size: 24px;
+            font-size: 21px;
           }
 
           .token-popover {
@@ -661,7 +625,6 @@ export function renderOverlayContent(
           ${cueRomanization}
           ${renderTranslation(cue)}
         </div>
-        ${renderRailControls()}
       </section>
     `;
   }
@@ -787,16 +750,6 @@ function renderTranslation(cue: SubtitleCue): string {
   }
 
   return `<div class="translation">${escapeHtml(cue.translatedText)}</div>`;
-}
-
-function renderRailControls(): string {
-  return `
-    <div class="rail-controls" aria-hidden="true">
-      <span class="rail-control">&#8635;</span>
-      <span class="rail-control">&#9734;</span>
-      <span class="rail-control">&#8942;</span>
-    </div>
-  `;
 }
 
 function formatCueTimeRange(cue: SubtitleCue): string {

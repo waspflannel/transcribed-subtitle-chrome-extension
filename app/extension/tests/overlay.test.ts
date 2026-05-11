@@ -18,6 +18,7 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('sa-laam');
     expect(html).toContain('peace greeting');
     expect(html).not.toContain('egyptian');
+    expect(html).not.toContain('rail-control');
   });
 
   it('respects romanization and gloss visibility settings', () => {
