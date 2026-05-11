@@ -1,9 +1,17 @@
-import { DEFAULT_SOURCE_LANGUAGE, isSupportedSourceLanguage, type SourceLanguage } from './source-languages';
+import {
+  DEFAULT_SOURCE_LANGUAGE,
+  DEFAULT_TARGET_LANGUAGE,
+  isSourceLanguage,
+  isTargetLanguage,
+  type SourceLanguage,
+  type TargetLanguage,
+} from './languages';
 
 export type OverlayPosition = 'bottom' | 'top' | 'compact';
 
 export interface ExtensionSettings {
   sourceLanguage: SourceLanguage;
+  targetLanguage: TargetLanguage;
   overlayVisible: boolean;
   overlayPosition: OverlayPosition;
   showRomanization: boolean;
@@ -17,6 +25,7 @@ export const MAX_SUBTITLE_TIMING_OFFSET_SECONDS = 10;
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
+  targetLanguage: DEFAULT_TARGET_LANGUAGE,
   overlayVisible: true,
   overlayPosition: 'bottom',
   showRomanization: true,
@@ -28,8 +37,12 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
 export function createExtensionSettingsFromPartial(value: Partial<ExtensionSettings> | null | undefined): ExtensionSettings {
   const settings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
 
-  if (isSupportedSourceLanguage(value?.sourceLanguage)) {
+  if (isSourceLanguage(value?.sourceLanguage)) {
     settings.sourceLanguage = value.sourceLanguage;
+  }
+
+  if (isTargetLanguage(value?.targetLanguage)) {
+    settings.targetLanguage = value.targetLanguage;
   }
 
   if (typeof value?.overlayVisible === 'boolean') {

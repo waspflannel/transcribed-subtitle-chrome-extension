@@ -15,16 +15,27 @@ describe('settings model', () => {
         overlayVisible: false,
         overlayPosition: 'side' as never,
         sourceLanguage: 'es',
+        targetLanguage: 'ja',
         fullTrackEnrichment: true,
         subtitleTimingOffsetSeconds: 4.54,
       }),
     ).toEqual({
       ...DEFAULT_EXTENSION_SETTINGS,
       sourceLanguage: 'es',
+      targetLanguage: 'ja',
       overlayVisible: false,
       fullTrackEnrichment: true,
       subtitleTimingOffsetSeconds: 4.5,
     });
+  });
+
+  it('rejects invalid stored source and target languages', () => {
+    expect(
+      createExtensionSettingsFromPartial({
+        sourceLanguage: 'zz' as never,
+        targetLanguage: 'auto' as never,
+      }),
+    ).toEqual(DEFAULT_EXTENSION_SETTINGS);
   });
 
   it('normalizes subtitle timing offsets to the supported slider range', () => {

@@ -156,6 +156,7 @@ async function generateSubtitlesForTab(
     console.info('extension.subtitle_generation_started', {
       youtubeVideoId: pageStatus.videoId,
       sourceLanguage: settings.sourceLanguage,
+      targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
     });
 
@@ -164,7 +165,7 @@ async function generateSubtitlesForTab(
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
       sourceLanguage: settings.sourceLanguage,
-      targetLanguage: 'en',
+      targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
     });
 

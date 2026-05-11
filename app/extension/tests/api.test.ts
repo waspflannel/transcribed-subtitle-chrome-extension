@@ -56,6 +56,9 @@ describe('SubtitleApiClient', () => {
           startedAt: '2026-05-11T00:00:00Z',
           stage: 'transcribing',
           progressPercent: 45,
+          sourceLanguage: 'auto',
+          detectedSourceLanguage: 'es',
+          targetLanguage: 'en',
         },
       ],
     };

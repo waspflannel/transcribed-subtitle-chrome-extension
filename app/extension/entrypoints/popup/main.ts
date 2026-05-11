@@ -3,12 +3,17 @@ import './style.css';
 import { browser } from 'wxt/browser';
 
 import { escapeHtml } from '../../utils/html';
+import {
+  SOURCE_LANGUAGE_OPTIONS,
+  TARGET_LANGUAGE_OPTIONS,
+  isSourceLanguage,
+  isTargetLanguage,
+  languageLabel,
+  languageSearchText,
+  type LanguageOption,
+} from '../../utils/languages';
 import type { PopupState } from '../../utils/messages';
 import { formatHistoryTimestamp, generationProgress } from '../../utils/popup-progress';
-import {
-  SUPPORTED_SOURCE_LANGUAGES,
-  isSupportedSourceLanguage,
-} from '../../utils/source-languages';
 import { normalizeSubtitleTimingOffsetSeconds, type ExtensionSettings } from '../../utils/settings-model';
 
 type PopupRequest =
@@ -39,7 +44,12 @@ const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="r
 const generateButton = document.querySelector<HTMLButtonElement>('[data-action="generate"]')!;
 const clearStateButton = document.querySelector<HTMLButtonElement>('[data-action="clear-state"]')!;
 const resetTimingButton = document.querySelector<HTMLButtonElement>('[data-action="reset-timing"]')!;
-const sourceLanguageSelect = document.querySelector<HTMLSelectElement>('select[name="sourceLanguage"]')!;
+const sourceLanguageSearchInput = document.querySelector<HTMLInputElement>('input[name="sourceLanguageSearch"]')!;
+const targetLanguageSearchInput = document.querySelector<HTMLInputElement>('input[name="targetLanguageSearch"]')!;
+const sourceLanguageSelected = document.querySelector<HTMLElement>('[data-source-language-selected]')!;
+const targetLanguageSelected = document.querySelector<HTMLElement>('[data-target-language-selected]')!;
+const sourceLanguageList = document.querySelector<HTMLElement>('[data-source-language-list]')!;
+const targetLanguageList = document.querySelector<HTMLElement>('[data-target-language-list]')!;
 const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
 const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
 const showRomanizationInput = document.querySelector<HTMLInputElement>('input[name="showRomanization"]')!;
@@ -57,16 +67,19 @@ const jobsError = document.querySelector<HTMLElement>('[data-jobs-error]')!;
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tab]'));
 const panels = Array.from(document.querySelectorAll<HTMLElement>('[data-panel]'));
 
-sourceLanguageSelect.innerHTML = SUPPORTED_SOURCE_LANGUAGES.map(
-  (language) => `<option value="${language.code}">${language.label}</option>`,
-).join('');
+let currentSettings: ExtensionSettings | null = null;
+let sourceLanguageQuery = '';
+let targetLanguageQuery = '';
 
 refreshButton.addEventListener('click', () => void loadPopupState());
 generateButton.addEventListener('click', () => void generateSubtitles());
 clearStateButton.addEventListener('click', () => void clearLocalState());
 resetTimingButton.addEventListener('click', () => void updateTimingOffset(0));
 jobsList.addEventListener('click', handleJobsListClick);
-sourceLanguageSelect.addEventListener('change', handleSourceLanguageChange);
+sourceLanguageSearchInput.addEventListener('input', handleSourceLanguageSearch);
+targetLanguageSearchInput.addEventListener('input', handleTargetLanguageSearch);
+sourceLanguageList.addEventListener('click', handleSourceLanguageClick);
+targetLanguageList.addEventListener('click', handleTargetLanguageClick);
 overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 showRomanizationInput.addEventListener('change', () =>
@@ -144,20 +157,49 @@ async function sendPopupRequest(request: PopupRequest): Promise<void> {
   }
 }
 
-function handleSourceLanguageChange(): void {
-  const value = sourceLanguageSelect.value;
-
-  if (isSupportedSourceLanguage(value)) {
-    void updateSettings({ sourceLanguage: value });
-  }
-}
-
 function handleOverlayPositionChange(): void {
   const { value } = overlayPositionSelect;
 
   if (value === 'bottom' || value === 'top' || value === 'compact') {
     void updateSettings({ overlayPosition: value });
   }
+}
+
+function handleSourceLanguageSearch(): void {
+  sourceLanguageQuery = sourceLanguageSearchInput.value;
+  renderLanguagePickers(currentSettings);
+}
+
+function handleTargetLanguageSearch(): void {
+  targetLanguageQuery = targetLanguageSearchInput.value;
+  renderLanguagePickers(currentSettings);
+}
+
+function handleSourceLanguageClick(event: MouseEvent): void {
+  const code = languageButtonCode(event);
+
+  if (isSourceLanguage(code)) {
+    sourceLanguageQuery = '';
+    sourceLanguageSearchInput.value = '';
+    void updateSettings({ sourceLanguage: code });
+  }
+}
+
+function handleTargetLanguageClick(event: MouseEvent): void {
+  const code = languageButtonCode(event);
+
+  if (isTargetLanguage(code)) {
+    targetLanguageQuery = '';
+    targetLanguageSearchInput.value = '';
+    void updateSettings({ targetLanguage: code });
+  }
+}
+
+function languageButtonCode(event: MouseEvent): string | null {
+  const target = event.target instanceof Element ? event.target : null;
+  const button = target?.closest<HTMLButtonElement>('[data-language-code]');
+
+  return button?.dataset.languageCode ?? null;
 }
 
 function handleJobsListClick(event: MouseEvent): void {
@@ -185,11 +227,12 @@ function showPopupState(state: PopupState): void {
   videoText.textContent = pageStatus?.supported ? pageStatus.videoId : 'No supported video';
   showTrackState(state);
   renderJobHistory(state);
+  currentSettings = settings;
 
   generateButton.disabled = !supported || subtitleState.type === 'loading';
   generateButton.textContent = subtitleState.type === 'loading' ? 'Generating...' : 'Generate subtitles';
 
-  sourceLanguageSelect.value = settings.sourceLanguage;
+  renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
   showRomanizationInput.checked = settings.showRomanization;
@@ -225,6 +268,84 @@ function showTrackState(state: PopupState): void {
   trackText.textContent = subtitleState.type === 'error' ? subtitleState.message : 'No track';
 }
 
+function renderLanguagePickers(settings: ExtensionSettings | null): void {
+  renderLanguagePicker({
+    options: SOURCE_LANGUAGE_OPTIONS,
+    query: sourceLanguageQuery,
+    selectedCode: settings?.sourceLanguage,
+    selectedContainer: sourceLanguageSelected,
+    listContainer: sourceLanguageList,
+    disabled: sourceLanguageSearchInput.disabled,
+  });
+  renderLanguagePicker({
+    options: TARGET_LANGUAGE_OPTIONS,
+    query: targetLanguageQuery,
+    selectedCode: settings?.targetLanguage,
+    selectedContainer: targetLanguageSelected,
+    listContainer: targetLanguageList,
+    disabled: targetLanguageSearchInput.disabled,
+  });
+}
+
+function renderLanguagePicker(options: {
+  options: readonly LanguageOption[];
+  query: string;
+  selectedCode: string | undefined;
+  selectedContainer: HTMLElement;
+  listContainer: HTMLElement;
+  disabled: boolean;
+}): void {
+  const selectedLanguage = options.options.find((language) => language.code === options.selectedCode);
+  const normalizedQuery = options.query.trim().toLowerCase();
+  const visibleLanguages =
+    normalizedQuery === ''
+      ? options.options
+      : options.options.filter((language) => languageSearchText(language).includes(normalizedQuery));
+
+  options.selectedContainer.innerHTML = selectedLanguage
+    ? selectedLanguageSummary(selectedLanguage)
+    : '<span class="muted">No language selected</span>';
+  options.listContainer.innerHTML =
+    visibleLanguages.length === 0
+      ? '<p class="muted">No languages match that search.</p>'
+      : visibleLanguages
+          .map((language) => languageOptionButton(language, language.code === options.selectedCode, options.disabled))
+          .join('');
+}
+
+function selectedLanguageSummary(language: LanguageOption): string {
+  return `
+    <span>${escapeHtml(language.label)}</span>
+    <span class="language-code">${escapeHtml(language.code)}</span>
+    ${languageBadge(language)}
+  `;
+}
+
+function languageOptionButton(language: LanguageOption, selected: boolean, disabled: boolean): string {
+  return `
+    <button
+      type="button"
+      class="language-option${selected ? ' selected' : ''}"
+      data-language-code="${escapeHtml(language.code)}"
+      role="option"
+      aria-selected="${selected ? 'true' : 'false'}"
+      ${disabled ? 'disabled' : ''}
+    >
+      <span class="language-option-main">
+        <span>${escapeHtml(language.label)}</span>
+        <span class="language-code">${escapeHtml(language.code)}</span>
+      </span>
+      ${languageBadge(language)}
+    </button>
+  `;
+}
+
+function languageBadge(language: Pick<LanguageOption, 'tier'>): string {
+  const label = language.tier === 'supported' ? 'Supported' : 'Experimental';
+
+  return `<span class="language-badge ${language.tier}">${label}</span>`;
+}
+
 function renderJobHistory(state: PopupState): void {
   if (state.jobHistoryError) {
     jobsError.hidden = false;
@@ -244,7 +365,8 @@ function renderJobHistory(state: PopupState): void {
     .map((job) => {
       const progress = generationProgress(job);
       const meta = [
-        job.sourceLanguage ? `Source ${job.sourceLanguage}` : null,
+        languageRouteLabel(job),
+        job.detectedSourceLanguage ? `Detected ${languageLabel(job.detectedSourceLanguage)}` : null,
         formatHistoryTimestamp(job.completedAt ?? job.lastUpdatedAt ?? job.startedAt),
         job.status === 'running' ? `${progress.percent}%` : null,
       ]
@@ -271,6 +393,10 @@ function renderJobHistory(state: PopupState): void {
     .join('');
 }
 
+function languageRouteLabel(job: PopupState['jobHistory'][number]): string {
+  return `${languageLabel(job.sourceLanguage)} to ${languageLabel(job.targetLanguage)}`;
+}
+
 function showTab(tabName: string): void {
   for (const button of tabButtons) {
     button.classList.toggle('active', button.dataset.tab === tabName);
@@ -282,6 +408,7 @@ function showTab(tabName: string): void {
 }
 
 function showError(error: unknown): void {
+  currentSettings = null;
   installIdText.hidden = true;
   statusText.className = 'status error';
   statusText.textContent =
@@ -290,6 +417,7 @@ function showError(error: unknown): void {
   trackText.textContent = 'No track';
   jobsList.innerHTML = '<p class="muted">Unable to load jobs.</p>';
   progressContainer.hidden = true;
+  renderLanguagePickers(null);
   generateButton.disabled = true;
   generateButton.textContent = 'Generate subtitles';
   showTimingOffset(0);
@@ -321,7 +449,11 @@ function statusLabel(subtitleStateType: PopupState['subtitleState']['type'], sup
 }
 
 function setSettingsDisabled(disabled: boolean): void {
-  sourceLanguageSelect.disabled = disabled;
+  sourceLanguageSearchInput.disabled = disabled;
+  targetLanguageSearchInput.disabled = disabled;
+  for (const button of [...sourceLanguageList.querySelectorAll('button'), ...targetLanguageList.querySelectorAll('button')]) {
+    button.disabled = disabled;
+  }
   overlayVisibleInput.disabled = disabled;
   overlayPositionSelect.disabled = disabled;
   showRomanizationInput.disabled = disabled;

@@ -43,10 +43,26 @@
           </section>
 
           <section class="section">
-            <label class="field">
-              <span>Source language</span>
-              <select name="sourceLanguage" disabled></select>
-            </label>
+            <div class="language-picker" data-language-picker="source">
+              <label class="field">
+                <span>Learning language</span>
+                <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+              </label>
+              <div class="selected-language" data-source-language-selected></div>
+              <div class="language-options" data-source-language-list role="listbox" aria-label="Learning language"></div>
+            </div>
+            <div class="language-picker" data-language-picker="target">
+              <label class="field">
+                <span>Translation language</span>
+                <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+              </label>
+              <div class="selected-language" data-target-language-selected></div>
+              <div class="language-options" data-target-language-list role="listbox" aria-label="Translation language"></div>
+            </div>
+            <p class="warning-copy">
+              Supported languages are tuned first. Experimental languages are available, but transcription and
+              translation quality may vary by language, dialect, audio quality, and provider coverage.
+            </p>
             <label class="toggle">
               <input type="checkbox" name="fullTrackEnrichment" disabled />
               <span>Full word cards</span>

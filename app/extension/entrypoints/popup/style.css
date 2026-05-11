@@ -40,6 +40,7 @@ select {
   font: inherit;
 }
 
+input[type="search"],
 select {
   background: #ffffff;
   border: 1px solid #cbd5e1;
@@ -49,6 +50,7 @@ select {
   padding: 0.25rem 0.45rem;
 }
 
+input[type="search"]:disabled,
 select:disabled {
   background: #e2e8f0;
   color: #64748b;
@@ -246,6 +248,94 @@ select:disabled {
 .field {
   display: grid;
   gap: 0.35rem;
+}
+
+.language-picker {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.selected-language {
+  align-items: center;
+  color: #0f172a;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  font-weight: 700;
+  gap: 0.35rem;
+  min-height: 24px;
+}
+
+.language-options {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  display: grid;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.language-option {
+  align-items: center;
+  background: #ffffff;
+  border: 0;
+  border-bottom: 1px solid #e2e8f0;
+  color: #0f172a;
+  cursor: pointer;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+}
+
+.language-option:last-child {
+  border-bottom: 0;
+}
+
+.language-option:hover,
+.language-option.selected {
+  background: #ecfdf5;
+}
+
+.language-option:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.language-option-main {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.language-code {
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.language-badge {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.1rem 0.36rem;
+  text-transform: uppercase;
+}
+
+.language-badge.supported {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.language-badge.experimental {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .timing-control {
