@@ -15,10 +15,10 @@
   - Anonymous extension install IDs.
   - YouTube video URLs and IDs submitted by the extension.
   - Temporary raw audio files during processing.
-  - Provider request/response data, including transcripts, translations, and token metadata.
+  - Provider request/response data, including language detection output, transcripts, translations, and token metadata.
   - Persisted generated subtitle tracks retained for 30 days.
 - Actors:
-  - Arabic learner using the extension.
+  - Language learner using the extension.
   - Malicious or buggy extension/client sending API requests.
   - Public YouTube and `yt-dlp` as external media/metadata sources.
   - AI provider APIs used by the Laravel backend.

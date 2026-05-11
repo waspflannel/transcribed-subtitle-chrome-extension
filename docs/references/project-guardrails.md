@@ -8,7 +8,7 @@ These guardrails apply to the YouTube AI Subtitle Learning Extension. Use them w
 
 ## Product Guardrails
 
-- Build the first product path only: public YouTube video -> generated subtitle track -> synchronized Arabic learning overlay.
+- Build the first product path only: public YouTube video -> generated subtitle track -> synchronized language-learning overlay.
 - Keep Netflix, other platforms, live captioning, accounts, vocabulary review, and subtitle editing out of the first release.
 - The user must explicitly start AI subtitle generation.
 - Extension code must never call OpenAI or any AI provider directly.

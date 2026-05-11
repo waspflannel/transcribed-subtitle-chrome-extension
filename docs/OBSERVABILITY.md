@@ -6,7 +6,7 @@ Make application state legible to agents and humans through inspectable signals.
 
 ## Current State
 
-The backend records persisted subtitle job and track rows, acquires YouTube audio into temporary storage, deletes raw audio after processing succeeds or fails, requests ElevenLabs Scribe word timestamps, normalizes them into validated WebVTT cue drafts, optionally romanizes or enriches through OpenAI/Laravel AI structured output, returns stable public errors with request IDs, throttles by install ID and IP, and prunes expired generated subtitles.
+The backend records persisted subtitle job and track rows, acquires YouTube audio into temporary storage, deletes raw audio after processing succeeds or fails, requests ElevenLabs Scribe word timestamps, normalizes words and provider-detected language codes into validated WebVTT cue drafts, optionally romanizes or enriches through OpenAI/Laravel AI structured output, returns stable public errors with request IDs, throttles by install ID and IP, and prunes expired generated subtitles.
 
 ## Logging
 
@@ -14,7 +14,7 @@ The backend records persisted subtitle job and track rows, acquires YouTube audi
 - Include request or operation identifiers when workflows span boundaries.
 - Log enough context to explain failures without leaking secrets.
 - For subtitle processing, use public job IDs in logs rather than install IDs, raw transcript text, audio paths, prompts, or provider secrets.
-- Audio acquisition and transcription emit stage-specific start, completed, and failed log events with public job ID, video ID, duration, byte count, provider identity, model name, adapter name, segment count, and stable error code where available.
+- Audio acquisition and transcription emit stage-specific start, completed, and failed log events with public job ID, video ID, requested source language, detected source language when available, target language, duration, byte count, provider identity, model name, adapter name, segment count, and stable error code where available.
 - Track generation emits cue count, track duration, audio duration, expiration, reuse, and duration mismatch events without logging cue text or full transcript payloads.
 - Romanization, full-card enrichment, and clicked-token enrichment emit started/completed/failed events with provider identity, model, cue/token counts, and stored dialect value without logging prompts, full transcripts, translations, or token payloads.
 - Extension WebVTT binding emits structured console diagnostics for video/track duration mismatch, WebVTT track load failures, and missing page video elements.

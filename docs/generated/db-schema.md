@@ -34,6 +34,7 @@ The product migrations currently define:
   - `youtube_url`
   - `video_duration_seconds`
   - `source_language`
+  - `detected_source_language`
   - `target_language`
   - `processing_version`
   - `status`
@@ -51,6 +52,7 @@ The product migrations currently define:
   - `subtitle_job_id`
   - `youtube_video_id`
   - `source_language`
+  - `detected_source_language`
   - `target_language`
   - `source_dialect`
   - `processing_version`

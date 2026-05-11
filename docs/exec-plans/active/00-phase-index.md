@@ -75,3 +75,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-04 | Phase 06 completed and archived. | `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md` |
 | 2026-05-05 | Phase 06 live proof completed; real provider failures drove split-retry hardening and closed `TD-005`. | `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md`; `docs/exec-plans/tech-debt-tracker.md` |
 | 2026-05-05 | Phase 07 completed and archived with release hardening, acceptance matrix, and remaining release-smoke automation debt tracked. | `docs/exec-plans/completed/phase-07-hardening-and-release-readiness.md`; `docs/exec-plans/tech-debt-tracker.md` |
+| 2026-05-11 | Many-to-many language refactor completed and archived. | `docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md` |

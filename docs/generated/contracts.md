@@ -7,6 +7,7 @@ Canonical contracts live in `packages/contracts`.
 ## Source Files
 
 - OpenAPI: `packages/contracts/openapi.json`
+- Language catalog: `packages/contracts/languages.json`
 - JSON Schema: `packages/contracts/schemas/*.schema.json`
 - TypeScript declarations: `packages/contracts/dist/index.d.ts`
 
@@ -24,12 +25,14 @@ The contract check:
 
 - validates `openapi.json`
 - compiles every JSON Schema
+- validates the language catalog and schema language enums
 - validates fixture payloads
 - regenerates TypeScript declarations
 
 ## Consumer Rules
 
 - Laravel treats these schemas as the extension-facing boundary. Future request validation and API resources must conform to these shapes.
+- `languages.json` is the canonical source for selectable languages. `auto` is source-only; target languages must be real catalog languages.
 - The WXT extension imports generated contract types through `app/extension/utils/contracts.ts`.
 - Provider-native objects, Eloquent models, queue payloads, and UI state are internal and must not become API contracts.
 - Cue token metadata supports optional `root` and `usageNote` fields. Missing learning fields are omitted from responses and UI rather than serialized as `null`.
