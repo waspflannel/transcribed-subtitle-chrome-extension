@@ -6,7 +6,7 @@
 - Popup markup is static in `index.html`; `main.ts` wires DOM events, sends background messages, and updates existing DOM nodes.
 - The in-page YouTube overlay is rendered by `app/extension/utils/overlay.ts` into an isolated Shadow DOM host.
 - The content script binds ready tracks to the page's primary `<video>` element, resolves browser `TextTrack` cue changes back to the matching API cue, and avoids replacing overlay HTML when rendered content has not changed.
-- The overlay renders source tokens, English translation, optional romanization/gloss metadata, hover preview, and click/tap pinned token detail inside Shadow DOM.
+- The overlay renders a Shadow DOM learning rail with source-token cards, cue timing, English translation, optional romanization/gloss metadata, hover preview, and click/tap pinned token detail.
 - The overlay calls the background script for on-click token enrichment when a token only has transcript/romanization data, then re-renders from the patched backend track.
 - The popup has Generate and Jobs tabs, a multilingual source-language selector, a Full word cards toggle with OpenAI-credit warning copy, backend-synced progress, stable public error copy, and a local clear-state control.
 - The popup exposes a manual subtitle timing delay from -10s to +10s. The content script applies it locally by rebinding the generated WebVTT track with shifted cue timings.
