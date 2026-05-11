@@ -1,8 +1,8 @@
 {
   "youtubeVideoId": "dQw4w9WgXcQ",
   "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "videoDurationSeconds": 213,
-  "sourceLanguage": "ar",
+  "videoDurationSeconds": 212,
+  "sourceLanguage": "es",
   "targetLanguage": "en",
-  "enrichmentMode": "on_demand"
+  "enrichmentMode": "full"
 }

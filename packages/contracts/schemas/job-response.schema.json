@@ -27,7 +27,13 @@
       "type": "string",
       "enum": [
         "auto",
-        "ar"
+        "ar",
+        "en",
+        "es",
+        "pt",
+        "fr",
+        "de",
+        "it"
       ]
     },
     "targetLanguage": {

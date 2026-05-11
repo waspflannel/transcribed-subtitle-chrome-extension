@@ -9,7 +9,10 @@ const distDir = path.join(root, 'dist');
 
 const schemaFiles = [
   'create-subtitle-job-request.schema.json',
+  'learning-token-request.schema.json',
+  'learning-token-response.schema.json',
   'job-response.schema.json',
+  'subtitle-job-history-response.schema.json',
   'track-response.schema.json',
   'cue.schema.json',
   'token.schema.json',

@@ -3,7 +3,7 @@
   "info": {
     "title": "YouTube AI Subtitle Learning Extension API",
     "version": "0.1.0",
-    "description": "API contract for requesting subtitle generation and receiving a completed generated track."
+    "description": "API contract for requesting subtitle generation and receiving subtitle-focused generated tracks."
   },
   "servers": [
     {
@@ -13,6 +13,33 @@
   ],
   "paths": {
     "/v1/subtitle-jobs": {
+      "get": {
+        "operationId": "listSubtitleJobs",
+        "summary": "List recent subtitle jobs for the current extension install.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent subtitle job history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/subtitle-job-history-response.schema.json"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
       "post": {
         "operationId": "createSubtitleJob",
         "summary": "Create a generated subtitle job for a public YouTube video.",
@@ -44,6 +71,48 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/learning-tokens": {
+      "post": {
+        "operationId": "enrichLearningToken",
+        "summary": "Enrich one clicked subtitle token for a generated track.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/learning-token-request.schema.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Learning token metadata.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/learning-token-response.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
@@ -129,6 +198,16 @@
             }
           }
         },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found.",
         "content": {
           "application/json": {
             "schema": {
