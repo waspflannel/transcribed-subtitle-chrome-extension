@@ -13,9 +13,11 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Agent harness scripts live in `scripts/agent/`.
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
-- The backend exposes the local `POST /v1/subtitle-jobs` JSON API.
+- The backend exposes local `POST /v1/subtitle-jobs`, `GET /v1/subtitle-jobs`, and `POST /v1/learning-tokens` JSON APIs.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
-- Phase 06 requests Whisper WebVTT, parses it into validated generated subtitle cue drafts, enriches each cue through a Laravel AI SDK OpenAI structured-output agent, persists the raw WebVTT plus translated/tokenized cues with 30-day expiration and hidden dialect metadata, reuses compatible completed tracks, and renders the active translated learning cue from browser `TextTrack` timing.
+- Current subtitle generation acquires YouTube audio, sends it to ElevenLabs Scribe v2 for word timestamps, normalizes words into WebVTT cues, and persists subtitle-focused tracks for 30 days.
+- Default generation is transcript-first: it stores timed subtitle cues with token stubs and best-effort OpenAI romanization for Arabic-script cues. Full word-card mode is opt-in and enriches every cue before returning.
+- On-click word cards call the backend one token at a time, use OpenAI structured output, cache by token/context/model, and patch the stored track for reuse.
 
 ## Selected Stack
 
@@ -30,7 +32,7 @@ Backend
   - Laravel migrations and Eloquent
   - SQLite first
   - Laravel AI SDK for provider identity and future enrichment primitives
-  - Laravel HTTP client for the OpenAI Whisper WebVTT transcription request
+  - Laravel HTTP client for the ElevenLabs Scribe speech-to-text request
   - Configurable `yt-dlp` binary for the first YouTube audio acquisition proof
   - Laravel Boost 2.x as development tooling
   - Local Boost skills routed by `docs/references/boost-skill-routing.md`
@@ -48,9 +50,9 @@ Chrome Extension
   -> proxy-facing Laravel API routes
       -> Laravel application services
       -> YouTube audio acquisition in controlled temporary storage
-      -> OpenAI provider / Whisper model WebVTT transcription normalized to timestamped transcript segments
-      -> WebVTT-backed cue validation
-      -> OpenAI/Laravel AI structured cue enrichment
+      -> ElevenLabs Scribe word-timestamp transcription
+      -> Scribe word normalization into WebVTT-backed cue validation
+      -> Optional OpenAI/Laravel AI romanization or word-card enrichment
       -> SQLite track storage
   <- generated subtitle track
 ```
@@ -71,7 +73,7 @@ Rules:
 - Runtime side effects should be isolated from pure domain logic.
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
-- OpenAI provider responses must be normalized before storage or extension exposure.
+- External provider responses must be normalized before storage or extension exposure.
 - Use Laravel AI SDK provider identity and primitives where they fit; keep narrow provider requests only for capabilities the SDK wrapper does not expose.
 - Eloquent models are internal details, not API contracts.
 

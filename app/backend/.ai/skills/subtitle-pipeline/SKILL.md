@@ -19,9 +19,10 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 
 ## Current Provider Choices
 
-- Use `Laravel\Ai\Enums\Lab::OpenAI` for OpenAI provider identity.
-- Use the OpenAI Whisper transcription model (`whisper-1`) for WebVTT speech-to-text because the current sync path needs `response_format=vtt`.
-- Use a narrow Laravel HTTP request for this transcription call while Laravel AI's transcription wrapper does not expose the WebVTT response format.
+- Use ElevenLabs Scribe v2 for speech-to-text and word timestamps.
+- Use `Laravel\Ai\Enums\Lab::ElevenLabs` for Scribe provider identity in transcription logs/config.
+- Use `Laravel\Ai\Enums\Lab::OpenAI` only for romanization and word-card generation.
+- Use narrow Laravel HTTP requests for Scribe while keeping the provider boundary behind `TranscriptionService`.
 - Use `config/ai.php` for provider keys, custom base URLs, and model defaults.
 - Prefer job-level stage logs for current transcription observability.
 
@@ -29,7 +30,7 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 
 Reconsider current Laravel AI/OpenAI SDK options before implementing any custom equivalent:
 
-- Agents and prompting for translation, token analysis, romanization, glosses, dialect labels, and confidence.
+- Agents and prompting for token analysis, romanization, glosses, dialect labels, and confidence.
 - Structured output for typed generated subtitle enrichment.
 - Conversation context only if the product adds user learning history, preferences, or tutoring.
 - SDK queueing only if it can preserve product-owned raw audio cleanup and subtitle job state.
