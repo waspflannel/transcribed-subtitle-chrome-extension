@@ -99,12 +99,17 @@ export class OverlayShell {
       }
 
       button.addEventListener('click', () => {
-        this.pinnedTokenIndex = this.pinnedTokenIndex === tokenIndex ? null : tokenIndex;
-        const isOpeningToken = this.pinnedTokenIndex === tokenIndex;
         const cue = this.currentState?.activeCue;
         const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
+        const failedTokenKey = cue && token ? tokenKey(cue.cueId, token.index) : null;
+        const isFailedToken =
+          failedTokenKey !== null && (this.currentState?.failedTokenKeys?.has(failedTokenKey) ?? false);
+        const wasPinned = this.pinnedTokenIndex === tokenIndex;
 
-        if (isOpeningToken && cue && token && !hasLearningMetadata(token)) {
+        this.pinnedTokenIndex = wasPinned && !isFailedToken ? null : tokenIndex;
+        const shouldRequestToken = this.pinnedTokenIndex === tokenIndex && (!wasPinned || isFailedToken);
+
+        if (shouldRequestToken && cue && token && !hasLearningMetadata(token)) {
           this.options.onTokenClick?.(cue, token);
         }
 

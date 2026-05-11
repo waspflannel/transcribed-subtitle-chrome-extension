@@ -209,9 +209,9 @@ async function enrichLearningTokenFromContent(
     throw new Error('Learning token enrichment requires an active content tab.');
   }
 
-  const currentState = tabSubtitleStates.get(tabId);
+  const currentState = await readySubtitleStateForEnrichment(tabId, sender.tab?.url ?? '', message.trackId);
 
-  if (currentState?.type !== 'ready') {
+  if (!currentState) {
     throw new Error('No generated subtitle track is active for this tab.');
   }
 
@@ -234,6 +234,27 @@ async function enrichLearningTokenFromContent(
     cueId: response.cueId,
     token: response.token,
   };
+}
+
+async function readySubtitleStateForEnrichment(
+  tabId: number,
+  tabUrl: string,
+  trackId: string,
+): Promise<Extract<SubtitleState, { type: 'ready' }> | null> {
+  const currentState = tabSubtitleStates.get(tabId);
+
+  if (currentState?.type === 'ready' && currentState.track.trackId === trackId) {
+    return currentState;
+  }
+
+  const pageStatus = parseYoutubePage(tabUrl);
+  const restoredState = await getSubtitleStateForPage(tabId, pageStatus);
+
+  if (restoredState.type === 'ready' && restoredState.track.trackId === trackId) {
+    return restoredState;
+  }
+
+  return null;
 }
 
 async function clearLocalStateFromPopup(): Promise<PopupState> {

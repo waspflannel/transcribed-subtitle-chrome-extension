@@ -98,6 +98,33 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('<div class="translation">');
   });
 
+  it('renders failed clicked-token detail for retryable word-card failures', () => {
+    const state = readyState();
+    const html = renderOverlayContent(
+      {
+        ...state,
+        activeCue: {
+          ...state.activeCue!,
+          tokens: [
+            {
+              index: 0,
+              text: 'salam',
+              romanization: 'sa-laam',
+            },
+          ],
+        },
+      },
+      {
+        pinnedTokenIndex: 0,
+        failedTokenKeys: new Set(['cue-0001:0']),
+      },
+    );
+
+    expect(html).toContain('Word card generation failed.');
+    expect(html).toContain('class="token-popover"');
+    expect(html).not.toContain('null');
+  });
+
   it('suppresses duplicate translation for English source tracks', () => {
     const track = trackResponse({
       sourceLanguage: 'en',

@@ -247,7 +247,13 @@ export default defineContentScript({
           type: 'ready',
           track: response.track,
         });
-      } catch {
+      } catch (error) {
+        console.warn('extension.learning_token_enrichment_failed', {
+          trackId: subtitleState.track.trackId,
+          cueId: cue.cueId,
+          tokenIndex: token.index,
+          error: error instanceof Error ? error.message : 'Unknown extension enrichment error',
+        });
         pendingTokenKeys.delete(key);
         failedTokenKeys.add(key);
         updateOverlay();
