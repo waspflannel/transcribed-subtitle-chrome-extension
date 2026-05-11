@@ -138,11 +138,11 @@ export class OverlayShell {
       <style>
         :host {
           all: initial;
-          bottom: 84px;
-          left: 16px;
+          bottom: 112px;
+          left: clamp(12px, 9vw, 160px);
           pointer-events: none;
           position: fixed;
-          right: 16px;
+          right: clamp(12px, 9vw, 160px);
           top: auto;
           width: auto;
           z-index: 2147483647;
@@ -156,41 +156,84 @@ export class OverlayShell {
         :host([data-position="compact"]) {
           left: auto;
           right: 16px;
-          width: min(390px, calc(100vw - 32px));
+          width: min(430px, calc(100vw - 32px));
         }
 
-        .shell {
-          background: rgba(16, 24, 40, 0.93);
-          border: 1px solid rgba(255, 255, 255, 0.16);
+        .rail {
+          background: rgba(10, 15, 22, 0.88);
+          backdrop-filter: blur(18px) saturate(120%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
           border-radius: 8px;
-          box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
           color: #f8fafc;
           display: grid;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          gap: 7px;
+          gap: 18px;
+          grid-template-columns: minmax(128px, 210px) minmax(0, 1fr) auto;
           line-height: 1.35;
           margin: 0 auto;
-          max-width: min(820px, calc(100vw - 32px));
-          padding: 12px 14px;
+          max-width: min(1280px, calc(100vw - 32px));
+          min-height: 178px;
+          padding: 26px 34px 28px;
           pointer-events: auto;
         }
 
+        .rail--message {
+          grid-template-columns: minmax(128px, 210px) minmax(0, 1fr);
+          min-height: auto;
+          max-width: min(860px, calc(100vw - 32px));
+        }
+
+        :host([data-position="compact"]) .rail {
+          gap: 14px;
+          grid-template-columns: minmax(0, 1fr);
+          min-height: auto;
+          padding: 18px;
+        }
+
+        .rail-meta {
+          align-content: start;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          min-width: 0;
+        }
+
         .eyebrow {
-          color: #a7f3d0;
-          font-size: 11px;
-          font-weight: 700;
+          color: #2dd4bf;
+          font-size: 18px;
+          font-weight: 650;
           letter-spacing: 0;
-          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        .cue-time {
+          color: #a7b0bd;
+          font-size: 18px;
+          font-weight: 500;
+          white-space: nowrap;
+        }
+
+        .rail-main {
+          align-content: center;
+          display: grid;
+          gap: 18px;
+          min-width: 0;
+        }
+
+        .rail-main--message {
+          gap: 6px;
         }
 
         .title {
-          font-size: 15px;
+          color: #f8fafc;
+          font-size: 18px;
           font-weight: 700;
         }
 
         .detail {
           color: #cbd5e1;
-          font-size: 13px;
+          font-size: 14px;
         }
 
         .meta {
@@ -201,75 +244,106 @@ export class OverlayShell {
           gap: 8px;
         }
 
-        .line {
+        .token-area {
           align-items: center;
           display: flex;
           flex-wrap: wrap;
-          font-size: 20px;
-          font-weight: 750;
-          gap: 6px;
+          gap: 12px;
+          justify-content: center;
+          min-width: 0;
         }
 
         .source-text {
+          color: #f8fafc;
+          font-size: 32px;
+          font-weight: 700;
           overflow-wrap: anywhere;
         }
 
         .translation {
-          color: #e2e8f0;
-          font-size: 14px;
+          color: #f8fafc;
+          font-size: 29px;
+          font-weight: 500;
+          line-height: 1.25;
+          overflow-wrap: anywhere;
         }
 
         .cue-romanization {
-          color: #bae6fd;
-          font-size: 13px;
+          color: #b9d8dc;
+          font-size: 16px;
+          font-weight: 500;
         }
 
-        .token {
+        .token-slot {
+          display: inline-grid;
+          max-width: 100%;
+          position: relative;
+        }
+
+        .token-card {
           align-items: center;
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.055);
+          border: 1px solid rgba(255, 255, 255, 0.075);
+          border-radius: 8px;
           color: inherit;
           cursor: pointer;
           display: inline-grid;
           font: inherit;
-          gap: 2px;
-          line-height: 1.15;
-          min-height: 36px;
-          padding: 5px 7px;
+          gap: 8px;
+          line-height: 1;
+          min-height: 96px;
+          min-width: 220px;
+          padding: 16px 20px;
           position: relative;
           text-align: center;
+          transition:
+            background 120ms ease,
+            border-color 120ms ease,
+            box-shadow 120ms ease;
         }
 
-        .token:hover,
-        .token:focus-visible,
-        .token[aria-pressed="true"] {
-          background: rgba(20, 184, 166, 0.22);
-          border-color: rgba(94, 234, 212, 0.72);
+        .token-card:hover {
+          background: rgba(255, 255, 255, 0.09);
+          border-color: rgba(255, 255, 255, 0.16);
+        }
+
+        .token-card:focus-visible {
+          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.32);
           outline: none;
         }
 
+        .token-card[aria-pressed="true"] {
+          background: linear-gradient(180deg, rgba(20, 184, 166, 0.18), rgba(20, 184, 166, 0.08));
+          border-color: rgba(45, 212, 191, 0.95);
+          box-shadow: inset 0 0 22px rgba(20, 184, 166, 0.08);
+        }
+
         .token-text {
-          font-size: 18px;
-          font-weight: 750;
+          color: #f8fafc;
+          font-size: 42px;
+          font-weight: 650;
+          line-height: 1;
+          overflow-wrap: anywhere;
         }
 
         .token-extra {
-          color: #cbd5e1;
-          font-size: 11px;
-          font-weight: 600;
+          color: #b9d8dc;
+          font-size: 16px;
+          font-weight: 500;
+          line-height: 1.3;
+          overflow-wrap: anywhere;
         }
 
         .token-inline-preview,
-        .token-detail {
-          background: rgba(15, 23, 42, 0.88);
-          border: 1px solid rgba(148, 163, 184, 0.28);
+        .token-popover {
+          background: rgba(12, 17, 24, 0.94);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           border-radius: 8px;
           color: #e2e8f0;
           display: grid;
           font-size: 13px;
-          gap: 5px;
-          padding: 8px 10px;
+          gap: 8px;
+          padding: 12px 14px;
         }
 
         .token-inline-preview {
@@ -283,19 +357,42 @@ export class OverlayShell {
           z-index: 1;
         }
 
-        .token:hover .token-inline-preview,
-        .token:focus-visible .token-inline-preview {
+        .token-card:hover .token-inline-preview,
+        .token-card:focus-visible .token-inline-preview {
           display: grid;
         }
 
-        .token-detail-header {
+        .token-popover {
+          bottom: calc(100% + 14px);
+          box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+          left: 50%;
+          position: absolute;
+          transform: translateX(-50%);
+          width: min(260px, calc(100vw - 48px));
+          z-index: 2;
+        }
+
+        .token-popover::after {
+          background: rgba(12, 17, 24, 0.94);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+          border-right: 1px solid rgba(255, 255, 255, 0.12);
+          bottom: -6px;
+          content: "";
+          height: 10px;
+          left: 50%;
+          position: absolute;
+          transform: translateX(-50%) rotate(45deg);
+          width: 10px;
+        }
+
+        .token-popover-header {
           align-items: center;
           display: flex;
           gap: 10px;
           justify-content: space-between;
         }
 
-        .token-detail-title {
+        .token-popover-title {
           color: #f8fafc;
           font-size: 14px;
           font-weight: 750;
@@ -315,6 +412,12 @@ export class OverlayShell {
           line-height: 1;
           padding: 0;
           width: 28px;
+        }
+
+        .icon-button:hover,
+        .icon-button:focus-visible {
+          background: rgba(255, 255, 255, 0.14);
+          outline: none;
         }
 
         .token-fields {
@@ -337,6 +440,175 @@ export class OverlayShell {
         .field-value {
           color: #f8fafc;
           overflow-wrap: anywhere;
+        }
+
+        .rail-controls {
+          align-content: start;
+          display: flex;
+          gap: 10px;
+          justify-content: end;
+        }
+
+        .rail-control {
+          align-items: center;
+          border-radius: 8px;
+          color: #cbd5e1;
+          display: inline-flex;
+          font-size: 19px;
+          height: 34px;
+          justify-content: center;
+          opacity: 0.78;
+          width: 34px;
+        }
+
+        :host([data-position="compact"]) .rail-controls {
+          display: none;
+        }
+
+        :host([data-position="compact"]) .rail-meta,
+        :host([data-position="compact"]) .token-area {
+          justify-content: flex-start;
+        }
+
+        :host([data-position="compact"]) .token-card {
+          min-height: 78px;
+          min-width: min(190px, 100%);
+          padding: 12px 14px;
+        }
+
+        :host([data-position="compact"]) .token-text {
+          font-size: 30px;
+        }
+
+        :host([data-position="compact"]) .translation {
+          font-size: 20px;
+        }
+
+        :host([data-position="compact"]) .token-popover {
+          bottom: auto;
+          left: auto;
+          margin-top: 8px;
+          position: relative;
+          transform: none;
+          width: auto;
+        }
+
+        :host([data-position="compact"]) .token-popover::after {
+          display: none;
+        }
+
+        @media (max-width: 899px) {
+          :host {
+            left: 16px;
+            right: 16px;
+          }
+
+          .rail {
+            grid-template-columns: minmax(0, 1fr) auto;
+            min-height: auto;
+            padding: 18px;
+          }
+
+          .rail-main {
+            grid-column: 1 / -1;
+          }
+
+          .rail-controls {
+            grid-column: 2;
+            grid-row: 1;
+          }
+
+          .translation {
+            font-size: 23px;
+          }
+
+          .token-card {
+            min-height: 86px;
+            min-width: min(190px, 100%);
+          }
+
+          .token-text {
+            font-size: 34px;
+          }
+        }
+
+        @media (max-width: 599px) {
+          :host {
+            bottom: 84px;
+            left: 10px;
+            right: 10px;
+          }
+
+          :host([data-position="top"]) {
+            top: 64px;
+          }
+
+          .rail {
+            gap: 12px;
+            grid-template-columns: minmax(0, 1fr);
+            padding: 14px;
+          }
+
+          .rail-meta {
+            gap: 6px;
+          }
+
+          .eyebrow,
+          .cue-time {
+            font-size: 13px;
+          }
+
+          .rail-controls {
+            display: none;
+          }
+
+          .token-area {
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 2px;
+          }
+
+          .token-slot {
+            flex: 0 0 auto;
+            width: min(172px, 70vw);
+          }
+
+          .token-card {
+            min-height: 74px;
+            min-width: 100%;
+            padding: 12px;
+          }
+
+          .token-text {
+            font-size: 30px;
+          }
+
+          .token-extra,
+          .cue-romanization {
+            font-size: 13px;
+          }
+
+          .translation {
+            font-size: 19px;
+          }
+
+          .source-text {
+            font-size: 24px;
+          }
+
+          .token-popover {
+            bottom: auto;
+            left: auto;
+            margin-top: 8px;
+            position: relative;
+            transform: none;
+            width: auto;
+          }
+
+          .token-popover::after {
+            display: none;
+          }
         }
       </style>
       <div data-overlay-content></div>
@@ -377,17 +649,19 @@ export function renderOverlayContent(
         : '';
 
     return `
-      <section class="shell" role="status">
-        <div class="eyebrow">AI subtitles</div>
-        <div class="line" lang="${state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage}">${renderSourceLine(
-          cue,
-          state.settings,
-          interaction,
-        )}</div>
-        ${cueRomanization}
-        ${renderTranslation(cue)}
-        ${renderTokenInteraction(cue, state.settings, interaction)}
-        <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Transcribed track</span></div>
+      <section class="rail" role="status">
+        <div class="rail-meta">
+          <span class="eyebrow">AI subtitles</span>
+          <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
+        </div>
+        <div class="rail-main">
+          <div class="token-area" lang="${
+            state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage
+          }">${renderSourceLine(cue, state.settings, interaction)}</div>
+          ${cueRomanization}
+          ${renderTranslation(cue)}
+        </div>
+        ${renderRailControls()}
       </section>
     `;
   }
@@ -436,10 +710,18 @@ function renderSourceLine(
         .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
         .map((value) => `<span class="token-extra">${escapeHtml(value)}</span>`)
         .join('');
+      const isPinned = interaction.pinnedTokenIndex === token.index;
 
-      return `<button class="token" type="button" data-token-index="${token.index}" aria-pressed="${
-        interaction.pinnedTokenIndex === token.index ? 'true' : 'false'
-      }"><span class="token-text">${escapeHtml(token.text)}</span>${extras}${renderTokenPreview(token, settings)}</button>`;
+      return `
+        <span class="token-slot">
+          <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${isPinned ? 'true' : 'false'}">
+            <span class="token-text">${escapeHtml(token.text)}</span>
+            ${extras}
+            ${renderTokenPreview(token, settings)}
+          </button>
+          ${isPinned ? renderTokenInteraction(cue, settings, interaction) : ''}
+        </span>
+      `;
     })
     .join('');
 }
@@ -467,9 +749,9 @@ function renderTokenInteraction(
       : 'Loading word card...';
 
     return `
-      <div class="token-detail">
-        <div class="token-detail-header">
-          <span class="token-detail-title">${escapeHtml(token.text)}</span>
+      <div class="token-popover">
+        <div class="token-popover-header">
+          <span class="token-popover-title">${escapeHtml(token.text)}</span>
           <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
         </div>
         <div class="detail">${escapeHtml(detail)}</div>
@@ -489,9 +771,9 @@ function renderTokenInteraction(
     .join('');
 
   return `
-    <div class="token-detail">
-      <div class="token-detail-header">
-        <span class="token-detail-title">${escapeHtml(token.text)}</span>
+    <div class="token-popover">
+      <div class="token-popover-header">
+        <span class="token-popover-title">${escapeHtml(token.text)}</span>
         <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
       </div>
       <div class="token-fields">${rows}</div>
@@ -505,6 +787,28 @@ function renderTranslation(cue: SubtitleCue): string {
   }
 
   return `<div class="translation">${escapeHtml(cue.translatedText)}</div>`;
+}
+
+function renderRailControls(): string {
+  return `
+    <div class="rail-controls" aria-hidden="true">
+      <span class="rail-control">&#8635;</span>
+      <span class="rail-control">&#9734;</span>
+      <span class="rail-control">&#8942;</span>
+    </div>
+  `;
+}
+
+function formatCueTimeRange(cue: SubtitleCue): string {
+  return `${formatCueTimestamp(cue.startMs)} - ${formatCueTimestamp(cue.endMs)}`;
+}
+
+function formatCueTimestamp(milliseconds: number): string {
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
 }
 
 function interactionTokenSet(
@@ -555,11 +859,15 @@ function renderShell(input: { eyebrow: string; title: string; detail: string; me
     : '';
 
   return `
-    <section class="shell" role="status">
-      <div class="eyebrow">${escapeHtml(input.eyebrow)}</div>
-      <div class="title">${escapeHtml(input.title)}</div>
-      <div class="detail">${escapeHtml(input.detail)}</div>
-      ${meta}
+    <section class="rail rail--message" role="status">
+      <div class="rail-meta">
+        <span class="eyebrow">${escapeHtml(input.eyebrow)}</span>
+      </div>
+      <div class="rail-main rail-main--message">
+        <div class="title">${escapeHtml(input.title)}</div>
+        <div class="detail">${escapeHtml(input.detail)}</div>
+        ${meta}
+      </div>
     </section>
   `;
 }

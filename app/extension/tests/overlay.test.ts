@@ -9,6 +9,10 @@ describe('renderOverlayContent', () => {
     const html = renderOverlayContent(readyState());
 
     expect(html).toContain('AI subtitles');
+    expect(html).toContain('class="rail"');
+    expect(html).toContain('class="token-card"');
+    expect(html).toContain('lang="ar"');
+    expect(html).toContain('00:00 - 00:02');
     expect(html).toContain('salam');
     expect(html).toContain('Hello');
     expect(html).toContain('sa-laam');
@@ -40,6 +44,8 @@ describe('renderOverlayContent', () => {
 
     expect(hoverHtml).toContain('role="tooltip"');
     expect(hoverHtml).toContain('sa-laam | peace greeting');
+    expect(pinnedHtml).toContain('aria-pressed="true"');
+    expect(pinnedHtml).toContain('class="token-popover"');
     expect(pinnedHtml).toContain('Root');
     expect(pinnedHtml).toContain('s-l-m');
     expect(pinnedHtml).toContain('Usage note');
@@ -60,6 +66,7 @@ describe('renderOverlayContent', () => {
 
     expect(html).toContain('Generating subtitles');
     expect(html).toContain('Video dQw4w9WgXcQ');
+    expect(html).toContain('class="rail rail--message"');
   });
 
   it('renders loading detail for clicked tokens that only have romanization', () => {
@@ -86,13 +93,27 @@ describe('renderOverlayContent', () => {
     );
 
     expect(html).toContain('Loading word card...');
+    expect(html).toContain('class="token-popover"');
     expect(html).not.toContain('<div class="translation">');
+  });
+
+  it('suppresses duplicate translation for English source tracks', () => {
+    const track = trackResponse({
+      sourceLanguage: 'en',
+      targetLanguage: 'en',
+      sourceText: 'Hello everyone',
+      translatedText: 'Hello everyone',
+      tokens: [],
+    });
+    const html = renderOverlayContent(readyState(track));
+
+    expect(html).toContain('lang="en"');
+    expect(html).toContain('Hello everyone');
+    expect(html).not.toContain('class="translation"');
   });
 });
 
-function readyState(): OverlayRenderState {
-  const track = trackResponse();
-
+function readyState(track = trackResponse()): OverlayRenderState {
   return {
     page: {
       supported: true,
@@ -108,13 +129,21 @@ function readyState(): OverlayRenderState {
   };
 }
 
-function trackResponse(): TrackResponse {
+function trackResponse(
+  overrides: {
+    sourceLanguage?: TrackResponse['sourceLanguage'];
+    targetLanguage?: TrackResponse['targetLanguage'];
+    sourceText?: string;
+    translatedText?: string;
+    tokens?: TrackResponse['cues'][number]['tokens'];
+  } = {},
+): TrackResponse {
   return {
     trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
     jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
     youtubeVideoId: 'dQw4w9WgXcQ',
-    sourceLanguage: 'ar',
-    targetLanguage: 'en',
+    sourceLanguage: overrides.sourceLanguage ?? 'ar',
+    targetLanguage: overrides.targetLanguage ?? 'en',
     generatedAt: '2026-05-02T00:00:00Z',
     expiresAt: '2026-06-01T00:00:00Z',
     webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nsalam\n",
@@ -124,9 +153,9 @@ function trackResponse(): TrackResponse {
         index: 0,
         startMs: 500,
         endMs: 2100,
-        sourceText: 'salam',
-        translatedText: 'Hello',
-        tokens: [
+        sourceText: overrides.sourceText ?? 'salam',
+        translatedText: overrides.translatedText ?? 'Hello',
+        tokens: overrides.tokens ?? [
           {
             index: 0,
             text: 'salam',
