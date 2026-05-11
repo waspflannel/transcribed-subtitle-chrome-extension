@@ -10,24 +10,35 @@ use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
-class OpenAiWebVttTranscriptionService
+class ElevenLabsScribeTranscriptionService implements TranscriptionService
 {
-    public function __construct(private readonly WebVttTranscriptParser $webVttParser) {}
+    /**
+     * @var array<string, string>
+     */
+    private const LANGUAGE_CODES = [
+        'ar' => 'ara',
+        'en' => 'eng',
+        'es' => 'spa',
+        'pt' => 'por',
+        'fr' => 'fra',
+        'de' => 'deu',
+        'it' => 'ita',
+    ];
+
+    public function __construct(private readonly ScribeTranscriptNormalizer $normalizer) {}
 
     public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
     {
-        $provider = Lab::OpenAI;
+        $provider = Lab::ElevenLabs;
         $apiKey = config('ai.providers.'.$provider->value.'.key');
-        $model = (string) config('ai.providers.'.$provider->value.'.models.transcription.default', 'whisper-1');
+        $model = (string) config('ai.providers.'.$provider->value.'.models.transcription.default', 'scribe_v2');
 
         if (! is_string($apiKey) || $apiKey === '') {
             throw SubtitleProcessingException::transcriptionFailed('Transcription provider is not configured.', [
                 'provider' => $provider->value,
-                'adapter' => 'openai-http',
+                'adapter' => 'elevenlabs-http',
             ]);
         }
-
-        $this->ensureModelSupportsWebVtt($provider, $model);
 
         try {
             $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
@@ -35,19 +46,27 @@ class OpenAiWebVttTranscriptionService
             if ($response->failed()) {
                 throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
                     'provider' => $provider->value,
-                    'adapter' => 'openai-http',
+                    'adapter' => 'elevenlabs-http',
                     'model' => $model,
                     'status' => $response->status(),
                 ]);
             }
 
-            $parsedWebVtt = $this->webVttParser->parse($response->body());
+            $payload = $response->json();
 
-            return new TimestampedTranscript(
-                language: $sourceLanguage,
+            if (! is_array($payload)) {
+                throw SubtitleProcessingException::transcriptionFailed('Transcription provider returned invalid JSON.', [
+                    'provider' => $provider->value,
+                    'adapter' => 'elevenlabs-http',
+                    'model' => $model,
+                    'reason' => 'invalid_json',
+                ]);
+            }
+
+            return $this->normalizer->normalize(
+                payload: $payload,
+                requestedSourceLanguage: $sourceLanguage,
                 durationSeconds: $audio->durationSeconds,
-                segments: $parsedWebVtt['segments'],
-                webVtt: $parsedWebVtt['webVtt'],
             );
         } catch (SubtitleProcessingException $exception) {
             throw $exception;
@@ -55,7 +74,7 @@ class OpenAiWebVttTranscriptionService
             throw SubtitleProcessingException::transcriptionFailed(
                 context: [
                     'provider' => $provider->value,
-                    'adapter' => 'openai-http',
+                    'adapter' => 'elevenlabs-http',
                     'model' => $model,
                     'exception' => $exception::class,
                 ],
@@ -72,15 +91,20 @@ class OpenAiWebVttTranscriptionService
         string $model,
     ): Response {
         $payload = [
-            'model' => $model,
-            'response_format' => 'vtt',
+            'model_id' => $model,
+            'timestamps_granularity' => 'word',
+            'tag_audio_events' => 'false',
+            'diarize' => 'false',
+            'no_verbatim' => 'false',
         ];
 
-        if ($sourceLanguage !== 'auto') {
-            $payload['language'] = $sourceLanguage;
+        $languageCode = $this->languageCode($sourceLanguage);
+
+        if ($languageCode !== null) {
+            $payload['language_code'] = $languageCode;
         }
 
-        return Http::withToken($apiKey)
+        return Http::withHeaders(['xi-api-key' => $apiKey])
             ->timeout((int) config('subtitles.transcription.timeout_seconds'))
             ->attach(
                 'file',
@@ -91,23 +115,18 @@ class OpenAiWebVttTranscriptionService
             ->post($this->transcriptionUrl($provider), $payload);
     }
 
-    private function ensureModelSupportsWebVtt(Lab $provider, string $model): void
+    private function languageCode(string $sourceLanguage): ?string
     {
-        if (! str_starts_with($model, 'gpt-4o-transcribe') && ! str_starts_with($model, 'gpt-4o-mini-transcribe')) {
-            return;
+        if ($sourceLanguage === 'auto') {
+            return null;
         }
 
-        throw SubtitleProcessingException::transcriptionFailed('Configured transcription model does not support WebVTT output.', [
-            'provider' => $provider->value,
-            'adapter' => 'openai-http',
-            'model' => $model,
-            'response_format' => 'vtt',
-        ]);
+        return self::LANGUAGE_CODES[$sourceLanguage] ?? null;
     }
 
     private function transcriptionUrl(Lab $provider): string
     {
-        return rtrim((string) config('ai.providers.'.$provider->value.'.url', 'https://api.openai.com/v1'), '/').'/audio/transcriptions';
+        return rtrim((string) config('ai.providers.'.$provider->value.'.url', 'https://api.elevenlabs.io/v1'), '/').'/speech-to-text';
     }
 
     private function audioFilename(TemporaryAudioFile $audio): string

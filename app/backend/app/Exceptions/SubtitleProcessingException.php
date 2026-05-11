@@ -64,4 +64,12 @@ class SubtitleProcessingException extends Exception
     {
         return new self('enrichment_failed', $message, 502, $context, $previous);
     }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public static function rateLimited(string $message = 'Subtitle generation is temporarily rate limited.', array $context = [], ?Throwable $previous = null): self
+    {
+        return new self('rate_limited', $message, 429, $context, $previous);
+    }
 }

@@ -3,5 +3,6 @@
   "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
   "videoDurationSeconds": 213,
   "sourceLanguage": "ar",
-  "targetLanguage": "en"
+  "targetLanguage": "en",
+  "enrichmentMode": "on_demand"
 }

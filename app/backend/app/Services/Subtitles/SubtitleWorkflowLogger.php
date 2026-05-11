@@ -19,7 +19,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.subtitle_job_created', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+            'processing_version' => $job->processing_version,
         ]);
     }
 
@@ -28,7 +28,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.subtitle_job_reused_for_retry', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+            'processing_version' => $job->processing_version,
         ]);
     }
 
@@ -38,7 +38,7 @@ class SubtitleWorkflowLogger
             'job_id' => $job->public_id,
             'track_id' => $job->track->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+            'processing_version' => $job->processing_version,
         ]);
     }
 
@@ -65,10 +65,10 @@ class SubtitleWorkflowLogger
         Log::info('backend.transcription_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
-            'adapter' => 'openai-http',
-            'model' => (string) config('ai.providers.'.Lab::OpenAI->value.'.models.transcription.default', 'whisper-1'),
-            'response_format' => 'vtt',
+            'provider' => Lab::ElevenLabs->value,
+            'adapter' => 'elevenlabs-http',
+            'model' => (string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default', 'scribe_v2'),
+            'timestamps_granularity' => 'word',
         ]);
     }
 
@@ -121,12 +121,52 @@ class SubtitleWorkflowLogger
         ]);
     }
 
+    public function romanizationStarted(SubtitleJob $job, int $cueCount): void
+    {
+        Log::info('backend.romanization_started', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => (string) config(
+                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+            ),
+            'cue_count' => $cueCount,
+        ]);
+    }
+
+    public function romanizationCompleted(SubtitleJob $job, CueEnrichmentResult $enrichment): void
+    {
+        Log::info('backend.romanization_completed', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => (string) config(
+                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
+                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
+            ),
+            'cue_count' => count($enrichment->cues),
+        ]);
+    }
+
+    public function romanizationSkipped(SubtitleJob $job, SubtitleProcessingException $exception): void
+    {
+        Log::warning('backend.romanization_skipped', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'error_code' => $exception->publicCode,
+            ...$exception->context,
+        ]);
+    }
+
     public function trackGenerated(SubtitleJob $job, SubtitleTrack $track, int $audioDurationSeconds): void
     {
         $cues = $track->cues;
         $lastCue = $cues[array_key_last($cues)] ?? null;
         $trackDurationSeconds = is_array($lastCue) ? ((int) ($lastCue['endMs'] ?? 0)) / 1000 : 0.0;
-        $durationDeltaSeconds = abs($audioDurationSeconds - $trackDurationSeconds);
+        $trackOverrunSeconds = $trackDurationSeconds - $audioDurationSeconds;
 
         Log::info('backend.track_generation_completed', [
             'job_id' => $job->public_id,
@@ -135,18 +175,18 @@ class SubtitleWorkflowLogger
             'cue_count' => count($cues),
             'track_duration_seconds' => round($trackDurationSeconds, 3),
             'audio_duration_seconds' => $audioDurationSeconds,
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION,
+            'processing_version' => $job->processing_version,
             'expires_at' => $track->expires_at->toJSON(),
         ]);
 
-        if ($durationDeltaSeconds > max(5, $audioDurationSeconds * 0.05)) {
-            Log::warning('backend.track_duration_mismatch', [
+        if ($trackOverrunSeconds > 5) {
+            Log::info('backend.track_duration_overrun', [
                 'job_id' => $job->public_id,
                 'track_id' => $track->public_id,
                 'youtube_video_id' => $job->youtube_video_id,
                 'track_duration_seconds' => round($trackDurationSeconds, 3),
                 'audio_duration_seconds' => $audioDurationSeconds,
-                'delta_seconds' => round($durationDeltaSeconds, 3),
+                'delta_seconds' => round($trackOverrunSeconds, 3),
             ]);
         }
     }

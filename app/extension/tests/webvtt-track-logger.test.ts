@@ -21,8 +21,8 @@ describe('createWebVttTrackLogger', () => {
     ]);
   });
 
-  it('logs duration mismatch diagnostics after track load', () => {
-    const { logger, warnings } = createCapturingLogger();
+  it('does not warn when the subtitle track ends before the video', () => {
+    const { logger, infos, warnings } = createCapturingLogger();
     const video = { duration: 20 };
     const textTrack = {
       cues: new FakeCueList([new FakeTextCue(0, 3, 'first'), new FakeTextCue(6, 7, 'second')]),
@@ -34,16 +34,34 @@ describe('createWebVttTrackLogger', () => {
       track: trackResponse(),
     });
 
-    expect(warnings).toEqual([
+    expect(infos).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('logs track overrun diagnostics as info after track load', () => {
+    const { logger, infos, warnings } = createCapturingLogger();
+    const video = { duration: 20 };
+    const textTrack = {
+      cues: new FakeCueList([new FakeTextCue(0, 3, 'first'), new FakeTextCue(6, 30, 'second')]),
+    };
+
+    logger.trackLoaded({
+      video: video as HTMLVideoElement,
+      textTrack: textTrack as unknown as TextTrack,
+      track: trackResponse(),
+    });
+
+    expect(warnings).toEqual([]);
+    expect(infos).toEqual([
       [
-        'extension.webvtt_track_duration_mismatch',
+        'extension.webvtt_track_duration_overrun',
         {
-          type: 'duration_mismatch',
+          type: 'duration_overrun',
           trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
           youtubeVideoId: 'dQw4w9WgXcQ',
           videoDurationSeconds: 20,
-          trackDurationSeconds: 7,
-          deltaSeconds: 13,
+          trackDurationSeconds: 30,
+          deltaSeconds: 10,
         },
       ],
     ]);
@@ -83,15 +101,19 @@ describe('createWebVttTrackLogger', () => {
   });
 });
 
-function createCapturingLogger(): { logger: WebVttTrackLogger; warnings: unknown[][] } {
+function createCapturingLogger(): { logger: WebVttTrackLogger; infos: unknown[][]; warnings: unknown[][] } {
+  const infos: unknown[][] = [];
   const warnings: unknown[][] = [];
   const logger = createWebVttTrackLogger({
+    info(...args: unknown[]): void {
+      infos.push(args);
+    },
     warn(...args: unknown[]): void {
       warnings.push(args);
     },
-  } as Pick<Console, 'warn'>);
+  } as Pick<Console, 'info' | 'warn'>);
 
-  return { logger, warnings };
+  return { logger, infos, warnings };
 }
 
 function trackResponse(): TrackResponse {

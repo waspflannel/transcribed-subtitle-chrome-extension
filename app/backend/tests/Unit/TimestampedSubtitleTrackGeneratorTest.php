@@ -64,6 +64,24 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         );
     }
 
+    public function test_transcript_only_enrichment_creates_clickable_token_stubs(): void
+    {
+        $generator = app(TimestampedSubtitleTrackGenerator::class);
+        $transcript = new TimestampedTranscript(
+            language: 'es',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.0, 2.0, 'Hola a todos')],
+            webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHola a todos\n",
+        );
+
+        $result = $generator->transcriptOnlyEnrichment($generator->draftCues($transcript));
+
+        $this->assertSame('unknown', $result->sourceDialect);
+        $this->assertSame('Hola a todos', $result->cues[0]['translatedText']);
+        $this->assertSame(['Hola', 'a', 'todos'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame(['hola', 'a', 'todos'], array_column($result->cues[0]['tokens'], 'normalizedText'));
+    }
+
     public function test_rejects_empty_source_text(): void
     {
         $this->assertInvalidTranscriptReason('empty_source_text', [

@@ -20,6 +20,11 @@ class SubtitleJob extends Model
         'source_language',
         'target_language',
         'processing_version',
+        'status',
+        'stage',
+        'progress_percent',
+        'error_code',
+        'error_message',
         'install_id',
         'request_ip',
         'expires_at',
@@ -34,6 +39,7 @@ class SubtitleJob extends Model
     {
         return [
             'expires_at' => 'immutable_datetime',
+            'progress_percent' => 'integer',
             'video_duration_seconds' => 'integer',
         ];
     }

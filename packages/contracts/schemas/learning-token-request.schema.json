@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/learning-token-request.schema.json",
+  "title": "LearningTokenRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trackId",
+    "cueId",
+    "tokenIndex"
+  ],
+  "properties": {
+    "trackId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Generated subtitle track containing the clicked token."
+    },
+    "cueId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "tokenIndex": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

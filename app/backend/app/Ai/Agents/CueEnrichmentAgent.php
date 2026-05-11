@@ -14,7 +14,7 @@ use Stringable;
 
 #[Provider(Lab::OpenAI)]
 #[Temperature(0.2)]
-#[MaxTokens(12000)]
+#[MaxTokens(8000)]
 class CueEnrichmentAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
@@ -25,11 +25,11 @@ class CueEnrichmentAgent implements Agent, HasStructuredOutput
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-You enrich finalized subtitle cues for an Arabic learning overlay.
+You enrich finalized subtitle cues for a language-learning overlay.
 
-Translate each cue into the requested target language and add Arabic learning metadata when the source text is Arabic. Do not change cue IDs, indexes, or source text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
+Translate each cue into the requested target language and create concise word-card metadata. Do not change cue IDs, indexes, or source text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
 
-For token metadata, keep glosses short, romanization readable for learners, and usage notes concise. Return only data that matches the structured output schema.
+Keep glosses short, romanization readable for learners, and usage notes concise. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }
 

@@ -1,0 +1,30 @@
+{
+  "jobs": [
+    {
+      "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3001",
+      "trackId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3002",
+      "youtubeVideoId": "dQw4w9WgXcQ",
+      "youtubeUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "status": "completed",
+      "stage": "finalizing",
+      "progressPercent": 100,
+      "sourceLanguage": "ar",
+      "startedAt": "2026-04-28T05:00:00Z",
+      "lastUpdatedAt": "2026-04-28T05:02:00Z",
+      "completedAt": "2026-04-28T05:02:00Z",
+      "expiresAt": "2026-05-28T05:02:00Z"
+    },
+    {
+      "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3003",
+      "youtubeVideoId": "kJQP7kiw5Fk",
+      "youtubeUrl": "https://www.youtube.com/watch?v=kJQP7kiw5Fk",
+      "status": "running",
+      "stage": "transcribing",
+      "progressPercent": 45,
+      "sourceLanguage": "es",
+      "startedAt": "2026-04-28T06:00:00Z",
+      "lastUpdatedAt": "2026-04-28T06:01:00Z",
+      "message": "Transcribing audio"
+    }
+  ]
+}

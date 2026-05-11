@@ -3,9 +3,10 @@ import { browser, type Browser } from 'wxt/browser';
 import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
+import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
 import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
-import type { SubtitleCue, TrackResponse } from '../utils/contracts';
+import type { LearningToken, SubtitleCue, TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
@@ -18,9 +19,15 @@ export default defineContentScript({
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
     let activeCue: SubtitleCue | null = null;
     let stopWebVttTrack: (() => void) | null = null;
+    const pendingTokenKeys = new Set<string>();
+    const failedTokenKeys = new Set<string>();
     let disposed = false;
 
-    const overlay = new OverlayShell(document);
+    const overlay = new OverlayShell(document, {
+      onTokenClick: (cue, token) => {
+        void enrichLearningToken(cue, token);
+      },
+    });
     const handleYoutubeRouteChange = (): void => clearSubtitles();
 
     for (const eventName of YOUTUBE_ROUTE_EVENTS) {
@@ -110,6 +117,8 @@ export default defineContentScript({
         subtitleState,
         settings,
         activeCue,
+        pendingTokenKeys,
+        failedTokenKeys,
       });
     }
 
@@ -117,6 +126,8 @@ export default defineContentScript({
       stopWebVttTrack?.();
       stopWebVttTrack = null;
       activeCue = null;
+      pendingTokenKeys.clear();
+      failedTokenKeys.clear();
     }
 
     function clearSubtitles(): void {
@@ -136,6 +147,8 @@ export default defineContentScript({
       }
 
       subtitleState = nextSubtitleState;
+      pendingTokenKeys.clear();
+      failedTokenKeys.clear();
 
       if (nextSubtitleState.type !== 'ready') {
         updateOverlay();
@@ -200,6 +213,44 @@ export default defineContentScript({
           trackId: track.trackId,
           offsetSeconds: settings.subtitleTimingOffsetSeconds,
         });
+      }
+    }
+
+    async function enrichLearningToken(cue: SubtitleCue, token: LearningToken): Promise<void> {
+      if (subtitleState.type !== 'ready' || hasLearningMetadata(token)) {
+        return;
+      }
+
+      const key = tokenKey(cue.cueId, token.index);
+
+      if (pendingTokenKeys.has(key)) {
+        return;
+      }
+
+      pendingTokenKeys.add(key);
+      failedTokenKeys.delete(key);
+      updateOverlay();
+
+      try {
+        const response = (await browser.runtime.sendMessage({
+          type: 'content.enrichLearningToken',
+          trackId: subtitleState.track.trackId,
+          cueId: cue.cueId,
+          tokenIndex: token.index,
+        })) as { ok?: boolean; track?: TrackResponse; error?: string };
+
+        if (response?.ok === false || !response?.track) {
+          throw new Error(response?.error ?? 'Unable to generate word card.');
+        }
+
+        applySubtitleState({
+          type: 'ready',
+          track: response.track,
+        });
+      } catch {
+        pendingTokenKeys.delete(key);
+        failedTokenKeys.add(key);
+        updateOverlay();
       }
     }
   },

@@ -30,14 +30,29 @@
       "type": "string",
       "enum": [
         "auto",
-        "ar"
+        "ar",
+        "en",
+        "es",
+        "pt",
+        "fr",
+        "de",
+        "it"
       ],
-      "description": "Source language requested by the extension. Arabic is the first polished path."
+      "description": "Source language requested by the extension. The first multilingual set supports Auto, Arabic, English, Spanish, Portuguese, French, German, and Italian."
     },
     "targetLanguage": {
       "type": "string",
       "const": "en",
       "description": "English is the first release translation target."
+    },
+    "enrichmentMode": {
+      "type": "string",
+      "enum": [
+        "on_demand",
+        "full"
+      ],
+      "default": "on_demand",
+      "description": "on_demand returns transcript-first tracks with clickable token stubs. full enriches every cue before returning the track."
     }
   }
 }

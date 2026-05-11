@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/subtitle-job-history-response.schema.json",
+  "title": "SubtitleJobHistoryResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobs"
+  ],
+  "properties": {
+    "jobs": {
+      "type": "array",
+      "maxItems": 25,
+      "items": {
+        "$ref": "#/$defs/SubtitleJobHistoryItem"
+      }
+    }
+  },
+  "$defs": {
+    "SubtitleJobHistoryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "youtubeVideoId",
+        "youtubeUrl",
+        "status",
+        "startedAt"
+      ],
+      "properties": {
+        "youtubeVideoId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{11}$"
+        },
+        "youtubeUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "completed",
+            "failed"
+          ]
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "preparing",
+            "acquiring-audio",
+            "transcribing",
+            "romanizing",
+            "enriching",
+            "finalizing"
+          ]
+        },
+        "progressPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "sourceLanguage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "jobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "trackId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

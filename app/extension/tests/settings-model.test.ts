@@ -14,11 +14,15 @@ describe('settings model', () => {
       createExtensionSettingsFromPartial({
         overlayVisible: false,
         overlayPosition: 'side' as never,
+        sourceLanguage: 'es',
+        fullTrackEnrichment: true,
         subtitleTimingOffsetSeconds: 4.54,
       }),
     ).toEqual({
       ...DEFAULT_EXTENSION_SETTINGS,
+      sourceLanguage: 'es',
       overlayVisible: false,
+      fullTrackEnrichment: true,
       subtitleTimingOffsetSeconds: 4.5,
     });
   });

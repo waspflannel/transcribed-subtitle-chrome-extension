@@ -1,6 +1,6 @@
 import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
-import type { TrackResponse } from './contracts';
+import type { SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
 export type SubtitleState =
   | {
@@ -9,7 +9,12 @@ export type SubtitleState =
   | {
       type: 'loading';
       youtubeVideoId: string;
+      youtubeUrl?: string;
       message: string;
+      stage?: SubtitleJobHistoryItem['stage'];
+      progressPercent?: number;
+      startedAt?: string;
+      lastUpdatedAt?: string;
     }
   | {
       type: 'ready';
@@ -29,6 +34,8 @@ export interface PopupState {
   activeTabId?: number;
   pageStatus?: YoutubePageInfo;
   subtitleState: SubtitleState;
+  jobHistory: SubtitleJobHistoryItem[];
+  jobHistoryError?: string;
 }
 
 export type RuntimeMessage =
@@ -37,6 +44,7 @@ export type RuntimeMessage =
     }
   | {
       type: 'popup.getState';
+      syncBackend?: boolean;
     }
   | {
       type: 'popup.updateSettings';
@@ -44,6 +52,12 @@ export type RuntimeMessage =
     }
   | {
       type: 'popup.generateSubtitles';
+    }
+  | {
+      type: 'content.enrichLearningToken';
+      trackId: string;
+      cueId: string;
+      tokenIndex: number;
     }
   | {
       type: 'popup.clearLocalState';
@@ -67,6 +81,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'popup.getState':
     case 'popup.updateSettings':
     case 'popup.generateSubtitles':
+    case 'content.enrichLearningToken':
     case 'popup.clearLocalState':
     case 'background.settingsChanged':
     case 'background.subtitleStateChanged':

@@ -5,7 +5,7 @@
 - Product name: transcribed-subtitle-extension
 - Primary user: Arabic learners watching public YouTube videos.
 - Primary problem: YouTube captions are often missing, inaccurate, poorly segmented, or not useful for language study.
-- Core promise: Generate AI subtitle tracks from YouTube audio and render a synchronized Arabic learning overlay with English translation and word-level study data.
+- Core promise: Generate AI subtitle tracks from YouTube audio and render a synchronized learning overlay with timed subtitles, romanization when available, and word-level study data on demand.
 
 ## Specs
 
@@ -36,8 +36,8 @@ Recommended format:
 - Backend Laravel job pipeline.
 - Backend YouTube audio acquisition.
 - Timestamped transcription.
-- English translation.
-- Arabic token learning metadata.
+- English word-card metadata on demand, or for the full track when explicitly enabled.
+- Arabic-script romanization as best-effort display metadata.
 - Synchronized in-page overlay.
 
 ## Explicit Non-Goals

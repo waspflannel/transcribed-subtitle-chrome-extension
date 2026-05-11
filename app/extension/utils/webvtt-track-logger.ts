@@ -12,10 +12,9 @@ export interface WebVttTrackLogger {
   trackLoadError: (track: TrackResponse) => void;
 }
 
-const DURATION_MISMATCH_MIN_SECONDS = 5;
-const DURATION_MISMATCH_RATIO = 0.05;
+const TRACK_OVERRUN_MIN_SECONDS = 5;
 
-export function createWebVttTrackLogger(consoleRef: Pick<Console, 'warn'> = console): WebVttTrackLogger {
+export function createWebVttTrackLogger(consoleRef: Pick<Console, 'info' | 'warn'> = console): WebVttTrackLogger {
   return {
     videoMissing(track) {
       consoleRef.warn('extension.webvtt_track_video_missing', {
@@ -32,19 +31,19 @@ export function createWebVttTrackLogger(consoleRef: Pick<Console, 'warn'> = cons
 
       const lastCue = textTrack.cues[textTrack.cues.length - 1];
       const trackDurationSeconds = lastCue.endTime;
-      const deltaSeconds = Math.abs(video.duration - trackDurationSeconds);
+      const overrunSeconds = trackDurationSeconds - video.duration;
 
-      if (deltaSeconds <= Math.max(DURATION_MISMATCH_MIN_SECONDS, video.duration * DURATION_MISMATCH_RATIO)) {
+      if (overrunSeconds <= TRACK_OVERRUN_MIN_SECONDS) {
         return;
       }
 
-      consoleRef.warn('extension.webvtt_track_duration_mismatch', {
-        type: 'duration_mismatch',
+      consoleRef.info('extension.webvtt_track_duration_overrun', {
+        type: 'duration_overrun',
         trackId: track.trackId,
         youtubeVideoId: track.youtubeVideoId,
         videoDurationSeconds: roundSeconds(video.duration),
         trackDurationSeconds: roundSeconds(trackDurationSeconds),
-        deltaSeconds: roundSeconds(deltaSeconds),
+        deltaSeconds: roundSeconds(overrunSeconds),
       });
     },
 

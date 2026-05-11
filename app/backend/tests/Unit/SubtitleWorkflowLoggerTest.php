@@ -16,7 +16,7 @@ class SubtitleWorkflowLoggerTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_track_generated_logs_completion_and_duration_mismatch(): void
+    public function test_track_generated_logs_completion_without_warning_on_trailing_silence(): void
     {
         $job = SubtitleJob::factory()->create([
             'youtube_video_id' => 'dQw4w9WgXcQ',
@@ -48,15 +48,46 @@ class SubtitleWorkflowLoggerTest extends TestCase
                     && $context['audio_duration_seconds'] === 100,
             ));
 
-        Log::shouldReceive('warning')
-            ->once()
-            ->with('backend.track_duration_mismatch', Mockery::on(
-                fn (array $context): bool => $context['job_id'] === $job->public_id
-                    && $context['track_id'] === $track->public_id
-                    && $context['delta_seconds'] === 98.0,
-            ));
+        Log::shouldReceive('warning')->never();
 
         $this->logger()->trackGenerated($job, $track, 100);
+    }
+
+    public function test_track_generated_logs_info_when_track_overruns_audio(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+        ]);
+        $track = SubtitleTrack::factory()
+            ->for($job, 'job')
+            ->create([
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'startMs' => 0,
+                        'endMs' => 12000,
+                        'sourceText' => 'overrun track',
+                        'translatedText' => 'overrun track',
+                        'tokens' => [],
+                    ],
+                ],
+            ]);
+
+        Log::shouldReceive('info')
+            ->once()
+            ->with('backend.track_generation_completed', Mockery::type('array'));
+
+        Log::shouldReceive('info')
+            ->once()
+            ->with('backend.track_duration_overrun', Mockery::on(
+                fn (array $context): bool => $context['job_id'] === $job->public_id
+                    && $context['track_id'] === $track->public_id
+                    && $context['delta_seconds'] === 10.0,
+            ));
+
+        $this->logger()->trackGenerated($job, $track, 2);
     }
 
     public function test_enrichment_logs_progress_without_generated_text(): void

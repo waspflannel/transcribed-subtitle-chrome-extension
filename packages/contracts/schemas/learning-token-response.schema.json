@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/learning-token-response.schema.json",
+  "title": "LearningTokenResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trackId",
+    "cueId",
+    "token"
+  ],
+  "properties": {
+    "trackId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cueId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "token": {
+      "$ref": "token.schema.json"
+    }
+  }
+}

@@ -2,6 +2,7 @@ import type { ExtensionSettings } from './settings-model';
 import { escapeHtml } from './html';
 import type { LearningToken, SubtitleCue } from './contracts';
 import type { SubtitleState } from './messages';
+import { hasLearningMetadata, tokenKey } from './track-tokens';
 import type { YoutubePageInfo } from './youtube';
 
 export interface OverlayRenderState {
@@ -9,10 +10,14 @@ export interface OverlayRenderState {
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
   activeCue?: SubtitleCue | null;
+  pendingTokenKeys?: ReadonlySet<string>;
+  failedTokenKeys?: ReadonlySet<string>;
 }
 
 interface OverlayInteractionState {
   pinnedTokenIndex: number | null;
+  pendingTokenKeys?: ReadonlySet<string>;
+  failedTokenKeys?: ReadonlySet<string>;
 }
 
 const EMPTY_INTERACTION: OverlayInteractionState = {
@@ -27,7 +32,12 @@ export class OverlayShell {
   private currentCueId: string | null = null;
   private pinnedTokenIndex: number | null = null;
 
-  public constructor(private readonly documentRef: Document = document) {}
+  public constructor(
+    private readonly documentRef: Document = document,
+    private readonly options: {
+      onTokenClick?: (cue: SubtitleCue, token: LearningToken) => void;
+    } = {},
+  ) {}
 
   public update(state: OverlayRenderState): void {
     if (!this.host || !this.content) {
@@ -65,6 +75,8 @@ export class OverlayShell {
 
     const html = renderOverlayContent(this.currentState, {
       pinnedTokenIndex: this.pinnedTokenIndex,
+      pendingTokenKeys: this.currentState.pendingTokenKeys,
+      failedTokenKeys: this.currentState.failedTokenKeys,
     });
 
     if (html !== this.renderedHtml) {
@@ -88,6 +100,14 @@ export class OverlayShell {
 
       button.addEventListener('click', () => {
         this.pinnedTokenIndex = this.pinnedTokenIndex === tokenIndex ? null : tokenIndex;
+        const isOpeningToken = this.pinnedTokenIndex === tokenIndex;
+        const cue = this.currentState?.activeCue;
+        const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
+
+        if (isOpeningToken && cue && token && !hasLearningMetadata(token)) {
+          this.options.onTokenClick?.(cue, token);
+        }
+
         this.render();
       });
     }
@@ -365,7 +385,7 @@ export function renderOverlayContent(
           interaction,
         )}</div>
         ${cueRomanization}
-        <div class="translation">${escapeHtml(cue.translatedText)}</div>
+        ${renderTranslation(cue)}
         ${renderTokenInteraction(cue, state.settings, interaction)}
         <div class="meta"><span>Video ${escapeHtml(state.page.videoId)}</span><span>Transcribed track</span></div>
       </section>
@@ -436,6 +456,27 @@ function renderTokenInteraction(
     return '';
   }
 
+  const key = tokenKey(cue.cueId, token.index);
+  const hasMetadata = hasLearningMetadata(token);
+  const isPending = interactionTokenSet(interaction, 'pending')?.has(key) ?? false;
+  const isFailed = interactionTokenSet(interaction, 'failed')?.has(key) ?? false;
+
+  if (!hasMetadata || isPending || isFailed) {
+    const detail = isFailed
+      ? 'Word card generation failed.'
+      : 'Loading word card...';
+
+    return `
+      <div class="token-detail">
+        <div class="token-detail-header">
+          <span class="token-detail-title">${escapeHtml(token.text)}</span>
+          <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
+        </div>
+        <div class="detail">${escapeHtml(detail)}</div>
+      </div>
+    `;
+  }
+
   const rows = tokenDetailRows(token, settings)
     .map(
       (row) => `
@@ -456,6 +497,21 @@ function renderTokenInteraction(
       <div class="token-fields">${rows}</div>
     </div>
   `;
+}
+
+function renderTranslation(cue: SubtitleCue): string {
+  if (cue.translatedText.trim() === cue.sourceText.trim()) {
+    return '';
+  }
+
+  return `<div class="translation">${escapeHtml(cue.translatedText)}</div>`;
+}
+
+function interactionTokenSet(
+  interaction: OverlayInteractionState,
+  setName: 'pending' | 'failed',
+): ReadonlySet<string> | undefined {
+  return setName === 'pending' ? interaction.pendingTokenKeys : interaction.failedTokenKeys;
 }
 
 function renderTokenPreview(token: LearningToken, settings: ExtensionSettings): string {

@@ -1,6 +1,8 @@
 import { browser, type Browser } from 'wxt/browser';
 
 import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from '../utils/api';
+import { clearRememberedTracks, getRememberedTrack, rememberActiveTrack } from '../utils/active-tracks';
+import type { SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
@@ -15,11 +17,14 @@ import {
   updateExtensionSettings,
 } from '../utils/settings';
 import type { ExtensionSettings } from '../utils/settings-model';
+import { trackWithLearningToken } from '../utils/track-tokens';
 import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
+const ESTIMATED_PROGRESS_INTERVAL_MS = 4000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
+type LoadingStage = NonNullable<SubtitleJobHistoryItem['stage']>;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -49,8 +54,11 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
     case 'content.getState':
       return getContentState(sender);
 
+    case 'content.enrichLearningToken':
+      return enrichLearningTokenFromContent(message, sender);
+
     case 'popup.getState':
-      return getPopupState();
+      return getPopupState({ syncBackend: message.syncBackend ?? true });
 
     case 'popup.updateSettings':
       return updateSettingsFromPopup(message.patch);
@@ -74,7 +82,7 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
   return {
     installId: await getOrCreateInstallId(),
     settings: await getExtensionSettings(),
-    subtitleState: tabId === null ? DEFAULT_SUBTITLE_STATE : getSubtitleStateForPage(tabId, pageStatus),
+    subtitleState: tabId === null ? DEFAULT_SUBTITLE_STATE : await getSubtitleStateForPage(tabId, pageStatus),
   };
 }
 
@@ -90,7 +98,7 @@ async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promi
     });
   }
 
-  return getPopupState();
+  return getPopupState({ syncBackend: true });
 }
 
 async function generateSubtitlesFromPopup(): Promise<PopupState> {
@@ -111,36 +119,53 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
 
     await publishSubtitleState(activeTabId, subtitleState);
 
-    return getPopupState();
+    return getPopupState({ syncBackend: true });
   }
 
-  const currentState = getSubtitleStateForPage(activeTabId, pageStatus);
+  const currentState = await getSubtitleStateForPage(activeTabId, pageStatus);
 
   if (currentState.type !== 'loading') {
+    const settings = await getExtensionSettings();
+    const now = new Date().toISOString();
+
     await publishSubtitleState(activeTabId, {
       type: 'loading',
       youtubeVideoId: pageStatus.videoId,
-      message: 'Generating subtitles...',
+      youtubeUrl: pageStatus.url,
+      message: 'Preparing request...',
+      stage: 'preparing',
+      progressPercent: 5,
+      startedAt: now,
+      lastUpdatedAt: now,
     });
 
-    void generateSubtitlesForTab(activeTabId, pageStatus);
+    void generateSubtitlesForTab(activeTabId, pageStatus, settings);
   }
 
-  return getPopupState();
+  return getPopupState({ syncBackend: false });
 }
 
-async function generateSubtitlesForTab(tabId: number, pageStatus: SupportedYoutubePageInfo): Promise<void> {
+async function generateSubtitlesForTab(
+  tabId: number,
+  pageStatus: SupportedYoutubePageInfo,
+  settings: ExtensionSettings,
+): Promise<void> {
+  const stopEstimatedProgress = startEstimatedProgress(tabId, pageStatus, settings.fullTrackEnrichment);
+
   try {
     console.info('extension.subtitle_generation_started', {
       youtubeVideoId: pageStatus.videoId,
+      sourceLanguage: settings.sourceLanguage,
+      enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
     });
 
     const installId = await getOrCreateInstallId();
     const job = await subtitleApi.createSubtitleJob(installId, {
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
-      sourceLanguage: 'ar',
+      sourceLanguage: settings.sourceLanguage,
       targetLanguage: 'en',
+      enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
     });
 
     if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
@@ -169,11 +194,51 @@ async function generateSubtitlesForTab(tabId: number, pageStatus: SupportedYoutu
         message: publicSubtitleErrorMessage(error),
       });
     }
+  } finally {
+    stopEstimatedProgress();
   }
+}
+
+async function enrichLearningTokenFromContent(
+  message: Extract<RuntimeMessage, { type: 'content.enrichLearningToken' }>,
+  sender: Browser.runtime.MessageSender,
+): Promise<unknown> {
+  const tabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
+
+  if (tabId === null) {
+    throw new Error('Learning token enrichment requires an active content tab.');
+  }
+
+  const currentState = tabSubtitleStates.get(tabId);
+
+  if (currentState?.type !== 'ready') {
+    throw new Error('No generated subtitle track is active for this tab.');
+  }
+
+  const installId = await getOrCreateInstallId();
+  const response = await subtitleApi.enrichLearningToken(installId, {
+    trackId: message.trackId,
+    cueId: message.cueId,
+    tokenIndex: message.tokenIndex,
+  });
+  const track = patchActiveTrack(currentState.track, response.cueId, response.token);
+
+  await publishSubtitleState(tabId, {
+    type: 'ready',
+    track,
+  });
+
+  return {
+    ok: true,
+    track,
+    cueId: response.cueId,
+    token: response.token,
+  };
 }
 
 async function clearLocalStateFromPopup(): Promise<PopupState> {
   await clearLocalExtensionState();
+  await clearRememberedTracks();
   tabSubtitleStates.clear();
 
   const activeTab = await getActiveTab();
@@ -193,34 +258,227 @@ async function clearLocalStateFromPopup(): Promise<PopupState> {
     await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
   }
 
-  return getPopupState();
+  return getPopupState({ syncBackend: true });
 }
 
-async function getPopupState(): Promise<PopupState> {
+async function getPopupState(options: { syncBackend: boolean }): Promise<PopupState> {
   const activeTab = await getActiveTab();
   const activeTabId = activeTab?.id ?? null;
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
+  const installId = await getOrCreateInstallId();
+  const settings = await getExtensionSettings();
+  const { jobs, error } = options.syncBackend
+    ? await listBackendJobHistory(installId)
+    : { jobs: [] as SubtitleJobHistoryItem[], error: undefined };
+  const localState =
+    activeTabId === null || pageStatus === undefined
+      ? DEFAULT_SUBTITLE_STATE
+      : await getSubtitleStateForPage(activeTabId, pageStatus);
 
   return {
-    installId: await getOrCreateInstallId(),
-    settings: await getExtensionSettings(),
+    installId,
+    settings,
     activeTabId: activeTabId ?? undefined,
     pageStatus,
-    subtitleState:
-      activeTabId === null || pageStatus === undefined
-        ? DEFAULT_SUBTITLE_STATE
-        : getSubtitleStateForPage(activeTabId, pageStatus),
+    subtitleState: stateWithBackendProgress(localState, pageStatus, jobs),
+    jobHistory: jobs,
+    jobHistoryError: error,
   };
 }
 
-function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInfo): SubtitleState {
+async function listBackendJobHistory(
+  installId: string,
+): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string }> {
+  try {
+    const response = await subtitleApi.listSubtitleJobs(installId);
+
+    return { jobs: response.jobs };
+  } catch (error) {
+    return {
+      jobs: [],
+      error: error instanceof Error ? error.message : 'Unable to load backend job history.',
+    };
+  }
+}
+
+function stateWithBackendProgress(
+  localState: SubtitleState,
+  pageStatus: YoutubePageInfo | undefined,
+  jobs: SubtitleJobHistoryItem[],
+): SubtitleState {
+  if (!pageStatus?.supported) {
+    return localState;
+  }
+
+  if (localState.type === 'ready' || localState.type === 'error') {
+    return localState;
+  }
+
+  const job = jobs.find((candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status !== 'completed');
+
+  if (!job) {
+    return localState;
+  }
+
+  if (job.status === 'failed') {
+    return {
+      type: 'error',
+      youtubeVideoId: job.youtubeVideoId,
+      message: job.message ?? 'Generation did not complete.',
+    };
+  }
+
+  return {
+    type: 'loading',
+    youtubeVideoId: job.youtubeVideoId,
+    youtubeUrl: job.youtubeUrl,
+    message: loadingMessageForStage(job.stage),
+    stage: job.stage,
+    progressPercent: job.progressPercent,
+    startedAt: job.startedAt,
+    lastUpdatedAt: job.lastUpdatedAt,
+  };
+}
+
+function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string {
+  switch (stage) {
+    case 'acquiring-audio':
+      return 'Acquiring audio...';
+
+    case 'transcribing':
+      return 'Transcribing audio...';
+
+    case 'romanizing':
+      return 'Adding romanization...';
+
+    case 'enriching':
+      return 'Generating word cards...';
+
+    case 'finalizing':
+      return 'Finalizing track...';
+
+    case 'preparing':
+    default:
+      return 'Preparing request...';
+  }
+}
+
+function startEstimatedProgress(
+  tabId: number,
+  pageStatus: SupportedYoutubePageInfo,
+  fullTrackEnrichment: boolean,
+): () => void {
+  const startedAtMs = Date.now();
+  let publishing = false;
+
+  const timerId = globalThis.setInterval(() => {
+    const currentState = tabSubtitleStates.get(tabId);
+
+    if (currentState?.type !== 'loading' || currentState.youtubeVideoId !== pageStatus.videoId) {
+      globalThis.clearInterval(timerId);
+
+      return;
+    }
+
+    const estimate = estimatedGenerationProgress(Date.now() - startedAtMs, fullTrackEnrichment);
+
+    if (
+      publishing ||
+      (currentState.stage === estimate.stage && (currentState.progressPercent ?? 0) >= estimate.progressPercent)
+    ) {
+      return;
+    }
+
+    publishing = true;
+
+    void publishSubtitleState(tabId, {
+      ...currentState,
+      message: loadingMessageForStage(estimate.stage),
+      stage: estimate.stage,
+      progressPercent: Math.max(currentState.progressPercent ?? 0, estimate.progressPercent),
+      lastUpdatedAt: new Date().toISOString(),
+    }).finally(() => {
+      publishing = false;
+    });
+  }, ESTIMATED_PROGRESS_INTERVAL_MS);
+
+  return () => globalThis.clearInterval(timerId);
+}
+
+function estimatedGenerationProgress(
+  elapsedMs: number,
+  fullTrackEnrichment: boolean,
+): { stage: LoadingStage; progressPercent: number } {
+  const elapsedSeconds = elapsedMs / 1000;
+
+  if (elapsedSeconds < 4) {
+    return { stage: 'preparing', progressPercent: 5 };
+  }
+
+  if (elapsedSeconds < 14) {
+    return {
+      stage: 'acquiring-audio',
+      progressPercent: interpolateProgress(elapsedSeconds, 4, 14, 12, 25),
+    };
+  }
+
+  if (elapsedSeconds < 45) {
+    return {
+      stage: 'transcribing',
+      progressPercent: interpolateProgress(elapsedSeconds, 14, 45, 25, 65),
+    };
+  }
+
+  const enrichmentStage: LoadingStage = fullTrackEnrichment ? 'enriching' : 'romanizing';
+  const enrichmentEndSeconds = fullTrackEnrichment ? 180 : 120;
+
+  if (elapsedSeconds < enrichmentEndSeconds) {
+    return {
+      stage: enrichmentStage,
+      progressPercent: interpolateProgress(elapsedSeconds, 45, enrichmentEndSeconds, 65, 92),
+    };
+  }
+
+  return { stage: 'finalizing', progressPercent: 95 };
+}
+
+function interpolateProgress(
+  value: number,
+  inputMin: number,
+  inputMax: number,
+  outputMin: number,
+  outputMax: number,
+): number {
+  const ratio = Math.max(0, Math.min(1, (value - inputMin) / (inputMax - inputMin)));
+
+  return Math.round(outputMin + (outputMax - outputMin) * ratio);
+}
+
+function patchActiveTrack(track: TrackResponse, cueId: string, token: Parameters<typeof trackWithLearningToken>[2]): TrackResponse {
+  return trackWithLearningToken(track, cueId, token);
+}
+
+async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInfo): Promise<SubtitleState> {
   const subtitleState = tabSubtitleStates.get(tabId) ?? DEFAULT_SUBTITLE_STATE;
 
   if (!pageStatus.supported) {
     return DEFAULT_SUBTITLE_STATE;
   }
 
-  return isSubtitleStateForVideo(subtitleState, pageStatus.videoId) ? subtitleState : DEFAULT_SUBTITLE_STATE;
+  if (subtitleState.type !== 'no-track' && isSubtitleStateForVideo(subtitleState, pageStatus.videoId)) {
+    return subtitleState;
+  }
+
+  const rememberedTrack = await getRememberedTrack(pageStatus.videoId);
+
+  if (!rememberedTrack) {
+    return DEFAULT_SUBTITLE_STATE;
+  }
+
+  const restoredState: SubtitleState = { type: 'ready', track: rememberedTrack };
+  tabSubtitleStates.set(tabId, restoredState);
+
+  return restoredState;
 }
 
 function isSubtitleStateForVideo(subtitleState: SubtitleState, youtubeVideoId: string): boolean {
@@ -247,6 +505,10 @@ function isCurrentLoadingState(tabId: number, youtubeVideoId: string): boolean {
 
 async function publishSubtitleState(tabId: number, subtitleState: SubtitleState): Promise<void> {
   tabSubtitleStates.set(tabId, subtitleState);
+
+  if (subtitleState.type === 'ready') {
+    await rememberActiveTrack(subtitleState.track);
+  }
 
   await sendTabMessage(tabId, {
     type: 'background.subtitleStateChanged',
