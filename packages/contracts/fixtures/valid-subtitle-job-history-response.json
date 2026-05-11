@@ -8,7 +8,9 @@
       "status": "completed",
       "stage": "finalizing",
       "progressPercent": 100,
-      "sourceLanguage": "ar",
+      "sourceLanguage": "auto",
+      "detectedSourceLanguage": "ar",
+      "targetLanguage": "en",
       "startedAt": "2026-04-28T05:00:00Z",
       "lastUpdatedAt": "2026-04-28T05:02:00Z",
       "completedAt": "2026-04-28T05:02:00Z",
@@ -22,6 +24,7 @@
       "stage": "transcribing",
       "progressPercent": 45,
       "sourceLanguage": "es",
+      "targetLanguage": "fr",
       "startedAt": "2026-04-28T06:00:00Z",
       "lastUpdatedAt": "2026-04-28T06:01:00Z",
       "message": "Transcribing audio"
