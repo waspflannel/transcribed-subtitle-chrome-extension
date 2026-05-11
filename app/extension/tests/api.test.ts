@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { SubtitleApiClient, SubtitleApiError, publicSubtitleErrorMessage } from '../utils/api';
-import type { CreateSubtitleJobRequest, JobResponse, TrackResponse } from '../utils/contracts';
+import type {
+  CreateSubtitleJobRequest,
+  JobResponse,
+  LearningTokenResponse,
+  SubtitleJobHistoryResponse,
+  TrackResponse,
+} from '../utils/contracts';
 
 const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -24,6 +30,7 @@ describe('SubtitleApiClient', () => {
       youtubeVideoId: 'dQw4w9WgXcQ',
       sourceLanguage: 'ar',
       targetLanguage: 'en',
+      enrichmentMode: 'on_demand',
     };
 
     await expect(client.createSubtitleJob(installId, payload)).resolves.toEqual(jobResponse);
@@ -35,6 +42,94 @@ describe('SubtitleApiClient', () => {
           'X-Extension-Install-Id': installId,
         }),
         body: JSON.stringify(payload),
+      }),
+    );
+  });
+
+  it('lists backend job history from the shared jobs endpoint', async () => {
+    const history: SubtitleJobHistoryResponse = {
+      jobs: [
+        {
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          status: 'running',
+          startedAt: '2026-05-11T00:00:00Z',
+          stage: 'transcribing',
+          progressPercent: 45,
+        },
+      ],
+    };
+    const fetchMock = vi.fn(async () => jsonResponse(history, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(client.listSubtitleJobs(installId)).resolves.toEqual(history);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/subtitle-jobs',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          'X-Extension-Install-Id': installId,
+        }),
+      }),
+    );
+  });
+
+  it('times out backend job history instead of blocking popup startup', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const fetchMock = vi.fn(
+        (_url: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const error = new Error('Aborted');
+
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      );
+      const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+      const request = client.listSubtitleJobs(installId);
+      const assertion = expect(request).rejects.toThrow(TypeError);
+
+      await vi.advanceTimersByTimeAsync(2500);
+
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('enriches one clicked learning token', async () => {
+    const tokenResponse: LearningTokenResponse = {
+      trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
+      cueId: 'cue-0001',
+      token: {
+        index: 0,
+        text: 'salam',
+        gloss: 'peace greeting',
+      },
+    };
+    const fetchMock = vi.fn(async () => jsonResponse(tokenResponse, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(
+      client.enrichLearningToken(installId, {
+        trackId: tokenResponse.trackId,
+        cueId: tokenResponse.cueId,
+        tokenIndex: 0,
+      }),
+    ).resolves.toEqual(tokenResponse);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/v1/learning-tokens',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          trackId: tokenResponse.trackId,
+          cueId: tokenResponse.cueId,
+          tokenIndex: 0,
+        }),
       }),
     );
   });

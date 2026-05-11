@@ -17,59 +17,87 @@
           <button type="button" class="refresh-button" data-action="refresh">Refresh</button>
         </header>
 
-        <section class="section">
-          <p class="status idle" data-status>Loading</p>
-          <dl class="facts">
-            <div>
-              <dt>Video</dt>
-              <dd data-video-label>Loading</dd>
+        <nav class="tabs" aria-label="Popup sections">
+          <button type="button" class="tab active" data-tab="generate">Generate</button>
+          <button type="button" class="tab" data-tab="jobs">Jobs</button>
+        </nav>
+
+        <section class="panel active" data-panel="generate">
+          <section class="section">
+            <p class="status idle" data-status>Loading</p>
+            <dl class="facts">
+              <div>
+                <dt>Video</dt>
+                <dd data-video-label>Loading</dd>
+              </div>
+              <div>
+                <dt>Track</dt>
+                <dd data-track-label>No track</dd>
+              </div>
+            </dl>
+            <div class="progress" data-progress hidden>
+              <span data-progress-label>Preparing request</span>
+              <strong data-progress-percent>0%</strong>
+              <div class="progress-bar" aria-hidden="true"><span data-progress-bar></span></div>
             </div>
-            <div>
-              <dt>Track</dt>
-              <dd data-track-label>No track</dd>
-            </div>
-          </dl>
+          </section>
+
+          <section class="section">
+            <label class="field">
+              <span>Source language</span>
+              <select name="sourceLanguage" disabled></select>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" name="fullTrackEnrichment" disabled />
+              <span>Full word cards</span>
+            </label>
+            <p class="warning-copy">Full word cards use more OpenAI credits because every token is enriched before the track returns.</p>
+            <button type="button" class="primary-button" data-action="generate" disabled>Generate subtitles</button>
+            <p class="privacy-copy">
+              Default generation creates timed subtitles and romanization when available. Word cards are generated when
+              you click a token unless Full word cards is enabled.
+            </p>
+          </section>
+
+          <section class="section">
+            <label class="toggle">
+              <input type="checkbox" name="overlayVisible" disabled />
+              <span>Show overlay</span>
+            </label>
+            <label class="field">
+              <span>Position</span>
+              <select name="overlayPosition" disabled>
+                <option value="bottom">Bottom</option>
+                <option value="top">Top</option>
+                <option value="compact">Compact</option>
+              </select>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" name="showRomanization" disabled />
+              <span>Romanization</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" name="showGloss" disabled />
+              <span>Gloss</span>
+            </label>
+            <label class="field">
+              <span>Timing delay</span>
+              <div class="timing-control">
+                <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled />
+                <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled />
+                <output data-timing-offset>0.0s</output>
+              </div>
+            </label>
+            <button type="button" class="secondary-button" data-action="reset-timing" disabled>Reset timing</button>
+            <button type="button" class="secondary-button" data-action="clear-state" disabled>Clear local state</button>
+          </section>
         </section>
 
-        <section class="section">
-          <button type="button" class="primary-button" data-action="generate" disabled>Generate subtitles</button>
-          <p class="privacy-copy">
-            Generation sends this public video's audio and subtitle text to your local Laravel backend, which uses the
-            configured AI services for transcription and translation. Generated tracks expire after 30 days.
-          </p>
-        </section>
-
-        <section class="section">
-          <label class="toggle">
-            <input type="checkbox" name="overlayVisible" disabled />
-            <span>Show overlay</span>
-          </label>
-          <label class="field">
-            <span>Position</span>
-            <select name="overlayPosition" disabled>
-              <option value="bottom">Bottom</option>
-              <option value="top">Top</option>
-              <option value="compact">Compact</option>
-            </select>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" name="showRomanization" disabled />
-            <span>Romanization</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" name="showGloss" disabled />
-            <span>Gloss</span>
-          </label>
-          <label class="field">
-            <span>Timing delay</span>
-            <div class="timing-control">
-              <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled />
-              <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled />
-              <output data-timing-offset>0.0s</output>
-            </div>
-          </label>
-          <button type="button" class="secondary-button" data-action="reset-timing" disabled>Reset timing</button>
-          <button type="button" class="secondary-button" data-action="clear-state" disabled>Clear local state</button>
+        <section class="panel" data-panel="jobs">
+          <section class="section">
+            <div class="jobs-list" data-jobs-list></div>
+            <p class="muted" data-jobs-error hidden></p>
+          </section>
         </section>
       </main>
     </div>

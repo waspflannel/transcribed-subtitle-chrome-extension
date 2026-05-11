@@ -1,10 +1,14 @@
+import { DEFAULT_SOURCE_LANGUAGE, isSupportedSourceLanguage, type SourceLanguage } from './source-languages';
+
 export type OverlayPosition = 'bottom' | 'top' | 'compact';
 
 export interface ExtensionSettings {
+  sourceLanguage: SourceLanguage;
   overlayVisible: boolean;
   overlayPosition: OverlayPosition;
   showRomanization: boolean;
   showGloss: boolean;
+  fullTrackEnrichment: boolean;
   subtitleTimingOffsetSeconds: number;
 }
 
@@ -12,15 +16,21 @@ export const MIN_SUBTITLE_TIMING_OFFSET_SECONDS = -10;
 export const MAX_SUBTITLE_TIMING_OFFSET_SECONDS = 10;
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
+  sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
   overlayVisible: true,
   overlayPosition: 'bottom',
   showRomanization: true,
   showGloss: true,
+  fullTrackEnrichment: false,
   subtitleTimingOffsetSeconds: 0,
 };
 
 export function createExtensionSettingsFromPartial(value: Partial<ExtensionSettings> | null | undefined): ExtensionSettings {
   const settings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
+
+  if (isSupportedSourceLanguage(value?.sourceLanguage)) {
+    settings.sourceLanguage = value.sourceLanguage;
+  }
 
   if (typeof value?.overlayVisible === 'boolean') {
     settings.overlayVisible = value.overlayVisible;
@@ -40,6 +50,10 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
 
   if (typeof value?.showGloss === 'boolean') {
     settings.showGloss = value.showGloss;
+  }
+
+  if (typeof value?.fullTrackEnrichment === 'boolean') {
+    settings.fullTrackEnrichment = value.fullTrackEnrichment;
   }
 
   settings.subtitleTimingOffsetSeconds = normalizeSubtitleTimingOffsetSeconds(value?.subtitleTimingOffsetSeconds);

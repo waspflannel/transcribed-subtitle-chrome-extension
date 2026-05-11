@@ -61,6 +61,33 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('Generating subtitles');
     expect(html).toContain('Video dQw4w9WgXcQ');
   });
+
+  it('renders loading detail for clicked tokens that only have romanization', () => {
+    const state = readyState();
+    const html = renderOverlayContent(
+      {
+        ...state,
+        activeCue: {
+          ...state.activeCue!,
+          translatedText: state.activeCue!.sourceText,
+          tokens: [
+            {
+              index: 0,
+              text: 'salam',
+              romanization: 'sa-laam',
+            },
+          ],
+        },
+      },
+      {
+        pinnedTokenIndex: 0,
+        pendingTokenKeys: new Set(['cue-0001:0']),
+      },
+    );
+
+    expect(html).toContain('Loading word card...');
+    expect(html).not.toContain('<div class="translation">');
+  });
 });
 
 function readyState(): OverlayRenderState {
