@@ -22,7 +22,7 @@ class ScribeTranscriptNormalizerTest extends TestCase
             ],
         ], 'auto', 3.0);
 
-        $this->assertSame('en', $transcript->language);
+        $this->assertSame('eng', $transcript->language);
         $this->assertSame(3.0, $transcript->durationSeconds);
         $this->assertSame("WEBVTT\n\ncue-0001\n00:00:00.100 --> 00:00:00.900\nHello world.\n\ncue-0002\n00:00:02.000 --> 00:00:02.900\nAfter pause.\n", $transcript->webVtt);
         $this->assertCount(2, $transcript->segments);
@@ -39,9 +39,9 @@ class ScribeTranscriptNormalizerTest extends TestCase
                 ['text' => 'نبدأ', 'start' => 1.3, 'end' => 1.7, 'type' => 'word'],
                 ['text' => 'الآن.', 'start' => 1.8, 'end' => 2.2, 'type' => 'word'],
             ],
-        ], 'ar', 3.0);
+        ], 'ara', 3.0);
 
-        $this->assertSame('ar', $transcript->language);
+        $this->assertSame('ara', $transcript->language);
         $this->assertCount(2, $transcript->segments);
         $this->assertSame('أهلا وسهلا بكم؟', $transcript->segments[0]->text);
         $this->assertSame('نبدأ الآن.', $transcript->segments[1]->text);
@@ -58,7 +58,7 @@ class ScribeTranscriptNormalizerTest extends TestCase
                 ['text' => 'again', 'start' => 1.0, 'end' => 1.3, 'type' => 'word'],
                 ['text' => 'trailing', 'type' => 'word'],
             ],
-        ], 'en', 2.0);
+        ], 'eng', 2.0);
 
         $this->assertSame('Hello untimed world.', $transcript->segments[0]->text);
         $this->assertSame('again trailing', $transcript->segments[1]->text);
@@ -71,7 +71,7 @@ class ScribeTranscriptNormalizerTest extends TestCase
                 'words' => [
                     ['text' => 'Broken', 'type' => 'word'],
                 ],
-            ], 'en', 1.0);
+            ], 'eng', 1.0);
             $this->fail('Expected missing word timing to fail.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);

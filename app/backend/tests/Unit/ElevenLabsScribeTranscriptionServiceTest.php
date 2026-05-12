@@ -59,9 +59,9 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             'api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload(), 200),
         ]);
 
-        $transcript = $this->service()->transcribe($this->audio, 'es');
+        $transcript = $this->service()->transcribe($this->audio, 'spa');
 
-        $this->assertSame('es', $transcript->language);
+        $this->assertSame('spa', $transcript->language);
         $this->assertSame(12.0, $transcript->durationSeconds);
         $this->assertStringStartsWith('WEBVTT', $transcript->webVtt);
         $this->assertCount(2, $transcript->segments);
@@ -76,7 +76,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
                 && str_contains($request->body(), 'name="timestamps_granularity"')
                 && str_contains($request->body(), 'word')
                 && str_contains($request->body(), 'name="language_code"')
-                && str_contains($request->body(), 'es');
+                && str_contains($request->body(), 'spa');
         });
     }
 
@@ -89,12 +89,12 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             ], 200),
         ]);
 
-        $transcript = $this->service()->transcribe($this->audio, 'ja');
+        $transcript = $this->service()->transcribe($this->audio, 'jpn');
 
-        $this->assertSame('ja', $transcript->language);
+        $this->assertSame('jpn', $transcript->language);
 
         Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'name="language_code"')
-            && str_contains($request->body(), 'ja'));
+            && str_contains($request->body(), 'jpn'));
     }
 
     public function test_it_omits_language_for_auto_detection(): void
@@ -105,7 +105,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
         $transcript = $this->service()->transcribe($this->audio, 'auto');
 
-        $this->assertSame('es', $transcript->language);
+        $this->assertSame('spa', $transcript->language);
 
         Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), 'name="language_code"'));
     }
@@ -117,7 +117,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         ]);
 
         try {
-            $this->service()->transcribe($this->audio, 'es');
+            $this->service()->transcribe($this->audio, 'spa');
             $this->fail('Expected provider failure to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -133,7 +133,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         config(['ai.providers.eleven.key' => null]);
 
         try {
-            $this->service()->transcribe($this->audio, 'es');
+            $this->service()->transcribe($this->audio, 'spa');
             $this->fail('Expected missing provider configuration to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);

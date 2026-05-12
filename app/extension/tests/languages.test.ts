@@ -14,7 +14,7 @@ import {
 describe('language catalog', () => {
   it('defaults to auto-detected source and English target', () => {
     expect(DEFAULT_SOURCE_LANGUAGE).toBe('auto');
-    expect(DEFAULT_TARGET_LANGUAGE).toBe('en');
+    expect(DEFAULT_TARGET_LANGUAGE).toBe('eng');
   });
 
   it('allows Auto detect only for source languages', () => {
@@ -24,13 +24,15 @@ describe('language catalog', () => {
     expect(TARGET_LANGUAGE_OPTIONS.some((language) => language.code === 'auto')).toBe(false);
   });
 
-  it('keeps supported and experimental languages searchable', () => {
-    const supported = SOURCE_LANGUAGE_OPTIONS.find((language) => language.code === 'ja');
-    const experimental = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'sw');
+  it('keeps WER accuracy tiers searchable', () => {
+    const excellent = SOURCE_LANGUAGE_OPTIONS.find((language) => language.code === 'jpn');
+    const high = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'swa');
+    const moderate = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'zul');
 
-    expect(supported?.tier).toBe('supported');
-    expect(experimental?.tier).toBe('experimental');
-    expect(languageLabel('zh')).toBe('Chinese');
-    expect(languageSearchText(supported!)).toContain('jpn');
+    expect(excellent?.tier).toBe('excellent');
+    expect(high?.tier).toBe('high');
+    expect(moderate?.tier).toBe('moderate');
+    expect(languageLabel('cmn')).toBe('Mandarin');
+    expect(languageSearchText(excellent!)).toContain('ja');
   });
 });

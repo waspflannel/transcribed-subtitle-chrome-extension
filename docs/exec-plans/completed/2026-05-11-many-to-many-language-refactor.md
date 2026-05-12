@@ -7,7 +7,7 @@ Last updated: 2026-05-11
 
 ## Goal
 
-Refactor subtitle generation from a fixed source-language-to-English workflow into selectable learning/source and translation/target languages. The popup should default to Auto detect -> English, keep the existing YouTube-only synchronous generation path, and clearly separate the eight Supported languages from the broader Experimental catalog where transcription and translation quality may vary.
+Refactor subtitle generation from a fixed source-language-to-English workflow into selectable learning/source and translation/target languages. The popup should default to Auto detect -> English, keep the existing YouTube-only synchronous generation path, and show language quality caveats where transcription and translation quality may vary.
 
 ## Scope
 
@@ -16,7 +16,7 @@ Refactor subtitle generation from a fixed source-language-to-English workflow in
   - Contract updates for many-to-many source/target languages and optional detected source language.
   - Backend validation, persistence, transcription language-code handling, detected-language normalization, cache keys, resources, factories, fixtures, and tests.
   - OpenAI enrichment prompt wording generalized away from English-only assumptions.
-  - Popup settings and UI for searchable source/target language pickers with Supported/Experimental badges and caveat copy.
+  - Popup settings and UI for searchable source/target language pickers with language quality badges and caveat copy.
   - Durable docs updates for the new product and architecture behavior.
 - Out of scope:
   - New AI providers, direct provider calls from the extension, queues, user accounts, non-YouTube platforms, subtitle editing, vocabulary review, or provider failover.
@@ -24,8 +24,8 @@ Refactor subtitle generation from a fixed source-language-to-English workflow in
 ## Acceptance Criteria
 
 - [x] Source language accepts Auto detect or any catalog language; target language accepts any catalog language except Auto detect.
-- [x] Supported languages are English, Spanish, French, German, Chinese (`zh`), Japanese, Arabic, and Portuguese.
-- [x] Experimental languages remain selectable with visible quality caveats.
+- [x] The catalog exposes the approved transcription language set.
+- [x] Language quality caveats remain visible.
 - [x] Auto-detected tracks preserve requested `sourceLanguage` and expose optional `detectedSourceLanguage` when available.
 - [x] Same-language source/target requests return transcript subtitles without unnecessary translation enrichment.
 - [x] Backend, extension, contracts, fixtures, tests, and docs agree on the same language behavior.
@@ -98,8 +98,8 @@ Evidence to capture:
 
 ## Completion Notes
 
-- What changed: Added a shared 185-entry language catalog with 8 Supported real languages and 176 Experimental languages, expanded contracts/source-target validation, persisted optional detected source language, generalized backend transcription/enrichment to many-to-many pairs, added same-language skip behavior, replaced the popup source dropdown with searchable Learning/Translation language pickers, and updated durable docs.
+- What changed: Added a shared language catalog, expanded contracts/source-target validation, persisted optional detected source language, generalized backend transcription/enrichment to many-to-many pairs, added same-language skip behavior, replaced the popup source dropdown with searchable Learning/Translation language pickers, and updated durable docs.
 - Validation results: Contracts, backend tests, extension tests, TypeScript compile, WXT build, and `.\scripts\agent\check.ps1` passed.
 - Simplicity/readability review: Fixed misplaced test tracking state, removed an unused UI helper, and broadened contract enum sync assertions so the generated schemas cannot drift quietly.
-- Residual risk: Live provider quality for Experimental languages still needs manual public-video testing with real ElevenLabs/OpenAI credentials.
+- Residual risk: Live provider quality for lower-WER-tier languages still needs manual public-video testing with real ElevenLabs/OpenAI credentials.
 - Follow-up debt: Add browser screenshot smoke coverage when the extension UI smoke harness exists.

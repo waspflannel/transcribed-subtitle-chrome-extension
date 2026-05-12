@@ -49,7 +49,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->enrich($this->sourceCues(), 'ar', 'fr');
+        $result = $this->provider()->enrich($this->sourceCues(), 'ara', 'fra');
 
         $this->assertSame('egyptian', $result->sourceDialect);
         $this->assertSame('Welcome everyone', $result->cues[0]['translatedText']);
@@ -63,7 +63,7 @@ class CueEnrichmentServiceTest extends TestCase
         ], $result->cues[0]['tokens'][0]);
 
         CueEnrichmentAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"targetLanguage":"fr"')
+            fn ($prompt): bool => $prompt->contains('"targetLanguage":"fra"')
                 && $prompt->contains('"targetLanguageName":"French"')
                 && $prompt->contains('"sourceLanguageName":"Arabic"')
                 && $prompt->contains('"cueId":"cue-0001"')
@@ -109,7 +109,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $result = $this->provider()->romanize([$sourceCue], 'ar');
+        $result = $this->provider()->romanize([$sourceCue], 'ara');
 
         $this->assertSame('مرحبا بكم', $result->cues[0]['translatedText']);
         $this->assertSame('marhaban bikum', $result->cues[0]['romanization']);
@@ -150,8 +150,8 @@ class CueEnrichmentServiceTest extends TestCase
         $token = $this->provider()->enrichToken(
             cue: $this->sourceCue('cue-0001', 0, 'Hola a todos'),
             token: ['index' => 0, 'text' => 'Hola', 'normalizedText' => 'hola'],
-            sourceLanguage: 'es',
-            targetLanguage: 'ja',
+            sourceLanguage: 'spa',
+            targetLanguage: 'jpn',
         );
 
         $this->assertSame([
@@ -194,7 +194,7 @@ class CueEnrichmentServiceTest extends TestCase
             $this->sourceCue('cue-0001', 0, 'source one'),
             $this->sourceCue('cue-0002', 1, 'source two'),
             $this->sourceCue('cue-0003', 2, 'source three'),
-        ], 'ar', 'en');
+        ], 'ara', 'eng');
 
         $this->assertSame('egyptian', $result->sourceDialect);
         $this->assertSame(['cue-0001', 'cue-0002', 'cue-0003'], array_column($result->cues, 'cueId'));
@@ -227,7 +227,7 @@ class CueEnrichmentServiceTest extends TestCase
             $this->provider()->enrich([
                 $this->sourceCue('cue-0001', 0, 'source one'),
                 $this->sourceCue('cue-0002', 1, 'source two'),
-            ], 'ar', 'en');
+            ], 'ara', 'eng');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('cue_count_mismatch', $exception->context['reason'] ?? null);
@@ -256,7 +256,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         try {
-            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+            $this->provider()->enrich($this->sourceCues(), 'ara', 'eng');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('cue_identity_mismatch', $exception->context['reason'] ?? null);
@@ -282,7 +282,7 @@ class CueEnrichmentServiceTest extends TestCase
             $this->provider()->enrich([
                 $this->sourceCue('cue-0001', 0, 'source one'),
                 $this->sourceCue('cue-0002', 1, 'source two'),
-            ], 'en', 'en');
+            ], 'eng', 'eng');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame(RequestException::class, $exception->context['exception'] ?? null);
@@ -302,7 +302,7 @@ class CueEnrichmentServiceTest extends TestCase
         )->preventStrayPrompts();
 
         try {
-            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+            $this->provider()->enrich($this->sourceCues(), 'ara', 'eng');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('rate_limited', $exception->publicCode);
             $this->assertSame(429, $exception->status);
@@ -320,7 +320,7 @@ class CueEnrichmentServiceTest extends TestCase
             ->preventStrayPrompts();
 
         try {
-            $this->provider()->enrich($this->sourceCues(), 'ar', 'en');
+            $this->provider()->enrich($this->sourceCues(), 'ara', 'eng');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('laravel-ai-sdk', $exception->context['adapter'] ?? null);

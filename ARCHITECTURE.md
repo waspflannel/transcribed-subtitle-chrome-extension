@@ -13,7 +13,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Agent harness scripts live in `scripts/agent/`.
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
-- The canonical language catalog lives in `packages/contracts/languages.json`; `auto` is source-only, the eight Supported languages are English, Spanish, French, German, Chinese (`zh`), Japanese, Arabic, and Portuguese, and the remaining catalog languages are Experimental.
+- The canonical language catalog lives in `packages/contracts/languages.json`; `auto` is source-only and the real language choices use the provider WER-ranked transcription tags: Excellent, High Accuracy, Good, and Moderate.
 - The backend exposes local `POST /v1/subtitle-jobs`, `GET /v1/subtitle-jobs`, and `POST /v1/learning-tokens` JSON APIs.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
 - Current subtitle generation acquires YouTube audio, sends it to ElevenLabs Scribe v2 for word timestamps using the requested source language or provider auto-detect, normalizes provider language codes into the catalog when possible, and persists subtitle-focused tracks for 30 days.

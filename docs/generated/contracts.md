@@ -32,7 +32,7 @@ The contract check:
 ## Consumer Rules
 
 - Laravel treats these schemas as the extension-facing boundary. Future request validation and API resources must conform to these shapes.
-- `languages.json` is the canonical source for selectable languages. `auto` is source-only; target languages must be real catalog languages.
+- `languages.json` is the canonical source for selectable languages. `auto` is source-only; target languages must be real catalog languages from the same WER-ranked transcription set.
 - The WXT extension imports generated contract types through `app/extension/utils/contracts.ts`.
 - Provider-native objects, Eloquent models, queue payloads, and UI state are internal and must not become API contracts.
 - Cue token metadata supports optional `root` and `usageNote` fields. Missing learning fields are omitted from responses and UI rather than serialized as `null`.

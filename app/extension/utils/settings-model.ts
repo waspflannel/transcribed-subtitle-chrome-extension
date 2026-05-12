@@ -1,8 +1,8 @@
 import {
   DEFAULT_SOURCE_LANGUAGE,
   DEFAULT_TARGET_LANGUAGE,
-  isSourceLanguage,
-  isTargetLanguage,
+  normalizeSourceLanguage,
+  normalizeTargetLanguage,
   type SourceLanguage,
   type TargetLanguage,
 } from './languages';
@@ -36,13 +36,15 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
 
 export function createExtensionSettingsFromPartial(value: Partial<ExtensionSettings> | null | undefined): ExtensionSettings {
   const settings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
+  const sourceLanguage = normalizeSourceLanguage(value?.sourceLanguage);
+  const targetLanguage = normalizeTargetLanguage(value?.targetLanguage);
 
-  if (isSourceLanguage(value?.sourceLanguage)) {
-    settings.sourceLanguage = value.sourceLanguage;
+  if (sourceLanguage) {
+    settings.sourceLanguage = sourceLanguage;
   }
 
-  if (isTargetLanguage(value?.targetLanguage)) {
-    settings.targetLanguage = value.targetLanguage;
+  if (targetLanguage) {
+    settings.targetLanguage = targetLanguage;
   }
 
   if (typeof value?.overlayVisible === 'boolean') {

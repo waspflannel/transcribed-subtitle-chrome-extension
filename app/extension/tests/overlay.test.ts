@@ -11,7 +11,7 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('AI subtitles');
     expect(html).toContain('class="rail"');
     expect(html).toContain('class="token-card"');
-    expect(html).toContain('lang="ar"');
+    expect(html).toContain('lang="ara"');
     expect(html).toContain('00:00 - 00:02');
     expect(html).toContain('salam');
     expect(html).toContain('Hello');
@@ -127,15 +127,15 @@ describe('renderOverlayContent', () => {
 
   it('suppresses duplicate translation for English source tracks', () => {
     const track = trackResponse({
-      sourceLanguage: 'en',
-      targetLanguage: 'en',
+      sourceLanguage: 'eng',
+      targetLanguage: 'eng',
       sourceText: 'Hello everyone',
       translatedText: 'Hello everyone',
       tokens: [],
     });
     const html = renderOverlayContent(readyState(track));
 
-    expect(html).toContain('lang="en"');
+    expect(html).toContain('lang="eng"');
     expect(html).toContain('Hello everyone');
     expect(html).not.toContain('class="translation"');
   });
@@ -170,8 +170,8 @@ function trackResponse(
     trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
     jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
     youtubeVideoId: 'dQw4w9WgXcQ',
-    sourceLanguage: overrides.sourceLanguage ?? 'ar',
-    targetLanguage: overrides.targetLanguage ?? 'en',
+    sourceLanguage: overrides.sourceLanguage ?? 'ara',
+    targetLanguage: overrides.targetLanguage ?? 'eng',
     generatedAt: '2026-05-02T00:00:00Z',
     expiresAt: '2026-06-01T00:00:00Z',
     webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nsalam\n",

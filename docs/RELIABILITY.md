@@ -29,7 +29,7 @@ Provider queueing and failover are intentionally deferred for this proof. Eleven
 
 Default generation persists a subtitle-focused track even if romanization fails. Full word-card mode fails if batch enrichment fails. Same-language source/target requests skip translation enrichment and persist transcript text as the translated text. On-click token enrichment caches successful metadata by token/context/language/model and patches the stored track for the remaining 30-day track lifetime.
 
-Supported languages are product-tuned first, but both Supported and Experimental catalog languages can vary in transcription and translation quality by language, dialect, audio quality, and provider coverage.
+The language catalog is limited to the WER-ranked transcription set used in the popup. The tier is a transcription accuracy signal only; translation card quality can still vary by language pair, dialect, audio quality, and provider coverage.
 
 Phase 07 release hardening keeps the synchronous request path. Compatible completed tracks are reused, incomplete compatible jobs are reused for retry instead of creating duplicate rows, and Laravel route throttling enforces both per-install and per-IP limits. Public failures map to stable popup and overlay messages.
 

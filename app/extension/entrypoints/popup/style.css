@@ -328,14 +328,29 @@ select:disabled {
   text-transform: uppercase;
 }
 
-.language-badge.supported {
+.language-badge.auto {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.language-badge.excellent {
   background: #dcfce7;
   color: #166534;
 }
 
-.language-badge.experimental {
+.language-badge.high {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.language-badge.good {
   background: #fef3c7;
   color: #92400e;
+}
+
+.language-badge.moderate {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .timing-control {

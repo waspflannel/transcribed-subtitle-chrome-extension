@@ -14,15 +14,15 @@ describe('settings model', () => {
       createExtensionSettingsFromPartial({
         overlayVisible: false,
         overlayPosition: 'side' as never,
-        sourceLanguage: 'es',
-        targetLanguage: 'ja',
+        sourceLanguage: 'spa',
+        targetLanguage: 'jpn',
         fullTrackEnrichment: true,
         subtitleTimingOffsetSeconds: 4.54,
       }),
     ).toEqual({
       ...DEFAULT_EXTENSION_SETTINGS,
-      sourceLanguage: 'es',
-      targetLanguage: 'ja',
+      sourceLanguage: 'spa',
+      targetLanguage: 'jpn',
       overlayVisible: false,
       fullTrackEnrichment: true,
       subtitleTimingOffsetSeconds: 4.5,
@@ -36,6 +36,18 @@ describe('settings model', () => {
         targetLanguage: 'auto' as never,
       }),
     ).toEqual(DEFAULT_EXTENSION_SETTINGS);
+  });
+
+  it('normalizes old stored ISO-639-1 language codes', () => {
+    expect(
+      createExtensionSettingsFromPartial({
+        sourceLanguage: 'es' as never,
+        targetLanguage: 'ja' as never,
+      }),
+    ).toMatchObject({
+      sourceLanguage: 'spa',
+      targetLanguage: 'jpn',
+    });
   });
 
   it('normalizes subtitle timing offsets to the supported slider range', () => {

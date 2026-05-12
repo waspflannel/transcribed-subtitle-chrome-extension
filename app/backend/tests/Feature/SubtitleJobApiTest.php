@@ -64,8 +64,8 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, SubtitleTrack::count());
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'dQw4w9WgXcQ',
-            'source_language' => 'ar',
-            'target_language' => 'en',
+            'source_language' => 'ara',
+            'target_language' => 'eng',
             'status' => 'completed',
             'stage' => 'finalizing',
             'progress_percent' => 100,
@@ -78,7 +78,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_arabic_transcript_first_generation_adds_best_effort_romanization(): void
     {
         $this->transcriptionService->transcript = new TimestampedTranscript(
-            language: 'ar',
+            language: 'ara',
             durationSeconds: 2.0,
             segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
             webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
@@ -107,7 +107,7 @@ class SubtitleJobApiTest extends TestCase
     {
         $this->translationAnalysis->romanizationShouldFail = true;
         $this->transcriptionService->transcript = new TimestampedTranscript(
-            language: 'ar',
+            language: 'ara',
             durationSeconds: 2.0,
             segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
             webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
@@ -144,8 +144,8 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.tokens.0.gloss', 'first');
 
         $this->assertSame(1, $this->translationAnalysis->calls);
-        $this->assertSame(['ar'], $this->translationAnalysis->sourceLanguages);
-        $this->assertSame(['en'], $this->translationAnalysis->targetLanguages);
+        $this->assertSame(['ara'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
     }
 
     public function test_full_same_language_generation_skips_translation_enrichment(): void
@@ -153,8 +153,8 @@ class SubtitleJobApiTest extends TestCase
         $response = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
-                'sourceLanguage' => 'en',
-                'targetLanguage' => 'en',
+                'sourceLanguage' => 'eng',
+                'targetLanguage' => 'eng',
                 'enrichmentMode' => 'full',
             ]));
 
@@ -188,7 +188,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_create_subtitle_job_accepts_catalog_source_languages(): void
     {
-        $sourceLanguages = ['auto', 'en', 'zh', 'ja', 'ar', 'pt', 'it', 'sw'];
+        $sourceLanguages = ['auto', 'eng', 'cmn', 'jpn', 'ara', 'por', 'ita', 'swa'];
 
         foreach ($sourceLanguages as $index => $sourceLanguage) {
             $videoId = 'vid'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
@@ -209,7 +209,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_create_subtitle_job_accepts_catalog_target_languages(): void
     {
-        foreach (['en', 'zh', 'ja', 'fr', 'sw'] as $index => $targetLanguage) {
+        foreach (['eng', 'cmn', 'jpn', 'fra', 'swa'] as $index => $targetLanguage) {
             $videoId = 'tgt'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
 
             $this
@@ -237,27 +237,27 @@ class SubtitleJobApiTest extends TestCase
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'auto',
-                'targetLanguage' => 'en',
+                'targetLanguage' => 'eng',
             ]));
 
         $response
             ->assertOk()
             ->assertJsonPath('sourceLanguage', 'auto')
-            ->assertJsonPath('detectedSourceLanguage', 'ja')
+            ->assertJsonPath('detectedSourceLanguage', 'jpn')
             ->assertJsonPath('track.sourceLanguage', 'auto')
-            ->assertJsonPath('track.detectedSourceLanguage', 'ja');
+            ->assertJsonPath('track.detectedSourceLanguage', 'jpn');
 
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'auto',
-            'detected_source_language' => 'ja',
-            'target_language' => 'en',
+            'detected_source_language' => 'jpn',
+            'target_language' => 'eng',
         ]);
         $this->assertDatabaseHas('subtitle_tracks', [
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'source_language' => 'auto',
-            'detected_source_language' => 'ja',
-            'target_language' => 'en',
+            'detected_source_language' => 'jpn',
+            'target_language' => 'eng',
         ]);
     }
 
@@ -312,7 +312,7 @@ class SubtitleJobApiTest extends TestCase
             'status' => 'completed',
             'stage' => 'finalizing',
             'progress_percent' => 100,
-            'detected_source_language' => 'ar',
+            'detected_source_language' => 'ara',
             'updated_at' => now(),
         ]);
         $track = SubtitleTrack::factory()
@@ -355,15 +355,15 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.0.youtubeVideoId', 'dQw4w9WgXcQ')
             ->assertJsonPath('jobs.0.status', 'completed')
             ->assertJsonPath('jobs.0.trackId', $track->public_id)
-            ->assertJsonPath('jobs.0.sourceLanguage', 'ar')
-            ->assertJsonPath('jobs.0.detectedSourceLanguage', 'ar')
-            ->assertJsonPath('jobs.0.targetLanguage', 'en')
+            ->assertJsonPath('jobs.0.sourceLanguage', 'ara')
+            ->assertJsonPath('jobs.0.detectedSourceLanguage', 'ara')
+            ->assertJsonPath('jobs.0.targetLanguage', 'eng')
             ->assertJsonPath('jobs.1.youtubeVideoId', 'run00000001')
             ->assertJsonPath('jobs.1.status', 'running')
             ->assertJsonPath('jobs.1.stage', 'transcribing')
             ->assertJsonPath('jobs.1.progressPercent', 45)
             ->assertJsonPath('jobs.1.jobId', $runningJob->public_id)
-            ->assertJsonPath('jobs.1.targetLanguage', 'en')
+            ->assertJsonPath('jobs.1.targetLanguage', 'eng')
             ->assertJsonPath('jobs.2.youtubeVideoId', 'fail0000001')
             ->assertJsonPath('jobs.2.status', 'failed')
             ->assertJsonPath('jobs.2.stage', 'enriching')
@@ -413,8 +413,8 @@ class SubtitleJobApiTest extends TestCase
         $jobResponse = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
-                'sourceLanguage' => 'en',
-                'targetLanguage' => 'en',
+                'sourceLanguage' => 'eng',
+                'targetLanguage' => 'eng',
             ]))
             ->assertOk();
 
@@ -538,8 +538,8 @@ class SubtitleJobApiTest extends TestCase
             'youtubeVideoId' => $videoId,
             'youtubeUrl' => 'https://www.youtube.com/watch?v='.$videoId,
             'videoDurationSeconds' => 213,
-            'sourceLanguage' => 'ar',
-            'targetLanguage' => 'en',
+            'sourceLanguage' => 'ara',
+            'targetLanguage' => 'eng',
             ...$overrides,
         ];
     }

@@ -16,8 +16,8 @@ describe('SubtitleApiClient', () => {
     const jobResponse: JobResponse = {
       jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
       youtubeVideoId: 'dQw4w9WgXcQ',
-      sourceLanguage: 'ar',
-      targetLanguage: 'en',
+      sourceLanguage: 'ara',
+      targetLanguage: 'eng',
       track: trackResponse(),
       createdAt: '2026-04-30T00:00:00Z',
       updatedAt: '2026-04-30T00:00:00Z',
@@ -28,8 +28,8 @@ describe('SubtitleApiClient', () => {
 
     const payload: CreateSubtitleJobRequest = {
       youtubeVideoId: 'dQw4w9WgXcQ',
-      sourceLanguage: 'ar',
-      targetLanguage: 'en',
+      sourceLanguage: 'ara',
+      targetLanguage: 'eng',
       enrichmentMode: 'on_demand',
     };
 
@@ -57,8 +57,8 @@ describe('SubtitleApiClient', () => {
           stage: 'transcribing',
           progressPercent: 45,
           sourceLanguage: 'auto',
-          detectedSourceLanguage: 'es',
-          targetLanguage: 'en',
+          detectedSourceLanguage: 'spa',
+          targetLanguage: 'eng',
         },
       ],
     };
@@ -152,8 +152,8 @@ describe('SubtitleApiClient', () => {
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
     const payload: CreateSubtitleJobRequest = {
       youtubeVideoId: 'bad-job-id',
-      sourceLanguage: 'ar',
-      targetLanguage: 'en',
+      sourceLanguage: 'ara',
+      targetLanguage: 'eng',
     };
 
     await expect(client.createSubtitleJob(installId, payload)).rejects.toMatchObject({
@@ -181,8 +181,8 @@ function trackResponse(): TrackResponse {
     trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
     jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
     youtubeVideoId: 'dQw4w9WgXcQ',
-    sourceLanguage: 'ar',
-    targetLanguage: 'en',
+    sourceLanguage: 'ara',
+    targetLanguage: 'eng',
     generatedAt: '2026-04-30T00:00:00Z',
     expiresAt: '2026-05-30T00:00:00Z',
     webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nmarhaban\n",

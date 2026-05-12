@@ -341,9 +341,15 @@ function languageOptionButton(language: LanguageOption, selected: boolean, disab
 }
 
 function languageBadge(language: Pick<LanguageOption, 'tier'>): string {
-  const label = language.tier === 'supported' ? 'Supported' : 'Experimental';
+  const labels: Record<LanguageOption['tier'], string> = {
+    auto: 'Auto',
+    excellent: 'Excellent',
+    high: 'High Accuracy',
+    good: 'Good',
+    moderate: 'Moderate',
+  };
 
-  return `<span class="language-badge ${language.tier}">${label}</span>`;
+  return `<span class="language-badge ${language.tier}">${labels[language.tier]}</span>`;
 }
 
 function renderJobHistory(state: PopupState): void {

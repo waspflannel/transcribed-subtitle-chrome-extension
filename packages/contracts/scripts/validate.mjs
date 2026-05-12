@@ -66,16 +66,16 @@ const createSubtitleJobRequest = ajv.getSchema('create-subtitle-job-request.sche
 assertInvalid(createSubtitleJobRequest, {
   youtubeVideoId: 'dQw4w9WgXcQ',
   sourceLanguage: 'not-a-language',
-  targetLanguage: 'en',
+  targetLanguage: 'eng',
 }, 'invalid source language');
 assertInvalid(createSubtitleJobRequest, {
   youtubeVideoId: 'dQw4w9WgXcQ',
-  sourceLanguage: 'en',
+  sourceLanguage: 'eng',
   targetLanguage: 'auto',
 }, 'target language auto');
 assertInvalid(createSubtitleJobRequest, {
   youtubeVideoId: 'dQw4w9WgXcQ',
-  sourceLanguage: 'en',
+  sourceLanguage: 'eng',
   targetLanguage: 'not-a-language',
 }, 'invalid target language');
 
@@ -85,18 +85,23 @@ console.log('validated openapi.json');
 function validateLanguageCatalog(catalog) {
   const languages = catalog.languages;
 
-  if (!Array.isArray(languages) || languages.length < 101) {
-    throw new Error('languages.json must define 100+ language choices.');
+  if (!Array.isArray(languages) || languages.length !== 94) {
+    throw new Error('languages.json must define Auto detect plus the 93 WER-ranked language choices.');
   }
 
   const codes = new Set();
-  const supportedCodes = [];
+  const tierCounts = new Map([
+    ['excellent', 0],
+    ['high', 0],
+    ['good', 0],
+    ['moderate', 0],
+  ]);
 
   for (const language of languages) {
     if (
       typeof language?.code !== 'string' ||
       typeof language?.label !== 'string' ||
-      !['supported', 'experimental'].includes(language?.tier)
+      !['auto', 'excellent', 'high', 'good', 'moderate'].includes(language?.tier)
     ) {
       throw new Error('languages.json contains an invalid language entry.');
     }
@@ -107,18 +112,35 @@ function validateLanguageCatalog(catalog) {
 
     codes.add(language.code);
 
-    if (language.tier === 'supported' && language.sourceOnly !== true) {
-      supportedCodes.push(language.code);
+    if (language.code === 'auto') {
+      if (language.tier !== 'auto' || language.sourceOnly !== true) {
+        throw new Error('languages.json auto detection must be source-only with tier auto.');
+      }
+
+      continue;
+    }
+
+    if (language.sourceOnly === true) {
+      throw new Error(`languages.json only auto can be source-only, found ${language.code}.`);
+    }
+
+    tierCounts.set(language.tier, (tierCounts.get(language.tier) ?? 0) + 1);
+  }
+
+  const expectedTierCounts = new Map([
+    ['excellent', 36],
+    ['high', 21],
+    ['good', 18],
+    ['moderate', 18],
+  ]);
+
+  for (const [tier, expectedCount] of expectedTierCounts) {
+    if (tierCounts.get(tier) !== expectedCount) {
+      throw new Error(`languages.json ${tier} tier must contain ${expectedCount} languages.`);
     }
   }
 
-  const expectedSupportedCodes = ['en', 'es', 'fr', 'de', 'zh', 'ja', 'ar', 'pt'];
-
-  if (JSON.stringify(supportedCodes) !== JSON.stringify(expectedSupportedCodes)) {
-    throw new Error(`languages.json supported languages must be ${expectedSupportedCodes.join(', ')}.`);
-  }
-
-  if (!languages.some((language) => language.code === 'auto' && language.sourceOnly === true)) {
+  if (!codes.has('auto')) {
     throw new Error('languages.json must include source-only auto detection.');
   }
 }
