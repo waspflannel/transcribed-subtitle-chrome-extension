@@ -1,6 +1,6 @@
 {
   "name": "transcribed-subtitle-extension",
-  "description": "AI subtitle learning overlay extension scaffold.",
+  "description": "AI language-to-language subtitle extension scaffold.",
   "private": true,
   "version": "0.0.0",
   "type": "module",

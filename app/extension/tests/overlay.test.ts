@@ -11,12 +11,12 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('AI subtitles');
     expect(html).toContain('class="rail"');
     expect(html).toContain('class="token-card"');
-    expect(html).toContain('lang="ara"');
+    expect(html).toContain('lang="spa"');
     expect(html).toContain('00:00 - 00:02');
-    expect(html).toContain('salam');
-    expect(html).toContain('Hello');
-    expect(html).toContain('sa-laam');
-    expect(html).toContain('peace greeting');
+    expect(html).toContain('hola');
+    expect(html).toContain('Bonjour');
+    expect(html).toContain('o-la');
+    expect(html).toContain('hello');
     expect(html).not.toContain('egyptian');
     expect(html).not.toContain('rail-control');
   });
@@ -31,10 +31,10 @@ describe('renderOverlayContent', () => {
       },
     });
 
-    expect(html).toContain('salam');
-    expect(html).toContain('Hello');
-    expect(html).not.toContain('sa-laam');
-    expect(html).not.toContain('peace greeting');
+    expect(html).toContain('hola');
+    expect(html).toContain('Bonjour');
+    expect(html).not.toContain('o-la');
+    expect(html).not.toContain('hello');
   });
 
   it('renders hover preview and pinned token detail without null placeholders', () => {
@@ -44,11 +44,11 @@ describe('renderOverlayContent', () => {
     });
 
     expect(hoverHtml).toContain('role="tooltip"');
-    expect(hoverHtml).toContain('sa-laam | peace greeting');
+    expect(hoverHtml).toContain('o-la | hello');
     expect(pinnedHtml).toContain('aria-pressed="true"');
     expect(pinnedHtml).toContain('class="token-popover"');
     expect(pinnedHtml).toContain('Root');
-    expect(pinnedHtml).toContain('s-l-m');
+    expect(pinnedHtml).toContain('hol');
     expect(pinnedHtml).toContain('Usage note');
     expect(pinnedHtml).toContain('Common greeting.');
     expect(pinnedHtml).not.toContain('null');
@@ -81,8 +81,8 @@ describe('renderOverlayContent', () => {
           tokens: [
             {
               index: 0,
-              text: 'salam',
-              romanization: 'sa-laam',
+              text: 'hola',
+              romanization: 'o-la',
             },
           ],
         },
@@ -108,8 +108,8 @@ describe('renderOverlayContent', () => {
           tokens: [
             {
               index: 0,
-              text: 'salam',
-              romanization: 'sa-laam',
+              text: 'hola',
+              romanization: 'o-la',
             },
           ],
         },
@@ -170,28 +170,28 @@ function trackResponse(
     trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
     jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
     youtubeVideoId: 'dQw4w9WgXcQ',
-    sourceLanguage: overrides.sourceLanguage ?? 'ara',
-    targetLanguage: overrides.targetLanguage ?? 'eng',
+    sourceLanguage: overrides.sourceLanguage ?? 'spa',
+    targetLanguage: overrides.targetLanguage ?? 'fra',
     generatedAt: '2026-05-02T00:00:00Z',
     expiresAt: '2026-06-01T00:00:00Z',
-    webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nsalam\n",
+    webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nhola\n",
     cues: [
       {
         cueId: 'cue-0001',
         index: 0,
         startMs: 500,
         endMs: 2100,
-        sourceText: overrides.sourceText ?? 'salam',
-        translatedText: overrides.translatedText ?? 'Hello',
+        sourceText: overrides.sourceText ?? 'hola',
+        translatedText: overrides.translatedText ?? 'Bonjour',
         tokens: overrides.tokens ?? [
           {
             index: 0,
-            text: 'salam',
-            lemma: 'salam',
-            root: 's-l-m',
-            partOfSpeech: 'noun',
-            gloss: 'peace greeting',
-            romanization: 'sa-laam',
+            text: 'hola',
+            lemma: 'hola',
+            root: 'hol',
+            partOfSpeech: 'interjection',
+            gloss: 'hello',
+            romanization: 'o-la',
             usageNote: 'Common greeting.',
           },
         ],

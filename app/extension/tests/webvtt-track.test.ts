@@ -26,7 +26,7 @@ describe('bindWebVttTrackToVideo', () => {
     const trackElement = video.appendedTrack!;
     expect(trackElement.kind).toBe('subtitles');
     expect(trackElement.label).toBe('AI subtitles');
-    expect(trackElement.srclang).toBe('ara');
+    expect(trackElement.srclang).toBe('spa');
     expect(trackElement.src).toBe('blob:test-track');
     expect(trackElement.track.mode).toBe('hidden');
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
@@ -126,8 +126,8 @@ function trackResponse(): TrackResponse {
     trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
     jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
     youtubeVideoId: 'dQw4w9WgXcQ',
-    sourceLanguage: 'ara',
-    targetLanguage: 'eng',
+    sourceLanguage: 'spa',
+    targetLanguage: 'fra',
     generatedAt: '2026-05-02T00:00:00Z',
     expiresAt: '2026-06-01T00:00:00Z',
     webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n",

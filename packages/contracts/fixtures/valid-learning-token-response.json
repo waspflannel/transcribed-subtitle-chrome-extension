@@ -3,14 +3,12 @@
   "cueId": "cue-0001",
   "token": {
     "index": 0,
-    "text": "marhaban",
-    "normalizedText": "marhaban",
-    "lemma": "marhaban",
-    "root": "r-h-b",
+    "text": "Hola",
+    "normalizedText": "hola",
+    "lemma": "hola",
     "partOfSpeech": "interjection",
     "translation": "hello",
     "gloss": "greeting",
-    "romanization": "marhaban",
     "usageNote": "Common greeting."
   }
 }

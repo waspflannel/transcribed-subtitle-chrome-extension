@@ -11,7 +11,7 @@ describe('parseYoutubePage', () => {
   });
 
   it('rejects non-watch YouTube pages', () => {
-    expect(parseYoutubePage('https://www.youtube.com/results?search_query=arabic')).toMatchObject({
+    expect(parseYoutubePage('https://www.youtube.com/results?search_query=spanish')).toMatchObject({
       supported: false,
       reason: 'not_watch_page',
     });

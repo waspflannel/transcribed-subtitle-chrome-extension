@@ -16,8 +16,9 @@ describe('SubtitleApiClient', () => {
     const jobResponse: JobResponse = {
       jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
       youtubeVideoId: 'dQw4w9WgXcQ',
-      sourceLanguage: 'ara',
-      targetLanguage: 'eng',
+      sourceLanguage: 'auto',
+      detectedSourceLanguage: 'spa',
+      targetLanguage: 'fra',
       track: trackResponse(),
       createdAt: '2026-04-30T00:00:00Z',
       updatedAt: '2026-04-30T00:00:00Z',
@@ -28,8 +29,8 @@ describe('SubtitleApiClient', () => {
 
     const payload: CreateSubtitleJobRequest = {
       youtubeVideoId: 'dQw4w9WgXcQ',
-      sourceLanguage: 'ara',
-      targetLanguage: 'eng',
+      sourceLanguage: 'auto',
+      targetLanguage: 'fra',
       enrichmentMode: 'on_demand',
     };
 
@@ -110,8 +111,8 @@ describe('SubtitleApiClient', () => {
       cueId: 'cue-0001',
       token: {
         index: 0,
-        text: 'salam',
-        gloss: 'peace greeting',
+        text: 'hola',
+        gloss: 'hello',
       },
     };
     const fetchMock = vi.fn(async () => jsonResponse(tokenResponse, 200));
@@ -152,8 +153,8 @@ describe('SubtitleApiClient', () => {
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
     const payload: CreateSubtitleJobRequest = {
       youtubeVideoId: 'bad-job-id',
-      sourceLanguage: 'ara',
-      targetLanguage: 'eng',
+      sourceLanguage: 'auto',
+      targetLanguage: 'fra',
     };
 
     await expect(client.createSubtitleJob(installId, payload)).rejects.toMatchObject({
@@ -181,19 +182,20 @@ function trackResponse(): TrackResponse {
     trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',
     jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
     youtubeVideoId: 'dQw4w9WgXcQ',
-    sourceLanguage: 'ara',
-    targetLanguage: 'eng',
+    sourceLanguage: 'auto',
+    detectedSourceLanguage: 'spa',
+    targetLanguage: 'fra',
     generatedAt: '2026-04-30T00:00:00Z',
     expiresAt: '2026-05-30T00:00:00Z',
-    webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nmarhaban\n",
+    webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nhola\n",
     cues: [
       {
         cueId: 'cue-0001',
         index: 0,
         startMs: 0,
         endMs: 1000,
-        sourceText: 'marhaban',
-        translatedText: 'hello',
+        sourceText: 'hola',
+        translatedText: 'bonjour',
         tokens: [],
       },
     ],

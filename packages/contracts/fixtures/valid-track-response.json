@@ -3,42 +3,38 @@
   "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3001",
   "youtubeVideoId": "dQw4w9WgXcQ",
   "sourceLanguage": "auto",
-  "detectedSourceLanguage": "ara",
+  "detectedSourceLanguage": "spa",
   "targetLanguage": "eng",
   "generatedAt": "2026-04-28T05:02:00Z",
   "expiresAt": "2026-05-28T05:02:00Z",
-  "webVtt": "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nÙ…Ø±Ø­Ø¨Ø§ Ø¨ÙƒÙ…\n",
+  "webVtt": "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nHola a todos\n",
   "cues": [
     {
       "cueId": "cue-0001",
       "index": 0,
       "startMs": 1200,
       "endMs": 4200,
-      "sourceText": "مرحبا بكم",
-      "translatedText": "Welcome everyone",
-      "romanization": "marhaban bikum",
+      "sourceText": "Hola a todos",
+      "translatedText": "Hello everyone",
       "tokens": [
         {
           "index": 0,
-          "text": "مرحبا",
-          "normalizedText": "مرحبا",
-          "lemma": "مرحبا",
-          "root": "r-h-b",
+          "text": "Hola",
+          "normalizedText": "hola",
+          "lemma": "hola",
           "partOfSpeech": "interjection",
           "translation": "hello",
           "gloss": "greeting",
-          "romanization": "marhaban",
           "usageNote": "Common greeting."
         },
         {
           "index": 1,
-          "text": "بكم",
-          "normalizedText": "بكم",
-          "lemma": "أنتم",
+          "text": "todos",
+          "normalizedText": "todos",
+          "lemma": "todo",
           "partOfSpeech": "pronoun",
-          "translation": "you all",
-          "gloss": "with you",
-          "romanization": "bikum"
+          "translation": "everyone",
+          "gloss": "all"
         }
       ]
     }
