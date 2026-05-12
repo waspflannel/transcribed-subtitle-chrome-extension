@@ -8,7 +8,7 @@
 - The content script binds ready tracks to the page's primary `<video>` element, resolves browser `TextTrack` cue changes back to the matching API cue, and avoids replacing overlay HTML when rendered content has not changed.
 - The overlay renders a Shadow DOM learning rail with source-token cards, cue timing, selected-target translation, optional romanization/gloss metadata, hover preview, and click/tap pinned token detail.
 - The overlay calls the background script for on-click token enrichment when a token only has transcript/romanization data, then re-renders from the patched backend track.
-- The popup has Generate and Jobs tabs, searchable Learning language and Translation language pickers, WER accuracy badges, a shared transcription/translation quality caveat, a Full word cards toggle with OpenAI-credit warning copy, backend-synced progress, stable public error copy, and a local clear-state control.
+- The popup has Generate and Jobs tabs, searchable Subtitle language and Translation language pickers, WER accuracy badges, a shared transcription/translation quality caveat, a Full word cards toggle with OpenAI-credit warning copy, backend-synced progress, stable public error copy, and a local clear-state control.
 - The popup exposes a manual subtitle timing delay from -10s to +10s. The content script applies it locally by rebinding the generated WebVTT track with shifted cue timings.
 - A Laravel/web application frontend is outside the current release scope.
 

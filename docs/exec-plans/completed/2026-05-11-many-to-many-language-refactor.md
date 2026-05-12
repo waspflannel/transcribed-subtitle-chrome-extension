@@ -7,7 +7,7 @@ Last updated: 2026-05-11
 
 ## Goal
 
-Refactor subtitle generation from a fixed source-language-to-English workflow into selectable learning/source and translation/target languages. The popup should default to Auto detect -> English, keep the existing YouTube-only synchronous generation path, and show language quality caveats where transcription and translation quality may vary.
+Refactor subtitle generation from a fixed source-language-to-English workflow into selectable subtitle/source and translation/target languages. The popup should default to Auto detect -> English, keep the existing YouTube-only synchronous generation path, and show language quality caveats where transcription and translation quality may vary.
 
 ## Scope
 
@@ -91,14 +91,14 @@ Evidence to capture:
 | 2026-05-11 | Plan created after loading `phased-implementation-v2`, `git-group-commits`, review policy, project guardrails, backend Boost routing, local Laravel skills, ElevenLabs Scribe docs, and OpenAI structured output docs. | `.\scripts\agent\doctor.ps1` passed; baseline `.\scripts\agent\check.ps1` passed with contracts, 52 backend tests, 33 extension tests, TypeScript compile, and WXT build. |
 | 2026-05-11 | Added shared language catalog, schema sync script, updated contract enums/fixtures/types, and backend catalog reader. | `packages/contracts npm run check` passed during implementation. |
 | 2026-05-11 | Updated backend validation, migration, models/resources/history, Scribe request handling, detected language normalization, cache keys, same-language skip behavior, and OpenAI prompts/tests. | `php artisan test --compact` passed: 57 tests, 338 assertions. |
-| 2026-05-11 | Replaced popup source dropdown with searchable Learning/Translation language pickers, persisted target language, sent source/target to backend, and added catalog tests. | Extension `npm test` passed: 9 files, 37 tests; `npm run compile` passed. |
+| 2026-05-11 | Replaced popup source dropdown with searchable Subtitle/Translation language pickers, persisted target language, sent source/target to backend, and added catalog tests. | Extension `npm test` passed: 9 files, 37 tests; `npm run compile` passed. |
 | 2026-05-11 | Updated durable docs for many-to-many languages, detected source language, quality caveats, and generated contract/database references. | Edited product, architecture, frontend, reliability, observability, security, quality, generated docs, release readiness, and guardrail references. |
 | 2026-05-11 | Completed simplification/readability review and fixed findings. | `git diff --check` passed; removed unused popup language helper; moved fake target-language tracking onto the translation test provider; expanded contract enum sync validation for history and detected language schemas. |
 | 2026-05-11 | Ran final stack validation after simplification fixes. | `npm run check` in `packages/contracts` passed; `php artisan test --compact` passed with 57 tests and 338 assertions; extension `npm test` passed with 9 files and 37 tests; extension `npm run compile` passed; extension `npm run build` passed; `.\scripts\agent\check.ps1` passed. |
 
 ## Completion Notes
 
-- What changed: Added a shared language catalog, expanded contracts/source-target validation, persisted optional detected source language, generalized backend transcription/enrichment to many-to-many pairs, added same-language skip behavior, replaced the popup source dropdown with searchable Learning/Translation language pickers, and updated durable docs.
+- What changed: Added a shared language catalog, expanded contracts/source-target validation, persisted optional detected source language, generalized backend transcription/enrichment to many-to-many pairs, added same-language skip behavior, replaced the popup source dropdown with searchable Subtitle/Translation language pickers, and updated durable docs.
 - Validation results: Contracts, backend tests, extension tests, TypeScript compile, WXT build, and `.\scripts\agent\check.ps1` passed.
 - Simplicity/readability review: Fixed misplaced test tracking state, removed an unused UI helper, and broadened contract enum sync assertions so the generated schemas cannot drift quietly.
 - Residual risk: Live provider quality for lower-WER-tier languages still needs manual public-video testing with real ElevenLabs/OpenAI credentials.

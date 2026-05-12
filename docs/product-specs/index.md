@@ -5,7 +5,7 @@
 - Product name: transcribed-subtitle-extension
 - Primary user: language learners watching public YouTube videos.
 - Primary problem: YouTube captions are often missing, inaccurate, poorly segmented, or not useful for language study.
-- Core promise: Generate AI subtitle tracks from YouTube audio for selectable learning and translation languages, then render a synchronized learning overlay with timed subtitles, romanization when available, and word-level study data on demand.
+- Core promise: Generate AI subtitle tracks from YouTube audio for selectable subtitle and translation languages, then render a synchronized learning overlay with timed subtitles, romanization when available, and word-level study data on demand.
 
 ## Specs
 
@@ -36,7 +36,7 @@ Recommended format:
 - Backend Laravel job pipeline.
 - Backend YouTube audio acquisition.
 - Timestamped transcription.
-- Selectable learning/source language, defaulting to Auto detect.
+- Selectable subtitle/source language, defaulting to Auto detect.
 - Selectable translation/target language, defaulting to English.
 - Word-card metadata in the selected target language on demand, or for the full track when explicitly enabled.
 - Arabic-script romanization as best-effort display metadata.
