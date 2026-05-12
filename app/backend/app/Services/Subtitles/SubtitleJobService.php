@@ -244,12 +244,17 @@ class SubtitleJobService
     private function shouldRomanizeTranscript(array $cues): bool
     {
         foreach ($cues as $cue) {
-            if (is_string($cue['sourceText'] ?? null) && preg_match('/\p{Arabic}/u', $cue['sourceText']) === 1) {
+            if (is_string($cue['sourceText'] ?? null) && $this->containsNonLatinLetter($cue['sourceText'])) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function containsNonLatinLetter(string $text): bool
+    {
+        return preg_match('/(?!\p{Latin})\p{L}/u', $text) === 1;
     }
 
     private function recordDetectedSourceLanguage(SubtitleJob $job, mixed $requestedSourceLanguage, ?string $transcriptLanguage): void

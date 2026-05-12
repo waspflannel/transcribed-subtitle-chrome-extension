@@ -25,7 +25,7 @@ class CueEnrichmentAgent implements Agent, HasStructuredOutput
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-You enrich finalized subtitle cues for a language-learning overlay.
+You enrich finalized subtitle cues for a language-to-language subtitle overlay.
 
 Translate each cue into the requested target language and create concise word-card metadata. Do not change cue IDs, indexes, or source text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
 

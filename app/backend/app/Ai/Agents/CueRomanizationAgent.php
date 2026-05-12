@@ -22,7 +22,7 @@ class CueRomanizationAgent implements Agent, HasStructuredOutput
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-Romanize subtitle cues written in Arabic script for display in transcript-first mode.
+Romanize subtitle cues written in non-Latin scripts for display in transcript-first mode.
 
 Do not translate, explain grammar, or create word-card metadata. Preserve cue and token identity exactly. Return readable Latin-script pronunciation only.
 INSTRUCTIONS;

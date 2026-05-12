@@ -24,7 +24,7 @@ class SubtitleJobFactory extends Factory
             'youtube_video_id' => Str::random(11),
             'youtube_url' => null,
             'video_duration_seconds' => 213,
-            'source_language' => 'ara',
+            'source_language' => 'auto',
             'detected_source_language' => null,
             'target_language' => 'eng',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,

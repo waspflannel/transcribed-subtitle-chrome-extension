@@ -28,7 +28,7 @@ class ScribeTranscriptNormalizerTest extends TestCase
         $this->assertCount(2, $transcript->segments);
     }
 
-    public function test_it_breaks_on_arabic_sentence_punctuation(): void
+    public function test_it_breaks_on_non_latin_sentence_punctuation(): void
     {
         $transcript = $this->normalizer()->normalize([
             'language_code' => 'ar',

@@ -105,7 +105,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         $job = SubtitleJob::factory()->create();
         $generator = app(TimestampedSubtitleTrackGenerator::class);
         $transcript = new TimestampedTranscript(
-            language: 'ara',
+            language: 'spa',
             durationSeconds: 8.0,
             segments: $segments,
             webVtt: $webVtt ?? $this->sampleWebVtt(),
