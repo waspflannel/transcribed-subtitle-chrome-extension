@@ -4,7 +4,7 @@ Created: 2026-05-05
 
 ## Goal
 
-Define the first-release hardening checks for the YouTube AI Subtitle Learning Extension.
+Define the first-release hardening checks for the YouTube AI Language Subtitle Extension.
 
 ## Critical User States
 
@@ -31,10 +31,10 @@ Verify each URL is still public before a release run because YouTube availabilit
 
 | Case | Candidate URL | Purpose | Pass Criteria |
 | --- | --- | --- | --- |
-| Clear Arabic learning audio | `https://www.youtube.com/watch?v=D-vIm_bcgtg` | Clear, short Arabic speech for baseline transcription and translation quality. | Track completes, overlay syncs, and no cue contains empty source text. |
-| Noisy Arabic/public speech candidate | `https://www.youtube.com/watch?v=Kax_tVLW7TU` | Regression check for a real video that completed during Phase 06 live proof under live provider conditions. | Existing or regenerated track completes; logs contain no transcript or audio path leakage. |
-| Dialect-heavy Arabic candidate | `https://www.youtube.com/watch?v=y1wyPIAHhGQ` | Regression check for conversational Arabic that completed during Phase 06 live proof. | Existing or regenerated track completes; popup and overlay show ready state. |
-| Many-to-many language pair | Pick a short public non-English video during release testing | Regression check for selectable source and target languages beyond Arabic -> English. | Generate with Auto detect -> English and one explicit Good or Moderate source/target pair; Jobs shows requested and detected languages when available. |
+| Auto-detected source language | Pick a short public video in any supported non-English language during release testing | Baseline check for Auto detect plus a selected translation language. | Generate with Auto detect -> English or another selected target; Jobs shows requested and detected languages when available. |
+| Explicit source language | Pick a short public video where the spoken language is known | Regression check that the selected subtitle language is sent to transcription instead of relying on a fixed source. | Generate with the matching explicit source language and a different target language; track completes and overlay syncs. |
+| Same-language track | Pick a short public English video or another known-language video | Regression check that source and target can intentionally match. | Generate with the same source and target; subtitles render and duplicate translation/card enrichment is skipped. |
+| Cross-language word cards | Pick a short public non-English video during release testing | Regression check for selectable target-language cards. | Generate one explicit Good or Moderate source/target pair; clicked word cards use the selected target language. |
 | Background-noise/music candidate | `https://www.youtube.com/watch?v=YMOrIhZ2mKM` | Stress transcription/enrichment when speech competes with non-speech audio. | Track completes or fails with stable public error; logs identify the failed stage. |
 | Long-video candidate | `https://www.youtube.com/watch?v=FOvqnzFDMxI` | Exercise the release duration boundary and long-request behavior. | Videos over 60 minutes return `video_too_long`; videos under 60 minutes remain usable during generation. |
 

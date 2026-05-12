@@ -6,11 +6,13 @@ Source baseline: `revamped-design-document.md`
 
 ## 1. Status
 
-This document is the implementation baseline for the revamped product direction.
+This is a historical pre-refactor note, not the active implementation baseline.
 
-The product is a Chrome extension for generating AI subtitles for YouTube videos and rendering an Arabic learning overlay synchronized to playback.
+The current product is a language-to-language YouTube subtitle app where users choose the subtitle/source language or Auto detect and choose the translation/target language for word cards. Current behavior is governed by `docs/product-specs/index.md`, `ARCHITECTURE.md`, and `docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`.
 
-This document intentionally replaces the older dual-platform caption-extraction direction. Netflix, platform caption extraction as the primary path, user accounts, cloud sync, and vocabulary review are out of scope for the first product line described here.
+The Arabic-to-English framing below is retained only as old design history and must not be treated as the active product direction.
+
+This file can still explain older tradeoffs, but future implementation should use the current docs above for scope and product decisions.
 
 Backend technology stack is Laravel. The extension remains TypeScript because Chrome extension code runs in the browser.
 
@@ -1184,7 +1186,7 @@ Deliver:
 - extension track loading
 - synchronized overlay with source text
 
-### Slice 5: Translation And Arabic Learning Data
+### Slice 5: Translation And Learning Data
 
 Deliver:
 

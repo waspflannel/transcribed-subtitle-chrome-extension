@@ -30,7 +30,7 @@ Phase status:
 - Phase 03: Laravel Job API And Persistence, completed in `docs/exec-plans/completed/phase-03-laravel-job-api-and-persistence.md`
 - Phase 04: Audio Acquisition And Transcription Proof, completed in `docs/exec-plans/completed/phase-04-audio-acquisition-and-transcription-proof.md`
 - Phase 05: Generated Track And Overlay Sync, completed in `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md`
-- Phase 06: Translation And Arabic Learning Data, completed in `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md`
+- Phase 06: Translation And Learning Data, completed in `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md`
 - Phase 07: Hardening And Release Readiness, completed in `docs/exec-plans/completed/phase-07-hardening-and-release-readiness.md`
 
 No active implementation phase is open after Phase 07 closeout.

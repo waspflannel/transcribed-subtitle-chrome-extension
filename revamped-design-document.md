@@ -4,11 +4,11 @@ Created: 2026-04-28
 
 ## Status
 
-This document defines the revamped product direction discussed after Phase 02.
+This is a historical pre-refactor note, not the active product baseline.
 
-It intentionally changes the project from a dual-platform caption-enhancement extension into a YouTube-only AI subtitle generation and Arabic learning overlay.
+The current product is a language-to-language YouTube subtitle app where users choose the subtitle/source language or Auto detect and choose the translation/target language for word cards. Current behavior is governed by `docs/product-specs/index.md`, `ARCHITECTURE.md`, and `docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`.
 
-This document should be treated as the new design baseline for upcoming planning. The existing phase plans and older design documents still describe the original caption-extraction direction and should be revised before further implementation work continues.
+The Arabic-to-English framing below is retained only as old design history and must not be treated as the active product direction.
 
 ## Executive Summary
 

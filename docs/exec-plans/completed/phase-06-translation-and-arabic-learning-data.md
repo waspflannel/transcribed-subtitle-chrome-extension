@@ -1,4 +1,4 @@
-# Plan: Phase 06 - Translation And Arabic Learning Data
+# Plan: Phase 06 - Translation And Learning Data
 
 Status: completed
 Owner: agent
@@ -7,9 +7,9 @@ Last updated: 2026-05-05
 
 ## Goal
 
-Enrich generated subtitle cues with English translation and Arabic learning metadata, then render the learning interactions in the overlay.
+Enrich generated subtitle cues with translation and word-level metadata, then render the learning interactions in the overlay.
 
-This phase turns the synchronized subtitle layer into the actual learning product: Arabic source line, English translation, romanization/gloss settings, hover preview, and click/tap pinned token detail.
+This phase turned the synchronized subtitle layer into the learning product: source subtitles, translated text, romanization/gloss settings, hover preview, and click/tap pinned token detail.
 
 ## Scope
 
@@ -17,7 +17,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
   - Laravel AI SDK OpenAI-backed enrichment provider using structured output where it fits the cue contract.
   - Dedicated cue-enrichment agent or prompt with structured output.
   - Translation from source cue text to target language.
-  - Arabic token metadata for text, lemma, root, part of speech, romanization, gloss, and usage note when available.
+  - Token metadata for text, lemma, root, part of speech, romanization, gloss, and usage note when available.
   - Dialect detection stored as metadata and hidden from normal UI.
   - Validation of enriched cue output before storage.
   - Extension rendering of translation below source text.
@@ -35,8 +35,8 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 
 - [x] Laravel enrichment service uses Laravel AI SDK with OpenAI as the first target provider.
 - [x] Enrichment output is structured and validated before storage.
-- [x] Each cue has an English translation when enrichment succeeds.
-- [x] Arabic cues include token metadata where available.
+- [x] Each cue has a translation when enrichment succeeds.
+- [x] Cues include token metadata where available.
 - [x] Missing token fields are omitted or represented safely; UI does not show `null` placeholders.
 - [x] Dialect is stored as `unknown` or a detected value but hidden from normal UI.
 - [x] Overlay renders source text and translation.
@@ -53,7 +53,7 @@ This phase turns the synchronized subtitle layer into the actual learning produc
 - Related plans: `phase-05-generated-track-and-overlay-sync.md`, `phase-07-hardening-and-release-readiness.md`
 - Known risks:
   - Model output may be incomplete or inconsistent without strict structured validation.
-  - Arabic tokenization quality varies by dialect and orthography.
+  - Tokenization quality varies by language, dialect, script, and orthography.
   - Hover UI can become cluttered if every available field is always displayed.
 
 ## Implementation Steps
@@ -86,7 +86,7 @@ npm run build
 Evidence to capture:
 
 - Tests: structured output validation, enrichment failure mapping, token rendering, settings behavior.
-- Screenshots or video: overlay with Arabic, English translation, hover preview, and pinned token detail.
+- Screenshots or video: overlay with source text, translation, hover preview, and pinned token detail.
 - Logs: enrichment started/completed/failed events.
 - Metrics or traces: enrichment latency and cue count.
 

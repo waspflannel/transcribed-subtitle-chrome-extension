@@ -30,7 +30,7 @@ The finished workflow should keep a synchronous first-release path: the extensio
 ## Acceptance Criteria
 
 - [ ] Implementation branch is based on `main`; the old branch is used only as reference.
-- [x] Default generation calls ElevenLabs for transcription and OpenAI only for best-effort romanization when Arabic script is present.
+- [x] Default generation calls ElevenLabs for transcription and OpenAI only for best-effort romanization when non-Latin script is present.
 - [x] Clicking an unenriched word calls the backend `/v1/learning-tokens`, patches the stored track, and avoids duplicate OpenAI calls for cached metadata.
 - [x] Full word-card mode calls OpenAI for all cue cards before returning the generated track.
 - [x] Backend job history/progress is authoritative for the popup Jobs tab; Cancel is absent.

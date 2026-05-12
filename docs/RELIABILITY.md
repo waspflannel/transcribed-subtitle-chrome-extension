@@ -25,7 +25,7 @@ Subtitle generation remains synchronous. Expected backend failures include unsup
 
 Extension playback sync is local and browser-native. It attaches generated WebVTT as a hidden `TextTrack`, listens for `cuechange`, clears the overlay when no cue is active, and logs diagnostics instead of trying to auto-correct track drift.
 
-Provider queueing and failover are intentionally deferred for this proof. ElevenLabs is the only transcription provider; OpenAI is used only for romanization and word-card generation. Revisit framework or SDK-native queueing before adding asynchronous transcription, but keep product-owned job state and raw audio cleanup explicit.
+Provider queueing and failover are intentionally deferred for this proof. ElevenLabs is the only transcription provider; OpenAI is used only for non-Latin-script romanization and word-card generation. Revisit framework or SDK-native queueing before adding asynchronous transcription, but keep product-owned job state and raw audio cleanup explicit.
 
 Default generation persists a subtitle-focused track even if romanization fails. Full word-card mode fails if batch enrichment fails. Same-language source/target requests skip translation enrichment and persist transcript text as the translated text. On-click token enrichment caches successful metadata by token/context/language/model and patches the stored track for the remaining 30-day track lifetime.
 

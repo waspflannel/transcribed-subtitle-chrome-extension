@@ -51,7 +51,7 @@ Pop-Location
 | Phase 03: Laravel Job API And Persistence | `laravel-best-practices`, `laravel-patterns`, `laravel-specialist`, `laravel-security`. |
 | Phase 04: Audio Acquisition And Transcription Proof | `laravel-best-practices`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`, `subtitle-pipeline`. |
 | Phase 05: Generated Track And Overlay Sync | Use Laravel skills only for backend track endpoint or persistence changes. |
-| Phase 06: Translation And Arabic Learning Data | `laravel-best-practices`, `laravel-patterns`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`, `subtitle-pipeline`. |
+| Phase 06: Translation And Learning Data | `laravel-best-practices`, `laravel-patterns`, `laravel-specialist`, `laravel-security`, `ai-sdk-development`, `subtitle-pipeline`. |
 | Phase 07: Hardening And Release Readiness | `laravel-security`, plus `laravel-patterns` and `laravel-specialist` for cleanup. |
 
 ## Evidence

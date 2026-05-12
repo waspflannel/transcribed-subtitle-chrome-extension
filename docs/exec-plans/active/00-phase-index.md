@@ -7,7 +7,7 @@ Last updated: 2026-05-05
 
 ## Goal
 
-This index splits `detailed-design-document.md` into implementation phases for the YouTube AI Subtitle Learning Extension.
+This index splits `detailed-design-document.md` into implementation phases for the YouTube AI Language Subtitle Extension.
 
 The phase sequence is designed to reach real transcription early, keep the Laravel backend and WXT extension simple, and preserve schema-first contracts across PHP and TypeScript.
 
@@ -28,7 +28,7 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 | 03 | `../completed/phase-03-laravel-job-api-and-persistence.md` | Laravel generation API, SQLite persistence, and mock track path | Completed 2026-04-30 |
 | 04 | `../completed/phase-04-audio-acquisition-and-transcription-proof.md` | Public YouTube audio acquisition and timestamped transcription proof | Completed 2026-05-02 |
 | 05 | `../completed/phase-05-generated-track-and-overlay-sync.md` | Valid generated tracks and playback-synced overlay | Completed 2026-05-02 |
-| 06 | `../completed/phase-06-translation-and-arabic-learning-data.md` | Translation and Arabic token learning data | Completed 2026-05-04 |
+| 06 | `../completed/phase-06-translation-and-arabic-learning-data.md` | Translation and word-level learning data | Completed 2026-05-04 |
 | 07 | `../completed/phase-07-hardening-and-release-readiness.md` | Reliability, privacy, rate limits, diagnostics, and acceptance tests | Completed 2026-05-05 |
 
 ## Global Constraints

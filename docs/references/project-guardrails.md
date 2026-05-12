@@ -4,11 +4,11 @@ Created: 2026-04-28
 
 > A great engineer finds the simplest solution to the hardest problems.
 
-These guardrails apply to the YouTube AI Subtitle Learning Extension. Use them when implementing phases, reviewing changes, or deciding whether a new abstraction is justified.
+These guardrails apply to the YouTube AI Language Subtitle Extension. Use them when implementing phases, reviewing changes, or deciding whether a new abstraction is justified.
 
 ## Product Guardrails
 
-- Build the first product path only: public YouTube video -> generated subtitle track -> synchronized language-learning overlay.
+- Build the first product path only: public YouTube video -> generated subtitle track -> synchronized language-to-language overlay.
 - Keep Netflix, other platforms, live captioning, accounts, vocabulary review, and subtitle editing out of the first release.
 - The user must explicitly start AI subtitle generation.
 - Extension code must never call OpenAI or any AI provider directly.
