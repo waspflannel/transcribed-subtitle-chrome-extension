@@ -17,8 +17,9 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - The backend exposes local `POST /v1/subtitle-jobs`, `GET /v1/subtitle-jobs`, and `POST /v1/learning-tokens` JSON APIs.
 - Subtitle jobs and generated tracks persist in Laravel SQLite tables; successful requests return a completed job with its generated track.
 - Current subtitle generation acquires YouTube audio, sends it to ElevenLabs Scribe v2 for word timestamps using the requested source language or provider auto-detect, normalizes provider language codes into the catalog when possible, and persists subtitle-focused tracks for 30 days.
-- Default generation is transcript-first: it stores timed subtitle cues with token stubs and best-effort OpenAI romanization for non-Latin-script cues. Full word-card mode is opt-in and enriches every cue into the selected target language before returning.
-- Same-language source/target requests keep transcript subtitles, set translated text to the source text, and skip translation/card enrichment while keeping transcript-first romanization where applicable.
+- Default generation is transcript-first: it stores timed subtitle cues, then runs a dedicated OpenAI/Laravel AI structured-output tokenizer for every transcript so learner-facing token boundaries are chosen before display. ElevenLabs Scribe words are normalized into timed transcript segments directly, including removal of provider-created character spacing for no-space scripts, and WebVTT is generated from those segments for browser track sync. The tokenizer prompt includes previous/current/next cue text, and the agent schema returns only cue identity plus token index/text. Backend validation checks cue identity, sequential token indexes, non-empty lexical token text, and source-order boundary safety; failed cues retry once with `OPENAI_TOKENIZATION_RETRY_MODEL` before being stored as transcript-only `tokens: []`.
+- Romanization is a separate optional step controlled by `includeRomanization`; it annotates existing tokenizer boundaries and cannot retokenize. Full word-card mode is opt-in and enriches every existing token into the selected target language without changing token count, indexes, or text.
+- Same-language source/target requests keep transcript subtitles, set translated text to the source text, and skip translation/card enrichment while keeping tokenizer output and optional romanization where applicable.
 - On-click word cards call the backend one token at a time, use OpenAI structured output with the effective source and selected target language, cache by token/context/language/model, and patch the stored track for reuse.
 
 ## Selected Stack
@@ -53,8 +54,10 @@ Chrome Extension
       -> Laravel application services
       -> YouTube audio acquisition in controlled temporary storage
       -> ElevenLabs Scribe word-timestamp transcription
-      -> Scribe word normalization into WebVTT-backed cue validation
-      -> Optional OpenAI/Laravel AI romanization or word-card enrichment
+      -> Scribe word normalization into timed segments and WebVTT
+      -> OpenAI/Laravel AI cue tokenization
+      -> Optional OpenAI/Laravel AI romanization preserving token boundaries
+      -> Optional OpenAI/Laravel AI word-card enrichment preserving token boundaries
       -> SQLite track storage
   <- generated subtitle track
 ```

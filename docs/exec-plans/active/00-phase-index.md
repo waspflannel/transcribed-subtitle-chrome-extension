@@ -3,7 +3,7 @@
 Status: completed
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-05
+Last updated: 2026-05-13
 
 ## Goal
 
@@ -76,3 +76,8 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-05 | Phase 06 live proof completed; real provider failures drove split-retry hardening and closed `TD-005`. | `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md`; `docs/exec-plans/tech-debt-tracker.md` |
 | 2026-05-05 | Phase 07 completed and archived with release hardening, acceptance matrix, and remaining release-smoke automation debt tracked. | `docs/exec-plans/completed/phase-07-hardening-and-release-readiness.md`; `docs/exec-plans/tech-debt-tracker.md` |
 | 2026-05-11 | Many-to-many language refactor completed and archived. | `docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md` |
+| 2026-05-11 | AI-first tokenization and romanization revamp completed and archived. | `docs/exec-plans/completed/2026-05-11-ai-first-tokenization-and-romanization-revamp.md` |
+| 2026-05-12 | Cheap tokenizer agent pipeline completed and archived. | `docs/exec-plans/completed/2026-05-12-cheap-tokenizer-agent-pipeline.md` |
+| 2026-05-12 | Simple AI tokenization pipeline refactor completed and archived. | `docs/exec-plans/completed/2026-05-12-simple-ai-tokenization-pipeline-refactor.md` |
+| 2026-05-12 | Tokenization quality gate upgrade completed and archived. | `docs/exec-plans/completed/2026-05-12-tokenization-quality-gate-upgrade.md` |
+| 2026-05-13 | Tokenization pipeline cleanup refactor completed and archived. | `docs/exec-plans/completed/2026-05-13-tokenization-pipeline-cleanup-refactor.md` |

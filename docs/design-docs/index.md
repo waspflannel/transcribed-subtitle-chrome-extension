@@ -30,7 +30,8 @@ Each decision should include context, decision, consequences, validation expecta
 - Users select the subtitle/source language for transcription, or Auto detect.
 - Users select the translation/target language for word cards.
 - ElevenLabs Scribe is the transcription provider for the current proof.
-- OpenAI is used for non-Latin-script romanization and target-language word-card enrichment.
+- OpenAI/Laravel AI structured output is used for mandatory cue tokenization, optional non-Latin-script romanization, and target-language word-card enrichment.
+- Token boundary intelligence belongs in the tokenizer agent; backend token validation is limited to output shape and source-order safety.
 - Laravel Boost is required development tooling after the Laravel app is scaffolded.
 - Contracts are schema-first and shared across Laravel and TypeScript.
 - Completed tracks are retained for 30 days.
