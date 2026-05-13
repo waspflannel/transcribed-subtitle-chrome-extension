@@ -11,7 +11,7 @@ use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\Transcription\TranscriptionService;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
-use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
+use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -38,7 +38,7 @@ class SubtitleJobApiTest extends TestCase
 
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
         $this->app->instance(TranscriptionService::class, $this->transcriptionService);
-        $this->app->instance(TranslationAnalysisProvider::class, $this->translationAnalysis);
+        $this->app->instance(LaravelAiTranslationAnalysisProvider::class, $this->translationAnalysis);
     }
 
     public function test_default_generation_returns_transcript_first_track_without_full_card_enrichment(): void
@@ -72,6 +72,7 @@ class SubtitleJobApiTest extends TestCase
             'progress_percent' => 100,
         ]);
         $this->assertFalse(File::exists($this->audioSource->lastAudioPath));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->calls);
         $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
     }
@@ -100,8 +101,65 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.tokens.1.romanization', 'romanized بكم');
 
         $this->assertNull($response->json('track.cues.0.tokens.0.gloss'));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->calls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
+    }
+
+    public function test_transcript_first_generation_skips_romanization_when_disabled(): void
+    {
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'ara',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
+        );
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'noroman0001',
+                'includeRomanization' => false,
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', 'مرحبا بكم')
+            ->assertJsonPath('track.cues.0.tokens.0.text', 'مرحبا');
+
+        $this->assertNull($response->json('track.cues.0.romanization'));
+        $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
+    }
+
+    public function test_japanese_transcript_first_generation_rebuilds_grouped_tokens_and_romanization(): void
+    {
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'jpn',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, '私は日本語を勉強しています')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\n私は日本語を勉強しています\n",
+        );
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'jpn',
+                'youtubeVideoId' => 'jpn00000001',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', '私は日本語を勉強しています')
+            ->assertJsonPath('track.cues.0.romanization', 'watashi wa nihongo o benkyo shite imasu')
+            ->assertJsonPath('track.cues.0.tokens.0.text', '私')
+            ->assertJsonPath('track.cues.0.tokens.2.text', '日本語')
+            ->assertJsonPath('track.cues.0.tokens.2.romanization', 'nihongo')
+            ->assertJsonPath('track.cues.0.tokens.4.text', '勉強しています');
+
+        $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
     }
 
     public function test_non_latin_transcript_first_generation_continues_when_romanization_fails(): void
@@ -125,12 +183,93 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertNull($response->json('track.cues.0.romanization'));
         $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'nonlatin001',
             'status' => 'completed',
             'stage' => 'finalizing',
         ]);
+    }
+
+    public function test_transcript_first_generation_continues_with_transcript_only_cues_when_tokenization_fails(): void
+    {
+        $this->translationAnalysis->tokenizationShouldFail = true;
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('track.cues.0.tokens', []);
+
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'youtube_video_id' => 'tokfail0001',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+        ]);
+    }
+
+    public function test_japanese_romanization_failure_keeps_tokenizer_tokens(): void
+    {
+        $this->translationAnalysis->romanizationShouldFail = true;
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'jpn',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, '私 は 日 本 語 を 勉 強 し て い ま す')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\n私 は 日 本 語 を 勉 強 し て い ま す\n",
+        );
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'jpn',
+                'youtubeVideoId' => 'jpnfail0001',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.tokens.0.text', '私')
+            ->assertJsonPath('track.cues.0.tokens.2.text', '日本語')
+            ->assertJsonPath('track.cues.0.tokens.4.text', '勉強しています');
+
+        $this->assertNull($response->json('track.cues.0.romanization'));
+        $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
+    }
+
+    public function test_japanese_romanization_failure_keeps_no_space_tokenizer_boundaries(): void
+    {
+        $this->translationAnalysis->romanizationShouldFail = true;
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'jpn',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'ねえ今思っていてあそうじゃな')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nねえ今思っていてあそうじゃな\n",
+        );
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'jpn',
+                'youtubeVideoId' => 'jpnfail0002',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.tokens.0.text', 'ねえ')
+            ->assertJsonPath('track.cues.0.tokens.1.text', '今')
+            ->assertJsonPath('track.cues.0.tokens.2.text', '思っていて')
+            ->assertJsonPath('track.cues.0.tokens.3.text', 'あそうじゃな');
+
+        $this->assertNull($response->json('track.cues.0.romanization'));
+        $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
     }
 
     public function test_full_enrichment_mode_blocks_for_all_card_metadata(): void
@@ -145,8 +284,37 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.tokens.0.gloss', 'first');
 
         $this->assertSame(1, $this->translationAnalysis->calls);
-        $this->assertSame(['spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
+    }
+
+    public function test_full_japanese_enrichment_uses_grouped_token_boundaries(): void
+    {
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'jpn',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, '私は日本語を勉強しています')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\n私は日本語を勉強しています\n",
+        );
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'jpn',
+                'youtubeVideoId' => 'jpnfull0001',
+                'enrichmentMode' => 'full',
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.translatedText', 'Translated 私は日本語を勉強しています')
+            ->assertJsonPath('track.cues.0.tokens.2.text', '日本語')
+            ->assertJsonPath('track.cues.0.tokens.2.gloss', 'Japanese language')
+            ->assertJsonPath('track.cues.0.tokens.4.text', '勉強しています');
+
+        $this->assertSame(1, $this->translationAnalysis->calls);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
     }
 
     public function test_full_same_language_generation_skips_translation_enrichment(): void
@@ -165,6 +333,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.translatedText', 'first transcript segment');
 
         $this->assertSame(0, $this->translationAnalysis->calls);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
 
@@ -183,6 +352,40 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertNotSame($onDemandResponse->json('jobId'), $fullResponse->json('jobId'));
         $this->assertNotSame($onDemandResponse->json('track.trackId'), $fullResponse->json('track.trackId'));
+        $this->assertSame(2, SubtitleJob::count());
+        $this->assertSame(2, SubtitleTrack::count());
+    }
+
+    public function test_romanized_and_non_romanized_tracks_are_cached_separately(): void
+    {
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'ara',
+            durationSeconds: 2.0,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
+            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
+        );
+
+        $plainResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'romanmode01',
+                'includeRomanization' => false,
+            ]));
+
+        $romanizedResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'romanmode01',
+                'includeRomanization' => true,
+            ]));
+
+        $plainResponse->assertOk();
+        $romanizedResponse->assertOk();
+
+        $this->assertNotSame($plainResponse->json('jobId'), $romanizedResponse->json('jobId'));
+        $this->assertNotSame($plainResponse->json('track.trackId'), $romanizedResponse->json('track.trackId'));
+        $this->assertNull($plainResponse->json('track.cues.0.romanization'));
+        $this->assertSame('romanized مرحبا بكم', $romanizedResponse->json('track.cues.0.romanization'));
         $this->assertSame(2, SubtitleJob::count());
         $this->assertSame(2, SubtitleTrack::count());
     }
@@ -280,6 +483,45 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(1, $this->audioSource->calls);
         $this->assertSame(0, $this->translationAnalysis->calls);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_old_tokenization_processing_versions_are_not_reused(): void
+    {
+        $oldJob = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'youtube_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'source_language' => 'auto',
+            'detected_source_language' => 'spa',
+            'target_language' => 'eng',
+            'processing_version' => 'elevenlabs-scribe-v2-transcript-first-tokenizer-agent-v4',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+            'install_id' => $this->installId(),
+            'expires_at' => now()->addDays(30),
+        ]);
+        SubtitleTrack::factory()
+            ->for($oldJob, 'job')
+            ->create([
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'source_language' => 'auto',
+                'detected_source_language' => 'spa',
+                'target_language' => 'eng',
+                'processing_version' => 'elevenlabs-scribe-v2-transcript-first-tokenizer-agent-v4',
+                'expires_at' => now()->addDays(30),
+            ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $response->assertOk();
+
+        $this->assertSame(2, SubtitleJob::count());
+        $this->assertSame(2, SubtitleTrack::count());
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertNotSame($oldJob->public_id, $response->json('jobId'));
     }
 
     public function test_completed_tracks_are_cached_per_install(): void
@@ -650,15 +892,21 @@ class RecordingTranscriptionService implements TranscriptionService
     }
 }
 
-class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvider
+class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisProvider
 {
+    public function __construct() {}
+
     public int $calls = 0;
+
+    public int $tokenizationCalls = 0;
 
     public int $romanizationCalls = 0;
 
     public int $tokenCalls = 0;
 
     public bool $shouldFail = false;
+
+    public bool $tokenizationShouldFail = false;
 
     public bool $romanizationShouldFail = false;
 
@@ -675,8 +923,37 @@ class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvide
     /**
      * @param  array<int, array<string, mixed>>  $cues
      */
-    public function enrich(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    public function tokenize(array $cues, string $sourceLanguage): CueEnrichmentResult
     {
+        $this->tokenizationCalls++;
+        $this->sourceLanguages[] = $sourceLanguage;
+
+        if ($this->tokenizationShouldFail) {
+            throw SubtitleProcessingException::enrichmentFailed();
+        }
+
+        return new CueEnrichmentResult(
+            array_map(
+                fn (array $cue): array => [
+                    ...$cue,
+                    'translatedText' => (string) $cue['sourceText'],
+                    'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
+                ],
+                $cues,
+            ),
+            'unknown',
+        );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    public function enrich(
+        array $cues,
+        string $sourceLanguage,
+        string $targetLanguage,
+        bool $includeRomanization = true,
+    ): CueEnrichmentResult {
         $this->calls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
@@ -687,21 +964,27 @@ class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvide
 
         return new CueEnrichmentResult(
             array_map(
-                function (array $cue): array {
-                    $firstToken = strtok((string) $cue['sourceText'], ' ') ?: (string) $cue['sourceText'];
-
-                    return [
+                function (array $cue) use ($includeRomanization): array {
+                    $enrichedCue = [
                         ...$cue,
                         'translatedText' => 'Translated '.$cue['sourceText'],
-                        'tokens' => [
-                            [
-                                'index' => 0,
-                                'text' => $firstToken,
-                                'gloss' => $firstToken,
-                                'romanization' => $firstToken,
+                        'tokens' => array_map(
+                            fn (array $token): array => [
+                                ...$token,
+                                'gloss' => $this->glossForToken((string) $token['text']),
+                                ...($includeRomanization && is_string($token['romanization'] ?? null)
+                                    ? ['romanization' => $token['romanization']]
+                                    : []),
                             ],
-                        ],
+                            $cue['tokens'],
+                        ),
                     ];
+
+                    if ($includeRomanization && is_string($cue['romanization'] ?? null)) {
+                        $enrichedCue['romanization'] = $cue['romanization'];
+                    }
+
+                    return $enrichedCue;
                 },
                 $cues,
             ),
@@ -725,11 +1008,11 @@ class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvide
                 fn (array $cue): array => [
                     ...$cue,
                     'translatedText' => (string) $cue['sourceText'],
-                    'romanization' => 'romanized '.$cue['sourceText'],
+                    'romanization' => $this->romanizationForCue((string) $cue['sourceText'], $sourceLanguage),
                     'tokens' => array_map(
                         fn (array $token): array => [
                             ...$token,
-                            'romanization' => 'romanized '.$token['text'],
+                            'romanization' => $this->romanizationForToken((string) $token['text']),
                         ],
                         $cue['tokens'],
                     ),
@@ -764,6 +1047,95 @@ class RecordingTranslationAnalysisProvider implements TranslationAnalysisProvide
             'gloss' => $text.' gloss',
             'romanization' => $text.' romanized',
             'usageNote' => 'Clicked token from cue '.($cue['cueId'] ?? 'unknown').'.',
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function tokenizeCue(string $sourceText, string $sourceLanguage): array
+    {
+        if ($sourceLanguage === 'jpn') {
+            $comparableText = $this->comparableText($sourceText);
+
+            if ($comparableText === '私は日本語を勉強しています') {
+                return $this->japaneseLearningTokens();
+            }
+
+            if ($comparableText === 'ねえ今思っていてあそうじゃな') {
+                return [
+                    ['index' => 0, 'text' => 'ねえ', 'normalizedText' => 'ねえ'],
+                    ['index' => 1, 'text' => '今', 'normalizedText' => '今'],
+                    ['index' => 2, 'text' => '思っていて', 'normalizedText' => '思っていて'],
+                    ['index' => 3, 'text' => 'あそうじゃな', 'normalizedText' => 'あそうじゃな'],
+                ];
+            }
+        }
+
+        $words = array_values(array_filter(
+            preg_split('/\s+/u', trim($sourceText)) ?: [],
+            fn (string $word): bool => $word !== '',
+        ));
+
+        if ($words === []) {
+            $words = [$sourceText];
+        }
+
+        return array_map(
+            fn (string $word, int $index): array => [
+                'index' => $index,
+                'text' => $word,
+                'normalizedText' => strtolower($word),
+            ],
+            $words,
+            array_keys($words),
+        );
+    }
+
+    private function glossForToken(string $token): string
+    {
+        return match ($token) {
+            '日本語' => 'Japanese language',
+            '勉強しています' => 'am studying',
+            default => $token,
+        };
+    }
+
+    private function romanizationForCue(string $sourceText, string $sourceLanguage): string
+    {
+        return $sourceLanguage === 'jpn' && $this->comparableText($sourceText) === '私は日本語を勉強しています'
+            ? 'watashi wa nihongo o benkyo shite imasu'
+            : 'romanized '.$sourceText;
+    }
+
+    private function romanizationForToken(string $token): string
+    {
+        return match ($token) {
+            '私' => 'watashi',
+            'は' => 'wa',
+            '日本語' => 'nihongo',
+            'を' => 'o',
+            '勉強しています' => 'benkyo shite imasu',
+            default => 'romanized '.$token,
+        };
+    }
+
+    private function comparableText(string $text): string
+    {
+        return (string) preg_replace('/\s+/u', '', $text);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function japaneseLearningTokens(): array
+    {
+        return [
+            ['index' => 0, 'text' => '私', 'normalizedText' => '私'],
+            ['index' => 1, 'text' => 'は', 'normalizedText' => 'は'],
+            ['index' => 2, 'text' => '日本語', 'normalizedText' => '日本語'],
+            ['index' => 3, 'text' => 'を', 'normalizedText' => 'を'],
+            ['index' => 4, 'text' => '勉強しています', 'normalizedText' => '勉強しています'],
         ];
     }
 }

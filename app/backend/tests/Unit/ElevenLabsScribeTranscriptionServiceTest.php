@@ -6,7 +6,6 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
-use App\Services\Transcription\WebVttTranscriptParser;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -147,7 +146,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
     private function service(): ElevenLabsScribeTranscriptionService
     {
         return new ElevenLabsScribeTranscriptionService(
-            new ScribeTranscriptNormalizer(new WebVttTranscriptParser),
+            new ScribeTranscriptNormalizer,
         );
     }
 

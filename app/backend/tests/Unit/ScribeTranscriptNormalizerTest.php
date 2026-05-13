@@ -4,7 +4,6 @@ namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
-use App\Services\Transcription\WebVttTranscriptParser;
 use Tests\TestCase;
 
 class ScribeTranscriptNormalizerTest extends TestCase
@@ -64,6 +63,26 @@ class ScribeTranscriptNormalizerTest extends TestCase
         $this->assertSame('again trailing', $transcript->segments[1]->text);
     }
 
+    public function test_it_collapses_provider_artifact_spacing_for_no_space_scripts(): void
+    {
+        $transcript = $this->normalizer()->normalize([
+            'language_code' => 'ja',
+            'words' => [
+                ['text' => "\u{65E5}", 'start' => 0.0, 'end' => 0.1, 'type' => 'word'],
+                ['text' => "\u{672C}", 'start' => 0.1, 'end' => 0.2, 'type' => 'word'],
+                ['text' => "\u{8A9E}", 'start' => 0.2, 'end' => 0.3, 'type' => 'word'],
+                ['text' => "\u{3092}", 'start' => 0.3, 'end' => 0.4, 'type' => 'word'],
+                ['text' => "\u{52C9}", 'start' => 0.4, 'end' => 0.5, 'type' => 'word'],
+                ['text' => "\u{5F37}", 'start' => 0.5, 'end' => 0.6, 'type' => 'word'],
+                ['text' => "\u{3059}\u{308B}\u{3002}", 'start' => 0.6, 'end' => 0.9, 'type' => 'word'],
+            ],
+        ], 'auto', 1.0);
+
+        $this->assertSame('jpn', $transcript->language);
+        $this->assertSame("\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3059}\u{308B}\u{3002}", $transcript->segments[0]->text);
+        $this->assertStringContainsString("\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3059}\u{308B}\u{3002}", $transcript->webVtt);
+    }
+
     public function test_it_rejects_missing_word_timings(): void
     {
         try {
@@ -81,6 +100,6 @@ class ScribeTranscriptNormalizerTest extends TestCase
 
     private function normalizer(): ScribeTranscriptNormalizer
     {
-        return new ScribeTranscriptNormalizer(new WebVttTranscriptParser);
+        return new ScribeTranscriptNormalizer;
     }
 }
