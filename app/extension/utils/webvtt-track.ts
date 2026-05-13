@@ -145,14 +145,8 @@ function findActiveTextCue(textTrack: TextTrack): VTTCue | null {
 function findTrackCue(track: TrackResponse, textCue: VTTCue): SubtitleCue | null {
   const startMs = Math.round(textCue.startTime * 1000);
   const endMs = Math.round(textCue.endTime * 1000);
-  const text = textCue.text.trim();
-  const timingMatch = track.cues.find(
+
+  return track.cues.find(
     (cue) => Math.abs(cue.startMs - startMs) <= 25 && Math.abs(cue.endMs - endMs) <= 25,
-  );
-
-  if (timingMatch) {
-    return timingMatch;
-  }
-
-  return track.cues.find((cue) => cue.sourceText.trim() === text) ?? null;
+  ) ?? null;
 }

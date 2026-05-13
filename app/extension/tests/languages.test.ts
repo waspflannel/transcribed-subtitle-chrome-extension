@@ -35,4 +35,8 @@ describe('language catalog', () => {
     expect(languageLabel('cmn')).toBe('Mandarin');
     expect(languageSearchText(excellent!)).toContain('ja');
   });
+
+  it('rejects unknown display language codes instead of inventing labels', () => {
+    expect(() => languageLabel('xx')).toThrow(TypeError);
+  });
 });

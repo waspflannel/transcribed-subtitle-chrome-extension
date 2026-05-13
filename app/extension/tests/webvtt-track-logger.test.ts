@@ -134,7 +134,13 @@ function trackResponse(): TrackResponse {
         endMs: 2100,
         sourceText: 'first transcript segment',
         translatedText: 'first transcript segment',
-        tokens: [],
+        tokens: [
+          {
+            index: 0,
+            text: 'first',
+            normalizedText: 'first',
+          },
+        ],
       },
     ],
   };

@@ -55,5 +55,5 @@ function pruneExpiredTracks(tracks: Record<string, TrackResponse>): Record<strin
 function isExpired(track: TrackResponse): boolean {
   const expiresAtMs = Date.parse(track.expiresAt);
 
-  return Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now();
+  return !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now();
 }

@@ -18,7 +18,7 @@ export function formatHistoryTimestamp(value: string): string {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return 'Unknown time';
+    throw new Error(`Invalid history timestamp: ${value}`);
   }
 
   return date.toLocaleString(undefined, {

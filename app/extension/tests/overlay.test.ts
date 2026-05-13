@@ -82,6 +82,7 @@ describe('renderOverlayContent', () => {
             {
               index: 0,
               text: 'hola',
+              normalizedText: 'hola',
               romanization: 'o-la',
             },
           ],
@@ -109,6 +110,7 @@ describe('renderOverlayContent', () => {
             {
               index: 0,
               text: 'hola',
+              normalizedText: 'hola',
               romanization: 'o-la',
             },
           ],
@@ -131,12 +133,24 @@ describe('renderOverlayContent', () => {
       targetLanguage: 'eng',
       sourceText: 'Hello everyone',
       translatedText: 'Hello everyone',
-      tokens: [],
+      tokens: [
+        {
+          index: 0,
+          text: 'Hello',
+          normalizedText: 'hello',
+        },
+        {
+          index: 1,
+          text: 'everyone',
+          normalizedText: 'everyone',
+        },
+      ],
     });
     const html = renderOverlayContent(readyState(track));
 
     expect(html).toContain('lang="eng"');
-    expect(html).toContain('Hello everyone');
+    expect(html).toContain('Hello');
+    expect(html).toContain('everyone');
     expect(html).not.toContain('class="translation"');
   });
 });
@@ -187,6 +201,7 @@ function trackResponse(
           {
             index: 0,
             text: 'hola',
+            normalizedText: 'hola',
             lemma: 'hola',
             root: 'hol',
             partOfSpeech: 'interjection',

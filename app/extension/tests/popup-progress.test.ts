@@ -13,7 +13,7 @@ describe('popup progress helpers', () => {
     expect(generationProgress({ stage: 'enriching', progressPercent: 75 }).stageLabel).toBe('Generating word cards');
   });
 
-  it('formats invalid history timestamps defensively', () => {
-    expect(formatHistoryTimestamp('not-a-date')).toBe('Unknown time');
+  it('fails loudly for invalid history timestamps', () => {
+    expect(() => formatHistoryTimestamp('not-a-date')).toThrow('Invalid history timestamp');
   });
 });
