@@ -90,13 +90,51 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
-            'model' => (string) config(
-                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-            ),
+            'model' => $this->openAiModel('enrichment'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => $cueCount,
+        ]);
+    }
+
+    public function tokenizationStarted(SubtitleJob $job, int $cueCount): void
+    {
+        Log::info('backend.tokenization_started', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => $this->openAiModel('tokenization'),
+            'retry_model' => $this->openAiModel('tokenization.retry'),
+            'source_language' => $job->source_language,
+            'cue_count' => $cueCount,
+        ]);
+    }
+
+    public function tokenizationCompleted(SubtitleJob $job, CueEnrichmentResult $enrichment): void
+    {
+        Log::info('backend.tokenization_completed', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => $this->openAiModel('tokenization'),
+            'retry_model' => $this->openAiModel('tokenization.retry'),
+            'source_language' => $job->source_language,
+            'source_dialect' => $enrichment->sourceDialect,
+            'cue_count' => count($enrichment->cues),
+            'token_count' => $this->tokenCount($enrichment),
+            'tokenless_cue_count' => $this->tokenlessCueCount($enrichment),
+        ]);
+    }
+
+    public function tokenizationFallbackUsed(SubtitleJob $job, SubtitleProcessingException $exception): void
+    {
+        Log::warning('backend.tokenization_fallback_used', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'error_code' => $exception->publicCode,
+            ...$exception->context,
         ]);
     }
 
@@ -107,18 +145,12 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
-            'model' => (string) config(
-                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-            ),
+            'model' => $this->openAiModel('enrichment'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'source_dialect' => $enrichment->sourceDialect,
             'cue_count' => count($enrichment->cues),
-            'token_count' => array_sum(array_map(
-                fn (array $cue): int => is_array($cue['tokens'] ?? null) ? count($cue['tokens']) : 0,
-                $enrichment->cues,
-            )),
+            'token_count' => $this->tokenCount($enrichment),
         ]);
     }
 
@@ -129,10 +161,7 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
-            'model' => (string) config(
-                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-            ),
+            'model' => $this->openAiModel('romanization'),
             'cue_count' => $cueCount,
         ]);
     }
@@ -144,17 +173,14 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
-            'model' => (string) config(
-                'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-                config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-            ),
+            'model' => $this->openAiModel('romanization'),
             'cue_count' => count($enrichment->cues),
         ]);
     }
 
-    public function romanizationSkipped(SubtitleJob $job, SubtitleProcessingException $exception): void
+    public function romanizationFailed(SubtitleJob $job, SubtitleProcessingException $exception): void
     {
-        Log::warning('backend.romanization_skipped', [
+        Log::warning('backend.romanization_failed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'error_code' => $exception->publicCode,
@@ -209,5 +235,30 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'exception' => $exception::class,
         ]);
+    }
+
+    private function openAiModel(string $purpose): string
+    {
+        if ($purpose === 'tokenization.retry') {
+            return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.tokenization.retry', 'gpt-5.5');
+        }
+
+        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.'.$purpose.'.default');
+    }
+
+    private function tokenCount(CueEnrichmentResult $enrichment): int
+    {
+        return array_sum(array_map(
+            fn (array $cue): int => is_array($cue['tokens'] ?? null) ? count($cue['tokens']) : 0,
+            $enrichment->cues,
+        ));
+    }
+
+    private function tokenlessCueCount(CueEnrichmentResult $enrichment): int
+    {
+        return count(array_filter(
+            $enrichment->cues,
+            fn (array $cue): bool => ($cue['tokens'] ?? null) === [],
+        ));
     }
 }

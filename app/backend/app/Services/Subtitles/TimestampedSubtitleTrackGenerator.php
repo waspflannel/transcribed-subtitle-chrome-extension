@@ -64,14 +64,14 @@ class TimestampedSubtitleTrackGenerator
     /**
      * @param  array<int, array<string, mixed>>  $draftCues
      */
-    public function transcriptOnlyEnrichment(array $draftCues): CueEnrichmentResult
+    public function fallbackEnrichment(array $draftCues): CueEnrichmentResult
     {
         return new CueEnrichmentResult(
             array_map(
                 fn (array $cue): array => [
                     ...$cue,
                     'translatedText' => (string) $cue['sourceText'],
-                    'tokens' => $this->tokenStubs((string) $cue['sourceText']),
+                    'tokens' => [],
                 ],
                 $draftCues,
             ),
@@ -169,42 +169,6 @@ class TimestampedSubtitleTrackGenerator
     private function normalizeText(string $text): string
     {
         return trim((string) preg_replace('/\s+/u', ' ', $text));
-    }
-
-    /**
-     * @return array<int, array{index: int, text: string, normalizedText: string}>
-     */
-    private function tokenStubs(string $sourceText): array
-    {
-        preg_match_all('/[\p{L}\p{N}\p{M}\']+/u', $sourceText, $matches);
-
-        $words = array_values(array_filter(
-            $matches[0] ?? [],
-            fn (string $word): bool => trim($word) !== '',
-        ));
-
-        if ($words === []) {
-            $words = [$sourceText];
-        }
-
-        return array_map(
-            fn (string $word, int $index): array => [
-                'index' => $index,
-                'text' => $word,
-                'normalizedText' => $this->normalizeTokenText($word),
-            ],
-            $words,
-            array_keys($words),
-        );
-    }
-
-    private function normalizeTokenText(string $text): string
-    {
-        $normalized = $this->normalizeText($text);
-
-        return function_exists('mb_strtolower')
-            ? mb_strtolower($normalized, 'UTF-8')
-            : strtolower($normalized);
     }
 
     /**

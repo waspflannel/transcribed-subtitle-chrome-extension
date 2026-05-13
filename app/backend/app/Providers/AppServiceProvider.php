@@ -4,8 +4,6 @@ namespace App\Providers;
 
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\TranscriptionService;
-use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
-use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -20,7 +18,6 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->bind(TranscriptionService::class, ElevenLabsScribeTranscriptionService::class);
-        $this->app->bind(TranslationAnalysisProvider::class, LaravelAiTranslationAnalysisProvider::class);
     }
 
     /**

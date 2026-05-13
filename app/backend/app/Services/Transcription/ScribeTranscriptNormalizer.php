@@ -7,6 +7,8 @@ use App\Services\Languages\LanguageCatalog;
 
 class ScribeTranscriptNormalizer
 {
+    private const NO_SPACE_ARTIFACT_BOUNDARY_PATTERN = '/(?<=[\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}\p{P}\p{S}])\s+(?=[\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}\p{P}\p{S}])/u';
+
     private const MAX_CUE_DURATION_SECONDS = 6.0;
 
     private const MAX_CUE_CHARACTERS = 84;
@@ -15,15 +17,13 @@ class ScribeTranscriptNormalizer
 
     private const PAUSE_BREAK_SECONDS = 0.9;
 
-    public function __construct(private readonly WebVttTranscriptParser $webVttParser) {}
-
     /**
      * @param  array<string, mixed>  $payload
      */
     public function normalize(array $payload, string $requestedSourceLanguage, ?float $durationSeconds): TimestampedTranscript
     {
-        $webVtt = $this->webVttFromWords($this->timedWords($payload));
-        $parsed = $this->webVttParser->parse($webVtt);
+        $segments = $this->segmentsFromWords($this->timedWords($payload));
+        $webVtt = $this->webVttFromSegments($segments);
         $detectedLanguage = is_string($payload['language_code'] ?? null)
             ? LanguageCatalog::normalizeCode($payload['language_code'])
             : null;
@@ -34,8 +34,8 @@ class ScribeTranscriptNormalizer
         return new TimestampedTranscript(
             language: $language,
             durationSeconds: $durationSeconds,
-            segments: $parsed['segments'],
-            webVtt: $parsed['webVtt'],
+            segments: $segments,
+            webVtt: $webVtt,
         );
     }
 
@@ -119,13 +119,13 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $words
+     * @param  array<int, TimestampedTranscriptSegment>  $segments
      */
-    private function webVttFromWords(array $words): string
+    private function webVttFromSegments(array $segments): string
     {
         $blocks = ['WEBVTT'];
 
-        foreach ($this->segmentsFromWords($words) as $index => $segment) {
+        foreach ($segments as $index => $segment) {
             $blocks[] = implode("\n", [
                 sprintf('cue-%04d', $index + 1),
                 $this->formatTimestamp($segment->startSeconds).' --> '.$this->formatTimestamp($segment->endSeconds),
@@ -222,7 +222,7 @@ class ScribeTranscriptNormalizer
         return new TimestampedTranscriptSegment(
             startSeconds: $start,
             endSeconds: $end,
-            text: $this->normalizeText(implode(' ', array_column($words, 'text'))),
+            text: $this->normalizeTranscriptText(implode(' ', array_column($words, 'text'))),
         );
     }
 
@@ -265,6 +265,13 @@ class ScribeTranscriptNormalizer
     private function normalizeText(string $text): string
     {
         return trim((string) preg_replace('/\s+/u', ' ', $text));
+    }
+
+    private function normalizeTranscriptText(string $text): string
+    {
+        $normalized = $this->normalizeText($text);
+
+        return (string) preg_replace(self::NO_SPACE_ARTIFACT_BOUNDARY_PATTERN, '', $normalized);
     }
 
     /**

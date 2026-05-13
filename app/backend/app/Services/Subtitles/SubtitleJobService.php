@@ -8,26 +8,32 @@ use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Transcription\TranscriptionService;
-use App\Services\TranslationAnalysis\TranslationAnalysisProvider;
+use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION_ON_DEMAND = 'elevenlabs-scribe-v2-transcript-first-romanized-v2';
+    public const PROCESSING_VERSION_ON_DEMAND = 'elevenlabs-scribe-v2-transcript-first-agent-tokenizer-v6';
 
-    public const PROCESSING_VERSION_FULL = 'elevenlabs-scribe-v2-full-enriched-v2';
+    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED = 'elevenlabs-scribe-v2-transcript-first-agent-tokenizer-v6-romanized';
+
+    public const PROCESSING_VERSION_FULL = 'elevenlabs-scribe-v2-full-agent-tokenizer-v6';
+
+    public const PROCESSING_VERSION_FULL_ROMANIZED = 'elevenlabs-scribe-v2-full-agent-tokenizer-v6-romanized';
 
     public const COMPATIBLE_PROCESSING_VERSIONS = [
         self::PROCESSING_VERSION_ON_DEMAND,
+        self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
         self::PROCESSING_VERSION_FULL,
+        self::PROCESSING_VERSION_FULL_ROMANIZED,
     ];
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
         private readonly TranscriptionService $transcriptionService,
-        private readonly TranslationAnalysisProvider $translationAnalysis,
+        private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
         private readonly SubtitleWorkflowLogger $logger,
     ) {}
@@ -38,7 +44,8 @@ class SubtitleJobService
     public function generate(array $payload, string $installId, ?string $requestIp): SubtitleJob
     {
         $enrichmentMode = $this->enrichmentMode($payload);
-        $processingVersion = $this->processingVersion($enrichmentMode);
+        $includeRomanization = $this->includeRomanization($payload);
+        $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization);
 
         $job = DB::transaction(function () use ($payload, $installId, $requestIp, $processingVersion): SubtitleJob {
             $job = SubtitleJob::query()
@@ -71,14 +78,18 @@ class SubtitleJobService
             return $job;
         }
 
-        return $this->generateTrack($job, $payload, $enrichmentMode);
+        return $this->generateTrack($job, $payload, $enrichmentMode, $includeRomanization);
     }
 
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function generateTrack(SubtitleJob $job, array $payload, string $enrichmentMode): SubtitleJob
-    {
+    private function generateTrack(
+        SubtitleJob $job,
+        array $payload,
+        string $enrichmentMode,
+        bool $includeRomanization,
+    ): SubtitleJob {
         $this->extendProcessingTimeLimit();
 
         $audio = null;
@@ -112,37 +123,52 @@ class SubtitleJobService
             $job = $job->refresh();
             $draftCues = $this->tracks->draftCues($transcript);
 
-            if ($enrichmentMode === 'full' && ! $this->isSameLanguageGeneration($job)) {
-                $stage = 'enriching';
-                $this->markJobRunning($job, $stage, 75);
-                $this->logger->enrichmentStarted($job, count($draftCues));
+            $stage = 'tokenizing';
+            $this->markJobRunning($job, $stage, 65);
+            $this->logger->tokenizationStarted($job, count($draftCues));
 
-                $enrichment = $this->translationAnalysis->enrich(
+            try {
+                $enrichment = $this->translationAnalysis->tokenize(
                     cues: $draftCues,
                     sourceLanguage: $this->effectiveSourceLanguage($job),
+                );
+
+                $this->logger->tokenizationCompleted($job, $enrichment);
+            } catch (SubtitleProcessingException $exception) {
+                $this->logger->tokenizationFallbackUsed($job, $exception);
+                $enrichment = $this->tracks->fallbackEnrichment($draftCues);
+            }
+
+            if ($includeRomanization && $this->shouldRomanizeTranscript($enrichment->cues)) {
+                $stage = 'romanizing';
+                $this->markJobRunning($job, $stage, 78);
+                $this->logger->romanizationStarted($job, count($enrichment->cues));
+
+                try {
+                    $enrichment = $this->translationAnalysis->romanize(
+                        cues: $enrichment->cues,
+                        sourceLanguage: $this->effectiveSourceLanguage($job),
+                    );
+
+                    $this->logger->romanizationCompleted($job, $enrichment);
+                } catch (SubtitleProcessingException $exception) {
+                    $this->logger->romanizationFailed($job, $exception);
+                }
+            }
+
+            if ($enrichmentMode === 'full' && ! $this->isSameLanguageGeneration($job)) {
+                $stage = 'enriching';
+                $this->markJobRunning($job, $stage, 85);
+                $this->logger->enrichmentStarted($job, count($enrichment->cues));
+
+                $enrichment = $this->translationAnalysis->enrich(
+                    cues: $enrichment->cues,
+                    sourceLanguage: $this->effectiveSourceLanguage($job),
                     targetLanguage: $job->target_language,
+                    includeRomanization: $includeRomanization,
                 );
 
                 $this->logger->enrichmentCompleted($job, $enrichment);
-            } else {
-                $enrichment = $this->tracks->transcriptOnlyEnrichment($draftCues);
-
-                if ($this->shouldRomanizeTranscript($enrichment->cues)) {
-                    $stage = 'romanizing';
-                    $this->markJobRunning($job, $stage, 82);
-                    $this->logger->romanizationStarted($job, count($enrichment->cues));
-
-                    try {
-                        $enrichment = $this->translationAnalysis->romanize(
-                            cues: $enrichment->cues,
-                            sourceLanguage: $this->effectiveSourceLanguage($job),
-                        );
-
-                        $this->logger->romanizationCompleted($job, $enrichment);
-                    } catch (SubtitleProcessingException $exception) {
-                        $this->logger->romanizationSkipped($job, $exception);
-                    }
-                }
             }
 
             $stage = 'finalizing';
@@ -231,10 +257,24 @@ class SubtitleJobService
         return ($payload['enrichmentMode'] ?? 'on_demand') === 'full' ? 'full' : 'on_demand';
     }
 
-    private function processingVersion(string $enrichmentMode): string
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function includeRomanization(array $payload): bool
     {
-        return $enrichmentMode === 'full'
-            ? self::PROCESSING_VERSION_FULL
+        return filter_var($payload['includeRomanization'] ?? true, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
+    }
+
+    private function processingVersion(string $enrichmentMode, bool $includeRomanization): string
+    {
+        if ($enrichmentMode === 'full') {
+            return $includeRomanization
+                ? self::PROCESSING_VERSION_FULL_ROMANIZED
+                : self::PROCESSING_VERSION_FULL;
+        }
+
+        return $includeRomanization
+            ? self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED
             : self::PROCESSING_VERSION_ON_DEMAND;
     }
 

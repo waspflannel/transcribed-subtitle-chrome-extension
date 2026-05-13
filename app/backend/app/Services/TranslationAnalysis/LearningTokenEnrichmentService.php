@@ -10,7 +10,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class LearningTokenEnrichmentService
 {
     public function __construct(
-        private readonly TranslationAnalysisProvider $translationAnalysis,
+        private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
     ) {}
 
     /**
@@ -144,8 +144,8 @@ class LearningTokenEnrichmentService
             'targetLanguage' => $track->target_language,
             'token' => $token['normalizedText'] ?? $token['text'] ?? '',
             'context' => $cue['sourceText'] ?? '',
-            'model' => config('ai.providers.openai.models.enrichment.default', 'gpt-4o-mini'),
-            'version' => 'v1',
+            'model' => config('ai.providers.openai.models.enrichment.default'),
+            'version' => 'v7-agent-tokenizer-boundaries',
         ], JSON_THROW_ON_ERROR));
     }
 

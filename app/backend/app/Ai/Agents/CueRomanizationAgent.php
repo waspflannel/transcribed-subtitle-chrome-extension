@@ -22,18 +22,15 @@ class CueRomanizationAgent implements Agent, HasStructuredOutput
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-Romanize subtitle cues written in non-Latin scripts for display in transcript-first mode.
+Romanize finalized, pre-tokenized subtitle cues written in non-Latin scripts.
 
-Do not translate, explain grammar, or create word-card metadata. Preserve cue and token identity exactly. Return readable Latin-script pronunciation only.
+Do not translate, explain grammar, create word-card metadata, or change token boundaries. Preserve cue identity, source text, token count, token indexes, and token text exactly. Add only readable learner-standard Latin-script pronunciation, such as Hepburn for Japanese and pinyin for Mandarin. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }
 
     public function model(): string
     {
-        return (string) config(
-            'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-            config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-        );
+        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.romanization.default');
     }
 
     public function timeout(): int

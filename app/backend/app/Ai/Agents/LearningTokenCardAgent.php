@@ -30,10 +30,7 @@ INSTRUCTIONS;
 
     public function model(): string
     {
-        return (string) config(
-            'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-            config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-        );
+        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default');
     }
 
     public function timeout(): int

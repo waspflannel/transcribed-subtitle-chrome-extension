@@ -19,26 +19,20 @@ class CueEnrichmentAgent implements Agent, HasStructuredOutput
 {
     use Promptable;
 
-    /**
-     * Get the instructions that the agent should follow.
-     */
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-You enrich finalized subtitle cues for a language-to-language subtitle overlay.
+You enrich finalized, pre-tokenized subtitle cues for a language-to-language subtitle overlay.
 
-Translate each cue into the requested target language and create concise word-card metadata. Do not change cue IDs, indexes, or source text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
+Translate each cue into the requested target language and add concise word-card metadata to the provided tokens. Do not change cue IDs, cue indexes, source text, token count, token indexes, or token text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
 
-Keep glosses short, romanization readable for learners, and usage notes concise. Return only data that matches the structured output schema.
+The tokenizer has already chosen the learner-facing boundaries. Preserve those boundaries exactly. Glosses should be short, romanization readable for learners when requested, and usage notes concise. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }
 
     public function model(): string
     {
-        return (string) config(
-            'ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default',
-            config('ai.providers.'.Lab::OpenAI->value.'.models.text.default', 'gpt-4o-mini'),
-        );
+        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.enrichment.default');
     }
 
     public function timeout(): int
@@ -46,9 +40,6 @@ INSTRUCTIONS;
         return (int) config('subtitles.enrichment.timeout_seconds', 120);
     }
 
-    /**
-     * Get the agent's structured output schema definition.
-     */
     public function schema(JsonSchema $schema): array
     {
         return [
