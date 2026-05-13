@@ -51,6 +51,7 @@ INSTRUCTIONS;
                     'translatedText' => $schema->string()->min(1)->required(),
                     'romanization' => $schema->string()->min(1)->required(),
                     'tokens' => $schema->array()
+                        ->min(1)
                         ->items($schema->object([
                             'index' => $schema->integer()->min(0)->required(),
                             'text' => $schema->string()->min(1)->required(),

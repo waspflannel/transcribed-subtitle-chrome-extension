@@ -5,9 +5,9 @@ export interface CreateSubtitleJobRequest {
    */
   youtubeVideoId: string;
   /**
-   * Optional watch URL captured by the extension for diagnostics and validation.
+   * Watch URL captured by the extension for diagnostics and validation.
    */
-  youtubeUrl?: string;
+  youtubeUrl: string;
   /**
    * Known YouTube video duration. Backend must still enforce the 60 minute limit.
    */
@@ -236,7 +236,7 @@ export interface LearningTokenResponse {
 export interface LearningToken {
   index: number;
   text: string;
-  normalizedText?: string;
+  normalizedText: string;
   lemma?: string;
   root?: string;
   partOfSpeech?: string;
@@ -847,12 +847,15 @@ export interface SubtitleCue {
   sourceText: string;
   translatedText: string;
   romanization?: string;
-  tokens: LearningToken[];
+  /**
+   * @minItems 1
+   */
+  tokens: [LearningToken, ...LearningToken[]];
 }
 export interface LearningToken {
   index: number;
   text: string;
-  normalizedText?: string;
+  normalizedText: string;
   lemma?: string;
   root?: string;
   partOfSpeech?: string;
@@ -1477,12 +1480,15 @@ export interface SubtitleCue {
   sourceText: string;
   translatedText: string;
   romanization?: string;
-  tokens: LearningToken[];
+  /**
+   * @minItems 1
+   */
+  tokens: [LearningToken, ...LearningToken[]];
 }
 export interface LearningToken {
   index: number;
   text: string;
-  normalizedText?: string;
+  normalizedText: string;
   lemma?: string;
   root?: string;
   partOfSpeech?: string;
@@ -1501,12 +1507,15 @@ export interface SubtitleCue {
   sourceText: string;
   translatedText: string;
   romanization?: string;
-  tokens: LearningToken[];
+  /**
+   * @minItems 1
+   */
+  tokens: [LearningToken, ...LearningToken[]];
 }
 export interface LearningToken {
   index: number;
   text: string;
-  normalizedText?: string;
+  normalizedText: string;
   lemma?: string;
   root?: string;
   partOfSpeech?: string;
@@ -1520,7 +1529,7 @@ export interface LearningToken {
 export interface LearningToken {
   index: number;
   text: string;
-  normalizedText?: string;
+  normalizedText: string;
   lemma?: string;
   root?: string;
   partOfSpeech?: string;

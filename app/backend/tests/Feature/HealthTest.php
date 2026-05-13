@@ -8,7 +8,7 @@ class HealthTest extends TestCase
 {
     public function test_health_route_returns_ok(): void
     {
-        $response = $this->get('/health');
+        $response = $this->get('/up');
 
         $response
             ->assertOk()

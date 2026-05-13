@@ -24,7 +24,7 @@ class CreateSubtitleJobRequest extends FormRequest
     {
         return [
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
-            'youtubeUrl' => ['sometimes', 'string', 'url', 'max:2048'],
+            'youtubeUrl' => ['required', 'string', 'url', 'max:2048'],
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
@@ -36,6 +36,30 @@ class CreateSubtitleJobRequest extends FormRequest
     public function extensionInstallId(): string
     {
         return (string) $this->header('X-Extension-Install-Id');
+    }
+
+    /**
+     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, enrichmentMode: string, includeRomanization: bool}
+     */
+    public function subtitlePayload(): array
+    {
+        $validated = $this->validated();
+        $payload = [
+            'youtubeVideoId' => $validated['youtubeVideoId'],
+            'youtubeUrl' => $validated['youtubeUrl'],
+            'sourceLanguage' => $validated['sourceLanguage'],
+            'targetLanguage' => $validated['targetLanguage'],
+            'enrichmentMode' => $validated['enrichmentMode'] ?? 'on_demand',
+            'includeRomanization' => array_key_exists('includeRomanization', $validated)
+                ? $this->boolean('includeRomanization')
+                : true,
+        ];
+
+        if (array_key_exists('videoDurationSeconds', $validated)) {
+            $payload['videoDurationSeconds'] = $validated['videoDurationSeconds'];
+        }
+
+        return $payload;
     }
 
     /**

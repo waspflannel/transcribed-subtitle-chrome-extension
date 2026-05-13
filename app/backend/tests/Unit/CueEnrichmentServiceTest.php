@@ -144,7 +144,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_tokenization_retry_failure_stores_transcript_only_cue(): void
+    public function test_tokenization_retry_failure_fails_generation(): void
     {
         $sourceText = 'Hola a todos';
 
@@ -171,15 +171,15 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([
-            $this->sourceCue('cue-0001', 0, $sourceText),
-        ], 'jpn');
-
-        $this->assertSame($sourceText, $result->cues[0]['translatedText']);
-        $this->assertSame([], $result->cues[0]['tokens']);
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->tokenize([
+                $this->sourceCue('cue-0001', 0, $sourceText),
+            ], 'jpn'),
+            'tokenization_retry_failed',
+        );
     }
 
-    public function test_tokenization_retry_provider_failure_preserves_valid_first_pass_cues(): void
+    public function test_tokenization_retry_provider_failure_fails_generation(): void
     {
         $validSourceText = 'Hola amiga';
         $failedSourceText = 'good morning';
@@ -203,13 +203,19 @@ class CueEnrichmentServiceTest extends TestCase
             fn (): never => throw new RuntimeException('retry provider unavailable'),
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([
-            $this->sourceCue('cue-0001', 0, $validSourceText),
-            $this->sourceCue('cue-0002', 1, $failedSourceText),
-        ], 'jpn');
+        try {
+            $this->provider()->tokenize([
+                $this->sourceCue('cue-0001', 0, $validSourceText),
+                $this->sourceCue('cue-0002', 1, $failedSourceText),
+            ], 'jpn');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame(RuntimeException::class, $exception->context['exception'] ?? null);
 
-        $this->assertSame(['Hola', 'amiga'], array_column($result->cues[0]['tokens'], 'text'));
-        $this->assertSame([], $result->cues[1]['tokens']);
+            return;
+        }
+
+        $this->fail('Expected retry provider failure to fail tokenization.');
     }
 
     public function test_tokenization_accepts_valid_first_pass_without_retry(): void
@@ -243,7 +249,7 @@ class CueEnrichmentServiceTest extends TestCase
 
     public function test_tokenization_prompt_uses_normalized_source_text_without_span_inputs(): void
     {
-        $sourceText = 'っ と よ ）。 伝 わ な い や な ん て タ ゲ ッ';
+        $sourceText = "\u{3063} \u{3068} \u{3088} \u{FF09}\u{3002} \u{4F1D} \u{308F} \u{306A} \u{3044} \u{3084} \u{306A} \u{3093} \u{3066} \u{30BF} \u{30B2} \u{30C3}";
 
         CueTokenizationAgent::fake([
             [
@@ -252,7 +258,13 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'tokens' => $this->generatedTokens($sourceText, ['っとよ', '伝わない', 'や', 'なんて', 'タゲッ']),
+                        'tokens' => $this->generatedTokens($sourceText, [
+                            "\u{3063}\u{3068}\u{3088}",
+                            "\u{4F1D}\u{308F}\u{306A}\u{3044}",
+                            "\u{3084}",
+                            "\u{306A}\u{3093}\u{3066}",
+                            "\u{30BF}\u{30B2}\u{30C3}",
+                        ]),
                     ],
                 ],
             ],
@@ -263,10 +275,16 @@ class CueEnrichmentServiceTest extends TestCase
         ], 'jpn');
 
         $this->assertSame($sourceText, $result->cues[0]['sourceText']);
-        $this->assertSame(['っとよ', '伝わない', 'や', 'なんて', 'タゲッ'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame([
+            "\u{3063}\u{3068}\u{3088}",
+            "\u{4F1D}\u{308F}\u{306A}\u{3044}",
+            "\u{3084}",
+            "\u{306A}\u{3093}\u{3066}",
+            "\u{30BF}\u{30B2}\u{30C3}",
+        ], array_column($result->cues[0]['tokens'], 'text'));
 
         CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"sourceText":"っ と よ ）。 伝 わ な い や な ん て タ ゲ ッ"')
+            fn ($prompt): bool => $prompt->contains($sourceText)
                 && $prompt->contains('transcription artifacts')
                 && ! $prompt->contains('tokenizationText')
                 && ! $prompt->contains('sourceStart')
@@ -274,7 +292,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_tokenization_changed_cue_identity_falls_back_to_transcript_only_after_retry(): void
+    public function test_tokenization_changed_cue_identity_fails_after_retry(): void
     {
         $sourceText = '違う姿違う形なの';
 
@@ -303,9 +321,10 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn');
-
-        $this->assertSame([], $result->cues[0]['tokens']);
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn'),
+            'tokenization_retry_failed',
+        );
 
         CueTokenizationAgent::assertPrompted(
             fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.retry')
@@ -362,12 +381,19 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_full_enrichment_skips_transcript_only_cues(): void
+    public function test_full_enrichment_rejects_tokenless_cues(): void
     {
         CueEnrichmentAgent::fake([
             [
                 'dialect' => 'castilian',
                 'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'bad tokenization',
+                        'translatedText' => 'bad tokenization',
+                        'tokens' => [],
+                    ],
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
@@ -394,15 +420,9 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $result = $this->provider()->enrich([$tokenlessCue, $validCue], 'spa', 'eng');
-
-        $this->assertSame([], $result->cues[0]['tokens']);
-        $this->assertSame('hello', $result->cues[1]['translatedText']);
-        $this->assertSame('hello', $result->cues[1]['tokens'][0]['gloss']);
-
-        CueEnrichmentAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"cueId":"cue-0002"')
-                && ! $prompt->contains('"cueId":"cue-0001"'),
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->enrich([$tokenlessCue, $validCue], 'spa', 'eng'),
+            'missing_source_tokens',
         );
     }
 
@@ -509,12 +529,22 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_romanization_skips_transcript_only_cues_and_preserves_valid_boundaries(): void
+    public function test_romanization_rejects_tokenless_cues(): void
     {
+        $tokenlessText = 'bad tokenization';
+
         CueRomanizationAgent::fake([
             [
                 'dialect' => 'unknown',
                 'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => $tokenlessText,
+                        'translatedText' => $tokenlessText,
+                        'romanization' => 'kakiitemita',
+                        'tokens' => [],
+                    ],
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
@@ -530,8 +560,8 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $tokenlessCue = [
-            ...$this->sourceCue('cue-0001', 0, 'か聞いてみた'),
-            'translatedText' => 'か聞いてみた',
+            ...$this->sourceCue('cue-0001', 0, $tokenlessText),
+            'translatedText' => $tokenlessText,
             'tokens' => [],
         ];
         $validCue = [
@@ -542,16 +572,9 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $result = $this->provider()->romanize([$tokenlessCue, $validCue], 'jpn');
-
-        $this->assertSame([], $result->cues[0]['tokens']);
-        $this->assertArrayNotHasKey('romanization', $result->cues[0]);
-        $this->assertSame('nihongo', $result->cues[1]['romanization']);
-        $this->assertSame(['日本語'], array_column($result->cues[1]['tokens'], 'text'));
-
-        CueRomanizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"cueId":"cue-0002"')
-                && ! $prompt->contains('"cueId":"cue-0001"'),
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->romanize([$tokenlessCue, $validCue], 'jpn'),
+            'missing_source_tokens',
         );
     }
 
@@ -633,7 +656,6 @@ class CueEnrichmentServiceTest extends TestCase
                 'token' => [
                     'index' => 0,
                     'text' => 'Hola',
-                    'normalizedText' => 'hola',
                     'lemma' => 'hola',
                     'root' => null,
                     'partOfSpeech' => null,
@@ -707,6 +729,40 @@ class CueEnrichmentServiceTest extends TestCase
         }
 
         $this->fail('Expected provider rate limit to map to a subtitle processing exception.');
+    }
+
+    public function test_provider_requires_configured_openai_url(): void
+    {
+        config(['ai.providers.openai.url' => null]);
+
+        try {
+            $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('Subtitle AI provider URL is not configured.', $exception->getMessage());
+            $this->assertSame('openai', $exception->context['provider'] ?? null);
+
+            return;
+        }
+
+        $this->fail('Expected missing OpenAI URL to fail before prompting.');
+    }
+
+    public function test_provider_requires_configured_openai_model(): void
+    {
+        config(['ai.providers.openai.models.tokenization.default' => null]);
+
+        try {
+            $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('Subtitle AI model is not configured.', $exception->getMessage());
+            $this->assertSame('tokenization.default', $exception->context['model_key'] ?? null);
+
+            return;
+        }
+
+        $this->fail('Expected missing OpenAI model to fail before prompting.');
     }
 
     public function test_provider_failures_map_to_stable_public_errors(): void

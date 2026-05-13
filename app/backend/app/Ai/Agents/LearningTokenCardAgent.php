@@ -44,7 +44,6 @@ INSTRUCTIONS;
             'token' => $schema->object([
                 'index' => $schema->integer()->min(0)->required(),
                 'text' => $schema->string()->min(1)->required(),
-                'normalizedText' => $schema->string()->min(1)->nullable()->required(),
                 'lemma' => $schema->string()->min(1)->nullable()->required(),
                 'root' => $schema->string()->min(1)->nullable()->required(),
                 'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),

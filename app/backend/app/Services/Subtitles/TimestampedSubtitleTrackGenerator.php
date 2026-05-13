@@ -61,24 +61,6 @@ class TimestampedSubtitleTrackGenerator
         return $cues;
     }
 
-    /**
-     * @param  array<int, array<string, mixed>>  $draftCues
-     */
-    public function fallbackEnrichment(array $draftCues): CueEnrichmentResult
-    {
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => [
-                    ...$cue,
-                    'translatedText' => (string) $cue['sourceText'],
-                    'tokens' => [],
-                ],
-                $draftCues,
-            ),
-            'unknown',
-        );
-    }
-
     private function validatedWebVtt(TimestampedTranscript $transcript): string
     {
         $webVtt = trim($transcript->webVtt);
@@ -131,6 +113,12 @@ class TimestampedSubtitleTrackGenerator
                 $this->failInvalidEnrichedCue('invalid_enriched_cue', [
                     'cue_position' => $position,
                     'field' => 'tokens',
+                ]);
+            }
+
+            if ($cue['tokens'] === []) {
+                $this->failInvalidEnrichedCue('empty_tokens', [
+                    'cue_position' => $position,
                 ]);
             }
         }

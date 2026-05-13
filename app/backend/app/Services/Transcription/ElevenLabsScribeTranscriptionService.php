@@ -4,14 +4,13 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
-use App\Services\Languages\LanguageCatalog;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
-class ElevenLabsScribeTranscriptionService implements TranscriptionService
+class ElevenLabsScribeTranscriptionService
 {
     public function __construct(private readonly ScribeTranscriptNormalizer $normalizer) {}
 
@@ -19,14 +18,24 @@ class ElevenLabsScribeTranscriptionService implements TranscriptionService
     {
         $provider = Lab::ElevenLabs;
         $apiKey = config('ai.providers.'.$provider->value.'.key');
-        $model = (string) config('ai.providers.'.$provider->value.'.models.transcription.default', 'scribe_v2');
+        $model = config('ai.providers.'.$provider->value.'.models.transcription.default');
 
-        if (! is_string($apiKey) || $apiKey === '') {
+        if (! is_string($apiKey) || trim($apiKey) === '') {
             throw SubtitleProcessingException::transcriptionFailed('Transcription provider is not configured.', [
                 'provider' => $provider->value,
                 'adapter' => 'elevenlabs-http',
             ]);
         }
+
+        if (! is_string($model) || trim($model) === '') {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription model is not configured.', [
+                'provider' => $provider->value,
+                'adapter' => 'elevenlabs-http',
+            ]);
+        }
+
+        $apiKey = trim($apiKey);
+        $model = trim($model);
 
         try {
             $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
@@ -109,21 +118,34 @@ class ElevenLabsScribeTranscriptionService implements TranscriptionService
             return null;
         }
 
-        return LanguageCatalog::normalizeCode($sourceLanguage);
+        return $sourceLanguage;
     }
 
     private function transcriptionUrl(Lab $provider): string
     {
-        return rtrim((string) config('ai.providers.'.$provider->value.'.url', 'https://api.elevenlabs.io/v1'), '/').'/speech-to-text';
+        $url = config('ai.providers.'.$provider->value.'.url');
+
+        if (! is_string($url) || trim($url) === '') {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription provider URL is not configured.', [
+                'provider' => $provider->value,
+                'adapter' => 'elevenlabs-http',
+            ]);
+        }
+
+        return rtrim(trim($url), '/').'/speech-to-text';
     }
 
     private function audioFilename(TemporaryAudioFile $audio): string
     {
         return match ($audio->mimeType) {
+            'audio/mp4' => 'audio.m4a',
             'audio/mpeg' => 'audio.mp3',
             'audio/wav', 'audio/x-wav' => 'audio.wav',
             'audio/webm' => 'audio.webm',
-            default => 'audio.m4a',
+            'audio/ogg' => 'audio.ogg',
+            default => throw SubtitleProcessingException::transcriptionFailed('Transcription audio type is not supported.', [
+                'mime_type' => $audio->mimeType,
+            ]),
         };
     }
 }

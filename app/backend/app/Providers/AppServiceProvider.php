@@ -2,33 +2,25 @@
 
 namespace App\Providers;
 
-use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
-use App\Services\Transcription\TranscriptionService;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use LogicException;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
-    public function register(): void
-    {
-        $this->app->bind(TranscriptionService::class, ElevenLabsScribeTranscriptionService::class);
-    }
-
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         JsonResource::withoutWrapping();
 
         RateLimiter::for('subtitle-api', function (Request $request): array {
-            $installId = (string) $request->header('X-Extension-Install-Id', 'missing');
+            $installId = $request->header('X-Extension-Install-Id');
+
+            if (! is_string($installId) || $installId === '') {
+                throw new LogicException('subtitle-api throttle requires a validated extension install ID.');
+            }
 
             return [
                 Limit::perMinute((int) config('subtitles.rate_limits.per_install_per_minute', 30))

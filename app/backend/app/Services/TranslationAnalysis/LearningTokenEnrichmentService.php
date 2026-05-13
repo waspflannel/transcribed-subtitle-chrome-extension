@@ -2,6 +2,7 @@
 
 namespace App\Services\TranslationAnalysis;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -89,7 +90,7 @@ class LearningTokenEnrichmentService
     private function cue(array $cues, string $cueId): array
     {
         foreach ($cues as $position => $cue) {
-            if (is_array($cue) && ($cue['cueId'] ?? null) === $cueId) {
+            if ($cue['cueId'] === $cueId) {
                 return [$position, $cue];
             }
         }
@@ -103,14 +104,8 @@ class LearningTokenEnrichmentService
      */
     private function token(array $cue, int $tokenIndex): array
     {
-        $tokens = $cue['tokens'] ?? null;
-
-        if (! is_array($tokens)) {
-            throw new NotFoundHttpException('Learning token not found.');
-        }
-
-        foreach ($tokens as $position => $token) {
-            if (is_array($token) && ($token['index'] ?? null) === $tokenIndex) {
+        foreach ($cue['tokens'] as $position => $token) {
+            if ($token['index'] === $tokenIndex) {
                 return [$position, $token];
             }
         }
@@ -142,11 +137,26 @@ class LearningTokenEnrichmentService
             'sourceLanguage' => $track->source_language,
             'detectedSourceLanguage' => $track->detected_source_language,
             'targetLanguage' => $track->target_language,
-            'token' => $token['normalizedText'] ?? $token['text'] ?? '',
-            'context' => $cue['sourceText'] ?? '',
-            'model' => config('ai.providers.openai.models.enrichment.default'),
+            'token' => $token['normalizedText'],
+            'context' => $cue['sourceText'],
+            'model' => $this->enrichmentModel(),
             'version' => 'v7-agent-tokenizer-boundaries',
         ], JSON_THROW_ON_ERROR));
+    }
+
+    private function enrichmentModel(): string
+    {
+        $model = config('ai.providers.openai.models.enrichment.default');
+
+        if (! is_string($model) || trim($model) === '') {
+            throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.', [
+                'provider' => 'openai',
+                'adapter' => 'laravel-ai-sdk',
+                'model_key' => 'enrichment.default',
+            ]);
+        }
+
+        return trim($model);
     }
 
     private function effectiveSourceLanguage(SubtitleTrack $track): string
@@ -169,13 +179,8 @@ class LearningTokenEnrichmentService
         $token = [
             'index' => (int) $existingToken['index'],
             'text' => (string) $existingToken['text'],
+            'normalizedText' => $existingToken['normalizedText'],
         ];
-
-        if (is_string($existingToken['normalizedText'] ?? null) && trim($existingToken['normalizedText']) !== '') {
-            $token['normalizedText'] = $existingToken['normalizedText'];
-        } elseif (is_string($enrichedToken['normalizedText'] ?? null) && trim($enrichedToken['normalizedText']) !== '') {
-            $token['normalizedText'] = $enrichedToken['normalizedText'];
-        }
 
         foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'romanization', 'usageNote'] as $field) {
             $value = is_string($enrichedToken[$field] ?? null) ? trim($enrichedToken[$field]) : '';

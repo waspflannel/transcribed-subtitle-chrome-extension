@@ -13,16 +13,16 @@ use Illuminate\Support\Str;
 class SubtitleJobFactory extends Factory
 {
     /**
-     * Define the model's default state.
-     *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
+        $videoId = Str::random(11);
+
         return [
             'public_id' => (string) Str::uuid(),
-            'youtube_video_id' => Str::random(11),
-            'youtube_url' => null,
+            'youtube_video_id' => $videoId,
+            'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,
             'video_duration_seconds' => 213,
             'source_language' => 'auto',
             'detected_source_language' => null,
