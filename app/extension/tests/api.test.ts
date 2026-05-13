@@ -32,6 +32,7 @@ describe('SubtitleApiClient', () => {
       sourceLanguage: 'auto',
       targetLanguage: 'fra',
       enrichmentMode: 'on_demand',
+      includeRomanization: true,
     };
 
     await expect(client.createSubtitleJob(installId, payload)).resolves.toEqual(jobResponse);

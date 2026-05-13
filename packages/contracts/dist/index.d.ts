@@ -208,9 +208,13 @@ export interface CreateSubtitleJobRequest {
     | 'yor'
     | 'zul';
   /**
-   * on_demand returns transcript-first tracks with clickable token stubs. full enriches every cue before returning the track.
+   * on_demand returns transcript-first tracks with tokenizer-agent clickable boundaries when valid. full enriches every cue before returning the track.
    */
   enrichmentMode?: 'on_demand' | 'full';
+  /**
+   * When true, backend may add cue and token romanization for non-Latin source text. When false, generation skips romanization.
+   */
+  includeRomanization?: boolean;
 }
 
 // Source: schemas/learning-token-request.schema.json
@@ -872,7 +876,7 @@ export interface SubtitleJobHistoryItem {
   startedAt: string;
   lastUpdatedAt?: string;
   completedAt?: string;
-  stage?: 'preparing' | 'acquiring-audio' | 'transcribing' | 'romanizing' | 'enriching' | 'finalizing';
+  stage?: 'preparing' | 'acquiring-audio' | 'transcribing' | 'tokenizing' | 'romanizing' | 'enriching' | 'finalizing';
   progressPercent?: number;
   sourceLanguage:
     | 'auto'

@@ -29,6 +29,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
             'enrichmentMode' => ['sometimes', 'string', Rule::in(['on_demand', 'full'])],
+            'includeRomanization' => ['sometimes', 'boolean'],
         ];
     }
 

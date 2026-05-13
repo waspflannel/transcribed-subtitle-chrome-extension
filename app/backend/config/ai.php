@@ -133,6 +133,13 @@ return [
                 'text' => [
                     'default' => env('OPENAI_TEXT_MODEL', 'gpt-4o-mini'),
                 ],
+                'tokenization' => [
+                    'default' => env('OPENAI_TOKENIZATION_MODEL', env('OPENAI_ENRICHMENT_MODEL', env('OPENAI_TEXT_MODEL', 'gpt-4o-mini'))),
+                    'retry' => env('OPENAI_TOKENIZATION_RETRY_MODEL', 'gpt-5.5'),
+                ],
+                'romanization' => [
+                    'default' => env('OPENAI_ROMANIZATION_MODEL', env('OPENAI_TOKENIZATION_MODEL', env('OPENAI_ENRICHMENT_MODEL', env('OPENAI_TEXT_MODEL', 'gpt-4o-mini')))),
+                ],
                 'enrichment' => [
                     'default' => env('OPENAI_ENRICHMENT_MODEL', env('OPENAI_TEXT_MODEL', 'gpt-4o-mini')),
                 ],

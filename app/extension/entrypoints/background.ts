@@ -150,7 +150,12 @@ async function generateSubtitlesForTab(
   pageStatus: SupportedYoutubePageInfo,
   settings: ExtensionSettings,
 ): Promise<void> {
-  const stopEstimatedProgress = startEstimatedProgress(tabId, pageStatus, settings.fullTrackEnrichment);
+  const stopEstimatedProgress = startEstimatedProgress(
+    tabId,
+    pageStatus,
+    settings.fullTrackEnrichment,
+    settings.showRomanization,
+  );
 
   try {
     console.info('extension.subtitle_generation_started', {
@@ -158,6 +163,7 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
+      includeRomanization: settings.showRomanization,
     });
 
     const installId = await getOrCreateInstallId();
@@ -167,6 +173,7 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
+      includeRomanization: settings.showRomanization,
     });
 
     if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
@@ -376,6 +383,9 @@ function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string 
     case 'transcribing':
       return 'Transcribing audio...';
 
+    case 'tokenizing':
+      return 'Tokenizing subtitles...';
+
     case 'romanizing':
       return 'Adding romanization...';
 
@@ -395,6 +405,7 @@ function startEstimatedProgress(
   tabId: number,
   pageStatus: SupportedYoutubePageInfo,
   fullTrackEnrichment: boolean,
+  includeRomanization: boolean,
 ): () => void {
   const startedAtMs = Date.now();
   let publishing = false;
@@ -408,7 +419,7 @@ function startEstimatedProgress(
       return;
     }
 
-    const estimate = estimatedGenerationProgress(Date.now() - startedAtMs, fullTrackEnrichment);
+    const estimate = estimatedGenerationProgress(Date.now() - startedAtMs, fullTrackEnrichment, includeRomanization);
 
     if (
       publishing ||
@@ -436,6 +447,7 @@ function startEstimatedProgress(
 function estimatedGenerationProgress(
   elapsedMs: number,
   fullTrackEnrichment: boolean,
+  includeRomanization: boolean,
 ): { stage: LoadingStage; progressPercent: number } {
   const elapsedSeconds = elapsedMs / 1000;
 
@@ -457,13 +469,26 @@ function estimatedGenerationProgress(
     };
   }
 
-  const enrichmentStage: LoadingStage = fullTrackEnrichment ? 'enriching' : 'romanizing';
+  if (elapsedSeconds < 70) {
+    return {
+      stage: 'tokenizing',
+      progressPercent: interpolateProgress(elapsedSeconds, 45, 70, 65, 78),
+    };
+  }
+
+  if (includeRomanization && elapsedSeconds < 100) {
+    return {
+      stage: 'romanizing',
+      progressPercent: interpolateProgress(elapsedSeconds, 70, 100, 78, 85),
+    };
+  }
+
   const enrichmentEndSeconds = fullTrackEnrichment ? 180 : 120;
 
   if (elapsedSeconds < enrichmentEndSeconds) {
     return {
-      stage: enrichmentStage,
-      progressPercent: interpolateProgress(elapsedSeconds, 45, enrichmentEndSeconds, 65, 92),
+      stage: fullTrackEnrichment ? 'enriching' : 'finalizing',
+      progressPercent: interpolateProgress(elapsedSeconds, includeRomanization ? 100 : 70, enrichmentEndSeconds, 85, 92),
     };
   }
 

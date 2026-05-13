@@ -4,5 +4,6 @@
   "videoDurationSeconds": 212,
   "sourceLanguage": "jpn",
   "targetLanguage": "fra",
-  "enrichmentMode": "full"
+  "enrichmentMode": "full",
+  "includeRomanization": true
 }

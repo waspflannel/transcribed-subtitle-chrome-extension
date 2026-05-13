@@ -4,5 +4,6 @@
   "videoDurationSeconds": 213,
   "sourceLanguage": "auto",
   "targetLanguage": "eng",
-  "enrichmentMode": "on_demand"
+  "enrichmentMode": "on_demand",
+  "includeRomanization": true
 }

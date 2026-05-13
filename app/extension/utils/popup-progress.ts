@@ -40,6 +40,9 @@ function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>): string
     case 'transcribing':
       return 'Transcribing audio';
 
+    case 'tokenizing':
+      return 'Tokenizing subtitles';
+
     case 'romanizing':
       return 'Adding romanization';
 

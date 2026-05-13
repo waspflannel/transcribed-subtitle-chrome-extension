@@ -63,6 +63,7 @@
             "preparing",
             "acquiring-audio",
             "transcribing",
+            "tokenizing",
             "romanizing",
             "enriching",
             "finalizing"
