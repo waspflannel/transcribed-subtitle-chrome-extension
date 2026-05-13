@@ -41,8 +41,8 @@ The root `revamped-design-document.md` and `detailed-design-document.md` files a
 - Selectable subtitle/source language, defaulting to Auto detect.
 - Selectable translation/target language, defaulting to English.
 - Word-card metadata in the selected target language on demand, or for the full track when explicitly enabled.
-- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, one stronger-model retry for rejected cues, and transcript-only display when tokenization remains unreliable.
-- Optional non-Latin-script romanization as best-effort display metadata when the user enables romanization.
+- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, one stronger-model retry for rejected cues, and visible generation failure when tokenization remains unreliable.
+- Optional non-Latin-script romanization when the user enables romanization, with visible generation failure when enabled romanization output is invalid.
 - Synchronized in-page overlay.
 
 ## Explicit Non-Goals

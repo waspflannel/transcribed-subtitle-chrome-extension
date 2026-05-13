@@ -1,9 +1,9 @@
 # Generated Database Schema
 
 Created: 2026-04-28
-Last updated: 2026-05-11
+Last updated: 2026-05-13
 
-The backend uses the stock Laravel SQLite baseline plus product tables for subtitle jobs and generated tracks.
+The backend uses SQLite tables for cache storage, subtitle jobs, and generated tracks.
 
 ## Local Database
 
@@ -11,18 +11,10 @@ The backend uses the stock Laravel SQLite baseline plus product tables for subti
 - Local file: `app/backend/database/database.sqlite`
 - Commit policy: the SQLite database file is local state and ignored by Git.
 
-## Baseline Tables
+## Framework Tables
 
-The Laravel scaffold migrations currently define:
-
-- `users`
-- `password_reset_tokens`
-- `sessions`
 - `cache`
 - `cache_locks`
-- `jobs`
-- `job_batches`
-- `failed_jobs`
 
 ## Product Tables
 
