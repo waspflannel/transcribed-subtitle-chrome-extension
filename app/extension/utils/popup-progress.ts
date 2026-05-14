@@ -46,6 +46,9 @@ function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>): string
     case 'romanizing':
       return 'Adding romanization';
 
+    case 'translating':
+      return 'Translating subtitles';
+
     case 'enriching':
       return 'Generating word cards';
 

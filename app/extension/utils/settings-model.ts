@@ -15,6 +15,7 @@ export interface ExtensionSettings {
   overlayVisible: boolean;
   overlayPosition: OverlayPosition;
   showRomanization: boolean;
+  showTranslation: boolean;
   showGloss: boolean;
   fullTrackEnrichment: boolean;
   subtitleTimingOffsetSeconds: number;
@@ -29,6 +30,7 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   overlayVisible: true,
   overlayPosition: 'bottom',
   showRomanization: true,
+  showTranslation: false,
   showGloss: true,
   fullTrackEnrichment: false,
   subtitleTimingOffsetSeconds: 0,
@@ -61,6 +63,10 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
 
   if (typeof value?.showRomanization === 'boolean') {
     settings.showRomanization = value.showRomanization;
+  }
+
+  if (typeof value?.showTranslation === 'boolean') {
+    settings.showTranslation = value.showTranslation;
   }
 
   if (typeof value?.showGloss === 'boolean') {

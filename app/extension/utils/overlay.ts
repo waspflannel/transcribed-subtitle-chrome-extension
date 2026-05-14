@@ -618,7 +618,7 @@ export function renderOverlayContent(
             state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage
           }">${renderSourceLine(cue, state.settings, interaction)}</div>
           ${cueRomanization}
-          ${renderTranslation(cue)}
+          ${renderTranslation(cue, state.settings)}
         </div>
       </section>
     `;
@@ -735,8 +735,8 @@ function renderTokenInteraction(
   `;
 }
 
-function renderTranslation(cue: SubtitleCue): string {
-  if (cue.translatedText.trim() === cue.sourceText.trim()) {
+function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): string {
+  if (!settings.showTranslation || cue.translatedText.trim() === cue.sourceText.trim()) {
     return '';
   }
 

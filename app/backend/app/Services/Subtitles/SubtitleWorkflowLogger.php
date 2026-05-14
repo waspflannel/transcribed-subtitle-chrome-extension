@@ -165,6 +165,34 @@ class SubtitleWorkflowLogger
         ]);
     }
 
+    public function translationStarted(SubtitleJob $job, int $cueCount): void
+    {
+        Log::info('backend.translation_started', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => $this->openAiModel('translation'),
+            'source_language' => $job->source_language,
+            'target_language' => $job->target_language,
+            'cue_count' => $cueCount,
+        ]);
+    }
+
+    public function translationCompleted(SubtitleJob $job, CueEnrichmentResult $enrichment): void
+    {
+        Log::info('backend.translation_completed', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => $this->openAiModel('translation'),
+            'source_language' => $job->source_language,
+            'target_language' => $job->target_language,
+            'cue_count' => count($enrichment->cues),
+        ]);
+    }
+
     public function trackGenerated(SubtitleJob $job, SubtitleTrack $track, int $audioDurationSeconds): void
     {
         $cues = $track->cues;

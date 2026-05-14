@@ -155,6 +155,7 @@ async function generateSubtitlesForTab(
     pageStatus,
     settings.fullTrackEnrichment,
     settings.showRomanization,
+    settings.showTranslation,
   );
 
   try {
@@ -164,6 +165,7 @@ async function generateSubtitlesForTab(
       targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
       includeRomanization: settings.showRomanization,
+      includeTranslation: settings.showTranslation,
     });
 
     const installId = await getOrCreateInstallId();
@@ -174,6 +176,7 @@ async function generateSubtitlesForTab(
       targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
       includeRomanization: settings.showRomanization,
+      includeTranslation: settings.showTranslation,
     });
 
     if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
@@ -394,6 +397,9 @@ function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string 
     case 'romanizing':
       return 'Adding romanization...';
 
+    case 'translating':
+      return 'Translating subtitles...';
+
     case 'enriching':
       return 'Generating word cards...';
 
@@ -411,6 +417,7 @@ function startEstimatedProgress(
   pageStatus: SupportedYoutubePageInfo,
   fullTrackEnrichment: boolean,
   includeRomanization: boolean,
+  includeTranslation: boolean,
 ): () => void {
   const startedAtMs = Date.now();
   let publishing = false;
@@ -424,7 +431,12 @@ function startEstimatedProgress(
       return;
     }
 
-    const estimate = estimatedGenerationProgress(Date.now() - startedAtMs, fullTrackEnrichment, includeRomanization);
+    const estimate = estimatedGenerationProgress(
+      Date.now() - startedAtMs,
+      fullTrackEnrichment,
+      includeRomanization,
+      includeTranslation,
+    );
 
     if (
       publishing ||
@@ -453,6 +465,7 @@ function estimatedGenerationProgress(
   elapsedMs: number,
   fullTrackEnrichment: boolean,
   includeRomanization: boolean,
+  includeTranslation: boolean,
 ): { stage: LoadingStage; progressPercent: number } {
   const elapsedSeconds = elapsedMs / 1000;
 
@@ -488,12 +501,31 @@ function estimatedGenerationProgress(
     };
   }
 
-  const enrichmentEndSeconds = fullTrackEnrichment ? 180 : 120;
+  if (includeTranslation && elapsedSeconds < 130) {
+    return {
+      stage: 'translating',
+      progressPercent: interpolateProgress(elapsedSeconds, includeRomanization ? 100 : 70, 130, 85, 90),
+    };
+  }
+
+  const enrichmentEndSeconds = fullTrackEnrichment
+    ? includeTranslation
+      ? 190
+      : 180
+    : includeTranslation
+      ? 140
+      : 120;
 
   if (elapsedSeconds < enrichmentEndSeconds) {
     return {
       stage: fullTrackEnrichment ? 'enriching' : 'finalizing',
-      progressPercent: interpolateProgress(elapsedSeconds, includeRomanization ? 100 : 70, enrichmentEndSeconds, 85, 92),
+      progressPercent: interpolateProgress(
+        elapsedSeconds,
+        includeTranslation ? 130 : includeRomanization ? 100 : 70,
+        enrichmentEndSeconds,
+        includeTranslation ? 90 : 85,
+        92,
+      ),
     };
   }
 

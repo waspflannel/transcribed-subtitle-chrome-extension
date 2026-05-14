@@ -16,6 +16,7 @@ describe('settings model', () => {
         overlayPosition: 'side' as never,
         sourceLanguage: 'spa',
         targetLanguage: 'jpn',
+        showTranslation: true,
         fullTrackEnrichment: true,
         subtitleTimingOffsetSeconds: 4.54,
       }),
@@ -24,6 +25,7 @@ describe('settings model', () => {
       sourceLanguage: 'spa',
       targetLanguage: 'jpn',
       overlayVisible: false,
+      showTranslation: true,
       fullTrackEnrichment: true,
       subtitleTimingOffsetSeconds: 4.5,
     });

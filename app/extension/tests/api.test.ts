@@ -34,6 +34,7 @@ describe('SubtitleApiClient', () => {
       targetLanguage: 'fra',
       enrichmentMode: 'on_demand',
       includeRomanization: true,
+      includeTranslation: true,
     };
 
     await expect(client.createSubtitleJob(installId, payload)).resolves.toEqual(jobResponse);
@@ -159,6 +160,9 @@ describe('SubtitleApiClient', () => {
       youtubeUrl: 'https://www.youtube.com/watch?v=bad-job-id',
       sourceLanguage: 'auto',
       targetLanguage: 'fra',
+      enrichmentMode: 'on_demand',
+      includeRomanization: true,
+      includeTranslation: false,
     };
 
     await expect(client.createSubtitleJob(installId, payload)).rejects.toMatchObject({

@@ -77,6 +77,29 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->calls);
         $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
+        $this->assertSame(0, $this->translationAnalysis->translationCalls);
+    }
+
+    public function test_transcript_first_generation_adds_requested_translation(): void
+    {
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'includeTranslation' => true,
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('track.cues.0.translatedText', 'Translated first transcript segment')
+            ->assertJsonPath('track.cues.0.tokens.0.text', 'first')
+            ->assertJsonMissingPath('track.cues.0.tokens.0.gloss');
+
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(1, $this->translationAnalysis->translationCalls);
+        $this->assertSame(0, $this->translationAnalysis->calls);
+        $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
     }
 
     public function test_non_latin_transcript_first_generation_adds_requested_romanization(): void
@@ -233,6 +256,28 @@ class SubtitleJobApiTest extends TestCase
         ]);
     }
 
+    public function test_transcript_first_generation_fails_when_translation_fails(): void
+    {
+        $this->translationAnalysis->translationShouldFail = true;
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'trnfail0001',
+                'includeTranslation' => true,
+            ]))
+            ->assertStatus(502)
+            ->assertJsonPath('error.code', 'enrichment_failed');
+
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(1, $this->translationAnalysis->translationCalls);
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'youtube_video_id' => 'trnfail0001',
+            'status' => 'failed',
+            'stage' => 'translating',
+        ]);
+    }
+
     public function test_japanese_romanization_failure_fails_generation(): void
     {
         $sourceText = $this->japaneseSentence();
@@ -309,13 +354,35 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('track.cues.0.translatedText', 'Translated first transcript segment')
+            ->assertJsonPath('track.cues.0.translatedText', 'first transcript segment')
             ->assertJsonPath('track.cues.0.tokens.0.gloss', 'first');
 
         $this->assertSame(1, $this->translationAnalysis->calls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(0, $this->translationAnalysis->translationCalls);
         $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
+    }
+
+    public function test_full_enrichment_with_translation_runs_both_ai_steps(): void
+    {
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'enrichmentMode' => 'full',
+                'includeTranslation' => true,
+            ]));
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.translatedText', 'Translated first transcript segment')
+            ->assertJsonPath('track.cues.0.tokens.0.gloss', 'first');
+
+        $this->assertSame(1, $this->translationAnalysis->calls);
+        $this->assertSame(1, $this->translationAnalysis->translationCalls);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(['spa', 'spa', 'spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['eng', 'eng'], $this->translationAnalysis->targetLanguages);
     }
 
     public function test_full_japanese_enrichment_uses_grouped_token_boundaries(): void
@@ -339,6 +406,7 @@ class SubtitleJobApiTest extends TestCase
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfull0001',
                 'enrichmentMode' => 'full',
+                'includeTranslation' => true,
             ]));
 
         $response
@@ -349,6 +417,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.tokens.4.text', "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}");
 
         $this->assertSame(1, $this->translationAnalysis->calls);
+        $this->assertSame(1, $this->translationAnalysis->translationCalls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
     }
 
@@ -360,6 +429,7 @@ class SubtitleJobApiTest extends TestCase
                 'sourceLanguage' => 'eng',
                 'targetLanguage' => 'eng',
                 'enrichmentMode' => 'full',
+                'includeTranslation' => true,
             ]));
 
         $response
@@ -368,6 +438,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('track.cues.0.translatedText', 'first transcript segment');
 
         $this->assertSame(0, $this->translationAnalysis->calls);
+        $this->assertSame(0, $this->translationAnalysis->translationCalls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
@@ -387,6 +458,33 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertNotSame($onDemandResponse->json('jobId'), $fullResponse->json('jobId'));
         $this->assertNotSame($onDemandResponse->json('track.trackId'), $fullResponse->json('track.trackId'));
+        $this->assertSame(2, SubtitleJob::count());
+        $this->assertSame(2, SubtitleTrack::count());
+    }
+
+    public function test_translated_and_untranslated_tracks_are_cached_separately(): void
+    {
+        $plainResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'transmode01',
+                'includeTranslation' => false,
+            ]));
+
+        $translatedResponse = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'transmode01',
+                'includeTranslation' => true,
+            ]));
+
+        $plainResponse->assertOk();
+        $translatedResponse->assertOk();
+
+        $this->assertNotSame($plainResponse->json('jobId'), $translatedResponse->json('jobId'));
+        $this->assertNotSame($plainResponse->json('track.trackId'), $translatedResponse->json('track.trackId'));
+        $this->assertSame('first transcript segment', $plainResponse->json('track.cues.0.translatedText'));
+        $this->assertSame('Translated first transcript segment', $translatedResponse->json('track.cues.0.translatedText'));
         $this->assertSame(2, SubtitleJob::count());
         $this->assertSame(2, SubtitleTrack::count());
     }
@@ -789,6 +887,21 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonStructure(['error' => ['code', 'message', 'details'], 'requestId']);
     }
 
+    public function test_create_subtitle_job_requires_explicit_generation_controls(): void
+    {
+        $payload = $this->validPayload();
+        unset($payload['enrichmentMode'], $payload['includeRomanization'], $payload['includeTranslation']);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'validation_failed')
+            ->assertJsonPath('error.details.errors.enrichmentMode.0', 'The enrichment mode field is required.')
+            ->assertJsonPath('error.details.errors.includeRomanization.0', 'The include romanization field is required.')
+            ->assertJsonPath('error.details.errors.includeTranslation.0', 'The include translation field is required.');
+    }
+
     public function test_api_requires_extension_install_id(): void
     {
         Log::spy();
@@ -842,6 +955,9 @@ class SubtitleJobApiTest extends TestCase
             'videoDurationSeconds' => 213,
             'sourceLanguage' => 'auto',
             'targetLanguage' => 'eng',
+            'enrichmentMode' => 'on_demand',
+            'includeRomanization' => true,
+            'includeTranslation' => false,
             ...$overrides,
         ];
     }
@@ -967,6 +1083,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public int $romanizationCalls = 0;
 
+    public int $translationCalls = 0;
+
     public int $tokenCalls = 0;
 
     public bool $shouldFail = false;
@@ -974,6 +1092,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     public bool $tokenizationShouldFail = false;
 
     public bool $romanizationShouldFail = false;
+
+    public bool $translationShouldFail = false;
 
     /**
      * @var array<int, string>
@@ -1032,7 +1152,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                 function (array $cue) use ($includeRomanization): array {
                     $enrichedCue = [
                         ...$cue,
-                        'translatedText' => 'Translated '.$cue['sourceText'],
+                        'translatedText' => (string) ($cue['translatedText'] ?? $cue['sourceText']),
                         'tokens' => array_map(
                             fn (array $token): array => [
                                 ...$token,
@@ -1051,6 +1171,31 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
                     return $enrichedCue;
                 },
+                $cues,
+            ),
+            'unknown',
+        );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    public function translate(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    {
+        $this->translationCalls++;
+        $this->sourceLanguages[] = $sourceLanguage;
+        $this->targetLanguages[] = $targetLanguage;
+
+        if ($this->translationShouldFail) {
+            throw SubtitleProcessingException::enrichmentFailed();
+        }
+
+        return new CueEnrichmentResult(
+            array_map(
+                fn (array $cue): array => [
+                    ...$cue,
+                    'translatedText' => 'Translated '.$cue['sourceText'],
+                ],
                 $cues,
             ),
             'unknown',

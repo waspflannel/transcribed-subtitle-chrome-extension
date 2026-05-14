@@ -5,7 +5,7 @@
 - Product name: transcribed-subtitle-extension
 - Primary user: language learners watching public YouTube videos.
 - Primary problem: YouTube captions are often missing, inaccurate, poorly segmented, or not useful for language study.
-- Core promise: Generate AI subtitle tracks from YouTube audio for a user-selected subtitle language or Auto detect, translate word cards into a user-selected target language, and render a synchronized overlay with timed subtitles, pronunciation metadata when available, and word-level study data on demand.
+- Core promise: Generate AI subtitle tracks from YouTube audio for a user-selected subtitle language or Auto detect, optionally translate subtitle cues and word cards into a user-selected target language, and render a synchronized overlay with timed subtitles, pronunciation metadata when available, and word-level study data on demand.
 
 ## Specs
 
@@ -40,8 +40,9 @@ The root `revamped-design-document.md` and `detailed-design-document.md` files a
 - Timestamped transcription.
 - Selectable subtitle/source language, defaulting to Auto detect.
 - Selectable translation/target language, defaulting to English.
+- Optional cue-level subtitle translation into the selected translation/target language.
 - Word-card metadata in the selected target language on demand, or for the full track when explicitly enabled.
-- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, one stronger-model retry for rejected cues, and visible generation failure when tokenization remains unreliable.
+- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, same-agent split retry for invalid multi-cue batches, and visible generation failure when a single cue remains unreliable.
 - Optional non-Latin-script romanization when the user enables romanization, with visible generation failure when enabled romanization output is invalid.
 - Synchronized in-page overlay.
 

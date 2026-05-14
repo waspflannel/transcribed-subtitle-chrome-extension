@@ -210,11 +210,15 @@ export interface CreateSubtitleJobRequest {
   /**
    * on_demand returns transcript-first tracks with tokenizer-agent clickable boundaries when valid. full enriches every cue before returning the track.
    */
-  enrichmentMode?: 'on_demand' | 'full';
+  enrichmentMode: 'on_demand' | 'full';
   /**
    * When true, backend may add cue and token romanization for non-Latin source text. When false, generation skips romanization.
    */
-  includeRomanization?: boolean;
+  includeRomanization: boolean;
+  /**
+   * When true, backend translates cue text into the selected target language. When false, translatedText remains the source text.
+   */
+  includeTranslation: boolean;
 }
 
 // Source: schemas/learning-token-request.schema.json
@@ -879,7 +883,15 @@ export interface SubtitleJobHistoryItem {
   startedAt: string;
   lastUpdatedAt?: string;
   completedAt?: string;
-  stage?: 'preparing' | 'acquiring-audio' | 'transcribing' | 'tokenizing' | 'romanizing' | 'enriching' | 'finalizing';
+  stage?:
+    | 'preparing'
+    | 'acquiring-audio'
+    | 'transcribing'
+    | 'tokenizing'
+    | 'romanizing'
+    | 'translating'
+    | 'enriching'
+    | 'finalizing';
   progressPercent?: number;
   sourceLanguage:
     | 'auto'

@@ -6,7 +6,7 @@ import type { TrackResponse } from '../utils/contracts';
 
 describe('renderOverlayContent', () => {
   it('renders the active cue source text, translation, and token learning metadata', () => {
-    const html = renderOverlayContent(readyState());
+    const html = renderOverlayContent(readyStateWithSettings({ showTranslation: true }));
 
     expect(html).toContain('AI subtitles');
     expect(html).toContain('class="rail"');
@@ -22,19 +22,26 @@ describe('renderOverlayContent', () => {
   });
 
   it('respects romanization and gloss visibility settings', () => {
-    const html = renderOverlayContent({
-      ...readyState(),
-      settings: {
-        ...DEFAULT_EXTENSION_SETTINGS,
+    const html = renderOverlayContent(
+      readyStateWithSettings({
         showRomanization: false,
+        showTranslation: true,
         showGloss: false,
-      },
-    });
+      }),
+    );
 
     expect(html).toContain('hola');
     expect(html).toContain('Bonjour');
     expect(html).not.toContain('o-la');
     expect(html).not.toContain('hello');
+  });
+
+  it('hides cue translation unless translation display is enabled', () => {
+    const html = renderOverlayContent(readyState());
+
+    expect(html).toContain('hola');
+    expect(html).not.toContain('Bonjour');
+    expect(html).not.toContain('class="translation"');
   });
 
   it('renders hover preview and pinned token detail without null placeholders', () => {
@@ -168,6 +175,16 @@ function readyState(track = trackResponse()): OverlayRenderState {
     },
     settings: DEFAULT_EXTENSION_SETTINGS,
     activeCue: track.cues[0],
+  };
+}
+
+function readyStateWithSettings(settings: Partial<OverlayRenderState['settings']>): OverlayRenderState {
+  return {
+    ...readyState(),
+    settings: {
+      ...DEFAULT_EXTENSION_SETTINGS,
+      ...settings,
+    },
   };
 }
 

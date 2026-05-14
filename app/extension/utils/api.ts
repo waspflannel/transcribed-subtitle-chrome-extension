@@ -146,7 +146,7 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
       return 'The AI transcription step failed. Try again later.';
 
     case 'enrichment_failed':
-      return 'The AI word-card step failed. Try again later.';
+      return 'The AI subtitle analysis step failed. Try again later.';
 
     case 'rate_limited':
       return 'Subtitle generation is temporarily rate limited. Wait a minute and try again.';

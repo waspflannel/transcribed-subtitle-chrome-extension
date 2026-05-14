@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
+use App\Ai\Agents\CueTranslationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -18,6 +19,13 @@ use Tests\TestCase;
 
 class CueEnrichmentServiceTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['ai.providers.openai.models.translation.default' => 'gpt-test-translation']);
+    }
+
     public function test_tokenizes_cues_with_agent_boundaries(): void
     {
         $sourceText = '違う姿違う形なの';
@@ -101,6 +109,26 @@ class CueEnrichmentServiceTest extends TestCase
                     ],
                 ],
             ],
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens($validSourceText, ['Hola', 'amiga']),
+                    ],
+                ],
+            ],
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0002',
+                        'index' => 1,
+                        'tokens' => $this->generatedTokens($failedSourceText, ['evening']),
+                    ],
+                ],
+            ],
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
@@ -119,6 +147,58 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
+    public function test_tokenization_retries_invalid_multi_cue_batches_at_smaller_size(): void
+    {
+        $firstSourceText = 'hello world';
+        $secondSourceText = 'good morning';
+
+        CueTokenizationAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens($firstSourceText, ['hello', 'world']),
+                    ],
+                    [
+                        'cueId' => 'cue-0002',
+                        'index' => 1,
+                        'tokens' => $this->generatedTokens($secondSourceText, ['good', 'evening']),
+                    ],
+                ],
+            ],
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens($firstSourceText, ['hello', 'world']),
+                    ],
+                ],
+            ],
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0002',
+                        'index' => 1,
+                        'tokens' => $this->generatedTokens($secondSourceText, ['good', 'morning']),
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $result = $this->provider()->tokenize([
+            $this->sourceCue('cue-0001', 0, $firstSourceText),
+            $this->sourceCue('cue-0002', 1, $secondSourceText),
+        ], 'eng');
+
+        $this->assertSame(['hello', 'world'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame(['good', 'morning'], array_column($result->cues[1]['tokens'], 'text'));
+    }
+
     public function test_tokenization_count_mismatch_fails_generation(): void
     {
         $firstSourceText = 'Bonjour a tous';
@@ -134,6 +214,20 @@ class CueEnrichmentServiceTest extends TestCase
                         'tokens' => $this->generatedTokens($firstSourceText, ['Bonjour', 'a tous']),
                     ],
                 ],
+            ],
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens($firstSourceText, ['Bonjour', 'a tous']),
+                    ],
+                ],
+            ],
+            [
+                'dialect' => 'unknown',
+                'cues' => [],
             ],
         ])->preventStrayPrompts();
 
@@ -256,7 +350,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_enriches_full_cues_with_translation_metadata_without_retokenizing(): void
+    public function test_enriches_full_cues_with_word_card_metadata_without_retokenizing(): void
     {
         CueEnrichmentAgent::fake([
             [
@@ -266,7 +360,7 @@ class CueEnrichmentServiceTest extends TestCase
                         'cueId' => 'cue-0001',
                         'index' => 0,
                         'sourceText' => 'hola a todos',
-                        'translatedText' => 'Bonjour a tous',
+                        'translatedText' => 'hola a todos',
                         'romanization' => 'hola a todos',
                         'tokens' => [
                             [
@@ -292,7 +386,7 @@ class CueEnrichmentServiceTest extends TestCase
         $result = $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra');
 
         $this->assertSame('castilian', $result->sourceDialect);
-        $this->assertSame('Bonjour a tous', $result->cues[0]['translatedText']);
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
         $this->assertSame('hola a todos', $result->cues[0]['romanization']);
         $this->assertSame(['hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
         $this->assertSame('hello', $result->cues[0]['tokens'][0]['gloss']);
@@ -301,6 +395,7 @@ class CueEnrichmentServiceTest extends TestCase
             fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
                 && data_get($this->promptInput($prompt), 'targetLanguage') === 'fra'
                 && data_get($this->promptInput($prompt), 'includeRomanization') === true
+                && data_get($this->promptInput($prompt), 'cues.0.translatedText') === 'hola a todos'
                 && data_get($this->promptInput($prompt), 'cues.0.tokens.1.text') === 'a todos',
         );
     }
@@ -360,7 +455,7 @@ class CueEnrichmentServiceTest extends TestCase
                         'cueId' => 'cue-0001',
                         'index' => 0,
                         'sourceText' => 'hola a todos',
-                        'translatedText' => 'Bonjour a tous',
+                        'translatedText' => 'hola a todos',
                         'romanization' => 'hola a todos',
                         'tokens' => [
                             ['index' => 0, 'text' => 'hola', 'romanization' => 'o-la'],
@@ -387,7 +482,7 @@ class CueEnrichmentServiceTest extends TestCase
                         'cueId' => 'cue-0001',
                         'index' => 0,
                         'sourceText' => 'hola a todos',
-                        'translatedText' => 'Welcome everyone',
+                        'translatedText' => 'hola a todos',
                         'tokens' => [
                             ['index' => 0, 'text' => 'hola'],
                             ['index' => 1, 'text' => 'todos'],
@@ -400,6 +495,172 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertProviderFailureReason(
             fn () => $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra'),
             'token_identity_mismatch',
+        );
+    }
+
+    public function test_translates_cues_without_changing_tokens_or_romanization(): void
+    {
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'hola a todos',
+                        'translatedText' => 'bonjour a tous',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCue = [
+            ...$this->tokenizedSourceCues()[0],
+            'romanization' => 'o-la a to-dos',
+            'tokens' => [
+                ['index' => 0, 'text' => 'hola', 'normalizedText' => 'hola', 'romanization' => 'o-la'],
+                ['index' => 1, 'text' => 'a todos', 'normalizedText' => 'a todos'],
+            ],
+        ];
+
+        $result = $this->provider()->translate([$sourceCue], 'spa', 'fra');
+
+        $this->assertSame('bonjour a tous', $result->cues[0]['translatedText']);
+        $this->assertSame('o-la a to-dos', $result->cues[0]['romanization']);
+        $this->assertSame(['hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
+
+        CueTranslationAgent::assertPrompted(
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && data_get($this->promptInput($prompt), 'targetLanguage') === 'fra'
+                && data_get($this->promptInput($prompt), 'cues.0.sourceText') === 'hola a todos'
+                && ! array_key_exists('tokens', $this->promptInput($prompt)['cues'][0]),
+        );
+    }
+
+    public function test_translation_rejects_changed_cue_identity(): void
+    {
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'changed source',
+                        'translatedText' => 'bonjour',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->translate($this->tokenizedSourceCues(), 'spa', 'fra'),
+            'cue_identity_mismatch',
+        );
+    }
+
+    public function test_translation_rejects_empty_translated_text(): void
+    {
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'hola a todos',
+                        'translatedText' => '   ',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->translate($this->tokenizedSourceCues(), 'spa', 'fra'),
+            'missing_translation',
+        );
+    }
+
+    public function test_translation_requires_configured_model(): void
+    {
+        config(['ai.providers.openai.models.translation.default' => null]);
+
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'hola a todos',
+                        'translatedText' => 'bonjour',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        try {
+            $this->provider()->translate($this->tokenizedSourceCues(), 'spa', 'fra');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('Subtitle AI model is not configured.', $exception->getMessage());
+            $this->assertSame('translation.default', $exception->context['model_key'] ?? null);
+            CueTranslationAgent::assertNeverPrompted();
+
+            return;
+        }
+
+        $this->fail('Expected missing translation model configuration to fail.');
+    }
+
+    public function test_full_enrichment_rejects_changed_translated_text(): void
+    {
+        CueEnrichmentAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'hola a todos',
+                        'translatedText' => 'changed translation',
+                        'tokens' => [
+                            ['index' => 0, 'text' => 'hola'],
+                            ['index' => 1, 'text' => 'a todos'],
+                        ],
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra'),
+            'translation_identity_mismatch',
+        );
+    }
+
+    public function test_full_enrichment_rejects_missing_source_translated_text(): void
+    {
+        CueEnrichmentAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'hola a todos',
+                        'translatedText' => 'hola a todos',
+                        'tokens' => [
+                            ['index' => 0, 'text' => 'hola'],
+                            ['index' => 1, 'text' => 'a todos'],
+                        ],
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $cues = $this->tokenizedSourceCues();
+        unset($cues[0]['translatedText']);
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->enrich($cues, 'spa', 'fra'),
+            'missing_source_translation',
         );
     }
 

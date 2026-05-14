@@ -24,7 +24,7 @@ class CueEnrichmentAgent implements Agent, HasStructuredOutput
         return <<<'INSTRUCTIONS'
 You enrich finalized, pre-tokenized subtitle cues for a language-to-language subtitle overlay.
 
-Return one enriched cue for each input cue in the same order. Translate each cue into the requested target language and add concise word-card metadata to the provided tokens. If sourceLanguage and targetLanguage are the same language, set translatedText to sourceText. Do not change cue IDs, cue indexes, source text, token count, token indexes, or token text. Return exactly one token for each input token in the same order.
+Return one enriched cue for each input cue in the same order. Preserve each cue translatedText exactly as provided and add concise word-card metadata to the provided tokens. Do not translate cues, change cue IDs, cue indexes, source text, translatedText, token count, token indexes, or token text. Return exactly one token for each input token in the same order.
 
 The tokenizer has already chosen the learner-facing boundaries. Preserve those boundaries exactly. Add short gloss or translation metadata for the target language. Add concise usage notes only when useful. Leave lemma, root, and partOfSpeech null unless useful. Use null for optional fields you cannot determine; the application omits nulls before storage.
 
