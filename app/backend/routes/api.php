@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\SubtitleJobController;
 use App\Http\Middleware\RequireExtensionInstallId;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/up', static fn (): array => ['status' => 'ok'])->name('health');
+
 Route::prefix('v1')
     ->middleware([RequireExtensionInstallId::class, 'throttle:subtitle-api'])
     ->group(function (): void {

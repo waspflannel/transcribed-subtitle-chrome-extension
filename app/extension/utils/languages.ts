@@ -29,14 +29,6 @@ export const DEFAULT_TARGET_LANGUAGE: TargetLanguage = 'eng';
 
 const sourceLanguageCodes = new Set(SOURCE_LANGUAGE_OPTIONS.map((language) => language.code));
 const targetLanguageCodes = new Set(TARGET_LANGUAGE_OPTIONS.map((language) => language.code));
-const languageAliases = new Map<string, string>();
-
-for (const language of LANGUAGE_OPTIONS) {
-  for (const alias of language.aliases ?? []) {
-    languageAliases.set(alias.toLowerCase(), language.code);
-  }
-}
-
 export function isSourceLanguage(value: unknown): value is SourceLanguage {
   return typeof value === 'string' && sourceLanguageCodes.has(value);
 }
@@ -57,10 +49,15 @@ export function normalizeTargetLanguage(value: unknown): TargetLanguage | null {
   return isTargetLanguage(code) ? code : null;
 }
 
-export function languageLabel(code: string | null | undefined): string {
+export function languageLabel(code: string): string {
   const normalizedCode = normalizeLanguageCode(code);
+  const language = LANGUAGE_OPTIONS.find((candidate) => candidate.code === normalizedCode);
 
-  return LANGUAGE_OPTIONS.find((language) => language.code === normalizedCode)?.label ?? code ?? '';
+  if (!language) {
+    throw new TypeError(`Unknown language code: ${code}`);
+  }
+
+  return language.label;
 }
 
 export function languageSearchText(language: LanguageOption): string {
@@ -78,19 +75,6 @@ function normalizeLanguageCode(value: unknown): string | null {
   }
 
   const normalized = value.trim().toLowerCase().replaceAll('_', '-');
-  const primary = normalized.split('-')[0] ?? normalized;
 
-  for (const candidate of [normalized, primary]) {
-    if (sourceLanguageCodes.has(candidate)) {
-      return candidate;
-    }
-
-    const alias = languageAliases.get(candidate);
-
-    if (alias) {
-      return alias;
-    }
-  }
-
-  return null;
+  return sourceLanguageCodes.has(normalized) ? normalized : null;
 }

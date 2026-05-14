@@ -143,6 +143,60 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_it_requires_configured_transcription_model(): void
+    {
+        config(['ai.providers.eleven.models.transcription.default' => null]);
+
+        try {
+            $this->service()->transcribe($this->audio, 'spa');
+            $this->fail('Expected missing model configuration to throw a stable transcription exception.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('Transcription model is not configured.', $exception->getMessage());
+            $this->assertSame('eleven', $exception->context['provider']);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_it_requires_configured_transcription_provider_url(): void
+    {
+        config(['ai.providers.eleven.url' => null]);
+
+        try {
+            $this->service()->transcribe($this->audio, 'spa');
+            $this->fail('Expected missing provider URL to throw a stable transcription exception.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('Transcription provider URL is not configured.', $exception->getMessage());
+            $this->assertSame('eleven', $exception->context['provider']);
+        }
+
+        Http::assertNothingSent();
+    }
+
+    public function test_it_rejects_unsupported_audio_mime_types(): void
+    {
+        $audio = new TemporaryAudioFile(
+            path: $this->audio->path,
+            directory: $this->audio->directory,
+            durationSeconds: $this->audio->durationSeconds,
+            sizeBytes: $this->audio->sizeBytes,
+            mimeType: 'application/octet-stream',
+        );
+
+        try {
+            $this->service()->transcribe($audio, 'spa');
+            $this->fail('Expected unsupported audio MIME type to fail before provider request.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('Transcription audio type is not supported.', $exception->getMessage());
+            $this->assertSame('application/octet-stream', $exception->context['mime_type']);
+        }
+
+        Http::assertNothingSent();
+    }
+
     private function service(): ElevenLabsScribeTranscriptionService
     {
         return new ElevenLabsScribeTranscriptionService(

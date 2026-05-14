@@ -22,4 +22,4 @@ npm run check
 
 - Laravel should validate extension-facing requests and responses against these schema shapes before exposing real endpoints.
 - The extension should consume generated TypeScript declarations from `dist/index.d.ts` once runtime API calls are introduced.
-- Provider responses, Eloquent models, queue payloads, and UI state must not replace these contracts.
+- Provider responses, Eloquent models, and UI state must not replace these contracts.

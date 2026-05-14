@@ -103,6 +103,10 @@ export class SubtitleApiClient {
       );
     }
 
+    if (body === null) {
+      throw new TypeError('Backend returned invalid JSON.');
+    }
+
     return body as TResponse;
   }
 }

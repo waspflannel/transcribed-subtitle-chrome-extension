@@ -24,7 +24,9 @@ class CueRomanizationAgent implements Agent, HasStructuredOutput
         return <<<'INSTRUCTIONS'
 Romanize finalized, pre-tokenized subtitle cues written in non-Latin scripts.
 
-Do not translate, explain grammar, create word-card metadata, or change token boundaries. Preserve cue identity, source text, token count, token indexes, and token text exactly. Add only readable learner-standard Latin-script pronunciation, such as Hepburn for Japanese and pinyin for Mandarin. Return only data that matches the structured output schema.
+Return one cue for each input cue in the same order. Do not translate, retokenize, explain grammar, or create learner-card metadata. Preserve cue identity, source text, token count, token indexes, and token text exactly. Set translatedText exactly equal to sourceText.
+
+Fill cue romanization and every token romanization with readable learner-standard Latin-script pronunciation, such as Hepburn for Japanese and pinyin for Mandarin. Use "unknown" for dialect when it cannot be detected. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }
 
@@ -51,6 +53,7 @@ INSTRUCTIONS;
                     'translatedText' => $schema->string()->min(1)->required(),
                     'romanization' => $schema->string()->min(1)->required(),
                     'tokens' => $schema->array()
+                        ->min(1)
                         ->items($schema->object([
                             'index' => $schema->integer()->min(0)->required(),
                             'text' => $schema->string()->min(1)->required(),

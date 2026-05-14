@@ -7,11 +7,13 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
-use App\Services\Transcription\TranscriptionService;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -37,7 +39,7 @@ class SubtitleJobApiTest extends TestCase
         $this->translationAnalysis = new RecordingTranslationAnalysisProvider;
 
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
-        $this->app->instance(TranscriptionService::class, $this->transcriptionService);
+        $this->app->instance(ElevenLabsScribeTranscriptionService::class, $this->transcriptionService);
         $this->app->instance(LaravelAiTranslationAnalysisProvider::class, $this->translationAnalysis);
     }
 
@@ -77,13 +79,20 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
     }
 
-    public function test_non_latin_transcript_first_generation_adds_best_effort_romanization(): void
+    public function test_non_latin_transcript_first_generation_adds_requested_romanization(): void
     {
+        $sourceText = $this->arabicGreeting();
+        [$firstToken, $secondToken] = explode(' ', $sourceText);
+
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'ara',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
         $response = $this
@@ -92,13 +101,13 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('track.cues.0.sourceText', 'مرحبا بكم')
-            ->assertJsonPath('track.cues.0.translatedText', 'مرحبا بكم')
-            ->assertJsonPath('track.cues.0.romanization', 'romanized مرحبا بكم')
-            ->assertJsonPath('track.cues.0.tokens.0.text', 'مرحبا')
-            ->assertJsonPath('track.cues.0.tokens.0.romanization', 'romanized مرحبا')
-            ->assertJsonPath('track.cues.0.tokens.1.text', 'بكم')
-            ->assertJsonPath('track.cues.0.tokens.1.romanization', 'romanized بكم');
+            ->assertJsonPath('track.cues.0.sourceText', $sourceText)
+            ->assertJsonPath('track.cues.0.translatedText', $sourceText)
+            ->assertJsonPath('track.cues.0.romanization', 'romanized '.$sourceText)
+            ->assertJsonPath('track.cues.0.tokens.0.text', $firstToken)
+            ->assertJsonPath('track.cues.0.tokens.0.romanization', 'romanized '.$firstToken)
+            ->assertJsonPath('track.cues.0.tokens.1.text', $secondToken)
+            ->assertJsonPath('track.cues.0.tokens.1.romanization', 'romanized '.$secondToken);
 
         $this->assertNull($response->json('track.cues.0.tokens.0.gloss'));
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
@@ -108,11 +117,18 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_transcript_first_generation_skips_romanization_when_disabled(): void
     {
+        $sourceText = $this->arabicGreeting();
+        [$firstToken] = explode(' ', $sourceText);
+
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'ara',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
         $response = $this
@@ -124,8 +140,8 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('track.cues.0.sourceText', 'مرحبا بكم')
-            ->assertJsonPath('track.cues.0.tokens.0.text', 'مرحبا');
+            ->assertJsonPath('track.cues.0.sourceText', $sourceText)
+            ->assertJsonPath('track.cues.0.tokens.0.text', $firstToken);
 
         $this->assertNull($response->json('track.cues.0.romanization'));
         $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
@@ -135,11 +151,17 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_japanese_transcript_first_generation_rebuilds_grouped_tokens_and_romanization(): void
     {
+        $sourceText = $this->japaneseSentence();
+
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'jpn',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, '私は日本語を勉強しています')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\n私は日本語を勉強しています\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
         $response = $this
@@ -151,125 +173,132 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('track.cues.0.sourceText', '私は日本語を勉強しています')
+            ->assertJsonPath('track.cues.0.sourceText', $sourceText)
             ->assertJsonPath('track.cues.0.romanization', 'watashi wa nihongo o benkyo shite imasu')
-            ->assertJsonPath('track.cues.0.tokens.0.text', '私')
-            ->assertJsonPath('track.cues.0.tokens.2.text', '日本語')
+            ->assertJsonPath('track.cues.0.tokens.0.text', "\u{79C1}")
+            ->assertJsonPath('track.cues.0.tokens.2.text', "\u{65E5}\u{672C}\u{8A9E}")
             ->assertJsonPath('track.cues.0.tokens.2.romanization', 'nihongo')
-            ->assertJsonPath('track.cues.0.tokens.4.text', '勉強しています');
+            ->assertJsonPath('track.cues.0.tokens.4.text', "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}");
 
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
     }
 
-    public function test_non_latin_transcript_first_generation_continues_when_romanization_fails(): void
+    public function test_non_latin_transcript_first_generation_fails_when_romanization_fails(): void
     {
+        $sourceText = $this->arabicGreeting();
+
         $this->translationAnalysis->romanizationShouldFail = true;
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'ara',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
-        $response = $this
+        $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'nonlatin001']));
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'nonlatin001']))
+            ->assertStatus(502)
+            ->assertJsonPath('error.code', 'enrichment_failed');
 
-        $response
-            ->assertOk()
-            ->assertJsonPath('track.cues.0.sourceText', 'مرحبا بكم')
-            ->assertJsonPath('track.cues.0.tokens.0.text', 'مرحبا');
-
-        $this->assertNull($response->json('track.cues.0.romanization'));
-        $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'nonlatin001',
-            'status' => 'completed',
-            'stage' => 'finalizing',
+            'status' => 'failed',
+            'stage' => 'romanizing',
         ]);
     }
 
-    public function test_transcript_first_generation_continues_with_transcript_only_cues_when_tokenization_fails(): void
+    public function test_transcript_first_generation_fails_when_tokenization_fails(): void
     {
         $this->translationAnalysis->tokenizationShouldFail = true;
 
-        $response = $this
+        $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']));
-
-        $response
-            ->assertOk()
-            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
-            ->assertJsonPath('track.cues.0.tokens', []);
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']))
+            ->assertStatus(502)
+            ->assertJsonPath('error.code', 'enrichment_failed');
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'tokfail0001',
-            'status' => 'completed',
-            'stage' => 'finalizing',
+            'status' => 'failed',
+            'stage' => 'tokenizing',
         ]);
     }
 
-    public function test_japanese_romanization_failure_keeps_tokenizer_tokens(): void
+    public function test_japanese_romanization_failure_fails_generation(): void
     {
+        $sourceText = $this->japaneseSentence();
+
         $this->translationAnalysis->romanizationShouldFail = true;
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'jpn',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, '私 は 日 本 語 を 勉 強 し て い ま す')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\n私 は 日 本 語 を 勉 強 し て い ま す\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
-        $response = $this
+        $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0001',
-            ]));
+            ]))
+            ->assertStatus(502)
+            ->assertJsonPath('error.code', 'enrichment_failed');
 
-        $response
-            ->assertOk()
-            ->assertJsonPath('track.cues.0.tokens.0.text', '私')
-            ->assertJsonPath('track.cues.0.tokens.2.text', '日本語')
-            ->assertJsonPath('track.cues.0.tokens.4.text', '勉強しています');
-
-        $this->assertNull($response->json('track.cues.0.romanization'));
-        $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'youtube_video_id' => 'jpnfail0001',
+            'status' => 'failed',
+            'stage' => 'romanizing',
+        ]);
     }
 
-    public function test_japanese_romanization_failure_keeps_no_space_tokenizer_boundaries(): void
+    public function test_japanese_no_space_romanization_failure_fails_generation(): void
     {
+        $sourceText = $this->japaneseNoSpaceSentence();
+
         $this->translationAnalysis->romanizationShouldFail = true;
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'jpn',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'ねえ今思っていてあそうじゃな')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nねえ今思っていてあそうじゃな\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
-        $response = $this
+        $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0002',
-            ]));
+            ]))
+            ->assertStatus(502)
+            ->assertJsonPath('error.code', 'enrichment_failed');
 
-        $response
-            ->assertOk()
-            ->assertJsonPath('track.cues.0.tokens.0.text', 'ねえ')
-            ->assertJsonPath('track.cues.0.tokens.1.text', '今')
-            ->assertJsonPath('track.cues.0.tokens.2.text', '思っていて')
-            ->assertJsonPath('track.cues.0.tokens.3.text', 'あそうじゃな');
-
-        $this->assertNull($response->json('track.cues.0.romanization'));
-        $this->assertNull($response->json('track.cues.0.tokens.0.romanization'));
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'youtube_video_id' => 'jpnfail0002',
+            'status' => 'failed',
+            'stage' => 'romanizing',
+        ]);
     }
 
     public function test_full_enrichment_mode_blocks_for_all_card_metadata(): void
@@ -291,11 +320,17 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_full_japanese_enrichment_uses_grouped_token_boundaries(): void
     {
+        $sourceText = $this->japaneseSentence();
+
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'jpn',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, '私は日本語を勉強しています')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\n私は日本語を勉強しています\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
         $response = $this
@@ -308,10 +343,10 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
-            ->assertJsonPath('track.cues.0.translatedText', 'Translated 私は日本語を勉強しています')
-            ->assertJsonPath('track.cues.0.tokens.2.text', '日本語')
+            ->assertJsonPath('track.cues.0.translatedText', 'Translated '.$sourceText)
+            ->assertJsonPath('track.cues.0.tokens.2.text', "\u{65E5}\u{672C}\u{8A9E}")
             ->assertJsonPath('track.cues.0.tokens.2.gloss', 'Japanese language')
-            ->assertJsonPath('track.cues.0.tokens.4.text', '勉強しています');
+            ->assertJsonPath('track.cues.0.tokens.4.text', "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}");
 
         $this->assertSame(1, $this->translationAnalysis->calls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
@@ -358,11 +393,17 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_romanized_and_non_romanized_tracks_are_cached_separately(): void
     {
+        $sourceText = $this->arabicGreeting();
+
         $this->transcriptionService->transcript = new TimestampedTranscript(
             language: 'ara',
             durationSeconds: 2.0,
-            segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'مرحبا بكم')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nمرحبا بكم\n",
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $sourceText)],
+            webVtt: "WEBVTT
+
+00:00:00.500 --> 00:00:02.100
+{$sourceText}
+",
         );
 
         $plainResponse = $this
@@ -385,7 +426,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertNotSame($plainResponse->json('jobId'), $romanizedResponse->json('jobId'));
         $this->assertNotSame($plainResponse->json('track.trackId'), $romanizedResponse->json('track.trackId'));
         $this->assertNull($plainResponse->json('track.cues.0.romanization'));
-        $this->assertSame('romanized مرحبا بكم', $romanizedResponse->json('track.cues.0.romanization'));
+        $this->assertSame('romanized '.$sourceText, $romanizedResponse->json('track.cues.0.romanization'));
         $this->assertSame(2, SubtitleJob::count());
         $this->assertSame(2, SubtitleTrack::count());
     }
@@ -773,6 +814,21 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('error.code', 'not_found');
     }
 
+    private function arabicGreeting(): string
+    {
+        return "\u{0645}\u{0631}\u{062D}\u{0628}\u{0627} \u{0628}\u{0643}\u{0645}";
+    }
+
+    private function japaneseSentence(): string
+    {
+        return "\u{79C1}\u{306F}\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}";
+    }
+
+    private function japaneseNoSpaceSentence(): string
+    {
+        return "\u{306D}\u{3048}\u{4ECA}\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}";
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -829,16 +885,17 @@ class SubtitleJobApiTest extends TestCase
         return "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n";
     }
 }
-
 class RecordingYouTubeAudioSource extends YouTubeAudioSource
 {
     public int $calls = 0;
 
     public ?string $lastAudioPath = null;
 
-    public function acquire(string $videoId, ?string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
     {
         $this->calls++;
+        parse_str((string) parse_url($youtubeUrl, PHP_URL_QUERY), $query);
+        $videoId = (string) $query['v'];
 
         $directory = storage_path('framework/testing/audio-api/'.(string) Str::uuid());
         File::ensureDirectoryExists($directory);
@@ -857,8 +914,13 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
     }
 }
 
-class RecordingTranscriptionService implements TranscriptionService
+class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 {
+    public function __construct()
+    {
+        parent::__construct(new ScribeTranscriptNormalizer);
+    }
+
     public bool $shouldFail = false;
 
     public ?TimestampedTranscript $transcript = null;
@@ -894,7 +956,10 @@ class RecordingTranscriptionService implements TranscriptionService
 
 class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisProvider
 {
-    public function __construct() {}
+    public function __construct()
+    {
+        parent::__construct(new LearningTokenOutputValidator);
+    }
 
     public int $calls = 0;
 
@@ -1043,10 +1108,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         return [
             'index' => $token['index'],
             'text' => $text,
-            'normalizedText' => $token['normalizedText'] ?? strtolower($text),
+            'normalizedText' => $token['normalizedText'],
             'gloss' => $text.' gloss',
             'romanization' => $text.' romanized',
-            'usageNote' => 'Clicked token from cue '.($cue['cueId'] ?? 'unknown').'.',
+            'usageNote' => 'Clicked token from cue '.$cue['cueId'].'.',
         ];
     }
 
@@ -1058,16 +1123,16 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         if ($sourceLanguage === 'jpn') {
             $comparableText = $this->comparableText($sourceText);
 
-            if ($comparableText === '私は日本語を勉強しています') {
+            if ($comparableText === "\u{79C1}\u{306F}\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}") {
                 return $this->japaneseLearningTokens();
             }
 
-            if ($comparableText === 'ねえ今思っていてあそうじゃな') {
+            if ($comparableText === "\u{306D}\u{3048}\u{4ECA}\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}") {
                 return [
-                    ['index' => 0, 'text' => 'ねえ', 'normalizedText' => 'ねえ'],
-                    ['index' => 1, 'text' => '今', 'normalizedText' => '今'],
-                    ['index' => 2, 'text' => '思っていて', 'normalizedText' => '思っていて'],
-                    ['index' => 3, 'text' => 'あそうじゃな', 'normalizedText' => 'あそうじゃな'],
+                    ['index' => 0, 'text' => "\u{306D}\u{3048}", 'normalizedText' => "\u{306D}\u{3048}"],
+                    ['index' => 1, 'text' => "\u{4ECA}", 'normalizedText' => "\u{4ECA}"],
+                    ['index' => 2, 'text' => "\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}", 'normalizedText' => "\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}"],
+                    ['index' => 3, 'text' => "\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}", 'normalizedText' => "\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}"],
                 ];
             }
         }
@@ -1095,15 +1160,15 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     private function glossForToken(string $token): string
     {
         return match ($token) {
-            '日本語' => 'Japanese language',
-            '勉強しています' => 'am studying',
+            "\u{65E5}\u{672C}\u{8A9E}" => 'Japanese language',
+            "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}" => 'am studying',
             default => $token,
         };
     }
 
     private function romanizationForCue(string $sourceText, string $sourceLanguage): string
     {
-        return $sourceLanguage === 'jpn' && $this->comparableText($sourceText) === '私は日本語を勉強しています'
+        return $sourceLanguage === 'jpn' && $this->comparableText($sourceText) === "\u{79C1}\u{306F}\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}"
             ? 'watashi wa nihongo o benkyo shite imasu'
             : 'romanized '.$sourceText;
     }
@@ -1111,11 +1176,11 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     private function romanizationForToken(string $token): string
     {
         return match ($token) {
-            '私' => 'watashi',
-            'は' => 'wa',
-            '日本語' => 'nihongo',
-            'を' => 'o',
-            '勉強しています' => 'benkyo shite imasu',
+            "\u{79C1}" => 'watashi',
+            "\u{306F}" => 'wa',
+            "\u{65E5}\u{672C}\u{8A9E}" => 'nihongo',
+            "\u{3092}" => 'o',
+            "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}" => 'benkyo shite imasu',
             default => 'romanized '.$token,
         };
     }
@@ -1131,11 +1196,11 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     private function japaneseLearningTokens(): array
     {
         return [
-            ['index' => 0, 'text' => '私', 'normalizedText' => '私'],
-            ['index' => 1, 'text' => 'は', 'normalizedText' => 'は'],
-            ['index' => 2, 'text' => '日本語', 'normalizedText' => '日本語'],
-            ['index' => 3, 'text' => 'を', 'normalizedText' => 'を'],
-            ['index' => 4, 'text' => '勉強しています', 'normalizedText' => '勉強しています'],
+            ['index' => 0, 'text' => "\u{79C1}", 'normalizedText' => "\u{79C1}"],
+            ['index' => 1, 'text' => "\u{306F}", 'normalizedText' => "\u{306F}"],
+            ['index' => 2, 'text' => "\u{65E5}\u{672C}\u{8A9E}", 'normalizedText' => "\u{65E5}\u{672C}\u{8A9E}"],
+            ['index' => 3, 'text' => "\u{3092}", 'normalizedText' => "\u{3092}"],
+            ['index' => 4, 'text' => "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}", 'normalizedText' => "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}"],
         ];
     }
 }

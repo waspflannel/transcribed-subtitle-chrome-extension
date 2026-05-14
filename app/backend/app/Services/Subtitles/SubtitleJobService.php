@@ -7,7 +7,7 @@ use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Languages\LanguageCatalog;
-use App\Services\Transcription\TranscriptionService;
+use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -23,7 +23,7 @@ class SubtitleJobService
 
     public const PROCESSING_VERSION_FULL_ROMANIZED = 'elevenlabs-scribe-v2-full-agent-tokenizer-v6-romanized';
 
-    public const COMPATIBLE_PROCESSING_VERSIONS = [
+    public const CURRENT_PROCESSING_VERSIONS = [
         self::PROCESSING_VERSION_ON_DEMAND,
         self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
         self::PROCESSING_VERSION_FULL,
@@ -32,7 +32,7 @@ class SubtitleJobService
 
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
-        private readonly TranscriptionService $transcriptionService,
+        private readonly ElevenLabsScribeTranscriptionService $transcriptionService,
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
         private readonly SubtitleWorkflowLogger $logger,
@@ -43,8 +43,8 @@ class SubtitleJobService
      */
     public function generate(array $payload, string $installId, ?string $requestIp): SubtitleJob
     {
-        $enrichmentMode = $this->enrichmentMode($payload);
-        $includeRomanization = $this->includeRomanization($payload);
+        $enrichmentMode = $payload['enrichmentMode'];
+        $includeRomanization = $payload['includeRomanization'];
         $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization);
 
         $job = DB::transaction(function () use ($payload, $installId, $requestIp, $processingVersion): SubtitleJob {
@@ -101,8 +101,7 @@ class SubtitleJobService
             $this->logger->audioAcquisitionStarted($job);
 
             $audio = $this->audioSource->acquire(
-                videoId: $payload['youtubeVideoId'],
-                youtubeUrl: $payload['youtubeUrl'] ?? null,
+                youtubeUrl: $payload['youtubeUrl'],
                 requestDurationSeconds: $payload['videoDurationSeconds'] ?? null,
             );
 
@@ -127,33 +126,24 @@ class SubtitleJobService
             $this->markJobRunning($job, $stage, 65);
             $this->logger->tokenizationStarted($job, count($draftCues));
 
-            try {
-                $enrichment = $this->translationAnalysis->tokenize(
-                    cues: $draftCues,
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
-                );
+            $enrichment = $this->translationAnalysis->tokenize(
+                cues: $draftCues,
+                sourceLanguage: $this->effectiveSourceLanguage($job),
+            );
 
-                $this->logger->tokenizationCompleted($job, $enrichment);
-            } catch (SubtitleProcessingException $exception) {
-                $this->logger->tokenizationFallbackUsed($job, $exception);
-                $enrichment = $this->tracks->fallbackEnrichment($draftCues);
-            }
+            $this->logger->tokenizationCompleted($job, $enrichment);
 
             if ($includeRomanization && $this->shouldRomanizeTranscript($enrichment->cues)) {
                 $stage = 'romanizing';
                 $this->markJobRunning($job, $stage, 78);
                 $this->logger->romanizationStarted($job, count($enrichment->cues));
 
-                try {
-                    $enrichment = $this->translationAnalysis->romanize(
-                        cues: $enrichment->cues,
-                        sourceLanguage: $this->effectiveSourceLanguage($job),
-                    );
+                $enrichment = $this->translationAnalysis->romanize(
+                    cues: $enrichment->cues,
+                    sourceLanguage: $this->effectiveSourceLanguage($job),
+                );
 
-                    $this->logger->romanizationCompleted($job, $enrichment);
-                } catch (SubtitleProcessingException $exception) {
-                    $this->logger->romanizationFailed($job, $exception);
-                }
+                $this->logger->romanizationCompleted($job, $enrichment);
             }
 
             if ($enrichmentMode === 'full' && ! $this->isSameLanguageGeneration($job)) {
@@ -212,7 +202,7 @@ class SubtitleJobService
         return SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
             'youtube_video_id' => $payload['youtubeVideoId'],
-            'youtube_url' => $payload['youtubeUrl'] ?? null,
+            'youtube_url' => $payload['youtubeUrl'],
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'source_language' => $payload['sourceLanguage'],
             'detected_source_language' => null,
@@ -235,7 +225,7 @@ class SubtitleJobService
         $job->unsetRelation('track');
 
         $job->update([
-            'youtube_url' => $payload['youtubeUrl'] ?? null,
+            'youtube_url' => $payload['youtubeUrl'],
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,
             'status' => 'running',
@@ -247,22 +237,6 @@ class SubtitleJobService
             'request_ip' => $requestIp,
             'expires_at' => null,
         ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function enrichmentMode(array $payload): string
-    {
-        return ($payload['enrichmentMode'] ?? 'on_demand') === 'full' ? 'full' : 'on_demand';
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function includeRomanization(array $payload): bool
-    {
-        return filter_var($payload['includeRomanization'] ?? true, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
     }
 
     private function processingVersion(string $enrichmentMode, bool $includeRomanization): string
@@ -297,7 +271,7 @@ class SubtitleJobService
         return preg_match('/(?!\p{Latin})\p{L}/u', $text) === 1;
     }
 
-    private function recordDetectedSourceLanguage(SubtitleJob $job, mixed $requestedSourceLanguage, ?string $transcriptLanguage): void
+    private function recordDetectedSourceLanguage(SubtitleJob $job, string $requestedSourceLanguage, string $transcriptLanguage): void
     {
         if ($requestedSourceLanguage !== 'auto') {
             return;
@@ -306,7 +280,13 @@ class SubtitleJobService
         $detectedSourceLanguage = LanguageCatalog::normalizeCode($transcriptLanguage);
 
         if ($detectedSourceLanguage === null) {
-            return;
+            throw SubtitleProcessingException::transcriptionFailed(
+                'Transcription provider did not return a supported detected language.',
+                [
+                    'reason' => 'unsupported_detected_source_language',
+                    'detected_source_language' => $transcriptLanguage,
+                ],
+            );
         }
 
         $job->update(['detected_source_language' => $detectedSourceLanguage]);

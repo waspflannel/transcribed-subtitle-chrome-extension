@@ -38,16 +38,13 @@ describe('settings model', () => {
     ).toEqual(DEFAULT_EXTENSION_SETTINGS);
   });
 
-  it('normalizes old stored ISO-639-1 language codes', () => {
+  it('does not keep old stored ISO-639-1 language compatibility aliases', () => {
     expect(
       createExtensionSettingsFromPartial({
         sourceLanguage: 'es' as never,
         targetLanguage: 'ja' as never,
       }),
-    ).toMatchObject({
-      sourceLanguage: 'spa',
-      targetLanguage: 'jpn',
-    });
+    ).toEqual(DEFAULT_EXTENSION_SETTINGS);
   });
 
   it('normalizes subtitle timing offsets to the supported slider range', () => {

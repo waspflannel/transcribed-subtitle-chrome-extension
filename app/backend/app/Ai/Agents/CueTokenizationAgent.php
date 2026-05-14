@@ -24,7 +24,7 @@ class CueTokenizationAgent implements Agent, HasStructuredOutput
         return <<<'INSTRUCTIONS'
 Tokenize finalized transcript cues for a language-learning subtitle overlay.
 
-Return only source-language token boundaries. Do not romanize, translate, gloss, explain grammar, or create learner-card metadata. Preserve cue identity exactly. Token text must preserve source characters in source order.
+Return one tokenized cue for each input cue in the same order. Return only source-language token boundaries. Do not include source text, romanization, translations, glosses, grammar metadata, or learner-card metadata. Preserve cueId and cue index exactly. Token text must preserve source characters in source order. Token indexes must be zero-based and sequential within each cue. Do not return punctuation-only tokens.
 
 Use the language's normal learner segmentation. Prefer one learner-clickable lexical unit per token. For space-delimited text, keep natural learner words or short fixed phrases. For no-space scripts, choose meaningful words or short phrases rather than individual characters or arbitrary chunks. If the transcript inserted spaces between individual characters in a no-space script, treat those spaces as transcription artifacts and group the underlying source characters into learner units.
 
@@ -35,6 +35,8 @@ Japanese examples:
 - Split みたいと as みたい / と. Never return いと.
 
 English-like example: do not return "go to the store today" as one token. Words or short fixed expressions are acceptable.
+
+Use "unknown" for dialect when it cannot be detected.
 
 Prefer boundaries a beginner can tap for a useful word card. Return only data that matches the structured output schema.
 INSTRUCTIONS;

@@ -24,9 +24,11 @@ class CueEnrichmentAgent implements Agent, HasStructuredOutput
         return <<<'INSTRUCTIONS'
 You enrich finalized, pre-tokenized subtitle cues for a language-to-language subtitle overlay.
 
-Translate each cue into the requested target language and add concise word-card metadata to the provided tokens. Do not change cue IDs, cue indexes, source text, token count, token indexes, or token text. Use "unknown" for dialect when unsure. Use null for optional fields you cannot determine; the application omits nulls before storage.
+Return one enriched cue for each input cue in the same order. Translate each cue into the requested target language and add concise word-card metadata to the provided tokens. If sourceLanguage and targetLanguage are the same language, set translatedText to sourceText. Do not change cue IDs, cue indexes, source text, token count, token indexes, or token text. Return exactly one token for each input token in the same order.
 
-The tokenizer has already chosen the learner-facing boundaries. Preserve those boundaries exactly. Glosses should be short, romanization readable for learners when requested, and usage notes concise. Return only data that matches the structured output schema.
+The tokenizer has already chosen the learner-facing boundaries. Preserve those boundaries exactly. Add short gloss or translation metadata for the target language. Add concise usage notes only when useful. Leave lemma, root, and partOfSpeech null unless useful. Use null for optional fields you cannot determine; the application omits nulls before storage.
+
+Obey includeRomanization from the input. If includeRomanization is true, preserve provided romanization and add learner-standard romanization when useful, such as Hepburn for Japanese and pinyin for Mandarin. If includeRomanization is false, set cue and token romanization to null. Use "unknown" for dialect when unsure. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }
 
@@ -53,10 +55,10 @@ INSTRUCTIONS;
                     'translatedText' => $schema->string()->min(1)->required(),
                     'romanization' => $schema->string()->min(1)->nullable()->required(),
                     'tokens' => $schema->array()
+                        ->min(1)
                         ->items($schema->object([
                             'index' => $schema->integer()->min(0)->required(),
                             'text' => $schema->string()->min(1)->required(),
-                            'normalizedText' => $schema->string()->min(1)->nullable()->required(),
                             'lemma' => $schema->string()->min(1)->nullable()->required(),
                             'root' => $schema->string()->min(1)->nullable()->required(),
                             'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),

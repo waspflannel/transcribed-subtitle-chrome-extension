@@ -67,7 +67,7 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'provider' => Lab::ElevenLabs->value,
             'adapter' => 'elevenlabs-http',
-            'model' => (string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default', 'scribe_v2'),
+            'model' => (string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default'),
             'timestamps_granularity' => 'word',
         ]);
     }
@@ -105,7 +105,6 @@ class SubtitleWorkflowLogger
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
-            'retry_model' => $this->openAiModel('tokenization.retry'),
             'source_language' => $job->source_language,
             'cue_count' => $cueCount,
         ]);
@@ -119,22 +118,10 @@ class SubtitleWorkflowLogger
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
-            'retry_model' => $this->openAiModel('tokenization.retry'),
             'source_language' => $job->source_language,
             'source_dialect' => $enrichment->sourceDialect,
             'cue_count' => count($enrichment->cues),
             'token_count' => $this->tokenCount($enrichment),
-            'tokenless_cue_count' => $this->tokenlessCueCount($enrichment),
-        ]);
-    }
-
-    public function tokenizationFallbackUsed(SubtitleJob $job, SubtitleProcessingException $exception): void
-    {
-        Log::warning('backend.tokenization_fallback_used', [
-            'job_id' => $job->public_id,
-            'youtube_video_id' => $job->youtube_video_id,
-            'error_code' => $exception->publicCode,
-            ...$exception->context,
         ]);
     }
 
@@ -178,21 +165,11 @@ class SubtitleWorkflowLogger
         ]);
     }
 
-    public function romanizationFailed(SubtitleJob $job, SubtitleProcessingException $exception): void
-    {
-        Log::warning('backend.romanization_failed', [
-            'job_id' => $job->public_id,
-            'youtube_video_id' => $job->youtube_video_id,
-            'error_code' => $exception->publicCode,
-            ...$exception->context,
-        ]);
-    }
-
     public function trackGenerated(SubtitleJob $job, SubtitleTrack $track, int $audioDurationSeconds): void
     {
         $cues = $track->cues;
-        $lastCue = $cues[array_key_last($cues)] ?? null;
-        $trackDurationSeconds = is_array($lastCue) ? ((int) ($lastCue['endMs'] ?? 0)) / 1000 : 0.0;
+        $lastCue = $cues[array_key_last($cues)];
+        $trackDurationSeconds = ((int) $lastCue['endMs']) / 1000;
         $trackOverrunSeconds = $trackDurationSeconds - $audioDurationSeconds;
 
         Log::info('backend.track_generation_completed', [
@@ -239,26 +216,14 @@ class SubtitleWorkflowLogger
 
     private function openAiModel(string $purpose): string
     {
-        if ($purpose === 'tokenization.retry') {
-            return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.tokenization.retry', 'gpt-5.5');
-        }
-
         return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.'.$purpose.'.default');
     }
 
     private function tokenCount(CueEnrichmentResult $enrichment): int
     {
         return array_sum(array_map(
-            fn (array $cue): int => is_array($cue['tokens'] ?? null) ? count($cue['tokens']) : 0,
+            fn (array $cue): int => count($cue['tokens']),
             $enrichment->cues,
-        ));
-    }
-
-    private function tokenlessCueCount(CueEnrichmentResult $enrichment): int
-    {
-        return count(array_filter(
-            $enrichment->cues,
-            fn (array $cue): bool => ($cue['tokens'] ?? null) === [],
         ));
     }
 }

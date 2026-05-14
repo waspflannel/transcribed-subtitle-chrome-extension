@@ -6,6 +6,7 @@
   "additionalProperties": false,
   "required": [
     "youtubeVideoId",
+    "youtubeUrl",
     "sourceLanguage",
     "targetLanguage"
   ],
@@ -18,7 +19,7 @@
     "youtubeUrl": {
       "type": "string",
       "format": "uri",
-      "description": "Optional watch URL captured by the extension for diagnostics and validation."
+      "description": "Watch URL captured by the extension for diagnostics and validation."
     },
     "videoDurationSeconds": {
       "type": "integer",

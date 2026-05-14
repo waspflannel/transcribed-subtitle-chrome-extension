@@ -31,21 +31,22 @@ class SubtitleTrackFactory extends Factory
             'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,
             'generated_at' => now(),
             'expires_at' => now()->addDays(30),
-            'web_vtt' => "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nmock source text\n",
+            'web_vtt' => "WEBVTT\n\n00:00:01.200 --> 00:00:04.200\nsample source text\n",
             'cues' => [
                 [
                     'cueId' => 'cue-0001',
                     'index' => 0,
                     'startMs' => 1200,
                     'endMs' => 4200,
-                    'sourceText' => 'mock source text',
-                    'translatedText' => 'Mock translation',
-                    'romanization' => 'mock romanization',
+                    'sourceText' => 'sample source text',
+                    'translatedText' => 'Sample translation',
+                    'romanization' => 'sample romanization',
                     'tokens' => [
                         [
                             'index' => 0,
-                            'text' => 'mock',
-                            'translation' => 'mock',
+                            'text' => 'sample',
+                            'normalizedText' => 'sample',
+                            'translation' => 'sample',
                         ],
                     ],
                 ],

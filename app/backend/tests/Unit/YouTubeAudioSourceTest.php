@@ -56,7 +56,6 @@ class YouTubeAudioSourceTest extends TestCase
         });
 
         $audio = (new YouTubeAudioSource)->acquire(
-            videoId: 'dQw4w9WgXcQ',
             youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             requestDurationSeconds: 42,
         );
@@ -87,7 +86,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('dQw4w9WgXcQ', null, 42);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
             $this->fail('Expected audio acquisition to reject private video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_unavailable', $exception->publicCode);
@@ -105,13 +104,43 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('dQw4w9WgXcQ', null, 42);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
             $this->fail('Expected audio acquisition to report missing downloader configuration.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_acquisition_failed', $exception->publicCode);
             $this->assertSame('Audio downloader is not installed or not available on PATH.', $exception->getMessage());
             $this->assertSame('youtube_downloader_missing', $exception->context['reason']);
             $this->assertSame('metadata', $exception->context['stage']);
+        }
+    }
+
+    public function test_it_rejects_downloaded_non_audio_files(): void
+    {
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) {
+            if (in_array('--dump-single-json', $process->command, true)) {
+                return Process::result(json_encode([
+                    'duration' => 42,
+                    'availability' => 'public',
+                    'is_live' => false,
+                ]));
+            }
+
+            $pathsIndex = array_search('--paths', $process->command, true);
+            $directory = $process->command[$pathsIndex + 1];
+            $path = $directory.DIRECTORY_SEPARATOR.'dQw4w9WgXcQ.txt';
+            File::put($path, 'not audio');
+
+            return Process::result($path);
+        });
+
+        try {
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
+            $this->fail('Expected non-audio download output to fail.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('audio_acquisition_failed', $exception->publicCode);
+            $this->assertSame('Audio acquisition produced an unknown file type.', $exception->getMessage());
+            $this->assertSame('txt', $exception->context['path_extension']);
         }
     }
 
@@ -126,7 +155,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('dQw4w9WgXcQ', null, null);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', null);
             $this->fail('Expected audio acquisition to reject long video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('video_too_long', $exception->publicCode);

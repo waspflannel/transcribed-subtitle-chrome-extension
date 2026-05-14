@@ -33,7 +33,9 @@ class SubtitleWorkflowLoggerTest extends TestCase
                         'endMs' => 2000,
                         'sourceText' => 'short track',
                         'translatedText' => 'short track',
-                        'tokens' => [],
+                        'tokens' => [
+                            ['index' => 0, 'text' => 'short', 'normalizedText' => 'short'],
+                        ],
                     ],
                 ],
             ]);
@@ -70,7 +72,9 @@ class SubtitleWorkflowLoggerTest extends TestCase
                         'endMs' => 12000,
                         'sourceText' => 'overrun track',
                         'translatedText' => 'overrun track',
-                        'tokens' => [],
+                        'tokens' => [
+                            ['index' => 0, 'text' => 'overrun', 'normalizedText' => 'overrun'],
+                        ],
                     ],
                 ],
             ]);
@@ -127,7 +131,7 @@ class SubtitleWorkflowLoggerTest extends TestCase
                 'sourceText' => 'source',
                 'translatedText' => 'translation',
                 'tokens' => [
-                    ['index' => 0, 'text' => 'source'],
+                    ['index' => 0, 'text' => 'source', 'normalizedText' => 'source'],
                 ],
             ],
         ], 'unknown'));

@@ -259,13 +259,6 @@ export class OverlayShell {
           min-width: 0;
         }
 
-        .source-text {
-          color: #f8fafc;
-          font-size: 24px;
-          font-weight: 700;
-          overflow-wrap: anywhere;
-        }
-
         .translation {
           color: #f8fafc;
           font-size: 17px;
@@ -563,10 +556,6 @@ export class OverlayShell {
             font-size: 15px;
           }
 
-          .source-text {
-            font-size: 21px;
-          }
-
           .token-popover {
             bottom: auto;
             left: auto;
@@ -666,10 +655,6 @@ function renderSourceLine(
   settings: ExtensionSettings,
   interaction: OverlayInteractionState,
 ): string {
-  if (cue.tokens.length === 0) {
-    return `<span class="source-text">${escapeHtml(cue.sourceText)}</span>`;
-  }
-
   return cue.tokens
     .map((token) => {
       const extras = [
@@ -704,7 +689,7 @@ function renderTokenInteraction(
   const token = cue.tokens.find((candidate) => candidate.index === selectedIndex);
 
   if (!token) {
-    return '';
+    throw new TypeError(`Pinned token ${String(selectedIndex)} is not present on cue ${cue.cueId}.`);
   }
 
   const key = tokenKey(cue.cueId, token.index);

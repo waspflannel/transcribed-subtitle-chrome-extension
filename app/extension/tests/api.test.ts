@@ -29,6 +29,7 @@ describe('SubtitleApiClient', () => {
 
     const payload: CreateSubtitleJobRequest = {
       youtubeVideoId: 'dQw4w9WgXcQ',
+      youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       sourceLanguage: 'auto',
       targetLanguage: 'fra',
       enrichmentMode: 'on_demand',
@@ -113,6 +114,7 @@ describe('SubtitleApiClient', () => {
       token: {
         index: 0,
         text: 'hola',
+        normalizedText: 'hola',
         gloss: 'hello',
       },
     };
@@ -154,6 +156,7 @@ describe('SubtitleApiClient', () => {
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
     const payload: CreateSubtitleJobRequest = {
       youtubeVideoId: 'bad-job-id',
+      youtubeUrl: 'https://www.youtube.com/watch?v=bad-job-id',
       sourceLanguage: 'auto',
       targetLanguage: 'fra',
     };
@@ -197,7 +200,13 @@ function trackResponse(): TrackResponse {
         endMs: 1000,
         sourceText: 'hola',
         translatedText: 'bonjour',
-        tokens: [],
+        tokens: [
+          {
+            index: 0,
+            text: 'hola',
+            normalizedText: 'hola',
+          },
+        ],
       },
     ],
   };

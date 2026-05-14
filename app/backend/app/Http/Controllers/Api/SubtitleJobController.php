@@ -19,7 +19,7 @@ class SubtitleJobController extends Controller
         $jobs = SubtitleJob::query()
             ->with('track')
             ->where('install_id', (string) $request->header('X-Extension-Install-Id'))
-            ->whereIn('processing_version', SubtitleJobService::COMPATIBLE_PROCESSING_VERSIONS)
+            ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
             ->where('created_at', '>=', now()->subDays(30))
             ->where(function ($query) use ($now, $recentIncompleteCutoff): void {
                 $query
@@ -28,7 +28,7 @@ class SubtitleJobController extends Controller
                             ->where('expires_at', '>', $now)
                             ->whereHas('track', function ($query) use ($now): void {
                                 $query
-                                    ->whereIn('processing_version', SubtitleJobService::COMPATIBLE_PROCESSING_VERSIONS)
+                                    ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
                                     ->where('expires_at', '>', $now);
                             });
                     })
@@ -52,7 +52,7 @@ class SubtitleJobController extends Controller
     public function store(CreateSubtitleJobRequest $request, SubtitleJobService $subtitleJobs): JsonResponse
     {
         $job = $subtitleJobs->generate(
-            payload: $request->validated(),
+            payload: $request->subtitlePayload(),
             installId: $request->extensionInstallId(),
             requestIp: $request->ip(),
         );
@@ -69,7 +69,7 @@ class SubtitleJobController extends Controller
         $status = $track !== null ? 'completed' : ($job->status === 'failed' ? 'failed' : 'running');
         $item = [
             'youtubeVideoId' => $job->youtube_video_id,
-            'youtubeUrl' => $job->youtube_url ?: 'https://www.youtube.com/watch?v='.$job->youtube_video_id,
+            'youtubeUrl' => $job->youtube_url,
             'status' => $status,
             'startedAt' => $job->created_at->toJSON(),
             'lastUpdatedAt' => $job->updated_at->toJSON(),

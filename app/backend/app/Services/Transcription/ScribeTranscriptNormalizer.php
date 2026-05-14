@@ -24,12 +24,9 @@ class ScribeTranscriptNormalizer
     {
         $segments = $this->segmentsFromWords($this->timedWords($payload));
         $webVtt = $this->webVttFromSegments($segments);
-        $detectedLanguage = is_string($payload['language_code'] ?? null)
-            ? LanguageCatalog::normalizeCode($payload['language_code'])
-            : null;
         $language = $requestedSourceLanguage === 'auto'
-            ? $detectedLanguage
-            : LanguageCatalog::normalizeCode($requestedSourceLanguage);
+            ? $this->detectedLanguage($payload)
+            : $requestedSourceLanguage;
 
         return new TimestampedTranscript(
             language: $language,
@@ -37,6 +34,26 @@ class ScribeTranscriptNormalizer
             segments: $segments,
             webVtt: $webVtt,
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function detectedLanguage(array $payload): string
+    {
+        if (! is_string($payload['language_code'] ?? null)) {
+            $this->failInvalidScribeResponse('missing_detected_language');
+        }
+
+        $language = LanguageCatalog::normalizeCode($payload['language_code']);
+
+        if ($language === null) {
+            $this->failInvalidScribeResponse('unsupported_detected_language', [
+                'language_code' => $payload['language_code'],
+            ]);
+        }
+
+        return $language;
     }
 
     /**

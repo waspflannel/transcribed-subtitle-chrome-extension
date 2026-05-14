@@ -45,6 +45,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
                 [
                     'index' => 0,
                     'text' => 'first',
+                    'normalizedText' => 'first',
                     'gloss' => 'first',
                 ],
             ],
@@ -64,21 +65,33 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         );
     }
 
-    public function test_fallback_enrichment_creates_transcript_only_cues(): void
+    public function test_rejects_enriched_cues_without_tokens(): void
     {
         $generator = app(TimestampedSubtitleTrackGenerator::class);
+        $job = SubtitleJob::factory()->create();
         $transcript = new TimestampedTranscript(
             language: 'spa',
             durationSeconds: 2.0,
             segments: [new TimestampedTranscriptSegment(0.0, 2.0, 'Hola a todos')],
             webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHola a todos\n",
         );
+        $draftCues = $generator->draftCues($transcript);
+        $enrichedCues = [[
+            ...$draftCues[0],
+            'translatedText' => 'Hola a todos',
+            'tokens' => [],
+        ]];
 
-        $result = $generator->fallbackEnrichment($generator->draftCues($transcript));
+        try {
+            $generator->generate($job, $transcript, new CueEnrichmentResult($enrichedCues, 'unknown'));
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+            $this->assertSame('empty_tokens', $exception->context['reason'] ?? null);
 
-        $this->assertSame('unknown', $result->sourceDialect);
-        $this->assertSame('Hola a todos', $result->cues[0]['translatedText']);
-        $this->assertSame([], $result->cues[0]['tokens']);
+            return;
+        }
+
+        $this->fail('Expected empty enriched token output to fail.');
     }
 
     public function test_rejects_empty_source_text(): void
@@ -111,17 +124,22 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         );
         $draftCues = $generator->draftCues($transcript);
         $enrichedCues = array_map(
-            fn (array $cue): array => [
-                ...$cue,
-                'translatedText' => 'Translation '.($cue['index'] + 1),
-                'tokens' => [
-                    [
-                        'index' => 0,
-                        'text' => strtok($cue['sourceText'], ' ') ?: $cue['sourceText'],
-                        'gloss' => strtok($cue['sourceText'], ' ') ?: $cue['sourceText'],
+            function (array $cue): array {
+                $tokenText = explode(' ', $cue['sourceText'])[0] ?: $cue['sourceText'];
+
+                return [
+                    ...$cue,
+                    'translatedText' => 'Translation '.($cue['index'] + 1),
+                    'tokens' => [
+                        [
+                            'index' => 0,
+                            'text' => $tokenText,
+                            'normalizedText' => strtolower($tokenText),
+                            'gloss' => $tokenText,
+                        ],
                     ],
-                ],
-            ],
+                ];
+            },
             $draftCues,
         );
 

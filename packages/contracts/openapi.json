@@ -123,10 +123,10 @@
         }
       }
     },
-    "/health": {
+    "/up": {
       "get": {
         "operationId": "health",
-        "summary": "Development health check.",
+        "summary": "Backend health check.",
         "responses": {
           "200": {
             "description": "Backend process is reachable.",

@@ -11,7 +11,7 @@ use Throwable;
 
 class YouTubeAudioSource
 {
-    public function acquire(string $videoId, ?string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
     {
         $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
 
@@ -19,15 +19,14 @@ class YouTubeAudioSource
             throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
         }
 
-        $url = $this->canonicalUrl($videoId, $youtubeUrl);
         $workDirectory = $this->createWorkDirectory();
 
         try {
-            $metadata = $this->metadata($url);
+            $metadata = $this->metadata($youtubeUrl);
             $durationSeconds = $this->durationSeconds($metadata, $maxDurationSeconds);
             $this->assertSupportedVideo($metadata);
 
-            $realPath = $this->downloadAudio($url, $workDirectory);
+            $realPath = $this->downloadAudio($youtubeUrl, $workDirectory);
             $sizeBytes = File::size($realPath);
 
             if ($sizeBytes < 1) {
@@ -53,15 +52,6 @@ class YouTubeAudioSource
                 previous: $exception,
             );
         }
-    }
-
-    private function canonicalUrl(string $videoId, ?string $youtubeUrl): string
-    {
-        if ($youtubeUrl === null || $youtubeUrl === '') {
-            return "https://www.youtube.com/watch?v={$videoId}";
-        }
-
-        return $youtubeUrl;
     }
 
     private function createWorkDirectory(): string
@@ -140,14 +130,16 @@ class YouTubeAudioSource
     {
         $availability = $metadata['availability'] ?? null;
 
-        if (is_string($availability) && $availability !== 'public') {
+        if ($availability !== 'public') {
             throw SubtitleProcessingException::audioUnavailable('Only public YouTube videos are supported.', [
                 'availability' => $availability,
             ]);
         }
 
-        if (($metadata['is_live'] ?? false) === true) {
-            throw SubtitleProcessingException::audioUnavailable('Live videos are not supported.');
+        if (($metadata['is_live'] ?? null) !== false) {
+            throw SubtitleProcessingException::audioUnavailable('Live videos are not supported.', [
+                'is_live' => $metadata['is_live'] ?? null,
+            ]);
         }
     }
 
@@ -300,10 +292,12 @@ class YouTubeAudioSource
 
         $mimeType = File::mimeType($path);
 
-        if (is_string($mimeType) && $mimeType !== '') {
+        if (is_string($mimeType) && str_starts_with($mimeType, 'audio/')) {
             return $mimeType;
         }
 
-        return 'application/octet-stream';
+        throw SubtitleProcessingException::audioAcquisitionFailed('Audio acquisition produced an unknown file type.', [
+            'path_extension' => pathinfo($path, PATHINFO_EXTENSION),
+        ]);
     }
 }
