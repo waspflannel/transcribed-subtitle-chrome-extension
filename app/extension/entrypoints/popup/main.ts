@@ -53,6 +53,7 @@ const targetLanguageList = document.querySelector<HTMLElement>('[data-target-lan
 const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
 const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
 const showRomanizationInput = document.querySelector<HTMLInputElement>('input[name="showRomanization"]')!;
+const showTranslationInput = document.querySelector<HTMLInputElement>('input[name="showTranslation"]')!;
 const showGlossInput = document.querySelector<HTMLInputElement>('input[name="showGloss"]')!;
 const fullTrackEnrichmentInput = document.querySelector<HTMLInputElement>('input[name="fullTrackEnrichment"]')!;
 const timingOffsetRangeInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetSeconds"]')!;
@@ -84,6 +85,9 @@ overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 showRomanizationInput.addEventListener('change', () =>
   void updateSettings({ showRomanization: showRomanizationInput.checked }),
+);
+showTranslationInput.addEventListener('change', () =>
+  void updateSettings({ showTranslation: showTranslationInput.checked }),
 );
 showGlossInput.addEventListener('change', () => void updateSettings({ showGloss: showGlossInput.checked }));
 fullTrackEnrichmentInput.addEventListener('change', () =>
@@ -236,6 +240,7 @@ function showPopupState(state: PopupState): void {
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
   showRomanizationInput.checked = settings.showRomanization;
+  showTranslationInput.checked = settings.showTranslation;
   showGlossInput.checked = settings.showGloss;
   fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
   showTimingOffset(settings.subtitleTimingOffsetSeconds);
@@ -463,6 +468,7 @@ function setSettingsDisabled(disabled: boolean): void {
   overlayVisibleInput.disabled = disabled;
   overlayPositionSelect.disabled = disabled;
   showRomanizationInput.disabled = disabled;
+  showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
   fullTrackEnrichmentInput.disabled = disabled;
   clearStateButton.disabled = disabled;

@@ -10,6 +10,7 @@ describe('popup progress helpers', () => {
       activityLabel: 'Active now',
     });
     expect(generationProgress({ stage: 'tokenizing', progressPercent: 65 }).stageLabel).toBe('Tokenizing subtitles');
+    expect(generationProgress({ stage: 'translating', progressPercent: 88 }).stageLabel).toBe('Translating subtitles');
     expect(generationProgress({ stage: 'enriching', progressPercent: 75 }).stageLabel).toBe('Generating word cards');
   });
 
