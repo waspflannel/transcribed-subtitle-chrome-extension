@@ -24,7 +24,6 @@ return [
             'models' => [
                 'tokenization' => [
                     'default' => env('OPENAI_TOKENIZATION_MODEL'),
-                    'retry' => env('OPENAI_TOKENIZATION_RETRY_MODEL'),
                 ],
                 'romanization' => [
                     'default' => env('OPENAI_ROMANIZATION_MODEL'),

@@ -105,7 +105,6 @@ class SubtitleWorkflowLogger
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
-            'retry_model' => $this->openAiModel('tokenization.retry'),
             'source_language' => $job->source_language,
             'cue_count' => $cueCount,
         ]);
@@ -119,7 +118,6 @@ class SubtitleWorkflowLogger
             'provider' => Lab::OpenAI->value,
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
-            'retry_model' => $this->openAiModel('tokenization.retry'),
             'source_language' => $job->source_language,
             'source_dialect' => $enrichment->sourceDialect,
             'cue_count' => count($enrichment->cues),
@@ -218,10 +216,6 @@ class SubtitleWorkflowLogger
 
     private function openAiModel(string $purpose): string
     {
-        if ($purpose === 'tokenization.retry') {
-            return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.tokenization.retry');
-        }
-
         return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.'.$purpose.'.default');
     }
 

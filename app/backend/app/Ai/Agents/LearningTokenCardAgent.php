@@ -24,7 +24,9 @@ class LearningTokenCardAgent implements Agent, HasStructuredOutput
         return <<<'INSTRUCTIONS'
 Create one concise learner card for one clicked subtitle token.
 
-Preserve the requested token text exactly. Include only metadata that helps a learner understand the token in context. Return only data that matches the structured output schema.
+Return exactly one token object for requestedToken. The returned token text must match requestedToken.text exactly. Include short gloss or translation metadata for the target language. Add lemma, root, partOfSpeech, romanization, or usageNote only when useful.
+
+For non-Latin source text, include romanization when helpful. For Latin-script languages, omit romanization unless it helps pronunciation. Use learner-standard romanization when applicable, such as Hepburn for Japanese and pinyin for Mandarin. Include only metadata that helps a learner understand the token in context. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }
 

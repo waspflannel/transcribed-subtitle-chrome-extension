@@ -8,13 +8,10 @@ use App\Ai\Agents\CueTokenizationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
-use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
-use JsonException;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use LogicException;
 use Throwable;
 
 class LaravelAiTranslationAnalysisProvider
@@ -32,15 +29,19 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        $this->ensureProviderConfigured(CueTokenizationAgent::class);
-
         $tokenizedCues = [];
         $dialect = 'unknown';
         $sourceCues = array_values($cues);
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->tokenizeBatch($batch, $sourceCues, $sourceLanguage);
+            $result = $this->tokenizedBatchResult(
+                $this->promptAgent(
+                    CueTokenizationAgent::class,
+                    $this->tokenizationInput($batch, $sourceLanguage, $sourceCues),
+                ),
+                $batch,
+            );
 
             array_push($tokenizedCues, ...$result->cues);
 
@@ -65,8 +66,6 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        $this->ensureProviderConfigured(CueEnrichmentAgent::class);
-
         $enrichedCuesById = [];
         $dialect = 'unknown';
         $sourceCues = array_values($cues);
@@ -74,10 +73,10 @@ class LaravelAiTranslationAnalysisProvider
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
             $result = $this->validatedEnrichedCueResult(
-                $this->structuredResponse($this->promptAgent(
+                $this->promptAgent(
                     CueEnrichmentAgent::class,
-                    $this->fullCardPrompt($batch, $sourceLanguage, $targetLanguage, $includeRomanization),
-                )),
+                    $this->cueEnrichmentInput($batch, $sourceLanguage, $targetLanguage, $includeRomanization),
+                ),
                 $batch,
                 $includeRomanization,
             );
@@ -109,8 +108,6 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        $this->ensureProviderConfigured(CueRomanizationAgent::class);
-
         $romanizedCuesById = [];
         $dialect = 'unknown';
         $sourceCues = array_values($cues);
@@ -118,10 +115,10 @@ class LaravelAiTranslationAnalysisProvider
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
             $result = $this->romanizedResult(
-                $this->structuredResponse($this->promptAgent(
+                $this->promptAgent(
                     CueRomanizationAgent::class,
-                    $this->romanizationPrompt($batch, $sourceLanguage),
-                )),
+                    $this->romanizationInput($batch, $sourceLanguage),
+                ),
                 $batch,
             );
 
@@ -157,12 +154,10 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('invalid_token_context');
         }
 
-        $this->ensureProviderConfigured(LearningTokenCardAgent::class);
-
-        $response = $this->structuredResponse($this->promptAgent(
+        $response = $this->promptAgent(
             LearningTokenCardAgent::class,
-            $this->tokenCardPrompt($cue, $token, $sourceLanguage, $targetLanguage),
-        ));
+            $this->learningTokenCardInput($cue, $token, $sourceLanguage, $targetLanguage),
+        );
         $outputToken = $response['token'] ?? null;
 
         if (! is_array($outputToken)) {
@@ -174,22 +169,22 @@ class LaravelAiTranslationAnalysisProvider
 
     /**
      * @param  class-string  $agentClass
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
      */
-    private function promptAgent(string $agentClass, string $prompt, ?string $model = null): mixed
+    private function promptAgent(string $agentClass, array $input): array
     {
-        $resolvedModel = $model ?? $this->model($agentClass);
-
         try {
-            $agent = $agentClass::make();
-
-            return $agent->prompt($prompt, model: $resolvedModel);
+            return $agentClass::make()
+                ->prompt($this->encodeAgentInput($input))
+                ->toArray();
         } catch (RateLimitedException $exception) {
             throw SubtitleProcessingException::rateLimited(
                 'Subtitle AI processing is temporarily rate limited.',
                 [
                     'provider' => Lab::OpenAI->value,
                     'adapter' => 'laravel-ai-sdk',
-                    'model' => $resolvedModel,
+                    'agent' => $agentClass,
                     'exception' => $exception::class,
                 ],
                 $exception,
@@ -200,7 +195,7 @@ class LaravelAiTranslationAnalysisProvider
             $context = [
                 'provider' => Lab::OpenAI->value,
                 'adapter' => 'laravel-ai-sdk',
-                'model' => $resolvedModel,
+                'agent' => $agentClass,
                 'exception' => $exception::class,
             ];
 
@@ -215,56 +210,21 @@ class LaravelAiTranslationAnalysisProvider
     /**
      * @param  array<int, array<string, mixed>>  $sourceCues
      * @param  array<int, array<string, mixed>>  $allCues
-     * @param  array<string, string>  $qualityFailures
-     *
-     * @throws JsonException
+     * @return array<string, mixed>
      */
-    private function tokenizationPrompt(
+    private function tokenizationInput(
         array $sourceCues,
         string $sourceLanguage,
         array $allCues = [],
-        array $qualityFailures = [],
-    ): string {
-        return json_encode([
+    ): array {
+        return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
-            'instructions' => [
-                'Tokenize this transcript.',
-                'Return one tokenized cue for each input cue in the same order.',
-                'Do not change cueId or index.',
-                'Return tokens only; do not include source text, romanization, translations, glosses, grammar metadata, or learner-card metadata.',
-                'Tokens must preserve source characters in source order.',
-                'Token indexes must be zero-based and sequential within each cue.',
-                'For space-delimited text, keep natural learner words or short fixed phrases.',
-                'For no-space scripts, choose learner-friendly words or short phrases according to the language, not individual characters and not arbitrary chunks.',
-                'Treat spaces between individual characters in no-space scripts as transcription artifacts and omit those spaces from token text.',
-                'Do not return punctuation-only tokens.',
-                'Prefer boundaries a beginner can tap for a useful word card.',
-                'Prefer one learner-clickable lexical unit per token.',
-                'Keep particles, case markers, short connectors, and auxiliaries separate when they function independently.',
-                'Do not attach a leading or trailing function word to a neighboring content word.',
-                'Avoid broad phrase chunks unless the expression is truly fixed and useful as one card.',
-                'Japanese example: split "か聞いてみた" as "か", "聞いて", "みた", never as "か聞いてみた".',
-                'Japanese example: split "みたいと" as "みたい", "と", never as "いと".',
-                'For English-like spacing, "go to the store today" should not be one token; words or short fixed expressions are acceptable.',
-                'Use unknown for dialect when it cannot be detected.',
-                ...($qualityFailures === [] ? [] : [
-                    'This is a retry for cues rejected by validation. Fix the listed rejection reason and return only valid boundaries.',
-                ]),
-            ],
-            'qualityFailures' => array_map(
-                fn (string $reason, string $cueId): array => [
-                    'cueId' => $cueId,
-                    'reason' => $reason,
-                ],
-                $qualityFailures,
-                array_keys($qualityFailures),
-            ),
             'cues' => array_map(
                 fn (array $cue): array => $this->tokenizationCueInput($cue, $allCues === [] ? $sourceCues : $allCues),
                 $sourceCues,
             ),
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        ];
     }
 
     /**
@@ -304,34 +264,20 @@ class LaravelAiTranslationAnalysisProvider
 
     /**
      * @param  array<int, array<string, mixed>>  $sourceCues
-     *
-     * @throws JsonException
+     * @return array<string, mixed>
      */
-    private function fullCardPrompt(
+    private function cueEnrichmentInput(
         array $sourceCues,
         string $sourceLanguage,
         string $targetLanguage,
         bool $includeRomanization,
-    ): string {
-        return json_encode([
+    ): array {
+        return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
             'targetLanguageName' => LanguageCatalog::label($targetLanguage),
             'includeRomanization' => $includeRomanization,
-            'instructions' => [
-                'Return one enriched cue for each input cue in the same order.',
-                'Do not change cueId, index, sourceText, token count, token indexes, or token text.',
-                'Translate each cue into targetLanguageName.',
-                'If sourceLanguage and targetLanguage are the same language, set translatedText to sourceText.',
-                'Return exactly one token for each input token in the same order.',
-                'Add short gloss or translation metadata for the target language.',
-                'Add concise usage notes only when useful.',
-                'Leave lemma, root, and partOfSpeech null unless useful.',
-                'If includeRomanization is true, preserve provided romanization and add learner-standard romanization when useful, such as Hepburn for Japanese and pinyin for Mandarin.',
-                'If includeRomanization is false, set cue and token romanization to null.',
-                'Use unknown for dialect when it cannot be detected.',
-            ],
             'cues' => array_map(
                 fn (array $cue): array => [
                     ...Arr::only($cue, ['cueId', 'index', 'sourceText', 'romanization']),
@@ -342,31 +288,20 @@ class LaravelAiTranslationAnalysisProvider
                 ],
                 $sourceCues,
             ),
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        ];
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $sourceCues
-     *
-     * @throws JsonException
+     * @return array<string, mixed>
      */
-    private function romanizationPrompt(array $sourceCues, string $sourceLanguage): string
+    private function romanizationInput(array $sourceCues, string $sourceLanguage): array
     {
-        return json_encode([
+        return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $sourceLanguage,
             'targetLanguageName' => LanguageCatalog::label($sourceLanguage),
-            'instructions' => [
-                'Romanize subtitle cues written in non-Latin scripts for transcript-first display.',
-                'Do not translate, retokenize, or create learner cards.',
-                'Return one cue for each input cue in the same order.',
-                'Do not change cueId, index, sourceText, token count, token indexes, or token text.',
-                'Set translatedText exactly equal to sourceText.',
-                'Fill cue romanization and every token romanization with readable Latin-script pronunciation.',
-                'Use learner-standard romanization, such as Hepburn for Japanese and pinyin for Mandarin.',
-                'Use unknown for dialect when it cannot be detected.',
-            ],
             'cues' => array_map(
                 fn (array $cue): array => [
                     ...Arr::only($cue, ['cueId', 'index', 'sourceText']),
@@ -377,143 +312,41 @@ class LaravelAiTranslationAnalysisProvider
                 ],
                 $sourceCues,
             ),
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        ];
     }
 
     /**
      * @param  array<string, mixed>  $cue
      * @param  array<string, mixed>  $token
-     *
-     * @throws JsonException
+     * @return array<string, mixed>
      */
-    private function tokenCardPrompt(array $cue, array $token, string $sourceLanguage, string $targetLanguage): string
+    private function learningTokenCardInput(array $cue, array $token, string $sourceLanguage, string $targetLanguage): array
     {
-        return json_encode([
+        return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
             'targetLanguageName' => LanguageCatalog::label($targetLanguage),
-            'instructions' => [
-                'Return exactly one token object for requestedToken.',
-                'The returned token text must match requestedToken.text.',
-                'Include short gloss or translation metadata for the target language.',
-                'Add lemma, root, partOfSpeech, romanization, or usageNote only when useful.',
-                'For non-Latin source text, include romanization when helpful.',
-                'For Latin-script languages, omit romanization unless it helps pronunciation.',
-                'Use learner-standard romanization when applicable, such as Hepburn for Japanese and pinyin for Mandarin.',
-            ],
             'cue' => Arr::only($cue, ['cueId', 'index', 'sourceText', 'romanization']),
             'requestedToken' => Arr::only($token, ['index', 'text', 'normalizedText', 'romanization']),
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $sourceCues
-     * @param  array<int, array<string, mixed>>  $allCues
-     */
-    private function tokenizeBatch(array $sourceCues, array $allCues, string $sourceLanguage): CueEnrichmentResult
-    {
-        $firstPass = $this->attemptTokenizedBatch($sourceCues, $allCues, $sourceLanguage);
-        $tokenizedByCueId = [];
-        $dialect = $firstPass['dialect'];
-
-        foreach ($firstPass['cues'] as $cue) {
-            $tokenizedByCueId[(string) $cue['cueId']] = $cue;
-        }
-
-        if ($firstPass['failures'] !== []) {
-            $failedCues = array_map(
-                fn (array $failure): array => $failure['cue'],
-                $firstPass['failures'],
-            );
-            $retryPass = $this->attemptTokenizedBatch(
-                $failedCues,
-                $allCues,
-                $sourceLanguage,
-                $this->failureReasonsByCueId($firstPass['failures']),
-                $this->tokenizationRetryModel(),
-            );
-
-            if ($dialect === 'unknown' && $retryPass['dialect'] !== 'unknown') {
-                $dialect = $retryPass['dialect'];
-            }
-
-            foreach ($retryPass['cues'] as $cue) {
-                $tokenizedByCueId[(string) $cue['cueId']] = $cue;
-            }
-
-            if ($retryPass['failures'] !== []) {
-                $this->failTokenizationFailures($retryPass['failures']);
-            }
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => $tokenizedByCueId[(string) $cue['cueId']],
-                $sourceCues,
-            ),
-            $dialect,
-        );
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $sourceCues
-     * @param  array<int, array<string, mixed>>  $allCues
-     * @param  array<string, string>  $qualityFailures
-     * @return array{cues: array<int, array<string, mixed>>, failures: array<int, array{cue: array<string, mixed>, reason: string}>, dialect: string}
-     */
-    private function attemptTokenizedBatch(
-        array $sourceCues,
-        array $allCues,
-        string $sourceLanguage,
-        array $qualityFailures = [],
-        ?string $model = null,
-    ): array {
-        $output = $this->structuredResponse($this->promptAgent(
-            CueTokenizationAgent::class,
-            $this->tokenizationPrompt($sourceCues, $sourceLanguage, $allCues, $qualityFailures),
-            $model,
-        ));
-
-        try {
-            return $this->tokenizedBatchResult($output, $sourceCues);
-        } catch (SubtitleProcessingException $exception) {
-            return [
-                'cues' => [],
-                'failures' => array_map(
-                    fn (array $cue): array => $this->tokenizationFailure($cue, $exception),
-                    $sourceCues,
-                ),
-                'dialect' => $this->cleanString($output['dialect'] ?? null) ?? 'unknown',
-            ];
-        }
+        ];
     }
 
     /**
      * @param  array<string, mixed>  $output
      * @param  array<int, array<string, mixed>>  $sourceCues
-     * @return array{cues: array<int, array<string, mixed>>, failures: array<int, array{cue: array<string, mixed>, reason: string}>, dialect: string}
      */
-    private function tokenizedBatchResult(array $output, array $sourceCues): array
+    private function tokenizedBatchResult(array $output, array $sourceCues): CueEnrichmentResult
     {
         $dialect = $this->cleanString($output['dialect'] ?? null) ?? 'unknown';
         $outputCues = $this->validatedOutputCues($output, $sourceCues);
         $tokenizedCues = [];
-        $failures = [];
 
         foreach ($sourceCues as $position => $sourceCue) {
-            try {
-                $tokenizedCues[] = $this->validatedTokenizedCue($sourceCue, $outputCues[$position], $position);
-            } catch (SubtitleProcessingException $exception) {
-                $failures[] = $this->tokenizationFailure($sourceCue, $exception);
-            }
+            $tokenizedCues[] = $this->validatedTokenizedCue($sourceCue, $outputCues[$position], $position);
         }
 
-        return [
-            'cues' => $tokenizedCues,
-            'failures' => $failures,
-            'dialect' => $dialect,
-        ];
+        return new CueEnrichmentResult($tokenizedCues, $dialect);
     }
 
     /**
@@ -534,49 +367,6 @@ class LaravelAiTranslationAnalysisProvider
                 (int) $sourceCue['index'],
             ),
         ];
-    }
-
-    /**
-     * @param  array<int, array{cue: array<string, mixed>, reason: string}>  $failures
-     * @return array<string, string>
-     */
-    private function failureReasonsByCueId(array $failures): array
-    {
-        $reasons = [];
-
-        foreach ($failures as $failure) {
-            $reasons[(string) $failure['cue']['cueId']] = $failure['reason'];
-        }
-
-        return $reasons;
-    }
-
-    /**
-     * @param  array<string, mixed>  $cue
-     * @return array{cue: array<string, mixed>, reason: string}
-     */
-    private function tokenizationFailure(array $cue, SubtitleProcessingException $exception): array
-    {
-        return [
-            'cue' => $cue,
-            'reason' => $this->cleanString($exception->context['reason'] ?? null) ?? 'invalid_tokenization',
-        ];
-    }
-
-    /**
-     * @param  array<int, array{cue: array<string, mixed>, reason: string}>  $failures
-     */
-    private function failTokenizationFailures(array $failures): never
-    {
-        $this->failInvalidOutput('tokenization_retry_failed', [
-            'failures' => array_map(
-                fn (array $failure): array => [
-                    'cue_id' => $failure['cue']['cueId'] ?? null,
-                    'reason' => $failure['reason'],
-                ],
-                $failures,
-            ),
-        ]);
     }
 
     /**
@@ -849,84 +639,11 @@ class LaravelAiTranslationAnalysisProvider
     }
 
     /**
-     * @return array<string, mixed>
+     * @param  array<string, mixed>  $input
      */
-    private function structuredResponse(mixed $response): array
+    private function encodeAgentInput(array $input): string
     {
-        if (is_array($response)) {
-            return $response;
-        }
-
-        if ($response instanceof Arrayable) {
-            return $response->toArray();
-        }
-
-        $structured = $response->structured ?? null;
-
-        if (is_array($structured)) {
-            return $structured;
-        }
-
-        $this->failInvalidOutput('missing_structured_response');
-    }
-
-    /**
-     * @param  class-string  $agentClass
-     */
-    private function ensureProviderConfigured(string $agentClass): void
-    {
-        $model = $this->model($agentClass);
-        $apiKey = config('ai.providers.'.Lab::OpenAI->value.'.key');
-        $url = config('ai.providers.'.Lab::OpenAI->value.'.url');
-
-        if (! is_string($url) || trim($url) === '') {
-            throw SubtitleProcessingException::enrichmentFailed('Subtitle AI provider URL is not configured.', [
-                'provider' => Lab::OpenAI->value,
-                'adapter' => 'laravel-ai-sdk',
-                'model' => $model,
-            ]);
-        }
-
-        if (! $agentClass::isFaked() && (! is_string($apiKey) || trim($apiKey) === '')) {
-            throw SubtitleProcessingException::enrichmentFailed('Subtitle AI provider is not configured.', [
-                'provider' => Lab::OpenAI->value,
-                'adapter' => 'laravel-ai-sdk',
-                'model' => $model,
-            ]);
-        }
-    }
-
-    /**
-     * @param  class-string  $agentClass
-     */
-    private function model(string $agentClass): string
-    {
-        return match ($agentClass) {
-            CueTokenizationAgent::class => $this->configuredOpenAiModel('tokenization.default'),
-            CueRomanizationAgent::class => $this->configuredOpenAiModel('romanization.default'),
-            CueEnrichmentAgent::class, LearningTokenCardAgent::class => $this->configuredOpenAiModel('enrichment.default'),
-            default => throw new LogicException("Unsupported AI agent [{$agentClass}]."),
-        };
-    }
-
-    private function tokenizationRetryModel(): string
-    {
-        return $this->configuredOpenAiModel('tokenization.retry');
-    }
-
-    private function configuredOpenAiModel(string $modelKey): string
-    {
-        $model = config('ai.providers.'.Lab::OpenAI->value.'.models.'.$modelKey);
-
-        if (! is_string($model) || trim($model) === '') {
-            throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.', [
-                'provider' => Lab::OpenAI->value,
-                'adapter' => 'laravel-ai-sdk',
-                'model_key' => $modelKey,
-            ]);
-        }
-
-        return trim($model);
+        return json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
     }
 
     private function cleanString(mixed $value): ?string

@@ -44,13 +44,13 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame($sourceText, $result->cues[0]['translatedText']);
 
         CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"sourceLanguage":"jpn"')
-                && $prompt->contains('Return tokens only')
-                && $prompt->contains($sourceText),
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && data_get($this->promptInput($prompt), 'sourceLanguage') === 'jpn'
+                && data_get($this->promptInput($prompt), 'cues.0.sourceText') === $sourceText,
         );
     }
 
-    public function test_tokenization_validation_failure_retries_failed_cue_with_rejection_reason(): void
+    public function test_tokenization_validation_failure_fails_generation(): void
     {
         $sourceText = 'Hola a todos';
 
@@ -62,110 +62,6 @@ class CueEnrichmentServiceTest extends TestCase
                         'cueId' => 'cue-0001',
                         'index' => 0,
                         'tokens' => $this->generatedTokens($sourceText, ['missing']),
-                    ],
-                ],
-            ],
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'cue-0001',
-                        'index' => 0,
-                        'tokens' => $this->generatedTokens($sourceText, ['Hola', 'a todos']),
-                    ],
-                ],
-            ],
-        ])->preventStrayPrompts();
-
-        $result = $this->provider()->tokenize([
-            $this->sourceCue('cue-0001', 0, $sourceText),
-        ], 'jpn');
-
-        $this->assertSame(['Hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
-
-        CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.retry')
-                && $prompt->contains('token_text_not_in_source')
-                && $prompt->contains('This is a retry'),
-        );
-    }
-
-    public function test_tokenization_retries_only_failed_cues(): void
-    {
-        $validSourceText = 'Hola amiga';
-        $failedSourceText = 'good morning';
-
-        CueTokenizationAgent::fake([
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'cue-0001',
-                        'index' => 0,
-                        'tokens' => $this->generatedTokens($validSourceText, ['Hola', 'amiga']),
-                    ],
-                    [
-                        'cueId' => 'cue-0002',
-                        'index' => 1,
-                        'tokens' => $this->generatedTokens($failedSourceText, ['evening']),
-                    ],
-                ],
-            ],
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'cue-0002',
-                        'index' => 1,
-                        'tokens' => $this->generatedTokens($failedSourceText, ['good', 'morning']),
-                    ],
-                ],
-            ],
-        ])->preventStrayPrompts();
-
-        $result = $this->provider()->tokenize([
-            $this->sourceCue('cue-0001', 0, $validSourceText),
-            $this->sourceCue('cue-0002', 1, $failedSourceText),
-        ], 'jpn');
-
-        $this->assertSame(['Hola', 'amiga'], array_column($result->cues[0]['tokens'], 'text'));
-        $this->assertSame(['good', 'morning'], array_column($result->cues[1]['tokens'], 'text'));
-
-        CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.default')
-                && $prompt->contains('"nextCueText":"good morning"')
-                && $prompt->contains('"previousCueText":"Hola amiga"'),
-        );
-
-        CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.retry')
-                && $prompt->contains('"cueId":"cue-0002"')
-                && ! $prompt->contains('"cueId":"cue-0001"'),
-        );
-    }
-
-    public function test_tokenization_retry_failure_fails_generation(): void
-    {
-        $sourceText = 'Hola a todos';
-
-        CueTokenizationAgent::fake([
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'cue-0001',
-                        'index' => 0,
-                        'tokens' => $this->generatedTokens($sourceText, ['missing']),
-                    ],
-                ],
-            ],
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'cue-0001',
-                        'index' => 0,
-                        'tokens' => $this->generatedTokens($sourceText, ['still missing']),
                     ],
                 ],
             ],
@@ -175,11 +71,16 @@ class CueEnrichmentServiceTest extends TestCase
             fn () => $this->provider()->tokenize([
                 $this->sourceCue('cue-0001', 0, $sourceText),
             ], 'jpn'),
-            'tokenization_retry_failed',
+            'token_text_not_in_source',
+        );
+
+        CueTokenizationAgent::assertPrompted(
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && ! array_key_exists('qualityFailures', $this->promptInput($prompt)),
         );
     }
 
-    public function test_tokenization_retry_provider_failure_fails_generation(): void
+    public function test_tokenization_fails_batch_when_any_cue_has_invalid_tokens(): void
     {
         $validSourceText = 'Hola amiga';
         $failedSourceText = 'good morning';
@@ -200,25 +101,58 @@ class CueEnrichmentServiceTest extends TestCase
                     ],
                 ],
             ],
-            fn (): never => throw new RuntimeException('retry provider unavailable'),
         ])->preventStrayPrompts();
 
-        try {
-            $this->provider()->tokenize([
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->tokenize([
                 $this->sourceCue('cue-0001', 0, $validSourceText),
                 $this->sourceCue('cue-0002', 1, $failedSourceText),
-            ], 'jpn');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('enrichment_failed', $exception->publicCode);
-            $this->assertSame(RuntimeException::class, $exception->context['exception'] ?? null);
+            ], 'jpn'),
+            'token_text_not_in_source',
+        );
 
-            return;
-        }
-
-        $this->fail('Expected retry provider failure to fail tokenization.');
+        CueTokenizationAgent::assertPrompted(
+            fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.default')
+                && $this->promptInputHasNoInstructions($prompt)
+                && data_get($this->promptInput($prompt), 'cues.0.nextCueText') === 'good morning'
+                && data_get($this->promptInput($prompt), 'cues.1.previousCueText') === 'Hola amiga',
+        );
     }
 
-    public function test_tokenization_accepts_valid_first_pass_without_retry(): void
+    public function test_tokenization_count_mismatch_fails_generation(): void
+    {
+        $firstSourceText = 'Bonjour a tous';
+        $secondSourceText = 'Je suis tres heureux';
+
+        CueTokenizationAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens($firstSourceText, ['Bonjour', 'a tous']),
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->tokenize([
+                $this->sourceCue('cue-0001', 0, $firstSourceText),
+                $this->sourceCue('cue-0002', 1, $secondSourceText),
+            ], 'fra'),
+            'cue_count_mismatch',
+        );
+
+        CueTokenizationAgent::assertPrompted(
+            fn ($prompt): bool => $prompt->contains('"cueId":"cue-0001"')
+                && $this->promptInputHasNoInstructions($prompt)
+                && $prompt->contains('"cueId":"cue-0002"'),
+        );
+    }
+
+    public function test_tokenization_accepts_valid_agent_output(): void
     {
         $sourceText = '違う姿違う形なの';
 
@@ -242,8 +176,9 @@ class CueEnrichmentServiceTest extends TestCase
 
         $this->assertSame(['違う', '姿', '違う', '形なの'], array_column($result->cues[0]['tokens'], 'text'));
 
-        CueTokenizationAgent::assertNotPrompted(
-            fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.retry'),
+        CueTokenizationAgent::assertPrompted(
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && ! array_key_exists('qualityFailures', $this->promptInput($prompt)),
         );
     }
 
@@ -285,14 +220,14 @@ class CueEnrichmentServiceTest extends TestCase
 
         CueTokenizationAgent::assertPrompted(
             fn ($prompt): bool => $prompt->contains($sourceText)
-                && $prompt->contains('transcription artifacts')
+                && $this->promptInputHasNoInstructions($prompt)
                 && ! $prompt->contains('tokenizationText')
                 && ! $prompt->contains('sourceStart')
                 && ! $prompt->contains('sourceEnd'),
         );
     }
 
-    public function test_tokenization_changed_cue_identity_fails_after_retry(): void
+    public function test_tokenization_changed_cue_identity_fails_generation(): void
     {
         $sourceText = '違う姿違う形なの';
 
@@ -308,27 +243,16 @@ class CueEnrichmentServiceTest extends TestCase
                     ],
                 ],
             ],
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'different-cue',
-                        'index' => 0,
-                        'sourceText' => $sourceText,
-                        'tokens' => $this->generatedTokens($sourceText, ['違う']),
-                    ],
-                ],
-            ],
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
             fn () => $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn'),
-            'tokenization_retry_failed',
+            'cue_identity_mismatch',
         );
 
         CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.retry')
-                && $prompt->contains('cue_identity_mismatch'),
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && ! array_key_exists('qualityFailures', $this->promptInput($prompt)),
         );
     }
 
@@ -374,10 +298,10 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame('hello', $result->cues[0]['tokens'][0]['gloss']);
 
         CueEnrichmentAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('"targetLanguage":"fra"')
-                && $prompt->contains('"includeRomanization":true')
-                && $prompt->contains('token count')
-                && $prompt->contains('"text":"a todos"'),
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && data_get($this->promptInput($prompt), 'targetLanguage') === 'fra'
+                && data_get($this->promptInput($prompt), 'includeRomanization') === true
+                && data_get($this->promptInput($prompt), 'cues.0.tokens.1.text') === 'a todos',
         );
     }
 
@@ -523,9 +447,10 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertArrayNotHasKey('gloss', $result->cues[0]['tokens'][2]);
 
         CueRomanizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains('Do not translate, retokenize')
-                && $prompt->contains('Hepburn for Japanese')
-                && $prompt->contains('"text":"日本語"'),
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && data_get($this->promptInput($prompt), 'sourceLanguage') === 'jpn'
+                && data_get($this->promptInput($prompt), 'targetLanguage') === 'jpn'
+                && data_get($this->promptInput($prompt), 'cues.0.tokens.2.text') === '日本語',
         );
     }
 
@@ -682,9 +607,15 @@ class CueEnrichmentServiceTest extends TestCase
             'gloss' => 'hello',
             'usageNote' => 'Common greeting.',
         ], $token);
+
+        LearningTokenCardAgent::assertPrompted(
+            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
+                && data_get($this->promptInput($prompt), 'cue.sourceText') === 'Hola a todos'
+                && data_get($this->promptInput($prompt), 'requestedToken.text') === 'Hola',
+        );
     }
 
-    public function test_provider_request_errors_map_without_split_retry(): void
+    public function test_provider_request_errors_map_to_stable_public_errors(): void
     {
         $calls = 0;
 
@@ -705,7 +636,7 @@ class CueEnrichmentServiceTest extends TestCase
             return;
         }
 
-        $this->fail('Expected provider request failure to map without split retries.');
+        $this->fail('Expected provider request failure to map to a subtitle processing exception.');
     }
 
     public function test_provider_rate_limits_map_to_stable_rate_limited_error(): void
@@ -720,49 +651,12 @@ class CueEnrichmentServiceTest extends TestCase
             $this->assertSame('rate_limited', $exception->publicCode);
             $this->assertSame(429, $exception->status);
             $this->assertSame(RateLimitedException::class, $exception->context['exception'] ?? null);
-            $this->assertSame(
-                (string) config('ai.providers.openai.models.tokenization.default'),
-                $exception->context['model'] ?? null,
-            );
+            $this->assertSame(CueTokenizationAgent::class, $exception->context['agent'] ?? null);
 
             return;
         }
 
         $this->fail('Expected provider rate limit to map to a subtitle processing exception.');
-    }
-
-    public function test_provider_requires_configured_openai_url(): void
-    {
-        config(['ai.providers.openai.url' => null]);
-
-        try {
-            $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('enrichment_failed', $exception->publicCode);
-            $this->assertSame('Subtitle AI provider URL is not configured.', $exception->getMessage());
-            $this->assertSame('openai', $exception->context['provider'] ?? null);
-
-            return;
-        }
-
-        $this->fail('Expected missing OpenAI URL to fail before prompting.');
-    }
-
-    public function test_provider_requires_configured_openai_model(): void
-    {
-        config(['ai.providers.openai.models.tokenization.default' => null]);
-
-        try {
-            $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('enrichment_failed', $exception->publicCode);
-            $this->assertSame('Subtitle AI model is not configured.', $exception->getMessage());
-            $this->assertSame('tokenization.default', $exception->context['model_key'] ?? null);
-
-            return;
-        }
-
-        $this->fail('Expected missing OpenAI model to fail before prompting.');
     }
 
     public function test_provider_failures_map_to_stable_public_errors(): void
@@ -786,6 +680,23 @@ class CueEnrichmentServiceTest extends TestCase
     private function provider(): LaravelAiTranslationAnalysisProvider
     {
         return new LaravelAiTranslationAnalysisProvider(new LearningTokenOutputValidator);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function promptInput(mixed $prompt): array
+    {
+        $input = json_decode($prompt->prompt, true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertIsArray($input);
+
+        return $input;
+    }
+
+    private function promptInputHasNoInstructions(mixed $prompt): bool
+    {
+        return ! array_key_exists('instructions', $this->promptInput($prompt));
     }
 
     /**
