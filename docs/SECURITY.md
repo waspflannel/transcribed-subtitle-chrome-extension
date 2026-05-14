@@ -55,6 +55,14 @@
   - `backend.transcription_started`
   - `backend.transcription_completed`
   - `backend.transcription_failed`
+  - `backend.tokenization_started`
+  - `backend.tokenization_batch_retried`
+  - `backend.tokenization_completed`
+  - `backend.romanization_started`
+  - `backend.romanization_completed`
+  - `backend.translation_started`
+  - `backend.translation_completed`
+  - `backend.translating_failed`
   - `backend.enrichment_started`
   - `backend.enrichment_completed`
   - `backend.enrichment_failed`
