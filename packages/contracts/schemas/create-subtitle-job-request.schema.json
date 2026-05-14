@@ -8,7 +8,10 @@
     "youtubeVideoId",
     "youtubeUrl",
     "sourceLanguage",
-    "targetLanguage"
+    "targetLanguage",
+    "enrichmentMode",
+    "includeRomanization",
+    "includeTranslation"
   ],
   "properties": {
     "youtubeVideoId": {
@@ -232,13 +235,15 @@
         "on_demand",
         "full"
       ],
-      "default": "on_demand",
       "description": "on_demand returns transcript-first tracks with tokenizer-agent clickable boundaries when valid. full enriches every cue before returning the track."
     },
     "includeRomanization": {
       "type": "boolean",
-      "default": true,
       "description": "When true, backend may add cue and token romanization for non-Latin source text. When false, generation skips romanization."
+    },
+    "includeTranslation": {
+      "type": "boolean",
+      "description": "When true, backend translates cue text into the selected target language. When false, translatedText remains the source text."
     }
   }
 }

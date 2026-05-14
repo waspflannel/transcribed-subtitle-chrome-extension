@@ -65,6 +65,7 @@
             "transcribing",
             "tokenizing",
             "romanizing",
+            "translating",
             "enriching",
             "finalizing"
           ]

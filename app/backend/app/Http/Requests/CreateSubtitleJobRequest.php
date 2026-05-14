@@ -28,8 +28,9 @@ class CreateSubtitleJobRequest extends FormRequest
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
-            'enrichmentMode' => ['sometimes', 'string', Rule::in(['on_demand', 'full'])],
-            'includeRomanization' => ['sometimes', 'boolean'],
+            'enrichmentMode' => ['required', 'string', Rule::in(['on_demand', 'full'])],
+            'includeRomanization' => ['required', 'boolean'],
+            'includeTranslation' => ['required', 'boolean'],
         ];
     }
 
@@ -39,7 +40,7 @@ class CreateSubtitleJobRequest extends FormRequest
     }
 
     /**
-     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, enrichmentMode: string, includeRomanization: bool}
+     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, enrichmentMode: string, includeRomanization: bool, includeTranslation: bool}
      */
     public function subtitlePayload(): array
     {
@@ -49,10 +50,9 @@ class CreateSubtitleJobRequest extends FormRequest
             'youtubeUrl' => $validated['youtubeUrl'],
             'sourceLanguage' => $validated['sourceLanguage'],
             'targetLanguage' => $validated['targetLanguage'],
-            'enrichmentMode' => $validated['enrichmentMode'] ?? 'on_demand',
-            'includeRomanization' => array_key_exists('includeRomanization', $validated)
-                ? $this->boolean('includeRomanization')
-                : true,
+            'enrichmentMode' => $validated['enrichmentMode'],
+            'includeRomanization' => $this->boolean('includeRomanization'),
+            'includeTranslation' => $this->boolean('includeTranslation'),
         ];
 
         if (array_key_exists('videoDurationSeconds', $validated)) {
