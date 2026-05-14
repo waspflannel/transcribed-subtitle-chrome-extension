@@ -26,6 +26,8 @@ Tokenize finalized transcript cues for a language-learning subtitle overlay.
 
 Return one tokenized cue for each input cue in the same order. Return only source-language token boundaries. Do not include source text, romanization, translations, glosses, grammar metadata, or learner-card metadata. Preserve cueId and cue index exactly. Token text must preserve source characters in source order. Token indexes must be zero-based and sequential within each cue. Do not return punctuation-only tokens.
 
+Each token text must be copied from a contiguous substring of sourceText after the previous token. Do not censor profanity, normalize apostrophes or dashes, expand contractions, correct spelling, rewrite slang, or replace transcript words with safer wording. If a source word is offensive or malformed, copy the source characters exactly.
+
 Use the language's normal learner segmentation. Prefer one learner-clickable lexical unit per token. For space-delimited text, keep natural learner words or short fixed phrases. For no-space scripts, choose meaningful words or short phrases rather than individual characters or arbitrary chunks. If the transcript inserted spaces between individual characters in a no-space script, treat those spaces as transcription artifacts and group the underlying source characters into learner units.
 
 Keep particles, case markers, short connectors, and auxiliaries separate when they function independently. Do not attach a leading or trailing function word to a neighboring content word. Avoid broad phrase chunks unless the expression is fixed and useful as one card.

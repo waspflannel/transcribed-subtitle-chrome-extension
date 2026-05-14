@@ -28,6 +28,9 @@ return [
                 'romanization' => [
                     'default' => env('OPENAI_ROMANIZATION_MODEL'),
                 ],
+                'translation' => [
+                    'default' => env('OPENAI_TRANSLATION_MODEL'),
+                ],
                 'enrichment' => [
                     'default' => env('OPENAI_ENRICHMENT_MODEL'),
                 ],

@@ -5,11 +5,13 @@ namespace App\Services\TranslationAnalysis;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
+use App\Ai\Agents\CueTranslationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
@@ -35,13 +37,7 @@ class LaravelAiTranslationAnalysisProvider
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->tokenizedBatchResult(
-                $this->promptAgent(
-                    CueTokenizationAgent::class,
-                    $this->tokenizationInput($batch, $sourceLanguage, $sourceCues),
-                ),
-                $batch,
-            );
+            $result = $this->tokenizeBatch($batch, $sourceLanguage, $sourceCues);
 
             array_push($tokenizedCues, ...$result->cues);
 
@@ -51,6 +47,46 @@ class LaravelAiTranslationAnalysisProvider
         }
 
         return new CueEnrichmentResult($tokenizedCues, $dialect);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $batch
+     * @param  array<int, array<string, mixed>>  $allCues
+     */
+    private function tokenizeBatch(array $batch, string $sourceLanguage, array $allCues): CueEnrichmentResult
+    {
+        $output = $this->promptAgent(
+            CueTokenizationAgent::class,
+            $this->tokenizationInput($batch, $sourceLanguage, $allCues),
+        );
+
+        try {
+            return $this->tokenizedBatchResult($output, $batch);
+        } catch (SubtitleProcessingException $exception) {
+            if (! $this->shouldRetryTokenizationBatch($exception, count($batch))) {
+                throw $exception;
+            }
+
+            $reason = $exception->context['reason'] ?? 'unknown';
+
+            Log::info('backend.tokenization_batch_retried', [
+                'provider' => Lab::OpenAI->value,
+                'adapter' => 'laravel-ai-sdk',
+                'model' => $this->openAiModel('tokenization'),
+                'source_language' => $sourceLanguage,
+                'cue_count' => count($batch),
+                'reason' => is_string($reason) ? $reason : 'unknown',
+            ]);
+
+            $splitAt = intdiv(count($batch), 2);
+            $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues);
+            $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues);
+
+            return new CueEnrichmentResult(
+                [...$left->cues, ...$right->cues],
+                $left->sourceDialect !== 'unknown' ? $left->sourceDialect : $right->sourceDialect,
+            );
+        }
     }
 
     /**
@@ -97,6 +133,34 @@ class LaravelAiTranslationAnalysisProvider
             ),
             $dialect,
         );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    public function translate(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    {
+        if ($cues === []) {
+            $this->failInvalidOutput('empty_source_cues');
+        }
+
+        $translatedCues = [];
+        $sourceCues = array_values($cues);
+        $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
+
+        foreach (array_chunk($sourceCues, $batchSize) as $batch) {
+            $result = $this->translatedResult(
+                $this->promptAgent(
+                    CueTranslationAgent::class,
+                    $this->translationInput($batch, $sourceLanguage, $targetLanguage),
+                ),
+                $batch,
+            );
+
+            array_push($translatedCues, ...$result->cues);
+        }
+
+        return new CueEnrichmentResult($translatedCues, 'unknown');
     }
 
     /**
@@ -207,6 +271,31 @@ class LaravelAiTranslationAnalysisProvider
         }
     }
 
+    private function shouldRetryTokenizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
+    {
+        if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
+            return false;
+        }
+
+        return in_array($exception->context['reason'] ?? null, [
+            'missing_cues',
+            'cue_count_mismatch',
+            'invalid_cue',
+            'cue_identity_mismatch',
+            'invalid_tokens',
+            'empty_tokens',
+            'invalid_token',
+            'invalid_token_index',
+            'invalid_token_text',
+            'token_text_not_in_source',
+        ], true);
+    }
+
+    private function openAiModel(string $purpose): string
+    {
+        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.'.$purpose.'.default');
+    }
+
     /**
      * @param  array<int, array<string, mixed>>  $sourceCues
      * @param  array<int, array<string, mixed>>  $allCues
@@ -280,12 +369,33 @@ class LaravelAiTranslationAnalysisProvider
             'includeRomanization' => $includeRomanization,
             'cues' => array_map(
                 fn (array $cue): array => [
-                    ...Arr::only($cue, ['cueId', 'index', 'sourceText', 'romanization']),
+                    ...Arr::only($cue, ['cueId', 'index', 'sourceText', 'translatedText', 'romanization']),
                     'tokens' => array_map(
                         fn (array $token): array => Arr::only($token, ['index', 'text', 'normalizedText', 'romanization']),
                         array_values($cue['tokens']),
                     ),
                 ],
+                $sourceCues,
+            ),
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $sourceCues
+     * @return array<string, mixed>
+     */
+    private function translationInput(
+        array $sourceCues,
+        string $sourceLanguage,
+        string $targetLanguage,
+    ): array {
+        return [
+            'sourceLanguage' => $sourceLanguage,
+            'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
+            'targetLanguage' => $targetLanguage,
+            'targetLanguageName' => LanguageCatalog::label($targetLanguage),
+            'cues' => array_map(
+                fn (array $cue): array => Arr::only($cue, ['cueId', 'index', 'sourceText']),
                 $sourceCues,
             ),
         ];
@@ -383,10 +493,20 @@ class LaravelAiTranslationAnalysisProvider
             $outputCue = $outputCues[$position];
             $this->validateCueIdentity($sourceCue, $outputCue, $position);
 
+            $sourceTranslatedText = $this->cleanString($sourceCue['translatedText'] ?? null);
+
+            if ($sourceTranslatedText === null) {
+                $this->failInvalidOutput('missing_source_translation', ['cue_index' => $sourceCue['index']]);
+            }
+
             $translatedText = $this->cleanString($outputCue['translatedText'] ?? null);
 
             if ($translatedText === null) {
                 $this->failInvalidOutput('missing_translation', ['cue_index' => $sourceCue['index']]);
+            }
+
+            if ($translatedText !== $sourceTranslatedText) {
+                $this->failInvalidOutput('translation_identity_mismatch', ['cue_index' => $sourceCue['index']]);
             }
 
             $enrichedCue = [
@@ -416,6 +536,34 @@ class LaravelAiTranslationAnalysisProvider
         }
 
         return new CueEnrichmentResult($enrichedCues, $dialect);
+    }
+
+    /**
+     * @param  array<string, mixed>  $output
+     * @param  array<int, array<string, mixed>>  $sourceCues
+     */
+    private function translatedResult(array $output, array $sourceCues): CueEnrichmentResult
+    {
+        $outputCues = $this->validatedOutputCues($output, $sourceCues);
+        $cues = [];
+
+        foreach ($sourceCues as $position => $sourceCue) {
+            $outputCue = $outputCues[$position];
+            $this->validateCueIdentity($sourceCue, $outputCue, $position);
+
+            $translatedText = $this->cleanString($outputCue['translatedText'] ?? null);
+
+            if ($translatedText === null) {
+                $this->failInvalidOutput('missing_translation', ['cue_index' => $sourceCue['index']]);
+            }
+
+            $cues[] = [
+                ...$sourceCue,
+                'translatedText' => $translatedText,
+            ];
+        }
+
+        return new CueEnrichmentResult($cues, 'unknown');
     }
 
     /**

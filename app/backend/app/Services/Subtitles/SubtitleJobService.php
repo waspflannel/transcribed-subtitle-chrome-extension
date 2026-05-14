@@ -8,6 +8,7 @@ use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,19 +16,31 @@ use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION_ON_DEMAND = 'elevenlabs-scribe-v2-transcript-first-agent-tokenizer-v6';
+    public const PROCESSING_VERSION_ON_DEMAND = 'scribe-v2-tokenizer-v7-on-demand';
 
-    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED = 'elevenlabs-scribe-v2-transcript-first-agent-tokenizer-v6-romanized';
+    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED = 'scribe-v2-tokenizer-v7-on-demand-romanized';
 
-    public const PROCESSING_VERSION_FULL = 'elevenlabs-scribe-v2-full-agent-tokenizer-v6';
+    public const PROCESSING_VERSION_ON_DEMAND_TRANSLATED = 'scribe-v2-tokenizer-v7-on-demand-translated';
 
-    public const PROCESSING_VERSION_FULL_ROMANIZED = 'elevenlabs-scribe-v2-full-agent-tokenizer-v6-romanized';
+    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v7-on-demand-romanized-translated';
+
+    public const PROCESSING_VERSION_FULL = 'scribe-v2-tokenizer-v7-full';
+
+    public const PROCESSING_VERSION_FULL_ROMANIZED = 'scribe-v2-tokenizer-v7-full-romanized';
+
+    public const PROCESSING_VERSION_FULL_TRANSLATED = 'scribe-v2-tokenizer-v7-full-translated';
+
+    public const PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v7-full-romanized-translated';
 
     public const CURRENT_PROCESSING_VERSIONS = [
         self::PROCESSING_VERSION_ON_DEMAND,
         self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
+        self::PROCESSING_VERSION_ON_DEMAND_TRANSLATED,
+        self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED,
         self::PROCESSING_VERSION_FULL,
         self::PROCESSING_VERSION_FULL_ROMANIZED,
+        self::PROCESSING_VERSION_FULL_TRANSLATED,
+        self::PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED,
     ];
 
     public function __construct(
@@ -45,7 +58,8 @@ class SubtitleJobService
     {
         $enrichmentMode = $payload['enrichmentMode'];
         $includeRomanization = $payload['includeRomanization'];
-        $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization);
+        $includeTranslation = $payload['includeTranslation'];
+        $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
 
         $job = DB::transaction(function () use ($payload, $installId, $requestIp, $processingVersion): SubtitleJob {
             $job = SubtitleJob::query()
@@ -78,7 +92,7 @@ class SubtitleJobService
             return $job;
         }
 
-        return $this->generateTrack($job, $payload, $enrichmentMode, $includeRomanization);
+        return $this->generateTrack($job, $payload, $enrichmentMode, $includeRomanization, $includeTranslation);
     }
 
     /**
@@ -89,6 +103,7 @@ class SubtitleJobService
         array $payload,
         string $enrichmentMode,
         bool $includeRomanization,
+        bool $includeTranslation,
     ): SubtitleJob {
         $this->extendProcessingTimeLimit();
 
@@ -146,9 +161,24 @@ class SubtitleJobService
                 $this->logger->romanizationCompleted($job, $enrichment);
             }
 
+            if ($includeTranslation && ! $this->isSameLanguageGeneration($job)) {
+                $stage = 'translating';
+                $this->markJobRunning($job, $stage, 85);
+                $this->logger->translationStarted($job, count($enrichment->cues));
+
+                $translatedEnrichment = $this->translationAnalysis->translate(
+                    cues: $enrichment->cues,
+                    sourceLanguage: $this->effectiveSourceLanguage($job),
+                    targetLanguage: $job->target_language,
+                );
+
+                $enrichment = new CueEnrichmentResult($translatedEnrichment->cues, $enrichment->sourceDialect);
+                $this->logger->translationCompleted($job, $enrichment);
+            }
+
             if ($enrichmentMode === 'full' && ! $this->isSameLanguageGeneration($job)) {
                 $stage = 'enriching';
-                $this->markJobRunning($job, $stage, 85);
+                $this->markJobRunning($job, $stage, 90);
                 $this->logger->enrichmentStarted($job, count($enrichment->cues));
 
                 $enrichment = $this->translationAnalysis->enrich(
@@ -239,16 +269,32 @@ class SubtitleJobService
         ]);
     }
 
-    private function processingVersion(string $enrichmentMode, bool $includeRomanization): string
+    private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string
     {
         if ($enrichmentMode === 'full') {
-            return $includeRomanization
-                ? self::PROCESSING_VERSION_FULL_ROMANIZED
+            if ($includeRomanization && $includeTranslation) {
+                return self::PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED;
+            }
+
+            if ($includeRomanization) {
+                return self::PROCESSING_VERSION_FULL_ROMANIZED;
+            }
+
+            return $includeTranslation
+                ? self::PROCESSING_VERSION_FULL_TRANSLATED
                 : self::PROCESSING_VERSION_FULL;
         }
 
-        return $includeRomanization
-            ? self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED
+        if ($includeRomanization && $includeTranslation) {
+            return self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED;
+        }
+
+        if ($includeRomanization) {
+            return self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED;
+        }
+
+        return $includeTranslation
+            ? self::PROCESSING_VERSION_ON_DEMAND_TRANSLATED
             : self::PROCESSING_VERSION_ON_DEMAND;
     }
 
