@@ -244,10 +244,7 @@ export default defineContentScript({
           throw new Error(response?.error ?? 'Unable to generate word card.');
         }
 
-        applySubtitleState({
-          type: 'ready',
-          track: response.track,
-        });
+        applyEnrichedTrack(response.track, cue.cueId, key);
       } catch (error) {
         console.warn('extension.learning_token_enrichment_failed', {
           trackId: subtitleState.track.trackId,
@@ -259,6 +256,21 @@ export default defineContentScript({
         failedTokenKeys.add(key);
         updateOverlay();
       }
+    }
+
+    function applyEnrichedTrack(track: TrackResponse, cueId: string, tokenKeyValue: string): void {
+      subtitleState = {
+        type: 'ready',
+        track,
+      };
+
+      if (activeCue?.cueId === cueId) {
+        activeCue = track.cues.find((candidate) => candidate.cueId === cueId) ?? activeCue;
+      }
+
+      pendingTokenKeys.delete(tokenKeyValue);
+      failedTokenKeys.delete(tokenKeyValue);
+      updateOverlay();
     }
   },
 });

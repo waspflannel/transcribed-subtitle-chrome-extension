@@ -231,7 +231,7 @@ async function enrichLearningTokenFromContent(
   });
   const track = patchActiveTrack(currentState.track, response.cueId, response.token);
 
-  await publishSubtitleState(tabId, {
+  await storeReadySubtitleState(tabId, {
     type: 'ready',
     track,
   });
@@ -242,6 +242,11 @@ async function enrichLearningTokenFromContent(
     cueId: response.cueId,
     token: response.token,
   };
+}
+
+async function storeReadySubtitleState(tabId: number, subtitleState: Extract<SubtitleState, { type: 'ready' }>): Promise<void> {
+  tabSubtitleStates.set(tabId, subtitleState);
+  await rememberActiveTrack(subtitleState.track);
 }
 
 async function readySubtitleStateForEnrichment(
