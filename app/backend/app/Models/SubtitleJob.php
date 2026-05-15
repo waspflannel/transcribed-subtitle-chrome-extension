@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\SubtitleJobFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SubtitleJob extends Model
@@ -21,6 +22,9 @@ class SubtitleJob extends Model
         'detected_source_language',
         'target_language',
         'processing_version',
+        'enrichment_mode',
+        'include_romanization',
+        'include_translation',
         'status',
         'stage',
         'progress_percent',
@@ -36,10 +40,17 @@ class SubtitleJob extends Model
         return $this->hasOne(SubtitleTrack::class);
     }
 
+    public function artifacts(): HasMany
+    {
+        return $this->hasMany(SubtitleJobArtifact::class);
+    }
+
     protected function casts(): array
     {
         return [
             'expires_at' => 'immutable_datetime',
+            'include_romanization' => 'boolean',
+            'include_translation' => 'boolean',
             'progress_percent' => 'integer',
             'video_duration_seconds' => 'integer',
         ];

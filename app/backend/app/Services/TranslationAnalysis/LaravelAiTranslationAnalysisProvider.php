@@ -37,7 +37,7 @@ class LaravelAiTranslationAnalysisProvider
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->tokenizeBatch($batch, $sourceLanguage, $sourceCues);
+            $result = $this->tokenizeCueBatch($batch, $sourceCues, $sourceLanguage);
 
             array_push($tokenizedCues, ...$result->cues);
 
@@ -47,6 +47,19 @@ class LaravelAiTranslationAnalysisProvider
         }
 
         return new CueEnrichmentResult($tokenizedCues, $dialect);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $batch
+     * @param  array<int, array<string, mixed>>  $allCues
+     */
+    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
+    {
+        if ($batch === []) {
+            $this->failInvalidOutput('empty_source_cues');
+        }
+
+        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues === [] ? $batch : $allCues);
     }
 
     /**
@@ -108,14 +121,7 @@ class LaravelAiTranslationAnalysisProvider
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->validatedEnrichedCueResult(
-                $this->promptAgent(
-                    CueEnrichmentAgent::class,
-                    $this->cueEnrichmentInput($batch, $sourceLanguage, $targetLanguage, $includeRomanization),
-                ),
-                $batch,
-                $includeRomanization,
-            );
+            $result = $this->enrichCueBatch($batch, $sourceLanguage, $targetLanguage, $includeRomanization);
 
             foreach ($result->cues as $cue) {
                 $enrichedCuesById[(string) $cue['cueId']] = $cue;
@@ -136,6 +142,29 @@ class LaravelAiTranslationAnalysisProvider
     }
 
     /**
+     * @param  array<int, array<string, mixed>>  $batch
+     */
+    public function enrichCueBatch(
+        array $batch,
+        string $sourceLanguage,
+        string $targetLanguage,
+        bool $includeRomanization = true,
+    ): CueEnrichmentResult {
+        if ($batch === []) {
+            $this->failInvalidOutput('empty_source_cues');
+        }
+
+        return $this->validatedEnrichedCueResult(
+            $this->promptAgent(
+                CueEnrichmentAgent::class,
+                $this->cueEnrichmentInput($batch, $sourceLanguage, $targetLanguage, $includeRomanization),
+            ),
+            $batch,
+            $includeRomanization,
+        );
+    }
+
+    /**
      * @param  array<int, array<string, mixed>>  $cues
      */
     public function translate(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
@@ -149,18 +178,30 @@ class LaravelAiTranslationAnalysisProvider
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->translatedResult(
-                $this->promptAgent(
-                    CueTranslationAgent::class,
-                    $this->translationInput($batch, $sourceLanguage, $targetLanguage),
-                ),
-                $batch,
-            );
+            $result = $this->translateCueBatch($batch, $sourceLanguage, $targetLanguage);
 
             array_push($translatedCues, ...$result->cues);
         }
 
         return new CueEnrichmentResult($translatedCues, 'unknown');
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $batch
+     */
+    public function translateCueBatch(array $batch, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    {
+        if ($batch === []) {
+            $this->failInvalidOutput('empty_source_cues');
+        }
+
+        return $this->translatedResult(
+            $this->promptAgent(
+                CueTranslationAgent::class,
+                $this->translationInput($batch, $sourceLanguage, $targetLanguage),
+            ),
+            $batch,
+        );
     }
 
     /**
@@ -178,13 +219,7 @@ class LaravelAiTranslationAnalysisProvider
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->romanizedResult(
-                $this->promptAgent(
-                    CueRomanizationAgent::class,
-                    $this->romanizationInput($batch, $sourceLanguage),
-                ),
-                $batch,
-            );
+            $result = $this->romanizeCueBatch($batch, $sourceLanguage);
 
             foreach ($result->cues as $cue) {
                 $romanizedCuesById[(string) $cue['cueId']] = $cue;
@@ -201,6 +236,24 @@ class LaravelAiTranslationAnalysisProvider
                 $sourceCues,
             ),
             $dialect,
+        );
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $batch
+     */
+    public function romanizeCueBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
+    {
+        if ($batch === []) {
+            $this->failInvalidOutput('empty_source_cues');
+        }
+
+        return $this->romanizedResult(
+            $this->promptAgent(
+                CueRomanizationAgent::class,
+                $this->romanizationInput($batch, $sourceLanguage),
+            ),
+            $batch,
         );
     }
 
