@@ -1584,6 +1584,7 @@ export interface ErrorObject {
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
+    | 'queue_unavailable'
     | 'not_found'
     | 'expired'
     | 'internal_error';
@@ -1604,6 +1605,7 @@ export interface ErrorObject {
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
+    | 'queue_unavailable'
     | 'not_found'
     | 'expired'
     | 'internal_error';

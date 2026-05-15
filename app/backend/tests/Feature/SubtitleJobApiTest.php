@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use PDOException;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
@@ -146,6 +147,33 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $workerBootstrap->startCalls);
     }
 
+    public function test_auto_started_sqlite_queue_uses_one_worker(): void
+    {
+        config([
+            'database.default' => 'sqlite',
+            'queue.connections.database.connection' => null,
+            'subtitles.queue.connection' => 'database',
+            'subtitles.queue.auto_start_workers' => true,
+            'subtitles.queue.auto_worker_count' => 3,
+        ]);
+        cache()->forget('subtitle-ai-worker-bootstrap-started');
+        $workerBootstrap = (object) ['startCalls' => 0];
+
+        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
+        {
+            public function __construct(private readonly object $workerBootstrap) {}
+
+            protected function startWorkerProcess(): void
+            {
+                $this->workerBootstrap->startCalls++;
+            }
+        };
+
+        $bootstrapper->startIfNeeded();
+
+        $this->assertSame(1, $workerBootstrap->startCalls);
+    }
+
     public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
     {
         config([
@@ -191,6 +219,35 @@ class SubtitleJobApiTest extends TestCase
         app(SubtitleGenerationPipeline::class)->processTranscription($job->id);
 
         $this->assertSame(0, $this->audioSource->calls);
+    }
+
+    public function test_queue_database_lock_failure_returns_specific_public_message(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'stage' => 'tokenizing',
+            'progress_percent' => 65,
+        ]);
+
+        app(SubtitleGenerationPipeline::class)->failJob(
+            $job->id,
+            'tokenizing',
+            new PDOException('SQLSTATE[HY000]: General error: 5 database is locked'),
+        );
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $job->install_id)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('stage', 'tokenizing')
+            ->assertJsonPath('message', 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.');
+
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'id' => $job->id,
+            'status' => 'failed',
+            'error_code' => 'queue_unavailable',
+            'error_message' => 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.',
+        ]);
     }
 
     public function test_default_generation_returns_transcript_first_track_without_full_card_enrichment(): void

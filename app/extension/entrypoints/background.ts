@@ -269,6 +269,9 @@ function publicSubtitleJobFailureMessage(job: JobResponse): string {
     case 'Subtitle generation is temporarily rate limited.':
       return publicSubtitleErrorMessage(new SubtitleApiError('rate_limited', job.message, 429));
 
+    case 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.':
+      return publicSubtitleErrorMessage(new SubtitleApiError('queue_unavailable', job.message, 503));
+
     default:
       return job.message ?? 'Generation did not complete.';
   }

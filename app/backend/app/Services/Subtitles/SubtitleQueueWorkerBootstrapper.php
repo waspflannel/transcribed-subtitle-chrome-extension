@@ -20,7 +20,7 @@ class SubtitleQueueWorkerBootstrapper
             return;
         }
 
-        $workerCount = max(1, (int) config('subtitles.queue.auto_worker_count', 3));
+        $workerCount = $this->workerCount();
 
         for ($worker = 0; $worker < $workerCount; $worker++) {
             $this->startWorkerProcess();
@@ -52,7 +52,7 @@ class SubtitleQueueWorkerBootstrapper
         }
     }
 
-    private function startWorkerProcess(): void
+    protected function startWorkerProcess(): void
     {
         $command = $this->workerCommand();
         $process = @popen($command, 'r');
@@ -66,7 +66,7 @@ class SubtitleQueueWorkerBootstrapper
         @pclose($process);
     }
 
-    private function workerCommand(): string
+    protected function workerCommand(): string
     {
         $args = [
             PHP_BINARY,
@@ -93,5 +93,25 @@ class SubtitleQueueWorkerBootstrapper
     private function quoteCommand(array $args): string
     {
         return implode(' ', array_map('escapeshellarg', $args));
+    }
+
+    protected function workerCount(): int
+    {
+        if ($this->usesSqliteQueueDatabase()) {
+            return 1;
+        }
+
+        return max(1, (int) config('subtitles.queue.auto_worker_count', 3));
+    }
+
+    private function usesSqliteQueueDatabase(): bool
+    {
+        if (SubtitleGenerationPipeline::connection() !== 'database') {
+            return false;
+        }
+
+        $queueDatabase = config('queue.connections.database.connection') ?: config('database.default');
+
+        return config('database.connections.'.$queueDatabase.'.driver') === 'sqlite';
     }
 }

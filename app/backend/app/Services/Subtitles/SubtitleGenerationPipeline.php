@@ -20,6 +20,7 @@ use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use PDOException;
 use Throwable;
 
 class SubtitleGenerationPipeline
@@ -290,6 +291,25 @@ class SubtitleGenerationPipeline
             ]);
             $this->artifacts->deleteForJob($job);
             $this->logger->processingFailed($job->refresh(), $stage, $exception);
+
+            return;
+        }
+
+        if ($this->isDatabaseLocked($exception)) {
+            $queueException = SubtitleProcessingException::queueUnavailable(
+                'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.',
+                ['reason' => 'database_locked'],
+                $exception,
+            );
+
+            $job->update([
+                'status' => 'failed',
+                'stage' => $stage,
+                'error_code' => $queueException->publicCode,
+                'error_message' => $queueException->getMessage(),
+            ]);
+            $this->artifacts->deleteForJob($job);
+            $this->logger->processingFailed($job->refresh(), $stage, $queueException);
 
             return;
         }
@@ -575,6 +595,17 @@ class SubtitleGenerationPipeline
     {
         return $job->track !== null
             && ! $job->track->isExpired();
+    }
+
+    private function isDatabaseLocked(Throwable $exception): bool
+    {
+        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
+            if ($current instanceof PDOException && str_contains($current->getMessage(), 'database is locked')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function failIncompleteState(string $reason): never
