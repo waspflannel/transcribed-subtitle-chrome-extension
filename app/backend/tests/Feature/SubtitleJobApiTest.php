@@ -852,6 +852,48 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.2.jobId', $failedJob->public_id);
     }
 
+    public function test_subtitle_job_status_polling_uses_separate_rate_limit_from_generation_requests(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.rate_limits.per_install_per_minute' => 1,
+            'subtitles.rate_limits.per_ip_per_minute' => 100,
+            'subtitles.rate_limits.status_per_install_per_minute' => 2,
+            'subtitles.rate_limits.status_per_ip_per_minute' => 100,
+        ]);
+        Queue::fake();
+
+        $installId = $this->installId('r');
+        $job = SubtitleJob::factory()->create([
+            'install_id' => $installId,
+            'youtube_video_id' => 'pollrate001',
+            'youtube_url' => 'https://www.youtube.com/watch?v=pollrate001',
+        ]);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ratelimit01']))
+            ->assertAccepted();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertStatus(429)
+            ->assertJsonPath('error.code', 'rate_limited');
+    }
+
     public function test_learning_token_enrichment_updates_track_and_skips_duplicate_provider_calls(): void
     {
         $jobResponse = $this
