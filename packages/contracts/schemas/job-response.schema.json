@@ -9,10 +9,11 @@
     "youtubeVideoId",
     "sourceLanguage",
     "targetLanguage",
-    "track",
+    "status",
+    "stage",
+    "progressPercent",
     "createdAt",
-    "updatedAt",
-    "expiresAt"
+    "updatedAt"
   ],
   "properties": {
     "jobId": {
@@ -220,6 +221,32 @@
         "zul"
       ]
     },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "completed",
+        "failed"
+      ]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "preparing",
+        "acquiring-audio",
+        "transcribing",
+        "tokenizing",
+        "romanizing",
+        "translating",
+        "enriching",
+        "finalizing"
+      ]
+    },
+    "progressPercent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
     "track": {
       "$ref": "track-response.schema.json"
     },
@@ -333,6 +360,53 @@
         "zul"
       ],
       "description": "Provider-detected source language when sourceLanguage was auto and detection produced a catalog language."
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "track": {},
+          "expiresAt": {}
+        },
+        "required": [
+          "track",
+          "expiresAt"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "running",
+              "failed"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "track": {}
+          },
+          "required": [
+            "track"
+          ]
+        }
+      }
+    }
+  ]
 }

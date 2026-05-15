@@ -13,6 +13,9 @@ Route::prefix('v1')
         Route::get('/subtitle-jobs', [SubtitleJobController::class, 'index'])
             ->name('subtitle-jobs.index');
 
+        Route::get('/subtitle-jobs/{jobId}', [SubtitleJobController::class, 'show'])
+            ->name('subtitle-jobs.show');
+
         Route::post('/subtitle-jobs', [SubtitleJobController::class, 'store'])
             ->name('subtitle-jobs.store');
 

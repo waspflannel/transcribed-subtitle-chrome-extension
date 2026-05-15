@@ -251,7 +251,9 @@ export interface LearningToken {
 }
 
 // Source: schemas/job-response.schema.json
-export interface JobResponse {
+export type JobResponse = {
+  [k: string]: unknown;
+} & {
   jobId: string;
   youtubeVideoId: string;
   sourceLanguage:
@@ -443,10 +445,21 @@ export interface JobResponse {
     | 'xho'
     | 'yor'
     | 'zul';
-  track: TrackResponse;
+  status: 'running' | 'completed' | 'failed';
+  stage:
+    | 'preparing'
+    | 'acquiring-audio'
+    | 'transcribing'
+    | 'tokenizing'
+    | 'romanizing'
+    | 'translating'
+    | 'enriching'
+    | 'finalizing';
+  progressPercent: number;
+  track?: TrackResponse;
   createdAt: string;
   updatedAt: string;
-  expiresAt: string;
+  expiresAt?: string;
   /**
    * Provider-detected source language when sourceLanguage was auto and detection produced a catalog language.
    */
@@ -544,7 +557,9 @@ export interface JobResponse {
     | 'xho'
     | 'yor'
     | 'zul';
-}
+  message?: string;
+};
+
 export interface TrackResponse {
   trackId: string;
   jobId: string;

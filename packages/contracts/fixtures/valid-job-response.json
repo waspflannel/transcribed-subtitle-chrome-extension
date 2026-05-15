@@ -4,6 +4,9 @@
   "sourceLanguage": "auto",
   "detectedSourceLanguage": "spa",
   "targetLanguage": "fra",
+  "status": "completed",
+  "stage": "finalizing",
+  "progressPercent": 100,
   "track": {
     "trackId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3002",
     "jobId": "018f9e2f-0d8c-7500-8f38-9f4c5d1b3001",

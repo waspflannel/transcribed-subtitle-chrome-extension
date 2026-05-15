@@ -57,6 +57,25 @@ class SubtitleJobController extends Controller
             requestIp: $request->ip(),
         );
 
+        return response()->json(
+            SubtitleJobResource::make($job)->resolve(),
+            $this->hasReadyTrack($job) ? 200 : 202,
+        );
+    }
+
+    public function show(Request $request, string $jobId): JsonResponse
+    {
+        $job = SubtitleJob::query()
+            ->with('track')
+            ->where('public_id', $jobId)
+            ->where('install_id', (string) $request->header('X-Extension-Install-Id'))
+            ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
+            ->first();
+
+        if ($job === null || ($job->status === 'completed' && ! $this->hasReadyTrack($job))) {
+            abort(404);
+        }
+
         return response()->json(SubtitleJobResource::make($job)->resolve());
     }
 
@@ -102,5 +121,11 @@ class SubtitleJobController extends Controller
         }
 
         return $item;
+    }
+
+    private function hasReadyTrack(SubtitleJob $job): bool
+    {
+        return $job->track !== null
+            && ! $job->track->isExpired();
     }
 }
