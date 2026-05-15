@@ -38,6 +38,7 @@ class SubtitleJobService
 
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
+        private readonly SubtitleQueueWorkerBootstrapper $queueWorkers,
     ) {}
 
     /**
@@ -71,7 +72,11 @@ class SubtitleJobService
                 ->first();
 
             if ($job) {
-                if ($this->hasReadyTrack($job) || $job->status === 'running') {
+                if ($this->hasReadyTrack($job)) {
+                    return $job;
+                }
+
+                if ($job->status === 'running' && ! $this->isStalePreparingJob($job)) {
                     return $job;
                 }
 
@@ -115,7 +120,9 @@ class SubtitleJobService
 
         if ($shouldDispatch) {
             ProcessSubtitleJob::dispatch($job->id)
+                ->onConnection(SubtitleGenerationPipeline::connection())
                 ->onQueue(SubtitleGenerationPipeline::QUEUE);
+            $this->queueWorkers->startIfNeeded();
 
             $job = $job->refresh()->load('track');
         }
@@ -222,5 +229,16 @@ class SubtitleJobService
     {
         return $job->track !== null
             && ! $job->track->isExpired();
+    }
+
+    private function isStalePreparingJob(SubtitleJob $job): bool
+    {
+        if ($job->stage !== 'preparing') {
+            return false;
+        }
+
+        $seconds = max(1, (int) config('subtitles.queue.stale_preparing_seconds', 60));
+
+        return $job->updated_at->lte(now()->subSeconds($seconds));
     }
 }

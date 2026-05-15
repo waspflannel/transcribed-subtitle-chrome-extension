@@ -28,6 +28,7 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
         public readonly int $subtitleJobId,
         public readonly int $batchIndex,
     ) {
+        $this->onConnection(SubtitleGenerationPipeline::connection());
         $this->onQueue(SubtitleGenerationPipeline::QUEUE);
     }
 

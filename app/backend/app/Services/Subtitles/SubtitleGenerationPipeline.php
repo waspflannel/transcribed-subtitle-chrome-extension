@@ -26,6 +26,11 @@ class SubtitleGenerationPipeline
 {
     public const QUEUE = 'subtitle-ai';
 
+    public static function connection(): string
+    {
+        return (string) config('subtitles.queue.connection', 'database');
+    }
+
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
         private readonly ElevenLabsScribeTranscriptionService $transcriptionService,
@@ -39,18 +44,16 @@ class SubtitleGenerationPipeline
     {
         $this->extendProcessingTimeLimit();
 
-        $job = $this->loadRunningJob($subtitleJobId);
+        $job = $this->claimPreparingJob($subtitleJobId);
 
         if ($job === null) {
             return;
         }
 
         $audio = null;
-        $stage = 'preparing';
+        $stage = 'acquiring-audio';
 
         try {
-            $stage = 'acquiring-audio';
-            $this->markJobRunning($job, 'acquiring-audio', 20);
             $this->logger->audioAcquisitionStarted($job);
 
             $audio = $this->audioSource->acquire(
@@ -330,6 +333,7 @@ class SubtitleGenerationPipeline
             failedStage: 'tokenizing',
             then: static function (Batch $batch) use ($subtitleJobId): void {
                 ContinueSubtitleJobAfterAnalysis::dispatch($subtitleJobId)
+                    ->onConnection(self::connection())
                     ->onQueue(self::QUEUE);
             },
         );
@@ -356,6 +360,7 @@ class SubtitleGenerationPipeline
             failedStage: 'romanizing',
             then: static function (Batch $batch) use ($subtitleJobId): void {
                 ContinueSubtitleJobAfterRomanization::dispatch($subtitleJobId)
+                    ->onConnection(self::connection())
                     ->onQueue(self::QUEUE);
             },
         );
@@ -382,6 +387,7 @@ class SubtitleGenerationPipeline
             failedStage: 'enriching',
             then: static function (Batch $batch) use ($subtitleJobId): void {
                 FinalizeSubtitleJob::dispatch($subtitleJobId, true)
+                    ->onConnection(self::connection())
                     ->onQueue(self::QUEUE);
             },
         );
@@ -396,6 +402,7 @@ class SubtitleGenerationPipeline
 
         Bus::batch($jobs)
             ->name($name)
+            ->onConnection(self::connection())
             ->onQueue(self::QUEUE)
             ->then($then)
             ->catch(static function (Batch $batch, Throwable $exception) use ($subtitleJobId, $failedStage): void {
@@ -424,6 +431,7 @@ class SubtitleGenerationPipeline
         }
 
         FinalizeSubtitleJob::dispatch($job->id, false)
+            ->onConnection(self::connection())
             ->onQueue(self::QUEUE);
     }
 
@@ -472,6 +480,26 @@ class SubtitleGenerationPipeline
         }
 
         return $job;
+    }
+
+    private function claimPreparingJob(int $subtitleJobId): ?SubtitleJob
+    {
+        $updated = SubtitleJob::query()
+            ->whereKey($subtitleJobId)
+            ->where('status', 'running')
+            ->where('stage', 'preparing')
+            ->update([
+                'stage' => 'acquiring-audio',
+                'progress_percent' => 20,
+                'error_code' => null,
+                'error_message' => null,
+            ]);
+
+        if ($updated !== 1) {
+            return null;
+        }
+
+        return $this->loadRunningJob($subtitleJobId);
     }
 
     private function translationRequested(SubtitleJob $job): bool

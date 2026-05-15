@@ -8,8 +8,9 @@
 
 ## Startup And Runtime
 
-- Backend subtitle generation requires a queue worker for non-cached requests: `php artisan queue:work --queue=subtitle-ai,default`.
-- A conservative local worker count is three `subtitle-ai` workers while OpenAI provider limits are still being observed.
+- Local subtitle generation uses the Laravel database queue and auto-starts short-lived `subtitle-ai` workers when Generate dispatches work, so users do not run queue commands manually.
+- Production should set `SUBTITLE_AUTO_START_WORKERS=false` and run supervised `subtitle-ai` workers for durable queue processing.
+- A conservative local and production worker count is three `subtitle-ai` workers while OpenAI provider limits are still being observed.
 - Add a startup smoke check to `scripts/agent/check.ps1`.
 - Track startup targets and performance budgets here.
 
@@ -22,7 +23,7 @@ For each critical workflow, define:
 - Retry or rollback behavior.
 - Signals emitted for debugging.
 
-Subtitle generation is asynchronous after request validation. `POST /v1/subtitle-jobs` returns a running job unless a compatible completed track is cached; the extension polls `GET /v1/subtitle-jobs/{jobId}` for running, completed, or failed status. Expected backend failures include unsupported YouTube URLs, videos over 60 minutes, non-public or unavailable videos, audio acquisition command failures, invalid language catalog codes, missing ElevenLabs/OpenAI configuration, provider timeouts, malformed Scribe word output, and unusable cue timing or empty cue text. Failed queued work marks the job failed with a stable public message; raw audio cleanup runs in `finally` after successful transcription, provider failure, and thrown exceptions. Cross-request automatic retry is intentionally absent; users can submit the generation request again after fixing configuration or choosing a supported public video. Structured logs identify the failed stage without dumping raw audio paths, cue text, prompts, or full transcripts.
+Subtitle generation is asynchronous after request validation. `POST /v1/subtitle-jobs` returns a running job unless a compatible completed track is cached; the extension polls `GET /v1/subtitle-jobs/{jobId}` for running, completed, or failed status. Expected backend failures include unsupported YouTube URLs, videos over 60 minutes, non-public or unavailable videos, audio acquisition command failures, invalid language catalog codes, missing ElevenLabs/OpenAI configuration, provider timeouts, malformed Scribe word output, and unusable cue timing or empty cue text. Failed queued work marks the job failed with a stable public message; raw audio cleanup runs in `finally` after successful transcription, provider failure, and thrown exceptions. Provider failures are not automatically retried across requests; users can submit the generation request again after fixing configuration or choosing a supported public video. A stale `preparing` job is reset and dispatched again because it indicates work never started. Structured logs identify the failed stage without dumping raw audio paths, cue text, prompts, or full transcripts.
 
 Extension playback sync is local and browser-native. It attaches generated WebVTT as a hidden `TextTrack`, listens for `cuechange`, clears the overlay when no cue is active, and logs diagnostics instead of trying to auto-correct track drift.
 
@@ -32,7 +33,7 @@ Default generation tokenizes every transcript with a narrow structured-output to
 
 The language catalog is limited to the WER-ranked transcription set used in the popup. The tier is a transcription accuracy signal only; translation card quality can still vary by language pair, dialect, audio quality, and provider coverage.
 
-Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Public failures map to stable popup and overlay messages.
+Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch unless they are stale in `preparing`, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Public failures map to stable popup and overlay messages.
 
 Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` command deletes expired tracks and their now-empty expired jobs daily; extension requests also ignore expired tracks and regenerate through the existing compatible job row. Intermediate subtitle artifacts are deleted on finalization, failure, retry reset, and job deletion.
 

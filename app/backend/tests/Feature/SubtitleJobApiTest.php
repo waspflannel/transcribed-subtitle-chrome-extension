@@ -9,6 +9,8 @@ use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleJobService;
+use App\Services\Subtitles\SubtitleQueueWorkerBootstrapper;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
@@ -46,12 +48,18 @@ class SubtitleJobApiTest extends TestCase
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
         $this->app->instance(ElevenLabsScribeTranscriptionService::class, $this->transcriptionService);
         $this->app->instance(LaravelAiTranslationAnalysisProvider::class, $this->translationAnalysis);
-        config(['queue.default' => 'sync']);
+        config([
+            'queue.default' => 'sync',
+            'subtitles.queue.connection' => 'sync',
+        ]);
     }
 
     public function test_new_subtitle_request_returns_running_job_and_dispatches_processing(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         Queue::fake();
 
         $response = $this
@@ -71,7 +79,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_duplicate_running_request_reuses_job_without_dispatching_duplicate_work(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         Queue::fake();
 
         $first = $this
@@ -86,6 +97,100 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame($first->json('jobId'), $second->json('jobId'));
         Queue::assertPushed(ProcessSubtitleJob::class, 1);
+    }
+
+    public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'background',
+        ]);
+        Queue::fake();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'bgqueue0001']))
+            ->assertAccepted();
+
+        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+            return $job->connection === 'background'
+                && $job->queue === SubtitleGenerationPipeline::QUEUE;
+        });
+    }
+
+    public function test_new_subtitle_request_bootstraps_local_workers_when_enabled(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.queue.auto_start_workers' => true,
+        ]);
+        Queue::fake();
+        $workerBootstrap = (object) ['startCalls' => 0];
+
+        $this->app->instance(SubtitleQueueWorkerBootstrapper::class, new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
+        {
+            public function __construct(private readonly object $workerBootstrap) {}
+
+            public function startIfNeeded(): void
+            {
+                $this->workerBootstrap->startCalls++;
+            }
+        });
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'workerboot1']))
+            ->assertAccepted();
+
+        $this->assertSame(1, $workerBootstrap->startCalls);
+    }
+
+    public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.queue.stale_preparing_seconds' => 60,
+        ]);
+        Queue::fake();
+
+        $installId = $this->installId();
+        $staleJob = SubtitleJob::factory()->create([
+            'public_id' => (string) Str::uuid(),
+            'youtube_video_id' => 'stalejob001',
+            'youtube_url' => 'https://www.youtube.com/watch?v=stalejob001',
+            'install_id' => $installId,
+            'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
+            'enrichment_mode' => 'on_demand',
+            'include_romanization' => true,
+            'include_translation' => false,
+            'status' => 'running',
+            'stage' => 'preparing',
+            'progress_percent' => 5,
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now()->subMinutes(5),
+        ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'stalejob001']))
+            ->assertAccepted();
+
+        $this->assertSame($staleJob->public_id, $response->json('jobId'));
+        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+    }
+
+    public function test_transcription_processor_ignores_jobs_already_claimed_by_another_worker(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'stage' => 'acquiring-audio',
+            'progress_percent' => 20,
+        ]);
+
+        app(SubtitleGenerationPipeline::class)->processTranscription($job->id);
+
+        $this->assertSame(0, $this->audioSource->calls);
     }
 
     public function test_default_generation_returns_transcript_first_track_without_full_card_enrichment(): void
@@ -254,7 +359,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_non_latin_transcript_first_generation_fails_when_romanization_fails(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $sourceText = $this->arabicGreeting();
 
         $this->translationAnalysis->romanizationShouldFail = true;
@@ -295,7 +403,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_transcript_first_generation_fails_when_tokenization_fails(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $this->translationAnalysis->tokenizationShouldFail = true;
 
         $response = $this
@@ -323,7 +434,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_transcript_first_generation_fails_when_translation_fails(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $this->translationAnalysis->translationShouldFail = true;
 
         $response = $this
@@ -355,7 +469,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_japanese_romanization_failure_fails_generation(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $sourceText = $this->japaneseSentence();
 
         $this->translationAnalysis->romanizationShouldFail = true;
@@ -399,7 +516,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_japanese_no_space_romanization_failure_fails_generation(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $sourceText = $this->japaneseNoSpaceSentence();
 
         $this->translationAnalysis->romanizationShouldFail = true;
@@ -856,6 +976,7 @@ class SubtitleJobApiTest extends TestCase
     {
         config([
             'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
             'subtitles.rate_limits.per_install_per_minute' => 1,
             'subtitles.rate_limits.per_ip_per_minute' => 100,
             'subtitles.rate_limits.status_per_install_per_minute' => 2,
@@ -994,7 +1115,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_full_enrichment_failure_returns_stable_error_and_status(): void
     {
-        config(['queue.default' => 'database']);
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $this->translationAnalysis->shouldFail = true;
 
         $response = $this

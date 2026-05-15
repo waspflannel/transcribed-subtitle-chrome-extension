@@ -11,6 +11,16 @@ return [
         'status_per_ip_per_minute' => (int) env('SUBTITLE_STATUS_RATE_LIMIT_PER_IP_PER_MINUTE', 300),
     ],
 
+    'queue' => [
+        'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'database'),
+        'auto_start_workers' => filter_var(env('SUBTITLE_AUTO_START_WORKERS', env('APP_ENV') === 'local'), FILTER_VALIDATE_BOOL),
+        'auto_worker_count' => (int) env('SUBTITLE_AUTO_WORKER_COUNT', 3),
+        'auto_worker_max_time_seconds' => (int) env('SUBTITLE_AUTO_WORKER_MAX_TIME_SECONDS', 900),
+        'auto_worker_sleep_seconds' => (int) env('SUBTITLE_AUTO_WORKER_SLEEP_SECONDS', 1),
+        'auto_worker_timeout_seconds' => (int) env('SUBTITLE_AUTO_WORKER_TIMEOUT_SECONDS', 1200),
+        'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
+    ],
+
     'youtube' => [
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
         'metadata_timeout_seconds' => (int) env('YOUTUBE_METADATA_TIMEOUT_SECONDS', 60),

@@ -25,6 +25,7 @@ class ProcessSubtitleJob implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
     ) {
+        $this->onConnection(SubtitleGenerationPipeline::connection());
         $this->onQueue(SubtitleGenerationPipeline::QUEUE);
     }
 

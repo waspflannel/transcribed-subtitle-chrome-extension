@@ -26,6 +26,7 @@ class FinalizeSubtitleJob implements ShouldQueue
         public readonly int $subtitleJobId,
         public readonly bool $useEnrichedCues,
     ) {
+        $this->onConnection(SubtitleGenerationPipeline::connection());
         $this->onQueue(SubtitleGenerationPipeline::QUEUE);
     }
 
