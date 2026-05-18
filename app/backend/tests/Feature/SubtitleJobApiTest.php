@@ -3,12 +3,17 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\ProcessSubtitleJob;
+use App\Jobs\RomanizeSubtitleCueBatch;
+use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitleQueueWorkerBootstrapper;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
@@ -20,6 +25,7 @@ use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -75,7 +81,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonMissingPath('track')
             ->assertJsonStructure(['jobId', 'status', 'stage', 'progressPercent', 'createdAt', 'updatedAt']);
 
-        Queue::assertPushedOn(SubtitleGenerationPipeline::QUEUE, ProcessSubtitleJob::class);
+        Queue::assertPushedOn(SubtitleGenerationPipeline::queue(), ProcessSubtitleJob::class);
     }
 
     public function test_duplicate_running_request_reuses_job_without_dispatching_duplicate_work(): void
@@ -115,7 +121,7 @@ class SubtitleJobApiTest extends TestCase
 
         Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
             return $job->connection === 'background'
-                && $job->queue === SubtitleGenerationPipeline::QUEUE;
+                && $job->queue === SubtitleGenerationPipeline::queue();
         });
     }
 
@@ -163,15 +169,44 @@ class SubtitleJobApiTest extends TestCase
         {
             public function __construct(private readonly object $workerBootstrap) {}
 
-            protected function startWorkerProcess(): void
+            protected function startWorkerProcess(): ?int
             {
                 $this->workerBootstrap->startCalls++;
+
+                return $this->workerBootstrap->startCalls;
             }
         };
 
         $bootstrapper->startIfNeeded();
 
         $this->assertSame(1, $workerBootstrap->startCalls);
+    }
+
+    public function test_auto_started_redis_queue_uses_configured_worker_count(): void
+    {
+        config([
+            'subtitles.queue.connection' => 'redis',
+            'subtitles.queue.auto_start_workers' => true,
+            'subtitles.queue.auto_worker_count' => 3,
+        ]);
+        cache()->forget('subtitle-ai-worker-bootstrap-started');
+        $workerBootstrap = (object) ['startCalls' => 0];
+
+        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
+        {
+            public function __construct(private readonly object $workerBootstrap) {}
+
+            protected function startWorkerProcess(): ?int
+            {
+                $this->workerBootstrap->startCalls++;
+
+                return $this->workerBootstrap->startCalls;
+            }
+        };
+
+        $bootstrapper->startIfNeeded();
+
+        $this->assertSame(3, $workerBootstrap->startCalls);
     }
 
     public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
@@ -207,6 +242,79 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame($staleJob->public_id, $response->json('jobId'));
         Queue::assertPushed(ProcessSubtitleJob::class, 1);
+    }
+
+    public function test_tokenization_and_translation_batches_are_dispatched_together_when_translation_is_enabled(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'translate01',
+                'includeTranslation' => true,
+            ]))
+            ->assertAccepted();
+
+        Artisan::call('queue:work', [
+            '--queue' => SubtitleGenerationPipeline::queue().',default',
+            '--once' => true,
+            '--tries' => 1,
+            '--sleep' => 0,
+        ]);
+
+        $payloads = DB::table('jobs')->pluck('payload')->implode("\n");
+
+        $this->assertStringContainsString(addslashes(TokenizeSubtitleCueBatch::class), $payloads);
+        $this->assertStringContainsString(addslashes(TranslateSubtitleCueBatch::class), $payloads);
+    }
+
+    public function test_cancelled_tokenization_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+
+        $this->dispatchCancelledBatch(new TokenizeSubtitleCueBatch($job->id, 0));
+
+        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_cancelled_translation_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('translating');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+
+        $this->dispatchCancelledBatch(new TranslateSubtitleCueBatch($job->id, 0));
+
+        $this->assertSame(0, $this->translationAnalysis->translationCalls);
+    }
+
+    public function test_cancelled_romanization_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('romanizing');
+        $this->artifacts()->putCueBatchResult(
+            $job,
+            SubtitleJobArtifactStore::TOKENIZED_CUES,
+            0,
+            new CueEnrichmentResult([$this->sampleCue()], 'unknown'),
+        );
+
+        $this->dispatchCancelledBatch(new RomanizeSubtitleCueBatch($job->id, 0));
+
+        $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
+    }
+
+    public function test_cancelled_enrichment_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('enriching');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [$this->sampleCue()]);
+
+        $this->dispatchCancelledBatch(new EnrichSubtitleCueBatch($job->id, 0));
+
+        $this->assertSame(0, $this->translationAnalysis->calls);
     }
 
     public function test_transcription_processor_ignores_jobs_already_claimed_by_another_worker(): void
@@ -1332,11 +1440,60 @@ class SubtitleJobApiTest extends TestCase
         return "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n";
     }
 
+    private function runningSubtitleJob(string $stage): SubtitleJob
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+
+        return SubtitleJob::factory()->create([
+            'status' => 'running',
+            'stage' => $stage,
+            'progress_percent' => 65,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sampleCue(): array
+    {
+        return [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'startMs' => 500,
+            'endMs' => 2100,
+            'sourceText' => 'first transcript segment',
+            'translatedText' => 'first transcript segment',
+            'tokens' => [
+                ['index' => 0, 'text' => 'first', 'normalizedText' => 'first'],
+            ],
+        ];
+    }
+
+    private function artifacts(): SubtitleJobArtifactStore
+    {
+        return app(SubtitleJobArtifactStore::class);
+    }
+
+    private function dispatchCancelledBatch(object $job): void
+    {
+        $batch = Bus::batch([$job])
+            ->onConnection(SubtitleGenerationPipeline::connection())
+            ->onQueue(SubtitleGenerationPipeline::queue())
+            ->dispatch();
+
+        $batch->cancel();
+
+        $this->runQueuedSubtitleJobs();
+    }
+
     private function runQueuedSubtitleJobs(): void
     {
         for ($attempt = 0; $attempt < 50 && DB::table('jobs')->exists(); $attempt++) {
             Artisan::call('queue:work', [
-                '--queue' => SubtitleGenerationPipeline::QUEUE.',default',
+                '--queue' => SubtitleGenerationPipeline::queue().',default',
                 '--once' => true,
                 '--tries' => 1,
                 '--sleep' => 0,
