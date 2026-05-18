@@ -22,16 +22,20 @@ class ProcessSubtitleJob implements ShouldQueue
 
     public int $timeout = 1200;
 
+    public readonly int $queuedAtMs;
+
     public function __construct(
         public readonly int $subtitleJobId,
+        ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
-        $this->onQueue(SubtitleGenerationPipeline::QUEUE);
+        $this->onQueue(SubtitleGenerationPipeline::queue());
+        $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->processTranscription($this->subtitleJobId);
+        $pipeline->processTranscription($this->subtitleJobId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -41,5 +45,10 @@ class ProcessSubtitleJob implements ShouldQueue
             'preparing',
             $exception ?? new RuntimeException('Subtitle processing job failed.'),
         );
+    }
+
+    private function currentTimeMs(): int
+    {
+        return (int) floor(microtime(true) * 1000);
     }
 }

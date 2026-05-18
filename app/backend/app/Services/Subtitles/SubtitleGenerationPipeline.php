@@ -32,6 +32,11 @@ class SubtitleGenerationPipeline
         return (string) config('subtitles.queue.connection', 'database');
     }
 
+    public static function queue(): string
+    {
+        return (string) config('subtitles.queue.name', self::QUEUE);
+    }
+
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
         private readonly ElevenLabsScribeTranscriptionService $transcriptionService,
@@ -41,7 +46,7 @@ class SubtitleGenerationPipeline
         private readonly SubtitleJobArtifactStore $artifacts,
     ) {}
 
-    public function processTranscription(int $subtitleJobId): void
+    public function processTranscription(int $subtitleJobId, ?int $queuedAtMs = null): void
     {
         $this->extendProcessingTimeLimit();
 
@@ -50,6 +55,8 @@ class SubtitleGenerationPipeline
         if ($job === null) {
             return;
         }
+
+        $this->logQueueWait($job, 'transcribing', null, $queuedAtMs);
 
         $audio = null;
         $stage = 'acquiring-audio';
@@ -69,10 +76,12 @@ class SubtitleGenerationPipeline
             $this->markJobRunning($job, 'transcribing', 45);
             $this->logger->transcriptionStarted($job);
 
+            $transcriptionStartedAtMs = $this->currentTimeMs();
             $transcript = $this->transcriptionService->transcribe(
                 audio: $audio,
                 sourceLanguage: $job->source_language,
             );
+            $this->logger->stageTiming($job, 'transcribing', $this->durationMs($transcriptionStartedAtMs));
 
             $this->logger->transcriptionCompleted($job, $transcript, $audio);
             $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
@@ -95,7 +104,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function tokenizeBatch(int $subtitleJobId, int $batchIndex): void
+    public function tokenizeBatch(int $subtitleJobId, int $batchIndex, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
@@ -103,7 +112,10 @@ class SubtitleGenerationPipeline
             return;
         }
 
+        $this->logQueueWait($job, 'tokenizing', $batchIndex, $queuedAtMs);
+
         try {
+            $startedAtMs = $this->currentTimeMs();
             $result = $this->translationAnalysis->tokenizeCueBatch(
                 batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
                 allCues: $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues,
@@ -111,6 +123,7 @@ class SubtitleGenerationPipeline
             );
 
             $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, $batchIndex, $result);
+            $this->logger->stageTiming($job, 'tokenizing', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'tokenizing', $exception);
 
@@ -118,7 +131,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function translateBatch(int $subtitleJobId, int $batchIndex): void
+    public function translateBatch(int $subtitleJobId, int $batchIndex, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
@@ -126,7 +139,10 @@ class SubtitleGenerationPipeline
             return;
         }
 
+        $this->logQueueWait($job, 'translating', $batchIndex, $queuedAtMs);
+
         try {
+            $startedAtMs = $this->currentTimeMs();
             $result = $this->translationAnalysis->translateCueBatch(
                 batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
                 sourceLanguage: $this->effectiveSourceLanguage($job),
@@ -134,6 +150,7 @@ class SubtitleGenerationPipeline
             );
 
             $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TRANSLATED_CUES, $batchIndex, $result);
+            $this->logger->stageTiming($job, 'translating', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'translating', $exception);
 
@@ -141,13 +158,16 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function continueAfterAnalysis(int $subtitleJobId): void
+    public function continueAfterAnalysis(int $subtitleJobId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
         if ($job === null) {
             return;
         }
+
+        $this->logQueueWait($job, 'analysis-continuation', null, $queuedAtMs);
+        $startedAtMs = $this->currentTimeMs();
 
         $tokenized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TOKENIZED_CUES);
         $this->logger->tokenizationCompleted($job, $tokenized);
@@ -160,15 +180,17 @@ class SubtitleGenerationPipeline
         }
 
         if ($job->include_romanization && $this->shouldRomanizeTranscript($tokenized->cues)) {
+            $this->logger->stageTiming($job, 'analysis-continuation', $this->durationMs($startedAtMs));
             $this->dispatchRomanizationBatch($job);
 
             return;
         }
 
         $this->storeMergedCuesAndContinue($job, $tokenized, $translated);
+        $this->logger->stageTiming($job, 'analysis-continuation', $this->durationMs($startedAtMs));
     }
 
-    public function romanizeBatch(int $subtitleJobId, int $batchIndex): void
+    public function romanizeBatch(int $subtitleJobId, int $batchIndex, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
@@ -176,13 +198,17 @@ class SubtitleGenerationPipeline
             return;
         }
 
+        $this->logQueueWait($job, 'romanizing', $batchIndex, $queuedAtMs);
+
         try {
+            $startedAtMs = $this->currentTimeMs();
             $result = $this->translationAnalysis->romanizeCueBatch(
                 batch: $this->artifacts->cueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, $batchIndex)->cues,
                 sourceLanguage: $this->effectiveSourceLanguage($job),
             );
 
             $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ROMANIZED_CUES, $batchIndex, $result);
+            $this->logger->stageTiming($job, 'romanizing', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'romanizing', $exception);
 
@@ -190,13 +216,16 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function continueAfterRomanization(int $subtitleJobId): void
+    public function continueAfterRomanization(int $subtitleJobId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
         if ($job === null) {
             return;
         }
+
+        $this->logQueueWait($job, 'romanization-continuation', null, $queuedAtMs);
+        $startedAtMs = $this->currentTimeMs();
 
         $romanized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ROMANIZED_CUES);
         $this->logger->romanizationCompleted($job, $romanized);
@@ -206,9 +235,10 @@ class SubtitleGenerationPipeline
             : null;
 
         $this->storeMergedCuesAndContinue($job, $romanized, $translated);
+        $this->logger->stageTiming($job, 'romanization-continuation', $this->durationMs($startedAtMs));
     }
 
-    public function enrichBatch(int $subtitleJobId, int $batchIndex): void
+    public function enrichBatch(int $subtitleJobId, int $batchIndex, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
@@ -216,7 +246,10 @@ class SubtitleGenerationPipeline
             return;
         }
 
+        $this->logQueueWait($job, 'enriching', $batchIndex, $queuedAtMs);
+
         try {
+            $startedAtMs = $this->currentTimeMs();
             $result = $this->translationAnalysis->enrichCueBatch(
                 batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::MERGED_CUES, $batchIndex),
                 sourceLanguage: $this->effectiveSourceLanguage($job),
@@ -225,6 +258,7 @@ class SubtitleGenerationPipeline
             );
 
             $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ENRICHED_CUES, $batchIndex, $result);
+            $this->logger->stageTiming($job, 'enriching', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'enriching', $exception);
 
@@ -232,13 +266,16 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function finalize(int $subtitleJobId, bool $useEnrichedCues): void
+    public function finalize(int $subtitleJobId, bool $useEnrichedCues, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId);
 
         if ($job === null) {
             return;
         }
+
+        $this->logQueueWait($job, 'finalizing', null, $queuedAtMs);
+        $startedAtMs = $this->currentTimeMs();
 
         $transcript = $this->artifacts->transcript($job);
         $enrichment = $useEnrichedCues
@@ -272,6 +309,8 @@ class SubtitleGenerationPipeline
             track: $track,
             audioDurationSeconds: (int) ($job->video_duration_seconds ?? $transcript->durationSeconds ?? 0),
         );
+        $this->logger->stageTiming($job, 'finalizing', $this->durationMs($startedAtMs));
+        $this->logger->completedTrackTiming($job->refresh(), (int) abs(now()->diffInMilliseconds($job->created_at)));
     }
 
     public function failJob(int $subtitleJobId, string $stage, Throwable $exception): void
@@ -354,7 +393,7 @@ class SubtitleGenerationPipeline
             then: static function (Batch $batch) use ($subtitleJobId): void {
                 ContinueSubtitleJobAfterAnalysis::dispatch($subtitleJobId)
                     ->onConnection(self::connection())
-                    ->onQueue(self::QUEUE);
+                    ->onQueue(self::queue());
             },
         );
     }
@@ -381,7 +420,7 @@ class SubtitleGenerationPipeline
             then: static function (Batch $batch) use ($subtitleJobId): void {
                 ContinueSubtitleJobAfterRomanization::dispatch($subtitleJobId)
                     ->onConnection(self::connection())
-                    ->onQueue(self::QUEUE);
+                    ->onQueue(self::queue());
             },
         );
     }
@@ -408,7 +447,7 @@ class SubtitleGenerationPipeline
             then: static function (Batch $batch) use ($subtitleJobId): void {
                 FinalizeSubtitleJob::dispatch($subtitleJobId, true)
                     ->onConnection(self::connection())
-                    ->onQueue(self::QUEUE);
+                    ->onQueue(self::queue());
             },
         );
     }
@@ -423,7 +462,7 @@ class SubtitleGenerationPipeline
         Bus::batch($jobs)
             ->name($name)
             ->onConnection(self::connection())
-            ->onQueue(self::QUEUE)
+            ->onQueue(self::queue())
             ->then($then)
             ->catch(static function (Batch $batch, Throwable $exception) use ($subtitleJobId, $failedStage): void {
                 app(SubtitleGenerationPipeline::class)->failJob($subtitleJobId, $failedStage, $exception);
@@ -452,7 +491,7 @@ class SubtitleGenerationPipeline
 
         FinalizeSubtitleJob::dispatch($job->id, false)
             ->onConnection(self::connection())
-            ->onQueue(self::QUEUE);
+            ->onQueue(self::queue());
     }
 
     private function mergeTranslatedText(
@@ -614,6 +653,30 @@ class SubtitleGenerationPipeline
             'Subtitle processing state is incomplete.',
             ['reason' => $reason],
         );
+    }
+
+    private function logQueueWait(SubtitleJob $job, string $stage, ?int $batchIndex, ?int $queuedAtMs): void
+    {
+        if ($queuedAtMs === null) {
+            return;
+        }
+
+        $this->logger->queueWaitObserved(
+            job: $job,
+            stage: $stage,
+            waitMs: max(0, $this->currentTimeMs() - $queuedAtMs),
+            batchIndex: $batchIndex,
+        );
+    }
+
+    private function currentTimeMs(): int
+    {
+        return (int) floor(microtime(true) * 1000);
+    }
+
+    private function durationMs(int $startedAtMs): int
+    {
+        return max(0, $this->currentTimeMs() - $startedAtMs);
     }
 
     private function extendProcessingTimeLimit(): void

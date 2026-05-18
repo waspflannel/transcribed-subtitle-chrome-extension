@@ -4,6 +4,8 @@ namespace App\Services\Subtitles;
 
 use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -36,6 +38,12 @@ class SubtitleJobService
         self::PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED,
     ];
 
+    private const DISPATCH_STATE_REUSED = 'reused';
+
+    private const DISPATCH_STATE_CREATED = 'created';
+
+    private const DISPATCH_STATE_RESET = 'reset';
+
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleQueueWorkerBootstrapper $queueWorkers,
@@ -50,65 +58,80 @@ class SubtitleJobService
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
-        $shouldDispatch = false;
+        $dispatchState = self::DISPATCH_STATE_REUSED;
 
-        $job = DB::transaction(function () use (
-            $payload,
-            $installId,
-            $requestIp,
-            $processingVersion,
-            $enrichmentMode,
-            $includeRomanization,
-            $includeTranslation,
-            &$shouldDispatch,
-        ): SubtitleJob {
-            $job = SubtitleJob::query()
-                ->with('track')
-                ->where('youtube_video_id', $payload['youtubeVideoId'])
-                ->where('source_language', $payload['sourceLanguage'])
-                ->where('target_language', $payload['targetLanguage'])
-                ->where('processing_version', $processingVersion)
-                ->where('install_id', $installId)
-                ->first();
+        try {
+            $job = DB::transaction(function () use (
+                $payload,
+                $installId,
+                $requestIp,
+                $processingVersion,
+                $enrichmentMode,
+                $includeRomanization,
+                $includeTranslation,
+                &$dispatchState,
+            ): SubtitleJob {
+                $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
+                    ->with('track')
+                    ->first();
 
-            if ($job) {
-                if ($this->hasReadyTrack($job)) {
-                    return $job;
+                if ($job) {
+                    if ($this->hasReadyTrack($job)) {
+                        $dispatchState = self::DISPATCH_STATE_REUSED;
+
+                        return $job;
+                    }
+
+                    if ($job->status === 'running' && ! $this->isStalePreparingJob($job)) {
+                        $dispatchState = self::DISPATCH_STATE_REUSED;
+
+                        return $job;
+                    }
+
+                    $this->logger->incompleteJobReused($job);
+                    $this->resetJob(
+                        job: $job,
+                        payload: $payload,
+                        installId: $installId,
+                        requestIp: $requestIp,
+                        enrichmentMode: $enrichmentMode,
+                        includeRomanization: $includeRomanization,
+                        includeTranslation: $includeTranslation,
+                    );
+                    $dispatchState = self::DISPATCH_STATE_RESET;
+
+                    return $job->refresh();
                 }
 
-                if ($job->status === 'running' && ! $this->isStalePreparingJob($job)) {
-                    return $job;
-                }
-
-                $this->logger->incompleteJobReused($job);
-                $this->resetJob(
-                    job: $job,
+                $job = $this->createJob(
                     payload: $payload,
                     installId: $installId,
                     requestIp: $requestIp,
+                    processingVersion: $processingVersion,
                     enrichmentMode: $enrichmentMode,
                     includeRomanization: $includeRomanization,
                     includeTranslation: $includeTranslation,
                 );
-                $shouldDispatch = true;
+                $this->logger->jobCreated($job);
+                $dispatchState = self::DISPATCH_STATE_CREATED;
 
-                return $job->refresh();
+                return $job;
+            });
+        } catch (QueryException $exception) {
+            if (! $this->isUniqueConstraintViolation($exception)) {
+                throw $exception;
             }
 
-            $job = $this->createJob(
-                payload: $payload,
-                installId: $installId,
-                requestIp: $requestIp,
-                processingVersion: $processingVersion,
-                enrichmentMode: $enrichmentMode,
-                includeRomanization: $includeRomanization,
-                includeTranslation: $includeTranslation,
-            );
-            $this->logger->jobCreated($job);
-            $shouldDispatch = true;
+            $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
+                ->with('track')
+                ->first();
 
-            return $job;
-        });
+            if ($job === null) {
+                throw $exception;
+            }
+
+            $dispatchState = self::DISPATCH_STATE_REUSED;
+        }
 
         $job = $job->refresh()->load('track');
 
@@ -118,16 +141,30 @@ class SubtitleJobService
             return $job;
         }
 
-        if ($shouldDispatch) {
+        if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
             ProcessSubtitleJob::dispatch($job->id)
                 ->onConnection(SubtitleGenerationPipeline::connection())
-                ->onQueue(SubtitleGenerationPipeline::QUEUE);
+                ->onQueue(SubtitleGenerationPipeline::queue());
             $this->queueWorkers->startIfNeeded();
 
             $job = $job->refresh()->load('track');
         }
 
         return $job;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return Builder<SubtitleJob>
+     */
+    private function compatibleJobQuery(array $payload, string $installId, string $processingVersion): Builder
+    {
+        return SubtitleJob::query()
+            ->where('youtube_video_id', $payload['youtubeVideoId'])
+            ->where('source_language', $payload['sourceLanguage'])
+            ->where('target_language', $payload['targetLanguage'])
+            ->where('processing_version', $processingVersion)
+            ->where('install_id', $installId);
     }
 
     /**
@@ -240,5 +277,12 @@ class SubtitleJobService
         $seconds = max(1, (int) config('subtitles.queue.stale_preparing_seconds', 60));
 
         return $job->updated_at->lte(now()->subSeconds($seconds));
+    }
+
+    private function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $sqlState = $exception->errorInfo[0] ?? null;
+
+        return in_array($sqlState, ['23000', '23505'], true);
     }
 }

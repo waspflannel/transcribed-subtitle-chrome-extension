@@ -22,17 +22,21 @@ class FinalizeSubtitleJob implements ShouldQueue
 
     public int $timeout = 120;
 
+    public readonly int $queuedAtMs;
+
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly bool $useEnrichedCues,
+        ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
-        $this->onQueue(SubtitleGenerationPipeline::QUEUE);
+        $this->onQueue(SubtitleGenerationPipeline::queue());
+        $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->finalize($this->subtitleJobId, $this->useEnrichedCues);
+        $pipeline->finalize($this->subtitleJobId, $this->useEnrichedCues, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -42,5 +46,10 @@ class FinalizeSubtitleJob implements ShouldQueue
             'finalizing',
             $exception ?? new RuntimeException('Subtitle finalization failed.'),
         );
+    }
+
+    private function currentTimeMs(): int
+    {
+        return (int) floor(microtime(true) * 1000);
     }
 }

@@ -223,6 +223,38 @@ class SubtitleWorkflowLogger
         }
     }
 
+    public function queueWaitObserved(SubtitleJob $job, string $stage, int $waitMs, ?int $batchIndex = null): void
+    {
+        Log::info('backend.subtitle_queue_wait_observed', $this->withOptionalBatchIndex([
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'stage' => $stage,
+            'queue_connection' => config('subtitles.queue.connection'),
+            'queue' => config('subtitles.queue.name'),
+            'wait_ms' => $waitMs,
+        ], $batchIndex));
+    }
+
+    public function stageTiming(SubtitleJob $job, string $stage, int $durationMs, ?int $batchIndex = null): void
+    {
+        Log::info('backend.subtitle_stage_timing', $this->withOptionalBatchIndex([
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'stage' => $stage,
+            'duration_ms' => $durationMs,
+        ], $batchIndex));
+    }
+
+    public function completedTrackTiming(SubtitleJob $job, int $durationMs): void
+    {
+        Log::info('backend.subtitle_completed_track_timing', [
+            'job_id' => $job->public_id,
+            'youtube_video_id' => $job->youtube_video_id,
+            'duration_ms' => $durationMs,
+            'processing_version' => $job->processing_version,
+        ]);
+    }
+
     public function processingFailed(SubtitleJob $job, string $stage, SubtitleProcessingException $exception): void
     {
         Log::warning("backend.{$stage}_failed", [
@@ -253,5 +285,21 @@ class SubtitleWorkflowLogger
             fn (array $cue): int => count($cue['tokens']),
             $enrichment->cues,
         ));
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function withOptionalBatchIndex(array $context, ?int $batchIndex): array
+    {
+        if ($batchIndex === null) {
+            return $context;
+        }
+
+        return [
+            ...$context,
+            'batch_index' => $batchIndex,
+        ];
     }
 }
