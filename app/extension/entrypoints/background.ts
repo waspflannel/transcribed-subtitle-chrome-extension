@@ -257,7 +257,7 @@ async function waitForCompletedSubtitleJob(
   return null;
 }
 
-function publicSubtitleJobFailureMessage(job: JobResponse): string {
+function publicSubtitleJobFailureMessage(job: Pick<JobResponse | SubtitleJobHistoryItem, 'message'>): string {
   switch (job.message) {
     case 'Transcription failed.':
       return publicSubtitleErrorMessage(new SubtitleApiError('transcription_failed', job.message, 502));
@@ -440,7 +440,7 @@ function stateWithBackendProgress(
     return {
       type: 'error',
       youtubeVideoId: job.youtubeVideoId,
-      message: job.message ?? 'Generation did not complete.',
+      message: publicSubtitleJobFailureMessage(job),
     };
   }
 
