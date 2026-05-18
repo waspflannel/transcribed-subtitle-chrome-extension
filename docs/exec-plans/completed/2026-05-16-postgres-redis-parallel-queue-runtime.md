@@ -37,7 +37,7 @@ Keep SQLite only as a test/dev-lite profile, not as an equal performance runtime
 - [x] `app/backend/config/queue.php` defines a `redis` queue connection using env-driven connection, queue name, `retry_after`, `block_for`, and `after_commit=false`.
 - [x] The selected subtitle queue connection remains a single source of truth through `SubtitleGenerationPipeline::connection()`.
 - [x] Root Docker Compose starts Postgres and Redis on non-conflicting local host ports and uses named volumes.
-- [x] `app/backend/.env.parallel.example` documents the Postgres + Redis runtime: `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `CACHE_STORE=database`, Redis queue env keys, and `SUBTITLE_AUTO_WORKER_COUNT=3`.
+- [x] `app/backend/.env.parallel.example` documents the Postgres + Redis runtime: `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `CACHE_STORE=database`, Redis queue env keys, and `SUBTITLE_AUTO_WORKER_COUNT=6`.
 - [x] Runtime docs clearly say Postgres + Redis is the performance profile and SQLite is only for tests/simple dev-lite smoke.
 - [x] Redis local auto-start can launch the configured number of `subtitle-ai` workers; SQLite-backed database queue auto-start launches exactly one worker.
 - [x] Worker lifecycle logs include queue connection, DB driver, worker count, queue name, worker PID when available, start result, and configured max lifetime.

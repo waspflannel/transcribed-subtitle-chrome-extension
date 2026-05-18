@@ -12,7 +12,7 @@
 - SQLite remains a test/dev-lite profile only. SQLite-backed local queues are capped at one auto-started worker to avoid `database is locked` write contention and are not considered the performance path.
 - Local Redis-backed subtitle generation can auto-start the configured number of short-lived `subtitle-ai` workers when Generate dispatches work, so users do not run queue commands manually for local proof runs.
 - Production should set `SUBTITLE_AUTO_START_WORKERS=false` and run supervised `subtitle-ai` workers for durable queue processing.
-- A conservative local and production worker count is three `subtitle-ai` workers while OpenAI provider limits are still being observed.
+- A conservative local and production worker count is six `subtitle-ai` workers while OpenAI provider limits are still being observed.
 - Add a startup smoke check to `scripts/agent/check.ps1`.
 - Track startup targets and performance budgets here.
 

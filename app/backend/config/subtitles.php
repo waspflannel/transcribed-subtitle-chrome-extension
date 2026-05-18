@@ -15,7 +15,7 @@ return [
         'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'database'),
         'name' => env('SUBTITLE_QUEUE', 'subtitle-ai'),
         'auto_start_workers' => filter_var(env('SUBTITLE_AUTO_START_WORKERS', env('APP_ENV') === 'local'), FILTER_VALIDATE_BOOL),
-        'auto_worker_count' => (int) env('SUBTITLE_AUTO_WORKER_COUNT', 3),
+        'auto_worker_count' => (int) env('SUBTITLE_AUTO_WORKER_COUNT', 6),
         'auto_worker_max_time_seconds' => (int) env('SUBTITLE_AUTO_WORKER_MAX_TIME_SECONDS', 900),
         'auto_worker_sleep_seconds' => (int) env('SUBTITLE_AUTO_WORKER_SLEEP_SECONDS', 1),
         'auto_worker_timeout_seconds' => (int) env('SUBTITLE_AUTO_WORKER_TIMEOUT_SECONDS', 1200),

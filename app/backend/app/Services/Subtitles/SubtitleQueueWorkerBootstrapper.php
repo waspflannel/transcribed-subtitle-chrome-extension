@@ -164,7 +164,7 @@ class SubtitleQueueWorkerBootstrapper
             return 1;
         }
 
-        return max(1, (int) config('subtitles.queue.auto_worker_count', 3));
+        return max(1, (int) config('subtitles.queue.auto_worker_count', 6));
     }
 
     private function usesSqliteQueueDatabase(): bool
