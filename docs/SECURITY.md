@@ -29,7 +29,8 @@
   - Extension-to-Laravel `/v1/*` API requests.
   - Laravel-to-YouTube audio acquisition process.
   - Laravel-to-AI-provider transcription and enrichment calls.
-  - SQLite persistence for generated tracks.
+  - Postgres persistence for generated tracks, subtitle jobs, artifacts, failed jobs, cache rows, and Laravel batch metadata in the parallel runtime profile.
+  - SQLite persistence for tests and simple dev-lite smoke runs.
 - Sensitive operations:
   - Validating supported public YouTube watch URLs and 60 minute duration limits.
   - Writing and deleting temporary audio files.
@@ -66,6 +67,9 @@
   - `backend.enrichment_started`
   - `backend.enrichment_completed`
   - `backend.enrichment_failed`
+  - `backend.subtitle_queue_wait_observed`
+  - `backend.subtitle_stage_timing`
+  - `backend.subtitle_completed_track_timing`
   - `backend.track_generation_completed`
   - `backend.track_reused`
   - `backend.expired_subtitles_pruned`
