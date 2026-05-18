@@ -57,13 +57,13 @@ class SubtitleQueueWorkerBootstrapper
     private function claimStartLock(): bool
     {
         try {
-            return Cache::add(self::START_LOCK_KEY, true, now()->addSeconds(30));
+            return Cache::add(self::START_LOCK_KEY, true, now()->addSeconds($this->workerMaxTimeSeconds()));
         } catch (Throwable $exception) {
             Log::warning('backend.subtitle_queue_worker_lock_failed', [
                 'exception' => $exception::class,
             ]);
 
-            return true;
+            return false;
         }
     }
 
@@ -130,7 +130,7 @@ class SubtitleQueueWorkerBootstrapper
             '--sleep='.max(0, (int) config('subtitles.queue.auto_worker_sleep_seconds', 1)),
             '--tries=1',
             '--timeout='.max(60, (int) config('subtitles.queue.auto_worker_timeout_seconds', 1200)),
-            '--max-time='.max(60, (int) config('subtitles.queue.auto_worker_max_time_seconds', 900)),
+            '--max-time='.$this->workerMaxTimeSeconds(),
         ];
     }
 
@@ -165,6 +165,11 @@ class SubtitleQueueWorkerBootstrapper
         }
 
         return max(1, (int) config('subtitles.queue.auto_worker_count', 6));
+    }
+
+    private function workerMaxTimeSeconds(): int
+    {
+        return max(60, (int) config('subtitles.queue.auto_worker_max_time_seconds', 900));
     }
 
     private function usesSqliteQueueDatabase(): bool

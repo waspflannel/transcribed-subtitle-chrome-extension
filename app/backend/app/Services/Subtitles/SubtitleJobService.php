@@ -73,6 +73,7 @@ class SubtitleJobService
             ): SubtitleJob {
                 $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
                     ->with('track')
+                    ->lockForUpdate()
                     ->first();
 
                 if ($job) {
@@ -215,7 +216,7 @@ class SubtitleJobService
         $job->artifacts()->delete();
         $job->unsetRelation('track');
 
-        $job->update([
+        $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,
@@ -230,7 +231,8 @@ class SubtitleJobService
             'install_id' => $installId,
             'request_ip' => $requestIp,
             'expires_at' => null,
-        ]);
+            'created_at' => now(),
+        ])->save();
     }
 
     private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string

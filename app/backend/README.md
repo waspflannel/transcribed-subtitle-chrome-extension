@@ -34,6 +34,8 @@ Run explicit local workers when you do not want auto-started workers:
 php artisan queue:work redis --queue=subtitle-ai,default --tries=1 --timeout=1200 --sleep=1
 ```
 
+Keep the queue `retry_after` value above the worker timeout; the example profiles use 1260 seconds for 1200 second subtitle workers.
+
 Production should set `SUBTITLE_AUTO_START_WORKERS=false` and run supervised `subtitle-ai` workers.
 
 The backend is API-only. Extension UI work lives in `../extension`.

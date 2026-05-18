@@ -209,6 +209,52 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(3, $workerBootstrap->startCalls);
     }
 
+    public function test_auto_started_worker_lock_lasts_for_worker_lifetime(): void
+    {
+        config([
+            'subtitles.queue.connection' => 'redis',
+            'subtitles.queue.auto_start_workers' => true,
+            'subtitles.queue.auto_worker_count' => 3,
+            'subtitles.queue.auto_worker_max_time_seconds' => 120,
+        ]);
+        cache()->forget('subtitle-ai-worker-bootstrap-started');
+        $workerBootstrap = (object) ['startCalls' => 0];
+
+        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
+        {
+            public function __construct(private readonly object $workerBootstrap) {}
+
+            protected function startWorkerProcess(): ?int
+            {
+                $this->workerBootstrap->startCalls++;
+
+                return $this->workerBootstrap->startCalls;
+            }
+        };
+
+        try {
+            $bootstrapper->startIfNeeded();
+            $this->travel(31)->seconds();
+            $bootstrapper->startIfNeeded();
+        } finally {
+            $this->travelBack();
+        }
+
+        $this->assertSame(3, $workerBootstrap->startCalls);
+    }
+
+    public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
+    {
+        $processJobTimeout = (new ProcessSubtitleJob(1))->timeout;
+
+        $this->assertGreaterThan($processJobTimeout, config('queue.connections.database.retry_after'));
+        $this->assertGreaterThan($processJobTimeout, config('queue.connections.redis.retry_after'));
+        $this->assertGreaterThan(
+            config('subtitles.queue.auto_worker_timeout_seconds'),
+            config('queue.connections.redis.retry_after'),
+        );
+    }
+
     public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
     {
         config([
@@ -241,6 +287,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertAccepted();
 
         $this->assertSame($staleJob->public_id, $response->json('jobId'));
+        $this->assertTrue($staleJob->fresh()->created_at->greaterThan($staleJob->created_at));
         Queue::assertPushed(ProcessSubtitleJob::class, 1);
     }
 
@@ -355,6 +402,25 @@ class SubtitleJobApiTest extends TestCase
             'status' => 'failed',
             'error_code' => 'queue_unavailable',
             'error_message' => 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.',
+        ]);
+    }
+
+    public function test_late_batch_result_does_not_recreate_artifacts_after_job_failure(): void
+    {
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+        $this->translationAnalysis->beforeTokenizationResult = function () use ($job): void {
+            app(SubtitleGenerationPipeline::class)->failJob(
+                $job->id,
+                'tokenizing',
+                SubtitleProcessingException::enrichmentFailed(),
+            );
+        };
+
+        app(SubtitleGenerationPipeline::class)->tokenizeBatch($job->id, 0);
+
+        $this->assertDatabaseMissing('subtitle_job_artifacts', [
+            'subtitle_job_id' => $job->id,
         ]);
     }
 
@@ -1597,6 +1663,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public bool $translationShouldFail = false;
 
+    public ?\Closure $beforeTokenizationResult = null;
+
     /**
      * @var array<int, string>
      */
@@ -1619,7 +1687,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
             throw SubtitleProcessingException::enrichmentFailed();
         }
 
-        return new CueEnrichmentResult(
+        $result = new CueEnrichmentResult(
             array_map(
                 fn (array $cue): array => [
                     ...$cue,
@@ -1630,6 +1698,12 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
             ),
             'unknown',
         );
+
+        if ($this->beforeTokenizationResult !== null) {
+            ($this->beforeTokenizationResult)();
+        }
+
+        return $result;
     }
 
     /**

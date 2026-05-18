@@ -122,7 +122,17 @@ class SubtitleGenerationPipeline
                 sourceLanguage: $this->effectiveSourceLanguage($job),
             );
 
-            $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, $batchIndex, $result);
+            $job = $this->storeCueBatchResultIfJobStillRunning(
+                subtitleJobId: $subtitleJobId,
+                artifactType: SubtitleJobArtifactStore::TOKENIZED_CUES,
+                batchIndex: $batchIndex,
+                result: $result,
+            );
+
+            if ($job === null) {
+                return;
+            }
+
             $this->logger->stageTiming($job, 'tokenizing', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'tokenizing', $exception);
@@ -149,7 +159,17 @@ class SubtitleGenerationPipeline
                 targetLanguage: $job->target_language,
             );
 
-            $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TRANSLATED_CUES, $batchIndex, $result);
+            $job = $this->storeCueBatchResultIfJobStillRunning(
+                subtitleJobId: $subtitleJobId,
+                artifactType: SubtitleJobArtifactStore::TRANSLATED_CUES,
+                batchIndex: $batchIndex,
+                result: $result,
+            );
+
+            if ($job === null) {
+                return;
+            }
+
             $this->logger->stageTiming($job, 'translating', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'translating', $exception);
@@ -207,7 +227,17 @@ class SubtitleGenerationPipeline
                 sourceLanguage: $this->effectiveSourceLanguage($job),
             );
 
-            $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ROMANIZED_CUES, $batchIndex, $result);
+            $job = $this->storeCueBatchResultIfJobStillRunning(
+                subtitleJobId: $subtitleJobId,
+                artifactType: SubtitleJobArtifactStore::ROMANIZED_CUES,
+                batchIndex: $batchIndex,
+                result: $result,
+            );
+
+            if ($job === null) {
+                return;
+            }
+
             $this->logger->stageTiming($job, 'romanizing', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'romanizing', $exception);
@@ -257,7 +287,17 @@ class SubtitleGenerationPipeline
                 includeRomanization: $job->include_romanization,
             );
 
-            $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ENRICHED_CUES, $batchIndex, $result);
+            $job = $this->storeCueBatchResultIfJobStillRunning(
+                subtitleJobId: $subtitleJobId,
+                artifactType: SubtitleJobArtifactStore::ENRICHED_CUES,
+                batchIndex: $batchIndex,
+                result: $result,
+            );
+
+            if ($job === null) {
+                return;
+            }
+
             $this->logger->stageTiming($job, 'enriching', $this->durationMs($startedAtMs), $batchIndex);
         } catch (Throwable $exception) {
             $this->failJob($subtitleJobId, 'enriching', $exception);
@@ -537,6 +577,23 @@ class SubtitleGenerationPipeline
         if ($job === null || $job->status !== 'running' || $this->hasReadyTrack($job)) {
             return null;
         }
+
+        return $job;
+    }
+
+    private function storeCueBatchResultIfJobStillRunning(
+        int $subtitleJobId,
+        string $artifactType,
+        int $batchIndex,
+        CueEnrichmentResult $result,
+    ): ?SubtitleJob {
+        $job = $this->loadRunningJob($subtitleJobId);
+
+        if ($job === null) {
+            return null;
+        }
+
+        $this->artifacts->putCueBatchResult($job, $artifactType, $batchIndex, $result);
 
         return $job;
     }
