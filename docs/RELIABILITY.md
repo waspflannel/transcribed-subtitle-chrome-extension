@@ -8,8 +8,9 @@
 
 ## Startup And Runtime
 
-- The parallel local/runtime profile uses Postgres for app data and Laravel batch metadata, and Redis for queued `subtitle-ai` jobs.
-- SQLite remains a test/dev-lite profile only. SQLite-backed local queues are capped at one auto-started worker to avoid `database is locked` write contention and are not considered the performance path.
+- The local/runtime profile uses Postgres for app data and Laravel batch metadata, and Redis for queued `subtitle-ai` jobs.
+- SQLite is test-only through PHPUnit's in-memory configuration. It is not a supported app runtime or smoke profile.
+- `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, or Redis queue configuration is missing.
 - Local Redis-backed subtitle generation can auto-start the configured number of short-lived `subtitle-ai` workers when Generate dispatches work, so users do not run queue commands manually for local proof runs.
 - Production should set `SUBTITLE_AUTO_START_WORKERS=false` and run supervised `subtitle-ai` workers for durable queue processing.
 - A conservative local and production worker count is six `subtitle-ai` workers while OpenAI provider limits are still being observed.
@@ -35,9 +36,9 @@ Default generation tokenizes every transcript with a narrow structured-output to
 
 The language catalog is limited to the WER-ranked transcription set used in the popup. The tier is a transcription accuracy signal only; translation card quality can still vary by language pair, dialect, audio quality, and provider coverage.
 
-Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch unless they are stale in `preparing`, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Public failures map to stable popup and overlay messages.
+Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch unless they are stale in `preparing`, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Every created or reset generation gets a new `run_id`; queued subtitle jobs carrying an older run ID skip before provider calls and artifact writes. Public failures map to stable popup and overlay messages.
 
-Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` command deletes expired tracks and their now-empty expired jobs daily; extension requests also ignore expired tracks and regenerate through the existing compatible job row. Intermediate subtitle artifacts are deleted on finalization, failure, retry reset, and job deletion. Cancelled Laravel batch jobs skip provider calls before execution, but cancellation does not interrupt provider calls already in progress.
+Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` command deletes expired tracks and their now-empty expired jobs daily; related trace rows are removed by job deletion. Extension requests also ignore expired tracks and regenerate through the existing compatible job row. Intermediate subtitle artifacts are deleted on finalization, failure, retry reset, and job deletion. Cancelled Laravel batch jobs skip provider calls before execution, but cancellation does not interrupt provider calls already in progress.
 
 The popup local clear-state action removes local extension settings and anonymous install ID, clears in-memory tab subtitle state, and republishes default settings/no-track state to the active YouTube tab. It does not delete backend tracks because the first release has no user account or ownership model.
 

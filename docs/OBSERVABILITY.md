@@ -18,12 +18,16 @@ The backend records persisted subtitle job, artifact, and track rows, acquires Y
 - Track generation emits cue count, track duration, audio duration, expiration, reuse, and duration mismatch events without logging cue text or full transcript payloads.
 - Tokenization, romanization, cue translation, full-card enrichment, and clicked-token enrichment emit started/completed/failed events with provider identity, model, cue/token counts where applicable, and stored dialect value where applicable without logging prompts, full transcripts, translations, token boundaries, romanizations, or token payloads.
 - Queue wait, transcription, cue-batch processing, continuation, finalization, and total completed-track duration emit sanitized timing logs: `backend.subtitle_queue_wait_observed`, `backend.subtitle_stage_timing`, and `backend.subtitle_completed_track_timing`.
+- Subtitle runtime tracing persists sanitized `subtitle_job_events` rows and emits `backend.subtitle_trace_event` logs with stable event names for job creation/reset/completion/failure, stale run skips, queue processing/processed/failed, batch lifecycle, stage start/completion/slow warnings, artifact read/write/delete, and worker bootstrap events.
+- Each generation has a `run_id`; queued subtitle work carries the run ID and stale queued payloads no-op before provider calls or artifact writes, with `job.stale_run_skipped` trace evidence.
+- Local diagnostics are available through `php artisan subtitles:runtime-check`, `php artisan subtitles:runtime`, `php artisan subtitles:trace <public-job-id>`, and `php artisan subtitles:slow`; all support `--json`.
 - Tokenization validation retries emit `backend.tokenization_batch_retried` with model, source language, cue count, and reason only; no transcript or token payloads are logged.
 - Queue job payloads contain job IDs, batch indexes, and scalar queue timing metadata only. Transcript text, draft cues, and AI batch results live in `subtitle_job_artifacts` and are deleted when the final track is persisted or the job fails.
 - Extension WebVTT binding emits structured console diagnostics for video/track duration mismatch, WebVTT track load failures, and missing page video elements.
 - Proxy-facing API failures emit `backend.proxy_invalid_install_id`, `backend.proxy_rate_limited`, and `backend.proxy_internal_error` with request IDs and without raw install IDs.
 - Subtitle job creation and incomplete-job retry emit `backend.subtitle_job_created` and `backend.subtitle_job_reused_for_retry`.
 - Expiration cleanup emits `backend.expired_subtitles_pruned` with deleted track and job counts.
+- Expiration cleanup deletes trace rows tied to expired subtitle jobs through the `subtitle_job_events` job relationship.
 - Extension generation emits `extension.subtitle_generation_started`, `extension.subtitle_generation_completed`, `extension.subtitle_generation_failed`, and `extension.local_state_cleared` without subtitles or token payloads. Progress shown during generation comes from backend job status polling, not a local estimated timeline.
 
 ## Metrics
@@ -37,7 +41,7 @@ Define metrics for:
 
 ## Traces
 
-Add traces for workflows that cross storage or external APIs.
+Subtitle workflow traces are persisted in `subtitle_job_events` and mirrored into structured logs. Trace context is scalar and sanitized only; it must not include transcripts, cue text, token text, prompts, translations, romanization, raw provider payloads, raw audio paths, provider secrets, or install IDs.
 
 ## Future Harness Targets
 
