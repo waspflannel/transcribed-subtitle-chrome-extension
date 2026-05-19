@@ -536,6 +536,67 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
+    public function test_translation_prompt_includes_neighboring_cue_context_without_tokens(): void
+    {
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'sourceText' => 'the song begins',
+                        'translatedText' => 'the song begins',
+                    ],
+                    [
+                        'cueId' => 'cue-0002',
+                        'index' => 1,
+                        'sourceText' => 'ambiguous idiom',
+                        'translatedText' => 'contextual meaning',
+                    ],
+                    [
+                        'cueId' => 'cue-0003',
+                        'index' => 2,
+                        'sourceText' => 'the crowd answers',
+                        'translatedText' => 'the crowd answers',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCues = [
+            [
+                ...$this->sourceCue('cue-0001', 0, 'the song begins'),
+                'tokens' => [['index' => 0, 'text' => 'the song begins']],
+            ],
+            [
+                ...$this->sourceCue('cue-0002', 1, 'ambiguous idiom'),
+                'tokens' => [['index' => 0, 'text' => 'ambiguous idiom']],
+            ],
+            [
+                ...$this->sourceCue('cue-0003', 2, 'the crowd answers'),
+                'tokens' => [['index' => 0, 'text' => 'the crowd answers']],
+            ],
+        ];
+
+        $this->provider()->translate($sourceCues, 'ara', 'eng');
+
+        CueTranslationAgent::assertPrompted(function ($prompt): bool {
+            $input = $this->promptInput($prompt);
+
+            return $this->promptInputHasNoInstructions($prompt)
+                && data_get($input, 'sourceLanguage') === 'ara'
+                && data_get($input, 'targetLanguage') === 'eng'
+                && array_key_exists('previousCueText', $input['cues'][0])
+                && data_get($input, 'cues.0.previousCueText') === null
+                && data_get($input, 'cues.0.nextCueText') === 'ambiguous idiom'
+                && data_get($input, 'cues.1.previousCueText') === 'the song begins'
+                && data_get($input, 'cues.1.nextCueText') === 'the crowd answers'
+                && data_get($input, 'cues.2.previousCueText') === 'ambiguous idiom'
+                && data_get($input, 'cues.2.nextCueText') === null
+                && ! array_key_exists('tokens', $input['cues'][1]);
+        });
+    }
+
     public function test_translation_rejects_changed_cue_identity(): void
     {
         CueTranslationAgent::fake([

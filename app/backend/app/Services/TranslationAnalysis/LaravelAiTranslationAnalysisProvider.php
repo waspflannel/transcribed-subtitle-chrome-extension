@@ -178,7 +178,7 @@ class LaravelAiTranslationAnalysisProvider
         $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
 
         foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->translateCueBatch($batch, $sourceLanguage, $targetLanguage);
+            $result = $this->translateCueBatch($batch, $sourceLanguage, $targetLanguage, $sourceCues);
 
             array_push($translatedCues, ...$result->cues);
         }
@@ -189,8 +189,12 @@ class LaravelAiTranslationAnalysisProvider
     /**
      * @param  array<int, array<string, mixed>>  $batch
      */
-    public function translateCueBatch(array $batch, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
-    {
+    public function translateCueBatch(
+        array $batch,
+        string $sourceLanguage,
+        string $targetLanguage,
+        array $allCues = [],
+    ): CueEnrichmentResult {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
         }
@@ -198,7 +202,7 @@ class LaravelAiTranslationAnalysisProvider
         return $this->translatedResult(
             $this->promptAgent(
                 CueTranslationAgent::class,
-                $this->translationInput($batch, $sourceLanguage, $targetLanguage),
+                $this->translationInput($batch, $sourceLanguage, $targetLanguage, $allCues),
             ),
             $batch,
         );
@@ -441,6 +445,7 @@ class LaravelAiTranslationAnalysisProvider
         array $sourceCues,
         string $sourceLanguage,
         string $targetLanguage,
+        array $allCues = [],
     ): array {
         return [
             'sourceLanguage' => $sourceLanguage,
@@ -448,9 +453,27 @@ class LaravelAiTranslationAnalysisProvider
             'targetLanguage' => $targetLanguage,
             'targetLanguageName' => LanguageCatalog::label($targetLanguage),
             'cues' => array_map(
-                fn (array $cue): array => Arr::only($cue, ['cueId', 'index', 'sourceText']),
+                fn (array $cue): array => $this->translationCueInput($cue, $allCues === [] ? $sourceCues : $allCues),
                 $sourceCues,
             ),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $cue
+     * @param  array<int, array<string, mixed>>  $allCues
+     * @return array<string, mixed>
+     */
+    private function translationCueInput(array $cue, array $allCues): array
+    {
+        $position = $this->cuePosition($cue, $allCues);
+        $previousCue = $position > 0 ? $allCues[$position - 1] : null;
+        $nextCue = $allCues[$position + 1] ?? null;
+
+        return [
+            ...Arr::only($cue, ['cueId', 'index', 'sourceText']),
+            'previousCueText' => $previousCue === null ? null : (string) $previousCue['sourceText'],
+            'nextCueText' => $nextCue === null ? null : (string) $nextCue['sourceText'],
         ];
     }
 

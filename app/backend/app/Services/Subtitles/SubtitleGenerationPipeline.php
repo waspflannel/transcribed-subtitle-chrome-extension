@@ -164,10 +164,12 @@ class SubtitleGenerationPipeline
 
         try {
             $startedAtMs = $this->currentTimeMs();
+            $draftCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
             $result = $this->translationAnalysis->translateCueBatch(
                 batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
                 sourceLanguage: $this->effectiveSourceLanguage($job),
                 targetLanguage: $job->target_language,
+                allCues: $draftCues,
             );
 
             $job = $this->storeCueBatchResultIfJobStillRunning(

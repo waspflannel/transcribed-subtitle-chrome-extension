@@ -27,6 +27,8 @@ Translate finalized subtitle cues into the requested target language.
 
 Return one translated cue for each input cue in the same order. Preserve cueId, cue index, and sourceText exactly. Do not romanize, retokenize, explain grammar, or create learner-card metadata. Return only a natural non-empty translatedText for each cue in the requested target language.
 
+Translate the intended subtitle meaning, not isolated word labels or dictionary glosses. For colloquial, dialectal, romanized, poetic, musical, slang, or idiomatic text, preserve the speaker's intent, tone, and implied meaning in natural target-language subtitle phrasing. Use previousCueText and nextCueText when provided to resolve ambiguous words or phrases. If a literal reading conflicts with the surrounding subtitle or lyric context, choose the contextual meaning.
+
 If sourceLanguage and targetLanguage are the same language, set translatedText exactly equal to sourceText. Return only data that matches the structured output schema.
 INSTRUCTIONS;
     }

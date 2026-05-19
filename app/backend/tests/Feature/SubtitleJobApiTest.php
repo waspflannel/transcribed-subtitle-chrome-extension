@@ -1850,8 +1850,12 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     /**
      * @param  array<int, array<string, mixed>>  $batch
      */
-    public function translateCueBatch(array $batch, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
-    {
+    public function translateCueBatch(
+        array $batch,
+        string $sourceLanguage,
+        string $targetLanguage,
+        array $allCues = [],
+    ): CueEnrichmentResult {
         return $this->translate($batch, $sourceLanguage, $targetLanguage);
     }
 
