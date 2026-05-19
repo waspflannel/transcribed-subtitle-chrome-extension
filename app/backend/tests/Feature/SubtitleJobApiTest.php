@@ -3,10 +3,18 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\EnrichSubtitleCueBatch;
+use App\Jobs\ProcessSubtitleJob;
+use App\Jobs\RomanizeSubtitleCueBatch;
+use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleJobArtifactStore;
+use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
@@ -15,9 +23,14 @@ use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use PDOException;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
@@ -41,6 +54,254 @@ class SubtitleJobApiTest extends TestCase
         $this->app->instance(YouTubeAudioSource::class, $this->audioSource);
         $this->app->instance(ElevenLabsScribeTranscriptionService::class, $this->transcriptionService);
         $this->app->instance(LaravelAiTranslationAnalysisProvider::class, $this->translationAnalysis);
+        config([
+            'queue.default' => 'sync',
+            'subtitles.queue.connection' => 'sync',
+        ]);
+    }
+
+    public function test_new_subtitle_request_returns_running_job_and_dispatches_processing(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+        Queue::fake();
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $response
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running')
+            ->assertJsonPath('stage', 'preparing')
+            ->assertJsonPath('progressPercent', 5)
+            ->assertJsonMissingPath('track')
+            ->assertJsonStructure(['jobId', 'status', 'stage', 'progressPercent', 'createdAt', 'updatedAt']);
+
+        Queue::assertPushedOn(SubtitleGenerationPipeline::queue(), ProcessSubtitleJob::class);
+    }
+
+    public function test_duplicate_running_request_reuses_job_without_dispatching_duplicate_work(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+        Queue::fake();
+
+        $first = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertAccepted();
+
+        $second = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertAccepted();
+
+        $this->assertSame($first->json('jobId'), $second->json('jobId'));
+        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+    }
+
+    public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'background',
+        ]);
+        Queue::fake();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'bgqueue0001']))
+            ->assertAccepted();
+
+        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+            return $job->connection === 'background'
+                && $job->queue === SubtitleGenerationPipeline::queue();
+        });
+    }
+
+    public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
+    {
+        $processJobTimeout = (new ProcessSubtitleJob(1, (string) Str::uuid()))->timeout;
+
+        $this->assertGreaterThan($processJobTimeout, config('queue.connections.database.retry_after'));
+        $this->assertGreaterThan($processJobTimeout, config('queue.connections.redis.retry_after'));
+    }
+
+    public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.queue.stale_preparing_seconds' => 60,
+        ]);
+        Queue::fake();
+
+        $installId = $this->installId();
+        $staleJob = SubtitleJob::factory()->create([
+            'public_id' => (string) Str::uuid(),
+            'youtube_video_id' => 'stalejob001',
+            'youtube_url' => 'https://www.youtube.com/watch?v=stalejob001',
+            'install_id' => $installId,
+            'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
+            'enrichment_mode' => 'on_demand',
+            'include_romanization' => true,
+            'include_translation' => false,
+            'status' => 'running',
+            'stage' => 'preparing',
+            'progress_percent' => 5,
+            'created_at' => now()->subMinutes(5),
+            'updated_at' => now()->subMinutes(5),
+        ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'stalejob001']))
+            ->assertAccepted();
+
+        $this->assertSame($staleJob->public_id, $response->json('jobId'));
+        $this->assertTrue($staleJob->fresh()->created_at->greaterThan($staleJob->created_at));
+        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+    }
+
+    public function test_tokenization_and_translation_batches_are_dispatched_together_when_translation_is_enabled(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'translate01',
+                'includeTranslation' => true,
+            ]))
+            ->assertAccepted();
+
+        Artisan::call('queue:work', [
+            '--queue' => SubtitleGenerationPipeline::queue().',default',
+            '--once' => true,
+            '--tries' => 1,
+            '--sleep' => 0,
+        ]);
+
+        $payloads = DB::table('jobs')->pluck('payload')->implode("\n");
+
+        $this->assertStringContainsString(addslashes(TokenizeSubtitleCueBatch::class), $payloads);
+        $this->assertStringContainsString(addslashes(TranslateSubtitleCueBatch::class), $payloads);
+    }
+
+    public function test_cancelled_tokenization_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+
+        $this->dispatchCancelledBatch(new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id));
+
+        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_cancelled_translation_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('translating');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+
+        $this->dispatchCancelledBatch(new TranslateSubtitleCueBatch($job->id, 0, $job->run_id));
+
+        $this->assertSame(0, $this->translationAnalysis->translationCalls);
+    }
+
+    public function test_cancelled_romanization_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('romanizing');
+        $this->artifacts()->putCueBatchResult(
+            $job,
+            SubtitleJobArtifactStore::TOKENIZED_CUES,
+            0,
+            new CueEnrichmentResult([$this->sampleCue()], 'unknown'),
+        );
+
+        $this->dispatchCancelledBatch(new RomanizeSubtitleCueBatch($job->id, 0, $job->run_id));
+
+        $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
+    }
+
+    public function test_cancelled_enrichment_batch_skips_provider_calls(): void
+    {
+        $job = $this->runningSubtitleJob('enriching');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [$this->sampleCue()]);
+
+        $this->dispatchCancelledBatch(new EnrichSubtitleCueBatch($job->id, 0, $job->run_id));
+
+        $this->assertSame(0, $this->translationAnalysis->calls);
+    }
+
+    public function test_transcription_processor_ignores_jobs_already_claimed_by_another_worker(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'stage' => 'acquiring-audio',
+            'progress_percent' => 20,
+        ]);
+
+        app(SubtitleGenerationPipeline::class)->processTranscription($job->id, $job->run_id);
+
+        $this->assertSame(0, $this->audioSource->calls);
+    }
+
+    public function test_queue_database_lock_failure_returns_specific_public_message(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'stage' => 'tokenizing',
+            'progress_percent' => 65,
+        ]);
+
+        app(SubtitleGenerationPipeline::class)->failJob(
+            $job->id,
+            'tokenizing',
+            new PDOException('SQLSTATE[HY000]: General error: 5 database is locked'),
+            $job->run_id,
+        );
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $job->install_id)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('stage', 'tokenizing')
+            ->assertJsonPath('errorCode', 'queue_unavailable')
+            ->assertJsonPath('message', 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.');
+
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'id' => $job->id,
+            'status' => 'failed',
+            'error_code' => 'queue_unavailable',
+            'error_message' => 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.',
+        ]);
+    }
+
+    public function test_late_batch_result_does_not_recreate_artifacts_after_job_failure(): void
+    {
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+        $this->translationAnalysis->beforeTokenizationResult = function () use ($job): void {
+            app(SubtitleGenerationPipeline::class)->failJob(
+                $job->id,
+                'tokenizing',
+                SubtitleProcessingException::enrichmentFailed(),
+                $job->run_id,
+            );
+        };
+
+        app(SubtitleGenerationPipeline::class)->tokenizeBatch($job->id, 0, $job->run_id);
+
+        $this->assertDatabaseMissing('subtitle_job_artifacts', [
+            'subtitle_job_id' => $job->id,
+        ]);
     }
 
     public function test_default_generation_returns_transcript_first_track_without_full_card_enrichment(): void
@@ -209,6 +470,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_non_latin_transcript_first_generation_fails_when_romanization_fails(): void
     {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $sourceText = $this->arabicGreeting();
 
         $this->translationAnalysis->romanizationShouldFail = true;
@@ -223,11 +488,20 @@ class SubtitleJobApiTest extends TestCase
 ",
         );
 
-        $this
+        $response = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'nonlatin001']))
-            ->assertStatus(502)
-            ->assertJsonPath('error.code', 'enrichment_failed');
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+
+        $this->runQueuedSubtitleJobs();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('message', 'Subtitle enrichment failed.');
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
@@ -240,13 +514,26 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_transcript_first_generation_fails_when_tokenization_fails(): void
     {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $this->translationAnalysis->tokenizationShouldFail = true;
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+
+        $this->runQueuedSubtitleJobs();
 
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']))
-            ->assertStatus(502)
-            ->assertJsonPath('error.code', 'enrichment_failed');
+            ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('message', 'Subtitle enrichment failed.');
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertDatabaseHas('subtitle_jobs', [
@@ -258,16 +545,29 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_transcript_first_generation_fails_when_translation_fails(): void
     {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $this->translationAnalysis->translationShouldFail = true;
 
-        $this
+        $response = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'trnfail0001',
                 'includeTranslation' => true,
             ]))
-            ->assertStatus(502)
-            ->assertJsonPath('error.code', 'enrichment_failed');
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+
+        $this->runQueuedSubtitleJobs();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('message', 'Subtitle enrichment failed.');
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
@@ -280,6 +580,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_japanese_romanization_failure_fails_generation(): void
     {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $sourceText = $this->japaneseSentence();
 
         $this->translationAnalysis->romanizationShouldFail = true;
@@ -294,14 +598,23 @@ class SubtitleJobApiTest extends TestCase
 ",
         );
 
-        $this
+        $response = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0001',
             ]))
-            ->assertStatus(502)
-            ->assertJsonPath('error.code', 'enrichment_failed');
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+
+        $this->runQueuedSubtitleJobs();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('message', 'Subtitle enrichment failed.');
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
@@ -314,6 +627,10 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_japanese_no_space_romanization_failure_fails_generation(): void
     {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $sourceText = $this->japaneseNoSpaceSentence();
 
         $this->translationAnalysis->romanizationShouldFail = true;
@@ -328,14 +645,23 @@ class SubtitleJobApiTest extends TestCase
 ",
         );
 
-        $this
+        $response = $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0002',
             ]))
-            ->assertStatus(502)
-            ->assertJsonPath('error.code', 'enrichment_failed');
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+
+        $this->runQueuedSubtitleJobs();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('message', 'Subtitle enrichment failed.');
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
@@ -721,6 +1047,7 @@ class SubtitleJobApiTest extends TestCase
             'status' => 'failed',
             'stage' => 'enriching',
             'progress_percent' => 75,
+            'error_code' => 'rate_limited',
             'error_message' => 'Subtitle enrichment is temporarily rate limited.',
             'updated_at' => now()->subMinutes(2),
         ]);
@@ -753,8 +1080,52 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.2.status', 'failed')
             ->assertJsonPath('jobs.2.stage', 'enriching')
             ->assertJsonPath('jobs.2.progressPercent', 75)
+            ->assertJsonPath('jobs.2.errorCode', 'rate_limited')
             ->assertJsonPath('jobs.2.message', 'Subtitle enrichment is temporarily rate limited.')
             ->assertJsonPath('jobs.2.jobId', $failedJob->public_id);
+    }
+
+    public function test_subtitle_job_status_polling_uses_separate_rate_limit_from_generation_requests(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.rate_limits.per_install_per_minute' => 1,
+            'subtitles.rate_limits.per_ip_per_minute' => 100,
+            'subtitles.rate_limits.status_per_install_per_minute' => 2,
+            'subtitles.rate_limits.status_per_ip_per_minute' => 100,
+        ]);
+        Queue::fake();
+
+        $installId = $this->installId('r');
+        $job = SubtitleJob::factory()->create([
+            'install_id' => $installId,
+            'youtube_video_id' => 'pollrate001',
+            'youtube_url' => 'https://www.youtube.com/watch?v=pollrate001',
+        ]);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ratelimit01']))
+            ->assertAccepted();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id);
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $installId)
+            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertStatus(429)
+            ->assertJsonPath('error.code', 'rate_limited');
     }
 
     public function test_learning_token_enrichment_updates_track_and_skips_duplicate_provider_calls(): void
@@ -857,13 +1228,26 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_full_enrichment_failure_returns_stable_error_and_status(): void
     {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
         $this->translationAnalysis->shouldFail = true;
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['enrichmentMode' => 'full']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+
+        $this->runQueuedSubtitleJobs();
 
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['enrichmentMode' => 'full']))
-            ->assertStatus(502)
-            ->assertJsonPath('error.code', 'enrichment_failed');
+            ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
+            ->assertOk()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('message', 'Subtitle enrichment failed.');
 
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'dQw4w9WgXcQ',
@@ -972,6 +1356,9 @@ class SubtitleJobApiTest extends TestCase
             'youtubeVideoId',
             'sourceLanguage',
             'targetLanguage',
+            'status',
+            'stage',
+            'progressPercent',
             'createdAt',
             'updatedAt',
             'expiresAt',
@@ -999,6 +1386,69 @@ class SubtitleJobApiTest extends TestCase
     private function sampleWebVtt(): string
     {
         return "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n";
+    }
+
+    private function runningSubtitleJob(string $stage): SubtitleJob
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+
+        return SubtitleJob::factory()->create([
+            'status' => 'running',
+            'stage' => $stage,
+            'progress_percent' => 65,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sampleCue(): array
+    {
+        return [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'startMs' => 500,
+            'endMs' => 2100,
+            'sourceText' => 'first transcript segment',
+            'translatedText' => 'first transcript segment',
+            'tokens' => [
+                ['index' => 0, 'text' => 'first', 'normalizedText' => 'first'],
+            ],
+        ];
+    }
+
+    private function artifacts(): SubtitleJobArtifactStore
+    {
+        return app(SubtitleJobArtifactStore::class);
+    }
+
+    private function dispatchCancelledBatch(object $job): void
+    {
+        $batch = Bus::batch([$job])
+            ->onConnection(SubtitleGenerationPipeline::connection())
+            ->onQueue(SubtitleGenerationPipeline::queue())
+            ->dispatch();
+
+        $batch->cancel();
+
+        $this->runQueuedSubtitleJobs();
+    }
+
+    private function runQueuedSubtitleJobs(): void
+    {
+        for ($attempt = 0; $attempt < 50 && DB::table('jobs')->exists(); $attempt++) {
+            Artisan::call('queue:work', [
+                '--queue' => SubtitleGenerationPipeline::queue().',default',
+                '--once' => true,
+                '--tries' => 1,
+                '--sleep' => 0,
+            ]);
+        }
+
+        $this->assertSame(0, DB::table('jobs')->count(), Artisan::output());
     }
 }
 class RecordingYouTubeAudioSource extends YouTubeAudioSource
@@ -1095,6 +1545,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public bool $translationShouldFail = false;
 
+    public ?\Closure $beforeTokenizationResult = null;
+
     /**
      * @var array<int, string>
      */
@@ -1106,9 +1558,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     public array $targetLanguages = [];
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
+     * @param  array<int, array<string, mixed>>  $batch
+     * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenize(array $cues, string $sourceLanguage): CueEnrichmentResult
+    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
@@ -1117,24 +1570,30 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
             throw SubtitleProcessingException::enrichmentFailed();
         }
 
-        return new CueEnrichmentResult(
+        $result = new CueEnrichmentResult(
             array_map(
                 fn (array $cue): array => [
                     ...$cue,
                     'translatedText' => (string) $cue['sourceText'],
                     'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
                 ],
-                $cues,
+                $batch,
             ),
             'unknown',
         );
+
+        if ($this->beforeTokenizationResult !== null) {
+            ($this->beforeTokenizationResult)();
+        }
+
+        return $result;
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
+     * @param  array<int, array<string, mixed>>  $batch
      */
-    public function enrich(
-        array $cues,
+    public function enrichCueBatch(
+        array $batch,
         string $sourceLanguage,
         string $targetLanguage,
         bool $includeRomanization = true,
@@ -1171,17 +1630,21 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
                     return $enrichedCue;
                 },
-                $cues,
+                $batch,
             ),
             'unknown',
         );
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
+     * @param  array<int, array<string, mixed>>  $batch
      */
-    public function translate(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
-    {
+    public function translateCueBatch(
+        array $batch,
+        string $sourceLanguage,
+        string $targetLanguage,
+        array $allCues = [],
+    ): CueEnrichmentResult {
         $this->translationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
@@ -1196,16 +1659,16 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                     ...$cue,
                     'translatedText' => 'Translated '.$cue['sourceText'],
                 ],
-                $cues,
+                $batch,
             ),
             'unknown',
         );
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
+     * @param  array<int, array<string, mixed>>  $batch
      */
-    public function romanize(array $cues, string $sourceLanguage): CueEnrichmentResult
+    public function romanizeCueBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
     {
         $this->romanizationCalls++;
 
@@ -1227,7 +1690,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                         $cue['tokens'],
                     ),
                 ],
-                $cues,
+                $batch,
             ),
             'unknown',
         );

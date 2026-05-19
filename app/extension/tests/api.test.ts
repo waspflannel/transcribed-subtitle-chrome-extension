@@ -19,6 +19,9 @@ describe('SubtitleApiClient', () => {
       sourceLanguage: 'auto',
       detectedSourceLanguage: 'spa',
       targetLanguage: 'fra',
+      status: 'completed',
+      stage: 'finalizing',
+      progressPercent: 100,
       track: trackResponse(),
       createdAt: '2026-04-30T00:00:00Z',
       updatedAt: '2026-04-30T00:00:00Z',
@@ -50,14 +53,43 @@ describe('SubtitleApiClient', () => {
     );
   });
 
+  it('polls one subtitle job by id', async () => {
+    const jobResponse: JobResponse = {
+      jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+      youtubeVideoId: 'dQw4w9WgXcQ',
+      sourceLanguage: 'auto',
+      targetLanguage: 'fra',
+      status: 'running',
+      stage: 'tokenizing',
+      progressPercent: 65,
+      createdAt: '2026-04-30T00:00:00Z',
+      updatedAt: '2026-04-30T00:01:00Z',
+    };
+    const fetchMock = vi.fn(async () => jsonResponse(jobResponse, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(client.getSubtitleJob(installId, jobResponse.jobId)).resolves.toEqual(jobResponse);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `http://localhost:8000/v1/subtitle-jobs/${jobResponse.jobId}`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          'X-Extension-Install-Id': installId,
+        }),
+      }),
+    );
+  });
+
   it('lists backend job history from the shared jobs endpoint', async () => {
     const history: SubtitleJobHistoryResponse = {
       jobs: [
         {
+          jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3003',
           youtubeVideoId: 'dQw4w9WgXcQ',
           youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           status: 'running',
           startedAt: '2026-05-11T00:00:00Z',
+          lastUpdatedAt: '2026-05-11T00:01:00Z',
           stage: 'transcribing',
           progressPercent: 45,
           sourceLanguage: 'auto',
@@ -176,6 +208,9 @@ describe('SubtitleApiClient', () => {
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('rate_limited', 'Too many requests.', 429)),
     ).toBe('Subtitle generation is temporarily rate limited. Wait a minute and try again.');
+    expect(
+      publicSubtitleErrorMessage(new SubtitleApiError('queue_unavailable', 'Queue busy.', 503)),
+    ).toBe('The subtitle queue database is busy. Wait for the current generation to finish, then try again.');
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('audio_unavailable', 'Private video.', 422)),
     ).toBe('This video is not available for subtitle generation. Use a public non-live YouTube video.');

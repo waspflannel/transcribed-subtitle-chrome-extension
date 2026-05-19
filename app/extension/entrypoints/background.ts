@@ -2,7 +2,7 @@ import { browser, type Browser } from 'wxt/browser';
 
 import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from '../utils/api';
 import { clearRememberedTracks, getRememberedTrack, rememberActiveTrack } from '../utils/active-tracks';
-import type { SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
+import type { JobResponse, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
@@ -22,9 +22,8 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
-const ESTIMATED_PROGRESS_INTERVAL_MS = 4000;
+const JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
-type LoadingStage = NonNullable<SubtitleJobHistoryItem['stage']>;
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -150,14 +149,6 @@ async function generateSubtitlesForTab(
   pageStatus: SupportedYoutubePageInfo,
   settings: ExtensionSettings,
 ): Promise<void> {
-  const stopEstimatedProgress = startEstimatedProgress(
-    tabId,
-    pageStatus,
-    settings.fullTrackEnrichment,
-    settings.showRomanization,
-    settings.showTranslation,
-  );
-
   try {
     console.info('extension.subtitle_generation_started', {
       youtubeVideoId: pageStatus.videoId,
@@ -169,7 +160,7 @@ async function generateSubtitlesForTab(
     });
 
     const installId = await getOrCreateInstallId();
-    const job = await subtitleApi.createSubtitleJob(installId, {
+    const initialJob = await subtitleApi.createSubtitleJob(installId, {
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
       sourceLanguage: settings.sourceLanguage,
@@ -178,6 +169,34 @@ async function generateSubtitlesForTab(
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
+    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, initialJob);
+
+    if (job === null) {
+      return;
+    }
+
+    if (job.status === 'failed') {
+      console.warn('extension.subtitle_generation_failed', {
+        youtubeVideoId: pageStatus.videoId,
+        jobId: job.jobId,
+        backendMessage: job.message,
+      });
+
+      if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+        await publishSubtitleState(tabId, {
+          type: 'error',
+          jobId: job.jobId,
+          youtubeVideoId: pageStatus.videoId,
+          message: publicSubtitleJobFailureMessage(job),
+        });
+      }
+
+      return;
+    }
+
+    if (!job.track) {
+      throw new Error('Completed subtitle job did not include a track.');
+    }
 
     if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
       await publishSubtitleState(tabId, {
@@ -205,9 +224,53 @@ async function generateSubtitlesForTab(
         message: publicSubtitleErrorMessage(error),
       });
     }
-  } finally {
-    stopEstimatedProgress();
   }
+}
+
+async function waitForCompletedSubtitleJob(
+  tabId: number,
+  pageStatus: SupportedYoutubePageInfo,
+  installId: string,
+  initialJob: JobResponse,
+): Promise<JobResponse | null> {
+  let job = initialJob;
+
+  while (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+    if (job.status === 'completed' || job.status === 'failed') {
+      return job;
+    }
+
+    await publishSubtitleState(tabId, {
+      type: 'loading',
+      jobId: job.jobId,
+      youtubeVideoId: pageStatus.videoId,
+      youtubeUrl: pageStatus.url,
+      message: loadingMessageForStage(job.stage),
+      stage: job.stage,
+      progressPercent: job.progressPercent,
+      startedAt: job.createdAt,
+      lastUpdatedAt: job.updatedAt,
+    });
+
+    await delay(JOB_POLL_INTERVAL_MS);
+    job = await subtitleApi.getSubtitleJob(installId, job.jobId);
+  }
+
+  return null;
+}
+
+function publicSubtitleJobFailureMessage(job: Pick<JobResponse | SubtitleJobHistoryItem, 'errorCode' | 'message'>): string {
+  if (!job.errorCode || !job.message) {
+    throw new Error('Failed subtitle job is missing error details.');
+  }
+
+  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, milliseconds);
+  });
 }
 
 async function enrichLearningTokenFromContent(
@@ -366,13 +429,15 @@ function stateWithBackendProgress(
   if (job.status === 'failed') {
     return {
       type: 'error',
+      jobId: job.jobId,
       youtubeVideoId: job.youtubeVideoId,
-      message: job.message ?? 'Generation did not complete.',
+      message: publicSubtitleJobFailureMessage(job),
     };
   }
 
   return {
     type: 'loading',
+    jobId: job.jobId,
     youtubeVideoId: job.youtubeVideoId,
     youtubeUrl: job.youtubeUrl,
     message: loadingMessageForStage(job.stage),
@@ -410,138 +475,6 @@ function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string 
     default:
       return 'Preparing request...';
   }
-}
-
-function startEstimatedProgress(
-  tabId: number,
-  pageStatus: SupportedYoutubePageInfo,
-  fullTrackEnrichment: boolean,
-  includeRomanization: boolean,
-  includeTranslation: boolean,
-): () => void {
-  const startedAtMs = Date.now();
-  let publishing = false;
-
-  const timerId = globalThis.setInterval(() => {
-    const currentState = tabSubtitleStates.get(tabId);
-
-    if (currentState?.type !== 'loading' || currentState.youtubeVideoId !== pageStatus.videoId) {
-      globalThis.clearInterval(timerId);
-
-      return;
-    }
-
-    const estimate = estimatedGenerationProgress(
-      Date.now() - startedAtMs,
-      fullTrackEnrichment,
-      includeRomanization,
-      includeTranslation,
-    );
-
-    if (
-      publishing ||
-      (currentState.stage === estimate.stage && (currentState.progressPercent ?? 0) >= estimate.progressPercent)
-    ) {
-      return;
-    }
-
-    publishing = true;
-
-    void publishSubtitleState(tabId, {
-      ...currentState,
-      message: loadingMessageForStage(estimate.stage),
-      stage: estimate.stage,
-      progressPercent: Math.max(currentState.progressPercent ?? 0, estimate.progressPercent),
-      lastUpdatedAt: new Date().toISOString(),
-    }).finally(() => {
-      publishing = false;
-    });
-  }, ESTIMATED_PROGRESS_INTERVAL_MS);
-
-  return () => globalThis.clearInterval(timerId);
-}
-
-function estimatedGenerationProgress(
-  elapsedMs: number,
-  fullTrackEnrichment: boolean,
-  includeRomanization: boolean,
-  includeTranslation: boolean,
-): { stage: LoadingStage; progressPercent: number } {
-  const elapsedSeconds = elapsedMs / 1000;
-
-  if (elapsedSeconds < 4) {
-    return { stage: 'preparing', progressPercent: 5 };
-  }
-
-  if (elapsedSeconds < 14) {
-    return {
-      stage: 'acquiring-audio',
-      progressPercent: interpolateProgress(elapsedSeconds, 4, 14, 12, 25),
-    };
-  }
-
-  if (elapsedSeconds < 45) {
-    return {
-      stage: 'transcribing',
-      progressPercent: interpolateProgress(elapsedSeconds, 14, 45, 25, 65),
-    };
-  }
-
-  if (elapsedSeconds < 70) {
-    return {
-      stage: 'tokenizing',
-      progressPercent: interpolateProgress(elapsedSeconds, 45, 70, 65, 78),
-    };
-  }
-
-  if (includeRomanization && elapsedSeconds < 100) {
-    return {
-      stage: 'romanizing',
-      progressPercent: interpolateProgress(elapsedSeconds, 70, 100, 78, 85),
-    };
-  }
-
-  if (includeTranslation && elapsedSeconds < 130) {
-    return {
-      stage: 'translating',
-      progressPercent: interpolateProgress(elapsedSeconds, includeRomanization ? 100 : 70, 130, 85, 90),
-    };
-  }
-
-  const enrichmentEndSeconds = fullTrackEnrichment
-    ? includeTranslation
-      ? 190
-      : 180
-    : includeTranslation
-      ? 140
-      : 120;
-
-  if (elapsedSeconds < enrichmentEndSeconds) {
-    return {
-      stage: fullTrackEnrichment ? 'enriching' : 'finalizing',
-      progressPercent: interpolateProgress(
-        elapsedSeconds,
-        includeTranslation ? 130 : includeRomanization ? 100 : 70,
-        enrichmentEndSeconds,
-        includeTranslation ? 90 : 85,
-        92,
-      ),
-    };
-  }
-
-  return { stage: 'finalizing', progressPercent: 95 };
-}
-
-function interpolateProgress(
-  value: number,
-  inputMin: number,
-  inputMax: number,
-  outputMin: number,
-  outputMax: number,
-): number {
-  const ratio = Math.max(0, Math.min(1, (value - inputMin) / (inputMax - inputMin)));
-
-  return Math.round(outputMin + (outputMax - outputMin) * ratio);
 }
 
 function patchActiveTrack(track: TrackResponse, cueId: string, token: Parameters<typeof trackWithLearningToken>[2]): TrackResponse {

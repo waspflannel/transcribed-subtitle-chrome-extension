@@ -8,11 +8,12 @@ export type SubtitleState =
     }
   | {
       type: 'loading';
+      jobId?: string;
       youtubeVideoId: string;
       youtubeUrl?: string;
       message: string;
-      stage?: SubtitleJobHistoryItem['stage'];
-      progressPercent?: number;
+      stage: SubtitleJobHistoryItem['stage'];
+      progressPercent: number;
       startedAt?: string;
       lastUpdatedAt?: string;
     }
@@ -22,6 +23,7 @@ export type SubtitleState =
     }
   | {
       type: 'error';
+      jobId?: string;
       youtubeVideoId?: string;
       message: string;
     };

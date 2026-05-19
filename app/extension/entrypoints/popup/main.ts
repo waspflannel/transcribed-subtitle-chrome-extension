@@ -40,6 +40,7 @@ const installIdText = document.querySelector<HTMLParagraphElement>('[data-instal
 const statusText = document.querySelector<HTMLParagraphElement>('[data-status]')!;
 const videoText = document.querySelector<HTMLElement>('[data-video-label]')!;
 const trackText = document.querySelector<HTMLElement>('[data-track-label]')!;
+const jobText = document.querySelector<HTMLElement>('[data-job-label]')!;
 const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="refresh"]')!;
 const generateButton = document.querySelector<HTMLButtonElement>('[data-action="generate"]')!;
 const clearStateButton = document.querySelector<HTMLButtonElement>('[data-action="clear-state"]')!;
@@ -229,6 +230,7 @@ function showPopupState(state: PopupState): void {
   statusText.className = `status ${statusClass(subtitleState.type, supported)}`;
   statusText.textContent = statusLabel(subtitleState.type, supported);
   videoText.textContent = pageStatus?.supported ? pageStatus.videoId : 'No supported video';
+  jobText.textContent = jobIdForState(subtitleState) ?? 'No job';
   showTrackState(state);
   renderJobHistory(state);
   currentSettings = settings;
@@ -375,6 +377,7 @@ function renderJobHistory(state: PopupState): void {
   jobsList.innerHTML = state.jobHistory
     .map((job) => {
       const progress = generationProgress(job);
+      const jobId = job.jobId ?? null;
       const meta = [
         languageRouteLabel(job),
         job.detectedSourceLanguage ? `Detected ${languageLabel(job.detectedSourceLanguage)}` : null,
@@ -391,6 +394,7 @@ function renderJobHistory(state: PopupState): void {
             <span class="job-title">${escapeHtml(job.youtubeVideoId)}</span>
             <span class="job-badge ${job.status}">${escapeHtml(job.status)}</span>
           </header>
+          ${jobId ? `<p class="job-id">Job ID ${escapeHtml(jobId)}</p>` : ''}
           <div class="job-meta">${meta}</div>
           <p class="muted">${escapeHtml(job.status === 'running' ? progress.stageLabel : job.message ?? 'Track ready')}</p>
           <div class="job-actions">
@@ -426,6 +430,7 @@ function showError(error: unknown): void {
     typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unable to load extension state';
   videoText.textContent = 'No supported video';
   trackText.textContent = 'No track';
+  jobText.textContent = 'No job';
   jobsList.innerHTML = '<p class="muted">Unable to load jobs.</p>';
   progressContainer.hidden = true;
   renderLanguagePickers(null);
@@ -457,6 +462,20 @@ function statusLabel(subtitleStateType: PopupState['subtitleState']['type'], sup
   }
 
   return supported ? 'Ready to generate' : 'Unsupported page';
+}
+
+function jobIdForState(subtitleState: PopupState['subtitleState']): string | null {
+  switch (subtitleState.type) {
+    case 'loading':
+    case 'error':
+      return subtitleState.jobId ?? null;
+
+    case 'ready':
+      return subtitleState.track.jobId;
+
+    case 'no-track':
+      return null;
+  }
 }
 
 function setSettingsDisabled(disabled: boolean): void {

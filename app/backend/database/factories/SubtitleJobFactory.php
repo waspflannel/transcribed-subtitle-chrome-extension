@@ -21,6 +21,7 @@ class SubtitleJobFactory extends Factory
 
         return [
             'public_id' => (string) Str::uuid(),
+            'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $videoId,
             'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,
             'video_duration_seconds' => 213,
@@ -28,6 +29,9 @@ class SubtitleJobFactory extends Factory
             'detected_source_language' => null,
             'target_language' => 'eng',
             'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,
+            'enrichment_mode' => 'on_demand',
+            'include_romanization' => true,
+            'include_translation' => false,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,

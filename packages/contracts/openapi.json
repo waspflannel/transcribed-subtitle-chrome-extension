@@ -60,7 +60,17 @@
         },
         "responses": {
           "200": {
-            "description": "Subtitle generation completed.",
+            "description": "Compatible subtitle track was already completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/job-response.schema.json"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Subtitle generation is queued, running, or has not yet produced a completed track.",
             "content": {
               "application/json": {
                 "schema": {
@@ -71,6 +81,47 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/subtitle-jobs/{jobId}": {
+      "get": {
+        "operationId": "getSubtitleJob",
+        "summary": "Poll one subtitle job until it completes or fails.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current subtitle job status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/job-response.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"

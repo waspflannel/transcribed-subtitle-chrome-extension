@@ -35,6 +35,12 @@ export class SubtitleApiClient {
     });
   }
 
+  public async getSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
+    return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
+      method: 'GET',
+    });
+  }
+
   public async listSubtitleJobs(installId: string): Promise<SubtitleJobHistoryResponse> {
     return this.request<SubtitleJobHistoryResponse>('subtitle-jobs', installId, {
       method: 'GET',
@@ -150,6 +156,9 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
 
     case 'rate_limited':
       return 'Subtitle generation is temporarily rate limited. Wait a minute and try again.';
+
+    case 'queue_unavailable':
+      return 'The subtitle queue database is busy. Wait for the current generation to finish, then try again.';
 
     case 'not_found':
     case 'expired':

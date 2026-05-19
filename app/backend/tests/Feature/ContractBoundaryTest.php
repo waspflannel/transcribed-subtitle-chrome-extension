@@ -35,7 +35,7 @@ class ContractBoundaryTest extends TestCase
 
         $this->assertSame('3.1.0', $openApi['openapi']);
         $this->assertArrayHasKey('/v1/subtitle-jobs', $openApi['paths']);
-        $this->assertArrayNotHasKey('/v1/subtitle-jobs/{jobId}', $openApi['paths']);
+        $this->assertArrayHasKey('/v1/subtitle-jobs/{jobId}', $openApi['paths']);
         $this->assertArrayNotHasKey('/v1/tracks/lookup', $openApi['paths']);
     }
 }

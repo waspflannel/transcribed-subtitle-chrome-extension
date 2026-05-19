@@ -2,35 +2,30 @@
 
 namespace App\Services\Subtitles;
 
-use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
-use App\Services\Audio\TemporaryAudioFile;
-use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Languages\LanguageCatalog;
-use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
-use App\Services\TranslationAnalysis\CueEnrichmentResult;
-use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Throwable;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION_ON_DEMAND = 'scribe-v2-tokenizer-v7-on-demand';
+    public const PROCESSING_VERSION_ON_DEMAND = 'scribe-v2-tokenizer-v8-async-on-demand';
 
-    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED = 'scribe-v2-tokenizer-v7-on-demand-romanized';
+    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED = 'scribe-v2-tokenizer-v8-async-on-demand-romanized';
 
-    public const PROCESSING_VERSION_ON_DEMAND_TRANSLATED = 'scribe-v2-tokenizer-v7-on-demand-translated';
+    public const PROCESSING_VERSION_ON_DEMAND_TRANSLATED = 'scribe-v2-tokenizer-v8-async-on-demand-translated';
 
-    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v7-on-demand-romanized-translated';
+    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v8-async-on-demand-romanized-translated';
 
-    public const PROCESSING_VERSION_FULL = 'scribe-v2-tokenizer-v7-full';
+    public const PROCESSING_VERSION_FULL = 'scribe-v2-tokenizer-v8-async-full';
 
-    public const PROCESSING_VERSION_FULL_ROMANIZED = 'scribe-v2-tokenizer-v7-full-romanized';
+    public const PROCESSING_VERSION_FULL_ROMANIZED = 'scribe-v2-tokenizer-v8-async-full-romanized';
 
-    public const PROCESSING_VERSION_FULL_TRANSLATED = 'scribe-v2-tokenizer-v7-full-translated';
+    public const PROCESSING_VERSION_FULL_TRANSLATED = 'scribe-v2-tokenizer-v8-async-full-translated';
 
-    public const PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v7-full-romanized-translated';
+    public const PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v8-async-full-romanized-translated';
 
     public const CURRENT_PROCESSING_VERSIONS = [
         self::PROCESSING_VERSION_ON_DEMAND,
@@ -43,12 +38,15 @@ class SubtitleJobService
         self::PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED,
     ];
 
+    private const DISPATCH_STATE_REUSED = 'reused';
+
+    private const DISPATCH_STATE_CREATED = 'created';
+
+    private const DISPATCH_STATE_RESET = 'reset';
+
     public function __construct(
-        private readonly YouTubeAudioSource $audioSource,
-        private readonly ElevenLabsScribeTranscriptionService $transcriptionService,
-        private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
-        private readonly TimestampedSubtitleTrackGenerator $tracks,
         private readonly SubtitleWorkflowLogger $logger,
+        private readonly SubtitleRuntimeTracer $tracer,
     ) {}
 
     /**
@@ -60,177 +58,130 @@ class SubtitleJobService
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
+        $dispatchState = self::DISPATCH_STATE_REUSED;
 
-        $job = DB::transaction(function () use ($payload, $installId, $requestIp, $processingVersion): SubtitleJob {
-            $job = SubtitleJob::query()
-                ->with('track')
-                ->where('youtube_video_id', $payload['youtubeVideoId'])
-                ->where('source_language', $payload['sourceLanguage'])
-                ->where('target_language', $payload['targetLanguage'])
-                ->where('processing_version', $processingVersion)
-                ->where('install_id', $installId)
-                ->first();
+        try {
+            $job = DB::transaction(function () use (
+                $payload,
+                $installId,
+                $requestIp,
+                $processingVersion,
+                $enrichmentMode,
+                $includeRomanization,
+                $includeTranslation,
+                &$dispatchState,
+            ): SubtitleJob {
+                $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
+                    ->with('track')
+                    ->lockForUpdate()
+                    ->first();
 
-            if ($job) {
-                if ($this->hasReadyTrack($job)) {
-                    return $job;
+                if ($job) {
+                    if ($this->hasReadyTrack($job)) {
+                        $dispatchState = self::DISPATCH_STATE_REUSED;
+
+                        return $job;
+                    }
+
+                    if ($job->status === 'running' && ! $this->isStalePreparingJob($job)) {
+                        $dispatchState = self::DISPATCH_STATE_REUSED;
+
+                        return $job;
+                    }
+
+                    $this->logger->incompleteJobReused($job);
+                    $this->resetJob(
+                        job: $job,
+                        payload: $payload,
+                        installId: $installId,
+                        requestIp: $requestIp,
+                        enrichmentMode: $enrichmentMode,
+                        includeRomanization: $includeRomanization,
+                        includeTranslation: $includeTranslation,
+                    );
+                    $dispatchState = self::DISPATCH_STATE_RESET;
+
+                    return $job->refresh();
                 }
 
-                $this->logger->incompleteJobReused($job);
-                $this->resetJob($job, $payload, $installId, $requestIp);
-            } else {
-                $job = $this->createJob($payload, $installId, $requestIp, $processingVersion);
+                $job = $this->createJob(
+                    payload: $payload,
+                    installId: $installId,
+                    requestIp: $requestIp,
+                    processingVersion: $processingVersion,
+                    enrichmentMode: $enrichmentMode,
+                    includeRomanization: $includeRomanization,
+                    includeTranslation: $includeTranslation,
+                );
                 $this->logger->jobCreated($job);
+                $dispatchState = self::DISPATCH_STATE_CREATED;
+
+                return $job;
+            });
+        } catch (QueryException $exception) {
+            if (! $this->isUniqueConstraintViolation($exception)) {
+                throw $exception;
             }
 
-            return $job->refresh();
-        });
+            $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
+                ->with('track')
+                ->first();
 
-        if ($this->hasReadyTrack($job->load('track'))) {
+            if ($job === null) {
+                throw $exception;
+            }
+
+            $dispatchState = self::DISPATCH_STATE_REUSED;
+        }
+
+        $job = $job->refresh()->load('track');
+
+        if ($this->hasReadyTrack($job)) {
             $this->logger->trackReused($job);
 
             return $job;
         }
 
-        return $this->generateTrack($job, $payload, $enrichmentMode, $includeRomanization, $includeTranslation);
+        if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
+            ProcessSubtitleJob::dispatch($job->id, $job->run_id)
+                ->onConnection(SubtitleGenerationPipeline::connection())
+                ->onQueue(SubtitleGenerationPipeline::queue());
+
+            $job = $job->refresh()->load('track');
+        }
+
+        return $job;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return Builder<SubtitleJob>
+     */
+    private function compatibleJobQuery(array $payload, string $installId, string $processingVersion): Builder
+    {
+        return SubtitleJob::query()
+            ->where('youtube_video_id', $payload['youtubeVideoId'])
+            ->where('source_language', $payload['sourceLanguage'])
+            ->where('target_language', $payload['targetLanguage'])
+            ->where('processing_version', $processingVersion)
+            ->where('install_id', $installId);
     }
 
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function generateTrack(
-        SubtitleJob $job,
+    private function createJob(
         array $payload,
+        string $installId,
+        ?string $requestIp,
+        string $processingVersion,
         string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
     ): SubtitleJob {
-        $this->extendProcessingTimeLimit();
-
-        $audio = null;
-        $stage = 'preparing';
-
-        try {
-            $stage = 'acquiring-audio';
-            $this->markJobRunning($job, $stage, 20);
-            $this->logger->audioAcquisitionStarted($job);
-
-            $audio = $this->audioSource->acquire(
-                youtubeUrl: $payload['youtubeUrl'],
-                requestDurationSeconds: $payload['videoDurationSeconds'] ?? null,
-            );
-
-            $this->logger->audioAcquisitionCompleted($job, $audio);
-
-            $stage = 'transcribing';
-            $this->markJobRunning($job, $stage, 45);
-            $this->logger->transcriptionStarted($job);
-
-            $transcript = $this->transcriptionService->transcribe(
-                audio: $audio,
-                sourceLanguage: $payload['sourceLanguage'],
-            );
-
-            $this->logger->transcriptionCompleted($job, $transcript, $audio);
-
-            $this->recordDetectedSourceLanguage($job, $payload['sourceLanguage'], $transcript->language);
-            $job = $job->refresh();
-            $draftCues = $this->tracks->draftCues($transcript);
-
-            $stage = 'tokenizing';
-            $this->markJobRunning($job, $stage, 65);
-            $this->logger->tokenizationStarted($job, count($draftCues));
-
-            $enrichment = $this->translationAnalysis->tokenize(
-                cues: $draftCues,
-                sourceLanguage: $this->effectiveSourceLanguage($job),
-            );
-
-            $this->logger->tokenizationCompleted($job, $enrichment);
-
-            if ($includeRomanization && $this->shouldRomanizeTranscript($enrichment->cues)) {
-                $stage = 'romanizing';
-                $this->markJobRunning($job, $stage, 78);
-                $this->logger->romanizationStarted($job, count($enrichment->cues));
-
-                $enrichment = $this->translationAnalysis->romanize(
-                    cues: $enrichment->cues,
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
-                );
-
-                $this->logger->romanizationCompleted($job, $enrichment);
-            }
-
-            if ($includeTranslation && ! $this->isSameLanguageGeneration($job)) {
-                $stage = 'translating';
-                $this->markJobRunning($job, $stage, 85);
-                $this->logger->translationStarted($job, count($enrichment->cues));
-
-                $translatedEnrichment = $this->translationAnalysis->translate(
-                    cues: $enrichment->cues,
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
-                    targetLanguage: $job->target_language,
-                );
-
-                $enrichment = new CueEnrichmentResult($translatedEnrichment->cues, $enrichment->sourceDialect);
-                $this->logger->translationCompleted($job, $enrichment);
-            }
-
-            if ($enrichmentMode === 'full' && ! $this->isSameLanguageGeneration($job)) {
-                $stage = 'enriching';
-                $this->markJobRunning($job, $stage, 90);
-                $this->logger->enrichmentStarted($job, count($enrichment->cues));
-
-                $enrichment = $this->translationAnalysis->enrich(
-                    cues: $enrichment->cues,
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
-                    targetLanguage: $job->target_language,
-                    includeRomanization: $includeRomanization,
-                );
-
-                $this->logger->enrichmentCompleted($job, $enrichment);
-            }
-
-            $stage = 'finalizing';
-            $this->markJobRunning($job, $stage, 95);
-            $track = $this->tracks->generate($job->refresh(), $transcript, $enrichment);
-            $job->update([
-                'video_duration_seconds' => $audio->durationSeconds,
-                'status' => 'completed',
-                'stage' => 'finalizing',
-                'progress_percent' => 100,
-                'error_code' => null,
-                'error_message' => null,
-                'expires_at' => $track->expires_at,
-            ]);
-            $this->logger->trackGenerated($job->refresh(), $track, $audio->durationSeconds);
-
-            return $job->refresh()->load('track');
-
-        } catch (SubtitleProcessingException $exception) {
-            $this->markJobFailed($job, $stage, $exception->publicCode, $exception->getMessage());
-            $this->logger->processingFailed($job, $stage, $exception);
-
-            throw $exception;
-        } catch (Throwable $exception) {
-            $this->markJobFailed($job, $stage, 'internal_error', 'Generation did not complete.');
-            $this->logger->unexpectedFailure($job, $stage, $exception);
-
-            throw $exception;
-        } finally {
-            if ($audio instanceof TemporaryAudioFile) {
-                $audio->delete();
-            }
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function createJob(array $payload, string $installId, ?string $requestIp, string $processingVersion): SubtitleJob
-    {
-        return SubtitleJob::create([
+        $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
+            'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $payload['youtubeVideoId'],
             'youtube_url' => $payload['youtubeUrl'],
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
@@ -238,26 +189,50 @@ class SubtitleJobService
             'detected_source_language' => null,
             'target_language' => $payload['targetLanguage'],
             'processing_version' => $processingVersion,
+            'enrichment_mode' => $enrichmentMode,
+            'include_romanization' => $includeRomanization,
+            'include_translation' => $includeTranslation,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
             'install_id' => $installId,
             'request_ip' => $requestIp,
         ]);
+
+        $this->tracer->jobEvent($job, 'job.created', [
+            'stage' => 'preparing',
+            'status' => 'running',
+            'youtube_video_id' => $job->youtube_video_id,
+            'processing_version' => $job->processing_version,
+        ]);
+
+        return $job;
     }
 
     /**
      * @param  array<string, mixed>  $payload
      */
-    private function resetJob(SubtitleJob $job, array $payload, string $installId, ?string $requestIp): void
-    {
+    private function resetJob(
+        SubtitleJob $job,
+        array $payload,
+        string $installId,
+        ?string $requestIp,
+        string $enrichmentMode,
+        bool $includeRomanization,
+        bool $includeTranslation,
+    ): void {
         $job->track()->delete();
+        $job->artifacts()->delete();
         $job->unsetRelation('track');
 
-        $job->update([
+        $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
+            'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,
+            'enrichment_mode' => $enrichmentMode,
+            'include_romanization' => $includeRomanization,
+            'include_translation' => $includeTranslation,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
@@ -266,6 +241,14 @@ class SubtitleJobService
             'install_id' => $installId,
             'request_ip' => $requestIp,
             'expires_at' => null,
+            'created_at' => now(),
+        ])->save();
+
+        $this->tracer->jobEvent($job->refresh(), 'job.reset', [
+            'stage' => 'preparing',
+            'status' => 'running',
+            'youtube_video_id' => $job->youtube_video_id,
+            'processing_version' => $job->processing_version,
         ]);
     }
 
@@ -298,89 +281,27 @@ class SubtitleJobService
             : self::PROCESSING_VERSION_ON_DEMAND;
     }
 
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    private function shouldRomanizeTranscript(array $cues): bool
-    {
-        foreach ($cues as $cue) {
-            if (is_string($cue['sourceText'] ?? null) && $this->containsNonLatinLetter($cue['sourceText'])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function containsNonLatinLetter(string $text): bool
-    {
-        return preg_match('/(?!\p{Latin})\p{L}/u', $text) === 1;
-    }
-
-    private function recordDetectedSourceLanguage(SubtitleJob $job, string $requestedSourceLanguage, string $transcriptLanguage): void
-    {
-        if ($requestedSourceLanguage !== 'auto') {
-            return;
-        }
-
-        $detectedSourceLanguage = LanguageCatalog::normalizeCode($transcriptLanguage);
-
-        if ($detectedSourceLanguage === null) {
-            throw SubtitleProcessingException::transcriptionFailed(
-                'Transcription provider did not return a supported detected language.',
-                [
-                    'reason' => 'unsupported_detected_source_language',
-                    'detected_source_language' => $transcriptLanguage,
-                ],
-            );
-        }
-
-        $job->update(['detected_source_language' => $detectedSourceLanguage]);
-    }
-
-    private function effectiveSourceLanguage(SubtitleJob $job): string
-    {
-        return $job->detected_source_language ?: $job->source_language;
-    }
-
-    private function isSameLanguageGeneration(SubtitleJob $job): bool
-    {
-        return $this->effectiveSourceLanguage($job) === $job->target_language;
-    }
-
-    private function markJobRunning(SubtitleJob $job, string $stage, int $progressPercent): void
-    {
-        $job->update([
-            'status' => 'running',
-            'stage' => $stage,
-            'progress_percent' => $progressPercent,
-            'error_code' => null,
-            'error_message' => null,
-        ]);
-    }
-
-    private function markJobFailed(SubtitleJob $job, string $stage, string $errorCode, string $errorMessage): void
-    {
-        $job->update([
-            'status' => 'failed',
-            'stage' => $stage,
-            'error_code' => $errorCode,
-            'error_message' => $errorMessage,
-        ]);
-    }
-
     private function hasReadyTrack(SubtitleJob $job): bool
     {
         return $job->track !== null
             && ! $job->track->isExpired();
     }
 
-    private function extendProcessingTimeLimit(): void
+    private function isStalePreparingJob(SubtitleJob $job): bool
     {
-        if (! function_exists('set_time_limit')) {
-            return;
+        if ($job->stage !== 'preparing') {
+            return false;
         }
 
-        @set_time_limit((int) config('subtitles.processing_timeout_seconds', 0));
+        $seconds = max(1, (int) config('subtitles.queue.stale_preparing_seconds', 60));
+
+        return $job->updated_at->lte(now()->subSeconds($seconds));
+    }
+
+    private function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $sqlState = $exception->errorInfo[0] ?? null;
+
+        return in_array($sqlState, ['23000', '23505'], true);
     }
 }

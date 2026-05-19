@@ -68,6 +68,8 @@ describe('renderOverlayContent', () => {
         type: 'loading',
         youtubeVideoId: 'dQw4w9WgXcQ',
         message: 'Generating subtitles...',
+        stage: 'transcribing',
+        progressPercent: 45,
       },
       activeCue: null,
     });

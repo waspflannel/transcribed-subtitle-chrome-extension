@@ -159,6 +159,53 @@ class SubtitleWorkflowLoggerTest extends TestCase
         );
     }
 
+    public function test_queue_and_stage_timing_logs_stay_sanitized(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+            'processing_version' => 'scribe-v2-tokenizer-v8-async-on-demand',
+        ]);
+
+        Log::shouldReceive('info')
+            ->once()
+            ->with('backend.subtitle_queue_wait_observed', Mockery::on(
+                fn (array $context): bool => $context['job_id'] === $job->public_id
+                    && $context['youtube_video_id'] === 'dQw4w9WgXcQ'
+                    && $context['stage'] === 'tokenizing'
+                    && $context['wait_ms'] === 25
+                    && $context['batch_index'] === 0
+                    && ! array_key_exists('prompt', $context)
+                    && ! array_key_exists('transcript', $context)
+                    && ! array_key_exists('tokens', $context),
+            ));
+
+        Log::shouldReceive('info')
+            ->once()
+            ->with('backend.subtitle_stage_timing', Mockery::on(
+                fn (array $context): bool => $context['job_id'] === $job->public_id
+                    && $context['stage'] === 'tokenizing'
+                    && $context['duration_ms'] === 100
+                    && $context['batch_index'] === 0
+                    && ! array_key_exists('translation', $context)
+                    && ! array_key_exists('romanization', $context),
+            ));
+
+        Log::shouldReceive('info')
+            ->once()
+            ->with('backend.subtitle_completed_track_timing', Mockery::on(
+                fn (array $context): bool => $context['job_id'] === $job->public_id
+                    && $context['youtube_video_id'] === 'dQw4w9WgXcQ'
+                    && $context['duration_ms'] === 500
+                    && $context['processing_version'] === 'scribe-v2-tokenizer-v8-async-on-demand'
+                    && ! array_key_exists('sourceText', $context)
+                    && ! array_key_exists('translatedText', $context),
+            ));
+
+        $this->logger()->queueWaitObserved($job, 'tokenizing', 25, 0);
+        $this->logger()->stageTiming($job, 'tokenizing', 100, 0);
+        $this->logger()->completedTrackTiming($job, 500);
+    }
+
     private function logger(): SubtitleWorkflowLogger
     {
         return new SubtitleWorkflowLogger;

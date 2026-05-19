@@ -1,0 +1,35 @@
+name: transcribed-subtitle-extension
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "55432:5432"
+    environment:
+      POSTGRES_DB: transcribed_subtitle_extension
+      POSTGRES_USER: subtitle
+      POSTGRES_PASSWORD: subtitle
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U subtitle -d transcribed_subtitle_extension"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "56379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+  redis-data:

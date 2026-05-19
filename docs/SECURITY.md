@@ -29,7 +29,9 @@
   - Extension-to-Laravel `/v1/*` API requests.
   - Laravel-to-YouTube audio acquisition process.
   - Laravel-to-AI-provider transcription and enrichment calls.
-  - SQLite persistence for generated tracks.
+  - Postgres persistence for generated tracks, subtitle jobs, artifacts, failed jobs, cache rows, and Laravel batch metadata in the runtime profile.
+  - Sanitized subtitle runtime trace rows for queue, batch, timing, and failure diagnostics.
+  - SQLite persistence only inside PHPUnit's isolated in-memory test profile.
 - Sensitive operations:
   - Validating supported public YouTube watch URLs and 60 minute duration limits.
   - Writing and deleting temporary audio files.
@@ -43,6 +45,7 @@
   - Private, live, playlist, malformed, or over-long YouTube inputs.
   - Provider failures returning malformed WebVTT or malformed enrichment JSON.
   - Log leakage of raw audio paths, prompts, transcripts, translations, or provider secrets.
+  - Diagnostic trace leakage of generated cue/token content or anonymous install IDs.
   - Stale generated tracks retained beyond the 30-day window.
 - Audit signals:
   - `backend.proxy_invalid_install_id`
@@ -66,6 +69,13 @@
   - `backend.enrichment_started`
   - `backend.enrichment_completed`
   - `backend.enrichment_failed`
+  - `backend.subtitle_queue_wait_observed`
+  - `backend.subtitle_stage_timing`
+  - `backend.subtitle_completed_track_timing`
+  - `backend.subtitle_trace_event`
+  - `backend.queue_job_processing`
+  - `backend.queue_job_processed`
+  - `backend.queue_job_failed`
   - `backend.track_generation_completed`
   - `backend.track_reused`
   - `backend.expired_subtitles_pruned`
@@ -93,6 +103,7 @@ Project-specific security defaults:
 - Raw audio is temporary and must be deleted after processing succeeds or fails.
 - YouTube audio acquisition writes only to controlled backend temporary storage.
 - Logs must not include secrets, raw audio, full prompts, or full transcripts by default.
+- Runtime trace rows must stay scalar and sanitized; do not persist transcripts, cue text, token text, prompts, translations, romanization, raw provider payloads, raw audio paths, provider secrets, or install IDs.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - Phase 03 `/v1/*` API routes require `X-Extension-Install-Id`, throttle by anonymous install ID and IP, and return stable public error objects.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.

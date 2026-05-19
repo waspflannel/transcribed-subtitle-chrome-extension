@@ -36,6 +36,9 @@ class AiAgentInstructionTest extends TestCase
 
         $this->assertStringContainsString('Return one translated cue for each input cue in the same order.', $instructions);
         $this->assertStringContainsString('Do not romanize, retokenize', $instructions);
+        $this->assertStringContainsString('Translate the intended subtitle meaning', $instructions);
+        $this->assertStringContainsString('colloquial, dialectal, romanized, poetic, musical, slang, or idiomatic text', $instructions);
+        $this->assertStringContainsString('Use previousCueText and nextCueText', $instructions);
         $this->assertStringContainsString('translatedText exactly equal to sourceText', $instructions);
     }
 
