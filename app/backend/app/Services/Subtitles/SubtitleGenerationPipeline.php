@@ -48,7 +48,7 @@ class SubtitleGenerationPipeline
         private readonly SubtitleRuntimeTracer $tracer,
     ) {}
 
-    public function processTranscription(int $subtitleJobId, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function processTranscription(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
         $this->extendProcessingTimeLimit();
 
@@ -110,7 +110,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function tokenizeBatch(int $subtitleJobId, int $batchIndex, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function tokenizeBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -151,7 +151,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function translateBatch(int $subtitleJobId, int $batchIndex, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function translateBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -194,7 +194,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function continueAfterAnalysis(int $subtitleJobId, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function continueAfterAnalysis(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -227,7 +227,7 @@ class SubtitleGenerationPipeline
         $this->recordStageTiming($job, 'analysis-continuation', $this->durationMs($startedAtMs));
     }
 
-    public function romanizeBatch(int $subtitleJobId, int $batchIndex, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function romanizeBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -267,7 +267,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function continueAfterRomanization(int $subtitleJobId, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function continueAfterRomanization(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -290,7 +290,7 @@ class SubtitleGenerationPipeline
         $this->recordStageTiming($job, 'romanization-continuation', $this->durationMs($startedAtMs));
     }
 
-    public function enrichBatch(int $subtitleJobId, int $batchIndex, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function enrichBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -332,7 +332,7 @@ class SubtitleGenerationPipeline
         }
     }
 
-    public function finalize(int $subtitleJobId, bool $useEnrichedCues, ?string $runId = null, ?int $queuedAtMs = null): void
+    public function finalize(int $subtitleJobId, bool $useEnrichedCues, string $runId, ?int $queuedAtMs = null): void
     {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -388,7 +388,7 @@ class SubtitleGenerationPipeline
     /**
      * @param  array<string, mixed>  $context
      */
-    public function failJob(int $subtitleJobId, string $stage, Throwable $exception, ?string $runId = null, array $context = []): void
+    public function failJob(int $subtitleJobId, string $stage, Throwable $exception, string $runId, array $context = []): void
     {
         $job = SubtitleJob::query()->find($subtitleJobId);
 
@@ -478,7 +478,7 @@ class SubtitleGenerationPipeline
         $this->dispatchBatch(
             jobs: $jobs,
             name: 'subtitle analysis '.$job->public_id,
-            failedStage: 'tokenizing',
+            stage: 'analysis',
             runId: $runId,
             then: static function (Batch $batch) use ($subtitleJobId, $runId): void {
                 ContinueSubtitleJobAfterAnalysis::dispatch($subtitleJobId, $runId)
@@ -507,7 +507,7 @@ class SubtitleGenerationPipeline
         $this->dispatchBatch(
             jobs: $jobs,
             name: 'subtitle romanization '.$job->public_id,
-            failedStage: 'romanizing',
+            stage: 'romanizing',
             runId: $runId,
             then: static function (Batch $batch) use ($subtitleJobId, $runId): void {
                 ContinueSubtitleJobAfterRomanization::dispatch($subtitleJobId, $runId)
@@ -536,7 +536,7 @@ class SubtitleGenerationPipeline
         $this->dispatchBatch(
             jobs: $jobs,
             name: 'subtitle enrichment '.$job->public_id,
-            failedStage: 'enriching',
+            stage: 'enriching',
             runId: $runId,
             then: static function (Batch $batch) use ($subtitleJobId, $runId): void {
                 FinalizeSubtitleJob::dispatch($subtitleJobId, true, $runId)
@@ -549,7 +549,7 @@ class SubtitleGenerationPipeline
     /**
      * @param  array<int, object>  $jobs
      */
-    private function dispatchBatch(array $jobs, string $name, string $failedStage, ?string $runId, callable $then): void
+    private function dispatchBatch(array $jobs, string $name, string $stage, string $runId, callable $then): void
     {
         $subtitleJobId = $jobs[0]->subtitleJobId;
         $tracer = $this->tracer;
@@ -596,10 +596,10 @@ class SubtitleGenerationPipeline
                 ]);
                 $then($batch);
             })
-            ->catch(static function (Batch $batch, Throwable $exception) use ($subtitleJobId, $failedStage, $runId, $name, $tracer): void {
+            ->catch(static function (Batch $batch, Throwable $exception) use ($subtitleJobId, $stage, $runId, $name, $tracer): void {
                 $tracer->jobEventById($subtitleJobId, 'batch.failed', [
                     'run_id' => $runId,
-                    'stage' => $failedStage,
+                    'stage' => $stage,
                     'laravel_batch_id' => $batch->id,
                     'batch_name' => $name,
                     'total_jobs' => $batch->totalJobs,
@@ -608,9 +608,6 @@ class SubtitleGenerationPipeline
                     'processed_jobs' => $batch->processedJobs(),
                     'exception' => $exception::class,
                 ], 'error');
-                app(SubtitleGenerationPipeline::class)->failJob($subtitleJobId, $failedStage, $exception, $runId, [
-                    'laravel_batch_id' => $batch->id,
-                ]);
             })
             ->finally(static function (Batch $batch) use ($subtitleJobId, $runId, $name, $tracer): void {
                 $tracer->jobEventById($subtitleJobId, $batch->cancelled() ? 'batch.cancelled' : 'batch.finalized', [
@@ -685,7 +682,7 @@ class SubtitleGenerationPipeline
         return new CueEnrichmentResult($merged, $base->sourceDialect);
     }
 
-    private function loadRunningJob(int $subtitleJobId, ?string $runId = null): ?SubtitleJob
+    private function loadRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob
     {
         $job = SubtitleJob::query()
             ->with('track')
@@ -710,7 +707,7 @@ class SubtitleGenerationPipeline
 
     private function storeCueBatchResultIfJobStillRunning(
         int $subtitleJobId,
-        ?string $runId,
+        string $runId,
         string $artifactType,
         int $batchIndex,
         CueEnrichmentResult $result,
@@ -726,16 +723,14 @@ class SubtitleGenerationPipeline
         return $job;
     }
 
-    private function claimPreparingJob(int $subtitleJobId, ?string $runId): ?SubtitleJob
+    private function claimPreparingJob(int $subtitleJobId, string $runId): ?SubtitleJob
     {
         $query = SubtitleJob::query()
             ->whereKey($subtitleJobId)
             ->where('status', 'running')
             ->where('stage', 'preparing');
 
-        if ($runId !== null) {
-            $query->where('run_id', $runId);
-        }
+        $query->where('run_id', $runId);
 
         $updated = $query->update([
             'stage' => 'acquiring-audio',
@@ -945,12 +940,12 @@ class SubtitleGenerationPipeline
         ];
     }
 
-    private function runMatches(SubtitleJob $job, ?string $runId): bool
+    private function runMatches(SubtitleJob $job, string $runId): bool
     {
-        return $runId === null || $job->run_id === null || $job->run_id === $runId;
+        return $job->run_id === $runId;
     }
 
-    private function traceStaleRunSkipped(SubtitleJob $job, ?string $queuedRunId, string $stage): void
+    private function traceStaleRunSkipped(SubtitleJob $job, string $queuedRunId, string $stage): void
     {
         $this->tracer->jobEvent($job, 'job.stale_run_skipped', [
             'stage' => $stage,

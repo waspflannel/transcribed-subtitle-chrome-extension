@@ -46,7 +46,6 @@ class SubtitleJobService
 
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
-        private readonly SubtitleQueueWorkerBootstrapper $queueWorkers,
         private readonly SubtitleRuntimeTracer $tracer,
     ) {}
 
@@ -147,7 +146,6 @@ class SubtitleJobService
             ProcessSubtitleJob::dispatch($job->id, $job->run_id)
                 ->onConnection(SubtitleGenerationPipeline::connection())
                 ->onQueue(SubtitleGenerationPipeline::queue());
-            $this->queueWorkers->startIfNeeded();
 
             $job = $job->refresh()->load('track');
         }

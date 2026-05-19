@@ -275,9 +275,13 @@ class SubtitleRuntimeTracer
             return null;
         }
 
+        if (! property_exists($command, 'runId') || ! is_string($command->runId)) {
+            return null;
+        }
+
         return [
             'subtitle_job_id' => (int) $command->subtitleJobId,
-            'run_id' => property_exists($command, 'runId') && is_string($command->runId) ? $command->runId : null,
+            'run_id' => $command->runId,
             'batch_index' => property_exists($command, 'batchIndex') && is_int($command->batchIndex) ? $command->batchIndex : null,
             'laravel_batch_id' => property_exists($command, 'batchId') && is_string($command->batchId) ? $command->batchId : null,
             'laravel_job_uuid' => is_string($payload['uuid'] ?? null) ? $payload['uuid'] : null,

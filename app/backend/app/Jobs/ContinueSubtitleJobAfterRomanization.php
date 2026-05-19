@@ -26,7 +26,7 @@ class ContinueSubtitleJobAfterRomanization implements ShouldQueue
 
     public function __construct(
         public readonly int $subtitleJobId,
-        public readonly ?string $runId = null,
+        public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());

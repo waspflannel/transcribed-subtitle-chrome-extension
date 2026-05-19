@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 #[Signature('subtitles:runtime {--json : Output machine-readable JSON}')]
-#[Description('Show subtitle queue, worker, batch, and active job runtime state.')]
+#[Description('Show subtitle queue, batch, and active job runtime state.')]
 class ShowSubtitleRuntime extends Command
 {
     /**
@@ -47,18 +47,6 @@ class ShowSubtitleRuntime extends Command
         ];
 
         $batches = $this->recentBatches();
-        $workers = SubtitleJobEvent::query()
-            ->whereIn('event', ['worker.started', 'workers.started'])
-            ->latest()
-            ->limit(10)
-            ->get()
-            ->map(fn (SubtitleJobEvent $event): array => [
-                'time' => $event->created_at->toJSON(),
-                'event' => $event->event,
-                'workerPid' => $event->worker_pid,
-                'context' => $event->context ?? [],
-            ])
-            ->values();
         $failures = SubtitleJobEvent::query()
             ->whereIn('event', ['job.failed', 'queue.failed', 'batch.failed'])
             ->latest()
@@ -79,7 +67,6 @@ class ShowSubtitleRuntime extends Command
                 'summary' => $summary,
                 'activeJobs' => $activeJobs,
                 'batches' => $batches,
-                'workers' => $workers,
                 'failures' => $failures,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
@@ -96,11 +83,6 @@ class ShowSubtitleRuntime extends Command
         ]]);
         $this->table(['job_id', 'run_id', 'video', 'stage', 'progress', 'updated'], $activeJobs->all());
         $this->table(['batch_id', 'name', 'total', 'pending', 'failed', 'finished_at'], $batches->all());
-        $this->table(['time', 'event', 'worker_pid'], $workers->map(fn (array $worker): array => [
-            $worker['time'],
-            $worker['event'],
-            $worker['workerPid'] ?? ($worker['context']['worker_pid'] ?? ''),
-        ])->all());
         $this->table(['time', 'job_id', 'event', 'stage', 'error', 'exception'], $failures->all());
 
         return self::SUCCESS;

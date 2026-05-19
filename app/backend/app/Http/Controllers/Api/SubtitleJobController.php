@@ -9,6 +9,7 @@ use App\Models\SubtitleJob;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use LogicException;
 
 class SubtitleJobController extends Controller
 {
@@ -85,7 +86,20 @@ class SubtitleJobController extends Controller
     private function jobHistoryItem(SubtitleJob $job): array
     {
         $track = $job->track;
-        $status = $track !== null ? 'completed' : ($job->status === 'failed' ? 'failed' : 'running');
+        $status = $this->requiredString($job->status, 'status');
+
+        if (! in_array($status, ['running', 'completed', 'failed'], true)) {
+            throw new LogicException('Subtitle job has an invalid status.');
+        }
+
+        if ($status === 'completed' && $track === null) {
+            throw new LogicException('Completed subtitle job is missing a track.');
+        }
+
+        if ($track !== null && $status !== 'completed') {
+            throw new LogicException('Subtitle job has a track before completion.');
+        }
+
         $item = [
             'youtubeVideoId' => $job->youtube_video_id,
             'youtubeUrl' => $job->youtube_url,
@@ -95,18 +109,12 @@ class SubtitleJobController extends Controller
             'sourceLanguage' => $job->source_language,
             'targetLanguage' => $job->target_language,
             'jobId' => $job->public_id,
+            'stage' => $this->requiredString($job->stage, 'stage'),
+            'progressPercent' => $this->requiredProgressPercent($job->progress_percent),
         ];
 
         if (is_string($job->detected_source_language) && $job->detected_source_language !== '') {
             $item['detectedSourceLanguage'] = $job->detected_source_language;
-        }
-
-        if (is_string($job->stage) && $job->stage !== '') {
-            $item['stage'] = $job->stage;
-        }
-
-        if ($job->progress_percent !== null) {
-            $item['progressPercent'] = $job->progress_percent;
         }
 
         if ($track !== null) {
@@ -117,7 +125,8 @@ class SubtitleJobController extends Controller
 
         if ($status === 'failed') {
             $item['completedAt'] = $job->updated_at->toJSON();
-            $item['message'] = $job->error_message ?: 'Generation did not complete.';
+            $item['errorCode'] = $this->requiredString($job->error_code, 'error_code');
+            $item['message'] = $this->requiredString($job->error_message, 'error_message');
         }
 
         return $item;
@@ -127,5 +136,23 @@ class SubtitleJobController extends Controller
     {
         return $job->track !== null
             && ! $job->track->isExpired();
+    }
+
+    private function requiredString(mixed $value, string $field): string
+    {
+        if (! is_string($value) || $value === '') {
+            throw new LogicException("Subtitle job is missing {$field}.");
+        }
+
+        return $value;
+    }
+
+    private function requiredProgressPercent(mixed $value): int
+    {
+        if (! is_int($value)) {
+            throw new LogicException('Subtitle job is missing progress_percent.');
+        }
+
+        return $value;
     }
 }

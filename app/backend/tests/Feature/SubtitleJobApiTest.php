@@ -15,7 +15,6 @@ use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobService;
-use App\Services\Subtitles\SubtitleQueueWorkerBootstrapper;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
@@ -125,182 +124,12 @@ class SubtitleJobApiTest extends TestCase
         });
     }
 
-    public function test_new_subtitle_request_bootstraps_local_workers_when_enabled(): void
-    {
-        config([
-            'queue.default' => 'database',
-            'subtitles.queue.connection' => 'database',
-            'subtitles.queue.auto_start_workers' => true,
-        ]);
-        Queue::fake();
-        $workerBootstrap = (object) ['startCalls' => 0];
-
-        $this->app->instance(SubtitleQueueWorkerBootstrapper::class, new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
-        {
-            public function __construct(private readonly object $workerBootstrap) {}
-
-            public function startIfNeeded(): void
-            {
-                $this->workerBootstrap->startCalls++;
-            }
-        });
-
-        $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'workerboot1']))
-            ->assertAccepted();
-
-        $this->assertSame(1, $workerBootstrap->startCalls);
-    }
-
-    public function test_auto_started_sqlite_queue_uses_one_worker(): void
-    {
-        config([
-            'database.default' => 'sqlite',
-            'queue.connections.database.connection' => null,
-            'subtitles.queue.connection' => 'database',
-            'subtitles.queue.auto_start_workers' => true,
-            'subtitles.queue.auto_worker_count' => 3,
-        ]);
-        cache()->forget('subtitle-ai-worker-bootstrap-started');
-        $workerBootstrap = (object) ['startCalls' => 0];
-
-        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
-        {
-            public function __construct(private readonly object $workerBootstrap) {}
-
-            protected function startWorkerProcess(): ?int
-            {
-                $this->workerBootstrap->startCalls++;
-
-                return $this->workerBootstrap->startCalls;
-            }
-
-            protected function isProcessRunning(int $pid): bool
-            {
-                return true;
-            }
-        };
-
-        $bootstrapper->startIfNeeded();
-
-        $this->assertSame(1, $workerBootstrap->startCalls);
-    }
-
-    public function test_auto_started_redis_queue_uses_configured_worker_count(): void
-    {
-        config([
-            'subtitles.queue.connection' => 'redis',
-            'subtitles.queue.auto_start_workers' => true,
-            'subtitles.queue.auto_worker_count' => 3,
-        ]);
-        cache()->forget('subtitle-ai-worker-bootstrap-started');
-        $workerBootstrap = (object) ['startCalls' => 0];
-
-        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
-        {
-            public function __construct(private readonly object $workerBootstrap) {}
-
-            protected function startWorkerProcess(): ?int
-            {
-                $this->workerBootstrap->startCalls++;
-
-                return $this->workerBootstrap->startCalls;
-            }
-
-            protected function isProcessRunning(int $pid): bool
-            {
-                return true;
-            }
-        };
-
-        $bootstrapper->startIfNeeded();
-
-        $this->assertSame(3, $workerBootstrap->startCalls);
-    }
-
-    public function test_auto_started_worker_bootstrap_recovers_from_dead_cached_workers(): void
-    {
-        config([
-            'subtitles.queue.connection' => 'redis',
-            'subtitles.queue.auto_start_workers' => true,
-            'subtitles.queue.auto_worker_count' => 3,
-            'subtitles.queue.auto_worker_max_time_seconds' => 120,
-        ]);
-        $workerBootstrap = (object) ['startCalls' => 0];
-
-        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
-        {
-            public function __construct(private readonly object $workerBootstrap) {}
-
-            protected function startWorkerProcess(): ?int
-            {
-                $this->workerBootstrap->startCalls++;
-
-                return $this->workerBootstrap->startCalls;
-            }
-
-            protected function isProcessRunning(int $pid): bool
-            {
-                return false;
-            }
-        };
-
-        $bootstrapper->startIfNeeded();
-        $bootstrapper->startIfNeeded();
-
-        $this->assertSame(6, $workerBootstrap->startCalls);
-    }
-
-    public function test_auto_started_worker_lock_lasts_for_worker_lifetime(): void
-    {
-        config([
-            'subtitles.queue.connection' => 'redis',
-            'subtitles.queue.auto_start_workers' => true,
-            'subtitles.queue.auto_worker_count' => 3,
-            'subtitles.queue.auto_worker_max_time_seconds' => 120,
-        ]);
-        cache()->forget('subtitle-ai-worker-bootstrap-started');
-        $workerBootstrap = (object) ['startCalls' => 0];
-
-        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
-        {
-            public function __construct(private readonly object $workerBootstrap) {}
-
-            protected function startWorkerProcess(): ?int
-            {
-                $this->workerBootstrap->startCalls++;
-
-                return $this->workerBootstrap->startCalls;
-            }
-
-            protected function isProcessRunning(int $pid): bool
-            {
-                return true;
-            }
-        };
-
-        try {
-            $bootstrapper->startIfNeeded();
-            $this->travel(31)->seconds();
-            $bootstrapper->startIfNeeded();
-        } finally {
-            $this->travelBack();
-        }
-
-        $this->assertSame(3, $workerBootstrap->startCalls);
-    }
-
     public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
     {
-        $processJobTimeout = (new ProcessSubtitleJob(1))->timeout;
+        $processJobTimeout = (new ProcessSubtitleJob(1, (string) Str::uuid()))->timeout;
 
         $this->assertGreaterThan($processJobTimeout, config('queue.connections.database.retry_after'));
         $this->assertGreaterThan($processJobTimeout, config('queue.connections.redis.retry_after'));
-        $this->assertGreaterThan(
-            config('subtitles.queue.auto_worker_timeout_seconds'),
-            config('queue.connections.redis.retry_after'),
-        );
     }
 
     public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
@@ -372,7 +201,7 @@ class SubtitleJobApiTest extends TestCase
         $job = $this->runningSubtitleJob('tokenizing');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
 
-        $this->dispatchCancelledBatch(new TokenizeSubtitleCueBatch($job->id, 0));
+        $this->dispatchCancelledBatch(new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
     }
@@ -382,7 +211,7 @@ class SubtitleJobApiTest extends TestCase
         $job = $this->runningSubtitleJob('translating');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
 
-        $this->dispatchCancelledBatch(new TranslateSubtitleCueBatch($job->id, 0));
+        $this->dispatchCancelledBatch(new TranslateSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->translationCalls);
     }
@@ -397,7 +226,7 @@ class SubtitleJobApiTest extends TestCase
             new CueEnrichmentResult([$this->sampleCue()], 'unknown'),
         );
 
-        $this->dispatchCancelledBatch(new RomanizeSubtitleCueBatch($job->id, 0));
+        $this->dispatchCancelledBatch(new RomanizeSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
     }
@@ -407,7 +236,7 @@ class SubtitleJobApiTest extends TestCase
         $job = $this->runningSubtitleJob('enriching');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [$this->sampleCue()]);
 
-        $this->dispatchCancelledBatch(new EnrichSubtitleCueBatch($job->id, 0));
+        $this->dispatchCancelledBatch(new EnrichSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->calls);
     }
@@ -419,7 +248,7 @@ class SubtitleJobApiTest extends TestCase
             'progress_percent' => 20,
         ]);
 
-        app(SubtitleGenerationPipeline::class)->processTranscription($job->id);
+        app(SubtitleGenerationPipeline::class)->processTranscription($job->id, $job->run_id);
 
         $this->assertSame(0, $this->audioSource->calls);
     }
@@ -435,6 +264,7 @@ class SubtitleJobApiTest extends TestCase
             $job->id,
             'tokenizing',
             new PDOException('SQLSTATE[HY000]: General error: 5 database is locked'),
+            $job->run_id,
         );
 
         $this
@@ -443,6 +273,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'failed')
             ->assertJsonPath('stage', 'tokenizing')
+            ->assertJsonPath('errorCode', 'queue_unavailable')
             ->assertJsonPath('message', 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.');
 
         $this->assertDatabaseHas('subtitle_jobs', [
@@ -462,10 +293,11 @@ class SubtitleJobApiTest extends TestCase
                 $job->id,
                 'tokenizing',
                 SubtitleProcessingException::enrichmentFailed(),
+                $job->run_id,
             );
         };
 
-        app(SubtitleGenerationPipeline::class)->tokenizeBatch($job->id, 0);
+        app(SubtitleGenerationPipeline::class)->tokenizeBatch($job->id, 0, $job->run_id);
 
         $this->assertDatabaseMissing('subtitle_job_artifacts', [
             'subtitle_job_id' => $job->id,
@@ -1215,6 +1047,7 @@ class SubtitleJobApiTest extends TestCase
             'status' => 'failed',
             'stage' => 'enriching',
             'progress_percent' => 75,
+            'error_code' => 'rate_limited',
             'error_message' => 'Subtitle enrichment is temporarily rate limited.',
             'updated_at' => now()->subMinutes(2),
         ]);
@@ -1247,6 +1080,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.2.status', 'failed')
             ->assertJsonPath('jobs.2.stage', 'enriching')
             ->assertJsonPath('jobs.2.progressPercent', 75)
+            ->assertJsonPath('jobs.2.errorCode', 'rate_limited')
             ->assertJsonPath('jobs.2.message', 'Subtitle enrichment is temporarily rate limited.')
             ->assertJsonPath('jobs.2.jobId', $failedJob->public_id);
     }
@@ -1724,9 +1558,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     public array $targetLanguages = [];
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
+     * @param  array<int, array<string, mixed>>  $batch
+     * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenize(array $cues, string $sourceLanguage): CueEnrichmentResult
+    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
@@ -1742,7 +1577,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                     'translatedText' => (string) $cue['sourceText'],
                     'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
                 ],
-                $cues,
+                $batch,
             ),
             'unknown',
         );
@@ -1756,18 +1591,9 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     /**
      * @param  array<int, array<string, mixed>>  $batch
-     * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
-    {
-        return $this->tokenize($batch, $sourceLanguage);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    public function enrich(
-        array $cues,
+    public function enrichCueBatch(
+        array $batch,
         string $sourceLanguage,
         string $targetLanguage,
         bool $includeRomanization = true,
@@ -1804,44 +1630,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
                     return $enrichedCue;
                 },
-                $cues,
-            ),
-            'unknown',
-        );
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
-    public function enrichCueBatch(
-        array $batch,
-        string $sourceLanguage,
-        string $targetLanguage,
-        bool $includeRomanization = true,
-    ): CueEnrichmentResult {
-        return $this->enrich($batch, $sourceLanguage, $targetLanguage, $includeRomanization);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    public function translate(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
-    {
-        $this->translationCalls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-        $this->targetLanguages[] = $targetLanguage;
-
-        if ($this->translationShouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => [
-                    ...$cue,
-                    'translatedText' => 'Translated '.$cue['sourceText'],
-                ],
-                $cues,
+                $batch,
             ),
             'unknown',
         );
@@ -1856,13 +1645,30 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         string $targetLanguage,
         array $allCues = [],
     ): CueEnrichmentResult {
-        return $this->translate($batch, $sourceLanguage, $targetLanguage);
+        $this->translationCalls++;
+        $this->sourceLanguages[] = $sourceLanguage;
+        $this->targetLanguages[] = $targetLanguage;
+
+        if ($this->translationShouldFail) {
+            throw SubtitleProcessingException::enrichmentFailed();
+        }
+
+        return new CueEnrichmentResult(
+            array_map(
+                fn (array $cue): array => [
+                    ...$cue,
+                    'translatedText' => 'Translated '.$cue['sourceText'],
+                ],
+                $batch,
+            ),
+            'unknown',
+        );
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
+     * @param  array<int, array<string, mixed>>  $batch
      */
-    public function romanize(array $cues, string $sourceLanguage): CueEnrichmentResult
+    public function romanizeCueBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
     {
         $this->romanizationCalls++;
 
@@ -1884,18 +1690,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                         $cue['tokens'],
                     ),
                 ],
-                $cues,
+                $batch,
             ),
             'unknown',
         );
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
-    public function romanizeCueBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
-    {
-        return $this->romanize($batch, $sourceLanguage);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Ai\Agents\CueTokenizationAgent;
 use App\Ai\Agents\CueTranslationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use GuzzleHttp\Psr7\Response as PsrResponse;
@@ -44,7 +45,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([
+        $result = $this->tokenizeBatch([
             $this->sourceCue('cue-0001', 0, $sourceText),
         ], 'jpn');
 
@@ -76,7 +77,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->tokenize([
+            fn () => $this->tokenizeBatch([
                 $this->sourceCue('cue-0001', 0, $sourceText),
             ], 'jpn'),
             'token_text_not_in_source',
@@ -132,7 +133,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->tokenize([
+            fn () => $this->tokenizeBatch([
                 $this->sourceCue('cue-0001', 0, $validSourceText),
                 $this->sourceCue('cue-0002', 1, $failedSourceText),
             ], 'jpn'),
@@ -190,7 +191,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([
+        $result = $this->tokenizeBatch([
             $this->sourceCue('cue-0001', 0, $firstSourceText),
             $this->sourceCue('cue-0002', 1, $secondSourceText),
         ], 'eng');
@@ -232,7 +233,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->tokenize([
+            fn () => $this->tokenizeBatch([
                 $this->sourceCue('cue-0001', 0, $firstSourceText),
                 $this->sourceCue('cue-0002', 1, $secondSourceText),
             ], 'fra'),
@@ -264,7 +265,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([
+        $result = $this->tokenizeBatch([
             $this->sourceCue('cue-0001', 0, $sourceText),
         ], 'jpn');
 
@@ -299,7 +300,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->tokenize([
+        $result = $this->tokenizeBatch([
             $this->sourceCue('cue-0001', 0, $sourceText),
         ], 'jpn');
 
@@ -340,7 +341,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn'),
+            fn () => $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn'),
             'cue_identity_mismatch',
         );
 
@@ -383,7 +384,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra');
+        $result = $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra');
 
         $this->assertSame('castilian', $result->sourceDialect);
         $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
@@ -440,7 +441,7 @@ class CueEnrichmentServiceTest extends TestCase
         ];
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->enrich([$tokenlessCue, $validCue], 'spa', 'eng'),
+            fn () => $this->enrichBatch([$tokenlessCue, $validCue], 'spa', 'eng'),
             'missing_source_tokens',
         );
     }
@@ -466,7 +467,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $result = $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra', includeRomanization: false);
+        $result = $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra', includeRomanization: false);
 
         $this->assertArrayNotHasKey('romanization', $result->cues[0]);
         $this->assertArrayNotHasKey('romanization', $result->cues[0]['tokens'][0]);
@@ -493,7 +494,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra'),
+            fn () => $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
             'token_identity_mismatch',
         );
     }
@@ -522,7 +523,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $result = $this->provider()->translate([$sourceCue], 'spa', 'fra');
+        $result = $this->translateBatch([$sourceCue], 'spa', 'fra');
 
         $this->assertSame('bonjour a tous', $result->cues[0]['translatedText']);
         $this->assertSame('o-la a to-dos', $result->cues[0]['romanization']);
@@ -578,7 +579,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $this->provider()->translate($sourceCues, 'ara', 'eng');
+        $this->translateBatch($sourceCues, 'ara', 'eng');
 
         CueTranslationAgent::assertPrompted(function ($prompt): bool {
             $input = $this->promptInput($prompt);
@@ -613,7 +614,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->translate($this->tokenizedSourceCues(), 'spa', 'fra'),
+            fn () => $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
             'cue_identity_mismatch',
         );
     }
@@ -634,7 +635,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->translate($this->tokenizedSourceCues(), 'spa', 'fra'),
+            fn () => $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
             'missing_translation',
         );
     }
@@ -657,7 +658,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         try {
-            $this->provider()->translate($this->tokenizedSourceCues(), 'spa', 'fra');
+            $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('Subtitle AI model is not configured.', $exception->getMessage());
@@ -691,7 +692,7 @@ class CueEnrichmentServiceTest extends TestCase
         ])->preventStrayPrompts();
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->enrich($this->tokenizedSourceCues(), 'spa', 'fra'),
+            fn () => $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
             'translation_identity_mismatch',
         );
     }
@@ -720,7 +721,7 @@ class CueEnrichmentServiceTest extends TestCase
         unset($cues[0]['translatedText']);
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->enrich($cues, 'spa', 'fra'),
+            fn () => $this->enrichBatch($cues, 'spa', 'fra'),
             'missing_source_translation',
         );
     }
@@ -761,7 +762,7 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $result = $this->provider()->romanize([$sourceCue], 'jpn');
+        $result = $this->romanizeBatch([$sourceCue], 'jpn');
 
         $this->assertSame('watashi wa nihongo o benkyo shite imasu', $result->cues[0]['romanization']);
         $this->assertSame(['私', 'は', '日本語', 'を', '勉強しています'], array_column($result->cues[0]['tokens'], 'text'));
@@ -820,7 +821,7 @@ class CueEnrichmentServiceTest extends TestCase
         ];
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->romanize([$tokenlessCue, $validCue], 'jpn'),
+            fn () => $this->romanizeBatch([$tokenlessCue, $validCue], 'jpn'),
             'missing_source_tokens',
         );
     }
@@ -856,7 +857,7 @@ class CueEnrichmentServiceTest extends TestCase
         ];
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->romanize([$sourceCue], 'jpn'),
+            fn () => $this->romanizeBatch([$sourceCue], 'jpn'),
             'token_identity_mismatch',
         );
     }
@@ -891,7 +892,7 @@ class CueEnrichmentServiceTest extends TestCase
         ];
 
         $this->assertProviderFailureReason(
-            fn () => $this->provider()->romanize([$sourceCue], 'jpn'),
+            fn () => $this->romanizeBatch([$sourceCue], 'jpn'),
             'token_count_mismatch',
         );
     }
@@ -948,7 +949,7 @@ class CueEnrichmentServiceTest extends TestCase
         })->preventStrayPrompts();
 
         try {
-            $this->provider()->enrich($this->tokenizedSourceCues(), 'eng', 'eng');
+            $this->enrichBatch($this->tokenizedSourceCues(), 'eng', 'eng');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame(RequestException::class, $exception->context['exception'] ?? null);
@@ -968,7 +969,7 @@ class CueEnrichmentServiceTest extends TestCase
         )->preventStrayPrompts();
 
         try {
-            $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+            $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('rate_limited', $exception->publicCode);
             $this->assertSame(429, $exception->status);
@@ -987,7 +988,7 @@ class CueEnrichmentServiceTest extends TestCase
             ->preventStrayPrompts();
 
         try {
-            $this->provider()->tokenize([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+            $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('laravel-ai-sdk', $exception->context['adapter'] ?? null);
@@ -1002,6 +1003,42 @@ class CueEnrichmentServiceTest extends TestCase
     private function provider(): LaravelAiTranslationAnalysisProvider
     {
         return new LaravelAiTranslationAnalysisProvider(new LearningTokenOutputValidator);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    private function tokenizeBatch(array $cues, string $sourceLanguage): CueEnrichmentResult
+    {
+        return $this->provider()->tokenizeCueBatch($cues, $cues, $sourceLanguage);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    private function enrichBatch(
+        array $cues,
+        string $sourceLanguage,
+        string $targetLanguage,
+        bool $includeRomanization = true,
+    ): CueEnrichmentResult {
+        return $this->provider()->enrichCueBatch($cues, $sourceLanguage, $targetLanguage, $includeRomanization);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    private function translateBatch(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    {
+        return $this->provider()->translateCueBatch($cues, $sourceLanguage, $targetLanguage, $cues);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cues
+     */
+    private function romanizeBatch(array $cues, string $sourceLanguage): CueEnrichmentResult
+    {
+        return $this->provider()->romanizeCueBatch($cues, $sourceLanguage);
     }
 
     /**

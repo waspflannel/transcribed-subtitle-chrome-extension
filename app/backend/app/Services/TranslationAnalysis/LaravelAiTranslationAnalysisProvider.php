@@ -23,33 +23,6 @@ class LaravelAiTranslationAnalysisProvider
     ) {}
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    public function tokenize(array $cues, string $sourceLanguage): CueEnrichmentResult
-    {
-        if ($cues === []) {
-            $this->failInvalidOutput('empty_source_cues');
-        }
-
-        $tokenizedCues = [];
-        $dialect = 'unknown';
-        $sourceCues = array_values($cues);
-        $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
-
-        foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->tokenizeCueBatch($batch, $sourceCues, $sourceLanguage);
-
-            array_push($tokenizedCues, ...$result->cues);
-
-            if ($dialect === 'unknown' && $result->sourceDialect !== 'unknown') {
-                $dialect = $result->sourceDialect;
-            }
-        }
-
-        return new CueEnrichmentResult($tokenizedCues, $dialect);
-    }
-
-    /**
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
@@ -103,45 +76,6 @@ class LaravelAiTranslationAnalysisProvider
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    public function enrich(
-        array $cues,
-        string $sourceLanguage,
-        string $targetLanguage,
-        bool $includeRomanization = true,
-    ): CueEnrichmentResult {
-        if ($cues === []) {
-            $this->failInvalidOutput('empty_source_cues');
-        }
-
-        $enrichedCuesById = [];
-        $dialect = 'unknown';
-        $sourceCues = array_values($cues);
-        $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
-
-        foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->enrichCueBatch($batch, $sourceLanguage, $targetLanguage, $includeRomanization);
-
-            foreach ($result->cues as $cue) {
-                $enrichedCuesById[(string) $cue['cueId']] = $cue;
-            }
-
-            if ($dialect === 'unknown' && $result->sourceDialect !== 'unknown') {
-                $dialect = $result->sourceDialect;
-            }
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => $enrichedCuesById[(string) $cue['cueId']],
-                $sourceCues,
-            ),
-            $dialect,
-        );
-    }
-
-    /**
      * @param  array<int, array<string, mixed>>  $batch
      */
     public function enrichCueBatch(
@@ -165,28 +99,6 @@ class LaravelAiTranslationAnalysisProvider
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    public function translate(array $cues, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
-    {
-        if ($cues === []) {
-            $this->failInvalidOutput('empty_source_cues');
-        }
-
-        $translatedCues = [];
-        $sourceCues = array_values($cues);
-        $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
-
-        foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->translateCueBatch($batch, $sourceLanguage, $targetLanguage, $sourceCues);
-
-            array_push($translatedCues, ...$result->cues);
-        }
-
-        return new CueEnrichmentResult($translatedCues, 'unknown');
-    }
-
-    /**
      * @param  array<int, array<string, mixed>>  $batch
      */
     public function translateCueBatch(
@@ -205,41 +117,6 @@ class LaravelAiTranslationAnalysisProvider
                 $this->translationInput($batch, $sourceLanguage, $targetLanguage, $allCues),
             ),
             $batch,
-        );
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    public function romanize(array $cues, string $sourceLanguage): CueEnrichmentResult
-    {
-        if ($cues === []) {
-            $this->failInvalidOutput('empty_source_cues');
-        }
-
-        $romanizedCuesById = [];
-        $dialect = 'unknown';
-        $sourceCues = array_values($cues);
-        $batchSize = max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
-
-        foreach (array_chunk($sourceCues, $batchSize) as $batch) {
-            $result = $this->romanizeCueBatch($batch, $sourceLanguage);
-
-            foreach ($result->cues as $cue) {
-                $romanizedCuesById[(string) $cue['cueId']] = $cue;
-            }
-
-            if ($dialect === 'unknown' && $result->sourceDialect !== 'unknown') {
-                $dialect = $result->sourceDialect;
-            }
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => $romanizedCuesById[(string) $cue['cueId']],
-                $sourceCues,
-            ),
-            $dialect,
         );
     }
 

@@ -30,7 +30,7 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly int $batchIndex,
-        public readonly ?string $runId = null,
+        public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
