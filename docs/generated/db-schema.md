@@ -25,7 +25,7 @@ The product migrations currently define:
 
 - `subtitle_jobs`
   - `public_id`
-  - `run_id`
+  - `run_id` (required queued-work fence)
   - `youtube_video_id`
   - `youtube_url`
   - `video_duration_seconds`

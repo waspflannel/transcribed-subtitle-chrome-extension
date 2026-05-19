@@ -29,8 +29,8 @@
   - Extension-to-Laravel `/v1/*` API requests.
   - Laravel-to-YouTube audio acquisition process.
   - Laravel-to-AI-provider transcription and enrichment calls.
-  - Postgres persistence for generated tracks, subtitle jobs, artifacts, failed jobs, cache rows, and Laravel batch metadata in the parallel runtime profile.
-  - Sanitized subtitle runtime trace rows for queue, worker, batch, timing, and failure diagnostics.
+  - Postgres persistence for generated tracks, subtitle jobs, artifacts, failed jobs, cache rows, and Laravel batch metadata in the runtime profile.
+  - Sanitized subtitle runtime trace rows for queue, batch, timing, and failure diagnostics.
   - SQLite persistence only inside PHPUnit's isolated in-memory test profile.
 - Sensitive operations:
   - Validating supported public YouTube watch URLs and 60 minute duration limits.
