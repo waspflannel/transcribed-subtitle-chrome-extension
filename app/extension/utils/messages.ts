@@ -8,6 +8,7 @@ export type SubtitleState =
     }
   | {
       type: 'loading';
+      jobId?: string;
       youtubeVideoId: string;
       youtubeUrl?: string;
       message: string;
@@ -22,6 +23,7 @@ export type SubtitleState =
     }
   | {
       type: 'error';
+      jobId?: string;
       youtubeVideoId?: string;
       message: string;
     };

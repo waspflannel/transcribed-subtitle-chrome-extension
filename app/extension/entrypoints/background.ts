@@ -185,6 +185,7 @@ async function generateSubtitlesForTab(
       if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
         await publishSubtitleState(tabId, {
           type: 'error',
+          jobId: job.jobId,
           youtubeVideoId: pageStatus.videoId,
           message: publicSubtitleJobFailureMessage(job),
         });
@@ -241,6 +242,7 @@ async function waitForCompletedSubtitleJob(
 
     await publishSubtitleState(tabId, {
       type: 'loading',
+      jobId: job.jobId,
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
       message: loadingMessageForStage(job.stage),
@@ -439,6 +441,7 @@ function stateWithBackendProgress(
   if (job.status === 'failed') {
     return {
       type: 'error',
+      jobId: job.jobId,
       youtubeVideoId: job.youtubeVideoId,
       message: publicSubtitleJobFailureMessage(job),
     };
@@ -446,6 +449,7 @@ function stateWithBackendProgress(
 
   return {
     type: 'loading',
+    jobId: job.jobId,
     youtubeVideoId: job.youtubeVideoId,
     youtubeUrl: job.youtubeUrl,
     message: loadingMessageForStage(job.stage),

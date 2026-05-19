@@ -454,6 +454,13 @@ select:disabled {
   overflow-wrap: anywhere;
 }
 
+.job-id {
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
 .job-badge {
   border-radius: 999px;
   font-size: 0.68rem;
