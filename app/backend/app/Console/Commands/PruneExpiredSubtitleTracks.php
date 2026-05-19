@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\SubtitleJob;
+use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -26,10 +27,14 @@ class PruneExpiredSubtitleTracks extends Command
             ->where('expires_at', '<=', now())
             ->delete();
 
-        $expiredJobs = SubtitleJob::query()
+        $expiredJobIds = SubtitleJob::query()
             ->where('expires_at', '<=', now())
             ->doesntHave('track')
-            ->count();
+            ->pluck('id');
+        $expiredJobs = $expiredJobIds->count();
+        $expiredEvents = $expiredJobIds->isEmpty()
+            ? 0
+            : SubtitleJobEvent::query()->whereIn('subtitle_job_id', $expiredJobIds)->count();
 
         SubtitleJob::query()
             ->where('expires_at', '<=', now())
@@ -41,7 +46,7 @@ class PruneExpiredSubtitleTracks extends Command
             'expired_job_count' => $expiredJobs,
         ]);
 
-        $this->components->info("Pruned {$expiredTracks} expired subtitle tracks and {$expiredJobs} expired subtitle jobs.");
+        $this->components->info("Pruned {$expiredTracks} expired subtitle tracks, {$expiredJobs} expired subtitle jobs, and {$expiredEvents} subtitle trace events.");
 
         return self::SUCCESS;
     }

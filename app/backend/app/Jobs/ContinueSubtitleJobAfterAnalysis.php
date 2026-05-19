@@ -26,6 +26,7 @@ class ContinueSubtitleJobAfterAnalysis implements ShouldQueue
 
     public function __construct(
         public readonly int $subtitleJobId,
+        public readonly ?string $runId = null,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
@@ -35,7 +36,7 @@ class ContinueSubtitleJobAfterAnalysis implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->continueAfterAnalysis($this->subtitleJobId, $this->queuedAtMs);
+        $pipeline->continueAfterAnalysis($this->subtitleJobId, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -44,6 +45,7 @@ class ContinueSubtitleJobAfterAnalysis implements ShouldQueue
             $this->subtitleJobId,
             'tokenizing',
             $exception ?? new RuntimeException('Subtitle analysis continuation failed.'),
+            $this->runId,
         );
     }
 

@@ -25,6 +25,10 @@ class SubtitleJobArtifactStore
 
     public const ENRICHED_CUES = 'enriched_cues';
 
+    public function __construct(
+        private readonly SubtitleRuntimeTracer $tracer,
+    ) {}
+
     public function putTranscript(SubtitleJob $job, TimestampedTranscript $transcript): void
     {
         $this->put($job, self::TRANSCRIPT, [
@@ -222,9 +226,19 @@ class SubtitleJobArtifactStore
 
     public function deleteForJob(SubtitleJob $job): void
     {
+        $artifactCount = SubtitleJobArtifact::query()
+            ->where('subtitle_job_id', $job->id)
+            ->count();
+        $startedAtMs = $this->currentTimeMs();
+
         SubtitleJobArtifact::query()
             ->where('subtitle_job_id', $job->id)
             ->delete();
+
+        $this->tracer->jobEvent($job, 'artifact.deleted', [
+            'artifact_count' => $artifactCount,
+            'duration_ms' => $this->durationMs($startedAtMs),
+        ]);
     }
 
     /**
@@ -232,6 +246,8 @@ class SubtitleJobArtifactStore
      */
     private function put(SubtitleJob $job, string $artifactType, array $payload, int $batchIndex = 0): void
     {
+        $startedAtMs = $this->currentTimeMs();
+
         SubtitleJobArtifact::query()->updateOrCreate(
             [
                 'subtitle_job_id' => $job->id,
@@ -240,6 +256,12 @@ class SubtitleJobArtifactStore
             ],
             ['payload' => $payload],
         );
+
+        $this->tracer->jobEvent($job, 'artifact.written', [
+            'artifact_type' => $artifactType,
+            'batch_index' => $batchIndex,
+            'duration_ms' => $this->durationMs($startedAtMs),
+        ]);
     }
 
     /**
@@ -247,6 +269,7 @@ class SubtitleJobArtifactStore
      */
     private function payload(SubtitleJob $job, string $artifactType, int $batchIndex = 0): array
     {
+        $startedAtMs = $this->currentTimeMs();
         $artifact = SubtitleJobArtifact::query()
             ->where('subtitle_job_id', $job->id)
             ->where('artifact_type', $artifactType)
@@ -258,6 +281,12 @@ class SubtitleJobArtifactStore
         if (! is_array($payload)) {
             $this->failMissingArtifact($artifactType);
         }
+
+        $this->tracer->jobEvent($job, 'artifact.read', [
+            'artifact_type' => $artifactType,
+            'batch_index' => $batchIndex,
+            'duration_ms' => $this->durationMs($startedAtMs),
+        ]);
 
         return $payload;
     }
@@ -295,5 +324,15 @@ class SubtitleJobArtifactStore
             'Subtitle processing state is incomplete.',
             ['artifact_type' => $artifactType],
         );
+    }
+
+    private function currentTimeMs(): int
+    {
+        return (int) floor(microtime(true) * 1000);
+    }
+
+    private function durationMs(int $startedAtMs): int
+    {
+        return max(0, $this->currentTimeMs() - $startedAtMs);
     }
 }

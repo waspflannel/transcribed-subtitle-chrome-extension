@@ -30,6 +30,7 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly int $batchIndex,
+        public readonly ?string $runId = null,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
@@ -47,7 +48,7 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->tokenizeBatch($this->subtitleJobId, $this->batchIndex, $this->queuedAtMs);
+        $pipeline->tokenizeBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -56,6 +57,8 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
             $this->subtitleJobId,
             'tokenizing',
             $exception ?? new RuntimeException('Subtitle tokenization batch failed.'),
+            $this->runId,
+            ['batch_index' => $this->batchIndex],
         );
     }
 

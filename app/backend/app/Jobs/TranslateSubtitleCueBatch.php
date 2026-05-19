@@ -30,6 +30,7 @@ class TranslateSubtitleCueBatch implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly int $batchIndex,
+        public readonly ?string $runId = null,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
@@ -47,7 +48,7 @@ class TranslateSubtitleCueBatch implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->translateBatch($this->subtitleJobId, $this->batchIndex, $this->queuedAtMs);
+        $pipeline->translateBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -56,6 +57,8 @@ class TranslateSubtitleCueBatch implements ShouldQueue
             $this->subtitleJobId,
             'translating',
             $exception ?? new RuntimeException('Subtitle translation batch failed.'),
+            $this->runId,
+            ['batch_index' => $this->batchIndex],
         );
     }
 

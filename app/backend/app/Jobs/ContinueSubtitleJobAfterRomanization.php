@@ -26,6 +26,7 @@ class ContinueSubtitleJobAfterRomanization implements ShouldQueue
 
     public function __construct(
         public readonly int $subtitleJobId,
+        public readonly ?string $runId = null,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
@@ -35,7 +36,7 @@ class ContinueSubtitleJobAfterRomanization implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->continueAfterRomanization($this->subtitleJobId, $this->queuedAtMs);
+        $pipeline->continueAfterRomanization($this->subtitleJobId, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -44,6 +45,7 @@ class ContinueSubtitleJobAfterRomanization implements ShouldQueue
             $this->subtitleJobId,
             'romanizing',
             $exception ?? new RuntimeException('Subtitle romanization continuation failed.'),
+            $this->runId,
         );
     }
 

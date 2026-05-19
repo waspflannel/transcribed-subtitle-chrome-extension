@@ -15,6 +15,7 @@ class SubtitleJob extends Model
 
     protected $fillable = [
         'public_id',
+        'run_id',
         'youtube_video_id',
         'youtube_url',
         'video_duration_seconds',
@@ -43,6 +44,11 @@ class SubtitleJob extends Model
     public function artifacts(): HasMany
     {
         return $this->hasMany(SubtitleJobArtifact::class);
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(SubtitleJobEvent::class);
     }
 
     protected function casts(): array

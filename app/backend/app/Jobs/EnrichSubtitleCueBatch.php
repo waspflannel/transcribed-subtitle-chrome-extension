@@ -30,6 +30,7 @@ class EnrichSubtitleCueBatch implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly int $batchIndex,
+        public readonly ?string $runId = null,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
@@ -47,7 +48,7 @@ class EnrichSubtitleCueBatch implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->enrichBatch($this->subtitleJobId, $this->batchIndex, $this->queuedAtMs);
+        $pipeline->enrichBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -56,6 +57,8 @@ class EnrichSubtitleCueBatch implements ShouldQueue
             $this->subtitleJobId,
             'enriching',
             $exception ?? new RuntimeException('Subtitle enrichment batch failed.'),
+            $this->runId,
+            ['batch_index' => $this->batchIndex],
         );
     }
 

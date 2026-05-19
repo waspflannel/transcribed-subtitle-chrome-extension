@@ -21,6 +21,7 @@ class SubtitleJobFactory extends Factory
 
         return [
             'public_id' => (string) Str::uuid(),
+            'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $videoId,
             'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,
             'video_duration_seconds' => 213,

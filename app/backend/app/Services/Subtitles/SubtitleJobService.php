@@ -47,6 +47,7 @@ class SubtitleJobService
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleQueueWorkerBootstrapper $queueWorkers,
+        private readonly SubtitleRuntimeTracer $tracer,
     ) {}
 
     /**
@@ -143,7 +144,7 @@ class SubtitleJobService
         }
 
         if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
-            ProcessSubtitleJob::dispatch($job->id)
+            ProcessSubtitleJob::dispatch($job->id, $job->run_id)
                 ->onConnection(SubtitleGenerationPipeline::connection())
                 ->onQueue(SubtitleGenerationPipeline::queue());
             $this->queueWorkers->startIfNeeded();
@@ -180,8 +181,9 @@ class SubtitleJobService
         bool $includeRomanization,
         bool $includeTranslation,
     ): SubtitleJob {
-        return SubtitleJob::create([
+        $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
+            'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $payload['youtubeVideoId'],
             'youtube_url' => $payload['youtubeUrl'],
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
@@ -198,6 +200,15 @@ class SubtitleJobService
             'install_id' => $installId,
             'request_ip' => $requestIp,
         ]);
+
+        $this->tracer->jobEvent($job, 'job.created', [
+            'stage' => 'preparing',
+            'status' => 'running',
+            'youtube_video_id' => $job->youtube_video_id,
+            'processing_version' => $job->processing_version,
+        ]);
+
+        return $job;
     }
 
     /**
@@ -218,6 +229,7 @@ class SubtitleJobService
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
+            'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,
             'enrichment_mode' => $enrichmentMode,
@@ -233,6 +245,13 @@ class SubtitleJobService
             'expires_at' => null,
             'created_at' => now(),
         ])->save();
+
+        $this->tracer->jobEvent($job->refresh(), 'job.reset', [
+            'stage' => 'preparing',
+            'status' => 'running',
+            'youtube_video_id' => $job->youtube_video_id,
+            'processing_version' => $job->processing_version,
+        ]);
     }
 
     private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string

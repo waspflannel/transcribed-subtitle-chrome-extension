@@ -22,6 +22,11 @@ return [
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
     ],
 
+    'tracing' => [
+        'slow_queue_wait_ms' => (int) env('SUBTITLE_TRACE_SLOW_QUEUE_WAIT_MS', 30000),
+        'slow_stage_ms' => (int) env('SUBTITLE_TRACE_SLOW_STAGE_MS', 120000),
+    ],
+
     'youtube' => [
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
         'metadata_timeout_seconds' => (int) env('YOUTUBE_METADATA_TIMEOUT_SECONDS', 60),

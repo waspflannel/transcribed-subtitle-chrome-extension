@@ -27,6 +27,7 @@ class FinalizeSubtitleJob implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly bool $useEnrichedCues,
+        public readonly ?string $runId = null,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleGenerationPipeline::connection());
@@ -36,7 +37,7 @@ class FinalizeSubtitleJob implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->finalize($this->subtitleJobId, $this->useEnrichedCues, $this->queuedAtMs);
+        $pipeline->finalize($this->subtitleJobId, $this->useEnrichedCues, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
@@ -45,6 +46,7 @@ class FinalizeSubtitleJob implements ShouldQueue
             $this->subtitleJobId,
             'finalizing',
             $exception ?? new RuntimeException('Subtitle finalization failed.'),
+            $this->runId,
         );
     }
 
