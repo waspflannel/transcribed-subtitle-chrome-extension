@@ -175,6 +175,11 @@ class SubtitleJobApiTest extends TestCase
 
                 return $this->workerBootstrap->startCalls;
             }
+
+            protected function isProcessRunning(int $pid): bool
+            {
+                return true;
+            }
         };
 
         $bootstrapper->startIfNeeded();
@@ -202,11 +207,49 @@ class SubtitleJobApiTest extends TestCase
 
                 return $this->workerBootstrap->startCalls;
             }
+
+            protected function isProcessRunning(int $pid): bool
+            {
+                return true;
+            }
         };
 
         $bootstrapper->startIfNeeded();
 
         $this->assertSame(3, $workerBootstrap->startCalls);
+    }
+
+    public function test_auto_started_worker_bootstrap_recovers_from_dead_cached_workers(): void
+    {
+        config([
+            'subtitles.queue.connection' => 'redis',
+            'subtitles.queue.auto_start_workers' => true,
+            'subtitles.queue.auto_worker_count' => 3,
+            'subtitles.queue.auto_worker_max_time_seconds' => 120,
+        ]);
+        $workerBootstrap = (object) ['startCalls' => 0];
+
+        $bootstrapper = new class($workerBootstrap) extends SubtitleQueueWorkerBootstrapper
+        {
+            public function __construct(private readonly object $workerBootstrap) {}
+
+            protected function startWorkerProcess(): ?int
+            {
+                $this->workerBootstrap->startCalls++;
+
+                return $this->workerBootstrap->startCalls;
+            }
+
+            protected function isProcessRunning(int $pid): bool
+            {
+                return false;
+            }
+        };
+
+        $bootstrapper->startIfNeeded();
+        $bootstrapper->startIfNeeded();
+
+        $this->assertSame(6, $workerBootstrap->startCalls);
     }
 
     public function test_auto_started_worker_lock_lasts_for_worker_lifetime(): void
@@ -229,6 +272,11 @@ class SubtitleJobApiTest extends TestCase
                 $this->workerBootstrap->startCalls++;
 
                 return $this->workerBootstrap->startCalls;
+            }
+
+            protected function isProcessRunning(int $pid): bool
+            {
+                return true;
             }
         };
 

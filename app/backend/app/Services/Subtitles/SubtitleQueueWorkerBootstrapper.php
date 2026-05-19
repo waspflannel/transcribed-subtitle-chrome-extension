@@ -8,7 +8,9 @@ use Throwable;
 
 class SubtitleQueueWorkerBootstrapper
 {
-    private const START_LOCK_KEY = 'subtitle-ai-worker-bootstrap-started';
+    private const START_LOCK_PREFIX = 'subtitle-ai-worker-bootstrap-started';
+
+    private const WORKER_PIDS_PREFIX = 'subtitle-ai-worker-bootstrap-pids';
 
     public function startIfNeeded(): void
     {
@@ -16,36 +18,57 @@ class SubtitleQueueWorkerBootstrapper
             return;
         }
 
+        $workerCount = $this->workerCount();
+        $liveWorkerPids = $this->liveWorkerPids();
+
+        if (count($liveWorkerPids) >= $workerCount) {
+            return;
+        }
+
+        if (count($liveWorkerPids) < $workerCount) {
+            Cache::forget($this->startLockKey());
+        }
+
         if (! $this->claimStartLock()) {
             return;
         }
 
-        $workerCount = $this->workerCount();
+        $tracer = app(SubtitleRuntimeTracer::class);
+        $startedWorkerPids = $liveWorkerPids;
 
-        for ($worker = 0; $worker < $workerCount; $worker++) {
+        for ($worker = count($liveWorkerPids); $worker < $workerCount; $worker++) {
             $pid = $this->startWorkerProcess();
 
-            Log::info('backend.subtitle_queue_worker_started', [
+            if ($pid !== null) {
+                $startedWorkerPids[] = $pid;
+            }
+
+            $tracer->record(null, 'worker.started', [
                 'connection' => SubtitleGenerationPipeline::connection(),
                 'queue_driver' => $this->queueDriver(),
                 'database_driver' => $this->databaseDriver(),
                 'queue' => SubtitleGenerationPipeline::queue(),
                 'worker_number' => $worker + 1,
                 'worker_count' => $workerCount,
+                'existing_worker_count' => count($liveWorkerPids),
                 'worker_pid' => $pid,
                 'worker_max_time_seconds' => max(60, (int) config('subtitles.queue.auto_worker_max_time_seconds', 900)),
                 'start_result' => $pid === null ? 'pid_unavailable' : 'started',
-            ]);
+            ], logName: 'backend.subtitle_queue_worker_started');
         }
 
-        Log::info('backend.subtitle_queue_workers_started', [
+        $this->rememberWorkerPids($startedWorkerPids);
+
+        $tracer->record(null, 'workers.started', [
             'connection' => SubtitleGenerationPipeline::connection(),
             'queue_driver' => $this->queueDriver(),
             'database_driver' => $this->databaseDriver(),
             'queue' => SubtitleGenerationPipeline::queue(),
             'worker_count' => $workerCount,
+            'existing_worker_count' => count($liveWorkerPids),
+            'started_worker_count' => max(0, $workerCount - count($liveWorkerPids)),
             'worker_max_time_seconds' => max(60, (int) config('subtitles.queue.auto_worker_max_time_seconds', 900)),
-        ]);
+        ], logName: 'backend.subtitle_queue_workers_started');
     }
 
     private function shouldStartWorkers(): bool
@@ -57,7 +80,7 @@ class SubtitleQueueWorkerBootstrapper
     private function claimStartLock(): bool
     {
         try {
-            return Cache::add(self::START_LOCK_KEY, true, now()->addSeconds($this->workerMaxTimeSeconds()));
+            return Cache::add($this->startLockKey(), true, now()->addSeconds($this->workerMaxTimeSeconds()));
         } catch (Throwable $exception) {
             Log::warning('backend.subtitle_queue_worker_lock_failed', [
                 'exception' => $exception::class,
@@ -69,6 +92,16 @@ class SubtitleQueueWorkerBootstrapper
 
     protected function startWorkerProcess(): ?int
     {
+        if (! $this->canStartWorkerProcesses()) {
+            Log::warning('backend.subtitle_queue_worker_start_skipped', [
+                'reason' => 'worker_processes_disabled',
+                'connection' => SubtitleGenerationPipeline::connection(),
+                'queue' => SubtitleGenerationPipeline::queue(),
+            ]);
+
+            return null;
+        }
+
         if (! function_exists('exec')) {
             Log::warning('backend.subtitle_queue_worker_start_failed', [
                 'reason' => 'exec_unavailable',
@@ -96,6 +129,91 @@ class SubtitleQueueWorkerBootstrapper
         }
 
         return $this->parsePid($output[0] ?? null);
+    }
+
+    protected function canStartWorkerProcesses(): bool
+    {
+        return ! app()->environment('testing')
+            || (bool) config('subtitles.queue.allow_worker_processes_in_testing', false);
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function liveWorkerPids(): array
+    {
+        $cachedPids = Cache::get($this->workerPidsKey(), []);
+
+        if (! is_array($cachedPids)) {
+            Cache::forget($this->workerPidsKey());
+
+            return [];
+        }
+
+        $livePids = [];
+
+        foreach ($cachedPids as $pid) {
+            $pid = is_numeric($pid) ? (int) $pid : 0;
+
+            if ($pid > 0 && $this->isProcessRunning($pid)) {
+                $livePids[] = $pid;
+            }
+        }
+
+        $livePids = array_values(array_unique($livePids));
+
+        if ($livePids === []) {
+            Cache::forget($this->workerPidsKey());
+        } else {
+            $this->rememberWorkerPids($livePids);
+        }
+
+        return $livePids;
+    }
+
+    /**
+     * @param  array<int, int|null>  $pids
+     */
+    private function rememberWorkerPids(array $pids): void
+    {
+        $pids = array_values(array_unique(array_filter(
+            array_map(fn (mixed $pid): int => (int) $pid, $pids),
+            fn (int $pid): bool => $pid > 0,
+        )));
+
+        if ($pids === []) {
+            Cache::forget($this->workerPidsKey());
+
+            return;
+        }
+
+        Cache::put($this->workerPidsKey(), $pids, now()->addSeconds($this->workerMaxTimeSeconds()));
+    }
+
+    protected function isProcessRunning(int $pid): bool
+    {
+        if ($pid <= 0 || ! function_exists('exec')) {
+            return false;
+        }
+
+        $output = [];
+        $exitCode = 1;
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            @exec('tasklist /FI "PID eq '.$pid.'" /NH', $output, $exitCode);
+
+            return $exitCode === 0
+                && collect($output)->contains(fn (string $line): bool => preg_match('/\b'.$pid.'\b/', $line) === 1);
+        }
+
+        if (function_exists('posix_kill') && @posix_kill($pid, 0)) {
+            return true;
+        }
+
+        @exec('ps -p '.escapeshellarg((string) $pid).' -o pid=', $output, $exitCode);
+
+        return $exitCode === 0
+            && collect($output)->contains(fn (string $line): bool => trim($line) === (string) $pid);
     }
 
     protected function workerCommand(): string
@@ -170,6 +288,28 @@ class SubtitleQueueWorkerBootstrapper
     private function workerMaxTimeSeconds(): int
     {
         return max(60, (int) config('subtitles.queue.auto_worker_max_time_seconds', 900));
+    }
+
+    private function startLockKey(): string
+    {
+        return self::START_LOCK_PREFIX.':'.$this->runtimeKey();
+    }
+
+    private function workerPidsKey(): string
+    {
+        return self::WORKER_PIDS_PREFIX.':'.$this->runtimeKey();
+    }
+
+    private function runtimeKey(): string
+    {
+        return sha1(implode('|', [
+            SubtitleGenerationPipeline::connection(),
+            SubtitleGenerationPipeline::queue(),
+            $this->queueDriver(),
+            $this->databaseDriver(),
+            $this->workerCount(),
+            $this->workerMaxTimeSeconds(),
+        ]));
     }
 
     private function usesSqliteQueueDatabase(): bool
