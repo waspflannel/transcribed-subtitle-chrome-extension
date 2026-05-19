@@ -558,6 +558,19 @@ export type JobResponse = {
     | 'yor'
     | 'zul';
   message?: string;
+  errorCode?:
+    | 'validation_failed'
+    | 'unsupported_video'
+    | 'audio_unavailable'
+    | 'video_too_long'
+    | 'audio_acquisition_failed'
+    | 'transcription_failed'
+    | 'enrichment_failed'
+    | 'rate_limited'
+    | 'queue_unavailable'
+    | 'not_found'
+    | 'expired'
+    | 'internal_error';
 };
 
 export interface TrackResponse {
@@ -885,20 +898,16 @@ export interface LearningToken {
 }
 
 // Source: schemas/subtitle-job-history-response.schema.json
-export interface SubtitleJobHistoryResponse {
-  /**
-   * @maxItems 25
-   */
-  jobs: SubtitleJobHistoryItem[];
-}
-export interface SubtitleJobHistoryItem {
+export type SubtitleJobHistoryItem = {
+  [k: string]: unknown;
+} & {
   youtubeVideoId: string;
   youtubeUrl: string;
   status: 'running' | 'completed' | 'failed';
   startedAt: string;
-  lastUpdatedAt?: string;
+  lastUpdatedAt: string;
   completedAt?: string;
-  stage?:
+  stage:
     | 'preparing'
     | 'acquiring-audio'
     | 'transcribing'
@@ -907,7 +916,7 @@ export interface SubtitleJobHistoryItem {
     | 'translating'
     | 'enriching'
     | 'finalizing';
-  progressPercent?: number;
+  progressPercent: number;
   sourceLanguage:
     | 'auto'
     | 'bel'
@@ -1003,10 +1012,23 @@ export interface SubtitleJobHistoryItem {
     | 'xho'
     | 'yor'
     | 'zul';
-  jobId?: string;
+  jobId: string;
   trackId?: string;
   expiresAt?: string;
   message?: string;
+  errorCode?:
+    | 'validation_failed'
+    | 'unsupported_video'
+    | 'audio_unavailable'
+    | 'video_too_long'
+    | 'audio_acquisition_failed'
+    | 'transcription_failed'
+    | 'enrichment_failed'
+    | 'rate_limited'
+    | 'queue_unavailable'
+    | 'not_found'
+    | 'expired'
+    | 'internal_error';
   targetLanguage:
     | 'bel'
     | 'bos'
@@ -1198,6 +1220,13 @@ export interface SubtitleJobHistoryItem {
     | 'xho'
     | 'yor'
     | 'zul';
+};
+
+export interface SubtitleJobHistoryResponse {
+  /**
+   * @maxItems 25
+   */
+  jobs: SubtitleJobHistoryItem[];
 }
 
 // Source: schemas/track-response.schema.json

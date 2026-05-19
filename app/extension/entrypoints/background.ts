@@ -259,24 +259,12 @@ async function waitForCompletedSubtitleJob(
   return null;
 }
 
-function publicSubtitleJobFailureMessage(job: Pick<JobResponse | SubtitleJobHistoryItem, 'message'>): string {
-  switch (job.message) {
-    case 'Transcription failed.':
-      return publicSubtitleErrorMessage(new SubtitleApiError('transcription_failed', job.message, 502));
-
-    case 'Subtitle enrichment failed.':
-      return publicSubtitleErrorMessage(new SubtitleApiError('enrichment_failed', job.message, 502));
-
-    case 'Subtitle AI processing is temporarily rate limited.':
-    case 'Subtitle generation is temporarily rate limited.':
-      return publicSubtitleErrorMessage(new SubtitleApiError('rate_limited', job.message, 429));
-
-    case 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.':
-      return publicSubtitleErrorMessage(new SubtitleApiError('queue_unavailable', job.message, 503));
-
-    default:
-      return job.message ?? 'Generation did not complete.';
+function publicSubtitleJobFailureMessage(job: Pick<JobResponse | SubtitleJobHistoryItem, 'errorCode' | 'message'>): string {
+  if (!job.errorCode || !job.message) {
+    throw new Error('Failed subtitle job is missing error details.');
   }
+
+  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
 }
 
 function delay(milliseconds: number): Promise<void> {

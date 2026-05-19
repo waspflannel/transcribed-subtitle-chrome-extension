@@ -84,10 +84,12 @@ describe('SubtitleApiClient', () => {
     const history: SubtitleJobHistoryResponse = {
       jobs: [
         {
+          jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3003',
           youtubeVideoId: 'dQw4w9WgXcQ',
           youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
           status: 'running',
           startedAt: '2026-05-11T00:00:00Z',
+          lastUpdatedAt: '2026-05-11T00:01:00Z',
           stage: 'transcribing',
           progressPercent: 45,
           sourceLanguage: 'auto',

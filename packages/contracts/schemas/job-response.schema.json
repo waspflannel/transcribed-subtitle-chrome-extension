@@ -364,6 +364,9 @@
     "message": {
       "type": "string",
       "minLength": 1
+    },
+    "errorCode": {
+      "$ref": "error-object.schema.json#/properties/code"
     }
   },
   "allOf": [
@@ -390,14 +393,38 @@
       "if": {
         "properties": {
           "status": {
-            "enum": [
-              "running",
-              "failed"
-            ]
+            "const": "running"
           }
         }
       },
       "then": {
+        "not": {
+          "properties": {
+            "track": {}
+          },
+          "required": [
+            "track"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "errorCode": {},
+          "message": {}
+        },
+        "required": [
+          "errorCode",
+          "message"
+        ],
         "not": {
           "properties": {
             "track": {}

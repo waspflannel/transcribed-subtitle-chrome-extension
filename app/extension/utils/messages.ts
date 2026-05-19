@@ -12,8 +12,8 @@ export type SubtitleState =
       youtubeVideoId: string;
       youtubeUrl?: string;
       message: string;
-      stage?: SubtitleJobHistoryItem['stage'];
-      progressPercent?: number;
+      stage: SubtitleJobHistoryItem['stage'];
+      progressPercent: number;
       startedAt?: string;
       lastUpdatedAt?: string;
     }

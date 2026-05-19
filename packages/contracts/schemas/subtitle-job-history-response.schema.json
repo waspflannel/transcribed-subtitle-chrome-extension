@@ -25,8 +25,12 @@
         "youtubeUrl",
         "status",
         "startedAt",
+        "lastUpdatedAt",
+        "stage",
+        "progressPercent",
         "sourceLanguage",
-        "targetLanguage"
+        "targetLanguage",
+        "jobId"
       ],
       "properties": {
         "youtubeVideoId": {
@@ -189,6 +193,9 @@
         "message": {
           "type": "string",
           "minLength": 1
+        },
+        "errorCode": {
+          "$ref": "error-object.schema.json#/properties/code"
         },
         "targetLanguage": {
           "type": "string",
@@ -387,7 +394,51 @@
           ],
           "description": "Provider-detected source language when sourceLanguage was auto and detection produced a catalog language."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {},
+              "message": {},
+              "completedAt": {}
+            },
+            "required": [
+              "errorCode",
+              "message",
+              "completedAt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "completed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "completedAt": {},
+              "trackId": {},
+              "expiresAt": {}
+            },
+            "required": [
+              "completedAt",
+              "trackId",
+              "expiresAt"
+            ]
+          }
+        }
+      ]
     }
   }
 }
