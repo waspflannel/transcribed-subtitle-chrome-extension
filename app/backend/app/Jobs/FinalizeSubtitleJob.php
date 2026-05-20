@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -30,19 +32,19 @@ class FinalizeSubtitleJob implements ShouldQueue
         public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
-        $this->onConnection(SubtitleGenerationPipeline::connection());
-        $this->onQueue(SubtitleGenerationPipeline::queue());
+        $this->onConnection(SubtitleQueue::connection());
+        $this->onQueue(SubtitleQueue::name());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->finalize($this->subtitleJobId, $this->useEnrichedCues, $this->runId, $this->queuedAtMs);
+        $pipeline->persistGeneratedSubtitleTrack($this->subtitleJobId, $this->useEnrichedCues, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
     {
-        app(SubtitleGenerationPipeline::class)->failJob(
+        app(SubtitleJobFailureHandler::class)->failJob(
             $this->subtitleJobId,
             'finalizing',
             $exception ?? new RuntimeException('Subtitle finalization failed.'),

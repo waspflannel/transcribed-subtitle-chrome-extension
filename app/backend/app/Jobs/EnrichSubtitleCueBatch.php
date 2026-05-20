@@ -2,7 +2,9 @@
 
 namespace App\Jobs;
 
-use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleCueBatchProcessor;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,8 +35,8 @@ class EnrichSubtitleCueBatch implements ShouldQueue
         public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
-        $this->onConnection(SubtitleGenerationPipeline::connection());
-        $this->onQueue(SubtitleGenerationPipeline::queue());
+        $this->onConnection(SubtitleQueue::connection());
+        $this->onQueue(SubtitleQueue::name());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
@@ -46,14 +48,14 @@ class EnrichSubtitleCueBatch implements ShouldQueue
         return [new SkipIfBatchCancelled];
     }
 
-    public function handle(SubtitleGenerationPipeline $pipeline): void
+    public function handle(SubtitleCueBatchProcessor $processor): void
     {
-        $pipeline->enrichBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
+        $processor->enrichCueBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
     {
-        app(SubtitleGenerationPipeline::class)->failJob(
+        app(SubtitleJobFailureHandler::class)->failJob(
             $this->subtitleJobId,
             'enriching',
             $exception ?? new RuntimeException('Subtitle enrichment batch failed.'),

@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,19 +31,19 @@ class ProcessSubtitleJob implements ShouldQueue
         public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
-        $this->onConnection(SubtitleGenerationPipeline::connection());
-        $this->onQueue(SubtitleGenerationPipeline::queue());
+        $this->onConnection(SubtitleQueue::connection());
+        $this->onQueue(SubtitleQueue::name());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->processTranscription($this->subtitleJobId, $this->runId, $this->queuedAtMs);
+        $pipeline->transcribeSourceAudioAndDispatchAnalysis($this->subtitleJobId, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void
     {
-        app(SubtitleGenerationPipeline::class)->failJob(
+        app(SubtitleJobFailureHandler::class)->failJob(
             $this->subtitleJobId,
             'preparing',
             $exception ?? new RuntimeException('Subtitle processing job failed.'),

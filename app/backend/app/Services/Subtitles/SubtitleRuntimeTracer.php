@@ -2,10 +2,10 @@
 
 namespace App\Services\Subtitles;
 
-use App\Jobs\ContinueSubtitleJobAfterAnalysis;
-use App\Jobs\ContinueSubtitleJobAfterRomanization;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
+use App\Jobs\MergeSubtitleCuesAfterRomanizationBatches;
+use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
@@ -85,10 +85,10 @@ class SubtitleRuntimeTracer
      * @var array<int, class-string>
      */
     private const QUEUED_SUBTITLE_JOB_CLASSES = [
-        ContinueSubtitleJobAfterAnalysis::class,
-        ContinueSubtitleJobAfterRomanization::class,
         EnrichSubtitleCueBatch::class,
         FinalizeSubtitleJob::class,
+        MergeSubtitleCuesAfterRomanizationBatches::class,
+        PrepareSubtitleCuesAfterAnalysisBatches::class,
         ProcessSubtitleJob::class,
         RomanizeSubtitleCueBatch::class,
         TokenizeSubtitleCueBatch::class,
@@ -263,9 +263,9 @@ class SubtitleRuntimeTracer
     {
         $payload = method_exists($queueJob, 'payload') ? $queueJob->payload() : [];
         $queue = method_exists($queueJob, 'getQueue') ? $queueJob->getQueue() : null;
-        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleGenerationPipeline::queue();
+        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::name();
 
-        if ($queueName !== SubtitleGenerationPipeline::queue()) {
+        if ($queueName !== SubtitleQueue::name()) {
             return null;
         }
 

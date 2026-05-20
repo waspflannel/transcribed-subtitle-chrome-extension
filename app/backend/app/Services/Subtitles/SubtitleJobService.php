@@ -144,8 +144,8 @@ class SubtitleJobService
 
         if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
             ProcessSubtitleJob::dispatch($job->id, $job->run_id)
-                ->onConnection(SubtitleGenerationPipeline::connection())
-                ->onQueue(SubtitleGenerationPipeline::queue());
+                ->onConnection(SubtitleQueue::connection())
+                ->onQueue(SubtitleQueue::name());
 
             $job = $job->refresh()->load('track');
         }
