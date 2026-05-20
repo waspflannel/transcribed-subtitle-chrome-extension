@@ -12,9 +12,12 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
+use App\Services\Subtitles\SubtitleQueue;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
@@ -80,7 +83,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonMissingPath('track')
             ->assertJsonStructure(['jobId', 'status', 'stage', 'progressPercent', 'createdAt', 'updatedAt']);
 
-        Queue::assertPushedOn(SubtitleGenerationPipeline::queue(), ProcessSubtitleJob::class);
+        Queue::assertPushedOn(SubtitleQueue::name(), ProcessSubtitleJob::class);
     }
 
     public function test_duplicate_running_request_reuses_job_without_dispatching_duplicate_work(): void
@@ -120,7 +123,7 @@ class SubtitleJobApiTest extends TestCase
 
         Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
             return $job->connection === 'background'
-                && $job->queue === SubtitleGenerationPipeline::queue();
+                && $job->queue === SubtitleQueue::name();
         });
     }
 
@@ -184,7 +187,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertAccepted();
 
         Artisan::call('queue:work', [
-            '--queue' => SubtitleGenerationPipeline::queue().',default',
+            '--queue' => SubtitleQueue::name().',default',
             '--once' => true,
             '--tries' => 1,
             '--sleep' => 0,
@@ -248,7 +251,7 @@ class SubtitleJobApiTest extends TestCase
             'progress_percent' => 20,
         ]);
 
-        app(SubtitleGenerationPipeline::class)->processTranscription($job->id, $job->run_id);
+        app(SubtitleGenerationPipeline::class)->transcribeSourceAudioAndDispatchAnalysis($job->id, $job->run_id);
 
         $this->assertSame(0, $this->audioSource->calls);
     }
@@ -260,7 +263,7 @@ class SubtitleJobApiTest extends TestCase
             'progress_percent' => 65,
         ]);
 
-        app(SubtitleGenerationPipeline::class)->failJob(
+        app(SubtitleJobFailureHandler::class)->failJob(
             $job->id,
             'tokenizing',
             new PDOException('SQLSTATE[HY000]: General error: 5 database is locked'),
@@ -289,7 +292,7 @@ class SubtitleJobApiTest extends TestCase
         $job = $this->runningSubtitleJob('tokenizing');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
         $this->translationAnalysis->beforeTokenizationResult = function () use ($job): void {
-            app(SubtitleGenerationPipeline::class)->failJob(
+            app(SubtitleJobFailureHandler::class)->failJob(
                 $job->id,
                 'tokenizing',
                 SubtitleProcessingException::enrichmentFailed(),
@@ -297,7 +300,7 @@ class SubtitleJobApiTest extends TestCase
             );
         };
 
-        app(SubtitleGenerationPipeline::class)->tokenizeBatch($job->id, 0, $job->run_id);
+        app(SubtitleCueBatchProcessor::class)->tokenizeCueBatch($job->id, 0, $job->run_id);
 
         $this->assertDatabaseMissing('subtitle_job_artifacts', [
             'subtitle_job_id' => $job->id,
@@ -1428,8 +1431,8 @@ class SubtitleJobApiTest extends TestCase
     private function dispatchCancelledBatch(object $job): void
     {
         $batch = Bus::batch([$job])
-            ->onConnection(SubtitleGenerationPipeline::connection())
-            ->onQueue(SubtitleGenerationPipeline::queue())
+            ->onConnection(SubtitleQueue::connection())
+            ->onQueue(SubtitleQueue::name())
             ->dispatch();
 
         $batch->cancel();
@@ -1441,7 +1444,7 @@ class SubtitleJobApiTest extends TestCase
     {
         for ($attempt = 0; $attempt < 50 && DB::table('jobs')->exists(); $attempt++) {
             Artisan::call('queue:work', [
-                '--queue' => SubtitleGenerationPipeline::queue().',default',
+                '--queue' => SubtitleQueue::name().',default',
                 '--once' => true,
                 '--tries' => 1,
                 '--sleep' => 0,

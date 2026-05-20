@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -18,7 +18,7 @@ class CheckSubtitleRuntime extends Command
     {
         $databaseConnection = (string) config('database.default');
         $databaseDriver = (string) config("database.connections.{$databaseConnection}.driver", $databaseConnection);
-        $queueConnection = SubtitleGenerationPipeline::connection();
+        $queueConnection = SubtitleQueue::connection();
         $queueDriver = (string) config("queue.connections.{$queueConnection}.driver", $queueConnection);
         $isTesting = app()->environment('testing');
         $enforceRuntime = $this->option('strict') || ! $isTesting;
@@ -32,7 +32,7 @@ class CheckSubtitleRuntime extends Command
             'queueDefault' => (string) config('queue.default'),
             'subtitleQueueConnection' => $queueConnection,
             'subtitleQueueDriver' => $queueDriver,
-            'subtitleQueueName' => SubtitleGenerationPipeline::queue(),
+            'subtitleQueueName' => SubtitleQueue::name(),
             'redisClient' => (string) config('database.redis.client'),
             'cacheStore' => (string) config('cache.default'),
         ];

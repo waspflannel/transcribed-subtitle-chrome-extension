@@ -7,8 +7,10 @@ use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
-use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleQueue;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -46,7 +48,7 @@ class SubtitleRuntimeTracingTest extends TestCase
         TokenizeSubtitleCueBatch::dispatch($job->id, 0, $staleRunId);
 
         Artisan::call('queue:work', [
-            '--queue' => SubtitleGenerationPipeline::queue().',default',
+            '--queue' => SubtitleQueue::name().',default',
             '--once' => true,
             '--tries' => 1,
             '--sleep' => 0,
@@ -57,7 +59,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             'run_id' => $staleRunId,
             'event' => 'queue.processing',
             'queue_connection' => 'database',
-            'queue' => SubtitleGenerationPipeline::queue(),
+            'queue' => SubtitleQueue::name(),
             'batch_index' => 0,
         ]);
         $this->assertDatabaseHas('subtitle_job_events', [
@@ -70,7 +72,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             'run_id' => $staleRunId,
             'event' => 'queue.processed',
             'queue_connection' => 'database',
-            'queue' => SubtitleGenerationPipeline::queue(),
+            'queue' => SubtitleQueue::name(),
         ]);
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
     }
@@ -83,7 +85,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             $this->sampleCue(),
         ]);
 
-        app(SubtitleGenerationPipeline::class)->tokenizeBatch(
+        app(SubtitleCueBatchProcessor::class)->tokenizeCueBatch(
             $job->id,
             0,
             $job->run_id,
@@ -128,7 +130,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             'stage' => 'transcribing',
         ]);
 
-        app(SubtitleGenerationPipeline::class)->failJob(
+        app(SubtitleJobFailureHandler::class)->failJob(
             $job->id,
             'tokenizing',
             SubtitleProcessingException::enrichmentFailed(),

@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
-use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -39,9 +39,9 @@ class ShowSubtitleRuntime extends Command
             ->values();
 
         $summary = [
-            'connection' => SubtitleGenerationPipeline::connection(),
-            'driver' => config('queue.connections.'.SubtitleGenerationPipeline::connection().'.driver'),
-            'queue' => SubtitleGenerationPipeline::queue(),
+            'connection' => SubtitleQueue::connection(),
+            'driver' => config('queue.connections.'.SubtitleQueue::connection().'.driver'),
+            'queue' => SubtitleQueue::name(),
             'queueDepth' => $this->queueDepth(),
             'activeJobCount' => $activeJobs->count(),
         ];
@@ -90,20 +90,20 @@ class ShowSubtitleRuntime extends Command
 
     private function queueDepth(): int|string
     {
-        $connection = SubtitleGenerationPipeline::connection();
+        $connection = SubtitleQueue::connection();
         $driver = config('queue.connections.'.$connection.'.driver');
 
         try {
             if ($driver === 'database' && Schema::hasTable('jobs')) {
                 return DB::table('jobs')
-                    ->where('queue', SubtitleGenerationPipeline::queue())
+                    ->where('queue', SubtitleQueue::name())
                     ->count();
             }
 
             if ($driver === 'redis') {
                 $redisConnection = (string) config('queue.connections.'.$connection.'.connection', 'default');
 
-                return Redis::connection($redisConnection)->llen('queues:'.SubtitleGenerationPipeline::queue());
+                return Redis::connection($redisConnection)->llen('queues:'.SubtitleQueue::name());
             }
         } catch (Throwable $exception) {
             return 'unavailable:'.$exception::class;
