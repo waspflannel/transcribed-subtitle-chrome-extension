@@ -200,6 +200,23 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame(['good', 'morning'], array_column($result->cues[1]['tokens'], 'text'));
     }
 
+    public function test_batch_agents_require_full_cue_context(): void
+    {
+        $cue = $this->sourceCue('cue-0001', 0, 'hola a todos');
+
+        CueTokenizationAgent::fake([])->preventStrayPrompts();
+        CueTranslationAgent::fake([])->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->tokenizeCueBatch([$cue], [], 'spa'),
+            'empty_context_cues',
+        );
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->translateCueBatch([$cue], 'spa', 'eng', []),
+            'empty_context_cues',
+        );
+    }
+
     public function test_tokenization_count_mismatch_fails_generation(): void
     {
         $firstSourceText = 'Bonjour a tous';
