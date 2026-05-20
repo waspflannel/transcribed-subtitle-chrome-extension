@@ -3,19 +3,29 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\EnrichSubtitleCueBatch;
+use App\Jobs\FinalizeSubtitleJob;
+use App\Jobs\MergeSubtitleCuesAfterRomanizationBatches;
+use App\Jobs\Middleware\LimitSubtitleInstallConcurrency;
+use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
+use App\Jobs\ProcessSubtitleJob;
+use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitlePipelineTelemetry;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -34,6 +44,7 @@ class SubtitleRuntimeTracingTest extends TestCase
         config([
             'queue.default' => 'database',
             'subtitles.queue.connection' => 'database',
+            'subtitles.tiers.default' => 'base',
         ]);
     }
 
@@ -119,6 +130,96 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
     }
 
+    public function test_per_install_concurrency_middleware_releases_jobs_over_the_tier_limit(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.per_install_concurrency' => 1,
+            'subtitles.tiers.release_delay_seconds' => 7,
+        ]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        $counterKey = 'subtitle-install-concurrency:'.hash('sha256', $job->install_id).':base';
+        Cache::put($counterKey, 1, now()->addMinute());
+        $queuedJob = new class($job->id)
+        {
+            public bool $released = false;
+
+            public int $releaseDelay = 0;
+
+            public function __construct(public readonly int $subtitleJobId) {}
+
+            public function release(int $delay): void
+            {
+                $this->released = true;
+                $this->releaseDelay = $delay;
+            }
+        };
+
+        app(LimitSubtitleInstallConcurrency::class)->handle(
+            $queuedJob,
+            function (): never {
+                $this->fail('Expected over-limit job to be released before processing.');
+            },
+        );
+
+        $this->assertTrue($queuedJob->released);
+        $this->assertSame(7, $queuedJob->releaseDelay);
+        $this->assertDatabaseHas('subtitle_job_events', [
+            'subtitle_job_id' => $job->id,
+            'event' => 'queue.concurrency_delayed',
+            'stage' => 'tokenizing',
+        ]);
+    }
+
+    public function test_concurrency_limited_jobs_allow_release_retries_but_cap_exceptions(): void
+    {
+        $runId = (string) Str::uuid();
+        $jobs = [
+            new ProcessSubtitleJob(1, $runId),
+            new TokenizeSubtitleCueBatch(1, 0, $runId),
+            new TranslateSubtitleCueBatch(1, 0, $runId),
+            new RomanizeSubtitleCueBatch(1, 0, $runId),
+            new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
+            new MergeSubtitleCuesAfterRomanizationBatches(1, $runId),
+            new EnrichSubtitleCueBatch(1, 0, $runId),
+            new FinalizeSubtitleJob(1, false, $runId),
+        ];
+
+        foreach ($jobs as $job) {
+            $this->assertSame(0, $job->tries, get_class($job));
+            $this->assertSame(1, $job->maxExceptions, get_class($job));
+        }
+    }
+
+    public function test_completed_jobs_record_performance_budget_checks(): void
+    {
+        config(['subtitles.tiers.plans.base.budgets_seconds.short' => 1]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+            'created_at' => now()->subSeconds(5),
+            'updated_at' => now()->subSeconds(5),
+            'video_duration_seconds' => 120,
+        ]);
+
+        app(SubtitlePipelineTelemetry::class)->recordJobCompleted($job);
+
+        $this->assertDatabaseHas('subtitle_job_events', [
+            'subtitle_job_id' => $job->id,
+            'event' => 'performance.budget_checked',
+            'stage' => 'finalizing',
+        ]);
+        $this->assertDatabaseHas('subtitle_job_events', [
+            'subtitle_job_id' => $job->id,
+            'event' => 'performance.budget_exceeded',
+            'stage' => 'finalizing',
+        ]);
+    }
+
     public function test_failure_trace_records_public_error_and_exception_context(): void
     {
         $job = SubtitleJob::factory()->create(['stage' => 'tokenizing']);
@@ -174,6 +275,45 @@ class SubtitleRuntimeTracingTest extends TestCase
 
         $this->assertSame(0, Artisan::call('subtitles:slow', ['--json' => true]));
         $this->assertStringContainsString('"slowType": "stage_duration"', Artisan::output());
+    }
+
+    public function test_generation_metrics_command_reports_duration_budget_and_cost_groups(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'plus',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+            'video_duration_seconds' => 600,
+            'estimated_provider_cost_microusd' => 500,
+        ]);
+        SubtitleJobEvent::query()->create([
+            'subtitle_job_id' => $job->id,
+            'public_job_id' => $job->public_id,
+            'run_id' => $job->run_id,
+            'event' => 'job.completed',
+            'stage' => 'finalizing',
+            'status' => 'completed',
+            'duration_ms' => 300000,
+        ]);
+        SubtitleJobEvent::query()->create([
+            'subtitle_job_id' => $job->id,
+            'public_job_id' => $job->public_id,
+            'run_id' => $job->run_id,
+            'event' => 'queue.wait_observed',
+            'stage' => 'tokenizing',
+            'wait_ms' => 1200,
+        ]);
+
+        $this->assertSame(0, Artisan::call('subtitles:metrics', ['--json' => true]));
+        $metrics = json_decode(Artisan::output(), true);
+
+        $this->assertSame(1, $metrics['summary']['completedJobCount']);
+        $this->assertSame('plus', $metrics['groups'][0]['tier']);
+        $this->assertSame('medium', $metrics['groups'][0]['durationBucket']);
+        $this->assertSame(300000, $metrics['groups'][0]['p95DurationMs']);
+        $this->assertSame(1200, $metrics['groups'][0]['p95QueueWaitMs']);
+        $this->assertSame(50, $metrics['groups'][0]['costPerGeneratedMinuteMicrousd']);
     }
 
     public function test_pruning_expired_jobs_removes_related_trace_events(): void

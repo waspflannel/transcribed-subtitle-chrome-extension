@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Services\Subtitles\SubtitleQueue;
+use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -33,6 +34,11 @@ class CheckSubtitleRuntime extends Command
             'subtitleQueueConnection' => $queueConnection,
             'subtitleQueueDriver' => $queueDriver,
             'subtitleQueueName' => SubtitleQueue::name(),
+            'subtitleWorkerQueues' => SubtitleQueue::workerQueueList(),
+            'subtitleAutoStartWorkers' => (bool) config('subtitles.queue.auto_start.enabled'),
+            'subtitleAutoWorkerCount' => (int) config('subtitles.queue.auto_start.worker_count', 0),
+            'subtitleAutoWorkerTries' => (int) config('subtitles.queue.auto_start.tries', 0),
+            'subtitleConfiguredWorkerCount' => SubtitleTier::workerCount(),
             'redisClient' => (string) config('database.redis.client'),
             'cacheStore' => (string) config('cache.default'),
         ];

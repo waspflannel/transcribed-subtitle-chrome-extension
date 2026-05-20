@@ -9,6 +9,7 @@ use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
@@ -18,6 +19,7 @@ use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitleQueue;
+use App\Services\Subtitles\SubtitleTier;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
@@ -26,11 +28,14 @@ use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Process\FakeProcessResult;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use PDOException;
@@ -60,6 +65,7 @@ class SubtitleJobApiTest extends TestCase
         config([
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
+            'subtitles.tiers.default' => 'base',
         ]);
     }
 
@@ -127,12 +133,93 @@ class SubtitleJobApiTest extends TestCase
         });
     }
 
+    public function test_new_subtitle_request_uses_configured_generation_tier_queue(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.tiers.default' => 'pro',
+            'subtitles.tiers.plans.pro.queue' => 'subtitle-ai-pro',
+        ]);
+        Queue::fake();
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tierqueue01']))
+            ->assertAccepted();
+
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'public_id' => $response->json('jobId'),
+            'generation_tier' => 'pro',
+        ]);
+        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+            return $job->connection === 'database'
+                && $job->queue === 'subtitle-ai-pro';
+        });
+    }
+
+    public function test_ultimate_generation_tier_uses_highest_priority_queue_and_parallelism_config(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.tiers.default' => 'ultimate',
+            'subtitles.tiers.plans.ultimate.queue' => 'subtitle-ai-ultimate',
+            'subtitles.tiers.plans.ultimate.per_install_concurrency' => 20,
+            'subtitles.tiers.plans.ultimate.worker_count' => 20,
+        ]);
+        Queue::fake();
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ultimate001']))
+            ->assertAccepted();
+
+        $this->assertSame('subtitle-ai-ultimate,subtitle-ai-pro,subtitle-ai-plus,subtitle-ai', SubtitleQueue::workerQueueList());
+        $this->assertSame(20, SubtitleTier::perInstallConcurrency('ultimate'));
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'public_id' => $response->json('jobId'),
+            'generation_tier' => 'ultimate',
+        ]);
+        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+            return $job->connection === 'database'
+                && $job->queue === 'subtitle-ai-ultimate';
+        });
+    }
+
     public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
     {
         $processJobTimeout = (new ProcessSubtitleJob(1, (string) Str::uuid()))->timeout;
 
         $this->assertGreaterThan($processJobTimeout, config('queue.connections.database.retry_after'));
         $this->assertGreaterThan($processJobTimeout, config('queue.connections.redis.retry_after'));
+    }
+
+    public function test_generate_request_auto_starts_configured_subtitle_workers(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+            'subtitles.queue.auto_start.enabled' => true,
+            'subtitles.queue.auto_start.enabled_in_tests' => true,
+            'subtitles.queue.auto_start.worker_count' => 2,
+        ]);
+        Queue::fake();
+        Process::preventStrayProcesses();
+        Process::fake(fn (): FakeProcessResult => Process::result("43210\n"));
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'autowork001']))
+            ->assertAccepted();
+
+        Process::assertRanTimes(
+            fn (PendingProcess $process): bool => $this->processCommandContains($process, 'queue:work')
+                && $this->processCommandContains($process, '--name=subtitle-auto-worker')
+                && $this->processCommandContains($process, '--queue='.SubtitleQueue::workerQueueList())
+                && $this->processCommandContains($process, '--tries=0'),
+            2,
+        );
     }
 
     public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
@@ -954,6 +1041,33 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
     }
 
+    public function test_generation_records_estimated_provider_cost_without_public_payload_changes(): void
+    {
+        config([
+            'subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 100,
+            'subtitles.costs.openai_tokenization_microusd_per_cue' => 10,
+        ]);
+
+        $response = $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'costtrace01']));
+
+        $response
+            ->assertOk()
+            ->assertJsonMissingPath('estimatedProviderCostMicrousd')
+            ->assertJsonMissingPath('generationTier');
+
+        $job = SubtitleJob::query()
+            ->where('public_id', $response->json('jobId'))
+            ->sole();
+
+        $this->assertSame(120, $job->estimated_provider_cost_microusd);
+        $this->assertSame(2, SubtitleJobEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where('event', 'provider.cost_estimated')
+            ->count());
+    }
+
     public function test_old_tokenization_processing_versions_are_not_reused(): void
     {
         $oldJob = SubtitleJob::factory()->create([
@@ -1452,6 +1566,15 @@ class SubtitleJobApiTest extends TestCase
         }
 
         $this->assertSame(0, DB::table('jobs')->count(), Artisan::output());
+    }
+
+    private function processCommandContains(PendingProcess $process, string $needle): bool
+    {
+        $command = is_array($process->command)
+            ? implode(' ', $process->command)
+            : (string) $process->command;
+
+        return str_contains($command, $needle);
     }
 }
 class RecordingYouTubeAudioSource extends YouTubeAudioSource

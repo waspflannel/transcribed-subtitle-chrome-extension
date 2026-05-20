@@ -23,12 +23,14 @@ class SubtitleJob extends Model
         'detected_source_language',
         'target_language',
         'processing_version',
+        'generation_tier',
         'enrichment_mode',
         'include_romanization',
         'include_translation',
         'status',
         'stage',
         'progress_percent',
+        'estimated_provider_cost_microusd',
         'error_code',
         'error_message',
         'install_id',
@@ -55,6 +57,7 @@ class SubtitleJob extends Model
     {
         return [
             'expires_at' => 'immutable_datetime',
+            'estimated_provider_cost_microusd' => 'integer',
             'include_romanization' => 'boolean',
             'include_translation' => 'boolean',
             'progress_percent' => 'integer',
