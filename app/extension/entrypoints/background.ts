@@ -4,6 +4,11 @@ import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from 
 import { clearRememberedTracks, getRememberedTrack, rememberActiveTrack } from '../utils/active-tracks';
 import type { JobResponse, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
+  loadingMessageForStage,
+  publicSubtitleJobFailureMessage,
+  stateWithBackendProgress,
+} from '../utils/backend-subtitle-state';
+import {
   DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
   type PopupState,
@@ -259,14 +264,6 @@ async function waitForCompletedSubtitleJob(
   return null;
 }
 
-function publicSubtitleJobFailureMessage(job: Pick<JobResponse | SubtitleJobHistoryItem, 'errorCode' | 'message'>): string {
-  if (!job.errorCode || !job.message) {
-    throw new Error('Failed subtitle job is missing error details.');
-  }
-
-  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
-}
-
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     globalThis.setTimeout(resolve, milliseconds);
@@ -381,12 +378,20 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
       ? DEFAULT_SUBTITLE_STATE
       : await getSubtitleStateForPage(activeTabId, pageStatus);
 
+  const subtitleState = await stateWithBackendProgress(localState, pageStatus, jobs, (job) =>
+    resolveCompletedSubtitleJob(installId, job),
+  );
+
+  if (activeTabId !== null && subtitleState.type === 'ready' && localState.type !== 'ready') {
+    await publishSubtitleState(activeTabId, subtitleState);
+  }
+
   return {
     installId,
     settings,
     activeTabId: activeTabId ?? undefined,
     pageStatus,
-    subtitleState: stateWithBackendProgress(localState, pageStatus, jobs),
+    subtitleState,
     jobHistory: jobs,
     jobHistoryError: error,
   };
@@ -407,73 +412,23 @@ async function listBackendJobHistory(
   }
 }
 
-function stateWithBackendProgress(
-  localState: SubtitleState,
-  pageStatus: YoutubePageInfo | undefined,
-  jobs: SubtitleJobHistoryItem[],
-): SubtitleState {
-  if (!pageStatus?.supported) {
-    return localState;
-  }
+async function resolveCompletedSubtitleJob(
+  installId: string,
+  historyJob: SubtitleJobHistoryItem,
+): Promise<JobResponse | null> {
+  try {
+    const job = await subtitleApi.getSubtitleJob(installId, historyJob.jobId);
 
-  if (localState.type === 'ready' || localState.type === 'error') {
-    return localState;
-  }
+    return job.status === 'completed' && job.track ? job : null;
+  } catch (error) {
+    console.warn('extension.completed_subtitle_recovery_failed', {
+      youtubeVideoId: historyJob.youtubeVideoId,
+      jobId: historyJob.jobId,
+      trackId: historyJob.trackId,
+      error: error instanceof Error ? error.message : 'Unknown completed subtitle recovery error',
+    });
 
-  const job = jobs.find((candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status !== 'completed');
-
-  if (!job) {
-    return localState;
-  }
-
-  if (job.status === 'failed') {
-    return {
-      type: 'error',
-      jobId: job.jobId,
-      youtubeVideoId: job.youtubeVideoId,
-      message: publicSubtitleJobFailureMessage(job),
-    };
-  }
-
-  return {
-    type: 'loading',
-    jobId: job.jobId,
-    youtubeVideoId: job.youtubeVideoId,
-    youtubeUrl: job.youtubeUrl,
-    message: loadingMessageForStage(job.stage),
-    stage: job.stage,
-    progressPercent: job.progressPercent,
-    startedAt: job.startedAt,
-    lastUpdatedAt: job.lastUpdatedAt,
-  };
-}
-
-function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string {
-  switch (stage) {
-    case 'acquiring-audio':
-      return 'Acquiring audio...';
-
-    case 'transcribing':
-      return 'Transcribing audio...';
-
-    case 'tokenizing':
-      return 'Tokenizing subtitles...';
-
-    case 'romanizing':
-      return 'Adding romanization...';
-
-    case 'translating':
-      return 'Translating subtitles...';
-
-    case 'enriching':
-      return 'Generating word cards...';
-
-    case 'finalizing':
-      return 'Finalizing track...';
-
-    case 'preparing':
-    default:
-      return 'Preparing request...';
+    return null;
   }
 }
 
