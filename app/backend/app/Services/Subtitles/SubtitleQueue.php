@@ -23,7 +23,7 @@ final class SubtitleQueue
 
     public static function nameForJob(object $job): string
     {
-        $tier = property_exists($job, 'generation_tier') ? $job->generation_tier : null;
+        $tier = data_get($job, 'generation_tier');
 
         return self::nameForTier(is_string($tier) ? $tier : SubtitleTier::default());
     }

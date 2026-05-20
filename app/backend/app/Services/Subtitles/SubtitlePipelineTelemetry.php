@@ -110,13 +110,18 @@ class SubtitlePipelineTelemetry
         ], 'error');
     }
 
-    public function recordBatchDispatched(int $subtitleJobId, string $runId, string $batchName, Batch $batch): void
-    {
+    public function recordBatchDispatched(
+        int $subtitleJobId,
+        string $runId,
+        string $batchName,
+        string $queueName,
+        Batch $batch,
+    ): void {
         $this->tracer->jobEventById($subtitleJobId, 'batch.dispatched', [
             'run_id' => $runId,
             'laravel_batch_id' => $batch->id,
             'queue_connection' => SubtitleQueue::connection(),
-            'queue' => $this->queueName($subtitleJobId),
+            'queue' => $queueName,
             ...$this->batchContext($batchName, $batch),
         ]);
     }
@@ -277,12 +282,5 @@ class SubtitlePipelineTelemetry
             ->latest('created_at')
             ->latest('id')
             ->first();
-    }
-
-    private function queueName(int $subtitleJobId): string
-    {
-        $job = SubtitleJob::query()->find($subtitleJobId);
-
-        return $job === null ? SubtitleQueue::name() : SubtitleQueue::nameForJob($job);
     }
 }

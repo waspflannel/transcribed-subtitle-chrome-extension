@@ -458,6 +458,6 @@ class SubtitleGenerationPipeline
             return;
         }
 
-        @set_time_limit((int) config('subtitles.processing_timeout_seconds', 0));
+        set_time_limit((int) config('subtitles.processing_timeout_seconds', 0));
     }
 }

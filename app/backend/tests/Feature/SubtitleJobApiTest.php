@@ -187,6 +187,19 @@ class SubtitleJobApiTest extends TestCase
         });
     }
 
+    public function test_queue_name_uses_job_generation_tier_not_current_default(): void
+    {
+        config([
+            'subtitles.tiers.default' => 'ultimate',
+            'subtitles.tiers.plans.pro.queue' => 'subtitle-ai-pro',
+            'subtitles.tiers.plans.ultimate.queue' => 'subtitle-ai-ultimate',
+        ]);
+
+        $job = SubtitleJob::factory()->make(['generation_tier' => 'pro']);
+
+        $this->assertSame('subtitle-ai-pro', SubtitleQueue::nameForJob($job));
+    }
+
     public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
     {
         $processJobTimeout = (new ProcessSubtitleJob(1, (string) Str::uuid()))->timeout;
@@ -1769,7 +1782,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         array $batch,
         string $sourceLanguage,
         string $targetLanguage,
-        array $allCues = [],
+        array $allCues,
     ): CueEnrichmentResult {
         $this->translationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
