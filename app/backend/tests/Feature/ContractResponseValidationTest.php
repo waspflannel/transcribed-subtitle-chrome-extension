@@ -120,9 +120,9 @@ class ContractResponseValidationTest extends TestCase
             'subtitle-job-history-response.schema.json',
         );
 
-        $sameLanguageTrack = $this->completedTrack($installId, 'learntok001', [
+        $trackWithLearningMetadata = $this->completedTrack($installId, 'learntok001', [
             'source_language' => 'eng',
-            'detected_source_language' => null,
+            'detected_source_language' => 'eng',
             'target_language' => 'eng',
         ]);
 
@@ -130,7 +130,7 @@ class ContractResponseValidationTest extends TestCase
             $this
                 ->withHeader('X-Extension-Install-Id', $installId)
                 ->postJson('/v1/learning-tokens', [
-                    'trackId' => $sameLanguageTrack->public_id,
+                    'trackId' => $trackWithLearningMetadata->public_id,
                     'cueId' => 'cue-0001',
                     'tokenIndex' => 0,
                 ])
