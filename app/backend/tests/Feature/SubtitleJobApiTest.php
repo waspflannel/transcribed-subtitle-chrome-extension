@@ -1294,6 +1294,67 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
     }
 
+    public function test_learning_token_enrichment_preserves_concurrent_token_updates(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'install_id' => $this->installId(),
+            'youtube_video_id' => 'learnmerge1',
+            'youtube_url' => 'https://www.youtube.com/watch?v=learnmerge1',
+            'source_language' => 'spa',
+            'detected_source_language' => 'spa',
+            'target_language' => 'eng',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+            'expires_at' => now()->addDays(30),
+        ]);
+        $track = SubtitleTrack::factory()
+            ->for($job, 'job')
+            ->create([
+                'youtube_video_id' => 'learnmerge1',
+                'source_language' => 'spa',
+                'detected_source_language' => 'spa',
+                'target_language' => 'eng',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'startMs' => 0,
+                        'endMs' => 2000,
+                        'sourceText' => 'alpha beta',
+                        'translatedText' => 'alpha beta',
+                        'tokens' => [
+                            ['index' => 0, 'text' => 'alpha', 'normalizedText' => 'alpha'],
+                            ['index' => 1, 'text' => 'beta', 'normalizedText' => 'beta'],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->translationAnalysis->beforeTokenResult = function () use ($track): void {
+            $freshTrack = $track->refresh();
+            $cues = $freshTrack->cues;
+            $cues[0]['tokens'][1]['gloss'] = 'beta concurrent gloss';
+            $freshTrack->update(['cues' => $cues]);
+        };
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->postJson('/v1/learning-tokens', [
+                'trackId' => $track->public_id,
+                'cueId' => 'cue-0001',
+                'tokenIndex' => 0,
+            ])
+            ->assertOk()
+            ->assertJsonPath('token.index', 0)
+            ->assertJsonPath('token.gloss', 'alpha gloss');
+
+        $track->refresh();
+
+        $this->assertSame('alpha gloss', $track->cues[0]['tokens'][0]['gloss']);
+        $this->assertSame('beta concurrent gloss', $track->cues[0]['tokens'][1]['gloss']);
+    }
+
     public function test_learning_token_enrichment_skips_provider_for_same_language_track(): void
     {
         $jobResponse = $this
@@ -1686,6 +1747,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public ?\Closure $beforeTokenizationResult = null;
 
+    public ?\Closure $beforeTokenResult = null;
+
     /**
      * @var array<int, string>
      */
@@ -1851,6 +1914,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         }
 
         $text = (string) $token['text'];
+
+        if ($this->beforeTokenResult !== null) {
+            ($this->beforeTokenResult)();
+        }
 
         return [
             'index' => $token['index'],

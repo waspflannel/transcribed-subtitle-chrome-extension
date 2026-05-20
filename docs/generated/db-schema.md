@@ -1,7 +1,7 @@
 # Generated Database Schema
 
 Created: 2026-04-28
-Last updated: 2026-05-18
+Last updated: 2026-05-20
 
 The backend uses Postgres for runtime persistence. Redis-backed workers still rely on database tables for subtitle jobs, generated tracks, artifacts, batches, failed jobs, and trace events. SQLite is limited to PHPUnit's isolated in-memory test profile.
 
@@ -33,9 +33,11 @@ The product migrations currently define:
   - `detected_source_language`
   - `target_language`
   - `processing_version`
+  - `generation_tier`
   - `status`
   - `stage`
   - `progress_percent`
+  - `estimated_provider_cost_microusd`
   - `error_code`
   - `error_message`
   - `install_id`
