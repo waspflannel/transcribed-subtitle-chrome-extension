@@ -42,9 +42,14 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->translationAnalysis = new TraceRecordingTranslationAnalysisProvider;
         $this->app->instance(LaravelAiTranslationAnalysisProvider::class, $this->translationAnalysis);
         config([
+            'cache.stores.subtitle_concurrency_test' => [
+                'driver' => 'array',
+                'serialize' => false,
+            ],
             'queue.default' => 'database',
             'subtitles.queue.connection' => 'database',
             'subtitles.tiers.default' => 'base',
+            'subtitles.tiers.concurrency_cache_store' => 'subtitle_concurrency_test',
         ]);
     }
 
@@ -141,7 +146,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             'stage' => 'tokenizing',
         ]);
         $counterKey = 'subtitle-install-concurrency:'.hash('sha256', $job->install_id).':base';
-        Cache::put($counterKey, 1, now()->addMinute());
+        Cache::store('subtitle_concurrency_test')->put($counterKey, 1, now()->addMinute());
         $queuedJob = new class($job->id)
         {
             public bool $released = false;
@@ -170,6 +175,59 @@ class SubtitleRuntimeTracingTest extends TestCase
             'subtitle_job_id' => $job->id,
             'event' => 'queue.concurrency_delayed',
             'stage' => 'tokenizing',
+        ]);
+        $event = SubtitleJobEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where('event', 'queue.concurrency_delayed')
+            ->firstOrFail();
+        $this->assertSame('limit_reached', $event->context['delay_reason']);
+        $this->assertSame('subtitle_concurrency_test', $event->context['cache_store']);
+        $this->assertSame(1, $event->context['concurrency_limit']);
+        $this->assertSame(1, $event->context['observed_active_count']);
+        $this->assertSame(7, $event->context['release_delay_seconds']);
+    }
+
+    public function test_per_install_concurrency_middleware_claims_and_releases_configured_store_slot(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.per_install_concurrency' => 1,
+        ]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'translating',
+        ]);
+        $counterKey = 'subtitle-install-concurrency:'.hash('sha256', $job->install_id).':base';
+        Cache::put($counterKey, 99, now()->addMinute());
+        $queuedJob = new class($job->id)
+        {
+            public bool $released = false;
+
+            public int $releaseDelay = 0;
+
+            public function __construct(public readonly int $subtitleJobId) {}
+
+            public function release(int $delay): void
+            {
+                $this->released = true;
+                $this->releaseDelay = $delay;
+            }
+        };
+        $processed = false;
+
+        app(LimitSubtitleInstallConcurrency::class)->handle(
+            $queuedJob,
+            function () use (&$processed): void {
+                $processed = true;
+            },
+        );
+
+        $this->assertTrue($processed);
+        $this->assertFalse($queuedJob->released);
+        $this->assertSame(99, Cache::get($counterKey));
+        $this->assertNull(Cache::store('subtitle_concurrency_test')->get($counterKey));
+        $this->assertDatabaseMissing('subtitle_job_events', [
+            'subtitle_job_id' => $job->id,
+            'event' => 'queue.concurrency_delayed',
         ]);
     }
 

@@ -30,6 +30,7 @@ return [
 
     'tiers' => [
         'default' => env('SUBTITLE_DEFAULT_GENERATION_TIER', 'base'),
+        'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
         'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 10),
         'lock_seconds' => (int) env('SUBTITLE_CONCURRENCY_LOCK_SECONDS', 10),
         'counter_seconds' => (int) env('SUBTITLE_CONCURRENCY_COUNTER_SECONDS', 1800),

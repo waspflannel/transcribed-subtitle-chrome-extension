@@ -10,12 +10,12 @@
 
 - The local/runtime profile uses Postgres for app data and Laravel batch metadata, and Redis for queued `subtitle-ai` jobs.
 - SQLite is test-only through PHPUnit's in-memory configuration. It is not a supported app runtime or smoke profile.
-- `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, or Redis queue configuration is missing.
+- `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, Redis queue configuration, or Redis-backed subtitle concurrency bookkeeping is missing.
 - Local generate requests auto-start subtitle queue workers when `SUBTITLE_AUTO_START_WORKERS=true`; auto-start defaults off when `APP_ENV=production` unless explicitly enabled, so production can run supervised workers instead.
 - Workers listen in `SubtitleQueue::workerQueueList()` order, which defaults to `subtitle-ai-ultimate,subtitle-ai-pro,subtitle-ai-plus,subtitle-ai`. This gives higher tiers priority while preserving a base queue path.
 - Auto-started workers and subtitle jobs default to unlimited release attempts because install-scoped concurrency throttling intentionally releases queued jobs for a later attempt; subtitle jobs cap real exceptions with `maxExceptions=1`, while capped one-attempt jobs would turn normal delays into `MaxAttemptsExceededException` failures.
 - Conservative beta worker counts are configurable by tier: base 4, plus 2, pro 2, and local `ultimate` 20 by default while OpenAI and ElevenLabs provider limits are still being observed.
-- Per-install concurrency caps are enforced for database/Redis queue workers with cache-backed counters. The sync queue driver bypasses these caps so feature tests and local synchronous proofs still complete inline.
+- Per-install concurrency caps are enforced for database/Redis queue workers through the dedicated `subtitle_concurrency` cache store. This keeps limiter locks and counters on Redis DB 1 while the global `CACHE_STORE` can remain database-backed. The sync queue driver bypasses these caps so feature tests and local synchronous proofs still complete inline.
 - Add a startup smoke check to `scripts/agent/check.ps1`.
 - Generation performance budgets are internal telemetry gates, not user-visible promises: base short/medium/near-limit p95 targets are 4/10/30 minutes, plus 3/7/22 minutes, and pro 2/5/15 minutes.
 

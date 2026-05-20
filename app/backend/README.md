@@ -31,6 +31,8 @@ The script starts Postgres and Redis through Docker Compose, writes the ignored 
 
 Local generate requests auto-start subtitle queue workers by default through `SUBTITLE_AUTO_START_WORKERS=true`. The spawned workers listen to the tier-priority queue list, currently `subtitle-ai-ultimate,subtitle-ai-pro,subtitle-ai-plus,subtitle-ai`, run with `SUBTITLE_AUTO_WORKER_TRIES=0` by default, and exit after `SUBTITLE_AUTO_WORKER_MAX_TIME_SECONDS`. Subtitle queue jobs also allow unlimited release attempts with `maxExceptions=1`, so deliberate concurrency-delay releases do not fail as exhausted attempts while real exceptions still fail the job. For local maximum parallelism testing, set `SUBTITLE_DEFAULT_GENERATION_TIER=ultimate`, `SUBTITLE_ULTIMATE_PER_INSTALL_CONCURRENCY=20`, and `SUBTITLE_AUTO_WORKER_COUNT=20`.
 
+Per-install concurrency limiter bookkeeping uses the dedicated Redis-backed cache store configured by `SUBTITLE_CONCURRENCY_CACHE_STORE=subtitle_concurrency`, with Redis connection and lock connection both defaulting to `cache`. The global `CACHE_STORE` can remain `database`; `subtitles:runtime-check --strict` verifies that Redis queues are not paired with database-backed limiter locks.
+
 Keep the queue `retry_after` value above the worker timeout; the example profiles use 1260 seconds for 1200 second subtitle workers. Auto-start defaults off when `APP_ENV=production` unless explicitly enabled; production can run supervised workers instead.
 
 ## Runtime Diagnostics

@@ -87,6 +87,13 @@ final class SubtitleTier
         return max(1, (int) config('subtitles.tiers.release_delay_seconds', 10));
     }
 
+    public static function concurrencyCacheStore(): string
+    {
+        $store = config('subtitles.tiers.concurrency_cache_store', 'subtitle_concurrency');
+
+        return is_string($store) && $store !== '' ? $store : 'subtitle_concurrency';
+    }
+
     public static function concurrencyLockSeconds(): int
     {
         return max(1, (int) config('subtitles.tiers.lock_seconds', 10));

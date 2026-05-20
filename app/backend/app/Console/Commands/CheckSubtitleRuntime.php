@@ -21,6 +21,8 @@ class CheckSubtitleRuntime extends Command
         $databaseDriver = (string) config("database.connections.{$databaseConnection}.driver", $databaseConnection);
         $queueConnection = SubtitleQueue::connection();
         $queueDriver = (string) config("queue.connections.{$queueConnection}.driver", $queueConnection);
+        $concurrencyCacheStore = SubtitleTier::concurrencyCacheStore();
+        $concurrencyCacheDriver = (string) config("cache.stores.{$concurrencyCacheStore}.driver", 'unconfigured');
         $isTesting = app()->environment('testing');
         $enforceRuntime = $this->option('strict') || ! $isTesting;
 
@@ -39,6 +41,10 @@ class CheckSubtitleRuntime extends Command
             'subtitleAutoWorkerCount' => (int) config('subtitles.queue.auto_start.worker_count', 0),
             'subtitleAutoWorkerTries' => (int) config('subtitles.queue.auto_start.tries', 0),
             'subtitleConfiguredWorkerCount' => SubtitleTier::workerCount(),
+            'subtitleConcurrencyCacheStore' => $concurrencyCacheStore,
+            'subtitleConcurrencyCacheDriver' => $concurrencyCacheDriver,
+            'subtitleConcurrencyRedisConnection' => (string) config("cache.stores.{$concurrencyCacheStore}.connection", ''),
+            'subtitleConcurrencyRedisLockConnection' => (string) config("cache.stores.{$concurrencyCacheStore}.lock_connection", ''),
             'redisClient' => (string) config('database.redis.client'),
             'cacheStore' => (string) config('cache.default'),
         ];
@@ -55,6 +61,10 @@ class CheckSubtitleRuntime extends Command
 
         if ($enforceRuntime && $queueDriver !== 'redis') {
             $problems[] = "Subtitle queue driver is {$queueDriver}; expected redis.";
+        }
+
+        if ($enforceRuntime && $queueDriver === 'redis' && $concurrencyCacheDriver !== 'redis') {
+            $problems[] = "Subtitle concurrency cache driver is {$concurrencyCacheDriver}; expected redis.";
         }
 
         if ($this->option('json')) {

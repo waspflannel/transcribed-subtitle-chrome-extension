@@ -6,6 +6,7 @@ use App\Models\SubtitleJob;
 use App\Services\Subtitles\SubtitleRuntimeTracer;
 use App\Services\Subtitles\SubtitleTier;
 use Closure;
+use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
@@ -26,10 +27,11 @@ final class LimitSubtitleInstallConcurrency
         $tier = SubtitleTier::normalize($subtitleJob->generation_tier);
         $limit = SubtitleTier::perInstallConcurrency($tier);
         $counterKey = $this->counterKey($subtitleJob);
+        $claim = $this->claimSlot($counterKey, $limit);
 
-        if (! $this->claimSlot($counterKey, $limit)) {
+        if (! $claim['claimed']) {
             $this->releaseQueuedJob($job);
-            $this->traceDelay($subtitleJob, $tier, $limit);
+            $this->traceDelay($subtitleJob, $tier, $limit, $claim);
 
             return null;
         }
@@ -50,54 +52,69 @@ final class LimitSubtitleInstallConcurrency
         return SubtitleJob::query()->find($job->subtitleJobId);
     }
 
-    private function claimSlot(string $counterKey, int $limit): bool
+    /**
+     * @return array{claimed: bool, delay_reason: string|null, observed_active_count: int|null}
+     */
+    private function claimSlot(string $counterKey, int $limit): array
     {
+        $cache = $this->cache();
         $claimed = false;
+        $activeCount = null;
 
         try {
-            Cache::lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
-                ->block(1, function () use ($counterKey, $limit, &$claimed): void {
-                    $active = max(0, (int) Cache::get($counterKey, 0));
+            $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
+                ->block(1, function () use ($cache, $counterKey, $limit, &$claimed, &$activeCount): void {
+                    $activeCount = max(0, (int) $cache->get($counterKey, 0));
 
-                    if ($active >= $limit) {
+                    if ($activeCount >= $limit) {
                         return;
                     }
 
-                    Cache::put(
+                    $cache->put(
                         $counterKey,
-                        $active + 1,
+                        $activeCount + 1,
                         now()->addSeconds(SubtitleTier::concurrencyCounterSeconds()),
                     );
                     $claimed = true;
                 });
         } catch (LockTimeoutException) {
-            return false;
+            return [
+                'claimed' => false,
+                'delay_reason' => 'lock_timeout',
+                'observed_active_count' => $activeCount,
+            ];
         }
 
-        return $claimed;
+        return [
+            'claimed' => $claimed,
+            'delay_reason' => $claimed ? null : 'limit_reached',
+            'observed_active_count' => $activeCount,
+        ];
     }
 
     private function releaseSlot(string $counterKey): void
     {
+        $cache = $this->cache();
+
         try {
-            Cache::lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
-                ->block(1, function () use ($counterKey): void {
-                    $active = max(0, (int) Cache::get($counterKey, 0) - 1);
+            $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
+                ->block(1, function () use ($cache, $counterKey): void {
+                    $active = max(0, (int) $cache->get($counterKey, 0) - 1);
 
                     if ($active === 0) {
-                        Cache::forget($counterKey);
+                        $cache->forget($counterKey);
 
                         return;
                     }
 
-                    Cache::put(
+                    $cache->put(
                         $counterKey,
                         $active,
                         now()->addSeconds(SubtitleTier::concurrencyCounterSeconds()),
                     );
                 });
         } catch (LockTimeoutException) {
-            Cache::forget($counterKey);
+            $cache->forget($counterKey);
         }
     }
 
@@ -108,13 +125,19 @@ final class LimitSubtitleInstallConcurrency
         }
     }
 
-    private function traceDelay(SubtitleJob $job, string $tier, int $limit): void
+    /**
+     * @param  array{claimed: bool, delay_reason: string|null, observed_active_count: int|null}  $claim
+     */
+    private function traceDelay(SubtitleJob $job, string $tier, int $limit, array $claim): void
     {
         app(SubtitleRuntimeTracer::class)->jobEvent($job, 'queue.concurrency_delayed', [
             'stage' => $job->stage,
             'status' => $job->status,
             'generation_tier' => $tier,
+            'delay_reason' => $claim['delay_reason'] ?? 'limit_reached',
+            'cache_store' => SubtitleTier::concurrencyCacheStore(),
             'concurrency_limit' => $limit,
+            'observed_active_count' => $claim['observed_active_count'],
             'release_delay_seconds' => SubtitleTier::concurrencyReleaseDelaySeconds(),
         ], 'warning');
     }
@@ -122,5 +145,10 @@ final class LimitSubtitleInstallConcurrency
     private function counterKey(SubtitleJob $job): string
     {
         return 'subtitle-install-concurrency:'.hash('sha256', $job->install_id).':'.SubtitleTier::normalize($job->generation_tier);
+    }
+
+    private function cache(): Repository
+    {
+        return Cache::store(SubtitleTier::concurrencyCacheStore());
     }
 }
