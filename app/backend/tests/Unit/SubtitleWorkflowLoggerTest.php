@@ -159,6 +159,70 @@ class SubtitleWorkflowLoggerTest extends TestCase
         );
     }
 
+    public function test_processing_failures_drop_unsafe_context_and_keep_safe_scalars(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'youtube_video_id' => 'dQw4w9WgXcQ',
+        ]);
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('backend.audio_acquisition_failed', Mockery::on(
+                fn (array $context): bool => $context['job_id'] === $job->public_id
+                    && $context['youtube_video_id'] === 'dQw4w9WgXcQ'
+                    && $context['error_code'] === 'audio_acquisition_failed'
+                    && $context['reason'] === 'process_failed'
+                    && $context['provider'] === 'yt-dlp'
+                    && $context['adapter'] === 'process'
+                    && $context['model_key'] === 'audio.source'
+                    && $context['status'] === 'failed'
+                    && $context['queue'] === 'subtitle-ai'
+                    && $context['queue_connection'] === 'redis'
+                    && $context['duration_seconds'] === 42
+                    && $context['max_duration_seconds'] === 3600
+                    && $context['batch_index'] === 2
+                    && $context['attempt'] === 1
+                    && ! array_key_exists('command', $context)
+                    && ! array_key_exists('stdout_excerpt', $context)
+                    && ! array_key_exists('stderr_excerpt', $context)
+                    && ! array_key_exists('audio_path', $context)
+                    && ! array_key_exists('install_id', $context)
+                    && ! array_key_exists('prompt', $context)
+                    && ! array_key_exists('transcript', $context)
+                    && ! array_key_exists('provider_payload', $context)
+                    && ! array_key_exists('tokens', $context)
+                    && ! array_key_exists('details', $context),
+            ));
+
+        $this->logger()->processingFailed(
+            $job,
+            'audio_acquisition',
+            SubtitleProcessingException::audioAcquisitionFailed(context: [
+                'reason' => 'process_failed',
+                'provider' => 'yt-dlp',
+                'adapter' => 'process',
+                'model_key' => 'audio.source',
+                'status' => 'failed',
+                'queue' => 'subtitle-ai',
+                'queue_connection' => 'redis',
+                'duration_seconds' => 42,
+                'max_duration_seconds' => 3600,
+                'batch_index' => 2,
+                'attempt' => 1,
+                'command' => 'yt-dlp https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                'stdout_excerpt' => 'raw provider output',
+                'stderr_excerpt' => 'raw provider error',
+                'audio_path' => storage_path('framework/testing/audio/private.m4a'),
+                'install_id' => 'install_'.str_repeat('a', 32),
+                'prompt' => 'translate this transcript',
+                'transcript' => 'full transcript text',
+                'provider_payload' => ['raw' => true],
+                'tokens' => [['text' => 'secret']],
+                'details' => ['nested' => 'data'],
+            ]),
+        );
+    }
+
     public function test_queue_and_stage_timing_logs_stay_sanitized(): void
     {
         $job = SubtitleJob::factory()->create([

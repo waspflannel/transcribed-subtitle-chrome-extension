@@ -5,6 +5,7 @@ namespace App\Services\TranslationAnalysis;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -22,8 +23,8 @@ class LearningTokenEnrichmentService
     {
         $track = $this->track($payload['trackId'], $installId);
         $cues = $track->cues;
-        [$cuePosition, $cue] = $this->cue($cues, $payload['cueId']);
-        [$tokenPosition, $token] = $this->token($cue, $payload['tokenIndex']);
+        [, $cue] = $this->cue($cues, $payload['cueId']);
+        [, $token] = $this->token($cue, $payload['tokenIndex']);
 
         if ($this->hasLearningMetadata($token)) {
             return $this->response($track, $cue, $token);
@@ -51,10 +52,35 @@ class LearningTokenEnrichmentService
                 targetLanguage: $track->target_language,
             ),
         );
-        $mergedToken = $this->mergeToken($token, $enrichedToken);
 
-        $cues[$cuePosition]['tokens'][$tokenPosition] = $mergedToken;
-        $track->update(['cues' => $cues]);
+        $response = DB::transaction(function () use ($track, $installId, $payload, $enrichedToken): array {
+            $lockedTrack = SubtitleTrack::query()
+                ->with('job')
+                ->whereKey($track->getKey())
+                ->where('expires_at', '>', now())
+                ->whereHas('job', fn ($query) => $query->where('install_id', $installId))
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedTrack instanceof SubtitleTrack) {
+                throw new NotFoundHttpException('Generated subtitle track not found.');
+            }
+
+            $freshCues = $lockedTrack->cues;
+            [$freshCuePosition, $freshCue] = $this->cue($freshCues, $payload['cueId']);
+            [$freshTokenPosition, $freshToken] = $this->token($freshCue, $payload['tokenIndex']);
+
+            if ($this->hasLearningMetadata($freshToken)) {
+                return $this->response($lockedTrack, $freshCue, $freshToken);
+            }
+
+            $freshMergedToken = $this->mergeToken($freshToken, $enrichedToken);
+            $freshCues[$freshCuePosition]['tokens'][$freshTokenPosition] = $freshMergedToken;
+            $freshCue['tokens'][$freshTokenPosition] = $freshMergedToken;
+            $lockedTrack->update(['cues' => $freshCues]);
+
+            return $this->response($lockedTrack, $freshCue, $freshMergedToken);
+        });
 
         Log::info('backend.learning_token_enrichment_completed', [
             'track_id' => $track->public_id,
@@ -64,7 +90,7 @@ class LearningTokenEnrichmentService
             'token_index' => $token['index'],
         ]);
 
-        return $this->response($track->refresh(), $cue, $mergedToken);
+        return $response;
     }
 
     private function track(string $trackId, string $installId): SubtitleTrack
