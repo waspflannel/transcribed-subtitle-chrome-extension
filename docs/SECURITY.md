@@ -38,6 +38,7 @@
   - Sending video-derived audio/text to configured AI services.
   - Persisting generated WebVTT and cue/token learning data.
   - Applying install-ID and IP rate limits.
+  - Applying server-side generation tier, queue priority, concurrency, and cost telemetry without trusting anonymous client-provided entitlements.
   - Returning public errors and request IDs without exposing internals.
 - Abuse cases:
   - Repeated generation requests to exhaust provider quota or local CPU/disk.
@@ -46,6 +47,7 @@
   - Provider failures returning malformed WebVTT or malformed enrichment JSON.
   - Log leakage of raw audio paths, prompts, transcripts, translations, or provider secrets.
   - Diagnostic trace leakage of generated cue/token content or anonymous install IDs.
+  - Public clients spoofing paid-tier queue priority before authenticated entitlements exist.
   - Stale generated tracks retained beyond the 30-day window.
 - Audit signals:
   - `backend.proxy_invalid_install_id`
@@ -73,6 +75,10 @@
   - `backend.subtitle_stage_timing`
   - `backend.subtitle_completed_track_timing`
   - `backend.subtitle_trace_event`
+  - `provider.cost_estimated`
+  - `queue.concurrency_delayed`
+  - `performance.budget_checked`
+  - `performance.budget_exceeded`
   - `backend.queue_job_processing`
   - `backend.queue_job_processed`
   - `backend.queue_job_failed`
@@ -104,6 +110,8 @@ Project-specific security defaults:
 - YouTube audio acquisition writes only to controlled backend temporary storage.
 - Logs must not include secrets, raw audio, full prompts, or full transcripts by default.
 - Runtime trace rows must stay scalar and sanitized; do not persist transcripts, cue text, token text, prompts, translations, romanization, raw provider payloads, raw audio paths, provider secrets, or install IDs.
+- Generation tier is server-side configuration until account auth exists; do not accept tier or entitlement from anonymous extension payloads.
+- Cost telemetry stores configured unit-price estimates and safe billing units only. It must not store raw usage payloads, provider responses, prompts, transcripts, translations, or token text.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - Phase 03 `/v1/*` API routes require `X-Extension-Install-Id`, throttle by anonymous install ID and IP, and return stable public error objects.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.

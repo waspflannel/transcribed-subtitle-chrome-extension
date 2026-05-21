@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Middleware\LimitSubtitleInstallConcurrency;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
@@ -20,7 +21,9 @@ class MergeSubtitleCuesAfterRomanizationBatches implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public int $tries = 1;
+    public int $tries = 0;
+
+    public int $maxExceptions = 1;
 
     public int $timeout = 120;
 
@@ -34,6 +37,14 @@ class MergeSubtitleCuesAfterRomanizationBatches implements ShouldQueue
         $this->onConnection(SubtitleQueue::connection());
         $this->onQueue(SubtitleQueue::name());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new LimitSubtitleInstallConcurrency];
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void

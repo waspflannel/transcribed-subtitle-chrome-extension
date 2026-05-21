@@ -47,17 +47,23 @@ class SubtitleJobService
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleRuntimeTracer $tracer,
+        private readonly SubtitleQueueWorkerBootstrapper $workers,
     ) {}
 
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function generate(array $payload, string $installId, ?string $requestIp): SubtitleJob
-    {
+    public function generate(
+        array $payload,
+        string $installId,
+        ?string $requestIp,
+        ?string $generationTier = null,
+    ): SubtitleJob {
         $enrichmentMode = $payload['enrichmentMode'];
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
+        $generationTier = SubtitleTier::normalize($generationTier ?? SubtitleTier::default());
         $dispatchState = self::DISPATCH_STATE_REUSED;
 
         try {
@@ -66,6 +72,7 @@ class SubtitleJobService
                 $installId,
                 $requestIp,
                 $processingVersion,
+                $generationTier,
                 $enrichmentMode,
                 $includeRomanization,
                 $includeTranslation,
@@ -95,6 +102,7 @@ class SubtitleJobService
                         payload: $payload,
                         installId: $installId,
                         requestIp: $requestIp,
+                        generationTier: $generationTier,
                         enrichmentMode: $enrichmentMode,
                         includeRomanization: $includeRomanization,
                         includeTranslation: $includeTranslation,
@@ -109,6 +117,7 @@ class SubtitleJobService
                     installId: $installId,
                     requestIp: $requestIp,
                     processingVersion: $processingVersion,
+                    generationTier: $generationTier,
                     enrichmentMode: $enrichmentMode,
                     includeRomanization: $includeRomanization,
                     includeTranslation: $includeTranslation,
@@ -145,10 +154,12 @@ class SubtitleJobService
         if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
             ProcessSubtitleJob::dispatch($job->id, $job->run_id)
                 ->onConnection(SubtitleQueue::connection())
-                ->onQueue(SubtitleQueue::name());
+                ->onQueue(SubtitleQueue::nameForJob($job));
 
             $job = $job->refresh()->load('track');
         }
+
+        $this->workers->ensureRunning();
 
         return $job;
     }
@@ -175,6 +186,7 @@ class SubtitleJobService
         string $installId,
         ?string $requestIp,
         string $processingVersion,
+        string $generationTier,
         string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
@@ -189,12 +201,14 @@ class SubtitleJobService
             'detected_source_language' => null,
             'target_language' => $payload['targetLanguage'],
             'processing_version' => $processingVersion,
+            'generation_tier' => $generationTier,
             'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
+            'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
             'request_ip' => $requestIp,
         ]);
@@ -204,6 +218,8 @@ class SubtitleJobService
             'status' => 'running',
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
+            'generation_tier' => $job->generation_tier,
+            'queue' => SubtitleQueue::nameForJob($job),
         ]);
 
         return $job;
@@ -217,6 +233,7 @@ class SubtitleJobService
         array $payload,
         string $installId,
         ?string $requestIp,
+        string $generationTier,
         string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
@@ -230,12 +247,14 @@ class SubtitleJobService
             'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,
+            'generation_tier' => $generationTier,
             'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
+            'estimated_provider_cost_microusd' => 0,
             'error_code' => null,
             'error_message' => null,
             'install_id' => $installId,
@@ -249,6 +268,8 @@ class SubtitleJobService
             'status' => 'running',
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
+            'generation_tier' => $job->generation_tier,
+            'queue' => SubtitleQueue::nameForJob($job),
         ]);
     }
 

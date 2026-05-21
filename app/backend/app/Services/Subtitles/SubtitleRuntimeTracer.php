@@ -265,7 +265,7 @@ class SubtitleRuntimeTracer
         $queue = method_exists($queueJob, 'getQueue') ? $queueJob->getQueue() : null;
         $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::name();
 
-        if ($queueName !== SubtitleQueue::name()) {
+        if (! in_array($queueName, SubtitleQueue::names(), true)) {
             return null;
         }
 

@@ -9,17 +9,34 @@ use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 class SubtitleWorkflowLogger
 {
+    private const SAFE_FAILURE_CONTEXT_KEYS = [
+        'adapter',
+        'attempt',
+        'batch_index',
+        'duration_seconds',
+        'max_duration_seconds',
+        'model',
+        'model_key',
+        'provider',
+        'queue',
+        'queue_connection',
+        'reason',
+        'status',
+    ];
+
     public function jobCreated(SubtitleJob $job): void
     {
         Log::info('backend.subtitle_job_created', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
+            'generation_tier' => $job->generation_tier,
         ]);
     }
 
@@ -29,6 +46,7 @@ class SubtitleWorkflowLogger
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
+            'generation_tier' => $job->generation_tier,
         ]);
     }
 
@@ -39,6 +57,7 @@ class SubtitleWorkflowLogger
             'track_id' => $job->track->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
+            'generation_tier' => $job->generation_tier,
         ]);
     }
 
@@ -230,7 +249,7 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'stage' => $stage,
             'queue_connection' => config('subtitles.queue.connection'),
-            'queue' => config('subtitles.queue.name'),
+            'queue' => SubtitleQueue::nameForJob($job),
             'wait_ms' => $waitMs,
         ], $batchIndex));
     }
@@ -252,6 +271,8 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'duration_ms' => $durationMs,
             'processing_version' => $job->processing_version,
+            'generation_tier' => $job->generation_tier,
+            'estimated_provider_cost_microusd' => $job->estimated_provider_cost_microusd,
         ]);
     }
 
@@ -261,7 +282,7 @@ class SubtitleWorkflowLogger
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'error_code' => $exception->publicCode,
-            ...$exception->context,
+            ...$this->sanitizedFailureContext($exception->context),
         ]);
     }
 
@@ -301,5 +322,34 @@ class SubtitleWorkflowLogger
             ...$context,
             'batch_index' => $batchIndex,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, int|float|bool|string>
+     */
+    private function sanitizedFailureContext(array $context): array
+    {
+        $safeContext = [];
+
+        foreach (self::SAFE_FAILURE_CONTEXT_KEYS as $key) {
+            if (! array_key_exists($key, $context)) {
+                continue;
+            }
+
+            $value = $context[$key];
+
+            if (is_int($value) || is_float($value) || is_bool($value)) {
+                $safeContext[$key] = $value;
+
+                continue;
+            }
+
+            if (is_string($value) && trim($value) !== '') {
+                $safeContext[$key] = Str::limit(trim($value), 240, '...');
+            }
+        }
+
+        return $safeContext;
     }
 }

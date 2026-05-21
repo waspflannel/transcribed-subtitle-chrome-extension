@@ -15,4 +15,29 @@ final class SubtitleQueue
     {
         return (string) config('subtitles.queue.name', self::DEFAULT_NAME);
     }
+
+    public static function nameForTier(string $tier): string
+    {
+        return SubtitleTier::queue($tier);
+    }
+
+    public static function nameForJob(object $job): string
+    {
+        $tier = data_get($job, 'generation_tier');
+
+        return self::nameForTier(is_string($tier) ? $tier : SubtitleTier::default());
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function names(): array
+    {
+        return SubtitleTier::queuesInPriorityOrder();
+    }
+
+    public static function workerQueueList(): string
+    {
+        return SubtitleTier::workerQueueList();
+    }
 }

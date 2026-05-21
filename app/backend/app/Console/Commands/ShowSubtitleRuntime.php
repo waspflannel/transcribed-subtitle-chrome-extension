@@ -32,6 +32,7 @@ class ShowSubtitleRuntime extends Command
                 'jobId' => $job->public_id,
                 'runId' => $job->run_id,
                 'videoId' => $job->youtube_video_id,
+                'tier' => $job->generation_tier,
                 'stage' => $job->stage,
                 'progress' => $job->progress_percent,
                 'updatedAt' => $job->updated_at->toJSON(),
@@ -41,8 +42,8 @@ class ShowSubtitleRuntime extends Command
         $summary = [
             'connection' => SubtitleQueue::connection(),
             'driver' => config('queue.connections.'.SubtitleQueue::connection().'.driver'),
-            'queue' => SubtitleQueue::name(),
-            'queueDepth' => $this->queueDepth(),
+            'queues' => SubtitleQueue::names(),
+            'queueDepths' => $this->queueDepths(),
             'activeJobCount' => $activeJobs->count(),
         ];
 
@@ -74,21 +75,38 @@ class ShowSubtitleRuntime extends Command
         }
 
         $this->components->info('Subtitle runtime');
-        $this->table(['connection', 'driver', 'queue', 'queue_depth', 'active_jobs'], [[
+        $this->table(['connection', 'driver', 'queues', 'active_jobs'], [[
             $summary['connection'],
             $summary['driver'],
-            $summary['queue'],
-            $summary['queueDepth'],
+            implode(',', $summary['queues']),
             $summary['activeJobCount'],
         ]]);
-        $this->table(['job_id', 'run_id', 'video', 'stage', 'progress', 'updated'], $activeJobs->all());
+        $this->table(['queue', 'depth'], collect($summary['queueDepths'])
+            ->map(fn (int|string $depth, string $queue): array => [$queue, $depth])
+            ->values()
+            ->all());
+        $this->table(['job_id', 'run_id', 'video', 'tier', 'stage', 'progress', 'updated'], $activeJobs->all());
         $this->table(['batch_id', 'name', 'total', 'pending', 'failed', 'finished_at'], $batches->all());
         $this->table(['time', 'job_id', 'event', 'stage', 'error', 'exception'], $failures->all());
 
         return self::SUCCESS;
     }
 
-    private function queueDepth(): int|string
+    /**
+     * @return array<string, int|string>
+     */
+    private function queueDepths(): array
+    {
+        $depths = [];
+
+        foreach (SubtitleQueue::names() as $queueName) {
+            $depths[$queueName] = $this->queueDepth($queueName);
+        }
+
+        return $depths;
+    }
+
+    private function queueDepth(string $queueName): int|string
     {
         $connection = SubtitleQueue::connection();
         $driver = config('queue.connections.'.$connection.'.driver');
@@ -96,14 +114,14 @@ class ShowSubtitleRuntime extends Command
         try {
             if ($driver === 'database' && Schema::hasTable('jobs')) {
                 return DB::table('jobs')
-                    ->where('queue', SubtitleQueue::name())
+                    ->where('queue', $queueName)
                     ->count();
             }
 
             if ($driver === 'redis') {
                 $redisConnection = (string) config('queue.connections.'.$connection.'.connection', 'default');
 
-                return Redis::connection($redisConnection)->llen('queues:'.SubtitleQueue::name());
+                return Redis::connection($redisConnection)->llen('queues:'.$queueName);
             }
         } catch (Throwable $exception) {
             return 'unavailable:'.$exception::class;

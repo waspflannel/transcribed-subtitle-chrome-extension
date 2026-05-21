@@ -14,6 +14,7 @@ class SubtitleCueBatchProcessor
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly SubtitleJobFailureHandler $failureHandler,
         private readonly SubtitlePipelineTelemetry $telemetry,
+        private readonly SubtitleProviderCostRecorder $costs,
     ) {}
 
     public function tokenizeCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
@@ -132,6 +133,7 @@ class SubtitleCueBatchProcessor
                 return;
             }
 
+            $this->costs->recordCueBatch($job, $stage, count($result->cues));
             $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs, $batchIndex);
         } catch (Throwable $exception) {
             $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId, [

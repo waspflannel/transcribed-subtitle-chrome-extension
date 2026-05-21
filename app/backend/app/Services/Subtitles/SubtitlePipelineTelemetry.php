@@ -36,7 +36,7 @@ class SubtitlePipelineTelemetry
         $this->tracer->jobEvent($job, 'queue.wait_observed', $this->withBatchIndex([
             'stage' => $stage,
             'queue_connection' => SubtitleQueue::connection(),
-            'queue' => SubtitleQueue::name(),
+            'queue' => SubtitleQueue::nameForJob($job),
             'wait_ms' => $waitMs,
         ], $batchIndex));
         $this->recordSlowQueueWait($job, $stage, $waitMs, $batchIndex);
@@ -48,7 +48,7 @@ class SubtitlePipelineTelemetry
             'stage' => $stage,
             'status' => $job->status,
             'queue_connection' => SubtitleQueue::connection(),
-            'queue' => SubtitleQueue::name(),
+            'queue' => SubtitleQueue::nameForJob($job),
             'worker_pid' => getmypid() ?: null,
         ], $batchIndex));
     }
@@ -69,11 +69,14 @@ class SubtitlePipelineTelemetry
 
     public function recordJobCompleted(SubtitleJob $job): void
     {
+        $durationMs = (int) abs(now()->diffInMilliseconds($job->created_at));
+
         $this->tracer->jobEvent($job, 'job.completed', [
             'stage' => 'finalizing',
             'status' => 'completed',
-            'duration_ms' => (int) abs(now()->diffInMilliseconds($job->created_at)),
+            'duration_ms' => $durationMs,
         ]);
+        $this->recordPerformanceBudget($job, $durationMs);
     }
 
     public function recordStaleRunSkipped(SubtitleJob $job, string $queuedRunId, string $stage): void
@@ -107,13 +110,18 @@ class SubtitlePipelineTelemetry
         ], 'error');
     }
 
-    public function recordBatchDispatched(int $subtitleJobId, string $runId, string $batchName, Batch $batch): void
-    {
+    public function recordBatchDispatched(
+        int $subtitleJobId,
+        string $runId,
+        string $batchName,
+        string $queueName,
+        Batch $batch,
+    ): void {
         $this->tracer->jobEventById($subtitleJobId, 'batch.dispatched', [
             'run_id' => $runId,
             'laravel_batch_id' => $batch->id,
             'queue_connection' => SubtitleQueue::connection(),
-            'queue' => SubtitleQueue::name(),
+            'queue' => $queueName,
             ...$this->batchContext($batchName, $batch),
         ]);
     }
@@ -195,6 +203,34 @@ class SubtitlePipelineTelemetry
             'threshold_ms' => $thresholdMs,
             'slow_type' => 'stage_duration',
         ], $batchIndex), 'warning');
+    }
+
+    private function recordPerformanceBudget(SubtitleJob $job, int $durationMs): void
+    {
+        $tier = SubtitleTier::normalize($job->generation_tier);
+        $bucket = SubtitleTier::budgetBucket($job->video_duration_seconds);
+        $budgetSeconds = SubtitleTier::budgetSeconds($tier, $job->video_duration_seconds);
+
+        if ($budgetSeconds === 0) {
+            return;
+        }
+
+        $budgetMs = $budgetSeconds * 1000;
+        $context = [
+            'stage' => 'finalizing',
+            'status' => 'completed',
+            'generation_tier' => $tier,
+            'duration_bucket' => $bucket,
+            'duration_ms' => $durationMs,
+            'budget_ms' => $budgetMs,
+            'video_duration_seconds' => $job->video_duration_seconds,
+        ];
+
+        $this->tracer->jobEvent($job, 'performance.budget_checked', $context);
+
+        if ($durationMs > $budgetMs) {
+            $this->tracer->jobEvent($job, 'performance.budget_exceeded', $context, 'warning');
+        }
     }
 
     private function durationMs(int $startedAtMs): int

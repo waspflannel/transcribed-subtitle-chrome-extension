@@ -18,6 +18,10 @@ Every meaningful PR should include:
 - Screenshots, videos, logs, or traces when relevant.
 - Known limitations and follow-up debt.
 
+## Architecture Review Reports
+
+- Whole-codebase architecture review, 2026-05-20: `docs/architecture-review-report-2026-05-20.md`
+
 ## Agent Review Loop
 
 For substantial changes:

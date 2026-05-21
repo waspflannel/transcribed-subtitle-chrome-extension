@@ -10,11 +10,14 @@
 
 - The local/runtime profile uses Postgres for app data and Laravel batch metadata, and Redis for queued `subtitle-ai` jobs.
 - SQLite is test-only through PHPUnit's in-memory configuration. It is not a supported app runtime or smoke profile.
-- `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, or Redis queue configuration is missing.
-- Local and production runtimes run explicit `subtitle-ai` queue workers; web requests dispatch jobs but do not manage worker processes.
-- A conservative worker count is six `subtitle-ai` workers while OpenAI provider limits are still being observed.
+- `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, Redis queue configuration, or Redis-backed subtitle concurrency bookkeeping is missing.
+- Local generate requests auto-start subtitle queue workers when `SUBTITLE_AUTO_START_WORKERS=true`; auto-start defaults off when `APP_ENV=production` unless explicitly enabled, so production can run supervised workers instead.
+- Workers listen in `SubtitleQueue::workerQueueList()` order, which defaults to `subtitle-ai-ultimate,subtitle-ai-pro,subtitle-ai-plus,subtitle-ai`. This gives higher tiers priority while preserving a base queue path.
+- Auto-started workers and subtitle jobs default to unlimited release attempts because install-scoped concurrency throttling intentionally releases queued jobs for a later attempt; subtitle jobs cap real exceptions with `maxExceptions=1`, while capped one-attempt jobs would turn normal delays into `MaxAttemptsExceededException` failures.
+- Conservative beta worker counts are configurable by tier: base 4, plus 2, pro 2, and local `ultimate` 20 by default while OpenAI and ElevenLabs provider limits are still being observed.
+- Per-install concurrency caps are enforced for database/Redis queue workers through the dedicated `subtitle_concurrency` cache store. This keeps limiter locks and counters on Redis DB 1 while the global `CACHE_STORE` can remain database-backed. The sync queue driver bypasses these caps so feature tests and local synchronous proofs still complete inline.
 - Add a startup smoke check to `scripts/agent/check.ps1`.
-- Track startup targets and performance budgets here.
+- Generation performance budgets are internal telemetry gates, not user-visible promises: base short/medium/near-limit p95 targets are 4/10/30 minutes, plus 3/7/22 minutes, and pro 2/5/15 minutes.
 
 ## Failure Handling
 
@@ -35,7 +38,9 @@ Default generation tokenizes every transcript with a narrow structured-output to
 
 The language catalog is limited to the WER-ranked transcription set used in the popup. The tier is a transcription accuracy signal only; translation card quality can still vary by language pair, dialect, audio quality, and provider coverage.
 
-Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch unless they are stale in `preparing`, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Every created or reset generation gets a new `run_id`; queued subtitle jobs carry that run ID and stale queued work skips before provider calls and artifact writes. Public failures map by stable error code to popup and overlay messages.
+Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch unless they are stale in `preparing`, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Reuse remains scoped to the anonymous install/account boundary until authenticated accounts define a stronger owner key; cross-account public-video caching is deferred. Every created or reset generation gets a new `run_id`; queued subtitle jobs carry that run ID and stale queued work skips before provider calls and artifact writes. Public failures map by stable error code to popup and overlay messages.
+
+Generation cost tracking uses configurable unit prices and safe units only: Scribe audio minutes and OpenAI cue counts. The estimates are internal margin telemetry and do not store prompts, transcripts, translations, token payloads, raw provider responses, or provider secrets.
 
 Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` command deletes expired tracks and their now-empty expired jobs daily; related trace rows are removed by job deletion. Extension requests also ignore expired tracks and regenerate through the existing compatible job row. Intermediate subtitle artifacts are deleted on finalization, failure, retry reset, and job deletion. Cancelled Laravel batch jobs skip provider calls before execution, but cancellation does not interrupt provider calls already in progress.
 

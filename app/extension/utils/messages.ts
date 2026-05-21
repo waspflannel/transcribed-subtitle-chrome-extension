@@ -75,22 +75,100 @@ export type RuntimeMessage =
     };
 
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
-  if (typeof value !== 'object' || value === null || !('type' in value)) {
+  if (!isRecord(value) || typeof value.type !== 'string') {
     return false;
   }
 
-  switch ((value as { type: unknown }).type) {
+  switch (value.type) {
     case 'content.getState':
-    case 'popup.getState':
-    case 'popup.updateSettings':
     case 'popup.generateSubtitles':
-    case 'content.enrichLearningToken':
     case 'popup.clearLocalState':
-    case 'background.settingsChanged':
-    case 'background.subtitleStateChanged':
       return true;
+
+    case 'popup.getState':
+      return optionalBoolean(value, 'syncBackend');
+
+    case 'popup.updateSettings':
+      return isRecord(value.patch);
+
+    case 'content.enrichLearningToken':
+      return hasString(value, 'youtubeVideoId')
+        && hasString(value, 'trackId')
+        && hasString(value, 'cueId')
+        && isNonNegativeInteger(value.tokenIndex);
+
+    case 'background.settingsChanged':
+      return isRecord(value.settings);
+
+    case 'background.subtitleStateChanged':
+      return isSubtitleStateValue(value.subtitleState);
 
     default:
       return false;
   }
+}
+
+function isSubtitleStateValue(value: unknown): value is SubtitleState {
+  if (!isRecord(value) || typeof value.type !== 'string') {
+    return false;
+  }
+
+  switch (value.type) {
+    case 'no-track':
+      return true;
+
+    case 'loading':
+      return hasString(value, 'youtubeVideoId')
+        && hasString(value, 'message')
+        && isSubtitleStage(value.stage)
+        && isProgressPercent(value.progressPercent)
+        && optionalString(value, 'jobId')
+        && optionalString(value, 'youtubeUrl')
+        && optionalString(value, 'startedAt')
+        && optionalString(value, 'lastUpdatedAt');
+
+    case 'ready':
+      return isRecord(value.track);
+
+    case 'error':
+      return hasString(value, 'message') && optionalString(value, 'jobId') && optionalString(value, 'youtubeVideoId');
+
+    default:
+      return false;
+  }
+}
+
+function isSubtitleStage(value: unknown): value is SubtitleJobHistoryItem['stage'] {
+  return value === 'preparing'
+    || value === 'acquiring-audio'
+    || value === 'transcribing'
+    || value === 'tokenizing'
+    || value === 'romanizing'
+    || value === 'translating'
+    || value === 'enriching'
+    || value === 'finalizing';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function hasString(value: Record<string, unknown>, key: string): boolean {
+  return typeof value[key] === 'string' && value[key] !== '';
+}
+
+function optionalString(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || typeof value[key] === 'string';
+}
+
+function optionalBoolean(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || typeof value[key] === 'boolean';
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+function isProgressPercent(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100;
 }

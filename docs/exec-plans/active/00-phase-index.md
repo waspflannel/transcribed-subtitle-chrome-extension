@@ -3,7 +3,7 @@
 Status: completed
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-13
+Last updated: 2026-05-20
 
 ## Goal
 
@@ -18,6 +18,23 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 - Agent map: `AGENTS.md`
 - Architecture map: `ARCHITECTURE.md`
 - Plan template: `docs/exec-plans/templates/exec-plan-template.md`
+
+## SaaS Roadmap
+
+The original extension proof phases are completed. The next product direction is tracked separately in `saas-roadmap/`:
+
+- `saas-roadmap/00-roadmap-index.md`
+- `saas-roadmap/01-generation-optimization.md`
+- `saas-roadmap/02-extension-frontend-upgrade.md`
+- `saas-roadmap/03-accounts-and-extension-auth.md`
+- `saas-roadmap/04-billing-tiers-and-usage.md`
+- `saas-roadmap/05-saas-website-and-seo.md`
+- `saas-roadmap/06-production-hosting-and-ops.md`
+- `saas-roadmap/07-beta-launch-and-support.md`
+- `saas-roadmap/08-marketing-and-growth.md`
+- `saas-roadmap/09-public-launch-after-beta.md`
+
+Execute the SaaS roadmap phase by phase after explicit user request. Each phase should be validated and updated before the next phase starts.
 
 ## Phase Order
 

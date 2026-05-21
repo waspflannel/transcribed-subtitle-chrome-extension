@@ -32,7 +32,11 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues === [] ? $batch : $allCues);
+        if ($allCues === []) {
+            $this->failInvalidOutput('empty_context_cues');
+        }
+
+        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues);
     }
 
     /**
@@ -105,10 +109,14 @@ class LaravelAiTranslationAnalysisProvider
         array $batch,
         string $sourceLanguage,
         string $targetLanguage,
-        array $allCues = [],
+        array $allCues,
     ): CueEnrichmentResult {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
+        }
+
+        if ($allCues === []) {
+            $this->failInvalidOutput('empty_context_cues');
         }
 
         return $this->translatedResult(
@@ -238,13 +246,13 @@ class LaravelAiTranslationAnalysisProvider
     private function tokenizationInput(
         array $sourceCues,
         string $sourceLanguage,
-        array $allCues = [],
+        array $allCues,
     ): array {
         return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'cues' => array_map(
-                fn (array $cue): array => $this->tokenizationCueInput($cue, $allCues === [] ? $sourceCues : $allCues),
+                fn (array $cue): array => $this->tokenizationCueInput($cue, $allCues),
                 $sourceCues,
             ),
         ];
@@ -322,7 +330,7 @@ class LaravelAiTranslationAnalysisProvider
         array $sourceCues,
         string $sourceLanguage,
         string $targetLanguage,
-        array $allCues = [],
+        array $allCues,
     ): array {
         return [
             'sourceLanguage' => $sourceLanguage,
@@ -330,7 +338,7 @@ class LaravelAiTranslationAnalysisProvider
             'targetLanguage' => $targetLanguage,
             'targetLanguageName' => LanguageCatalog::label($targetLanguage),
             'cues' => array_map(
-                fn (array $cue): array => $this->translationCueInput($cue, $allCues === [] ? $sourceCues : $allCues),
+                fn (array $cue): array => $this->translationCueInput($cue, $allCues),
                 $sourceCues,
             ),
         ];

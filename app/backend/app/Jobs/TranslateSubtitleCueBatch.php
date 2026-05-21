@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Middleware\LimitSubtitleInstallConcurrency;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
@@ -23,7 +24,9 @@ class TranslateSubtitleCueBatch implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public int $tries = 1;
+    public int $tries = 0;
+
+    public int $maxExceptions = 1;
 
     public int $timeout = 300;
 
@@ -45,7 +48,7 @@ class TranslateSubtitleCueBatch implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new SkipIfBatchCancelled];
+        return [new LimitSubtitleInstallConcurrency, new SkipIfBatchCancelled];
     }
 
     public function handle(SubtitleCueBatchProcessor $processor): void
