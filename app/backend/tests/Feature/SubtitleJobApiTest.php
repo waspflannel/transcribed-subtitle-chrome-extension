@@ -11,6 +11,7 @@ use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
+use App\Models\User;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -78,7 +79,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
@@ -101,12 +102,12 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $first = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertAccepted();
 
         $second = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertAccepted();
 
@@ -123,7 +124,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'bgqueue0001']))
             ->assertAccepted();
 
@@ -144,7 +145,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tierqueue01']))
             ->assertAccepted();
 
@@ -171,7 +172,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ultimate001']))
             ->assertAccepted();
 
@@ -222,7 +223,7 @@ class SubtitleJobApiTest extends TestCase
         Process::fake(fn (): FakeProcessResult => Process::result("43210\n"));
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'autowork001']))
             ->assertAccepted();
 
@@ -262,7 +263,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'stalejob001']))
             ->assertAccepted();
 
@@ -279,7 +280,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'translate01',
                 'includeTranslation' => true,
@@ -371,7 +372,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $this
-            ->withHeader('X-Extension-Install-Id', $job->install_id)
+            ->withExtensionAuth($job->install_id)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -410,7 +411,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_default_generation_returns_transcript_first_track_without_full_card_enrichment(): void
     {
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
@@ -447,7 +448,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_transcript_first_generation_adds_requested_translation(): void
     {
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'includeTranslation' => true,
             ]));
@@ -483,7 +484,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
@@ -519,7 +520,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'noroman0001',
                 'includeRomanization' => false,
@@ -552,7 +553,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpn00000001',
@@ -592,7 +593,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'nonlatin001']))
             ->assertAccepted()
             ->assertJsonPath('status', 'running');
@@ -600,7 +601,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -624,7 +625,7 @@ class SubtitleJobApiTest extends TestCase
         $this->translationAnalysis->tokenizationShouldFail = true;
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']))
             ->assertAccepted()
             ->assertJsonPath('status', 'running');
@@ -632,7 +633,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -655,7 +656,7 @@ class SubtitleJobApiTest extends TestCase
         $this->translationAnalysis->translationShouldFail = true;
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'trnfail0001',
                 'includeTranslation' => true,
@@ -666,7 +667,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -702,7 +703,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0001',
@@ -713,7 +714,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -749,7 +750,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0002',
@@ -760,7 +761,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -778,7 +779,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_full_enrichment_mode_blocks_for_all_card_metadata(): void
     {
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['enrichmentMode' => 'full']));
 
         $response
@@ -796,7 +797,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_full_enrichment_with_translation_runs_both_ai_steps(): void
     {
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'enrichmentMode' => 'full',
                 'includeTranslation' => true,
@@ -830,7 +831,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfull0001',
@@ -853,7 +854,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_full_same_language_generation_skips_translation_enrichment(): void
     {
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'eng',
                 'targetLanguage' => 'eng',
@@ -875,11 +876,11 @@ class SubtitleJobApiTest extends TestCase
     public function test_full_enrichment_and_on_demand_tracks_are_cached_separately(): void
     {
         $onDemandResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $fullResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['enrichmentMode' => 'full']));
 
         $onDemandResponse->assertOk();
@@ -894,14 +895,14 @@ class SubtitleJobApiTest extends TestCase
     public function test_translated_and_untranslated_tracks_are_cached_separately(): void
     {
         $plainResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'transmode01',
                 'includeTranslation' => false,
             ]));
 
         $translatedResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'transmode01',
                 'includeTranslation' => true,
@@ -934,14 +935,14 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $plainResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'romanmode01',
                 'includeRomanization' => false,
             ]));
 
         $romanizedResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'romanmode01',
                 'includeRomanization' => true,
@@ -966,7 +967,7 @@ class SubtitleJobApiTest extends TestCase
             $videoId = 'vid'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
 
             $this
-                ->withHeader('X-Extension-Install-Id', $this->installId(chr(97 + $index)))
+                ->withExtensionAuth($this->installId(chr(97 + $index)))
                 ->postJson('/v1/subtitle-jobs', $this->validPayload([
                     'youtubeVideoId' => $videoId,
                     'sourceLanguage' => $sourceLanguage,
@@ -985,7 +986,7 @@ class SubtitleJobApiTest extends TestCase
             $videoId = 'tgt'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
 
             $this
-                ->withHeader('X-Extension-Install-Id', $this->installId(chr(97 + $index)))
+                ->withExtensionAuth($this->installId(chr(97 + $index)))
                 ->postJson('/v1/subtitle-jobs', $this->validPayload([
                     'youtubeVideoId' => $videoId,
                     'targetLanguage' => $targetLanguage,
@@ -1006,7 +1007,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'auto',
                 'targetLanguage' => 'eng',
@@ -1036,11 +1037,11 @@ class SubtitleJobApiTest extends TestCase
     public function test_duplicate_default_request_reuses_completed_on_demand_track(): void
     {
         $firstResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $secondResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $firstResponse->assertOk();
@@ -1062,7 +1063,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'costtrace01']));
 
         $response
@@ -1112,7 +1113,7 @@ class SubtitleJobApiTest extends TestCase
             ]);
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response->assertOk();
@@ -1126,11 +1127,11 @@ class SubtitleJobApiTest extends TestCase
     public function test_completed_tracks_are_cached_per_install(): void
     {
         $firstResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $secondResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId('b'))
+            ->withExtensionAuth($this->installId('b'))
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $firstResponse->assertOk();
@@ -1146,7 +1147,9 @@ class SubtitleJobApiTest extends TestCase
     public function test_list_subtitle_jobs_returns_current_install_history(): void
     {
         $installId = $this->installId();
+        $user = User::factory()->create();
         $job = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'youtube_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             'install_id' => $installId,
@@ -1167,6 +1170,7 @@ class SubtitleJobApiTest extends TestCase
                 'expires_at' => now()->addDays(30),
             ]);
         $runningJob = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'youtube_video_id' => 'run00000001',
             'install_id' => $installId,
             'expires_at' => null,
@@ -1175,6 +1179,7 @@ class SubtitleJobApiTest extends TestCase
             'updated_at' => now()->subMinute(),
         ]);
         $failedJob = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'youtube_video_id' => 'fail0000001',
             'install_id' => $installId,
             'expires_at' => null,
@@ -1192,7 +1197,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId, $user)
             ->getJson('/v1/subtitle-jobs');
 
         $response
@@ -1243,24 +1248,24 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ratelimit01']))
             ->assertAccepted();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id);
 
         $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id);
 
         $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertStatus(429)
             ->assertJsonPath('error.code', 'rate_limited');
@@ -1269,7 +1274,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_learning_token_enrichment_updates_track_and_skips_duplicate_provider_calls(): void
     {
         $jobResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertOk();
 
@@ -1280,7 +1285,7 @@ class SubtitleJobApiTest extends TestCase
         ];
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/learning-tokens', $payload)
             ->assertOk()
             ->assertJsonPath('trackId', $payload['trackId'])
@@ -1291,7 +1296,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('token.romanization', 'first romanized');
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/learning-tokens', $payload)
             ->assertOk()
             ->assertJsonPath('token.gloss', 'first gloss');
@@ -1347,7 +1352,7 @@ class SubtitleJobApiTest extends TestCase
         };
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/learning-tokens', [
                 'trackId' => $track->public_id,
                 'cueId' => 'cue-0001',
@@ -1366,7 +1371,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_learning_token_enrichment_skips_provider_for_same_language_track(): void
     {
         $jobResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'eng',
                 'targetLanguage' => 'eng',
@@ -1374,7 +1379,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertOk();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/learning-tokens', [
                 'trackId' => $jobResponse->json('track.trackId'),
                 'cueId' => 'cue-0001',
@@ -1389,12 +1394,12 @@ class SubtitleJobApiTest extends TestCase
     public function test_learning_token_enrichment_requires_owning_install(): void
     {
         $jobResponse = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertOk();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId('b'))
+            ->withExtensionAuth($this->installId('b'))
             ->postJson('/v1/learning-tokens', [
                 'trackId' => $jobResponse->json('track.trackId'),
                 'cueId' => 'cue-0001',
@@ -1409,7 +1414,7 @@ class SubtitleJobApiTest extends TestCase
         $this->transcriptionService->shouldFail = true;
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertStatus(502)
             ->assertJsonPath('error.code', 'transcription_failed');
@@ -1434,7 +1439,7 @@ class SubtitleJobApiTest extends TestCase
         $this->translationAnalysis->shouldFail = true;
 
         $response = $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['enrichmentMode' => 'full']))
             ->assertAccepted()
             ->assertJsonPath('status', 'running');
@@ -1442,7 +1447,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -1459,7 +1464,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_create_subtitle_job_returns_stable_validation_errors(): void
     {
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', [
                 'youtubeVideoId' => 'dQw4w9WgXcQ',
                 'sourceLanguage' => 'zz',
@@ -1476,7 +1481,7 @@ class SubtitleJobApiTest extends TestCase
         unset($payload['enrichmentMode'], $payload['includeRomanization'], $payload['includeTranslation']);
 
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $payload)
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'validation_failed')
@@ -1504,7 +1509,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_no_cancel_route_is_exposed(): void
     {
         $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs/'.(string) Str::uuid().'/cancel')
             ->assertNotFound()
             ->assertJsonPath('error.code', 'not_found');

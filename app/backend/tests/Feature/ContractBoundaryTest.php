@@ -14,7 +14,11 @@ class ContractBoundaryTest extends TestCase
         $requiredFiles = [
             $contractsPath.DIRECTORY_SEPARATOR.'openapi.json',
             $contractsPath.DIRECTORY_SEPARATOR.'languages.json',
+            $schemaPath.DIRECTORY_SEPARATOR.'account-summary.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'create-subtitle-job-request.schema.json',
+            $schemaPath.DIRECTORY_SEPARATOR.'extension-login-request.schema.json',
+            $schemaPath.DIRECTORY_SEPARATOR.'extension-auth-response.schema.json',
+            $schemaPath.DIRECTORY_SEPARATOR.'extension-account-response.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'job-response.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'track-response.schema.json',
             $schemaPath.DIRECTORY_SEPARATOR.'cue.schema.json',
@@ -34,6 +38,9 @@ class ContractBoundaryTest extends TestCase
         );
 
         $this->assertSame('3.1.0', $openApi['openapi']);
+        $this->assertArrayHasKey('/v1/extension-auth/login', $openApi['paths']);
+        $this->assertArrayHasKey('/v1/extension-auth/account', $openApi['paths']);
+        $this->assertArrayHasKey('/v1/extension-auth/logout', $openApi['paths']);
         $this->assertArrayHasKey('/v1/subtitle-jobs', $openApi['paths']);
         $this->assertArrayHasKey('/v1/subtitle-jobs/{jobId}', $openApi['paths']);
         $this->assertArrayNotHasKey('/v1/tracks/lookup', $openApi['paths']);

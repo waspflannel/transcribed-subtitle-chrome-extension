@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   accountStateFromJobHistory,
+  accountStateFromSummary,
   formatJobTiming,
   formatResetDate,
   publicJobTelemetry,
@@ -31,6 +32,33 @@ describe('popup SaaS state helpers', () => {
       resetAt: '2026-06-01T00:00:00.000Z',
     });
     expect(formatResetDate(account.resetAt)).toBe('Jun 1');
+  });
+
+  it('uses authenticated account summaries from the backend without local install identity', () => {
+    expect(
+      accountStateFromSummary({
+        status: 'authenticated',
+        id: '1',
+        email: 'learner@example.com',
+        name: 'Beta Learner',
+        emailVerified: true,
+        planName: 'Local beta',
+        tierName: 'Base',
+        tierSpeedLabel: 'Standard queue',
+        monthlyMinuteLimit: 60,
+        monthlyMinutesUsed: 10,
+        monthlyMinutesPending: 2,
+        monthlyMinutesRemaining: 48,
+        resetAt: '2026-06-01T00:00:00.000Z',
+        upgradeAvailable: true,
+      }),
+    ).toMatchObject({
+      status: 'authenticated',
+      email: 'learner@example.com',
+      monthlyMinutesUsed: 10,
+      monthlyMinutesPending: 2,
+      monthlyMinutesRemaining: 48,
+    });
   });
 
   it('keeps job telemetry public-safe even when unexpected sensitive fields are present', () => {
