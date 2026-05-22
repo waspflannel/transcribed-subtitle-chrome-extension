@@ -192,6 +192,18 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
     case 'insecure_transport':
       return 'Extension sign-in requires HTTPS in production.';
 
+    case 'payment_required':
+      return 'Choose an active billing plan before generating subtitles.';
+
+    case 'usage_exhausted':
+      return 'This billing period does not have enough subtitle minutes left.';
+
+    case 'feature_unavailable':
+      return 'Your current plan does not include that generation option.';
+
+    case 'concurrency_exceeded':
+      return 'Your current plan already has the maximum number of running generations.';
+
     case 'unsupported_video':
     case 'audio_unavailable':
       return 'This video is not available for subtitle generation. Use a public non-live YouTube video.';
