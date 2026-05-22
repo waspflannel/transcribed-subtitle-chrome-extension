@@ -13,6 +13,11 @@
       "type": "string",
       "enum": [
         "validation_failed",
+        "invalid_credentials",
+        "unauthenticated",
+        "unauthorized",
+        "email_not_verified",
+        "insecure_transport",
         "unsupported_video",
         "audio_unavailable",
         "video_too_long",

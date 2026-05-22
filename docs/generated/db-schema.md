@@ -1,7 +1,7 @@
 # Generated Database Schema
 
 Created: 2026-04-28
-Last updated: 2026-05-20
+Last updated: 2026-05-22
 
 The backend uses Postgres for runtime persistence. Redis-backed workers still rely on database tables for subtitle jobs, generated tracks, artifacts, batches, failed jobs, and trace events. SQLite is limited to PHPUnit's isolated in-memory test profile.
 
@@ -15,6 +15,9 @@ The backend uses Postgres for runtime persistence. Redis-backed workers still re
 
 - `cache`
 - `cache_locks`
+- `password_reset_tokens`
+- `personal_access_tokens`
+- `sessions`
 - `jobs`
 - `job_batches`
 - `failed_jobs`
@@ -25,6 +28,7 @@ The product migrations currently define:
 
 - `subtitle_jobs`
   - `public_id`
+  - `user_id`
   - `run_id` (required queued-work fence)
   - `youtube_video_id`
   - `youtube_url`
@@ -44,7 +48,14 @@ The product migrations currently define:
   - `request_ip`
   - `expires_at`
   - timestamps
-  - unique compatibility key: `install_id`, `youtube_video_id`, `source_language`, `target_language`, `processing_version`
+  - unique compatibility key: `user_id`, `youtube_video_id`, `source_language`, `target_language`, `processing_version`
+- `users`
+  - `name`
+  - `email`
+  - `email_verified_at`
+  - `password`
+  - `remember_token`
+  - timestamps
 - `subtitle_job_artifacts`
   - `subtitle_job_id`
   - `artifact_type`

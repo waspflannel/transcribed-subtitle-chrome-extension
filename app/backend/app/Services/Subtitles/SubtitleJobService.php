@@ -4,6 +4,7 @@ namespace App\Services\Subtitles;
 
 use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +56,7 @@ class SubtitleJobService
      */
     public function generate(
         array $payload,
+        User $user,
         string $installId,
         ?string $requestIp,
         ?string $generationTier = null,
@@ -69,6 +71,7 @@ class SubtitleJobService
         try {
             $job = DB::transaction(function () use (
                 $payload,
+                $user,
                 $installId,
                 $requestIp,
                 $processingVersion,
@@ -78,7 +81,7 @@ class SubtitleJobService
                 $includeTranslation,
                 &$dispatchState,
             ): SubtitleJob {
-                $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
+                $job = $this->compatibleJobQuery($payload, $user, $processingVersion)
                     ->with('track')
                     ->lockForUpdate()
                     ->first();
@@ -100,6 +103,7 @@ class SubtitleJobService
                     $this->resetJob(
                         job: $job,
                         payload: $payload,
+                        user: $user,
                         installId: $installId,
                         requestIp: $requestIp,
                         generationTier: $generationTier,
@@ -114,6 +118,7 @@ class SubtitleJobService
 
                 $job = $this->createJob(
                     payload: $payload,
+                    user: $user,
                     installId: $installId,
                     requestIp: $requestIp,
                     processingVersion: $processingVersion,
@@ -132,7 +137,7 @@ class SubtitleJobService
                 throw $exception;
             }
 
-            $job = $this->compatibleJobQuery($payload, $installId, $processingVersion)
+            $job = $this->compatibleJobQuery($payload, $user, $processingVersion)
                 ->with('track')
                 ->first();
 
@@ -168,14 +173,14 @@ class SubtitleJobService
      * @param  array<string, mixed>  $payload
      * @return Builder<SubtitleJob>
      */
-    private function compatibleJobQuery(array $payload, string $installId, string $processingVersion): Builder
+    private function compatibleJobQuery(array $payload, User $user, string $processingVersion): Builder
     {
         return SubtitleJob::query()
+            ->whereBelongsTo($user)
             ->where('youtube_video_id', $payload['youtubeVideoId'])
             ->where('source_language', $payload['sourceLanguage'])
             ->where('target_language', $payload['targetLanguage'])
-            ->where('processing_version', $processingVersion)
-            ->where('install_id', $installId);
+            ->where('processing_version', $processingVersion);
     }
 
     /**
@@ -183,6 +188,7 @@ class SubtitleJobService
      */
     private function createJob(
         array $payload,
+        User $user,
         string $installId,
         ?string $requestIp,
         string $processingVersion,
@@ -193,6 +199,7 @@ class SubtitleJobService
     ): SubtitleJob {
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
+            'user_id' => $user->id,
             'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $payload['youtubeVideoId'],
             'youtube_url' => $payload['youtubeUrl'],
@@ -231,6 +238,7 @@ class SubtitleJobService
     private function resetJob(
         SubtitleJob $job,
         array $payload,
+        User $user,
         string $installId,
         ?string $requestIp,
         string $generationTier,
@@ -244,6 +252,7 @@ class SubtitleJobService
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
+            'user_id' => $user->id,
             'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,

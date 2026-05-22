@@ -41,11 +41,21 @@ type PopupRequest =
       type: 'popup.generateSubtitles';
     }
   | {
+      type: 'popup.login';
+      email: string;
+      password: string;
+    }
+  | {
+      type: 'popup.logout';
+    }
+  | {
       type: 'popup.clearLocalState';
     };
 
 type PopupErrorResponse = { ok: false; error: string };
 type PopupResponse = PopupState | PopupErrorResponse;
+type RequestErrorTarget = 'global' | 'account';
+type AccountFeedbackKind = 'info' | 'success' | 'error';
 
 const BACKEND_REFRESH_INTERVAL_MS = 10000;
 
@@ -89,6 +99,12 @@ const usageReset = document.querySelector<HTMLElement>('[data-usage-reset]')!;
 const accountStatus = document.querySelector<HTMLElement>('[data-account-status]')!;
 const accountPlan = document.querySelector<HTMLElement>('[data-account-plan]')!;
 const accountSpeed = document.querySelector<HTMLElement>('[data-account-speed]')!;
+const accountLoginForm = document.querySelector<HTMLFormElement>('[data-account-login-form]')!;
+const accountEmailInput = document.querySelector<HTMLInputElement>('input[name="accountEmail"]')!;
+const accountPasswordInput = document.querySelector<HTMLInputElement>('input[name="accountPassword"]')!;
+const accountLoginButton = document.querySelector<HTMLButtonElement>('[data-action="login"]')!;
+const logoutButton = document.querySelector<HTMLButtonElement>('[data-action="logout"]')!;
+const accountFeedback = document.querySelector<HTMLElement>('[data-account-feedback]')!;
 const featureList = document.querySelector<HTMLElement>('[data-feature-list]')!;
 const settingsLanguageSummary = document.querySelector<HTMLElement>('[data-settings-language-summary]')!;
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tab]'));
@@ -98,10 +114,15 @@ let currentSettings: ExtensionSettings | null = null;
 let latestState: PopupState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
+let accountRequestBusy = false;
 
 refreshButton.addEventListener('click', () => void loadPopupState());
 generateButton.addEventListener('click', () => void generateSubtitles());
 clearStateButton.addEventListener('click', () => void clearLocalState());
+accountLoginForm.addEventListener('submit', (event) => void loginFromAccountForm(event));
+logoutButton.addEventListener('click', () => void logoutAccount());
+accountEmailInput.addEventListener('input', clearAccountFeedback);
+accountPasswordInput.addEventListener('input', clearAccountFeedback);
 resetTimingButton.addEventListener('click', () => void updateTimingOffset(0));
 jobsList.addEventListener('click', handleJobsListClick);
 sourceLanguageSearchInput.addEventListener('input', handleSourceLanguageSearch);
@@ -165,6 +186,45 @@ async function clearLocalState(): Promise<void> {
   await sendPopupRequest({ type: 'popup.clearLocalState' });
 }
 
+async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+
+  setAccountRequestBusy(true, 'Signing in...');
+
+  try {
+    const signedIn = await sendPopupRequest(
+      {
+        type: 'popup.login',
+        email: accountEmailInput.value,
+        password: accountPasswordInput.value,
+      },
+      'account',
+    );
+
+    accountPasswordInput.value = '';
+
+    if (signedIn) {
+      showAccountFeedback('success', 'Signed in.');
+    }
+  } finally {
+    setAccountRequestBusy(false);
+  }
+}
+
+async function logoutAccount(): Promise<void> {
+  setAccountRequestBusy(true, 'Signing out...');
+
+  try {
+    const signedOut = await sendPopupRequest({ type: 'popup.logout' }, 'account');
+
+    if (signedOut) {
+      showAccountFeedback('success', 'Signed out.');
+    }
+  } finally {
+    setAccountRequestBusy(false);
+  }
+}
+
 async function updateTimingOffset(value: number): Promise<void> {
   const subtitleTimingOffsetSeconds = normalizeSubtitleTimingOffsetSeconds(value);
 
@@ -172,19 +232,23 @@ async function updateTimingOffset(value: number): Promise<void> {
   await updateSettings({ subtitleTimingOffsetSeconds });
 }
 
-async function sendPopupRequest(request: PopupRequest): Promise<void> {
+async function sendPopupRequest(request: PopupRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
   try {
     const response = (await browser.runtime.sendMessage(request)) as PopupResponse;
 
     if ('ok' in response) {
-      showError(response.error);
+      showRequestError(response.error, errorTarget);
 
-      return;
+      return false;
     }
 
     showPopupState(response);
+
+    return true;
   } catch (error) {
-    showError(error);
+    showRequestError(error, errorTarget);
+
+    return false;
   }
 }
 
@@ -282,8 +346,8 @@ function showPopupState(state: PopupState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = !supported || subtitleState.type === 'loading';
-  generateButton.textContent = subtitleState.type === 'loading' ? 'Generating...' : 'Generate subtitles';
+  generateButton.disabled = accountState.status !== 'authenticated' || !supported || subtitleState.type === 'loading';
+  generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
 
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
@@ -506,11 +570,19 @@ function renderUsage(accountState: AccountState): void {
 }
 
 function renderAccount(accountState: AccountState, settings: ExtensionSettings): void {
-  accountStatus.textContent = accountState.status === 'anonymous' ? 'Not signed in' : accountState.status;
+  const authenticated = accountState.status === 'authenticated';
+
+  accountStatus.textContent = authenticated ? accountState.email ?? 'Signed in' : 'Not signed in';
   accountPlan.textContent = accountState.planName;
   accountSpeed.textContent = accountState.tierSpeedLabel;
+  accountLoginForm.hidden = authenticated;
+  accountEmailInput.disabled = accountRequestBusy || authenticated;
+  accountPasswordInput.disabled = accountRequestBusy || authenticated;
+  accountLoginButton.disabled = accountRequestBusy || authenticated;
+  accountLoginButton.textContent = accountRequestBusy ? 'Signing in...' : 'Sign in';
+  logoutButton.disabled = accountRequestBusy || !authenticated;
   featureList.innerHTML = [
-    ['Subtitle generation', 'Included'],
+    ['Subtitle generation', authenticated ? 'Enabled' : 'Sign in required'],
     ['Cue translation', settings.showTranslation ? 'On for next job' : 'Available'],
     ['Romanization', settings.showRomanization ? 'On for next job' : 'Available'],
     ['Full word cards', settings.fullTrackEnrichment ? 'On for next job' : 'Available'],
@@ -571,6 +643,50 @@ function showError(error: unknown): void {
   generateButton.textContent = 'Generate subtitles';
   showTimingOffset(0);
   setSettingsDisabled(true);
+}
+
+function showRequestError(error: unknown, errorTarget: RequestErrorTarget): void {
+  const message = typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? error.message
+      : 'Unable to load extension state';
+
+  if (errorTarget === 'account') {
+    showAccountFeedback('error', message);
+
+    return;
+  }
+
+  showError(error);
+}
+
+function showAccountFeedback(kind: AccountFeedbackKind, message: string): void {
+  accountFeedback.hidden = false;
+  accountFeedback.className = `account-feedback ${kind}`;
+  accountFeedback.textContent = message;
+}
+
+function clearAccountFeedback(): void {
+  accountFeedback.hidden = true;
+  accountFeedback.className = 'account-feedback';
+  accountFeedback.textContent = '';
+}
+
+function setAccountRequestBusy(busy: boolean, message?: string): void {
+  accountRequestBusy = busy;
+
+  if (message) {
+    showAccountFeedback('info', message);
+  }
+
+  const authenticated = latestState?.accountState.status === 'authenticated';
+
+  accountEmailInput.disabled = busy || authenticated;
+  accountPasswordInput.disabled = busy || authenticated;
+  accountLoginButton.disabled = busy || authenticated;
+  accountLoginButton.textContent = busy ? 'Signing in...' : 'Sign in';
+  logoutButton.disabled = busy || !authenticated;
 }
 
 function statusClass(subtitleStateType: PopupState['subtitleState']['type'], supported: boolean): string {
@@ -636,6 +752,10 @@ function setSettingsDisabled(disabled: boolean): void {
   showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
   fullTrackEnrichmentInput.disabled = disabled;
+  accountEmailInput.disabled = disabled;
+  accountPasswordInput.disabled = disabled;
+  accountLoginButton.disabled = disabled;
+  logoutButton.disabled = disabled || latestState?.accountState.status !== 'authenticated';
   clearStateButton.disabled = disabled;
   resetTimingButton.disabled = disabled;
   timingOffsetRangeInput.disabled = disabled;
@@ -666,4 +786,19 @@ function showTimingOffset(value: number): void {
 
 function shortDisplayId(id: string): string {
   return id.length > 13 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
+}
+
+function generateButtonLabel(
+  accountState: AccountState,
+  subtitleStateType: PopupState['subtitleState']['type'],
+): string {
+  if (subtitleStateType === 'loading') {
+    return 'Generating...';
+  }
+
+  if (accountState.status !== 'authenticated') {
+    return 'Sign in to generate';
+  }
+
+  return 'Generate subtitles';
 }

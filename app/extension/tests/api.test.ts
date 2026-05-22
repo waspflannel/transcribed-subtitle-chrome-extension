@@ -10,6 +10,7 @@ import type {
 } from '../utils/contracts';
 
 const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('SubtitleApiClient', () => {
   it('creates subtitle jobs with the extension install header', async () => {
@@ -43,12 +44,13 @@ describe('SubtitleApiClient', () => {
       includeTranslation: true,
     };
 
-    await expect(client.createSubtitleJob(installId, payload)).resolves.toEqual(jobResponse);
+    await expect(client.createSubtitleJob(installId, authToken, payload)).resolves.toEqual(jobResponse);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8000/v1/subtitle-jobs',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
+          Authorization: `Bearer ${authToken}`,
           'X-Extension-Install-Id': installId,
         }),
         body: JSON.stringify(payload),
@@ -74,12 +76,13 @@ describe('SubtitleApiClient', () => {
     const fetchMock = vi.fn(async () => jsonResponse(jobResponse, 200));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
 
-    await expect(client.getSubtitleJob(installId, jobResponse.jobId)).resolves.toEqual(jobResponse);
+    await expect(client.getSubtitleJob(installId, authToken, jobResponse.jobId)).resolves.toEqual(jobResponse);
     expect(fetchMock).toHaveBeenCalledWith(
       `http://localhost:8000/v1/subtitle-jobs/${jobResponse.jobId}`,
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({
+          Authorization: `Bearer ${authToken}`,
           'X-Extension-Install-Id': installId,
         }),
       }),
@@ -110,12 +113,13 @@ describe('SubtitleApiClient', () => {
     const fetchMock = vi.fn(async () => jsonResponse(history, 200));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
 
-    await expect(client.listSubtitleJobs(installId)).resolves.toEqual(history);
+    await expect(client.listSubtitleJobs(installId, authToken)).resolves.toEqual(history);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8000/v1/subtitle-jobs',
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({
+          Authorization: `Bearer ${authToken}`,
           'X-Extension-Install-Id': installId,
         }),
       }),
@@ -138,7 +142,7 @@ describe('SubtitleApiClient', () => {
           }),
       );
       const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
-      const request = client.listSubtitleJobs(installId);
+      const request = client.listSubtitleJobs(installId, authToken);
       const assertion = expect(request).rejects.toThrow(TypeError);
 
       await vi.advanceTimersByTimeAsync(2500);
@@ -164,7 +168,7 @@ describe('SubtitleApiClient', () => {
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
 
     await expect(
-      client.enrichLearningToken(installId, {
+      client.enrichLearningToken(installId, authToken, {
         trackId: tokenResponse.trackId,
         cueId: tokenResponse.cueId,
         tokenIndex: 0,
@@ -174,6 +178,9 @@ describe('SubtitleApiClient', () => {
       'http://localhost:8000/v1/learning-tokens',
       expect.objectContaining({
         method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${authToken}`,
+        }),
         body: JSON.stringify({
           trackId: tokenResponse.trackId,
           cueId: tokenResponse.cueId,
@@ -206,7 +213,7 @@ describe('SubtitleApiClient', () => {
       includeTranslation: false,
     };
 
-    await expect(client.createSubtitleJob(installId, payload)).rejects.toMatchObject({
+    await expect(client.createSubtitleJob(installId, authToken, payload)).rejects.toMatchObject({
       name: 'SubtitleApiError',
       code: 'validation_failed',
       status: 422,
@@ -214,6 +221,12 @@ describe('SubtitleApiClient', () => {
   });
 
   it('maps stable backend errors to public release copy', () => {
+    expect(
+      publicSubtitleErrorMessage(new SubtitleApiError('unauthenticated', 'Token required.', 401)),
+    ).toBe('Sign in to the extension before generating subtitles.');
+    expect(
+      publicSubtitleErrorMessage(new SubtitleApiError('email_not_verified', 'Verify email.', 403)),
+    ).toBe('Verify your email address before generating subtitles.');
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('rate_limited', 'Too many requests.', 429)),
     ).toBe('Subtitle generation is temporarily rate limited. Wait a minute and try again.');
@@ -226,6 +239,59 @@ describe('SubtitleApiClient', () => {
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('internal_error', 'Stack trace here.', 500)),
     ).toBe('The backend hit an unexpected error. Try again later.');
+  });
+
+  it('logs in, fetches account state, and logs out with scoped extension tokens', async () => {
+    const authResponse = extensionAuthResponse();
+    const accountResponse = { account: authResponse.account };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(authResponse, 200))
+      .mockResolvedValueOnce(jsonResponse(accountResponse, 200))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(
+      client.loginExtension(installId, {
+        email: authResponse.account.email,
+        password: 'correct-password',
+      }),
+    ).resolves.toEqual(authResponse);
+    await expect(client.getExtensionAccount(installId, authResponse.token.plainTextToken)).resolves.toEqual(
+      accountResponse,
+    );
+    await expect(client.logoutExtension(installId, authResponse.token.plainTextToken)).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8000/v1/extension-auth/login',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.not.objectContaining({
+          Authorization: expect.any(String),
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8000/v1/extension-auth/account',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${authResponse.token.plainTextToken}`,
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'http://localhost:8000/v1/extension-auth/logout',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${authResponse.token.plainTextToken}`,
+        }),
+      }),
+    );
   });
 });
 
@@ -267,4 +333,31 @@ function jsonResponse(body: unknown, status: number): Response {
       'Content-Type': 'application/json',
     },
   });
+}
+
+function extensionAuthResponse() {
+  return {
+    account: {
+      status: 'authenticated' as const,
+      id: '1',
+      email: 'learner@example.com',
+      name: 'Beta Learner',
+      emailVerified: true,
+      planName: 'Local beta',
+      tierName: 'Base',
+      tierSpeedLabel: 'Standard queue',
+      monthlyMinuteLimit: 60,
+      monthlyMinutesUsed: 0,
+      monthlyMinutesPending: 0,
+      monthlyMinutesRemaining: 60,
+      resetAt: '2026-06-01T00:00:00.000Z',
+      upgradeAvailable: true,
+    },
+    token: {
+      plainTextToken: authToken,
+      tokenType: 'Bearer' as const,
+      expiresAt: '2026-06-21T00:00:00.000Z',
+      abilities: ['extension:account:read', 'extension:subtitles:write', 'extension:tokens:revoke'],
+    },
+  };
 }

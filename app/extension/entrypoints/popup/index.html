@@ -146,7 +146,7 @@
           <section class="surface">
             <div class="section-heading">
               <h2>Account</h2>
-              <p>Local beta access is active; sign-in arrives with the account phase.</p>
+              <p>Sign in with your verified beta account to enable generation.</p>
             </div>
             <dl class="facts compact">
               <div>
@@ -163,8 +163,19 @@
               </div>
             </dl>
             <div class="feature-list" data-feature-list></div>
+            <p class="account-feedback" data-account-feedback role="status" aria-live="polite" hidden></p>
+            <form class="account-form" data-account-login-form>
+              <label class="field">
+                <span>Email</span>
+                <input type="email" name="accountEmail" autocomplete="email" required />
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input type="password" name="accountPassword" autocomplete="current-password" required />
+              </label>
+              <button type="submit" class="primary-button" data-action="login">Sign in</button>
+            </form>
             <div class="button-row">
-              <button type="button" class="secondary-button" data-action="sign-in" disabled>Sign in</button>
               <button type="button" class="secondary-button" data-action="logout" disabled>Log out</button>
             </div>
           </section>

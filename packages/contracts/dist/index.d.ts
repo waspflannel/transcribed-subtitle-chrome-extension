@@ -1,3 +1,21 @@
+// Source: schemas/account-summary.schema.json
+export interface AccountSummary {
+  status: 'authenticated';
+  id: string;
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  planName: string;
+  tierName: string;
+  tierSpeedLabel: string;
+  monthlyMinuteLimit: number;
+  monthlyMinutesUsed: number;
+  monthlyMinutesPending: number;
+  monthlyMinutesRemaining: number;
+  resetAt: string;
+  upgradeAvailable: boolean;
+}
+
 // Source: schemas/create-subtitle-job-request.schema.json
 export interface CreateSubtitleJobRequest {
   /**
@@ -219,6 +237,66 @@ export interface CreateSubtitleJobRequest {
    * When true, backend translates cue text into the selected target language. When false, translatedText remains the source text.
    */
   includeTranslation: boolean;
+}
+
+// Source: schemas/extension-login-request.schema.json
+export interface ExtensionLoginRequest {
+  email: string;
+  password: string;
+}
+
+// Source: schemas/extension-auth-response.schema.json
+export interface ExtensionAuthResponse {
+  account: AccountSummary;
+  token: {
+    plainTextToken: string;
+    tokenType: 'Bearer';
+    expiresAt: string;
+    /**
+     * @minItems 1
+     */
+    abilities: [
+      'extension:account:read' | 'extension:subtitles:write' | 'extension:tokens:revoke',
+      ...('extension:account:read' | 'extension:subtitles:write' | 'extension:tokens:revoke')[]
+    ];
+  };
+}
+export interface AccountSummary {
+  status: 'authenticated';
+  id: string;
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  planName: string;
+  tierName: string;
+  tierSpeedLabel: string;
+  monthlyMinuteLimit: number;
+  monthlyMinutesUsed: number;
+  monthlyMinutesPending: number;
+  monthlyMinutesRemaining: number;
+  resetAt: string;
+  upgradeAvailable: boolean;
+}
+
+// Source: schemas/extension-account-response.schema.json
+export interface ExtensionAccountResponse {
+  account: AccountSummary;
+}
+export interface AccountSummary {
+  status: 'authenticated';
+  id: string;
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  planName: string;
+  tierName: string;
+  tierSpeedLabel: string;
+  monthlyMinuteLimit: number;
+  monthlyMinutesUsed: number;
+  monthlyMinutesPending: number;
+  monthlyMinutesRemaining: number;
+  resetAt: string;
+  upgradeAvailable: boolean;
 }
 
 // Source: schemas/learning-token-request.schema.json
@@ -576,6 +654,11 @@ export type JobResponse = {
   message?: string;
   errorCode?:
     | 'validation_failed'
+    | 'invalid_credentials'
+    | 'unauthenticated'
+    | 'unauthorized'
+    | 'email_not_verified'
+    | 'insecure_transport'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
@@ -1050,6 +1133,11 @@ export type SubtitleJobHistoryItem = {
   message?: string;
   errorCode?:
     | 'validation_failed'
+    | 'invalid_credentials'
+    | 'unauthenticated'
+    | 'unauthorized'
+    | 'email_not_verified'
+    | 'insecure_transport'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
@@ -1638,6 +1726,11 @@ export interface ApiError {
 export interface ErrorObject {
   code:
     | 'validation_failed'
+    | 'invalid_credentials'
+    | 'unauthenticated'
+    | 'unauthorized'
+    | 'email_not_verified'
+    | 'insecure_transport'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
@@ -1659,6 +1752,11 @@ export interface ErrorObject {
 export interface ErrorObject {
   code:
     | 'validation_failed'
+    | 'invalid_credentials'
+    | 'unauthenticated'
+    | 'unauthorized'
+    | 'email_not_verified'
+    | 'insecure_transport'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'

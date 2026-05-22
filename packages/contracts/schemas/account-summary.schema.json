@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/account-summary.schema.json",
+  "title": "AccountSummary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "id",
+    "email",
+    "name",
+    "emailVerified",
+    "planName",
+    "tierName",
+    "tierSpeedLabel",
+    "monthlyMinuteLimit",
+    "monthlyMinutesUsed",
+    "monthlyMinutesPending",
+    "monthlyMinutesRemaining",
+    "resetAt",
+    "upgradeAvailable"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "const": "authenticated"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "email": {
+      "type": "string",
+      "format": "email"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "emailVerified": {
+      "type": "boolean"
+    },
+    "planName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tierName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tierSpeedLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "monthlyMinuteLimit": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "monthlyMinutesUsed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "monthlyMinutesPending": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "monthlyMinutesRemaining": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "resetAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "upgradeAvailable": {
+      "type": "boolean"
+    }
+  }
+}

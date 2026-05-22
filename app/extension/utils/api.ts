@@ -1,6 +1,9 @@
 import type {
   ApiError,
   CreateSubtitleJobRequest,
+  ExtensionAccountResponse,
+  ExtensionAuthResponse,
+  ExtensionLoginRequest,
   JobResponse,
   LearningTokenRequest,
   LearningTokenResponse,
@@ -28,40 +31,70 @@ export class SubtitleApiClient {
     private readonly fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
 
-  public async createSubtitleJob(installId: string, payload: CreateSubtitleJobRequest): Promise<JobResponse> {
-    return this.request<JobResponse>('subtitle-jobs', installId, {
+  public async loginExtension(installId: string, payload: ExtensionLoginRequest): Promise<ExtensionAuthResponse> {
+    return this.request<ExtensionAuthResponse>('extension-auth/login', installId, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
-  public async getSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
-    return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
+  public async getExtensionAccount(installId: string, authToken: string): Promise<ExtensionAccountResponse> {
+    return this.request<ExtensionAccountResponse>('extension-auth/account', installId, {
       method: 'GET',
+      authToken,
     });
   }
 
-  public async listSubtitleJobs(installId: string): Promise<SubtitleJobHistoryResponse> {
+  public async logoutExtension(installId: string, authToken: string): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>('extension-auth/logout', installId, {
+      method: 'POST',
+      authToken,
+    });
+  }
+
+  public async createSubtitleJob(
+    installId: string,
+    authToken: string,
+    payload: CreateSubtitleJobRequest,
+  ): Promise<JobResponse> {
+    return this.request<JobResponse>('subtitle-jobs', installId, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      authToken,
+    });
+  }
+
+  public async getSubtitleJob(installId: string, authToken: string, jobId: string): Promise<JobResponse> {
+    return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
+      method: 'GET',
+      authToken,
+    });
+  }
+
+  public async listSubtitleJobs(installId: string, authToken: string): Promise<SubtitleJobHistoryResponse> {
     return this.request<SubtitleJobHistoryResponse>('subtitle-jobs', installId, {
       method: 'GET',
       timeoutMs: JOB_HISTORY_TIMEOUT_MS,
+      authToken,
     });
   }
 
   public async enrichLearningToken(
     installId: string,
+    authToken: string,
     payload: LearningTokenRequest,
   ): Promise<LearningTokenResponse> {
     return this.request<LearningTokenResponse>('learning-tokens', installId, {
       method: 'POST',
       body: JSON.stringify(payload),
+      authToken,
     });
   }
 
   private async request<TResponse>(
     path: string,
     installId: string,
-    init: Pick<RequestInit, 'method' | 'body'> & { timeoutMs?: number },
+    init: Pick<RequestInit, 'method' | 'body'> & { timeoutMs?: number; authToken?: string },
   ): Promise<TResponse> {
     const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const controller = typeof init.timeoutMs === 'number' ? new AbortController() : undefined;
@@ -73,13 +106,19 @@ export class SubtitleApiClient {
     let response: Response;
 
     try {
+      const headers: Record<string, string> = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Extension-Install-Id': installId,
+      };
+
+      if (init.authToken) {
+        headers.Authorization = `Bearer ${init.authToken}`;
+      }
+
       response = await this.fetchImpl(new URL(path, baseUrl).toString(), {
         method: init.method,
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'X-Extension-Install-Id': installId,
-        },
+        headers,
         body: init.body,
         signal: controller?.signal,
       });
@@ -137,6 +176,21 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
   switch (code) {
     case 'validation_failed':
       return 'The video details could not be validated. Refresh the YouTube tab and try again.';
+
+    case 'invalid_credentials':
+      return 'The email or password was not accepted.';
+
+    case 'unauthenticated':
+      return 'Sign in to the extension before generating subtitles.';
+
+    case 'unauthorized':
+      return 'This extension session is not allowed to access that subtitle job.';
+
+    case 'email_not_verified':
+      return 'Verify your email address before generating subtitles.';
+
+    case 'insecure_transport':
+      return 'Extension sign-in requires HTTPS in production.';
 
     case 'unsupported_video':
     case 'audio_unavailable':

@@ -1,8 +1,15 @@
 import { browser, type Browser } from 'wxt/browser';
 
+import {
+  clearExtensionSession,
+  getStoredExtensionSession,
+  storeExtensionSession,
+  updateStoredAccount,
+  type StoredExtensionSession,
+} from '../utils/account-session';
 import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from '../utils/api';
 import { clearRememberedTracks, getRememberedTrack, rememberActiveTrack } from '../utils/active-tracks';
-import type { JobResponse, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
+import type { JobResponse, LearningTokenResponse, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   loadingMessageForStage,
   publicSubtitleJobFailureMessage,
@@ -16,7 +23,7 @@ import {
   type RuntimeMessage,
   type SubtitleState,
 } from '../utils/messages';
-import { accountStateFromJobHistory } from '../utils/popup-saas-state';
+import { accountStateFromJobHistory, accountStateFromSummary } from '../utils/popup-saas-state';
 import {
   clearLocalExtensionState,
   getExtensionSettings,
@@ -72,6 +79,12 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
 
     case 'popup.generateSubtitles':
       return generateSubtitlesFromPopup();
+
+    case 'popup.login':
+      return loginFromPopup(message.email, message.password);
+
+    case 'popup.logout':
+      return logoutFromPopup();
 
     case 'popup.clearLocalState':
       return clearLocalStateFromPopup();
@@ -163,6 +176,12 @@ async function generateSubtitlesForTab(
   pageSnapshot: PageSnapshot,
 ): Promise<void> {
   try {
+    const session = await getStoredExtensionSession();
+
+    if (!session) {
+      throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+    }
+
     console.info('extension.subtitle_generation_started', {
       youtubeVideoId: pageStatus.videoId,
       sourceLanguage: settings.sourceLanguage,
@@ -173,7 +192,7 @@ async function generateSubtitlesForTab(
     });
 
     const installId = await getOrCreateInstallId();
-    const initialJob = await subtitleApi.createSubtitleJob(installId, {
+    const initialJob = await subtitleApi.createSubtitleJob(installId, session.plainTextToken, {
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
       ...(isCreatePayloadVideoDurationSeconds(pageSnapshot.videoDurationSeconds)
@@ -185,7 +204,7 @@ async function generateSubtitlesForTab(
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
-    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, initialJob);
+    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session.plainTextToken, initialJob);
 
     if (job === null) {
       return;
@@ -227,6 +246,8 @@ async function generateSubtitlesForTab(
       trackId: job.track.trackId,
     });
   } catch (error) {
+    await clearSessionIfInvalid(error);
+
     console.warn('extension.subtitle_generation_failed', {
       youtubeVideoId: pageStatus.videoId,
       errorCode: error instanceof SubtitleApiError ? error.code : 'extension_error',
@@ -247,6 +268,7 @@ async function waitForCompletedSubtitleJob(
   tabId: number,
   pageStatus: SupportedYoutubePageInfo,
   installId: string,
+  authToken: string,
   initialJob: JobResponse,
 ): Promise<JobResponse | null> {
   let job = initialJob;
@@ -269,7 +291,7 @@ async function waitForCompletedSubtitleJob(
     });
 
     await delay(JOB_POLL_INTERVAL_MS);
-    job = await subtitleApi.getSubtitleJob(installId, job.jobId);
+    job = await subtitleApi.getSubtitleJob(installId, authToken, job.jobId);
   }
 
   return null;
@@ -292,17 +314,31 @@ async function enrichLearningTokenFromContent(
   }
 
   const currentState = await readySubtitleStateForEnrichment(tabId, message.youtubeVideoId, message.trackId);
+  const session = await getStoredExtensionSession();
+
+  if (!session) {
+    throw new SubtitleApiError('unauthenticated', 'Sign in before enriching learning tokens.', 401);
+  }
 
   if (!currentState) {
     throw new Error('No generated subtitle track is active for this tab.');
   }
 
   const installId = await getOrCreateInstallId();
-  const response = await subtitleApi.enrichLearningToken(installId, {
-    trackId: message.trackId,
-    cueId: message.cueId,
-    tokenIndex: message.tokenIndex,
-  });
+  let response: LearningTokenResponse;
+
+  try {
+    response = await subtitleApi.enrichLearningToken(installId, session.plainTextToken, {
+      trackId: message.trackId,
+      cueId: message.cueId,
+      tokenIndex: message.tokenIndex,
+    });
+  } catch (error) {
+    await clearSessionIfInvalid(error);
+
+    throw error;
+  }
+
   const track = patchActiveTrack(currentState.track, response.cueId, response.token);
 
   await storeReadySubtitleState(tabId, {
@@ -375,25 +411,68 @@ async function clearLocalStateFromPopup(): Promise<PopupState> {
   return getPopupState({ syncBackend: true });
 }
 
+async function loginFromPopup(email: string, password: string): Promise<PopupState> {
+  const installId = await getOrCreateInstallId();
+  const response = await subtitleApi.loginExtension(installId, { email, password });
+
+  await storeExtensionSession(response);
+
+  console.info('extension.account_login_completed');
+
+  return getPopupState({ syncBackend: true });
+}
+
+async function logoutFromPopup(): Promise<PopupState> {
+  const installId = await getOrCreateInstallId();
+  const session = await getStoredExtensionSession();
+
+  if (session) {
+    try {
+      await subtitleApi.logoutExtension(installId, session.plainTextToken);
+    } catch (error) {
+      console.warn('extension.account_logout_revoke_failed', {
+        errorCode: error instanceof SubtitleApiError ? error.code : 'extension_error',
+      });
+    }
+  }
+
+  await clearExtensionSession();
+
+  console.info('extension.account_logout_completed');
+
+  return getPopupState({ syncBackend: true });
+}
+
 async function getPopupState(options: { syncBackend: boolean }): Promise<PopupState> {
   const activeTab = await getActiveTab();
   const activeTabId = activeTab?.id ?? null;
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
   const installId = await getOrCreateInstallId();
   const settings = await getExtensionSettings();
+  let effectiveSession = await getStoredExtensionSession();
   const pageSnapshot = activeTabId === null || pageStatus?.supported !== true
     ? {}
     : await getPageSnapshotFromTab(activeTabId);
-  const { jobs, error } = options.syncBackend
-    ? await listBackendJobHistory(installId)
-    : { jobs: [] as SubtitleJobHistoryItem[], error: undefined };
+
+  if (effectiveSession && options.syncBackend) {
+    effectiveSession = await syncExtensionAccount(installId, effectiveSession);
+  }
+
+  const history = effectiveSession && options.syncBackend
+    ? await listBackendJobHistory(installId, effectiveSession.plainTextToken)
+    : { jobs: [] as SubtitleJobHistoryItem[], error: undefined, sessionInvalid: false };
+
+  if (history.sessionInvalid) {
+    effectiveSession = null;
+  }
+
   const localState =
     activeTabId === null || pageStatus === undefined
       ? DEFAULT_SUBTITLE_STATE
       : await getSubtitleStateForPage(activeTabId, pageStatus);
 
-  const subtitleState = await stateWithBackendProgress(localState, pageStatus, jobs, (job) =>
-    resolveCompletedSubtitleJob(installId, job),
+  const subtitleState = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
+    effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job) : Promise.resolve(null),
   );
 
   if (activeTabId !== null && subtitleState.type === 'ready' && localState.type !== 'ready') {
@@ -406,10 +485,10 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     activeTabId: activeTabId ?? undefined,
     pageStatus,
     pageVideoDurationSeconds: pageSnapshot.videoDurationSeconds,
-    accountState: accountStateFromJobHistory(jobs),
+    accountState: effectiveSession ? accountStateFromSummary(effectiveSession.account) : accountStateFromJobHistory(history.jobs),
     subtitleState,
-    jobHistory: jobs,
-    jobHistoryError: error,
+    jobHistory: history.jobs,
+    jobHistoryError: history.error,
   };
 }
 
@@ -433,25 +512,36 @@ async function getPageSnapshotFromTab(tabId: number): Promise<PageSnapshot> {
 
 async function listBackendJobHistory(
   installId: string,
-): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string }> {
+  authToken: string,
+): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string; sessionInvalid: boolean }> {
   try {
-    const response = await subtitleApi.listSubtitleJobs(installId);
+    const response = await subtitleApi.listSubtitleJobs(installId, authToken);
 
-    return { jobs: response.jobs };
+    return { jobs: response.jobs, sessionInvalid: false };
   } catch (error) {
+    if (await clearSessionIfInvalid(error)) {
+      return {
+        jobs: [],
+        error: error instanceof Error ? error.message : 'Extension session expired.',
+        sessionInvalid: true,
+      };
+    }
+
     return {
       jobs: [],
       error: error instanceof Error ? error.message : 'Unable to load backend job history.',
+      sessionInvalid: false,
     };
   }
 }
 
 async function resolveCompletedSubtitleJob(
   installId: string,
+  authToken: string,
   historyJob: SubtitleJobHistoryItem,
 ): Promise<JobResponse | null> {
   try {
-    const job = await subtitleApi.getSubtitleJob(installId, historyJob.jobId);
+    const job = await subtitleApi.getSubtitleJob(installId, authToken, historyJob.jobId);
 
     return job.status === 'completed' && job.track ? job : null;
   } catch (error) {
@@ -463,6 +553,23 @@ async function resolveCompletedSubtitleJob(
     });
 
     return null;
+  }
+}
+
+async function syncExtensionAccount(
+  installId: string,
+  session: StoredExtensionSession,
+): Promise<StoredExtensionSession | null> {
+  try {
+    const response = await subtitleApi.getExtensionAccount(installId, session.plainTextToken);
+
+    return updateStoredAccount(response.account);
+  } catch (error) {
+    if (await clearSessionIfInvalid(error)) {
+      return null;
+    }
+
+    return session;
   }
 }
 
@@ -551,4 +658,19 @@ function isPositiveVideoDurationSeconds(value: unknown): value is number {
 
 function isCreatePayloadVideoDurationSeconds(value: unknown): value is number {
   return isPositiveVideoDurationSeconds(value) && value <= 3600;
+}
+
+function isSessionInvalidError(error: unknown): boolean {
+  return error instanceof SubtitleApiError
+    && (error.code === 'unauthenticated' || error.code === 'expired' || error.code === 'email_not_verified');
+}
+
+async function clearSessionIfInvalid(error: unknown): Promise<boolean> {
+  if (!isSessionInvalidError(error)) {
+    return false;
+  }
+
+  await clearExtensionSession();
+
+  return true;
 }

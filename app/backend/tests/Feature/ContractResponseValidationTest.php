@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
@@ -17,6 +18,7 @@ class ContractResponseValidationTest extends TestCase
     public function test_job_and_track_responses_match_contract_schemas(): void
     {
         $installId = $this->installId();
+        $user = User::factory()->create();
 
         config([
             'queue.default' => 'database',
@@ -26,7 +28,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withHeader('X-Extension-Install-Id', $installId)
+                ->withExtensionAuth($installId, $user)
                 ->postJson('/v1/subtitle-jobs', [
                     'youtubeVideoId' => 'create00001',
                     'youtubeUrl' => 'https://www.youtube.com/watch?v=create00001',
@@ -42,6 +44,7 @@ class ContractResponseValidationTest extends TestCase
         );
 
         $runningJob = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'runvalid001',
             'youtube_url' => 'https://www.youtube.com/watch?v=runvalid001',
@@ -52,16 +55,16 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withHeader('X-Extension-Install-Id', $installId)
+                ->withExtensionAuth($installId, $user)
                 ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id)
                 ->assertOk(),
             'job-response.schema.json',
         );
 
-        $completedTrack = $this->completedTrack($installId, 'complete001');
+        $completedTrack = $this->completedTrack($installId, $user, 'complete001');
 
         $completedResponse = $this
-            ->withHeader('X-Extension-Install-Id', $installId)
+            ->withExtensionAuth($installId, $user)
             ->getJson('/v1/subtitle-jobs/'.$completedTrack->job->public_id)
             ->assertOk();
 
@@ -69,6 +72,7 @@ class ContractResponseValidationTest extends TestCase
         $this->assertPayloadMatchesSchema($completedResponse->json('track'), 'track-response.schema.json');
 
         $failedJob = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'failvalid01',
             'youtube_url' => 'https://www.youtube.com/watch?v=failvalid01',
@@ -81,7 +85,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withHeader('X-Extension-Install-Id', $installId)
+                ->withExtensionAuth($installId, $user)
                 ->getJson('/v1/subtitle-jobs/'.$failedJob->public_id)
                 ->assertOk(),
             'job-response.schema.json',
@@ -91,9 +95,11 @@ class ContractResponseValidationTest extends TestCase
     public function test_history_learning_token_and_error_responses_match_contract_schemas(): void
     {
         $installId = $this->installId('b');
+        $user = User::factory()->create();
 
-        $this->completedTrack($installId, 'history0001');
+        $this->completedTrack($installId, $user, 'history0001');
         SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'history0002',
             'youtube_url' => 'https://www.youtube.com/watch?v=history0002',
@@ -102,6 +108,7 @@ class ContractResponseValidationTest extends TestCase
             'progress_percent' => 55,
         ]);
         SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'history0003',
             'youtube_url' => 'https://www.youtube.com/watch?v=history0003',
@@ -114,13 +121,13 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withHeader('X-Extension-Install-Id', $installId)
+                ->withExtensionAuth($installId, $user)
                 ->getJson('/v1/subtitle-jobs')
                 ->assertOk(),
             'subtitle-job-history-response.schema.json',
         );
 
-        $trackWithLearningMetadata = $this->completedTrack($installId, 'learntok001', [
+        $trackWithLearningMetadata = $this->completedTrack($installId, $user, 'learntok001', [
             'source_language' => 'eng',
             'detected_source_language' => 'eng',
             'target_language' => 'eng',
@@ -128,7 +135,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withHeader('X-Extension-Install-Id', $installId)
+                ->withExtensionAuth($installId, $user)
                 ->postJson('/v1/learning-tokens', [
                     'trackId' => $trackWithLearningMetadata->public_id,
                     'cueId' => 'cue-0001',
@@ -140,20 +147,21 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withHeader('X-Extension-Install-Id', $installId)
+                ->withExtensionAuth($installId, $user)
                 ->getJson('/v1/subtitle-jobs/00000000-0000-4000-8000-000000000000')
                 ->assertNotFound(),
             'api-error.schema.json',
         );
     }
 
-    private function completedTrack(string $installId, string $videoId, array $overrides = []): SubtitleTrack
+    private function completedTrack(string $installId, User $user, string $videoId, array $overrides = []): SubtitleTrack
     {
         $sourceLanguage = $overrides['source_language'] ?? 'auto';
         $detectedSourceLanguage = $overrides['detected_source_language'] ?? 'spa';
         $targetLanguage = $overrides['target_language'] ?? 'eng';
 
         $job = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => $videoId,
             'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,

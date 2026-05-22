@@ -1,6 +1,10 @@
 export type {
+  AccountSummary,
   ApiError,
   CreateSubtitleJobRequest,
+  ExtensionAccountResponse,
+  ExtensionAuthResponse,
+  ExtensionLoginRequest,
   JobResponse,
   LearningToken,
   LearningTokenRequest,

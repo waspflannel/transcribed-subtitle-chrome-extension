@@ -1,4 +1,4 @@
-import type { SubtitleJobHistoryItem } from './contracts';
+import type { AccountSummary, SubtitleJobHistoryItem } from './contracts';
 import { publicSubtitleErrorMessage, SubtitleApiError } from './api';
 import type { AccountState } from './messages';
 import { GENERATION_STAGES, stageLabel } from './popup-progress';
@@ -41,6 +41,25 @@ export function accountStateFromJobHistory(
     monthlyMinutesRemaining: Math.max(0, LOCAL_BETA_MONTHLY_MINUTES - completedMinutes - pendingMinutes),
     resetAt: nextMonthlyReset(now).toISOString(),
     upgradeAvailable: true,
+  };
+}
+
+export function accountStateFromSummary(account: AccountSummary): AccountState {
+  return {
+    status: 'authenticated',
+    id: account.id,
+    email: account.email,
+    name: account.name,
+    emailVerified: account.emailVerified,
+    planName: account.planName,
+    tierName: account.tierName,
+    tierSpeedLabel: account.tierSpeedLabel,
+    monthlyMinuteLimit: account.monthlyMinuteLimit,
+    monthlyMinutesUsed: account.monthlyMinutesUsed,
+    monthlyMinutesPending: account.monthlyMinutesPending,
+    monthlyMinutesRemaining: account.monthlyMinutesRemaining,
+    resetAt: account.resetAt,
+    upgradeAvailable: account.upgradeAvailable,
   };
 }
 

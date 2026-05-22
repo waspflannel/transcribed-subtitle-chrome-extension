@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\SubtitleJobFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -15,6 +16,7 @@ class SubtitleJob extends Model
 
     protected $fillable = [
         'public_id',
+        'user_id',
         'run_id',
         'youtube_video_id',
         'youtube_url',
@@ -41,6 +43,11 @@ class SubtitleJob extends Model
     public function track(): HasOne
     {
         return $this->hasOne(SubtitleTrack::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function artifacts(): HasMany
