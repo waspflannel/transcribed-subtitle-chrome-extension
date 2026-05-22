@@ -9,10 +9,10 @@
   <body>
     <div id="app">
       <main>
-        <header class="header">
+        <header class="app-header">
           <div>
+            <p class="eyebrow">Extension console</p>
             <h1>AI Subtitles</h1>
-            <p class="muted" data-install-id hidden></p>
           </div>
           <button type="button" class="refresh-button" data-action="refresh">Refresh</button>
         </header>
@@ -20,22 +20,32 @@
         <nav class="tabs" aria-label="Popup sections">
           <button type="button" class="tab active" data-tab="generate">Generate</button>
           <button type="button" class="tab" data-tab="jobs">Jobs</button>
+          <button type="button" class="tab" data-tab="usage">Usage</button>
+          <button type="button" class="tab" data-tab="account">Account</button>
+          <button type="button" class="tab" data-tab="settings">Settings</button>
         </nav>
 
         <section class="panel active" data-panel="generate">
-          <section class="section">
-            <p class="status idle" data-status>Loading</p>
+          <section class="surface status-surface">
+            <div class="status-line">
+              <p class="status idle" data-status>Loading</p>
+              <span class="plan-pill" data-plan-pill>Local beta</span>
+            </div>
             <dl class="facts">
               <div>
                 <dt>Video</dt>
                 <dd data-video-label>Loading</dd>
               </div>
               <div>
+                <dt>Duration</dt>
+                <dd data-video-duration>Duration pending</dd>
+              </div>
+              <div>
                 <dt>Track</dt>
                 <dd data-track-label>No track</dd>
               </div>
               <div>
-                <dt>Job ID</dt>
+                <dt>Job</dt>
                 <dd data-job-label>No job</dd>
               </div>
             </dl>
@@ -46,44 +56,132 @@
             </div>
           </section>
 
-          <section class="section">
-            <div class="language-picker" data-language-picker="source">
-              <label class="field">
-                <span>Subtitle language</span>
-                <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
-              </label>
-              <div class="selected-language" data-source-language-selected></div>
-              <div class="language-options" data-source-language-list role="listbox" aria-label="Subtitle language"></div>
+          <section class="surface">
+            <div class="section-heading">
+              <h2>Generation</h2>
+              <p>Choose the subtitle route and optional learning data for the active video.</p>
             </div>
-            <div class="language-picker" data-language-picker="target">
-              <label class="field">
-                <span>Translation language</span>
-                <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
-              </label>
-              <div class="selected-language" data-target-language-selected></div>
-              <div class="language-options" data-target-language-list role="listbox" aria-label="Translation language"></div>
+            <div class="language-grid">
+              <div class="language-picker" data-language-picker="source">
+                <label class="field">
+                  <span>Subtitle language</span>
+                  <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+                </label>
+                <div class="selected-language" data-source-language-selected></div>
+                <div class="language-options" data-source-language-list role="listbox" aria-label="Subtitle language"></div>
+              </div>
+              <div class="language-picker" data-language-picker="target">
+                <label class="field">
+                  <span>Translation language</span>
+                  <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+                </label>
+                <div class="selected-language" data-target-language-selected></div>
+                <div class="language-options" data-target-language-list role="listbox" aria-label="Translation language"></div>
+              </div>
             </div>
-            <p class="warning-copy">
-              Transcription accuracy tags use provider WER ranges. Translation card quality can still vary by
-              language pair, dialect, audio quality, and provider coverage.
-            </p>
-            <label class="toggle">
-              <input type="checkbox" name="showTranslation" disabled />
-              <span>Translate subtitles</span>
-            </label>
-            <label class="toggle">
-              <input type="checkbox" name="fullTrackEnrichment" disabled />
-              <span>Full word cards</span>
-            </label>
-            <p class="warning-copy">Full word cards use more OpenAI credits because every token is enriched before the track returns.</p>
+            <div class="option-grid">
+              <label class="toggle">
+                <input type="checkbox" name="showTranslation" disabled />
+                <span>Translate subtitles</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" name="showRomanization" disabled />
+                <span>Romanization</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" name="fullTrackEnrichment" disabled />
+                <span>Full word cards</span>
+              </label>
+            </div>
             <button type="button" class="primary-button" data-action="generate" disabled>Generate subtitles</button>
             <p class="privacy-copy">
-              Default generation creates timed subtitles and romanization when available. Word cards are generated when
-              you click a token unless Full word cards is enabled.
+              The extension sends the selected video URL and generation controls to the backend only after you start generation.
             </p>
           </section>
+        </section>
 
-          <section class="section">
+        <section class="panel" data-panel="jobs">
+          <section class="surface">
+            <div class="section-heading">
+              <h2>Jobs</h2>
+              <p>Recent backend jobs for this local extension install.</p>
+            </div>
+            <div class="jobs-list" data-jobs-list></div>
+            <p class="muted" data-jobs-error hidden></p>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="usage">
+          <section class="surface">
+            <div class="section-heading">
+              <h2>Usage</h2>
+              <p>Projected local beta minutes from public-safe job history.</p>
+            </div>
+            <div class="usage-meter">
+              <div class="usage-meter-label">
+                <span data-usage-summary>0 of 60 min used</span>
+                <strong data-usage-remaining>60 min left</strong>
+              </div>
+              <div class="progress-bar usage-bar" aria-hidden="true"><span data-usage-bar></span></div>
+            </div>
+            <dl class="facts compact">
+              <div>
+                <dt>Current plan</dt>
+                <dd data-usage-plan>Local beta</dd>
+              </div>
+              <div>
+                <dt>Pending jobs</dt>
+                <dd data-usage-pending>0 min pending</dd>
+              </div>
+              <div>
+                <dt>Reset date</dt>
+                <dd data-usage-reset>Loading</dd>
+              </div>
+            </dl>
+            <button type="button" class="secondary-button" data-action="upgrade" disabled>Upgrade</button>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="account">
+          <section class="surface">
+            <div class="section-heading">
+              <h2>Account</h2>
+              <p>Local beta access is active; sign-in arrives with the account phase.</p>
+            </div>
+            <dl class="facts compact">
+              <div>
+                <dt>Status</dt>
+                <dd data-account-status>Not signed in</dd>
+              </div>
+              <div>
+                <dt>Plan</dt>
+                <dd data-account-plan>Local beta</dd>
+              </div>
+              <div>
+                <dt>Speed</dt>
+                <dd data-account-speed>Standard queue</dd>
+              </div>
+            </dl>
+            <div class="feature-list" data-feature-list></div>
+            <div class="button-row">
+              <button type="button" class="secondary-button" data-action="sign-in" disabled>Sign in</button>
+              <button type="button" class="secondary-button" data-action="logout" disabled>Log out</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="settings">
+          <section class="surface">
+            <div class="section-heading">
+              <h2>Settings</h2>
+              <p>Overlay display, timing, defaults, and local browser state.</p>
+            </div>
+            <dl class="facts compact">
+              <div>
+                <dt>Language defaults</dt>
+                <dd data-settings-language-summary>Loading</dd>
+              </div>
+            </dl>
             <label class="toggle">
               <input type="checkbox" name="overlayVisible" disabled />
               <span>Show overlay</span>
@@ -97,10 +195,6 @@
               </select>
             </label>
             <label class="toggle">
-              <input type="checkbox" name="showRomanization" disabled />
-              <span>Romanization</span>
-            </label>
-            <label class="toggle">
               <input type="checkbox" name="showGloss" disabled />
               <span>Gloss</span>
             </label>
@@ -112,15 +206,10 @@
                 <output data-timing-offset>0.0s</output>
               </div>
             </label>
-            <button type="button" class="secondary-button" data-action="reset-timing" disabled>Reset timing</button>
-            <button type="button" class="secondary-button" data-action="clear-state" disabled>Clear local state</button>
-          </section>
-        </section>
-
-        <section class="panel" data-panel="jobs">
-          <section class="section">
-            <div class="jobs-list" data-jobs-list></div>
-            <p class="muted" data-jobs-error hidden></p>
+            <div class="button-row">
+              <button type="button" class="secondary-button" data-action="reset-timing" disabled>Reset timing</button>
+              <button type="button" class="secondary-button danger" data-action="clear-state" disabled>Clear local state</button>
+            </div>
           </section>
         </section>
       </main>
