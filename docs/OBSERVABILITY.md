@@ -8,6 +8,8 @@ Make application state legible to agents and humans through inspectable signals.
 
 The backend records persisted subtitle job, artifact, and track rows, acquires YouTube audio into temporary storage, deletes raw audio after processing succeeds or fails, requests ElevenLabs Scribe word timestamps, normalizes words and provider-detected language codes into timed segments and WebVTT cue drafts, tokenizes cues through OpenAI/Laravel AI structured output with structural/source-order validation, fails visibly when tokenization cannot produce usable tokens, optionally romanizes cues, optionally translates cues, optionally enriches existing tokens, returns stable public status/error states with request IDs, throttles by install ID and IP, and prunes expired generated subtitles.
 
+Billing state is inspectable through local user subscription fields, idempotent Stripe webhook event rows, and append-only usage ledger rows for monthly grants, reservations, debits, refunds, and support adjustments. `php artisan billing:usage-report --json` summarizes public minutes and provider-cost telemetry by plan.
+
 ## Logging
 
 - Prefer structured logs.
@@ -19,6 +21,7 @@ The backend records persisted subtitle job, artifact, and track rows, acquires Y
 - Tokenization, romanization, cue translation, full-card enrichment, and clicked-token enrichment emit started/completed/failed events with provider identity, model, cue/token counts where applicable, and stored dialect value where applicable without logging prompts, full transcripts, translations, token boundaries, romanizations, or token payloads.
 - Queue wait, transcription, cue-batch processing, continuation, finalization, and total completed-track duration emit sanitized timing logs: `backend.subtitle_queue_wait_observed`, `backend.subtitle_stage_timing`, and `backend.subtitle_completed_track_timing`.
 - Generation optimization emits sanitized internal events for provider cost estimates, per-install concurrency delays, and performance budget checks: `provider.cost_estimated`, `queue.concurrency_delayed`, `performance.budget_checked`, and `performance.budget_exceeded`. Concurrency delay trace context distinguishes real tier cap hits (`limit_reached`) from limiter lock contention (`lock_timeout`) and includes the configured limiter cache store, active count when observed, limit, and release delay.
+- Billing events are persisted in `billing_usage_events` rather than subtitle trace rows so support can audit grants, reservations, debits, refunds, adjustments, and provider-cost totals without reading transcripts or provider payloads.
 - Subtitle runtime tracing persists sanitized `subtitle_job_events` rows and emits `backend.subtitle_trace_event` logs with stable event names for job creation/reset/completion/failure, stale run skips, queue processing/processed/failed, batch lifecycle, stage start/completion/slow warnings, and artifact read/write/delete.
 - Each generation has a `run_id`; queued subtitle work carries the run ID and stale queued payloads no-op before provider calls or artifact writes, with `job.stale_run_skipped` trace evidence.
 - Local diagnostics are available through `php artisan subtitles:runtime-check`, `php artisan subtitles:runtime`, `php artisan subtitles:trace <public-job-id>`, `php artisan subtitles:slow`, and `php artisan subtitles:metrics`; all support `--json`.

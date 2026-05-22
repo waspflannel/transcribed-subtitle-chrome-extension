@@ -42,6 +42,10 @@ Compatible completed tracks are reused immediately, compatible running jobs are 
 
 Generation cost tracking uses configurable unit prices and safe units only: Scribe audio minutes and OpenAI cue counts. The estimates are internal margin telemetry and do not store prompts, transcripts, translations, token payloads, raw provider responses, or provider secrets.
 
+Billing state is updated through Stripe-hosted checkout, Stripe billing portal, and signed Stripe webhooks. Webhook event IDs are recorded before local mutation so retries and replays are idempotent. Subscription webhooks grant current-period minutes up to the active plan allowance; plan upgrades grant only the delta needed to reach the new period allowance. Failed payments move the local subscription to `past_due`, and canceled subscriptions stop entitlement checks from authorizing new generation.
+
+Subtitle generation reserves public generated-video minutes before dispatch. After audio acquisition measures the actual duration, the reservation is topped up or reduced before transcription starts. Completed tracks debit the active reservation; failures release reserved minutes when no completed track was produced. Compatible completed tracks return without another reservation or debit.
+
 Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` command deletes expired tracks and their now-empty expired jobs daily; related trace rows are removed by job deletion. Extension requests also ignore expired tracks and regenerate through the existing compatible job row. Intermediate subtitle artifacts are deleted on finalization, failure, retry reset, and job deletion. Cancelled Laravel batch jobs skip provider calls before execution, but cancellation does not interrupt provider calls already in progress.
 
 The popup local clear-state action removes local extension settings and anonymous install ID, clears in-memory tab subtitle state, and republishes default settings/no-track state to the active YouTube tab. It does not delete backend tracks because the first release has no user account or ownership model.

@@ -55,6 +55,43 @@ The product migrations currently define:
   - `email_verified_at`
   - `password`
   - `remember_token`
+  - `stripe_customer_id`
+  - `stripe_subscription_id`
+  - `stripe_subscription_item_id`
+  - `billing_plan_code`
+  - `billing_subscription_status`
+  - `billing_current_period_start`
+  - `billing_current_period_end`
+  - `billing_cancel_at_period_end`
+  - `billing_trial_ends_at`
+  - `billing_ends_at`
+  - timestamps
+- `stripe_webhook_events`
+  - `stripe_event_id`
+  - `type`
+  - `livemode`
+  - `payload_hash`
+  - `processed_at`
+  - `processing_error`
+  - timestamps
+- `billing_usage_events`
+  - `user_id`
+  - `subtitle_job_id`
+  - `subtitle_track_id`
+  - `stripe_subscription_id`
+  - `plan_code`
+  - `event_type`
+  - `billing_period_start`
+  - `billing_period_end`
+  - `minutes`
+  - `available_minutes_delta`
+  - `reserved_minutes_delta`
+  - `used_minutes_delta`
+  - `provider_cost_microusd_delta`
+  - `idempotency_key`
+  - `created_by`
+  - `note`
+  - `metadata`
   - timestamps
 - `subtitle_job_artifacts`
   - `subtitle_job_id`
