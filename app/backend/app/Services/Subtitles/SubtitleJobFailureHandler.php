@@ -2,8 +2,10 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Services\Billing\UsageLedger;
 use PDOException;
 use Throwable;
 
@@ -13,6 +15,7 @@ class SubtitleJobFailureHandler
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitlePipelineTelemetry $telemetry,
+        private readonly UsageLedger $usageLedger,
     ) {}
 
     /**
@@ -36,8 +39,19 @@ class SubtitleJobFailureHandler
             return;
         }
 
+        if ($exception instanceof BillingEntitlementException) {
+            $this->markFailed($job, $stage, $exception->publicCode, $exception->getMessage());
+            $this->usageLedger->releaseReservation($job->load('user'), 'failure');
+            $this->artifacts->deleteForJob($job);
+            $this->logger->processingFailed($job->refresh(), $stage, $exception);
+            $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);
+
+            return;
+        }
+
         if ($exception instanceof SubtitleProcessingException) {
             $this->markFailed($job, $stage, $exception->publicCode, $exception->getMessage());
+            $this->usageLedger->releaseReservation($job->load('user'), 'failure');
             $this->artifacts->deleteForJob($job);
             $this->logger->processingFailed($job->refresh(), $stage, $exception);
             $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);
@@ -53,6 +67,7 @@ class SubtitleJobFailureHandler
             );
 
             $this->markFailed($job, $stage, $queueException->publicCode, $queueException->getMessage());
+            $this->usageLedger->releaseReservation($job->load('user'), 'failure');
             $this->artifacts->deleteForJob($job);
             $this->logger->processingFailed($job->refresh(), $stage, $queueException);
             $this->telemetry->recordJobFailed($job->refresh(), $stage, $queueException, $context);
@@ -61,6 +76,7 @@ class SubtitleJobFailureHandler
         }
 
         $this->markFailed($job, $stage, 'internal_error', 'Generation did not complete.');
+        $this->usageLedger->releaseReservation($job->load('user'), 'failure');
         $this->artifacts->deleteForJob($job);
         $this->logger->unexpectedFailure($job->refresh(), $stage, $exception);
         $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);

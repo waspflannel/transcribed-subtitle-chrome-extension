@@ -5,6 +5,7 @@ namespace App\Services\Subtitles;
 use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
 use App\Models\User;
+use App\Services\Billing\BillingEntitlementService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,7 @@ class SubtitleJobService
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleRuntimeTracer $tracer,
         private readonly SubtitleQueueWorkerBootstrapper $workers,
+        private readonly BillingEntitlementService $billing,
     ) {}
 
     /**
@@ -65,7 +67,6 @@ class SubtitleJobService
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
-        $generationTier = SubtitleTier::normalize($generationTier ?? SubtitleTier::default());
         $dispatchState = self::DISPATCH_STATE_REUSED;
 
         try {
@@ -75,7 +76,6 @@ class SubtitleJobService
                 $installId,
                 $requestIp,
                 $processingVersion,
-                $generationTier,
                 $enrichmentMode,
                 $includeRomanization,
                 $includeTranslation,
@@ -99,6 +99,8 @@ class SubtitleJobService
                         return $job;
                     }
 
+                    $this->billing->releaseJobReservation($job, 'reset');
+                    $entitlement = $this->billing->authorizeForGeneration($user, $payload, $job->id);
                     $this->logger->incompleteJobReused($job);
                     $this->resetJob(
                         job: $job,
@@ -106,27 +108,30 @@ class SubtitleJobService
                         user: $user,
                         installId: $installId,
                         requestIp: $requestIp,
-                        generationTier: $generationTier,
+                        generationTier: $entitlement->generationTier,
                         enrichmentMode: $enrichmentMode,
                         includeRomanization: $includeRomanization,
                         includeTranslation: $includeTranslation,
                     );
+                    $this->billing->reserveForJob($job->refresh()->load('user'), $entitlement);
                     $dispatchState = self::DISPATCH_STATE_RESET;
 
                     return $job->refresh();
                 }
 
+                $entitlement = $this->billing->authorizeForGeneration($user, $payload);
                 $job = $this->createJob(
                     payload: $payload,
                     user: $user,
                     installId: $installId,
                     requestIp: $requestIp,
                     processingVersion: $processingVersion,
-                    generationTier: $generationTier,
+                    generationTier: $entitlement->generationTier,
                     enrichmentMode: $enrichmentMode,
                     includeRomanization: $includeRomanization,
                     includeTranslation: $includeTranslation,
                 );
+                $this->billing->reserveForJob($job->load('user'), $entitlement);
                 $this->logger->jobCreated($job);
                 $dispatchState = self::DISPATCH_STATE_CREATED;
 
