@@ -1,6 +1,6 @@
 # Phase 04: Billing Tiers And Usage
 
-Status: implemented; external Stripe test-mode evidence pending
+Status: completed
 Owner: agent
 Created: 2026-05-20
 Last updated: 2026-05-22
@@ -109,6 +109,8 @@ Users should understand pricing in generated video minutes. Internally, the syst
 - 2026-05-22: Added billing config, Cashier-style user subscription fields, Stripe webhook event storage, and append-only usage ledger events.
 - 2026-05-22: Added plan/entitlement services, stable billing denial codes, generation reservation/debit/refund hooks, dashboard billing actions, Stripe webhook handling, support adjustment command, and margin report command.
 - 2026-05-22: Updated contracts, extension billing-denial copy, architecture/security/reliability/observability/frontend/database docs, and debt tracker `TD-011` for live Stripe test-mode evidence.
+- 2026-05-22: Ran a code-simplifier pass on the merged billing branch, tightened billing config validation, made webhook processing failures retry-visible, removed read-side grant mutation from account summaries, and collapsed duplicated subtitle failure cleanup.
+- 2026-05-22: User confirmed Phase 04 complete. Archived this plan from active to completed; live Stripe test-mode proof remains tracked as `TD-011` release debt.
 
 ## Validation Evidence
 
@@ -124,6 +126,10 @@ Users should understand pricing in generated video minutes. Internally, the syst
 - 2026-05-22: `.\scripts\agent\doc-gardening.ps1` passed with no findings.
 - 2026-05-22: `.\scripts\agent\check.ps1` passed after implementation.
 - 2026-05-22: `.\scripts\agent\verify-pr.ps1` passed after implementation.
+- 2026-05-22: `php artisan test --compact tests\Feature\BillingAndUsageTest.php` passed after simplification, 10 tests / 55 assertions.
+- 2026-05-22: `php artisan test --compact tests\Feature\SubtitleJobApiTest.php` passed after simplification, 53 tests / 404 assertions.
+- 2026-05-22: `.\scripts\agent\check.ps1` passed after simplification, including backend 171 tests / 920 assertions and extension 56 tests.
+- 2026-05-22: `.\scripts\agent\verify-pr.ps1` passed after simplification on a standalone rerun.
 
 ## Completion Notes
 
@@ -131,17 +137,8 @@ Users should understand pricing in generated video minutes. Internally, the syst
 - Implemented signed webhook verification, idempotent webhook replay handling, subscription state updates, monthly grants, plan-change delta grants, failed-payment and cancellation state updates.
 - Implemented current-period minute reservations, debit on completed track, refund/release on failure or duration reduction, no double-charge on cached compatible tracks, feature/concurrency/minute denial codes, and extension-safe copy.
 - Added dashboard visibility for subscription and usage, support usage adjustments, and a JSON margin report that compares public used minutes with provider-cost telemetry.
-- Residual risk: live Stripe test-mode checkout and webhook proof was not run because test-mode credentials and price IDs are not present in this workspace. Tracked as `TD-011`.
-
-## Validation/Evidence Required
-
-- Stripe test-mode checkout and webhook run.
-- Backend billing and usage tests.
-- Extension and dashboard usage display tests.
-- Ledger audit examples for completed, failed, reused, adjusted, and plan-changed jobs.
-- Margin report comparing provider cost to plan minute usage.
-- `.\scripts\agent\check.ps1`
-- `.\scripts\agent\verify-pr.ps1`
+- Simplification follow-up removed fake billing-plan defaults, prevented read-side account summary grant mutation, and made handled Stripe webhook failures record durable retry-debugging state.
+- Residual release debt: live Stripe test-mode checkout and webhook proof was not run in this workspace because test-mode credentials and price IDs are not present. It remains tracked as `TD-011` rather than blocking phase archive.
 
 ## Risks and Follow-up Debt
 
