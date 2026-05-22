@@ -3,6 +3,7 @@
 namespace App\Jobs\Middleware;
 
 use App\Models\SubtitleJob;
+use App\Services\Subtitles\SubtitleQueue;
 use App\Services\Subtitles\SubtitleRuntimeTracer;
 use App\Services\Subtitles\SubtitleTier;
 use Closure;
@@ -10,7 +11,7 @@ use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 
-final class LimitSubtitleInstallConcurrency
+final class LimitSubtitleBatchConcurrency
 {
     public function handle(object $job, Closure $next): mixed
     {
@@ -20,13 +21,13 @@ final class LimitSubtitleInstallConcurrency
 
         $subtitleJob = $this->subtitleJob($job);
 
-        if ($subtitleJob === null) {
+        if ($subtitleJob === null || $subtitleJob->user_id === null) {
             return $next($job);
         }
 
         $tier = SubtitleTier::normalize($subtitleJob->generation_tier);
-        $limit = SubtitleTier::perInstallConcurrency($tier);
-        $counterKey = $this->counterKey($subtitleJob);
+        $limit = SubtitleTier::batchConcurrency($tier);
+        $counterKey = $this->counterKey($subtitleJob, $tier);
         $claim = $this->claimSlot($counterKey, $limit);
 
         if (! $claim['claimed']) {
@@ -133,6 +134,8 @@ final class LimitSubtitleInstallConcurrency
         app(SubtitleRuntimeTracer::class)->jobEvent($job, 'queue.concurrency_delayed', [
             'stage' => $job->stage,
             'status' => $job->status,
+            'queue_family' => SubtitleQueue::FAMILY_BATCH,
+            'limiter_type' => 'ai_batch',
             'generation_tier' => $tier,
             'delay_reason' => $claim['delay_reason'] ?? 'limit_reached',
             'cache_store' => SubtitleTier::concurrencyCacheStore(),
@@ -142,9 +145,9 @@ final class LimitSubtitleInstallConcurrency
         ], 'warning');
     }
 
-    private function counterKey(SubtitleJob $job): string
+    private function counterKey(SubtitleJob $job, string $tier): string
     {
-        return 'subtitle-install-concurrency:'.hash('sha256', $job->install_id).':'.SubtitleTier::normalize($job->generation_tier);
+        return 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':'.$tier;
     }
 
     private function cache(): Repository
