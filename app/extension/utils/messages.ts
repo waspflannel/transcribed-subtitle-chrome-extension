@@ -7,7 +7,11 @@ export interface PageSnapshot {
 }
 
 export interface AccountState {
-  status: 'anonymous';
+  status: 'anonymous' | 'authenticated';
+  id?: string;
+  email?: string;
+  name?: string;
+  emailVerified?: boolean;
   planName: string;
   tierName: string;
   tierSpeedLabel: string;
@@ -75,6 +79,14 @@ export type RuntimeMessage =
       type: 'popup.generateSubtitles';
     }
   | {
+      type: 'popup.login';
+      email: string;
+      password: string;
+    }
+  | {
+      type: 'popup.logout';
+    }
+  | {
       type: 'content.enrichLearningToken';
       youtubeVideoId: string;
       trackId: string;
@@ -104,9 +116,13 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   switch (value.type) {
     case 'content.getState':
     case 'popup.generateSubtitles':
+    case 'popup.logout':
     case 'popup.clearLocalState':
     case 'background.getPageSnapshot':
       return true;
+
+    case 'popup.login':
+      return hasString(value, 'email') && hasString(value, 'password');
 
     case 'popup.getState':
       return optionalBoolean(value, 'syncBackend');
