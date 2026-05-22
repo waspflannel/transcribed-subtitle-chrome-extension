@@ -16,6 +16,10 @@
         <p class="error-copy">{{ session('billing_error') }}</p>
     @endif
 
+    @if (session('billing_status'))
+        <p class="status">{{ session('billing_status') }}</p>
+    @endif
+
     @if (request('billing') === 'success')
         <p class="status">Checkout completed. Billing updates can take a moment while Stripe sends webhooks.</p>
     @elseif (request('billing') === 'cancelled')
@@ -76,6 +80,32 @@
             </article>
         @endforeach
     </section>
+
+    @if ($testingPlanSwitcherEnabled)
+        <section class="usage-block">
+            <div>
+                <h2>Test billing</h2>
+                <p>Switch plans without Stripe.</p>
+            </div>
+            <form method="post" action="{{ route('billing.testing-plan') }}">
+                @csrf
+                <label for="plan_code">Plan</label>
+                <select id="plan_code" name="plan_code">
+                    @foreach ($plans as $plan)
+                        <option value="{{ $plan['code'] }}" @selected($user->billing_plan_code === $plan['code'])>
+                            {{ $plan['name'] }}
+                        </option>
+                    @endforeach
+                </select>
+                <button type="submit">Set test plan</button>
+            </form>
+            <form method="post" action="{{ route('billing.testing-plan') }}">
+                @csrf
+                <input type="hidden" name="plan_code" value="none">
+                <button type="submit">Clear test plan</button>
+            </form>
+        </section>
+    @endif
 
     <form method="post" action="{{ route('billing.portal') }}">
         @csrf

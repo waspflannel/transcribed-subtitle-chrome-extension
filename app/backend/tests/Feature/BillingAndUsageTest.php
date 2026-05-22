@@ -9,6 +9,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Auth\ExtensionTokenIssuer;
+use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -61,6 +62,96 @@ class BillingAndUsageTest extends TestCase
             ->actingAs($user->fresh())
             ->post(route('billing.portal'))
             ->assertRedirect('https://billing.stripe.test/session');
+    }
+
+    public function test_testing_plan_switcher_changes_plans_without_stripe_and_rebalances_minutes(): void
+    {
+        config(['billing.testing_plan_switcher.enabled' => true]);
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Test billing')
+            ->assertSee('Switch plans without Stripe.');
+
+        $this
+            ->actingAs($user)
+            ->post(route('billing.testing-plan'), ['plan_code' => 'pro'])
+            ->assertRedirectToRoute('dashboard')
+            ->assertSessionHas('billing_status', 'Test billing plan switched to Pro.');
+
+        $summary = app(BillingEntitlementService::class)->accountSummary($user->fresh());
+
+        $this->assertSame('pro', $user->fresh()->billing_plan_code);
+        $this->assertSame('active', $user->fresh()->billing_subscription_status);
+        $this->assertSame(600, $summary['monthlyMinuteLimit']);
+        $this->assertSame(600, $summary['monthlyMinutesRemaining']);
+
+        $this
+            ->actingAs($user->fresh())
+            ->post(route('billing.testing-plan'), ['plan_code' => 'base'])
+            ->assertRedirectToRoute('dashboard')
+            ->assertSessionHas('billing_status', 'Test billing plan switched to Base.');
+
+        $summary = app(BillingEntitlementService::class)->accountSummary($user->fresh());
+
+        $this->assertSame('base', $user->fresh()->billing_plan_code);
+        $this->assertSame(90, $summary['monthlyMinuteLimit']);
+        $this->assertSame(90, $summary['monthlyMinutesRemaining']);
+        $this->assertSame(
+            -510,
+            (int) BillingUsageEvent::query()
+                ->where('event_type', 'adjustment')
+                ->where('created_by', 'billing-test-plan-switcher')
+                ->sum('available_minutes_delta'),
+        );
+    }
+
+    public function test_testing_plan_switcher_can_clear_the_local_plan(): void
+    {
+        config(['billing.testing_plan_switcher.enabled' => true]);
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user)
+            ->post(route('billing.testing-plan'), ['plan_code' => 'plus'])
+            ->assertRedirectToRoute('dashboard');
+
+        $this->assertSame('plus', $user->fresh()->billing_plan_code);
+
+        $this
+            ->actingAs($user->fresh())
+            ->post(route('billing.testing-plan'), ['plan_code' => 'none'])
+            ->assertRedirectToRoute('dashboard')
+            ->assertSessionHas('billing_status', 'Test billing plan cleared.');
+
+        $user = $user->fresh();
+
+        $this->assertNull($user->billing_plan_code);
+        $this->assertNull($user->billing_subscription_status);
+        $this->assertNull($user->billing_current_period_end);
+        $this->assertSame('No active plan', app(BillingEntitlementService::class)->accountSummary($user)['planName']);
+    }
+
+    public function test_testing_plan_switcher_is_hidden_and_blocked_when_disabled(): void
+    {
+        config(['billing.testing_plan_switcher.enabled' => false]);
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('Test billing');
+
+        $this
+            ->actingAs($user)
+            ->post(route('billing.testing-plan'), ['plan_code' => 'pro'])
+            ->assertNotFound();
+
+        $this->assertNull($user->fresh()->billing_plan_code);
     }
 
     public function test_stripe_webhook_updates_subscription_state_and_replay_does_not_duplicate_grants(): void

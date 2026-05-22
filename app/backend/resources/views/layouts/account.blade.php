@@ -64,7 +64,8 @@
                 gap: 6px;
             }
 
-            input {
+            input,
+            select {
                 border: 1px solid #c9d4cf;
                 border-radius: 6px;
                 color: #17211b;

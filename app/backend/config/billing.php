@@ -10,6 +10,10 @@ return [
         'connect_timeout_seconds' => (int) env('STRIPE_CONNECT_TIMEOUT_SECONDS', 5),
     ],
 
+    'testing_plan_switcher' => [
+        'enabled' => (bool) env('BILLING_TEST_PLAN_SWITCHER', in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)),
+    ],
+
     'plans' => [
         'base' => [
             'name' => 'Base',
