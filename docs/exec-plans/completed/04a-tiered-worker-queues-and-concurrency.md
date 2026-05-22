@@ -1,6 +1,6 @@
 # Phase 04a: Tiered Worker Queues And Account Concurrency
 
-Status: planned
+Status: completed
 Owner: agent
 Created: 2026-05-22
 Last updated: 2026-05-22
@@ -27,15 +27,15 @@ The implementation should keep workers shared by tier and work type, not reserve
 
 ## Acceptance Criteria
 
-- [ ] Subtitle jobs use authenticated `user_id` as the concurrency owner; `install_id` remains only for device and abuse diagnostics.
-- [ ] Generate requests are rejected with `429 concurrency_exceeded` when the account is already at its active generation limit.
-- [ ] Reusing an already-running compatible job does not consume another generation slot.
-- [ ] Completed and failed jobs no longer count against active generation concurrency.
-- [ ] Generation/orchestration jobs route to `subtitle-generation-{tier}` queues.
-- [ ] AI batch jobs route to `subtitle-batch-{tier}` queues.
-- [ ] AI batch middleware limits active batch work per account and tier, then releases delayed jobs back to Redis.
-- [ ] Runtime diagnostics show queue depths and worker group config for all generation and batch queues.
-- [ ] Concurrency logs and trace rows are sanitized and never expose raw user IDs, install IDs, transcript text, cue text, prompts, provider payloads, or secrets.
+- [x] Subtitle jobs use authenticated `user_id` as the concurrency owner; `install_id` remains only for device and abuse diagnostics.
+- [x] Generate requests are rejected with `429 concurrency_exceeded` when the account is already at its active generation limit.
+- [x] Reusing an already-running compatible job does not consume another generation slot.
+- [x] Completed and failed jobs no longer count against active generation concurrency.
+- [x] Generation/orchestration jobs route to `subtitle-generation-{tier}` queues.
+- [x] AI batch jobs route to `subtitle-batch-{tier}` queues.
+- [x] AI batch middleware limits active batch work per account and tier, then releases delayed jobs back to Redis.
+- [x] Runtime diagnostics show queue depths and worker group config for all generation and batch queues.
+- [x] Concurrency logs and trace rows are sanitized and never expose raw user IDs, install IDs, transcript text, cue text, prompts, provider payloads, or secrets.
 
 ## Key Implementation Areas
 
@@ -94,12 +94,25 @@ The implementation should keep workers shared by tier and work type, not reserve
 | 2026-05-22 | Use separate generation and AI batch limits. | Whole-video admission and provider-heavy parallel batch work have different cost and fairness constraints. |
 | 2026-05-22 | Reject over-limit Generate requests instead of adding queued status. | This avoids adding new public lifecycle states before beta evidence proves queued overflow is needed. |
 | 2026-05-22 | Keep Kubernetes out of the first implementation. | Laravel queues, Redis locks, and worker config should own business fairness; Kubernetes can later run and scale worker pods without changing policy. |
+| 2026-05-22 | Keep the public beta billing catalog at `base`, `plus`, and `pro`; keep `ultimate` as an internal queue tier until a product/pricing decision adds it publicly. | Current billing configuration exposes only three paid plans, while queue policy needs the ultimate tier ready for future entitlement mapping. |
+| 2026-05-22 | Use only the new `SUBTITLE_GENERATION_QUEUE_*` and `SUBTITLE_BATCH_QUEUE_*` names for tier routing. | Legacy `SUBTITLE_QUEUE_*` values in local environments would otherwise keep jobs on the old `subtitle-ai` family and fail the phase goal. |
+| 2026-05-22 | Let full word-card enrichment share the account/tier AI batch limiter with tokenization, translation, and romanization. | The first beta needs one inspectable AI batch fairness policy; stricter enrichment sub-limits require load and cost evidence. |
+| 2026-05-22 | Base generation and base batch guarantee pools are enough for the first implementation. | Higher-tier guarantee pools can be added later from runtime queue-depth and wait evidence without changing admission policy. |
 
 ## Progress Log
 
 | Date | Update | Evidence |
 | --- | --- | --- |
 | 2026-05-22 | Plan created from Plan C worker allocation discussion. | Roadmap document added for post-auth implementation. |
+| 2026-05-22 | Refined implementation against the current Laravel backend, local Boost skills, and Laravel 13 queue/cache docs. | Loaded `laravel-best-practices`, `laravel-specialist`, `laravel-security`, `subtitle-pipeline`; fetched Laravel 13 queue/cache docs for queue names, middleware, releases, and cache locks; baseline `.\scripts\agent\check.ps1` passed. |
+| 2026-05-22 | Implemented explicit generation and AI batch queue families, tier concurrency config, account-owned generation admission, account-owned batch limiter, worker groups, runtime diagnostics, and docs updates. | Focused backend tests passed: `php artisan test --compact tests/Feature/SubtitleRuntimeTracingTest.php tests/Feature/SubtitleJobApiTest.php tests/Feature/BillingAndUsageTest.php tests/Unit/SubtitleRuntimeTracerTest.php tests/Unit/SubtitleWorkflowLoggerTest.php` (85 passed, 553 assertions). |
+| 2026-05-22 | Completed validation and documentation lifecycle checks. | `vendor/bin/pint --dirty --format agent` passed; `php artisan test --compact tests/Feature/SubtitleJobApiTest.php tests/Feature/SubtitleRuntimeTracingTest.php tests/Feature/BillingAndUsageTest.php` passed (77 passed, 535 assertions); `.\scripts\agent\doc-gardening.ps1` reported no findings; `.\scripts\agent\check.ps1` passed; `.\scripts\agent\verify-pr.ps1` passed. |
+
+## Completion Notes
+
+- Implemented tiered generation queues, AI batch queues, per-tier generation and batch concurrency config, account-owned generation admission, Redis-backed account/tier AI batch limiting, shared priority/base-guarantee worker groups, and runtime queue-family diagnostics.
+- Updated architecture, reliability, security, observability, quality, runtime README, local runtime env script, production hosting plan, and technical-debt tracker to reflect the new queue model.
+- Residual risk: provider throughput is still bounded by global worker counts and provider rate limits; existing TD-009/TD-010 keep real provider-backed timing and load evidence open.
 
 ## Risks and Follow-up Debt
 
