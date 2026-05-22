@@ -1379,7 +1379,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('beta concurrent gloss', $track->cues[0]['tokens'][1]['gloss']);
     }
 
-    public function test_learning_token_enrichment_skips_provider_for_same_language_track(): void
+    public function test_learning_token_enrichment_generates_cards_for_same_language_track(): void
     {
         $jobResponse = $this
             ->withExtensionAuth($this->installId())
@@ -1397,9 +1397,10 @@ class SubtitleJobApiTest extends TestCase
                 'tokenIndex' => 0,
             ])
             ->assertOk()
-            ->assertJsonPath('token.text', 'first');
+            ->assertJsonPath('token.text', 'first')
+            ->assertJsonPath('token.gloss', 'first gloss');
 
-        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
+        $this->assertSame(1, $this->translationAnalysis->tokenCalls);
     }
 
     public function test_learning_token_enrichment_requires_owning_install(): void
