@@ -256,6 +256,10 @@ export type JobResponse = {
 } & {
   jobId: string;
   youtubeVideoId: string;
+  /**
+   * Known video duration in seconds when measured or supplied by the extension. Safe for usage and timing displays.
+   */
+  videoDurationSeconds?: number;
   sourceLanguage:
     | 'auto'
     | 'bel'
@@ -445,6 +449,18 @@ export type JobResponse = {
     | 'xho'
     | 'yor'
     | 'zul';
+  /**
+   * Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output.
+   */
+  enrichmentMode: 'on_demand' | 'full';
+  /**
+   * Whether the request asked the backend to add romanization where available.
+   */
+  includeRomanization: boolean;
+  /**
+   * Whether the request asked the backend to translate cue text.
+   */
+  includeTranslation: boolean;
   status: 'running' | 'completed' | 'failed';
   stage:
     | 'preparing'
@@ -902,6 +918,10 @@ export type SubtitleJobHistoryItem = {
   [k: string]: unknown;
 } & {
   youtubeVideoId: string;
+  /**
+   * Known video duration in seconds when measured or supplied by the extension. Safe for usage and timing displays.
+   */
+  videoDurationSeconds?: number;
   youtubeUrl: string;
   status: 'running' | 'completed' | 'failed';
   startedAt: string;
@@ -1012,6 +1032,18 @@ export type SubtitleJobHistoryItem = {
     | 'xho'
     | 'yor'
     | 'zul';
+  /**
+   * Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output.
+   */
+  enrichmentMode: 'on_demand' | 'full';
+  /**
+   * Whether the request asked the backend to add romanization where available.
+   */
+  includeRomanization: boolean;
+  /**
+   * Whether the request asked the backend to translate cue text.
+   */
+  includeTranslation: boolean;
   jobId: string;
   trackId?: string;
   expiresAt?: string;

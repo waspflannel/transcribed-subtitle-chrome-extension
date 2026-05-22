@@ -12,9 +12,21 @@ import {
   languageSearchText,
   type LanguageOption,
 } from '../../utils/languages';
-import type { PopupState } from '../../utils/messages';
+import type { AccountState, PopupState } from '../../utils/messages';
 import { formatHistoryTimestamp, generationProgress } from '../../utils/popup-progress';
-import { normalizeSubtitleTimingOffsetSeconds, type ExtensionSettings } from '../../utils/settings-model';
+import {
+  accountStateFromJobHistory,
+  formatDurationSeconds,
+  formatJobTiming,
+  formatResetDate,
+  publicJobTelemetry,
+  stageTimeline,
+} from '../../utils/popup-saas-state';
+import {
+  DEFAULT_EXTENSION_SETTINGS,
+  normalizeSubtitleTimingOffsetSeconds,
+  type ExtensionSettings,
+} from '../../utils/settings-model';
 
 type PopupRequest =
   | {
@@ -34,11 +46,13 @@ type PopupRequest =
 
 type PopupErrorResponse = { ok: false; error: string };
 type PopupResponse = PopupState | PopupErrorResponse;
+
 const BACKEND_REFRESH_INTERVAL_MS = 10000;
 
-const installIdText = document.querySelector<HTMLParagraphElement>('[data-install-id]')!;
 const statusText = document.querySelector<HTMLParagraphElement>('[data-status]')!;
+const planPill = document.querySelector<HTMLElement>('[data-plan-pill]')!;
 const videoText = document.querySelector<HTMLElement>('[data-video-label]')!;
+const videoDurationText = document.querySelector<HTMLElement>('[data-video-duration]')!;
 const trackText = document.querySelector<HTMLElement>('[data-track-label]')!;
 const jobText = document.querySelector<HTMLElement>('[data-job-label]')!;
 const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="refresh"]')!;
@@ -53,7 +67,7 @@ const sourceLanguageList = document.querySelector<HTMLElement>('[data-source-lan
 const targetLanguageList = document.querySelector<HTMLElement>('[data-target-language-list]')!;
 const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
 const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
-const showRomanizationInput = document.querySelector<HTMLInputElement>('input[name="showRomanization"]')!;
+const showRomanizationInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="showRomanization"]'));
 const showTranslationInput = document.querySelector<HTMLInputElement>('input[name="showTranslation"]')!;
 const showGlossInput = document.querySelector<HTMLInputElement>('input[name="showGloss"]')!;
 const fullTrackEnrichmentInput = document.querySelector<HTMLInputElement>('input[name="fullTrackEnrichment"]')!;
@@ -66,10 +80,22 @@ const progressPercent = document.querySelector<HTMLElement>('[data-progress-perc
 const progressBar = document.querySelector<HTMLElement>('[data-progress-bar]')!;
 const jobsList = document.querySelector<HTMLElement>('[data-jobs-list]')!;
 const jobsError = document.querySelector<HTMLElement>('[data-jobs-error]')!;
+const usageSummary = document.querySelector<HTMLElement>('[data-usage-summary]')!;
+const usageRemaining = document.querySelector<HTMLElement>('[data-usage-remaining]')!;
+const usageBar = document.querySelector<HTMLElement>('[data-usage-bar]')!;
+const usagePlan = document.querySelector<HTMLElement>('[data-usage-plan]')!;
+const usagePending = document.querySelector<HTMLElement>('[data-usage-pending]')!;
+const usageReset = document.querySelector<HTMLElement>('[data-usage-reset]')!;
+const accountStatus = document.querySelector<HTMLElement>('[data-account-status]')!;
+const accountPlan = document.querySelector<HTMLElement>('[data-account-plan]')!;
+const accountSpeed = document.querySelector<HTMLElement>('[data-account-speed]')!;
+const featureList = document.querySelector<HTMLElement>('[data-feature-list]')!;
+const settingsLanguageSummary = document.querySelector<HTMLElement>('[data-settings-language-summary]')!;
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tab]'));
 const panels = Array.from(document.querySelectorAll<HTMLElement>('[data-panel]'));
 
 let currentSettings: ExtensionSettings | null = null;
+let latestState: PopupState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 
@@ -84,9 +110,9 @@ sourceLanguageList.addEventListener('click', handleSourceLanguageClick);
 targetLanguageList.addEventListener('click', handleTargetLanguageClick);
 overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
-showRomanizationInput.addEventListener('change', () =>
-  void updateSettings({ showRomanization: showRomanizationInput.checked }),
-);
+for (const input of showRomanizationInputs) {
+  input.addEventListener('change', () => void updateSettings({ showRomanization: input.checked }));
+}
 showTranslationInput.addEventListener('change', () =>
   void updateSettings({ showTranslation: showTranslationInput.checked }),
 );
@@ -209,10 +235,23 @@ function languageButtonCode(event: MouseEvent): string | null {
 
 function handleJobsListClick(event: MouseEvent): void {
   const target = event.target instanceof Element ? event.target : null;
-  const button = target?.closest<HTMLButtonElement>('[data-action="view-video"]');
+  const button = target?.closest<HTMLButtonElement>('[data-action]');
+  const action = button?.dataset.action;
+
+  if (action !== 'view-video' && action !== 'retry-job') {
+    return;
+  }
+
   const videoUrl = button?.dataset.videoUrl;
+  const videoId = button?.dataset.videoId;
 
   if (!videoUrl) {
+    return;
+  }
+
+  if (action === 'retry-job' && latestState?.pageStatus?.supported && latestState.pageStatus.videoId === videoId) {
+    void generateSubtitles();
+
     return;
   }
 
@@ -220,20 +259,28 @@ function handleJobsListClick(event: MouseEvent): void {
 }
 
 function showPopupState(state: PopupState): void {
+  latestState = state;
+
   const pageStatus = state.pageStatus;
   const subtitleState = state.subtitleState;
   const settings = state.settings;
   const supported = Boolean(pageStatus?.supported);
+  const { accountState } = state;
+  const videoDurationSeconds = videoDurationForState(state);
 
-  installIdText.hidden = false;
-  installIdText.textContent = shortInstallId(state.installId);
+  currentSettings = settings;
+  planPill.textContent = accountState.planName;
   statusText.className = `status ${statusClass(subtitleState.type, supported)}`;
   statusText.textContent = statusLabel(subtitleState.type, supported);
   videoText.textContent = pageStatus?.supported ? pageStatus.videoId : 'No supported video';
+  videoDurationText.textContent = pageStatus?.supported ? formatDurationSeconds(videoDurationSeconds) : 'No supported video';
   jobText.textContent = jobIdForState(subtitleState) ?? 'No job';
+
   showTrackState(state);
   renderJobHistory(state);
-  currentSettings = settings;
+  renderUsage(accountState);
+  renderAccount(accountState, settings);
+  renderSettingsSummary(settings);
 
   generateButton.disabled = !supported || subtitleState.type === 'loading';
   generateButton.textContent = subtitleState.type === 'loading' ? 'Generating...' : 'Generate subtitles';
@@ -241,7 +288,7 @@ function showPopupState(state: PopupState): void {
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
-  showRomanizationInput.checked = settings.showRomanization;
+  setChecked(showRomanizationInputs, settings.showRomanization);
   showTranslationInput.checked = settings.showTranslation;
   showGlossInput.checked = settings.showGloss;
   fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
@@ -254,7 +301,7 @@ function showTrackState(state: PopupState): void {
 
   if (subtitleState.type === 'ready') {
     progressContainer.hidden = true;
-    trackText.textContent = `Ready ${shortInstallId(subtitleState.track.trackId)}`;
+    trackText.textContent = `Ready ${shortDisplayId(subtitleState.track.trackId)}`;
 
     return;
   }
@@ -314,7 +361,7 @@ function renderLanguagePicker(options: {
     : '<span class="muted">No language selected</span>';
   options.listContainer.innerHTML =
     visibleLanguages.length === 0
-      ? '<p class="muted">No languages match that search.</p>'
+      ? '<p class="muted empty-state">No languages match that search.</p>'
       : visibleLanguages
           .map((language) => languageOptionButton(language, language.code === options.selectedCode, options.disabled))
           .join('');
@@ -369,43 +416,119 @@ function renderJobHistory(state: PopupState): void {
   }
 
   if (state.jobHistory.length === 0) {
-    jobsList.innerHTML = '<p class="muted">No backend jobs yet.</p>';
+    jobsList.innerHTML = '<p class="muted empty-state">No backend jobs yet.</p>';
 
     return;
   }
 
-  jobsList.innerHTML = state.jobHistory
-    .map((job) => {
-      const progress = generationProgress(job);
-      const jobId = job.jobId ?? null;
-      const meta = [
-        languageRouteLabel(job),
-        job.detectedSourceLanguage ? `Detected ${languageLabel(job.detectedSourceLanguage)}` : null,
-        formatHistoryTimestamp(job.completedAt ?? job.lastUpdatedAt ?? job.startedAt),
-        job.status === 'running' ? `${progress.percent}%` : null,
-      ]
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => `<span>${escapeHtml(value)}</span>`)
-        .join('');
+  jobsList.innerHTML = state.jobHistory.map((job) => jobHistoryItemHtml(job, state)).join('');
+}
 
-      return `
-        <article class="job-item">
-          <header>
-            <span class="job-title">${escapeHtml(job.youtubeVideoId)}</span>
-            <span class="job-badge ${job.status}">${escapeHtml(job.status)}</span>
-          </header>
-          ${jobId ? `<p class="job-id">Job ID ${escapeHtml(jobId)}</p>` : ''}
-          <div class="job-meta">${meta}</div>
-          <p class="muted">${escapeHtml(job.status === 'running' ? progress.stageLabel : job.message ?? 'Track ready')}</p>
-          <div class="job-actions">
-            <button class="job-action-button" type="button" data-action="view-video" data-video-url="${escapeHtml(
-              job.youtubeUrl,
-            )}">View video</button>
-          </div>
-        </article>
-      `;
-    })
+function jobHistoryItemHtml(job: PopupState['jobHistory'][number], state: PopupState): string {
+  const telemetry = publicJobTelemetry(job);
+  const progress = generationProgress(job);
+  const meta = [
+    languageRouteLabel(job),
+    job.detectedSourceLanguage ? `Detected ${languageLabel(job.detectedSourceLanguage)}` : null,
+    formatDurationSeconds(telemetry.videoDurationSeconds),
+    formatJobTiming(job),
+    formatHistoryTimestamp(job.completedAt ?? job.lastUpdatedAt ?? job.startedAt),
+  ]
+    .filter((value): value is string => typeof value === 'string' && value !== '')
+    .map((value) => `<span>${escapeHtml(value)}</span>`)
     .join('');
+  const controls = jobControls(job)
+    .map((value) => `<span>${escapeHtml(value)}</span>`)
+    .join('');
+  const message = telemetry.errorMessage ?? (job.status === 'completed' ? 'Track ready' : progress.stageLabel);
+
+  return `
+    <article class="job-item">
+      <header>
+        <div>
+          <span class="job-title">${escapeHtml(job.youtubeVideoId)}</span>
+          <p class="job-id">Job ${escapeHtml(telemetry.publicJobId)}</p>
+        </div>
+        <span class="job-badge ${job.status}">${escapeHtml(job.status)}</span>
+      </header>
+      <div class="job-meta">${meta}</div>
+      <div class="job-controls">${controls}</div>
+      ${stageTimelineHtml(job)}
+      <p class="job-message ${job.status === 'failed' ? 'error-copy' : ''}">${escapeHtml(message)}</p>
+      <div class="job-actions">
+        ${
+          job.status === 'failed'
+            ? `<button class="job-action-button" type="button" data-action="retry-job" data-video-id="${escapeHtml(
+                job.youtubeVideoId,
+              )}" data-video-url="${escapeHtml(job.youtubeUrl)}">Retry</button>`
+            : ''
+        }
+        <button class="job-action-button" type="button" data-action="view-video" data-video-url="${escapeHtml(
+          job.youtubeUrl,
+        )}">Open video</button>
+      </div>
+    </article>
+  `;
+}
+
+function stageTimelineHtml(job: PopupState['jobHistory'][number]): string {
+  return `
+    <ol class="stage-timeline" aria-label="Generation stage timeline">
+      ${stageTimeline(job)
+        .map((item) => `<li class="${item.state}" title="${escapeHtml(item.label)}"><span>${escapeHtml(item.label)}</span></li>`)
+        .join('')}
+    </ol>
+  `;
+}
+
+function jobControls(job: PopupState['jobHistory'][number]): string[] {
+  const values = [
+    job.includeTranslation ? 'Translated cues' : 'Transcript cues',
+    job.includeRomanization ? 'Romanization when available' : 'Romanization off',
+    job.enrichmentMode === 'full' ? 'Full word cards' : 'On-click word cards',
+  ];
+
+  return values;
+}
+
+function renderUsage(accountState: AccountState): void {
+  const totalCommitted = accountState.monthlyMinutesUsed + accountState.monthlyMinutesPending;
+  const percent = accountState.monthlyMinuteLimit === 0
+    ? 0
+    : Math.min(100, Math.round((totalCommitted / accountState.monthlyMinuteLimit) * 100));
+
+  usageSummary.textContent = `${accountState.monthlyMinutesUsed} of ${accountState.monthlyMinuteLimit} min used`;
+  usageRemaining.textContent = `${accountState.monthlyMinutesRemaining} min left`;
+  usageBar.style.width = `${percent}%`;
+  usagePlan.textContent = `${accountState.planName} (${accountState.tierName})`;
+  usagePending.textContent = `${accountState.monthlyMinutesPending} min pending`;
+  usageReset.textContent = formatResetDate(accountState.resetAt);
+}
+
+function renderAccount(accountState: AccountState, settings: ExtensionSettings): void {
+  accountStatus.textContent = accountState.status === 'anonymous' ? 'Not signed in' : accountState.status;
+  accountPlan.textContent = accountState.planName;
+  accountSpeed.textContent = accountState.tierSpeedLabel;
+  featureList.innerHTML = [
+    ['Subtitle generation', 'Included'],
+    ['Cue translation', settings.showTranslation ? 'On for next job' : 'Available'],
+    ['Romanization', settings.showRomanization ? 'On for next job' : 'Available'],
+    ['Full word cards', settings.fullTrackEnrichment ? 'On for next job' : 'Available'],
+    ['Priority speed', accountState.upgradeAvailable ? 'Upgrade preview' : 'Included'],
+  ]
+    .map(
+      ([label, value]) => `
+        <div class="feature-row">
+          <span>${escapeHtml(label)}</span>
+          <strong>${escapeHtml(value)}</strong>
+        </div>
+      `,
+    )
+    .join('');
+}
+
+function renderSettingsSummary(settings: ExtensionSettings): void {
+  settingsLanguageSummary.textContent = `${languageLabel(settings.sourceLanguage)} to ${languageLabel(settings.targetLanguage)}`;
 }
 
 function languageRouteLabel(job: PopupState['jobHistory'][number]): string {
@@ -414,7 +537,10 @@ function languageRouteLabel(job: PopupState['jobHistory'][number]): string {
 
 function showTab(tabName: string): void {
   for (const button of tabButtons) {
-    button.classList.toggle('active', button.dataset.tab === tabName);
+    const active = button.dataset.tab === tabName;
+
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
   }
 
   for (const panel of panels) {
@@ -423,17 +549,24 @@ function showTab(tabName: string): void {
 }
 
 function showError(error: unknown): void {
+  const emptyAccountState = accountStateFromJobHistory([]);
+
+  latestState = null;
   currentSettings = null;
-  installIdText.hidden = true;
+  planPill.textContent = 'Offline';
   statusText.className = 'status error';
   statusText.textContent =
     typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unable to load extension state';
   videoText.textContent = 'No supported video';
+  videoDurationText.textContent = 'Duration pending';
   trackText.textContent = 'No track';
   jobText.textContent = 'No job';
-  jobsList.innerHTML = '<p class="muted">Unable to load jobs.</p>';
+  jobsList.innerHTML = '<p class="muted empty-state">Unable to load jobs.</p>';
   progressContainer.hidden = true;
   renderLanguagePickers(null);
+  renderUsage(emptyAccountState);
+  renderAccount(emptyAccountState, DEFAULT_EXTENSION_SETTINGS);
+  settingsLanguageSummary.textContent = 'Unavailable';
   generateButton.disabled = true;
   generateButton.textContent = 'Generate subtitles';
   showTimingOffset(0);
@@ -468,14 +601,27 @@ function jobIdForState(subtitleState: PopupState['subtitleState']): string | nul
   switch (subtitleState.type) {
     case 'loading':
     case 'error':
-      return subtitleState.jobId ?? null;
+      return subtitleState.jobId ? shortDisplayId(subtitleState.jobId) : null;
 
     case 'ready':
-      return subtitleState.track.jobId;
+      return shortDisplayId(subtitleState.track.jobId);
 
     case 'no-track':
       return null;
   }
+}
+
+function videoDurationForState(state: PopupState): number | undefined {
+  if (typeof state.pageVideoDurationSeconds === 'number') {
+    return state.pageVideoDurationSeconds;
+  }
+
+  const pageVideoId = state.pageStatus?.supported ? state.pageStatus.videoId : null;
+  const matchingJob = pageVideoId
+    ? state.jobHistory.find((job) => job.youtubeVideoId === pageVideoId && typeof job.videoDurationSeconds === 'number')
+    : undefined;
+
+  return matchingJob?.videoDurationSeconds;
 }
 
 function setSettingsDisabled(disabled: boolean): void {
@@ -486,7 +632,7 @@ function setSettingsDisabled(disabled: boolean): void {
   }
   overlayVisibleInput.disabled = disabled;
   overlayPositionSelect.disabled = disabled;
-  showRomanizationInput.disabled = disabled;
+  setDisabled(showRomanizationInputs, disabled);
   showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
   fullTrackEnrichmentInput.disabled = disabled;
@@ -496,8 +642,16 @@ function setSettingsDisabled(disabled: boolean): void {
   timingOffsetNumberInput.disabled = disabled;
 }
 
-function shortInstallId(installId: string): string {
-  return installId.length > 16 ? `${installId.slice(0, 15)}...` : installId;
+function setChecked(inputs: readonly HTMLInputElement[], checked: boolean): void {
+  for (const input of inputs) {
+    input.checked = checked;
+  }
+}
+
+function setDisabled(inputs: readonly HTMLInputElement[], disabled: boolean): void {
+  for (const input of inputs) {
+    input.disabled = disabled;
+  }
 }
 
 function showTimingOffset(value: number): void {
@@ -508,4 +662,8 @@ function showTimingOffset(value: number): void {
   timingOffsetNumberInput.value = normalized.toFixed(1);
   timingOffsetOutput.value = label;
   timingOffsetOutput.textContent = label;
+}
+
+function shortDisplayId(id: string): string {
+  return id.length > 13 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
 }

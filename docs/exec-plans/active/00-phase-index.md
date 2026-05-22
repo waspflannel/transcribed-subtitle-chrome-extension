@@ -3,7 +3,7 @@
 Status: completed
 Owner: agent
 Created: 2026-04-28
-Last updated: 2026-05-20
+Last updated: 2026-05-22
 
 ## Goal
 
@@ -24,10 +24,11 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 The original extension proof phases are completed. The next product direction is tracked separately in `saas-roadmap/`:
 
 - `saas-roadmap/00-roadmap-index.md`
-- `saas-roadmap/01-generation-optimization.md`
-- `saas-roadmap/02-extension-frontend-upgrade.md`
+- `../completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`
+- `../completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md`
 - `saas-roadmap/03-accounts-and-extension-auth.md`
 - `saas-roadmap/04-billing-tiers-and-usage.md`
+- `saas-roadmap/04a-tiered-worker-queues-and-concurrency.md`
 - `saas-roadmap/05-saas-website-and-seo.md`
 - `saas-roadmap/06-production-hosting-and-ops.md`
 - `saas-roadmap/07-beta-launch-and-support.md`
@@ -98,3 +99,6 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-12 | Simple AI tokenization pipeline refactor completed and archived. | `docs/exec-plans/completed/2026-05-12-simple-ai-tokenization-pipeline-refactor.md` |
 | 2026-05-12 | Tokenization quality gate upgrade completed and archived. | `docs/exec-plans/completed/2026-05-12-tokenization-quality-gate-upgrade.md` |
 | 2026-05-13 | Tokenization pipeline cleanup refactor completed and archived. | `docs/exec-plans/completed/2026-05-13-tokenization-pipeline-cleanup-refactor.md` |
+| 2026-05-21 | SaaS Phase 01 generation optimization completed and archived after PR #8 merged to `main`. | `docs/exec-plans/completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`; `TD-010` tracks remaining medium and near-limit provider timing evidence. |
+| 2026-05-21 | SaaS Phase 02 extension frontend upgrade completed and archived. | `docs/exec-plans/completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md`; five-tab popup, public-safe telemetry, usage projection, and visual smoke evidence. |
+| 2026-05-22 | Added SaaS Phase 04a for post-auth tiered worker queues and account concurrency. | `docs/exec-plans/active/saas-roadmap/04a-tiered-worker-queues-and-concurrency.md` |

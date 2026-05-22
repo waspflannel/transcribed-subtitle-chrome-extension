@@ -11,10 +11,12 @@ import {
 import {
   DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
+  type PageSnapshot,
   type PopupState,
   type RuntimeMessage,
   type SubtitleState,
 } from '../utils/messages';
+import { accountStateFromJobHistory } from '../utils/popup-saas-state';
 import {
   clearLocalExtensionState,
   getExtensionSettings,
@@ -29,6 +31,7 @@ const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
 const JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
+type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -72,6 +75,9 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
 
     case 'popup.clearLocalState':
       return clearLocalStateFromPopup();
+
+    case 'background.getPageSnapshot':
+      throw new Error('Page snapshot requests are handled by the content script.');
   }
 }
 
@@ -130,6 +136,7 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
 
   if (currentState.type !== 'loading') {
     const settings = await getExtensionSettings();
+    const pageSnapshot = await getPageSnapshotFromTab(activeTabId);
     const now = new Date().toISOString();
 
     await publishSubtitleState(activeTabId, {
@@ -143,7 +150,7 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
       lastUpdatedAt: now,
     });
 
-    void generateSubtitlesForTab(activeTabId, pageStatus, settings);
+    void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot);
   }
 
   return getPopupState({ syncBackend: false });
@@ -153,6 +160,7 @@ async function generateSubtitlesForTab(
   tabId: number,
   pageStatus: SupportedYoutubePageInfo,
   settings: ExtensionSettings,
+  pageSnapshot: PageSnapshot,
 ): Promise<void> {
   try {
     console.info('extension.subtitle_generation_started', {
@@ -168,6 +176,9 @@ async function generateSubtitlesForTab(
     const initialJob = await subtitleApi.createSubtitleJob(installId, {
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
+      ...(isCreatePayloadVideoDurationSeconds(pageSnapshot.videoDurationSeconds)
+        ? { videoDurationSeconds: pageSnapshot.videoDurationSeconds }
+        : {}),
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
@@ -370,6 +381,9 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
   const installId = await getOrCreateInstallId();
   const settings = await getExtensionSettings();
+  const pageSnapshot = activeTabId === null || pageStatus?.supported !== true
+    ? {}
+    : await getPageSnapshotFromTab(activeTabId);
   const { jobs, error } = options.syncBackend
     ? await listBackendJobHistory(installId)
     : { jobs: [] as SubtitleJobHistoryItem[], error: undefined };
@@ -391,10 +405,30 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     settings,
     activeTabId: activeTabId ?? undefined,
     pageStatus,
+    pageVideoDurationSeconds: pageSnapshot.videoDurationSeconds,
+    accountState: accountStateFromJobHistory(jobs),
     subtitleState,
     jobHistory: jobs,
     jobHistoryError: error,
   };
+}
+
+async function getPageSnapshotFromTab(tabId: number): Promise<PageSnapshot> {
+  try {
+    const response = (await browser.tabs.sendMessage(tabId, {
+      type: 'background.getPageSnapshot',
+    })) as PageSnapshotResponse | undefined;
+
+    if (response?.ok !== true || !isPositiveVideoDurationSeconds(response.videoDurationSeconds)) {
+      return {};
+    }
+
+    return {
+      videoDurationSeconds: response.videoDurationSeconds,
+    };
+  } catch {
+    return {};
+  }
 }
 
 async function listBackendJobHistory(
@@ -509,4 +543,12 @@ async function sendTabMessage(tabId: number, message: RuntimeMessage): Promise<v
   } catch {
     // Unsupported pages do not have this content script; popup state still updates locally.
   }
+}
+
+function isPositiveVideoDurationSeconds(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+function isCreatePayloadVideoDurationSeconds(value: unknown): value is number {
+  return isPositiveVideoDurationSeconds(value) && value <= 3600;
 }

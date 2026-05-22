@@ -52,7 +52,7 @@ This plan intentionally compares every architecture finding against `docs/exec-p
 - Quality rules: `docs/quality/golden-principles.md`
 - Security and observability docs: `docs/SECURITY.md`, `docs/OBSERVABILITY.md`
 - Roadmap: `docs/exec-plans/active/saas-roadmap/00-roadmap-index.md`
-- Related active plans: `docs/exec-plans/active/saas-roadmap/01-generation-optimization.md`, `docs/exec-plans/active/2026-05-20-whole-codebase-simplification-pass.md`
+- Related completed plans: `docs/exec-plans/completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`, `docs/exec-plans/completed/2026-05-20-whole-codebase-simplification-pass.md`
 - Related debt: `docs/exec-plans/tech-debt-tracker.md`
 - Known risk: Laravel Boost MCP tools are not exposed in this Codex session; avoid Laravel API or dependency changes that require current framework documentation unless Context7 or local docs can supply enough evidence.
 
