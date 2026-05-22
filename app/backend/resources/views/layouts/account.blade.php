@@ -121,6 +121,80 @@
                 color: #166534;
                 padding: 10px 12px;
             }
+
+            dl {
+                display: grid;
+                gap: 10px;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                margin: 0;
+            }
+
+            dt {
+                color: #69756f;
+                font-size: 0.72rem;
+                font-weight: 800;
+                text-transform: uppercase;
+            }
+
+            dd {
+                margin: 0;
+            }
+
+            .error-copy {
+                background: #fee2e2;
+                border-radius: 6px;
+                color: #991b1b;
+                padding: 10px 12px;
+            }
+
+            .usage-block,
+            .plan-list article {
+                border: 1px solid #d9e2de;
+                border-radius: 8px;
+                display: grid;
+                gap: 12px;
+                padding: 14px;
+            }
+
+            .usage-label {
+                align-items: center;
+                display: flex;
+                gap: 12px;
+                justify-content: space-between;
+            }
+
+            .usage-label span,
+            .usage-block p {
+                color: #58635d;
+                font-size: 0.9rem;
+            }
+
+            .usage-bar {
+                background: #e5ebe8;
+                border-radius: 999px;
+                height: 8px;
+                overflow: hidden;
+            }
+
+            .usage-bar span {
+                background: #0f766e;
+                display: block;
+                height: 100%;
+            }
+
+            .plan-list {
+                display: grid;
+                gap: 12px;
+            }
+
+            .plan-list article h2 {
+                margin: 0;
+            }
+
+            .plan-list ul {
+                margin: 0;
+                padding-left: 18px;
+            }
         </style>
     </head>
     <body>

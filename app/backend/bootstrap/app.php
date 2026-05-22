@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Http\Middleware\RequireExtensionInstallId;
 use App\Http\Responses\ApiErrorResponse;
@@ -42,6 +43,10 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->preventRequestForgery(except: [
+            'stripe/*',
+        ]);
+
         $middleware->prependToPriorityList(
             [AuthenticatesRequests::class, ThrottleRequests::class, ThrottleRequestsWithRedis::class],
             RequireExtensionInstallId::class,
@@ -119,6 +124,14 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (SubtitleProcessingException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status, request: $request);
+        });
+
+        $exceptions->render(function (BillingEntitlementException $exception, Request $request) {
             if (! $request->is('v1/*')) {
                 return null;
             }
