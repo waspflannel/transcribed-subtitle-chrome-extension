@@ -22,6 +22,9 @@ class SubtitleJobResource extends JsonResource
         $status = $this->requiredString($this->status, 'status');
         $stage = $this->requiredString($this->stage, 'stage');
         $progressPercent = $this->progress_percent;
+        $enrichmentMode = $this->requiredEnrichmentMode($this->enrichment_mode);
+        $includeRomanization = $this->requiredBoolean($this->include_romanization, 'include_romanization');
+        $includeTranslation = $this->requiredBoolean($this->include_translation, 'include_translation');
 
         if (! in_array($status, ['running', 'completed', 'failed'], true)) {
             throw new LogicException('Subtitle job has an invalid status.');
@@ -44,12 +47,19 @@ class SubtitleJobResource extends JsonResource
             'youtubeVideoId' => $this->youtube_video_id,
             'sourceLanguage' => $this->source_language,
             'targetLanguage' => $this->target_language,
+            'enrichmentMode' => $enrichmentMode,
+            'includeRomanization' => $includeRomanization,
+            'includeTranslation' => $includeTranslation,
             'status' => $status,
             'stage' => $stage,
             'progressPercent' => $progressPercent,
             'createdAt' => $this->created_at->toJSON(),
             'updatedAt' => $this->updated_at->toJSON(),
         ];
+
+        if (is_int($this->video_duration_seconds)) {
+            $resource['videoDurationSeconds'] = $this->video_duration_seconds;
+        }
 
         if (is_string($this->detected_source_language) && $this->detected_source_language !== '') {
             $resource['detectedSourceLanguage'] = $this->detected_source_language;
@@ -66,6 +76,24 @@ class SubtitleJobResource extends JsonResource
         }
 
         return $resource;
+    }
+
+    private function requiredEnrichmentMode(mixed $value): string
+    {
+        if ($value !== 'on_demand' && $value !== 'full') {
+            throw new LogicException('Subtitle job has an invalid enrichment_mode.');
+        }
+
+        return $value;
+    }
+
+    private function requiredBoolean(mixed $value, string $field): bool
+    {
+        if (! is_bool($value)) {
+            throw new LogicException("Subtitle job is missing {$field}.");
+        }
+
+        return $value;
     }
 
     private function requiredString(mixed $value, string $field): string

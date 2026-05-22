@@ -100,6 +100,9 @@ function jobHistory(overrides: Partial<SubtitleJobHistoryItem>): SubtitleJobHist
     sourceLanguage: 'auto',
     targetLanguage: 'eng',
     ...overrides,
+    enrichmentMode: overrides.enrichmentMode ?? 'on_demand',
+    includeRomanization: overrides.includeRomanization ?? true,
+    includeTranslation: overrides.includeTranslation ?? false,
   };
 }
 
@@ -109,6 +112,9 @@ function completedJobResponse(track: TrackResponse): JobResponse {
     youtubeVideoId: track.youtubeVideoId,
     sourceLanguage: track.sourceLanguage,
     targetLanguage: track.targetLanguage,
+    enrichmentMode: 'on_demand',
+    includeRomanization: true,
+    includeTranslation: false,
     status: 'completed',
     stage: 'finalizing',
     progressPercent: 100,

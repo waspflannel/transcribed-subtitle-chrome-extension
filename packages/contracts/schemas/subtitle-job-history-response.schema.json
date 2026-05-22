@@ -30,12 +30,21 @@
         "progressPercent",
         "sourceLanguage",
         "targetLanguage",
+        "enrichmentMode",
+        "includeRomanization",
+        "includeTranslation",
         "jobId"
       ],
       "properties": {
         "youtubeVideoId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]{11}$"
+        },
+        "videoDurationSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "description": "Known video duration in seconds when measured or supplied by the extension. Safe for usage and timing displays."
         },
         "youtubeUrl": {
           "type": "string",
@@ -177,6 +186,22 @@
             "yor",
             "zul"
           ]
+        },
+        "enrichmentMode": {
+          "type": "string",
+          "enum": [
+            "on_demand",
+            "full"
+          ],
+          "description": "Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output."
+        },
+        "includeRomanization": {
+          "type": "boolean",
+          "description": "Whether the request asked the backend to add romanization where available."
+        },
+        "includeTranslation": {
+          "type": "boolean",
+          "description": "Whether the request asked the backend to translate cue text."
         },
         "jobId": {
           "type": "string",

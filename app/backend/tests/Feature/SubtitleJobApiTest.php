@@ -1054,7 +1054,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
     }
 
-    public function test_generation_records_estimated_provider_cost_without_public_payload_changes(): void
+    public function test_generation_records_estimated_provider_cost_without_exposing_internal_payload(): void
     {
         config([
             'subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 100,
@@ -1067,6 +1067,10 @@ class SubtitleJobApiTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertJsonPath('videoDurationSeconds', 42)
+            ->assertJsonPath('enrichmentMode', 'on_demand')
+            ->assertJsonPath('includeRomanization', true)
+            ->assertJsonPath('includeTranslation', false)
             ->assertJsonMissingPath('estimatedProviderCostMicrousd')
             ->assertJsonMissingPath('generationTier');
 
@@ -1200,6 +1204,10 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.0.sourceLanguage', 'spa')
             ->assertJsonPath('jobs.0.detectedSourceLanguage', 'spa')
             ->assertJsonPath('jobs.0.targetLanguage', 'eng')
+            ->assertJsonPath('jobs.0.videoDurationSeconds', 213)
+            ->assertJsonPath('jobs.0.enrichmentMode', 'on_demand')
+            ->assertJsonPath('jobs.0.includeRomanization', true)
+            ->assertJsonPath('jobs.0.includeTranslation', false)
             ->assertJsonPath('jobs.1.youtubeVideoId', 'run00000001')
             ->assertJsonPath('jobs.1.status', 'running')
             ->assertJsonPath('jobs.1.stage', 'transcribing')
