@@ -14,6 +14,7 @@ use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -306,7 +307,7 @@ class BillingAndUsageTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('error.code', 'feature_unavailable');
 
-        config(['billing.plans.base.concurrency' => 1]);
+        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
         $user = User::factory()->create();
         $this->withExtensionAuth($this->installId('c'), $user);
         SubtitleJob::factory()->for($user)->create(['status' => 'running']);
@@ -325,6 +326,89 @@ class BillingAndUsageTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'usage000001']))
             ->assertStatus(402)
             ->assertJsonPath('error.code', 'usage_exhausted');
+    }
+
+    public function test_compatible_running_generation_reuse_does_not_consume_another_generation_slot(): void
+    {
+        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+        Queue::fake();
+        $installId = $this->installId('r');
+        $user = User::factory()->create();
+        $payload = $this->validPayload(['youtubeVideoId' => 'reuse000001']);
+        $runningJob = SubtitleJob::factory()->for($user)->create([
+            'public_id' => '6f870f20-962c-4a55-b92d-046d7f004001',
+            'youtube_video_id' => $payload['youtubeVideoId'],
+            'youtube_url' => $payload['youtubeUrl'],
+            'source_language' => $payload['sourceLanguage'],
+            'target_language' => $payload['targetLanguage'],
+            'processing_version' => 'scribe-v2-tokenizer-v8-async-on-demand-romanized',
+            'enrichment_mode' => 'on_demand',
+            'include_romanization' => true,
+            'include_translation' => false,
+            'status' => 'running',
+            'stage' => 'tokenizing',
+            'install_id' => $installId,
+        ]);
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $payload)
+            ->assertAccepted()
+            ->assertJsonPath('jobId', $runningJob->public_id);
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_completed_and_failed_generations_do_not_count_against_active_generation_limit(): void
+    {
+        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+        Queue::fake();
+        $installId = $this->installId('n');
+        $user = User::factory()->create();
+        SubtitleJob::factory()->for($user)->create([
+            'youtube_video_id' => 'done0000001',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+        ]);
+        SubtitleJob::factory()->for($user)->create([
+            'youtube_video_id' => 'fail0000001',
+            'status' => 'failed',
+            'stage' => 'transcribing',
+        ]);
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'newlimit001']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+    }
+
+    public function test_generation_concurrency_rejection_log_is_sanitized(): void
+    {
+        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+        Queue::fake();
+        Log::spy();
+        $installId = $this->installId('l');
+        $user = User::factory()->create();
+        SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'loglimit001']))
+            ->assertStatus(429)
+            ->assertJsonPath('error.code', 'concurrency_exceeded');
+
+        Log::shouldHaveReceived('warning')
+            ->with('backend.generation_concurrency_rejected', \Mockery::on(
+                fn (array $context): bool => isset($context['user_hash'])
+                    && $context['queue_family'] === 'generation'
+                    && $context['limiter_type'] === 'generation_admission'
+                    && $context['generation_tier'] === 'base'
+                    && $context['concurrency_limit'] === 1
+                    && $context['observed_active_count'] === 1
+                    && ! array_key_exists('user_id', $context)
+                    && ! array_key_exists('install_id', $context),
+            ));
     }
 
     public function test_support_adjustments_and_margin_report_are_inspectable(): void

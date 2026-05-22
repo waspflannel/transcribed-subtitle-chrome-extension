@@ -43,7 +43,18 @@ class ShowSubtitleRuntime extends Command
             'connection' => SubtitleQueue::connection(),
             'driver' => config('queue.connections.'.SubtitleQueue::connection().'.driver'),
             'queues' => SubtitleQueue::names(),
+            'queueFamilies' => [
+                SubtitleQueue::FAMILY_GENERATION => [
+                    'queues' => SubtitleQueue::generationNames(),
+                    'depths' => $this->queueDepths(SubtitleQueue::generationNames()),
+                ],
+                SubtitleQueue::FAMILY_BATCH => [
+                    'queues' => SubtitleQueue::batchNames(),
+                    'depths' => $this->queueDepths(SubtitleQueue::batchNames()),
+                ],
+            ],
             'queueDepths' => $this->queueDepths(),
+            'workerGroups' => SubtitleQueue::workerGroups(),
             'activeJobCount' => $activeJobs->count(),
         ];
 
@@ -81,6 +92,22 @@ class ShowSubtitleRuntime extends Command
             implode(',', $summary['queues']),
             $summary['activeJobCount'],
         ]]);
+        $this->table(['family', 'queue', 'depth'], collect($summary['queueFamilies'])
+            ->flatMap(fn (array $family, string $familyName): array => collect($family['depths'])
+                ->map(fn (int|string $depth, string $queue): array => [$familyName, $queue, $depth])
+                ->values()
+                ->all())
+            ->values()
+            ->all());
+        $this->table(['worker_group', 'family', 'queues', 'workers'], collect($summary['workerGroups'])
+            ->map(fn (array $group): array => [
+                $group['name'],
+                $group['queue_family'],
+                implode(',', $group['queues']),
+                $group['worker_count'],
+            ])
+            ->values()
+            ->all());
         $this->table(['queue', 'depth'], collect($summary['queueDepths'])
             ->map(fn (int|string $depth, string $queue): array => [$queue, $depth])
             ->values()
@@ -95,11 +122,11 @@ class ShowSubtitleRuntime extends Command
     /**
      * @return array<string, int|string>
      */
-    private function queueDepths(): array
+    private function queueDepths(?array $queues = null): array
     {
         $depths = [];
 
-        foreach (SubtitleQueue::names() as $queueName) {
+        foreach ($queues ?? SubtitleQueue::names() as $queueName) {
             $depths[$queueName] = $this->queueDepth($queueName);
         }
 

@@ -26,6 +26,7 @@ class SubtitleWorkflowLogger
         'provider',
         'queue',
         'queue_connection',
+        'queue_family',
         'reason',
         'status',
     ];
@@ -249,7 +250,8 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'stage' => $stage,
             'queue_connection' => config('subtitles.queue.connection'),
-            'queue' => SubtitleQueue::nameForJob($job),
+            'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
+            'queue' => $batchIndex === null ? SubtitleQueue::generationNameForJob($job) : SubtitleQueue::batchNameForJob($job),
             'wait_ms' => $waitMs,
         ], $batchIndex));
     }

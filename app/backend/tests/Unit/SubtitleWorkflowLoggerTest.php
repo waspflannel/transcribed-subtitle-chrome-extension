@@ -176,7 +176,8 @@ class SubtitleWorkflowLoggerTest extends TestCase
                     && $context['adapter'] === 'process'
                     && $context['model_key'] === 'audio.source'
                     && $context['status'] === 'failed'
-                    && $context['queue'] === 'subtitle-ai'
+                    && $context['queue'] === 'subtitle-generation-base'
+                    && $context['queue_family'] === 'generation'
                     && $context['queue_connection'] === 'redis'
                     && $context['duration_seconds'] === 42
                     && $context['max_duration_seconds'] === 3600
@@ -203,7 +204,8 @@ class SubtitleWorkflowLoggerTest extends TestCase
                 'adapter' => 'process',
                 'model_key' => 'audio.source',
                 'status' => 'failed',
-                'queue' => 'subtitle-ai',
+                'queue' => 'subtitle-generation-base',
+                'queue_family' => 'generation',
                 'queue_connection' => 'redis',
                 'duration_seconds' => 42,
                 'max_duration_seconds' => 3600,

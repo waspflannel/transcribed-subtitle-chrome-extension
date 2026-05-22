@@ -36,7 +36,8 @@ class SubtitlePipelineTelemetry
         $this->tracer->jobEvent($job, 'queue.wait_observed', $this->withBatchIndex([
             'stage' => $stage,
             'queue_connection' => SubtitleQueue::connection(),
-            'queue' => SubtitleQueue::nameForJob($job),
+            'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
+            'queue' => $batchIndex === null ? SubtitleQueue::generationNameForJob($job) : SubtitleQueue::batchNameForJob($job),
             'wait_ms' => $waitMs,
         ], $batchIndex));
         $this->recordSlowQueueWait($job, $stage, $waitMs, $batchIndex);
@@ -48,7 +49,8 @@ class SubtitlePipelineTelemetry
             'stage' => $stage,
             'status' => $job->status,
             'queue_connection' => SubtitleQueue::connection(),
-            'queue' => SubtitleQueue::nameForJob($job),
+            'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
+            'queue' => $batchIndex === null ? SubtitleQueue::generationNameForJob($job) : SubtitleQueue::batchNameForJob($job),
             'worker_pid' => getmypid() ?: null,
         ], $batchIndex));
     }
@@ -121,6 +123,7 @@ class SubtitlePipelineTelemetry
             'run_id' => $runId,
             'laravel_batch_id' => $batch->id,
             'queue_connection' => SubtitleQueue::connection(),
+            'queue_family' => SubtitleQueue::FAMILY_BATCH,
             'queue' => $queueName,
             ...$this->batchContext($batchName, $batch),
         ]);
