@@ -38,6 +38,15 @@ class AppServiceProvider extends ServiceProvider
                     ->by('status-ip:'.$request->ip()),
             ];
         });
+
+        RateLimiter::for('extension-auth', function (Request $request): array {
+            $email = strtolower((string) $request->input('email'));
+
+            return [
+                Limit::perMinute(5)->by('extension-auth-email:'.$email),
+                Limit::perMinute(20)->by('extension-auth-ip:'.$request->ip()),
+            ];
+        });
     }
 
     private function registerSubtitleQueueTracing(): void

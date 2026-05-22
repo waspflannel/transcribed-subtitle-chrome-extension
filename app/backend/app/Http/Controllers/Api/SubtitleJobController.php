@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateSubtitleJobRequest;
 use App\Http\Resources\SubtitleJobResource;
 use App\Models\SubtitleJob;
+use App\Models\User;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,9 +18,10 @@ class SubtitleJobController extends Controller
     {
         $now = now();
         $recentIncompleteCutoff = now()->subHours(4);
+        $user = $this->extensionUser($request);
         $jobs = SubtitleJob::query()
             ->with('track')
-            ->where('install_id', (string) $request->header('X-Extension-Install-Id'))
+            ->whereBelongsTo($user)
             ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
             ->where('created_at', '>=', now()->subDays(30))
             ->where(function ($query) use ($now, $recentIncompleteCutoff): void {
@@ -54,6 +56,7 @@ class SubtitleJobController extends Controller
     {
         $job = $subtitleJobs->generate(
             payload: $request->subtitlePayload(),
+            user: $this->extensionUser($request),
             installId: $request->extensionInstallId(),
             requestIp: $request->ip(),
         );
@@ -69,7 +72,7 @@ class SubtitleJobController extends Controller
         $job = SubtitleJob::query()
             ->with('track')
             ->where('public_id', $jobId)
-            ->where('install_id', (string) $request->header('X-Extension-Install-Id'))
+            ->whereBelongsTo($this->extensionUser($request))
             ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
             ->first();
 
@@ -182,5 +185,16 @@ class SubtitleJobController extends Controller
         }
 
         return $value;
+    }
+
+    private function extensionUser(Request $request): User
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            throw new LogicException('Extension API request is missing an authenticated user.');
+        }
+
+        return $user;
     }
 }

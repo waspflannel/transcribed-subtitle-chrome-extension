@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\SubtitleJob;
+use App\Models\User;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -21,6 +22,7 @@ class SubtitleJobFactory extends Factory
 
         return [
             'public_id' => (string) Str::uuid(),
+            'user_id' => User::factory(),
             'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $videoId,
             'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,

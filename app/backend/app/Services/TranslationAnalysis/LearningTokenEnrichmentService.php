@@ -4,6 +4,7 @@ namespace App\Services\TranslationAnalysis;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,9 +20,9 @@ class LearningTokenEnrichmentService
      * @param  array{trackId: string, cueId: string, tokenIndex: int}  $payload
      * @return array{trackId: string, cueId: string, token: array<string, mixed>}
      */
-    public function enrich(array $payload, string $installId): array
+    public function enrich(array $payload, User $user): array
     {
-        $track = $this->track($payload['trackId'], $installId);
+        $track = $this->track($payload['trackId'], $user);
         $cues = $track->cues;
         [, $cue] = $this->cue($cues, $payload['cueId']);
         [, $token] = $this->token($cue, $payload['tokenIndex']);
@@ -53,12 +54,12 @@ class LearningTokenEnrichmentService
             ),
         );
 
-        $response = DB::transaction(function () use ($track, $installId, $payload, $enrichedToken): array {
+        $response = DB::transaction(function () use ($track, $user, $payload, $enrichedToken): array {
             $lockedTrack = SubtitleTrack::query()
                 ->with('job')
                 ->whereKey($track->getKey())
                 ->where('expires_at', '>', now())
-                ->whereHas('job', fn ($query) => $query->where('install_id', $installId))
+                ->whereHas('job', fn ($query) => $query->whereBelongsTo($user))
                 ->lockForUpdate()
                 ->first();
 
@@ -93,13 +94,13 @@ class LearningTokenEnrichmentService
         return $response;
     }
 
-    private function track(string $trackId, string $installId): SubtitleTrack
+    private function track(string $trackId, User $user): SubtitleTrack
     {
         $track = SubtitleTrack::query()
             ->with('job')
             ->where('public_id', $trackId)
             ->where('expires_at', '>', now())
-            ->whereHas('job', fn ($query) => $query->where('install_id', $installId))
+            ->whereHas('job', fn ($query) => $query->whereBelongsTo($user))
             ->first();
 
         if (! $track instanceof SubtitleTrack) {

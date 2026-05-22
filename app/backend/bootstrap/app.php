@@ -3,16 +3,21 @@
 use App\Exceptions\SubtitleProcessingException;
 use App\Http\Middleware\RequireExtensionInstallId;
 use App\Http\Responses\ApiErrorResponse;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Middleware\ThrottleRequestsWithRedis;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\Exceptions\MissingAbilityException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 $databaseIsLocked = static function (Throwable $exception): bool {
@@ -31,17 +36,44 @@ $databaseIsLocked = static function (Throwable $exception): bool {
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
+        web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         apiPrefix: '',
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prependToPriorityList(
-            [ThrottleRequests::class, ThrottleRequestsWithRedis::class],
+            [AuthenticatesRequests::class, ThrottleRequests::class, ThrottleRequestsWithRedis::class],
             RequireExtensionInstallId::class,
         );
     })
     ->withExceptions(function (Exceptions $exceptions) use ($databaseIsLocked): void {
+        $exceptions->render(function (AuthenticationException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make(
+                'unauthenticated',
+                'A valid extension API token is required.',
+                401,
+                request: $request,
+            );
+        });
+
+        $exceptions->render(function (MissingAbilityException|AuthorizationException|AccessDeniedHttpException $exception, Request $request) {
+            if (! $request->is('v1/*')) {
+                return null;
+            }
+
+            return ApiErrorResponse::make(
+                'unauthorized',
+                'The extension API token is not allowed to access this resource.',
+                403,
+                request: $request,
+            );
+        });
+
         $exceptions->render(function (ValidationException $exception, Request $request) {
             if (! $request->is('v1/*')) {
                 return null;
