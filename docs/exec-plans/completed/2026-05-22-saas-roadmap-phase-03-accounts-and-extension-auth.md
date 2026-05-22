@@ -73,8 +73,8 @@ The user preference for beta is email/password login inside the extension popup.
 ## Refined Slices
 
 1. Backend account and token foundation.
-   - Builds: user/password reset/session tables, minimal Laravel web auth routes, email verification, hashed scoped extension token table, token issuance/revocation/account endpoints, and public auth error codes.
-   - Defers: social login, two-factor auth, token refresh, paid-plan caps, and dependency changes such as Sanctum unless explicitly approved later.
+   - Builds: user/password reset/session tables, minimal Laravel web auth routes, email verification, scoped extension token issuance/revocation/account endpoints, and public auth error codes.
+   - Defers: social login, two-factor auth, token refresh, and paid-plan caps.
    - Touches: migrations, user/token models, auth controllers/requests/middleware, API contracts, feature tests.
    - Validation: backend auth tests and contract check.
 2. Authenticated subtitle ownership.
@@ -93,6 +93,7 @@ The user preference for beta is email/password login inside the extension popup.
 | Date | Decision | Reason |
 | --- | --- | --- |
 | 2026-05-22 | Do not add Laravel Sanctum in this phase without explicit dependency approval; implement a narrow first-party Laravel token table using hashed bearer tokens and scoped abilities. | Backend local guidelines forbid dependency changes without approval, while the beta needs a small inspectable token flow now. |
+| 2026-05-22 | Supersede the custom extension token table with Laravel Sanctum after explicit approval. | The follow-up Fortify/Sanctum migration replaced custom token storage and middleware with Laravel-maintained personal access tokens. |
 | 2026-05-22 | Require verified email before issuing extension tokens. | The extension can create provider-costing jobs, so beta access should prove inbox ownership before token issuance. |
 | 2026-05-22 | Keep old anonymous install-owned jobs inaccessible after login instead of silently claiming them. | Auto-claiming by install ID could expose another user's old local/test jobs on shared browser profiles. |
 
@@ -127,7 +128,7 @@ The user preference for beta is email/password login inside the extension popup.
 ## Completion Notes
 
 - Implemented verified Laravel accounts, password reset, email verification, session-backed web auth, and minimal account dashboard routes.
-- Implemented scoped hashed extension bearer tokens without adding a new dependency, because backend guardrails require dependency approval before adding Sanctum.
+- Implemented scoped extension bearer tokens with Laravel Sanctum after the follow-up Fortify/Sanctum migration replaced the initial custom token table.
 - Moved subtitle job reuse/history/show and learning-token access from install-owned queries to authenticated `user_id` ownership; install ID remains required and persisted for device/abuse controls.
 - Added account/login/logout schemas, OpenAPI paths, generated TypeScript types, extension token storage, Authorization headers, and popup login/logout controls.
 - No follow-up debt was added. Billing-tier token caps, anonymous-history claiming, and refresh-token behavior remain explicitly deferred to later roadmap phases rather than Phase 03 debt.
