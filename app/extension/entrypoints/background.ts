@@ -9,7 +9,7 @@ import {
 } from '../utils/account-session';
 import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from '../utils/api';
 import { clearRememberedTracks, getRememberedTrack, rememberActiveTrack } from '../utils/active-tracks';
-import type { JobResponse, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
+import type { JobResponse, LearningTokenResponse, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   loadingMessageForStage,
   publicSubtitleJobFailureMessage,
@@ -246,6 +246,8 @@ async function generateSubtitlesForTab(
       trackId: job.track.trackId,
     });
   } catch (error) {
+    await clearSessionIfInvalid(error);
+
     console.warn('extension.subtitle_generation_failed', {
       youtubeVideoId: pageStatus.videoId,
       errorCode: error instanceof SubtitleApiError ? error.code : 'extension_error',
@@ -323,11 +325,20 @@ async function enrichLearningTokenFromContent(
   }
 
   const installId = await getOrCreateInstallId();
-  const response = await subtitleApi.enrichLearningToken(installId, session.plainTextToken, {
-    trackId: message.trackId,
-    cueId: message.cueId,
-    tokenIndex: message.tokenIndex,
-  });
+  let response: LearningTokenResponse;
+
+  try {
+    response = await subtitleApi.enrichLearningToken(installId, session.plainTextToken, {
+      trackId: message.trackId,
+      cueId: message.cueId,
+      tokenIndex: message.tokenIndex,
+    });
+  } catch (error) {
+    await clearSessionIfInvalid(error);
+
+    throw error;
+  }
+
   const track = patchActiveTrack(currentState.track, response.cueId, response.token);
 
   await storeReadySubtitleState(tabId, {
@@ -438,21 +449,29 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
   const installId = await getOrCreateInstallId();
   const settings = await getExtensionSettings();
-  const session = await getStoredExtensionSession();
+  let effectiveSession = await getStoredExtensionSession();
   const pageSnapshot = activeTabId === null || pageStatus?.supported !== true
     ? {}
     : await getPageSnapshotFromTab(activeTabId);
-  const accountSync = session && options.syncBackend ? await syncExtensionAccount(installId, session) : null;
-  const effectiveSession = accountSync?.session ?? session;
-  const { jobs, error } = effectiveSession && options.syncBackend
+
+  if (effectiveSession && options.syncBackend) {
+    effectiveSession = await syncExtensionAccount(installId, effectiveSession);
+  }
+
+  const history = effectiveSession && options.syncBackend
     ? await listBackendJobHistory(installId, effectiveSession.plainTextToken)
-    : { jobs: [] as SubtitleJobHistoryItem[], error: undefined };
+    : { jobs: [] as SubtitleJobHistoryItem[], error: undefined, sessionInvalid: false };
+
+  if (history.sessionInvalid) {
+    effectiveSession = null;
+  }
+
   const localState =
     activeTabId === null || pageStatus === undefined
       ? DEFAULT_SUBTITLE_STATE
       : await getSubtitleStateForPage(activeTabId, pageStatus);
 
-  const subtitleState = await stateWithBackendProgress(localState, pageStatus, jobs, (job) =>
+  const subtitleState = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
     effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job) : Promise.resolve(null),
   );
 
@@ -466,10 +485,10 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     activeTabId: activeTabId ?? undefined,
     pageStatus,
     pageVideoDurationSeconds: pageSnapshot.videoDurationSeconds,
-    accountState: effectiveSession ? accountStateFromSummary(effectiveSession.account) : accountStateFromJobHistory(jobs),
+    accountState: effectiveSession ? accountStateFromSummary(effectiveSession.account) : accountStateFromJobHistory(history.jobs),
     subtitleState,
-    jobHistory: jobs,
-    jobHistoryError: error,
+    jobHistory: history.jobs,
+    jobHistoryError: history.error,
   };
 }
 
@@ -494,19 +513,24 @@ async function getPageSnapshotFromTab(tabId: number): Promise<PageSnapshot> {
 async function listBackendJobHistory(
   installId: string,
   authToken: string,
-): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string }> {
+): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string; sessionInvalid: boolean }> {
   try {
     const response = await subtitleApi.listSubtitleJobs(installId, authToken);
 
-    return { jobs: response.jobs };
+    return { jobs: response.jobs, sessionInvalid: false };
   } catch (error) {
-    if (isSessionInvalidError(error)) {
-      await clearExtensionSession();
+    if (await clearSessionIfInvalid(error)) {
+      return {
+        jobs: [],
+        error: error instanceof Error ? error.message : 'Extension session expired.',
+        sessionInvalid: true,
+      };
     }
 
     return {
       jobs: [],
       error: error instanceof Error ? error.message : 'Unable to load backend job history.',
+      sessionInvalid: false,
     };
   }
 }
@@ -535,20 +559,17 @@ async function resolveCompletedSubtitleJob(
 async function syncExtensionAccount(
   installId: string,
   session: StoredExtensionSession,
-): Promise<{ session: StoredExtensionSession } | null> {
+): Promise<StoredExtensionSession | null> {
   try {
     const response = await subtitleApi.getExtensionAccount(installId, session.plainTextToken);
-    const nextSession = await updateStoredAccount(response.account);
 
-    return nextSession ? { session: nextSession } : null;
+    return updateStoredAccount(response.account);
   } catch (error) {
-    if (isSessionInvalidError(error)) {
-      await clearExtensionSession();
-
+    if (await clearSessionIfInvalid(error)) {
       return null;
     }
 
-    return { session };
+    return session;
   }
 }
 
@@ -642,4 +663,14 @@ function isCreatePayloadVideoDurationSeconds(value: unknown): value is number {
 function isSessionInvalidError(error: unknown): boolean {
   return error instanceof SubtitleApiError
     && (error.code === 'unauthenticated' || error.code === 'expired' || error.code === 'email_not_verified');
+}
+
+async function clearSessionIfInvalid(error: unknown): Promise<boolean> {
+  if (!isSessionInvalidError(error)) {
+    return false;
+  }
+
+  await clearExtensionSession();
+
+  return true;
 }
