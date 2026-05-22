@@ -7,7 +7,7 @@ This package is the canonical boundary between the WXT extension and Laravel bac
 - `openapi.json` defines the first API surface.
 - `schemas/*.schema.json` defines the payload contracts.
 - `dist/index.d.ts` is generated from JSON Schema for TypeScript consumers.
-- The extension-facing API stays intentionally small: request subtitles for a YouTube video and receive either the completed generated track or a stable API error.
+- The extension-facing API stays intentionally small: log in with a verified account for an opaque scoped extension bearer token, request subtitles for a YouTube video, and receive either the completed generated track or a stable API error.
 
 ## Commands
 

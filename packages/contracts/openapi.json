@@ -12,13 +12,141 @@
     }
   ],
   "paths": {
-    "/v1/subtitle-jobs": {
-      "get": {
-        "operationId": "listSubtitleJobs",
-        "summary": "List recent subtitle jobs for the current extension install.",
+    "/v1/extension-auth/login": {
+      "post": {
+        "operationId": "loginExtension",
+        "summary": "Issue a scoped extension API token for a verified account.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/extension-login-request.schema.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Extension token and safe account summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/extension-auth-response.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/extension-auth/account": {
+      "get": {
+        "operationId": "getExtensionAccount",
+        "summary": "Return the current extension account summary.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Safe account summary.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/extension-account-response.schema.json"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/extension-auth/logout": {
+      "post": {
+        "operationId": "logoutExtension",
+        "summary": "Revoke the active extension API token.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The token was revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/subtitle-jobs": {
+      "get": {
+        "operationId": "listSubtitleJobs",
+        "summary": "List recent subtitle jobs for the authenticated account.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
           }
         ],
         "responses": {
@@ -35,6 +163,12 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
@@ -46,6 +180,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
           }
         ],
         "requestBody": {
@@ -85,6 +222,12 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "429": {
             "$ref": "#/components/responses/RateLimited"
           }
@@ -98,6 +241,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
           },
           {
             "name": "jobId",
@@ -123,6 +269,12 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
           "422": {
             "$ref": "#/components/responses/ValidationError"
           },
@@ -139,6 +291,9 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
           }
         ],
         "requestBody": {
@@ -164,6 +319,12 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
@@ -216,6 +377,16 @@
           "maxLength": 128,
           "pattern": "^[A-Za-z0-9_-]+$"
         }
+      },
+      "ExtensionAuthorization": {
+        "name": "Authorization",
+        "in": "header",
+        "required": true,
+        "description": "Bearer extension API token issued by /v1/extension-auth/login.",
+        "schema": {
+          "type": "string",
+          "pattern": "^Bearer .+$"
+        }
       }
     },
     "responses": {
@@ -231,6 +402,26 @@
       },
       "ValidationError": {
         "description": "Request failed validation.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "Unauthenticated": {
+        "description": "Missing, invalid, revoked, or expired extension token.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Authenticated token or account cannot perform the requested action.",
         "content": {
           "application/json": {
             "schema": {

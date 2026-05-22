@@ -42,6 +42,9 @@ for (const [file, schema] of schemas) {
 
 const fixtures = [
   ['create-subtitle-job-request.schema.json', 'valid-create-subtitle-job-request.json'],
+  ['extension-login-request.schema.json', 'valid-extension-login-request.json'],
+  ['extension-auth-response.schema.json', 'valid-extension-auth-response.json'],
+  ['extension-account-response.schema.json', 'valid-extension-account-response.json'],
   ['create-subtitle-job-request.schema.json', 'valid-create-subtitle-job-request-full.json'],
   ['learning-token-request.schema.json', 'valid-learning-token-request.json'],
   ['learning-token-response.schema.json', 'valid-learning-token-response.json'],

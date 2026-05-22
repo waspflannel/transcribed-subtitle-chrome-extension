@@ -8,7 +8,11 @@ const schemasDir = path.join(root, 'schemas');
 const distDir = path.join(root, 'dist');
 
 const schemaFiles = [
+  'account-summary.schema.json',
   'create-subtitle-job-request.schema.json',
+  'extension-login-request.schema.json',
+  'extension-auth-response.schema.json',
+  'extension-account-response.schema.json',
   'learning-token-request.schema.json',
   'learning-token-response.schema.json',
   'job-response.schema.json',
