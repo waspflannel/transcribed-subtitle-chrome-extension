@@ -1,5 +1,16 @@
 import type { SubtitleJobHistoryItem } from './contracts';
 
+export const GENERATION_STAGES = [
+  'preparing',
+  'acquiring-audio',
+  'transcribing',
+  'tokenizing',
+  'romanizing',
+  'translating',
+  'enriching',
+  'finalizing',
+] as const satisfies readonly SubtitleJobHistoryItem['stage'][];
+
 export interface GenerationProgress {
   percent: number;
   stageLabel: string;
@@ -29,7 +40,7 @@ export function formatHistoryTimestamp(value: string): string {
   });
 }
 
-function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>): string {
+export function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>): string {
   switch (stage) {
     case 'preparing':
       return 'Preparing request';

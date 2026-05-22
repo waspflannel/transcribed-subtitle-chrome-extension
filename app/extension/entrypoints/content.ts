@@ -84,6 +84,15 @@ export default defineContentScript({
         return false;
       }
 
+      if (message.type === 'background.getPageSnapshot') {
+        sendResponse({
+          ok: true,
+          videoDurationSeconds: currentVideoDurationSeconds(),
+        });
+
+        return false;
+      }
+
       return false;
     }
 
@@ -214,6 +223,17 @@ export default defineContentScript({
           offsetSeconds: settings.subtitleTimingOffsetSeconds,
         });
       }
+    }
+
+    function currentVideoDurationSeconds(): number | undefined {
+      const video = document.querySelector('video');
+      const duration = video?.duration;
+
+      if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
+        return undefined;
+      }
+
+      return Math.round(duration);
     }
 
     async function enrichLearningToken(cue: SubtitleCue, token: LearningToken): Promise<void> {

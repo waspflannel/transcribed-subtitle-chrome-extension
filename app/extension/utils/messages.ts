@@ -2,6 +2,23 @@ import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
 import type { SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
+export interface PageSnapshot {
+  videoDurationSeconds?: number;
+}
+
+export interface AccountState {
+  status: 'anonymous';
+  planName: string;
+  tierName: string;
+  tierSpeedLabel: string;
+  monthlyMinuteLimit: number;
+  monthlyMinutesUsed: number;
+  monthlyMinutesPending: number;
+  monthlyMinutesRemaining: number;
+  resetAt: string;
+  upgradeAvailable: boolean;
+}
+
 export type SubtitleState =
   | {
       type: 'no-track';
@@ -35,6 +52,8 @@ export interface PopupState {
   settings: ExtensionSettings;
   activeTabId?: number;
   pageStatus?: YoutubePageInfo;
+  pageVideoDurationSeconds?: number;
+  accountState: AccountState;
   subtitleState: SubtitleState;
   jobHistory: SubtitleJobHistoryItem[];
   jobHistoryError?: string;
@@ -63,6 +82,9 @@ export type RuntimeMessage =
       tokenIndex: number;
     }
   | {
+      type: 'background.getPageSnapshot';
+    }
+  | {
       type: 'popup.clearLocalState';
     }
   | {
@@ -83,6 +105,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'content.getState':
     case 'popup.generateSubtitles':
     case 'popup.clearLocalState':
+    case 'background.getPageSnapshot':
       return true;
 
     case 'popup.getState':
