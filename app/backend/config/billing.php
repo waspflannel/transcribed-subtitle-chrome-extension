@@ -17,7 +17,6 @@ return [
             'stripe_price_id' => env('STRIPE_PRICE_BASE'),
             'monthly_minutes' => 90,
             'generation_tier' => 'base',
-            'concurrency' => 1,
             'speed_label' => 'Standard queue',
             'features' => [
                 'cue_translation' => true,
@@ -31,7 +30,6 @@ return [
             'stripe_price_id' => env('STRIPE_PRICE_PLUS'),
             'monthly_minutes' => 240,
             'generation_tier' => 'plus',
-            'concurrency' => 2,
             'speed_label' => 'Priority queue',
             'features' => [
                 'cue_translation' => true,
@@ -45,7 +43,6 @@ return [
             'stripe_price_id' => env('STRIPE_PRICE_PRO'),
             'monthly_minutes' => 600,
             'generation_tier' => 'pro',
-            'concurrency' => 3,
             'speed_label' => 'Fast queue',
             'features' => [
                 'cue_translation' => true,

@@ -13,7 +13,6 @@ return [
 
     'queue' => [
         'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'database'),
-        'name' => env('SUBTITLE_QUEUE', 'subtitle-ai'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
         'auto_start' => [
@@ -26,6 +25,28 @@ return [
             'tries' => (int) env('SUBTITLE_AUTO_WORKER_TRIES', 0),
             'lock_seconds' => (int) env('SUBTITLE_AUTO_WORKER_LOCK_SECONDS', 10),
         ],
+        'worker_groups' => [
+            'generation-priority' => [
+                'queue_family' => 'generation',
+                'tiers' => ['ultimate', 'pro', 'plus', 'base'],
+                'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 4),
+            ],
+            'batch-priority' => [
+                'queue_family' => 'batch',
+                'tiers' => ['ultimate', 'pro', 'plus', 'base'],
+                'worker_count' => (int) env('SUBTITLE_BATCH_PRIORITY_WORKERS', 20),
+            ],
+            'base-generation-guarantee' => [
+                'queue_family' => 'generation',
+                'tiers' => ['base'],
+                'worker_count' => (int) env('SUBTITLE_BASE_GENERATION_GUARANTEE_WORKERS', 1),
+            ],
+            'base-batch-guarantee' => [
+                'queue_family' => 'batch',
+                'tiers' => ['base'],
+                'worker_count' => (int) env('SUBTITLE_BASE_BATCH_GUARANTEE_WORKERS', 2),
+            ],
+        ],
     ],
 
     'tiers' => [
@@ -36,9 +57,10 @@ return [
         'counter_seconds' => (int) env('SUBTITLE_CONCURRENCY_COUNTER_SECONDS', 1800),
         'plans' => [
             'ultimate' => [
-                'queue' => env('SUBTITLE_QUEUE_ULTIMATE', 'subtitle-ai-ultimate'),
-                'per_install_concurrency' => (int) env('SUBTITLE_ULTIMATE_PER_INSTALL_CONCURRENCY', 20),
-                'worker_count' => (int) env('SUBTITLE_ULTIMATE_WORKERS', 20),
+                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_ULTIMATE', 'subtitle-generation-ultimate'),
+                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_ULTIMATE', 'subtitle-batch-ultimate'),
+                'generation_concurrency' => (int) env('SUBTITLE_ULTIMATE_GENERATION_CONCURRENCY', 5),
+                'batch_concurrency' => (int) env('SUBTITLE_ULTIMATE_BATCH_CONCURRENCY', 20),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_ULTIMATE_SHORT_BUDGET_SECONDS', 90),
                     'medium' => (int) env('SUBTITLE_ULTIMATE_MEDIUM_BUDGET_SECONDS', 240),
@@ -46,9 +68,10 @@ return [
                 ],
             ],
             'base' => [
-                'queue' => env('SUBTITLE_QUEUE_BASE', env('SUBTITLE_QUEUE', 'subtitle-ai')),
-                'per_install_concurrency' => (int) env('SUBTITLE_BASE_PER_INSTALL_CONCURRENCY', 1),
-                'worker_count' => (int) env('SUBTITLE_BASE_WORKERS', 4),
+                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_BASE', 'subtitle-generation-base'),
+                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_BASE', 'subtitle-batch-base'),
+                'generation_concurrency' => (int) env('SUBTITLE_BASE_GENERATION_CONCURRENCY', 1),
+                'batch_concurrency' => (int) env('SUBTITLE_BASE_BATCH_CONCURRENCY', 3),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_BASE_SHORT_BUDGET_SECONDS', 240),
                     'medium' => (int) env('SUBTITLE_BASE_MEDIUM_BUDGET_SECONDS', 600),
@@ -56,9 +79,10 @@ return [
                 ],
             ],
             'plus' => [
-                'queue' => env('SUBTITLE_QUEUE_PLUS', 'subtitle-ai-plus'),
-                'per_install_concurrency' => (int) env('SUBTITLE_PLUS_PER_INSTALL_CONCURRENCY', 2),
-                'worker_count' => (int) env('SUBTITLE_PLUS_WORKERS', 2),
+                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PLUS', 'subtitle-generation-plus'),
+                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PLUS', 'subtitle-batch-plus'),
+                'generation_concurrency' => (int) env('SUBTITLE_PLUS_GENERATION_CONCURRENCY', 2),
+                'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 8),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PLUS_SHORT_BUDGET_SECONDS', 180),
                     'medium' => (int) env('SUBTITLE_PLUS_MEDIUM_BUDGET_SECONDS', 420),
@@ -66,9 +90,10 @@ return [
                 ],
             ],
             'pro' => [
-                'queue' => env('SUBTITLE_QUEUE_PRO', 'subtitle-ai-pro'),
-                'per_install_concurrency' => (int) env('SUBTITLE_PRO_PER_INSTALL_CONCURRENCY', 3),
-                'worker_count' => (int) env('SUBTITLE_PRO_WORKERS', 2),
+                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PRO', 'subtitle-generation-pro'),
+                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PRO', 'subtitle-batch-pro'),
+                'generation_concurrency' => (int) env('SUBTITLE_PRO_GENERATION_CONCURRENCY', 3),
+                'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 14),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PRO_SHORT_BUDGET_SECONDS', 120),
                     'medium' => (int) env('SUBTITLE_PRO_MEDIUM_BUDGET_SECONDS', 300),
