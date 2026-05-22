@@ -14,7 +14,8 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
 - The canonical language catalog lives in `packages/contracts/languages.json`; `auto` is source-only and the real language choices use the provider WER-ranked transcription tags: Excellent, High Accuracy, Good, and Moderate.
-- The backend exposes local `GET /up`, `POST /v1/subtitle-jobs`, `GET /v1/subtitle-jobs`, `GET /v1/subtitle-jobs/{jobId}`, and `POST /v1/learning-tokens` JSON APIs.
+- The backend exposes local `GET /up`, `POST /v1/extension-auth/login`, `GET /v1/extension-auth/account`, `POST /v1/extension-auth/logout`, `POST /v1/subtitle-jobs`, `GET /v1/subtitle-jobs`, `GET /v1/subtitle-jobs/{jobId}`, and `POST /v1/learning-tokens` JSON APIs.
+- SaaS identity is email/password through Laravel Fortify plus scoped Laravel Sanctum personal access tokens for extension API requests. Verified users own subtitle jobs; extension install IDs remain on requests and rows as device/abuse signals, not ownership boundaries.
 - Subtitle jobs, per-run trace events, generated tracks, Laravel batch metadata, failed jobs, cache rows, and short-lived job artifacts persist in Postgres. SQLite is test-only through PHPUnit's isolated in-memory profile.
 - Current subtitle generation runs through Redis queues on tier-aware named queues. Base jobs use `subtitle-ai` by default, higher tiers can use configured `subtitle-ai-plus` and `subtitle-ai-pro` queues, and local generate requests auto-start workers that listen in priority order. The first queued job acquires YouTube audio, sends it to ElevenLabs Scribe v2 for word timestamps using the requested source language or provider auto-detect, normalizes provider language codes into the catalog when possible, stores transcript/draft-cue artifacts, and dispatches OpenAI cue batch jobs on the same tier queue.
 - Each created or reset subtitle generation has a `run_id` that is carried by queued work. Workers skip stale queued payloads before provider calls or artifact writes when the queued run no longer matches the current job row, and the skip is recorded in sanitized trace events.
@@ -54,7 +55,7 @@ Contracts
 
 ```text
 Chrome Extension
-  -> proxy-facing Laravel API routes
+  -> proxy-facing Laravel API routes with bearer extension token
       -> Laravel application services create/reuse a subtitle job
   <- running/completed job status
   -> polls GET /v1/subtitle-jobs/{jobId}
@@ -90,6 +91,7 @@ Rules:
 - Generated or external schemas should be documented under `docs/generated/`.
 - Extension code must not call AI providers directly.
 - Extension code must not decide generation tier before authenticated entitlements exist.
+- Extension code stores only scoped backend-issued Sanctum bearer tokens and safe account summaries; raw credentials stay in popup-to-background login messages and are not persisted.
 - External provider responses must be normalized before storage or extension exposure.
 - Use Laravel AI SDK provider identity and primitives where they fit; keep narrow provider requests only for capabilities the SDK wrapper does not expose.
 - Eloquent models are internal details, not API contracts.

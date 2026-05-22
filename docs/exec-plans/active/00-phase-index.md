@@ -26,7 +26,8 @@ The original extension proof phases are completed. The next product direction is
 - `saas-roadmap/00-roadmap-index.md`
 - `../completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`
 - `../completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md`
-- `saas-roadmap/03-accounts-and-extension-auth.md`
+- `../completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md`
+- `../completed/2026-05-22-fortify-sanctum-auth-migration.md`
 - `saas-roadmap/04-billing-tiers-and-usage.md`
 - `saas-roadmap/04a-tiered-worker-queues-and-concurrency.md`
 - `saas-roadmap/05-saas-website-and-seo.md`
@@ -102,3 +103,5 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-21 | SaaS Phase 01 generation optimization completed and archived after PR #8 merged to `main`. | `docs/exec-plans/completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`; `TD-010` tracks remaining medium and near-limit provider timing evidence. |
 | 2026-05-21 | SaaS Phase 02 extension frontend upgrade completed and archived. | `docs/exec-plans/completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md`; five-tab popup, public-safe telemetry, usage projection, and visual smoke evidence. |
 | 2026-05-22 | Added SaaS Phase 04a for post-auth tiered worker queues and account concurrency. | `docs/exec-plans/active/saas-roadmap/04a-tiered-worker-queues-and-concurrency.md` |
+| 2026-05-22 | SaaS Phase 03 accounts and extension auth completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md`; verified web accounts, scoped extension tokens, and authenticated job ownership. |
+| 2026-05-22 | Fortify/Sanctum auth migration completed and archived. | `docs/exec-plans/completed/2026-05-22-fortify-sanctum-auth-migration.md`; web auth moved to Fortify and extension bearer auth moved to Sanctum. |

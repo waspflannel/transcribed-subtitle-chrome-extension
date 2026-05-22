@@ -12,6 +12,7 @@
 
 - Assets:
   - Backend provider credentials and AI configuration.
+  - SaaS user accounts, password reset tokens, email verification state, and scoped Sanctum extension API tokens.
   - Anonymous extension install IDs.
   - YouTube video URLs and IDs submitted by the extension.
   - Temporary raw audio files during processing.
@@ -27,6 +28,7 @@
   - YouTube page and URL state entering the content script.
   - Extension messages between popup, background worker, and content script.
   - Extension-to-Laravel `/v1/*` API requests.
+  - Extension bearer tokens stored in browser extension storage and attached by the background worker.
   - Laravel-to-YouTube audio acquisition process.
   - Laravel-to-AI-provider transcription and enrichment calls.
   - Postgres persistence for generated tracks, subtitle jobs, artifacts, failed jobs, cache rows, and Laravel batch metadata in the runtime profile.
@@ -38,6 +40,7 @@
   - Sending video-derived audio/text to configured AI services.
   - Persisting generated WebVTT and cue/token learning data.
   - Applying install-ID and IP rate limits.
+  - Issuing, expiring, and revoking scoped Sanctum extension API tokens only for verified users.
   - Applying server-side generation tier, queue priority, concurrency, and cost telemetry without trusting anonymous client-provided entitlements.
   - Returning public errors and request IDs without exposing internals.
 - Abuse cases:
@@ -48,9 +51,12 @@
   - Log leakage of raw audio paths, prompts, transcripts, translations, or provider secrets.
   - Diagnostic trace leakage of generated cue/token content or anonymous install IDs.
   - Public clients spoofing paid-tier queue priority before authenticated entitlements exist.
+  - Missing, expired, revoked, or wrong-user extension tokens attempting to access jobs, tracks, or enrichment.
   - Stale generated tracks retained beyond the 30-day window.
 - Audit signals:
   - `backend.proxy_invalid_install_id`
+  - `extension.account_login_completed`
+  - `extension.account_logout_completed`
   - `backend.proxy_rate_limited`
   - `backend.subtitle_job_created`
   - `backend.subtitle_job_reused_for_retry`
@@ -113,7 +119,9 @@ Project-specific security defaults:
 - Generation tier is server-side configuration until account auth exists; do not accept tier or entitlement from anonymous extension payloads.
 - Cost telemetry stores configured unit-price estimates and safe billing units only. It must not store raw usage payloads, provider responses, prompts, transcripts, translations, or token text.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
-- Phase 03 `/v1/*` API routes require `X-Extension-Install-Id`, throttle by anonymous install ID and IP, and return stable public error objects.
+- The original anonymous API hardening required `X-Extension-Install-Id`, install/IP throttles, and stable public error objects.
+- SaaS Phase 03 `/v1/*` subtitle and learning-token routes require both `X-Extension-Install-Id` and a scoped Sanctum bearer token. Install ID remains a device/abuse signal; authenticated `user_id` is the ownership boundary.
+- Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
 - Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.
 - Phase 07 adds request IDs to extension-facing API errors, logs invalid install IDs and rate limits without raw install IDs, configures final install/IP throttle defaults, and schedules expired generated subtitle cleanup.
