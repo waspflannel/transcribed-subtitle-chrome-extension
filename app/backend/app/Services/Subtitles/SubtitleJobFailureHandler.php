@@ -40,21 +40,13 @@ class SubtitleJobFailureHandler
         }
 
         if ($exception instanceof BillingEntitlementException) {
-            $this->markFailed($job, $stage, $exception->publicCode, $exception->getMessage());
-            $this->usageLedger->releaseReservation($job->load('user'), 'failure');
-            $this->artifacts->deleteForJob($job);
-            $this->logger->processingFailed($job->refresh(), $stage, $exception);
-            $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);
+            $this->failExpectedException($job, $stage, $exception, $context);
 
             return;
         }
 
         if ($exception instanceof SubtitleProcessingException) {
-            $this->markFailed($job, $stage, $exception->publicCode, $exception->getMessage());
-            $this->usageLedger->releaseReservation($job->load('user'), 'failure');
-            $this->artifacts->deleteForJob($job);
-            $this->logger->processingFailed($job->refresh(), $stage, $exception);
-            $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);
+            $this->failExpectedException($job, $stage, $exception, $context);
 
             return;
         }
@@ -66,20 +58,36 @@ class SubtitleJobFailureHandler
                 $exception,
             );
 
-            $this->markFailed($job, $stage, $queueException->publicCode, $queueException->getMessage());
-            $this->usageLedger->releaseReservation($job->load('user'), 'failure');
-            $this->artifacts->deleteForJob($job);
-            $this->logger->processingFailed($job->refresh(), $stage, $queueException);
-            $this->telemetry->recordJobFailed($job->refresh(), $stage, $queueException, $context);
+            $this->failExpectedException($job, $stage, $queueException, $context);
 
             return;
         }
 
         $this->markFailed($job, $stage, 'internal_error', 'Generation did not complete.');
-        $this->usageLedger->releaseReservation($job->load('user'), 'failure');
-        $this->artifacts->deleteForJob($job);
+        $this->cleanupReservedWork($job);
         $this->logger->unexpectedFailure($job->refresh(), $stage, $exception);
         $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function failExpectedException(
+        SubtitleJob $job,
+        string $stage,
+        BillingEntitlementException|SubtitleProcessingException $exception,
+        array $context,
+    ): void {
+        $this->markFailed($job, $stage, $exception->publicCode, $exception->getMessage());
+        $this->cleanupReservedWork($job);
+        $this->logger->processingFailed($job->refresh(), $stage, $exception);
+        $this->telemetry->recordJobFailed($job->refresh(), $stage, $exception, $context);
+    }
+
+    private function cleanupReservedWork(SubtitleJob $job): void
+    {
+        $this->usageLedger->releaseReservation($job->load('user'), 'failure');
+        $this->artifacts->deleteForJob($job);
     }
 
     private function markFailed(SubtitleJob $job, string $stage, string $errorCode, string $errorMessage): void

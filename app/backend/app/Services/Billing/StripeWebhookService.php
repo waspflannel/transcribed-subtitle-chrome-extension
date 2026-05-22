@@ -6,10 +6,19 @@ use App\Models\StripeWebhookEvent;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Throwable;
 
 final class StripeWebhookService
 {
+    private const HANDLED_EVENTS = [
+        'checkout.session.completed',
+        'customer.subscription.created',
+        'customer.subscription.updated',
+        'customer.subscription.deleted',
+        'invoice.payment_failed',
+    ];
+
     public function __construct(
         private readonly BillingPlanCatalog $plans,
         private readonly UsageLedger $ledger,
@@ -24,40 +33,46 @@ final class StripeWebhookService
         $type = data_get($event, 'type');
 
         if (! is_string($eventId) || $eventId === '' || ! is_string($type) || $type === '') {
-            return;
+            throw new RuntimeException('Stripe webhook event id and type are required.');
         }
 
-        DB::transaction(function () use ($event, $payload, $eventId, $type): void {
-            $record = StripeWebhookEvent::query()
-                ->where('stripe_event_id', $eventId)
-                ->lockForUpdate()
-                ->first();
+        try {
+            DB::transaction(function () use ($event, $payload, $eventId, $type): void {
+                $record = StripeWebhookEvent::query()
+                    ->where('stripe_event_id', $eventId)
+                    ->lockForUpdate()
+                    ->first();
 
-            if ($record instanceof StripeWebhookEvent && $record->processed_at !== null) {
-                return;
-            }
+                if ($record instanceof StripeWebhookEvent && $record->processed_at !== null) {
+                    return;
+                }
 
-            $record ??= StripeWebhookEvent::create([
-                'stripe_event_id' => $eventId,
-                'type' => $type,
-                'livemode' => (bool) data_get($event, 'livemode', false),
-                'payload_hash' => hash('sha256', $payload),
-            ]);
+                $record ??= StripeWebhookEvent::create([
+                    'stripe_event_id' => $eventId,
+                    'type' => $type,
+                    'livemode' => (bool) data_get($event, 'livemode', false),
+                    'payload_hash' => hash('sha256', $payload),
+                ]);
 
-            try {
                 $this->apply($event);
                 $record->forceFill([
                     'processed_at' => now(),
                     'processing_error' => null,
                 ])->save();
-            } catch (Throwable $exception) {
-                $record->forceFill([
+            });
+        } catch (Throwable $exception) {
+            StripeWebhookEvent::query()->updateOrCreate(
+                ['stripe_event_id' => $eventId],
+                [
+                    'type' => $type,
+                    'livemode' => (bool) data_get($event, 'livemode', false),
+                    'payload_hash' => hash('sha256', $payload),
                     'processing_error' => $exception->getMessage(),
-                ])->save();
+                ],
+            );
 
-                throw $exception;
-            }
-        });
+            throw $exception;
+        }
     }
 
     /**
@@ -66,10 +81,15 @@ final class StripeWebhookService
     private function apply(array $event): void
     {
         $type = data_get($event, 'type');
+
+        if (! is_string($type) || ! in_array($type, self::HANDLED_EVENTS, true)) {
+            return;
+        }
+
         $object = data_get($event, 'data.object');
 
         if (! is_array($object)) {
-            return;
+            throw new RuntimeException("Stripe webhook [{$type}] is missing data.object.");
         }
 
         match ($type) {
@@ -87,13 +107,8 @@ final class StripeWebhookService
      */
     private function handleCheckoutCompleted(array $session): void
     {
-        $user = $this->findUserForObject($session);
-
-        if (! $user instanceof User) {
-            return;
-        }
-
-        $plan = $this->planForObject($session, $user);
+        $user = $this->requireUserForObject($session);
+        $plan = $this->requirePlanForObject($session);
         $subscriptionId = data_get($session, 'subscription');
         $customerId = data_get($session, 'customer');
 
@@ -109,13 +124,8 @@ final class StripeWebhookService
      */
     private function handleSubscriptionChanged(array $subscription): void
     {
-        $user = $this->findUserForObject($subscription);
-
-        if (! $user instanceof User) {
-            return;
-        }
-
-        $plan = $this->planForObject($subscription, $user);
+        $user = $this->requireUserForObject($subscription);
+        $plan = $this->requirePlanForObject($subscription);
         $periodStart = $this->timestamp(data_get($subscription, 'current_period_start'));
         $periodEnd = $this->timestamp(data_get($subscription, 'current_period_end'));
         $status = data_get($subscription, 'status');
@@ -130,7 +140,7 @@ final class StripeWebhookService
             'stripe_customer_id' => is_string($customerId) ? $customerId : $user->stripe_customer_id,
             'stripe_subscription_id' => is_string($subscriptionId) ? $subscriptionId : $user->stripe_subscription_id,
             'stripe_subscription_item_id' => is_string($subscriptionItemId) ? $subscriptionItemId : $user->stripe_subscription_item_id,
-            'billing_plan_code' => is_array($plan) ? (string) $plan['code'] : $user->billing_plan_code,
+            'billing_plan_code' => (string) $plan['code'],
             'billing_subscription_status' => is_string($status) ? $status : $user->billing_subscription_status,
             'billing_current_period_start' => $periodStart ?? $user->billing_current_period_start,
             'billing_current_period_end' => $periodEnd ?? $user->billing_current_period_end,
@@ -139,7 +149,7 @@ final class StripeWebhookService
             'billing_ends_at' => $endedAt,
         ])->save();
 
-        if (is_array($plan) && in_array($user->billing_subscription_status, ['active', 'trialing'], true) && $periodStart !== null && $periodEnd !== null) {
+        if (in_array($user->billing_subscription_status, ['active', 'trialing'], true) && $periodStart !== null && $periodEnd !== null) {
             $this->ledger->ensureMonthlyGrant($user->refresh(), $plan, $periodStart, $periodEnd);
         }
     }
@@ -149,12 +159,7 @@ final class StripeWebhookService
      */
     private function handleInvoicePaymentFailed(array $invoice): void
     {
-        $user = $this->findUserForObject($invoice);
-
-        if (! $user instanceof User) {
-            return;
-        }
-
+        $user = $this->requireUserForObject($invoice);
         $subscriptionId = data_get($invoice, 'subscription');
 
         $user->forceFill([
@@ -166,7 +171,7 @@ final class StripeWebhookService
     /**
      * @param  array<string, mixed>  $object
      */
-    private function findUserForObject(array $object): ?User
+    private function requireUserForObject(array $object): User
     {
         $userId = data_get($object, 'metadata.user_id') ?? data_get($object, 'client_reference_id');
 
@@ -181,19 +186,23 @@ final class StripeWebhookService
         $customerId = data_get($object, 'customer');
 
         if (is_string($customerId) && $customerId !== '') {
-            return User::query()
+            $user = User::query()
                 ->where('stripe_customer_id', $customerId)
                 ->first();
+
+            if ($user instanceof User) {
+                return $user;
+            }
         }
 
-        return null;
+        throw new RuntimeException('Stripe webhook did not match a local user.');
     }
 
     /**
      * @param  array<string, mixed>  $object
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
-    private function planForObject(array $object, User $user): ?array
+    private function requirePlanForObject(array $object): array
     {
         $priceId = data_get($object, 'items.data.0.price.id');
         $plan = $this->plans->planForStripePrice(is_string($priceId) ? $priceId : null);
@@ -204,11 +213,11 @@ final class StripeWebhookService
 
         $planCode = data_get($object, 'metadata.plan_code');
 
-        if (is_string($planCode)) {
-            return $this->plans->plan($planCode);
+        if (is_string($planCode) && $planCode !== '') {
+            return $this->plans->requirePlan($planCode);
         }
 
-        return $this->plans->plan($user->billing_plan_code);
+        throw new RuntimeException('Stripe webhook did not include a configured billing plan.');
     }
 
     private function timestamp(mixed $value): ?CarbonImmutable

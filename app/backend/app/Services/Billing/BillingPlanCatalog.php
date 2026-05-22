@@ -11,17 +11,17 @@ final class BillingPlanCatalog
      */
     public function plans(): array
     {
-        $plans = config('billing.plans', []);
+        $plans = config('billing.plans');
 
-        if (! is_array($plans)) {
-            return [];
+        if (! is_array($plans) || $plans === []) {
+            throw new InvalidArgumentException('Billing plans configuration must be a non-empty array.');
         }
 
         $normalized = [];
 
         foreach ($plans as $code => $plan) {
-            if (! is_string($code) || ! is_array($plan)) {
-                continue;
+            if (! is_string($code) || $code === '' || ! is_array($plan)) {
+                throw new InvalidArgumentException('Billing plans must be keyed by non-empty plan codes.');
             }
 
             $normalized[$code] = [
@@ -92,7 +92,13 @@ final class BillingPlanCatalog
      */
     public function monthlyMinutes(array $plan): int
     {
-        return max(0, (int) ($plan['monthly_minutes'] ?? 0));
+        $minutes = $plan['monthly_minutes'] ?? null;
+
+        if (! is_numeric($minutes) || (int) $minutes < 1) {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define positive monthly minutes.");
+        }
+
+        return (int) $minutes;
     }
 
     /**
@@ -100,9 +106,13 @@ final class BillingPlanCatalog
      */
     public function generationTier(array $plan): string
     {
-        $tier = $plan['generation_tier'] ?? 'base';
+        $tier = $plan['generation_tier'] ?? null;
 
-        return is_string($tier) && $tier !== '' ? $tier : 'base';
+        if (! is_string($tier) || $tier === '') {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define a generation tier.");
+        }
+
+        return $tier;
     }
 
     /**
@@ -110,7 +120,13 @@ final class BillingPlanCatalog
      */
     public function concurrency(array $plan): int
     {
-        return max(1, (int) ($plan['concurrency'] ?? 1));
+        $concurrency = $plan['concurrency'] ?? null;
+
+        if (! is_numeric($concurrency) || (int) $concurrency < 1) {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define positive concurrency.");
+        }
+
+        return (int) $concurrency;
     }
 
     /**
@@ -118,9 +134,13 @@ final class BillingPlanCatalog
      */
     public function name(array $plan): string
     {
-        $name = $plan['name'] ?? $plan['code'] ?? 'Plan';
+        $name = $plan['name'] ?? null;
 
-        return is_string($name) && $name !== '' ? $name : 'Plan';
+        if (! is_string($name) || $name === '') {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define a display name.");
+        }
+
+        return $name;
     }
 
     /**
@@ -128,9 +148,13 @@ final class BillingPlanCatalog
      */
     public function speedLabel(array $plan): string
     {
-        $label = $plan['speed_label'] ?? 'Standard queue';
+        $label = $plan['speed_label'] ?? null;
 
-        return is_string($label) && $label !== '' ? $label : 'Standard queue';
+        if (! is_string($label) || $label === '') {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define a speed label.");
+        }
+
+        return $label;
     }
 
     /**
@@ -138,6 +162,22 @@ final class BillingPlanCatalog
      */
     public function hasFeature(array $plan, string $feature): bool
     {
-        return (bool) data_get($plan, "features.{$feature}", false);
+        $features = $plan['features'] ?? null;
+
+        if (! is_array($features) || ! array_key_exists($feature, $features)) {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define feature [{$feature}].");
+        }
+
+        return (bool) $features[$feature];
+    }
+
+    /**
+     * @param  array<string, mixed>  $plan
+     */
+    private function planCode(array $plan): string
+    {
+        $code = $plan['code'] ?? null;
+
+        return is_string($code) && $code !== '' ? $code : 'unknown';
     }
 }

@@ -6,6 +6,7 @@ use App\Exceptions\BillingEntitlementException;
 use App\Models\SubtitleJob;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 final class BillingEntitlementService
 {
@@ -71,7 +72,7 @@ final class BillingEntitlementService
         $user = $job->user;
 
         if (! $user instanceof User) {
-            return;
+            throw new RuntimeException('Subtitle job is missing its billing user.');
         }
 
         $plan = $this->plans->requirePlan($entitlement->planCode);
@@ -148,7 +149,6 @@ final class BillingEntitlementService
             ];
         }
 
-        $this->ledger->ensureMonthlyGrant($user, $plan, $period['start'], $period['end']);
         $summary = $this->ledger->summary($user, $period['start'], $period['end']);
         $monthlyMinutes = $this->plans->monthlyMinutes($plan);
 

@@ -2,15 +2,22 @@
 
 namespace App\Services\Billing;
 
+use App\Exceptions\BillingEntitlementException;
 use App\Models\BillingUsageEvent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
+use InvalidArgumentException;
+use RuntimeException;
 
 final class UsageLedger
 {
+    public function __construct(
+        private readonly BillingPlanCatalog $plans,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $plan
      */
@@ -20,7 +27,7 @@ final class UsageLedger
         CarbonInterface $periodStart,
         CarbonInterface $periodEnd,
     ): void {
-        $targetMinutes = app(BillingPlanCatalog::class)->monthlyMinutes($plan);
+        $targetMinutes = $this->plans->monthlyMinutes($plan);
         $alreadyGranted = (int) BillingUsageEvent::query()
             ->whereBelongsTo($user)
             ->where('event_type', 'monthly_grant')
@@ -54,8 +61,12 @@ final class UsageLedger
     {
         $period = $this->periodForUser($user);
 
-        if ($period === null || $minutes <= 0) {
-            return;
+        if ($period === null) {
+            throw BillingEntitlementException::paymentRequired();
+        }
+
+        if ($minutes <= 0) {
+            throw new InvalidArgumentException('Reservation minutes must be greater than zero.');
         }
 
         $this->recordEvent(
@@ -77,8 +88,12 @@ final class UsageLedger
     {
         $user = $job->user;
 
-        if (! $user instanceof User || ! is_int($job->video_duration_seconds)) {
-            return;
+        if (! $user instanceof User) {
+            throw new RuntimeException('Subtitle job is missing its billing user.');
+        }
+
+        if (! is_int($job->video_duration_seconds)) {
+            throw new RuntimeException('Subtitle job is missing its measured duration.');
         }
 
         $period = $this->periodForUser($user);
@@ -87,7 +102,11 @@ final class UsageLedger
         $reservedMinutes = $this->reservedMinutesForJob($job);
         $delta = $actualMinutes - $reservedMinutes;
 
-        if ($delta === 0 || $period === null) {
+        if ($period === null) {
+            throw BillingEntitlementException::paymentRequired();
+        }
+
+        if ($delta === 0) {
             return;
         }
 
@@ -297,17 +316,21 @@ final class UsageLedger
         CarbonInterface $periodStart,
         CarbonInterface $periodEnd,
         int $minutes,
+        string $idempotencyKey,
         int $availableMinutesDelta = 0,
         int $reservedMinutesDelta = 0,
         int $usedMinutesDelta = 0,
         int $providerCostMicrousdDelta = 0,
-        string $idempotencyKey = '',
         ?SubtitleJob $subtitleJob = null,
         ?SubtitleTrack $subtitleTrack = null,
         ?string $stripeSubscriptionId = null,
         ?string $createdBy = null,
         ?string $note = null,
     ): BillingUsageEvent {
+        if ($idempotencyKey === '') {
+            throw new InvalidArgumentException('Billing usage events require an idempotency key.');
+        }
+
         try {
             return BillingUsageEvent::create([
                 'user_id' => $user->id,

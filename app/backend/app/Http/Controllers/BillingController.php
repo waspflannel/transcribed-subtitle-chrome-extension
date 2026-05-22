@@ -37,9 +37,11 @@ class BillingController extends Controller
                 cancelUrl: route('dashboard', ['billing' => 'cancelled']),
             );
         } catch (RuntimeException $exception) {
+            report($exception);
+
             return redirect()
                 ->route('dashboard')
-                ->with('billing_error', $exception->getMessage());
+                ->with('billing_error', 'Billing is temporarily unavailable. Try again shortly.');
         }
 
         return redirect()->away($session['url']);
@@ -56,9 +58,11 @@ class BillingController extends Controller
         try {
             $session = $stripe->createBillingPortalSession($user, route('dashboard'));
         } catch (RuntimeException $exception) {
+            report($exception);
+
             return redirect()
                 ->route('dashboard')
-                ->with('billing_error', $exception->getMessage());
+                ->with('billing_error', 'Billing is temporarily unavailable. Try again shortly.');
         }
 
         return redirect()->away($session['url']);

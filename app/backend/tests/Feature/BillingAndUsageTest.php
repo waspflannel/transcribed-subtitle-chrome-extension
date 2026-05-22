@@ -128,6 +128,33 @@ class BillingAndUsageTest extends TestCase
         $this->assertSame(0, StripeWebhookEvent::count());
     }
 
+    public function test_handled_webhook_processing_failures_are_recorded_for_retry_debugging(): void
+    {
+        config(['billing.stripe.webhook_secret' => 'whsec_test']);
+        $payload = $this->stripePayload([
+            'id' => 'evt_missing_user',
+            'type' => 'customer.subscription.updated',
+            'data' => [
+                'object' => [
+                    'id' => 'sub_missing_user',
+                    'customer' => 'cus_missing_user',
+                    'status' => 'active',
+                    'current_period_start' => now()->startOfMonth()->timestamp,
+                    'current_period_end' => now()->addMonthNoOverflow()->startOfMonth()->timestamp,
+                ],
+            ],
+        ]);
+
+        $this
+            ->call('POST', '/stripe/webhook', [], [], [], $this->stripeHeaders($payload), $payload)
+            ->assertStatus(500);
+
+        $event = StripeWebhookEvent::query()->firstOrFail();
+        $this->assertSame('evt_missing_user', $event->stripe_event_id);
+        $this->assertNull($event->processed_at);
+        $this->assertStringContainsString('did not match a local user', (string) $event->processing_error);
+    }
+
     public function test_webhooks_cover_checkout_failed_payment_cancellation_and_plan_change(): void
     {
         config([
