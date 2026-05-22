@@ -1,9 +1,9 @@
 # Plan: Whole Codebase Simplification Pass
 
-Status: active
+Status: completed
 Owner: agent
 Created: 2026-05-20
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 ## Goal
 
@@ -34,7 +34,7 @@ Preserve existing behavior unless the current behavior is only supporting obsole
 - Architecture docs: `ARCHITECTURE.md`
 - Build posture: `how_to_build.txt`
 - Quality rules: `docs/quality/golden-principles.md`
-- Related plans: `docs/exec-plans/active/saas-roadmap/01-generation-optimization.md`
+- Related plans: `docs/exec-plans/completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`
 - Known risk: the backend requires Laravel Boost `search-docs` per `app/backend/AGENTS.md`, but the Boost MCP tools are not exposed in this Codex session. Use local docs and tests, and avoid dependency/API changes unless necessary.
 - Known risk: the repository has a pre-existing untracked `docs/TEMP_HANDOFF.md`; keep it out of this pass unless it proves directly relevant.
 
@@ -82,6 +82,7 @@ Evidence to capture:
 | 2026-05-20 | Made tokenization/translation batch analysis require full cue context instead of silently substituting the current batch. | Added `test_batch_agents_require_full_cue_context`; targeted test passed. |
 | 2026-05-20 | Tightened extension runtime message guards so a matching `type` alone is not accepted as a valid payload. | Added `app/extension/tests/messages.test.ts`; targeted Vitest and TypeScript compile passed. |
 | 2026-05-20 | Full harness validation passed. | `.\scripts\agent\check.ps1` passed: docs lint, contracts, Laravel tests, WXT tests, TypeScript compile, and WXT build. |
+| 2026-05-21 | Plan archived after merge to `main`. | This plan moved to `docs/exec-plans/completed/2026-05-20-whole-codebase-simplification-pass.md`. |
 
 ## Completion Notes
 

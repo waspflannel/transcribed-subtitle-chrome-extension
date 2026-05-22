@@ -3,7 +3,7 @@
 Status: active
 Owner: agent
 Created: 2026-05-20
-Last updated: 2026-05-20
+Last updated: 2026-05-22
 
 ## Summary
 
@@ -36,10 +36,11 @@ Move to public launch only after the paid beta proves:
 
 | Phase | Document | Primary Outcome | Exit Gate |
 | --- | --- | --- | --- |
-| 01 | `01-generation-optimization.md` | Measured, faster, tier-aware generation pipeline. | Performance/cost budgets are measured and enforced. |
-| 02 | `02-extension-frontend-upgrade.md` | Product-grade extension popup and job visibility. | Popup and overlay states pass visual and functional smoke checks. |
+| 01 | `../../completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md` | Measured, faster, tier-aware generation pipeline. | Completed 2026-05-21; medium and near-limit provider timing proof remains tracked as `TD-010`. |
+| 02 | `../../completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md` | Product-grade extension popup and job visibility. | Completed 2026-05-21; Browser bridge automation remains tracked as screenshot-harness debt before beta. |
 | 03 | `03-accounts-and-extension-auth.md` | User accounts and authenticated extension requests. | Jobs, tracks, and tokens are scoped to authenticated users. |
 | 04 | `04-billing-tiers-and-usage.md` | Paid plans, minute credits, and entitlement checks. | Billing and usage gates protect margins before beta traffic. |
+| 04a | `04a-tiered-worker-queues-and-concurrency.md` | Tiered generation and AI batch worker queues. | Account-owned concurrency limits and shared worker pools are ready for beta traffic. |
 | 05 | `05-saas-website-and-seo.md` | Laravel web dashboard and SEO-ready marketing site. | Users can sign up, buy, manage, and understand the product. |
 | 06 | `06-production-hosting-and-ops.md` | Production environment and deployment operations. | App, workers, scheduler, logs, backups, and alerts are production-ready. |
 | 07 | `07-beta-launch-and-support.md` | Paid beta launch process, support, and evidence loop. | Paying beta users can onboard and receive support safely. |
@@ -82,4 +83,12 @@ Docs-only roadmap changes should at minimum run:
 .\scripts\agent\lint-docs.ps1
 .\scripts\agent\doc-gardening.ps1
 ```
+
+## Progress Log
+
+| Date | Update | Evidence |
+| --- | --- | --- |
+| 2026-05-21 | Phase 01 generation optimization completed and archived after PR #8 merged to `main`. | `docs/exec-plans/completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md`; `docs/exec-plans/tech-debt-tracker.md` keeps `TD-010` open for medium and near-limit provider timing evidence. |
+| 2026-05-21 | Phase 02 extension frontend upgrade completed and archived. | `docs/exec-plans/completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md`; final `.\scripts\agent\check.ps1` and `.\scripts\agent\verify-pr.ps1` passed. |
+| 2026-05-22 | Added Phase 04a for post-auth tiered worker queues and account concurrency. | `docs/exec-plans/active/saas-roadmap/04a-tiered-worker-queues-and-concurrency.md` |
 
