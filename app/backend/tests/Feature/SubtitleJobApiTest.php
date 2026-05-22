@@ -67,6 +67,8 @@ class SubtitleJobApiTest extends TestCase
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
             'subtitles.tiers.default' => 'base',
+            'billing.plans.base.concurrency' => 20,
+            'billing.plans.base.features.full_word_cards' => true,
         ]);
     }
 
@@ -141,6 +143,7 @@ class SubtitleJobApiTest extends TestCase
             'subtitles.queue.connection' => 'database',
             'subtitles.tiers.default' => 'pro',
             'subtitles.tiers.plans.pro.queue' => 'subtitle-ai-pro',
+            'billing.plans.base.generation_tier' => 'pro',
         ]);
         Queue::fake();
 
@@ -168,6 +171,7 @@ class SubtitleJobApiTest extends TestCase
             'subtitles.tiers.plans.ultimate.queue' => 'subtitle-ai-ultimate',
             'subtitles.tiers.plans.ultimate.per_install_concurrency' => 20,
             'subtitles.tiers.plans.ultimate.worker_count' => 20,
+            'billing.plans.base.generation_tier' => 'ultimate',
         ]);
         Queue::fake();
 

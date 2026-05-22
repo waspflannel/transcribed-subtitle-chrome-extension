@@ -6,10 +6,9 @@ use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ExtensionLoginRequest;
 use App\Http\Responses\ApiErrorResponse;
-use App\Models\SubtitleJob;
 use App\Models\User;
 use App\Services\Auth\ExtensionTokenIssuer;
-use App\Services\Subtitles\SubtitleTier;
+use App\Services\Billing\BillingEntitlementService;
 use App\Support\ExtensionTokenAbility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +19,11 @@ class ExtensionAuthController extends Controller
 {
     use ResolvesExtensionUser;
 
-    public function login(ExtensionLoginRequest $request, ExtensionTokenIssuer $tokens): JsonResponse
-    {
+    public function login(
+        ExtensionLoginRequest $request,
+        ExtensionTokenIssuer $tokens,
+        BillingEntitlementService $billing,
+    ): JsonResponse {
         if (app()->isProduction() && ! $request->secure()) {
             return ApiErrorResponse::make(
                 'insecure_transport',
@@ -56,7 +58,7 @@ class ExtensionAuthController extends Controller
         $issuedToken = $tokens->issue($user, $request->extensionInstallId());
 
         return response()->json([
-            'account' => $this->accountSummary($user),
+            'account' => $billing->accountSummary($user),
             'token' => [
                 'plainTextToken' => $issuedToken->plainTextToken,
                 'tokenType' => 'Bearer',
@@ -66,10 +68,10 @@ class ExtensionAuthController extends Controller
         ]);
     }
 
-    public function account(Request $request): JsonResponse
+    public function account(Request $request, BillingEntitlementService $billing): JsonResponse
     {
         return response()->json([
-            'account' => $this->accountSummary($this->extensionUser($request)),
+            'account' => $billing->accountSummary($this->extensionUser($request)),
         ]);
     }
 
@@ -82,79 +84,5 @@ class ExtensionAuthController extends Controller
         }
 
         return response()->json(['ok' => true]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function accountSummary(User $user): array
-    {
-        $jobs = SubtitleJob::query()
-            ->whereBelongsTo($user)
-            ->where('created_at', '>=', now()->startOfMonth())
-            ->get(['status', 'video_duration_seconds']);
-
-        $usedMinutes = $jobs
-            ->filter(fn (SubtitleJob $job): bool => $job->status === 'completed')
-            ->sum(fn (SubtitleJob $job): int => $this->billableMinutes($job));
-        $pendingMinutes = $jobs
-            ->filter(fn (SubtitleJob $job): bool => $job->status === 'running')
-            ->sum(fn (SubtitleJob $job): int => $this->billableMinutes($job));
-        $tier = SubtitleTier::default();
-        $limit = $this->monthlyMinuteLimit($tier);
-
-        return [
-            'status' => 'authenticated',
-            'id' => (string) $user->id,
-            'email' => $user->email,
-            'name' => $user->name,
-            'emailVerified' => $user->hasVerifiedEmail(),
-            'planName' => 'Local beta',
-            'tierName' => $this->tierName($tier),
-            'tierSpeedLabel' => $this->tierSpeedLabel($tier),
-            'monthlyMinuteLimit' => $limit,
-            'monthlyMinutesUsed' => $usedMinutes,
-            'monthlyMinutesPending' => $pendingMinutes,
-            'monthlyMinutesRemaining' => max(0, $limit - $usedMinutes - $pendingMinutes),
-            'resetAt' => now()->addMonthNoOverflow()->startOfMonth()->toJSON(),
-            'upgradeAvailable' => true,
-        ];
-    }
-
-    private function billableMinutes(SubtitleJob $job): int
-    {
-        $seconds = $job->video_duration_seconds;
-
-        return is_int($seconds) && $seconds > 0 ? max(1, (int) ceil($seconds / 60)) : 0;
-    }
-
-    private function tierName(string $tier): string
-    {
-        return match ($tier) {
-            SubtitleTier::ULTIMATE => 'Ultimate',
-            'pro' => 'Pro',
-            'plus' => 'Plus',
-            default => 'Base',
-        };
-    }
-
-    private function tierSpeedLabel(string $tier): string
-    {
-        return match ($tier) {
-            SubtitleTier::ULTIMATE => 'Maximum local parallelism',
-            'pro' => 'Fast queue',
-            'plus' => 'Priority queue',
-            default => 'Standard queue',
-        };
-    }
-
-    private function monthlyMinuteLimit(string $tier): int
-    {
-        return match ($tier) {
-            SubtitleTier::ULTIMATE => 600,
-            'pro' => 240,
-            'plus' => 120,
-            default => 60,
-        };
     }
 }

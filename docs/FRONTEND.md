@@ -8,9 +8,9 @@
 - The content script binds ready tracks to the page's primary `<video>` element, resolves browser `TextTrack` cue changes back to the matching API cue, and avoids replacing overlay HTML when rendered content has not changed.
 - The overlay renders a Shadow DOM language rail with source-token cards, cue timing, optional selected-target cue translation, optional romanization/gloss metadata, hover preview, and click/tap pinned token detail.
 - The overlay calls the background script for on-click token enrichment when a token only has transcript/romanization data, then re-renders from the patched backend track.
-- The popup has Generate, Jobs, Usage, Account, and Settings tabs with searchable Subtitle language and Translation language pickers, Translate subtitles/Romanization/Full word cards controls, backend-synced progress, public-safe job timelines, projected local-beta usage, account placeholders, timing controls, stable public error copy, and local clear-state controls.
+- The popup has Generate, Jobs, Usage, Account, and Settings tabs with searchable Subtitle language and Translation language pickers, Translate subtitles/Romanization/Full word cards controls, backend-synced progress, public-safe job timelines, backend account/usage summaries, billing denial copy, timing controls, stable public error copy, and local clear-state controls.
 - The popup exposes a manual subtitle timing delay from -10s to +10s. The content script applies it locally by rebinding the generated WebVTT track with shifted cue timings.
-- A Laravel/web application frontend is outside the current release scope.
+- The Laravel account dashboard shows verified-account status, Stripe-hosted billing actions, current subscription state, and current-period minute usage.
 
 ## Expectations
 

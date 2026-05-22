@@ -20,6 +20,16 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'password',
         'email_verified_at',
+        'stripe_customer_id',
+        'stripe_subscription_id',
+        'stripe_subscription_item_id',
+        'billing_plan_code',
+        'billing_subscription_status',
+        'billing_current_period_start',
+        'billing_current_period_end',
+        'billing_cancel_at_period_end',
+        'billing_trial_ends_at',
+        'billing_ends_at',
     ];
 
     protected $hidden = [
@@ -32,9 +42,19 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(SubtitleJob::class);
     }
 
+    public function billingUsageEvents(): HasMany
+    {
+        return $this->hasMany(BillingUsageEvent::class);
+    }
+
     protected function casts(): array
     {
         return [
+            'billing_cancel_at_period_end' => 'boolean',
+            'billing_current_period_end' => 'immutable_datetime',
+            'billing_current_period_start' => 'immutable_datetime',
+            'billing_ends_at' => 'immutable_datetime',
+            'billing_trial_ends_at' => 'immutable_datetime',
             'email_verified_at' => 'immutable_datetime',
             'password' => 'hashed',
         ];

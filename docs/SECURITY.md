@@ -12,6 +12,7 @@
 
 - Assets:
   - Backend provider credentials and AI configuration.
+  - Stripe API keys, webhook signing secret, customer IDs, subscription IDs, billing plan state, and usage ledger rows.
   - SaaS user accounts, password reset tokens, email verification state, and scoped Sanctum extension API tokens.
   - Anonymous extension install IDs.
   - YouTube video URLs and IDs submitted by the extension.
@@ -42,6 +43,8 @@
   - Applying install-ID and IP rate limits.
   - Issuing, expiring, and revoking scoped Sanctum extension API tokens only for verified users.
   - Applying server-side generation tier, queue priority, concurrency, and cost telemetry without trusting anonymous client-provided entitlements.
+  - Verifying Stripe webhook signatures before mutating subscription or usage state.
+  - Enforcing active billing, current-period minute balance, feature gates, and concurrency before subtitle provider work starts.
   - Returning public errors and request IDs without exposing internals.
 - Abuse cases:
   - Repeated generation requests to exhaust provider quota or local CPU/disk.
@@ -51,6 +54,8 @@
   - Log leakage of raw audio paths, prompts, transcripts, translations, or provider secrets.
   - Diagnostic trace leakage of generated cue/token content or anonymous install IDs.
   - Public clients spoofing paid-tier queue priority before authenticated entitlements exist.
+  - Forged or replayed Stripe webhooks changing subscription state without signature verification or idempotency.
+  - Users starting more provider work than their active plan, remaining minutes, or concurrency allowance permits.
   - Missing, expired, revoked, or wrong-user extension tokens attempting to access jobs, tracks, or enrichment.
   - Stale generated tracks retained beyond the 30-day window.
 - Audit signals:
@@ -91,6 +96,12 @@
   - `backend.track_generation_completed`
   - `backend.track_reused`
   - `backend.expired_subtitles_pruned`
+  - `billing.monthly_grant`
+  - `billing.usage_reserved`
+  - `billing.usage_debited`
+  - `billing.usage_refunded`
+  - `billing.support_adjusted`
+  - `stripe.webhook_processed`
 
 ## Agent Expectations
 
@@ -118,6 +129,8 @@ Project-specific security defaults:
 - Runtime trace rows must stay scalar and sanitized; do not persist transcripts, cue text, token text, prompts, translations, romanization, raw provider payloads, raw audio paths, provider secrets, or install IDs.
 - Generation tier is server-side configuration until account auth exists; do not accept tier or entitlement from anonymous extension payloads.
 - Cost telemetry stores configured unit-price estimates and safe billing units only. It must not store raw usage payloads, provider responses, prompts, transcripts, translations, or token text.
+- Stripe webhook handlers must verify `Stripe-Signature`, record event IDs idempotently, and store only subscription/customer identifiers plus safe scalar billing metadata.
+- Usage ledger rows store public generated-video minute units and provider cost estimates separately; they must not store transcripts, prompts, raw provider payloads, card data, or Stripe secrets.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - The original anonymous API hardening required `X-Extension-Install-Id`, install/IP throttles, and stable public error objects.
 - SaaS Phase 03 `/v1/*` subtitle and learning-token routes require both `X-Extension-Install-Id` and a scoped Sanctum bearer token. Install ID remains a device/abuse signal; authenticated `user_id` is the ownership boundary.

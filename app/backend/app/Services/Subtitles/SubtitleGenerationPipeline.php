@@ -10,6 +10,8 @@ use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Billing\BillingEntitlementService;
+use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
@@ -28,6 +30,8 @@ class SubtitleGenerationPipeline
         private readonly SubtitleProviderCostRecorder $costs,
         private readonly SubtitleBatchDispatcher $batchDispatcher,
         private readonly SubtitleJobFailureHandler $failureHandler,
+        private readonly BillingEntitlementService $billing,
+        private readonly UsageLedger $usageLedger,
     ) {}
 
     public function transcribeSourceAudioAndDispatchAnalysis(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
@@ -56,6 +60,8 @@ class SubtitleGenerationPipeline
             );
 
             $job->update(['video_duration_seconds' => $audio->durationSeconds]);
+            $job = $job->refresh()->load('user');
+            $this->billing->syncJobReservationToActualDuration($job);
             $this->logger->audioAcquisitionCompleted($job->refresh(), $audio);
             $this->telemetry->recordStageCompleted($job->refresh(), 'acquiring-audio', $audioStartedAtMs);
 
@@ -189,6 +195,7 @@ class SubtitleGenerationPipeline
                 'error_message' => null,
                 'expires_at' => $track->expires_at,
             ]);
+            $this->usageLedger->debitCompletedJob($job->refresh()->load('user'), $track);
             $this->artifacts->deleteForJob($job);
 
             return $track;

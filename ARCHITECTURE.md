@@ -15,11 +15,13 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Canonical API/data contracts live in `packages/contracts`.
 - The canonical language catalog lives in `packages/contracts/languages.json`; `auto` is source-only and the real language choices use the provider WER-ranked transcription tags: Excellent, High Accuracy, Good, and Moderate.
 - The backend exposes local `GET /up`, `POST /v1/extension-auth/login`, `GET /v1/extension-auth/account`, `POST /v1/extension-auth/logout`, `POST /v1/subtitle-jobs`, `GET /v1/subtitle-jobs`, `GET /v1/subtitle-jobs/{jobId}`, and `POST /v1/learning-tokens` JSON APIs.
+- Web billing uses Stripe-hosted checkout and billing portal routes plus a verified `POST /stripe/webhook` endpoint. The app stores Cashier-style customer/subscription fields locally without adding Cashier as a dependency.
 - SaaS identity is email/password through Laravel Fortify plus scoped Laravel Sanctum personal access tokens for extension API requests. Verified users own subtitle jobs; extension install IDs remain on requests and rows as device/abuse signals, not ownership boundaries.
 - Subtitle jobs, per-run trace events, generated tracks, Laravel batch metadata, failed jobs, cache rows, and short-lived job artifacts persist in Postgres. SQLite is test-only through PHPUnit's isolated in-memory profile.
 - Current subtitle generation runs through Redis queues on tier-aware named queues. Base jobs use `subtitle-ai` by default, higher tiers can use configured `subtitle-ai-plus` and `subtitle-ai-pro` queues, and local generate requests auto-start workers that listen in priority order. The first queued job acquires YouTube audio, sends it to ElevenLabs Scribe v2 for word timestamps using the requested source language or provider auto-detect, normalizes provider language codes into the catalog when possible, stores transcript/draft-cue artifacts, and dispatches OpenAI cue batch jobs on the same tier queue.
 - Each created or reset subtitle generation has a `run_id` that is carried by queued work. Workers skip stale queued payloads before provider calls or artifact writes when the queued run no longer matches the current job row, and the skip is recorded in sanitized trace events.
 - Each subtitle job stores an internal `generation_tier` and `estimated_provider_cost_microusd`. Tier selection is server-side only until account auth exists; anonymous extension requests cannot choose paid-tier behavior.
+- Authenticated generation is gated by active subscription state, current-period minute credits, plan feature flags, and plan concurrency before queue dispatch. New or reset jobs reserve generated-video minutes, completed tracks debit the reservation, and failures release the reservation when no track is produced. Compatible cached tracks are reused without another charge.
 - Default generation is transcript-first: it stores timed subtitle cues, then runs a dedicated OpenAI/Laravel AI structured-output tokenizer for every transcript so learner-facing token boundaries are chosen before display. ElevenLabs Scribe words are normalized into timed transcript segments directly, including removal of provider-created character spacing for no-space scripts, and WebVTT is generated from those segments for browser track sync. The tokenizer prompt includes previous/current/next cue text, and the agent schema returns only cue identity plus token index/text. Backend validation checks cue identity, sequential token indexes, non-empty lexical token text, and source-order boundary safety; invalid multi-cue tokenization batches split and retry through the same tokenizer agent, while invalid single-cue output fails generation.
 - Romanization is a separate optional queued stage controlled by `includeRomanization`; it starts after tokenization, annotates existing tokenizer boundaries, cannot retokenize, and fails generation when enabled output is invalid. Cue translation is a separate optional queued stage controlled by `includeTranslation`; it can run alongside tokenization from draft source cues and later writes cue `translatedText` without changing token boundaries or learning metadata. Full word-card mode is opt-in and runs after tokenization, translation, and romanization have merged, enriching every existing token without changing cue translation, token count, indexes, or text.
 - Same-language source/target requests keep transcript subtitles, set translated text to the source text, and skip cue translation/card enrichment while keeping tokenizer output and optional romanization where applicable.
@@ -70,8 +72,19 @@ Chrome Extension
       -> Optional OpenAI/Laravel AI romanization batches preserving token boundaries after tokenization
       -> Optional OpenAI/Laravel AI word-card enrichment batches preserving token boundaries and cue translation
       -> Tier budget checks and configurable provider cost estimates
+      -> Billing entitlement checks and append-only minute ledger events
       -> Postgres track storage
   <- generated subtitle track
+
+Browser Dashboard
+  -> Laravel web auth
+  -> Stripe-hosted checkout / billing portal redirects
+  <- plan, subscription, minute usage, and support-visible billing state
+
+Stripe
+  -> POST /stripe/webhook with signed subscription and invoice events
+      -> idempotent local subscription state
+      -> monthly minute grants
 ```
 
 ## Boundary Model
