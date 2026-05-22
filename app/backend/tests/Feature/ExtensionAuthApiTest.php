@@ -152,6 +152,23 @@ class ExtensionAuthApiTest extends TestCase
             ->assertJsonPath('error.code', 'unauthenticated');
     }
 
+    public function test_logout_still_revokes_token_after_user_becomes_unverified(): void
+    {
+        $user = User::factory()->create();
+        $issuedToken = app(ExtensionTokenIssuer::class)->issue($user, $this->installId());
+
+        $user->forceFill(['email_verified_at' => null])->save();
+
+        $this
+            ->withHeader('X-Extension-Install-Id', $this->installId())
+            ->withHeader('Authorization', 'Bearer '.$issuedToken->plainTextToken)
+            ->postJson('/v1/extension-auth/logout')
+            ->assertOk()
+            ->assertJsonPath('ok', true);
+
+        $this->assertNull(PersonalAccessToken::findToken($issuedToken->plainTextToken));
+    }
+
     public function test_wrong_user_cannot_access_job_or_track(): void
     {
         $owner = User::factory()->create();

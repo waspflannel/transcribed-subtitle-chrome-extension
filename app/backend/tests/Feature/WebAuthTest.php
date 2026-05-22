@@ -36,6 +36,20 @@ class WebAuthTest extends TestCase
         Notification::assertSentTo($user, VerifyEmail::class);
     }
 
+    public function test_registration_normalizes_email_before_uniqueness_validation(): void
+    {
+        User::factory()->create(['email' => 'learner@example.com']);
+
+        $this
+            ->post('/register', [
+                'name' => 'Beta Learner',
+                'email' => 'Learner@Example.com',
+                'password' => 'correct12345',
+                'password_confirmation' => 'correct12345',
+            ])
+            ->assertSessionHasErrors('email');
+    }
+
     public function test_user_can_verify_email_and_open_dashboard(): void
     {
         $user = User::factory()->unverified()->create();

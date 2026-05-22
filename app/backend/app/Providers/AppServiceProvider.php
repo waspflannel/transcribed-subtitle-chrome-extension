@@ -12,6 +12,7 @@ use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use LogicException;
 
 class AppServiceProvider extends ServiceProvider
@@ -40,10 +41,11 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('extension-auth', function (Request $request): array {
-            $email = strtolower((string) $request->input('email'));
+            $email = $request->input('email');
+            $emailKey = is_string($email) ? Str::lower($email) : 'invalid-email';
 
             return [
-                Limit::perMinute(5)->by('extension-auth-email:'.$email),
+                Limit::perMinute(5)->by('extension-auth-email:'.$emailKey),
                 Limit::perMinute(20)->by('extension-auth-ip:'.$request->ip()),
             ];
         });

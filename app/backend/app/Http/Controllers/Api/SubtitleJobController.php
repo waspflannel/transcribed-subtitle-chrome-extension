@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateSubtitleJobRequest;
 use App\Http\Resources\SubtitleJobResource;
 use App\Models\SubtitleJob;
-use App\Models\User;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,6 +14,8 @@ use LogicException;
 
 class SubtitleJobController extends Controller
 {
+    use ResolvesExtensionUser;
+
     public function index(Request $request): JsonResponse
     {
         $now = now();
@@ -185,16 +187,5 @@ class SubtitleJobController extends Controller
         }
 
         return $value;
-    }
-
-    private function extensionUser(Request $request): User
-    {
-        $user = $request->user();
-
-        if (! $user instanceof User) {
-            throw new LogicException('Extension API request is missing an authenticated user.');
-        }
-
-        return $user;
     }
 }

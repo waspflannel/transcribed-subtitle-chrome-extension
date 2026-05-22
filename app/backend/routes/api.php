@@ -30,7 +30,6 @@ Route::prefix('v1')
             ->name('extension-auth.logout')
             ->middleware([
                 'auth:sanctum',
-                EnsureApiUserEmailIsVerified::class,
                 CheckAbilities::class.':'.ExtensionTokenAbility::TOKENS_REVOKE,
             ]);
 

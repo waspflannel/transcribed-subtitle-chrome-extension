@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ExtensionLoginRequest;
 use App\Http\Responses\ApiErrorResponse;
@@ -14,10 +15,11 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
-use LogicException;
 
 class ExtensionAuthController extends Controller
 {
+    use ResolvesExtensionUser;
+
     public function login(ExtensionLoginRequest $request, ExtensionTokenIssuer $tokens): JsonResponse
     {
         if (app()->isProduction() && ! $request->secure()) {
@@ -154,16 +156,5 @@ class ExtensionAuthController extends Controller
             'plus' => 120,
             default => 60,
         };
-    }
-
-    private function extensionUser(Request $request): User
-    {
-        $user = $request->user();
-
-        if (! $user instanceof User) {
-            throw new LogicException('Extension API request is missing an authenticated user.');
-        }
-
-        return $user;
     }
 }
