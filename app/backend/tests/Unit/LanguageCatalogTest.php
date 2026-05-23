@@ -45,4 +45,14 @@ class LanguageCatalogTest extends TestCase
         $this->assertSame('Japanese', LanguageCatalog::label('jpn'));
         $this->assertSame('unknown', LanguageCatalog::label('unknown'));
     }
+
+    public function test_it_exposes_supported_language_metadata_for_public_pages(): void
+    {
+        $languages = LanguageCatalog::supportedLanguages();
+
+        $this->assertNotEmpty($languages);
+        $this->assertContains('eng', array_column($languages, 'code'));
+        $this->assertNotContains('auto', array_column($languages, 'code'));
+        $this->assertContains('excellent', array_column($languages, 'tier'));
+    }
 }

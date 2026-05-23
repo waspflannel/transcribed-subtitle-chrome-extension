@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\StripeClient;
 use App\Services\Billing\TestingPlanSwitcher;
@@ -18,6 +19,7 @@ class BillingController extends Controller
         string $planCode,
         BillingPlanCatalog $plans,
         StripeClient $stripe,
+        FunnelAnalytics $analytics,
     ): RedirectResponse {
         $user = $request->user();
 
@@ -30,6 +32,8 @@ class BillingController extends Controller
         if ($plan === null) {
             abort(404);
         }
+
+        $analytics->checkoutStarted($user, $plan);
 
         try {
             $session = $stripe->createCheckoutSession(

@@ -1,29 +1,42 @@
 <?php
 
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\MarketingPageController;
+use App\Http\Controllers\RobotsController;
+use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\StripeWebhookController;
-use App\Services\Billing\BillingEntitlementService;
-use App\Services\Billing\BillingPlanCatalog;
-use App\Services\Billing\TestingPlanSwitcher;
-use Illuminate\Http\Request;
+use App\Http\Controllers\WebSubtitleJobController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\View\View;
 
-Route::get('/', fn () => redirect()->route('dashboard'));
+Route::get('/', [MarketingPageController::class, 'home'])
+    ->name('marketing.home');
+Route::get('/pricing', [MarketingPageController::class, 'pricing'])
+    ->name('marketing.pricing');
+Route::get('/languages', [MarketingPageController::class, 'languages'])
+    ->name('marketing.languages');
+Route::get('/how-it-works', [MarketingPageController::class, 'howItWorks'])
+    ->name('marketing.how-it-works');
+Route::get('/faq', [MarketingPageController::class, 'faq'])
+    ->name('marketing.faq');
+Route::get('/privacy', [MarketingPageController::class, 'privacy'])
+    ->name('marketing.privacy');
+Route::get('/terms', [MarketingPageController::class, 'terms'])
+    ->name('marketing.terms');
+Route::get('/support', [MarketingPageController::class, 'support'])
+    ->name('marketing.support');
 
-Route::get('/dashboard', fn (
-    Request $request,
-    BillingEntitlementService $billing,
-    BillingPlanCatalog $plans,
-    TestingPlanSwitcher $testingPlanSwitcher,
-): View => view('dashboard', [
-    'user' => $request->user(),
-    'account' => $billing->accountSummary($request->user()),
-    'plans' => $plans->publicPlans(),
-    'testingPlanSwitcherEnabled' => $testingPlanSwitcher->enabled(),
-]))
+Route::get('/robots.txt', RobotsController::class)
+    ->name('robots');
+Route::get('/sitemap.xml', SitemapController::class)
+    ->name('sitemap');
+
+Route::get('/dashboard', DashboardController::class)
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
+Route::get('/dashboard/jobs/{jobId}', [WebSubtitleJobController::class, 'show'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.jobs.show');
 
 Route::post('/billing/checkout/{planCode}', [BillingController::class, 'checkout'])
     ->middleware(['auth', 'verified'])

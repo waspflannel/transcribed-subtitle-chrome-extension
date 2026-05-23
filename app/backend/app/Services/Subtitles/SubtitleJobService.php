@@ -5,6 +5,7 @@ namespace App\Services\Subtitles;
 use App\Jobs\ProcessSubtitleJob;
 use App\Models\SubtitleJob;
 use App\Models\User;
+use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Billing\BillingEntitlementService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -51,6 +52,7 @@ class SubtitleJobService
         private readonly SubtitleRuntimeTracer $tracer,
         private readonly SubtitleQueueWorkerBootstrapper $workers,
         private readonly BillingEntitlementService $billing,
+        private readonly FunnelAnalytics $analytics,
     ) {}
 
     /**
@@ -202,6 +204,10 @@ class SubtitleJobService
         bool $includeRomanization,
         bool $includeTranslation,
     ): SubtitleJob {
+        $previousJobCount = SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->count();
+
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
             'user_id' => $user->id,
@@ -233,6 +239,8 @@ class SubtitleJobService
             'generation_tier' => $job->generation_tier,
             'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
+
+        $this->analytics->generationStarted($job->load('user'), $previousJobCount);
 
         return $job;
     }

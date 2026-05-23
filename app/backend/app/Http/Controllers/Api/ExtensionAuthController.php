@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ExtensionLoginRequest;
 use App\Http\Responses\ApiErrorResponse;
 use App\Models\User;
+use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Auth\ExtensionTokenIssuer;
 use App\Services\Billing\BillingEntitlementService;
 use App\Support\ExtensionTokenAbility;
@@ -23,6 +24,7 @@ class ExtensionAuthController extends Controller
         ExtensionLoginRequest $request,
         ExtensionTokenIssuer $tokens,
         BillingEntitlementService $billing,
+        FunnelAnalytics $analytics,
     ): JsonResponse {
         if (app()->isProduction() && ! $request->secure()) {
             return ApiErrorResponse::make(
@@ -56,9 +58,11 @@ class ExtensionAuthController extends Controller
         }
 
         $issuedToken = $tokens->issue($user, $request->extensionInstallId());
+        $account = $billing->accountSummary($user);
+        $analytics->extensionConnected($user, $request->extensionInstallId(), $account);
 
         return response()->json([
-            'account' => $billing->accountSummary($user),
+            'account' => $account,
             'token' => [
                 'plainTextToken' => $issuedToken->plainTextToken,
                 'tokenType' => 'Bearer',

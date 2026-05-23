@@ -66,6 +66,28 @@ class LanguageCatalog
         return (string) $language['label'];
     }
 
+    /**
+     * @return array<int, array{code: string, label: string, tier: string}>
+     */
+    public static function supportedLanguages(): array
+    {
+        $languages = [];
+
+        foreach (self::languages() as $language) {
+            if (self::isSourceOnly($language)) {
+                continue;
+            }
+
+            $languages[] = [
+                'code' => self::languageCode($language),
+                'label' => (string) $language['label'],
+                'tier' => (string) ($language['tier'] ?? 'unknown'),
+            ];
+        }
+
+        return $languages;
+    }
+
     public static function normalizeCode(?string $code): ?string
     {
         foreach (self::codeCandidates($code) as $candidate) {
