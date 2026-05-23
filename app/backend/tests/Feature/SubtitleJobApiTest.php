@@ -67,7 +67,8 @@ class SubtitleJobApiTest extends TestCase
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
             'subtitles.tiers.default' => 'base',
-            'billing.plans.base.concurrency' => 20,
+            'subtitles.tiers.plans.base.generation_concurrency' => 20,
+            'subtitles.tiers.plans.base.batch_concurrency' => 20,
             'billing.plans.base.features.full_word_cards' => true,
         ]);
     }
@@ -92,7 +93,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonMissingPath('track')
             ->assertJsonStructure(['jobId', 'status', 'stage', 'progressPercent', 'createdAt', 'updatedAt']);
 
-        Queue::assertPushedOn(SubtitleQueue::name(), ProcessSubtitleJob::class);
+        Queue::assertPushedOn(SubtitleQueue::generationName(), ProcessSubtitleJob::class);
     }
 
     public function test_duplicate_running_request_reuses_job_without_dispatching_duplicate_work(): void
@@ -132,7 +133,7 @@ class SubtitleJobApiTest extends TestCase
 
         Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
             return $job->connection === 'background'
-                && $job->queue === SubtitleQueue::name();
+                && $job->queue === SubtitleQueue::generationName();
         });
     }
 
@@ -142,7 +143,7 @@ class SubtitleJobApiTest extends TestCase
             'queue.default' => 'database',
             'subtitles.queue.connection' => 'database',
             'subtitles.tiers.default' => 'pro',
-            'subtitles.tiers.plans.pro.queue' => 'subtitle-ai-pro',
+            'subtitles.tiers.plans.pro.generation_queue' => 'subtitle-generation-pro',
             'billing.plans.base.generation_tier' => 'pro',
         ]);
         Queue::fake();
@@ -158,19 +159,20 @@ class SubtitleJobApiTest extends TestCase
         ]);
         Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
             return $job->connection === 'database'
-                && $job->queue === 'subtitle-ai-pro';
+                && $job->queue === 'subtitle-generation-pro';
         });
     }
 
-    public function test_ultimate_generation_tier_uses_highest_priority_queue_and_parallelism_config(): void
+    public function test_ultimate_generation_tier_uses_highest_priority_queue_and_concurrency_config(): void
     {
         config([
             'queue.default' => 'database',
             'subtitles.queue.connection' => 'database',
             'subtitles.tiers.default' => 'ultimate',
-            'subtitles.tiers.plans.ultimate.queue' => 'subtitle-ai-ultimate',
-            'subtitles.tiers.plans.ultimate.per_install_concurrency' => 20,
-            'subtitles.tiers.plans.ultimate.worker_count' => 20,
+            'subtitles.tiers.plans.ultimate.generation_queue' => 'subtitle-generation-ultimate',
+            'subtitles.tiers.plans.ultimate.batch_queue' => 'subtitle-batch-ultimate',
+            'subtitles.tiers.plans.ultimate.generation_concurrency' => 5,
+            'subtitles.tiers.plans.ultimate.batch_concurrency' => 20,
             'billing.plans.base.generation_tier' => 'ultimate',
         ]);
         Queue::fake();
@@ -180,15 +182,19 @@ class SubtitleJobApiTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ultimate001']))
             ->assertAccepted();
 
-        $this->assertSame('subtitle-ai-ultimate,subtitle-ai-pro,subtitle-ai-plus,subtitle-ai', SubtitleQueue::workerQueueList());
-        $this->assertSame(20, SubtitleTier::perInstallConcurrency('ultimate'));
+        $this->assertSame(
+            'subtitle-generation-ultimate,subtitle-generation-pro,subtitle-generation-plus,subtitle-generation-base,subtitle-batch-ultimate,subtitle-batch-pro,subtitle-batch-plus,subtitle-batch-base',
+            SubtitleQueue::workerQueueList(),
+        );
+        $this->assertSame(5, SubtitleTier::generationConcurrency('ultimate'));
+        $this->assertSame(20, SubtitleTier::batchConcurrency('ultimate'));
         $this->assertDatabaseHas('subtitle_jobs', [
             'public_id' => $response->json('jobId'),
             'generation_tier' => 'ultimate',
         ]);
         Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
             return $job->connection === 'database'
-                && $job->queue === 'subtitle-ai-ultimate';
+                && $job->queue === 'subtitle-generation-ultimate';
         });
     }
 
@@ -196,13 +202,13 @@ class SubtitleJobApiTest extends TestCase
     {
         config([
             'subtitles.tiers.default' => 'ultimate',
-            'subtitles.tiers.plans.pro.queue' => 'subtitle-ai-pro',
-            'subtitles.tiers.plans.ultimate.queue' => 'subtitle-ai-ultimate',
+            'subtitles.tiers.plans.pro.generation_queue' => 'subtitle-generation-pro',
+            'subtitles.tiers.plans.ultimate.generation_queue' => 'subtitle-generation-ultimate',
         ]);
 
         $job = SubtitleJob::factory()->make(['generation_tier' => 'pro']);
 
-        $this->assertSame('subtitle-ai-pro', SubtitleQueue::nameForJob($job));
+        $this->assertSame('subtitle-generation-pro', SubtitleQueue::generationNameForJob($job));
     }
 
     public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
@@ -233,7 +239,7 @@ class SubtitleJobApiTest extends TestCase
 
         Process::assertRanTimes(
             fn (PendingProcess $process): bool => $this->processCommandContains($process, 'queue:work')
-                && $this->processCommandContains($process, '--name=subtitle-auto-worker')
+                && $this->processCommandContains($process, '--name=subtitle-auto-worker-priority-override')
                 && $this->processCommandContains($process, '--queue='.SubtitleQueue::workerQueueList())
                 && $this->processCommandContains($process, '--tries=0'),
             2,
@@ -292,7 +298,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertAccepted();
 
         Artisan::call('queue:work', [
-            '--queue' => SubtitleQueue::name().',default',
+            '--queue' => SubtitleQueue::workerQueueList().',default',
             '--once' => true,
             '--tries' => 1,
             '--sleep' => 0,
@@ -302,6 +308,7 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertStringContainsString(addslashes(TokenizeSubtitleCueBatch::class), $payloads);
         $this->assertStringContainsString(addslashes(TranslateSubtitleCueBatch::class), $payloads);
+        $this->assertSame(2, DB::table('jobs')->where('queue', SubtitleQueue::batchName())->count());
     }
 
     public function test_cancelled_tokenization_batch_skips_provider_calls(): void
@@ -1372,7 +1379,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('beta concurrent gloss', $track->cues[0]['tokens'][1]['gloss']);
     }
 
-    public function test_learning_token_enrichment_skips_provider_for_same_language_track(): void
+    public function test_learning_token_enrichment_generates_cards_for_same_language_track(): void
     {
         $jobResponse = $this
             ->withExtensionAuth($this->installId())
@@ -1390,9 +1397,10 @@ class SubtitleJobApiTest extends TestCase
                 'tokenIndex' => 0,
             ])
             ->assertOk()
-            ->assertJsonPath('token.text', 'first');
+            ->assertJsonPath('token.text', 'first')
+            ->assertJsonPath('token.gloss', 'first gloss');
 
-        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
+        $this->assertSame(1, $this->translationAnalysis->tokenCalls);
     }
 
     public function test_learning_token_enrichment_requires_owning_install(): void
@@ -1637,7 +1645,7 @@ class SubtitleJobApiTest extends TestCase
     {
         $batch = Bus::batch([$job])
             ->onConnection(SubtitleQueue::connection())
-            ->onQueue(SubtitleQueue::name())
+            ->onQueue(SubtitleQueue::batchName())
             ->dispatch();
 
         $batch->cancel();
@@ -1649,7 +1657,7 @@ class SubtitleJobApiTest extends TestCase
     {
         for ($attempt = 0; $attempt < 50 && DB::table('jobs')->exists(); $attempt++) {
             Artisan::call('queue:work', [
-                '--queue' => SubtitleQueue::name().',default',
+                '--queue' => SubtitleQueue::workerQueueList().',default',
                 '--once' => true,
                 '--tries' => 1,
                 '--sleep' => 0,

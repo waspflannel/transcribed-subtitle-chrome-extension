@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Services\Subtitles\SubtitleTier;
 use InvalidArgumentException;
 
 final class BillingPlanCatalog
@@ -84,7 +85,14 @@ final class BillingPlanCatalog
      */
     public function publicPlans(): array
     {
-        return array_values($this->plans());
+        return array_values(array_map(
+            fn (array $plan): array => [
+                ...$plan,
+                'concurrency' => SubtitleTier::generationConcurrency($this->generationTier($plan)),
+                'batch_concurrency' => SubtitleTier::batchConcurrency($this->generationTier($plan)),
+            ],
+            $this->plans(),
+        ));
     }
 
     /**
@@ -113,20 +121,6 @@ final class BillingPlanCatalog
         }
 
         return $tier;
-    }
-
-    /**
-     * @param  array<string, mixed>  $plan
-     */
-    public function concurrency(array $plan): int
-    {
-        $concurrency = $plan['concurrency'] ?? null;
-
-        if (! is_numeric($concurrency) || (int) $concurrency < 1) {
-            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define positive concurrency.");
-        }
-
-        return (int) $concurrency;
     }
 
     /**

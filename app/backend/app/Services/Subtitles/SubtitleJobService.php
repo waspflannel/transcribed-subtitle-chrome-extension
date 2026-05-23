@@ -164,7 +164,7 @@ class SubtitleJobService
         if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
             ProcessSubtitleJob::dispatch($job->id, $job->run_id)
                 ->onConnection(SubtitleQueue::connection())
-                ->onQueue(SubtitleQueue::nameForJob($job));
+                ->onQueue(SubtitleQueue::generationNameForJob($job));
 
             $job = $job->refresh()->load('track');
         }
@@ -231,7 +231,7 @@ class SubtitleJobService
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
             'generation_tier' => $job->generation_tier,
-            'queue' => SubtitleQueue::nameForJob($job),
+            'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
 
         return $job;
@@ -283,7 +283,7 @@ class SubtitleJobService
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
             'generation_tier' => $job->generation_tier,
-            'queue' => SubtitleQueue::nameForJob($job),
+            'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
     }
 

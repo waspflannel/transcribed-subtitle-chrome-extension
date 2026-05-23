@@ -24,7 +24,7 @@ return [
         'redis' => [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'queue'),
-            'queue' => env('REDIS_QUEUE', env('SUBTITLE_QUEUE', 'subtitle-ai')),
+            'queue' => env('REDIS_QUEUE', env('SUBTITLE_QUEUE', 'subtitle-generation-base')),
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1260),
             'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 5),
             'after_commit' => false,

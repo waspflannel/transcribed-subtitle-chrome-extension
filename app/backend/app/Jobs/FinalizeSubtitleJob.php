@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Jobs\Middleware\LimitSubtitleInstallConcurrency;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
@@ -36,7 +35,7 @@ class FinalizeSubtitleJob implements ShouldQueue
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleQueue::connection());
-        $this->onQueue(SubtitleQueue::name());
+        $this->onQueue(SubtitleQueue::generationName());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
@@ -45,7 +44,7 @@ class FinalizeSubtitleJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new LimitSubtitleInstallConcurrency];
+        return [];
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void

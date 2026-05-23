@@ -31,10 +31,6 @@ class LearningTokenEnrichmentService
             return $this->response($track, $cue, $token);
         }
 
-        if ($this->isSameLanguageTrack($track)) {
-            return $this->response($track, $cue, $token);
-        }
-
         Log::info('backend.learning_token_enrichment_started', [
             'track_id' => $track->public_id,
             'job_id' => $track->job->public_id,
@@ -189,11 +185,6 @@ class LearningTokenEnrichmentService
     private function effectiveSourceLanguage(SubtitleTrack $track): string
     {
         return $track->detected_source_language ?: $track->source_language;
-    }
-
-    private function isSameLanguageTrack(SubtitleTrack $track): bool
-    {
-        return $this->effectiveSourceLanguage($track) === $track->target_language;
     }
 
     /**

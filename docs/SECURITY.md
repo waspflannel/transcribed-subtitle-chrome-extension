@@ -42,7 +42,7 @@
   - Persisting generated WebVTT and cue/token learning data.
   - Applying install-ID and IP rate limits.
   - Issuing, expiring, and revoking scoped Sanctum extension API tokens only for verified users.
-  - Applying server-side generation tier, queue priority, concurrency, and cost telemetry without trusting anonymous client-provided entitlements.
+  - Applying server-side generation tier, queue priority, account generation concurrency, account AI batch concurrency, and cost telemetry without trusting client-provided entitlements.
   - Verifying Stripe webhook signatures before mutating subscription or usage state.
   - Enforcing active billing, current-period minute balance, feature gates, and concurrency before subtitle provider work starts.
   - Returning public errors and request IDs without exposing internals.
@@ -88,6 +88,7 @@
   - `backend.subtitle_trace_event`
   - `provider.cost_estimated`
   - `queue.concurrency_delayed`
+  - `backend.generation_concurrency_rejected`
   - `performance.budget_checked`
   - `performance.budget_exceeded`
   - `backend.queue_job_processing`
@@ -134,6 +135,7 @@ Project-specific security defaults:
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - The original anonymous API hardening required `X-Extension-Install-Id`, install/IP throttles, and stable public error objects.
 - SaaS Phase 03 `/v1/*` subtitle and learning-token routes require both `X-Extension-Install-Id` and a scoped Sanctum bearer token. Install ID remains a device/abuse signal; authenticated `user_id` is the ownership boundary.
+- Tiered generation admission and AI batch concurrency use authenticated `user_id` as the owner and may log only hashed user IDs. Runtime trace rows must not store raw user IDs or install IDs.
 - Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
 - Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.

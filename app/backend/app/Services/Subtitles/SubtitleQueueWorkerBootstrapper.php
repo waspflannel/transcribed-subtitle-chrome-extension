@@ -33,7 +33,7 @@ class SubtitleQueueWorkerBootstrapper
                 Log::info('backend.subtitle_worker_auto_start_skipped', [
                     'reason' => 'lock_busy',
                     'queue_connection' => SubtitleQueue::connection(),
-                    'queues' => SubtitleQueue::workerQueueList(),
+                    'worker_groups' => $this->workerGroups(),
                 ]);
 
                 return;
@@ -49,7 +49,7 @@ class SubtitleQueueWorkerBootstrapper
                 'reason' => 'unexpected_exception',
                 'exception' => $exception::class,
                 'queue_connection' => SubtitleQueue::connection(),
-                'queues' => SubtitleQueue::workerQueueList(),
+                'worker_groups' => $this->workerGroups(),
             ]);
         }
     }
@@ -62,9 +62,8 @@ class SubtitleQueueWorkerBootstrapper
         return [
             'enabled' => (bool) config('subtitles.queue.auto_start.enabled', true),
             'targetWorkerCount' => $this->targetWorkerCount(),
-            'workerName' => self::WORKER_NAME,
             'queueConnection' => SubtitleQueue::connection(),
-            'queues' => SubtitleQueue::workerQueueList(),
+            'workerGroups' => $this->workerGroups(),
             'maxTimeSeconds' => $this->maxTimeSeconds(),
             'timeoutSeconds' => $this->timeoutSeconds(),
             'memoryMb' => $this->memoryMb(),
@@ -74,16 +73,23 @@ class SubtitleQueueWorkerBootstrapper
 
     private function syncWorkers(): void
     {
-        $targetWorkerCount = $this->targetWorkerCount();
+        $workerGroups = $this->workerGroups();
         $runningWorkers = $this->runningWorkers($this->storedWorkers());
-        $missingWorkerCount = max(0, $targetWorkerCount - count($runningWorkers));
         $startedWorkers = [];
 
-        for ($index = 0; $index < $missingWorkerCount; $index++) {
-            $startedWorker = $this->startWorker();
+        foreach ($workerGroups as $workerGroup) {
+            $runningGroupWorkers = array_values(array_filter(
+                $runningWorkers,
+                fn (array $worker): bool => ($worker['worker_group'] ?? null) === $workerGroup['name'],
+            ));
+            $missingWorkerCount = max(0, $workerGroup['worker_count'] - count($runningGroupWorkers));
 
-            if ($startedWorker !== null) {
-                $startedWorkers[] = $startedWorker;
+            for ($index = 0; $index < $missingWorkerCount; $index++) {
+                $startedWorker = $this->startWorker($workerGroup);
+
+                if ($startedWorker !== null) {
+                    $startedWorkers[] = $startedWorker;
+                }
             }
         }
 
@@ -97,8 +103,8 @@ class SubtitleQueueWorkerBootstrapper
         Log::info('backend.subtitle_worker_auto_start_checked', [
             'queue_connection' => SubtitleQueue::connection(),
             'queue_driver' => $this->queueDriver(),
-            'queues' => SubtitleQueue::workerQueueList(),
-            'target_worker_count' => $targetWorkerCount,
+            'worker_groups' => $workerGroups,
+            'target_worker_count' => $this->targetWorkerCount(),
             'running_worker_count' => count($runningWorkers),
             'started_worker_count' => count($startedWorkers),
             'worker_pids' => array_values(array_filter(array_map(
@@ -118,7 +124,7 @@ class SubtitleQueueWorkerBootstrapper
         return array_values(array_filter(
             $workers,
             fn (array $worker): bool => is_int($worker['pid'] ?? null)
-                && $this->isWorkerProcessRunning($worker['pid']),
+                && $this->isWorkerProcessRunning($worker),
         ));
     }
 
@@ -133,13 +139,14 @@ class SubtitleQueueWorkerBootstrapper
     }
 
     /**
+     * @param  array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}  $workerGroup
      * @return array<string, mixed>|null
      */
-    private function startWorker(): ?array
+    private function startWorker(array $workerGroup): ?array
     {
         $result = PHP_OS_FAMILY === 'Windows'
-            ? $this->startWindowsWorker()
-            : $this->startUnixWorker();
+            ? $this->startWindowsWorker($workerGroup)
+            : $this->startUnixWorker($workerGroup);
 
         $pid = $this->parsePid($result->output());
 
@@ -148,7 +155,9 @@ class SubtitleQueueWorkerBootstrapper
                 'reason' => 'process_start_failed',
                 'exit_code' => $result->exitCode(),
                 'queue_connection' => SubtitleQueue::connection(),
-                'queues' => SubtitleQueue::workerQueueList(),
+                'worker_group' => $workerGroup['name'],
+                'queue_family' => $workerGroup['queue_family'],
+                'queues' => implode(',', $workerGroup['queues']),
             ]);
 
             return null;
@@ -158,8 +167,10 @@ class SubtitleQueueWorkerBootstrapper
             'pid' => $pid,
             'started_at' => now()->toJSON(),
             'queue_connection' => SubtitleQueue::connection(),
-            'queues' => SubtitleQueue::workerQueueList(),
-            'worker_name' => self::WORKER_NAME,
+            'worker_group' => $workerGroup['name'],
+            'queue_family' => $workerGroup['queue_family'],
+            'queues' => implode(',', $workerGroup['queues']),
+            'worker_name' => $this->workerName($workerGroup),
             'max_time_seconds' => $this->maxTimeSeconds(),
             'tries' => $this->tries(),
         ];
@@ -169,10 +180,13 @@ class SubtitleQueueWorkerBootstrapper
         return $worker;
     }
 
-    private function startWindowsWorker(): ProcessResult
+    /**
+     * @param  array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}  $workerGroup
+     */
+    private function startWindowsWorker(array $workerGroup): ProcessResult
     {
-        [$stdout, $stderr] = $this->workerLogPaths();
-        $arguments = $this->powershellArray($this->workerArguments());
+        [$stdout, $stderr] = $this->workerLogPaths($workerGroup);
+        $arguments = $this->powershellArray($this->workerArguments($workerGroup));
         $script = implode('; ', [
             '$arguments = '.$arguments,
             '$process = Start-Process -FilePath '.$this->powershellString(PHP_BINARY)
@@ -196,13 +210,16 @@ class SubtitleQueueWorkerBootstrapper
         ]);
     }
 
-    private function startUnixWorker(): ProcessResult
+    /**
+     * @param  array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}  $workerGroup
+     */
+    private function startUnixWorker(array $workerGroup): ProcessResult
     {
-        [$stdout, $stderr] = $this->workerLogPaths();
+        [$stdout, $stderr] = $this->workerLogPaths($workerGroup);
         $command = sprintf(
             'cd %s && nohup %s > %s 2> %s < /dev/null & echo $!',
             escapeshellarg(base_path()),
-            implode(' ', array_map('escapeshellarg', [PHP_BINARY, ...$this->workerArguments()])),
+            implode(' ', array_map('escapeshellarg', [PHP_BINARY, ...$this->workerArguments($workerGroup)])),
             escapeshellarg($stdout),
             escapeshellarg($stderr),
         );
@@ -210,8 +227,17 @@ class SubtitleQueueWorkerBootstrapper
         return Process::timeout(10)->run(['sh', '-c', $command]);
     }
 
-    private function isWorkerProcessRunning(int $pid): bool
+    /**
+     * @param  array<string, mixed>  $worker
+     */
+    private function isWorkerProcessRunning(array $worker): bool
     {
+        $pid = $worker['pid'] ?? null;
+
+        if (! is_int($pid)) {
+            return false;
+        }
+
         if ($pid <= 0) {
             return false;
         }
@@ -229,10 +255,16 @@ class SubtitleQueueWorkerBootstrapper
         }
 
         $commandLine = $result->output();
+        $workerName = is_string($worker['worker_name'] ?? null) && $worker['worker_name'] !== ''
+            ? $worker['worker_name']
+            : self::WORKER_NAME;
+        $queues = is_string($worker['queues'] ?? null) && $worker['queues'] !== ''
+            ? $worker['queues']
+            : SubtitleQueue::workerQueueList();
 
         return str_contains($commandLine, 'queue:work')
-            && str_contains($commandLine, '--name='.self::WORKER_NAME)
-            && str_contains($commandLine, '--queue='.SubtitleQueue::workerQueueList())
+            && str_contains($commandLine, '--name='.$workerName)
+            && str_contains($commandLine, '--queue='.$queues)
             && str_contains($commandLine, '--tries='.(string) $this->tries());
     }
 
@@ -254,16 +286,17 @@ class SubtitleQueueWorkerBootstrapper
     }
 
     /**
+     * @param  array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}  $workerGroup
      * @return array<int, string>
      */
-    private function workerArguments(): array
+    private function workerArguments(array $workerGroup): array
     {
         return [
             'artisan',
             'queue:work',
             SubtitleQueue::connection(),
-            '--name='.self::WORKER_NAME,
-            '--queue='.SubtitleQueue::workerQueueList(),
+            '--name='.$this->workerName($workerGroup),
+            '--queue='.implode(',', $workerGroup['queues']),
             '--tries='.(string) $this->tries(),
             '--timeout='.(string) $this->timeoutSeconds(),
             '--sleep='.(string) $this->sleepSeconds(),
@@ -273,19 +306,21 @@ class SubtitleQueueWorkerBootstrapper
     }
 
     /**
+     * @param  array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}  $workerGroup
      * @return array{0: string, 1: string}
      */
-    private function workerLogPaths(): array
+    private function workerLogPaths(array $workerGroup): array
     {
         $directory = storage_path('logs/subtitle-workers');
 
         File::ensureDirectoryExists($directory);
 
         $suffix = now()->format('YmdHis').'-'.bin2hex(random_bytes(3));
+        $groupName = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $workerGroup['name']) ?: 'worker';
 
         return [
-            $directory.DIRECTORY_SEPARATOR."worker-{$suffix}.log",
-            $directory.DIRECTORY_SEPARATOR."worker-{$suffix}.err.log",
+            $directory.DIRECTORY_SEPARATOR."{$groupName}-{$suffix}.log",
+            $directory.DIRECTORY_SEPARATOR."{$groupName}-{$suffix}.err.log",
         ];
     }
 
@@ -305,17 +340,46 @@ class SubtitleQueueWorkerBootstrapper
 
     private function targetWorkerCount(): int
     {
+        return array_sum(array_map(
+            fn (array $workerGroup): int => $workerGroup['worker_count'],
+            $this->workerGroups(),
+        ));
+    }
+
+    /**
+     * @return array<int, array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}>
+     */
+    private function workerGroups(): array
+    {
         $configured = (int) config('subtitles.queue.auto_start.worker_count', 0);
 
         if ($configured > 0) {
-            return $configured;
+            return [[
+                'name' => 'priority-override',
+                'queue_family' => 'all',
+                'queues' => SubtitleQueue::workerQueues(),
+                'worker_count' => $configured,
+            ]];
         }
 
         if ($this->databaseDriver() === 'sqlite') {
-            return 1;
+            return [[
+                'name' => 'sqlite-local',
+                'queue_family' => 'all',
+                'queues' => SubtitleQueue::workerQueues(),
+                'worker_count' => 1,
+            ]];
         }
 
-        return SubtitleTier::workerCount();
+        return SubtitleQueue::workerGroups();
+    }
+
+    /**
+     * @param  array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}  $workerGroup
+     */
+    private function workerName(array $workerGroup): string
+    {
+        return self::WORKER_NAME.'-'.$workerGroup['name'];
     }
 
     private function parsePid(string $output): ?int

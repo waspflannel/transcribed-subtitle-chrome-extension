@@ -28,6 +28,7 @@ class SubtitleRuntimeTracerTest extends TestCase
             'youtube_url' => 'https://www.youtube.com/watch?v=secret',
             'file_path' => 'C:\\tmp\\artifact.json',
             'install_id' => 'install_secret',
+            'user_id' => 123,
             'api_key' => 'sk-secret',
             'access_token' => 'access-secret',
             'refresh_token' => 'refresh-secret',

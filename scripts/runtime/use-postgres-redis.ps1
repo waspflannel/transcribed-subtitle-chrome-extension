@@ -165,7 +165,15 @@ $runtimeEnv = @{
     CACHE_STORE = "database"
     QUEUE_CONNECTION = "redis"
     SUBTITLE_QUEUE_CONNECTION = "redis"
-    SUBTITLE_QUEUE = "subtitle-ai"
+    SUBTITLE_QUEUE = "subtitle-generation-base"
+    SUBTITLE_GENERATION_QUEUE_ULTIMATE = "subtitle-generation-ultimate"
+    SUBTITLE_GENERATION_QUEUE_PRO = "subtitle-generation-pro"
+    SUBTITLE_GENERATION_QUEUE_PLUS = "subtitle-generation-plus"
+    SUBTITLE_GENERATION_QUEUE_BASE = "subtitle-generation-base"
+    SUBTITLE_BATCH_QUEUE_ULTIMATE = "subtitle-batch-ultimate"
+    SUBTITLE_BATCH_QUEUE_PRO = "subtitle-batch-pro"
+    SUBTITLE_BATCH_QUEUE_PLUS = "subtitle-batch-plus"
+    SUBTITLE_BATCH_QUEUE_BASE = "subtitle-batch-base"
     SUBTITLE_CONCURRENCY_CACHE_STORE = "subtitle_concurrency"
     SUBTITLE_CONCURRENCY_REDIS_CONNECTION = "cache"
     SUBTITLE_CONCURRENCY_REDIS_LOCK_CONNECTION = "cache"
@@ -178,7 +186,7 @@ $runtimeEnv = @{
     REDIS_QUEUE_HOST = "127.0.0.1"
     REDIS_QUEUE_PORT = "56379"
     REDIS_QUEUE_DB = "2"
-    REDIS_QUEUE = "subtitle-ai"
+    REDIS_QUEUE = "subtitle-generation-base"
 }
 
 foreach ($entry in $runtimeEnv.GetEnumerator()) {

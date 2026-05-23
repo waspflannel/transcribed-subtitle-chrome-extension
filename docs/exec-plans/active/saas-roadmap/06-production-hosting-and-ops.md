@@ -26,7 +26,7 @@ The first production posture should be a managed Laravel VPS-style setup with ma
 
 ## Acceptance Criteria
 
-- [ ] Production environment runs Laravel web/API, supervised `subtitle-ai` workers, scheduler, Postgres, Redis, and HTTPS.
+- [ ] Production environment runs Laravel web/API, supervised subtitle generation and AI batch workers, scheduler, Postgres, Redis, and HTTPS.
 - [ ] `APP_DEBUG=false`, secrets are environment-only, and provider keys never enter extension builds.
 - [ ] Deploy process runs tests, builds, migrations, cache optimization, health checks, and worker restart safely.
 - [ ] Queue worker heartbeat, failed jobs, slow stages, high queue wait, provider rate limits, and disk/temp cleanup are observable.
@@ -42,7 +42,7 @@ The first production posture should be a managed Laravel VPS-style setup with ma
   - Managed Postgres and Redis, with network restrictions where possible.
   - Separate staging and production env files/secrets.
 - Workers and scheduler:
-  - Supervised queue workers for `subtitle-ai`.
+  - Supervised queue workers for the configured generation-priority, batch-priority, base-generation-guarantee, and base-batch-guarantee queue groups.
   - Scheduler for cleanup and recurring operations.
   - Clear worker timeout and retry-after configuration.
 - CI/CD:

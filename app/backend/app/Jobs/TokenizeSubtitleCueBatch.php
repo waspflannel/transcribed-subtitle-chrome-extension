@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Jobs\Middleware\LimitSubtitleInstallConcurrency;
+use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
@@ -39,7 +39,7 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleQueue::connection());
-        $this->onQueue(SubtitleQueue::name());
+        $this->onQueue(SubtitleQueue::batchName());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
@@ -48,7 +48,7 @@ class TokenizeSubtitleCueBatch implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new LimitSubtitleInstallConcurrency, new SkipIfBatchCancelled];
+        return [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
     }
 
     public function handle(SubtitleCueBatchProcessor $processor): void

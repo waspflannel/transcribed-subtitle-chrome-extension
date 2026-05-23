@@ -62,7 +62,7 @@ class SubtitleBatchDispatcher
     {
         FinalizeSubtitleJob::dispatch($job->id, false, $job->run_id)
             ->onConnection(SubtitleQueue::connection())
-            ->onQueue(SubtitleQueue::nameForJob($job));
+            ->onQueue(SubtitleQueue::generationNameForJob($job));
     }
 
     /**
@@ -84,18 +84,19 @@ class SubtitleBatchDispatcher
 
         $subtitleJobId = $job->id;
         $runId = $job->run_id;
-        $queueName = SubtitleQueue::nameForJob($job);
+        $batchQueueName = SubtitleQueue::batchNameForJob($job);
+        $completionQueueName = SubtitleQueue::generationNameForJob($job);
 
         Bus::batch($jobs)
             ->name($batchName)
             ->onConnection(SubtitleQueue::connection())
-            ->onQueue($queueName)
-            ->before(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName, $queueName): void {
+            ->onQueue($batchQueueName)
+            ->before(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName, $batchQueueName): void {
                 app(SubtitlePipelineTelemetry::class)->recordBatchDispatched(
                     $subtitleJobId,
                     $runId,
                     $batchName,
-                    $queueName,
+                    $batchQueueName,
                     $batch,
                 );
             })
@@ -108,12 +109,12 @@ class SubtitleBatchDispatcher
                 $batchName,
                 $completionJobClass,
                 $completionJobArguments,
-                $queueName,
+                $completionQueueName,
             ): void {
                 app(SubtitlePipelineTelemetry::class)->recordBatchCompleted($subtitleJobId, $runId, $batchName, $batch);
                 $completionJobClass::dispatch(...$completionJobArguments)
                     ->onConnection(SubtitleQueue::connection())
-                    ->onQueue($queueName);
+                    ->onQueue($completionQueueName);
             })
             ->catch(static function (Batch $batch, Throwable $exception) use ($subtitleJobId, $stage, $runId, $batchName): void {
                 app(SubtitlePipelineTelemetry::class)->recordBatchFailed($subtitleJobId, $stage, $runId, $batchName, $batch, $exception);

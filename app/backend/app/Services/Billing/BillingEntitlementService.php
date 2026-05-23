@@ -5,7 +5,10 @@ namespace App\Services\Billing;
 use App\Exceptions\BillingEntitlementException;
 use App\Models\SubtitleJob;
 use App\Models\User;
+use App\Services\Subtitles\SubtitleQueue;
+use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 final class BillingEntitlementService
@@ -43,6 +46,8 @@ final class BillingEntitlementService
         }
 
         $this->ledger->ensureMonthlyGrant($lockedUser, $plan, $period['start'], $period['end']);
+        $generationTier = SubtitleTier::normalize($this->plans->generationTier($plan));
+        $generationLimit = SubtitleTier::generationConcurrency($generationTier);
 
         $runningJobs = SubtitleJob::query()
             ->whereBelongsTo($lockedUser)
@@ -50,7 +55,9 @@ final class BillingEntitlementService
             ->when($excludeJobId !== null, fn ($query) => $query->whereKeyNot($excludeJobId))
             ->count();
 
-        if ($runningJobs >= $this->plans->concurrency($plan)) {
+        if ($runningJobs >= $generationLimit) {
+            $this->logGenerationConcurrencyRejected($lockedUser, $generationTier, $generationLimit, $runningJobs);
+
             throw BillingEntitlementException::concurrencyExceeded();
         }
 
@@ -62,7 +69,7 @@ final class BillingEntitlementService
 
         return new GenerationEntitlement(
             planCode: (string) $plan['code'],
-            generationTier: $this->plans->generationTier($plan),
+            generationTier: $generationTier,
             reservationMinutes: $reservationMinutes,
         );
     }
@@ -184,5 +191,18 @@ final class BillingEntitlementService
         }
 
         return $this->plans->plan($user->billing_plan_code);
+    }
+
+    private function logGenerationConcurrencyRejected(User $user, string $tier, int $limit, int $activeCount): void
+    {
+        Log::warning('backend.generation_concurrency_rejected', [
+            'user_hash' => substr(hash('sha256', (string) $user->id), 0, 16),
+            'queue_family' => SubtitleQueue::FAMILY_GENERATION,
+            'limiter_type' => 'generation_admission',
+            'generation_tier' => $tier,
+            'concurrency_limit' => $limit,
+            'observed_active_count' => $activeCount,
+            'delay_reason' => 'limit_reached',
+        ]);
     }
 }

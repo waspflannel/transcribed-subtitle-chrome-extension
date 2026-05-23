@@ -78,6 +78,7 @@ class SubtitleRuntimeTracer
         'translatedText',
         'translation',
         'translations',
+        'user_id',
         'youtube_url',
     ];
 
@@ -263,9 +264,10 @@ class SubtitleRuntimeTracer
     {
         $payload = method_exists($queueJob, 'payload') ? $queueJob->payload() : [];
         $queue = method_exists($queueJob, 'getQueue') ? $queueJob->getQueue() : null;
-        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::name();
+        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::generationName();
+        $queueFamily = SubtitleQueue::familyForQueue($queueName);
 
-        if (! in_array($queueName, SubtitleQueue::names(), true)) {
+        if ($queueFamily === null) {
             return null;
         }
 
@@ -288,6 +290,7 @@ class SubtitleRuntimeTracer
             'job_class' => $command::class,
             'queue_connection' => $connectionName,
             'queue' => $queueName,
+            'queue_family' => $queueFamily,
             'attempt' => method_exists($queueJob, 'attempts') ? $queueJob->attempts() : null,
             'worker_pid' => getmypid() ?: null,
         ];
