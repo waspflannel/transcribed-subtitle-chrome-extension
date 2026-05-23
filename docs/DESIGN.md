@@ -9,8 +9,9 @@
 
 ## Design System Status
 
-- Current state: not selected.
-- Source of truth: update this file when a framework, component library, token system, or visual direction is chosen.
+- Current state: beta SaaS web surface selected.
+- Visual direction: restrained server-rendered SaaS pages with ink-and-paper readability, teal primary actions, warm support/error accents, dense account surfaces, and an image-like product workflow hero built from the actual subtitle overlay concept.
+- Source of truth: `app/backend/public/css/site.css` for the beta Laravel website styles; update this file when a framework, component library, token system, or durable visual direction changes.
 - References: place long framework or design-system notes in `docs/references/`.
 
 ## Agent Expectations

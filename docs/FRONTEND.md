@@ -10,7 +10,7 @@
 - The overlay calls the background script for on-click token enrichment when a token only has transcript/romanization data, then re-renders from the patched backend track.
 - The popup has Generate, Jobs, Usage, Account, and Settings tabs with searchable Subtitle language and Translation language pickers, Translate subtitles/Romanization/Full word cards controls, backend-synced progress, public-safe job timelines, backend account/usage summaries, billing denial copy, timing controls, stable public error copy, and local clear-state controls.
 - The popup exposes a manual subtitle timing delay from -10s to +10s. The content script applies it locally by rebinding the generated WebVTT track with shifted cue timings.
-- The Laravel account dashboard shows verified-account status, Stripe-hosted billing actions, current subscription state, and current-period minute usage.
+- The Laravel web app now serves the beta SaaS website and account surface from server-rendered Blade pages. Public pages cover home, pricing, language coverage, how it works, FAQ, privacy, terms, support, `robots.txt`, and `sitemap.xml` with canonical and social metadata. Authenticated pages show plan, usage, Stripe-hosted billing actions, extension connection state, recent jobs, and owner-scoped public-safe job detail pages.
 
 ## Expectations
 

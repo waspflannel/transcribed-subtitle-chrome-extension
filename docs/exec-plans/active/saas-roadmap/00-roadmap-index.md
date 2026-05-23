@@ -41,7 +41,7 @@ Move to public launch only after the paid beta proves:
 | 03 | `../../completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md` | User accounts and authenticated extension requests. | Completed 2026-05-22; jobs, tracks, and tokens are scoped to authenticated users. Fortify/Sanctum follow-up completed in `../../completed/2026-05-22-fortify-sanctum-auth-migration.md`. |
 | 04 | `04-billing-tiers-and-usage.md` | Paid plans, minute credits, and entitlement checks. | Billing and usage gates protect margins before beta traffic. |
 | 04a | `04a-tiered-worker-queues-and-concurrency.md` | Tiered generation and AI batch worker queues. | Account-owned concurrency limits and shared worker pools are ready for beta traffic. |
-| 05 | `05-saas-website-and-seo.md` | Laravel web dashboard and SEO-ready marketing site. | Users can sign up, buy, manage, and understand the product. |
+| 05 | `../../completed/2026-05-22-saas-roadmap-phase-05-saas-website-and-seo.md` | Laravel web dashboard and SEO-ready marketing site. | Completed 2026-05-22; users can sign up, buy, manage, and understand the product. |
 | 06 | `06-production-hosting-and-ops.md` | Production environment and deployment operations. | App, workers, scheduler, logs, backups, and alerts are production-ready. |
 | 07 | `07-beta-launch-and-support.md` | Paid beta launch process, support, and evidence loop. | Paying beta users can onboard and receive support safely. |
 | 08 | `08-marketing-and-growth.md` | Acquisition, positioning, analytics, and retention loops. | Growth experiments are measurable and tied to product funnels. |
@@ -93,4 +93,5 @@ Docs-only roadmap changes should at minimum run:
 | 2026-05-22 | Added Phase 04a for post-auth tiered worker queues and account concurrency. | `docs/exec-plans/active/saas-roadmap/04a-tiered-worker-queues-and-concurrency.md` |
 | 2026-05-22 | Phase 03 accounts and extension auth completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md`; final `.\scripts\agent\check.ps1` and `.\scripts\agent\verify-pr.ps1` passed. |
 | 2026-05-22 | Fortify/Sanctum auth migration completed and archived. | `docs/exec-plans/completed/2026-05-22-fortify-sanctum-auth-migration.md`; final `.\scripts\agent\check.ps1`, `.\scripts\agent\verify-pr.ps1`, and Composer audit remediation passed. |
+| 2026-05-22 | Phase 05 SaaS website and SEO completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-05-saas-website-and-seo.md`; final `.\scripts\agent\check.ps1` and `.\scripts\agent\verify-pr.ps1` passed. |
 

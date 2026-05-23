@@ -30,7 +30,7 @@ The original extension proof phases are completed. The next product direction is
 - `../completed/2026-05-22-fortify-sanctum-auth-migration.md`
 - `saas-roadmap/04-billing-tiers-and-usage.md`
 - `saas-roadmap/04a-tiered-worker-queues-and-concurrency.md`
-- `saas-roadmap/05-saas-website-and-seo.md`
+- `../completed/2026-05-22-saas-roadmap-phase-05-saas-website-and-seo.md`
 - `saas-roadmap/06-production-hosting-and-ops.md`
 - `saas-roadmap/07-beta-launch-and-support.md`
 - `saas-roadmap/08-marketing-and-growth.md`
@@ -64,7 +64,7 @@ Execute the SaaS roadmap phase by phase after explicit user request. Each phase 
 - Contracts are schema-first and shared by Laravel and TypeScript.
 - Raw audio is temporary and deleted immediately after processing.
 - Completed tracks are retained for 30 days.
-- No user accounts, subtitle editing, Netflix support, or vocabulary review in the first release.
+- No cloud sync beyond the beta account, billing, extension-token, usage, and job-history records required for the SaaS release. Subtitle editing, Netflix support, and vocabulary review remain out of scope.
 - Each phase must apply `docs/quality/golden-principles.md` before review so repeated simplicity and readability feedback does not need to be rediscovered.
 
 ## Cross-Phase Validation
@@ -105,3 +105,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-22 | Added SaaS Phase 04a for post-auth tiered worker queues and account concurrency. | `docs/exec-plans/active/saas-roadmap/04a-tiered-worker-queues-and-concurrency.md` |
 | 2026-05-22 | SaaS Phase 03 accounts and extension auth completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md`; verified web accounts, scoped extension tokens, and authenticated job ownership. |
 | 2026-05-22 | Fortify/Sanctum auth migration completed and archived. | `docs/exec-plans/completed/2026-05-22-fortify-sanctum-auth-migration.md`; web auth moved to Fortify and extension bearer auth moved to Sanctum. |
+| 2026-05-22 | SaaS Phase 05 website and SEO completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-05-saas-website-and-seo.md`; server-rendered marketing pages, dashboard, job detail pages, SEO files, and first-party funnel analytics. |

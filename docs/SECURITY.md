@@ -137,6 +137,7 @@ Project-specific security defaults:
 - SaaS Phase 03 `/v1/*` subtitle and learning-token routes require both `X-Extension-Install-Id` and a scoped Sanctum bearer token. Install ID remains a device/abuse signal; authenticated `user_id` is the ownership boundary.
 - Tiered generation admission and AI batch concurrency use authenticated `user_id` as the owner and may log only hashed user IDs. Runtime trace rows must not store raw user IDs or install IDs.
 - Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
+- SaaS website analytics are first-party structured logs only for beta. Analytics events must not include transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, raw audio paths, or account emails.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
 - Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.
 - Phase 07 adds request IDs to extension-facing API errors, logs invalid install IDs and rate limits without raw install IDs, configures final install/IP throttle defaults, and schedules expired generated subtitle cleanup.
