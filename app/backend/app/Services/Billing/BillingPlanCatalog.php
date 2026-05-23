@@ -126,14 +126,6 @@ final class BillingPlanCatalog
     /**
      * @param  array<string, mixed>  $plan
      */
-    public function concurrency(array $plan): int
-    {
-        return SubtitleTier::generationConcurrency($this->generationTier($plan));
-    }
-
-    /**
-     * @param  array<string, mixed>  $plan
-     */
     public function name(array $plan): string
     {
         $name = $plan['name'] ?? null;

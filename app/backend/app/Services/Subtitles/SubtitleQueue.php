@@ -12,16 +12,9 @@ final class SubtitleQueue
 
     public const DEFAULT_BATCH_NAME = 'subtitle-batch-base';
 
-    public const DEFAULT_NAME = self::DEFAULT_GENERATION_NAME;
-
     public static function connection(): string
     {
         return (string) config('subtitles.queue.connection', 'database');
-    }
-
-    public static function name(): string
-    {
-        return self::generationName();
     }
 
     public static function generationName(): string
@@ -34,11 +27,6 @@ final class SubtitleQueue
         return self::batchNameForTier(SubtitleTier::default());
     }
 
-    public static function nameForTier(string $tier): string
-    {
-        return self::generationNameForTier($tier);
-    }
-
     public static function generationNameForTier(string $tier): string
     {
         return SubtitleTier::generationQueue($tier);
@@ -47,11 +35,6 @@ final class SubtitleQueue
     public static function batchNameForTier(string $tier): string
     {
         return SubtitleTier::batchQueue($tier);
-    }
-
-    public static function nameForJob(object $job): string
-    {
-        return self::generationNameForJob($job);
     }
 
     public static function generationNameForJob(object $job): string

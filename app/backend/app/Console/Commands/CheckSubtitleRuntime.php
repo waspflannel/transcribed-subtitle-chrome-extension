@@ -35,7 +35,7 @@ class CheckSubtitleRuntime extends Command
             'queueDefault' => (string) config('queue.default'),
             'subtitleQueueConnection' => $queueConnection,
             'subtitleQueueDriver' => $queueDriver,
-            'subtitleQueueName' => SubtitleQueue::name(),
+            'subtitleQueueName' => SubtitleQueue::generationName(),
             'subtitleGenerationQueues' => SubtitleQueue::generationNames(),
             'subtitleBatchQueues' => SubtitleQueue::batchNames(),
             'subtitleWorkerQueues' => SubtitleQueue::workerQueueList(),

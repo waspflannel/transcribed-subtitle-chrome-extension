@@ -264,7 +264,7 @@ class SubtitleRuntimeTracer
     {
         $payload = method_exists($queueJob, 'payload') ? $queueJob->payload() : [];
         $queue = method_exists($queueJob, 'getQueue') ? $queueJob->getQueue() : null;
-        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::name();
+        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::generationName();
         $queueFamily = SubtitleQueue::familyForQueue($queueName);
 
         if ($queueFamily === null) {

@@ -107,10 +107,12 @@ The implementation should keep workers shared by tier and work type, not reserve
 | 2026-05-22 | Refined implementation against the current Laravel backend, local Boost skills, and Laravel 13 queue/cache docs. | Loaded `laravel-best-practices`, `laravel-specialist`, `laravel-security`, `subtitle-pipeline`; fetched Laravel 13 queue/cache docs for queue names, middleware, releases, and cache locks; baseline `.\scripts\agent\check.ps1` passed. |
 | 2026-05-22 | Implemented explicit generation and AI batch queue families, tier concurrency config, account-owned generation admission, account-owned batch limiter, worker groups, runtime diagnostics, and docs updates. | Focused backend tests passed: `php artisan test --compact tests/Feature/SubtitleRuntimeTracingTest.php tests/Feature/SubtitleJobApiTest.php tests/Feature/BillingAndUsageTest.php tests/Unit/SubtitleRuntimeTracerTest.php tests/Unit/SubtitleWorkflowLoggerTest.php` (85 passed, 553 assertions). |
 | 2026-05-22 | Completed validation and documentation lifecycle checks. | `vendor/bin/pint --dirty --format agent` passed; `php artisan test --compact tests/Feature/SubtitleJobApiTest.php tests/Feature/SubtitleRuntimeTracingTest.php tests/Feature/BillingAndUsageTest.php` passed (77 passed, 535 assertions); `.\scripts\agent\doc-gardening.ps1` reported no findings; `.\scripts\agent\check.ps1` passed; `.\scripts\agent\verify-pr.ps1` passed. |
+| 2026-05-22 | Completed the final code-simplifier pass and removed stale single-queue compatibility helpers from the tiered queue services. | `vendor\bin\pint --dirty --format agent` passed; focused backend queue/billing/tracing tests passed (88 passed, 585 assertions); `.\scripts\agent\check.ps1` passed; `git diff --check` passed. |
 
 ## Completion Notes
 
 - Implemented tiered generation queues, AI batch queues, per-tier generation and batch concurrency config, account-owned generation admission, Redis-backed account/tier AI batch limiting, shared priority/base-guarantee worker groups, and runtime queue-family diagnostics.
+- Removed obsolete single-queue helper aliases after the split to explicit generation and batch queue APIs.
 - Updated architecture, reliability, security, observability, quality, runtime README, local runtime env script, production hosting plan, and technical-debt tracker to reflect the new queue model.
 - Residual risk: provider throughput is still bounded by global worker counts and provider rate limits; existing TD-009/TD-010 keep real provider-backed timing and load evidence open.
 

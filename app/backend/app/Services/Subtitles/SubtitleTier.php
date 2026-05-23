@@ -24,11 +24,6 @@ final class SubtitleTier
         return array_key_exists($tier, self::plans()) ? $tier : self::BASE;
     }
 
-    public static function queue(string $tier): string
-    {
-        return self::generationQueue($tier);
-    }
-
     public static function generationQueue(string $tier): string
     {
         $tier = self::normalize($tier);
@@ -43,14 +38,6 @@ final class SubtitleTier
         $queue = self::plans()[$tier]['batch_queue'] ?? null;
 
         return is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::DEFAULT_BATCH_NAME;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public static function queuesInPriorityOrder(): array
-    {
-        return self::generationQueuesInPriorityOrder();
     }
 
     /**
@@ -127,11 +114,6 @@ final class SubtitleTier
         }
 
         return $count;
-    }
-
-    public static function perInstallConcurrency(string $tier): int
-    {
-        return self::generationConcurrency($tier);
     }
 
     public static function generationConcurrency(string $tier): int
