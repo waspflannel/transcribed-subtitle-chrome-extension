@@ -11,10 +11,9 @@ use Illuminate\View\View;
 
 class MarketingPageController extends Controller
 {
-    public function home(Request $request, FunnelAnalytics $analytics, BillingPlanCatalog $plans): View
+    public function home(Request $request, FunnelAnalytics $analytics): View
     {
         return $this->marketingView($request, $analytics, 'home', 'marketing.home', [
-            'plans' => $plans->publicPlans(),
             'featuredLanguages' => $this->featuredLanguages(),
         ]);
     }

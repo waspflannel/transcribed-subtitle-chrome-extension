@@ -5,7 +5,7 @@
     $canonical = $canonicalUrl ?? url()->current();
     $robotsValue = $robots ?? 'index,follow';
     $bodyClassValue = $bodyClass ?? 'marketing-body';
-    $socialImage = $socialImageUrl ?? 'https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1200&q=80';
+    $socialImage = $socialImageUrl ?? asset('img/cinematic-study-console.svg');
 @endphp
 <!doctype html>
 <html lang="en">
@@ -31,7 +31,7 @@
     <body class="{{ $bodyClassValue }}">
         <header class="site-header">
             <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
-                <span class="brand-mark" aria-hidden="true">AI</span>
+                <span class="brand-mark" aria-hidden="true">CC</span>
                 <span>{{ $productName }}</span>
             </a>
             <nav class="site-nav" aria-label="Primary">
@@ -46,7 +46,7 @@
                     <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
-                    <a class="button button-small" href="{{ route('register') }}">Join beta</a>
+                    <a class="button button-small" href="{{ route('register') }}">Join paid beta</a>
                 @endauth
             </div>
         </header>

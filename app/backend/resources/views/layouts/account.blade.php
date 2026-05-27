@@ -13,7 +13,7 @@
     <body class="auth-body">
         <header class="auth-header">
             <a class="brand" href="{{ route('marketing.home') }}">
-                <span class="brand-mark" aria-hidden="true">AI</span>
+                <span class="brand-mark" aria-hidden="true">CC</span>
                 <span>{{ $productName }}</span>
             </a>
         </header>

@@ -4,89 +4,111 @@
     <section class="hero">
         <div class="hero-copy">
             <p class="eyebrow">Paid beta for YouTube language learners</p>
-            <h1>AI Language Subtitles</h1>
+            <h1>Turn any public YouTube video into a study session.</h1>
             <p class="hero-lede">
-                Generate synced subtitle tracks, translations, romanization, and word cards for public YouTube videos when captions are missing or not useful for study.
+                Generate synced subtitles, translations, romanization, and word cards when captions are missing or not useful for learning.
             </p>
             <div class="hero-actions">
-                <a class="button" href="{{ route('register') }}">Join beta</a>
-                <a class="button button-secondary" href="{{ route('marketing.how-it-works') }}#install">Install path</a>
-            </div>
-        </div>
-        <div class="hero-visual" aria-label="Subtitle overlay preview">
-            <img
-                class="hero-photo"
-                src="https://images.unsplash.com/photo-1516321497487-e288fb19713f?auto=format&fit=crop&w=1400&q=80"
-                alt=""
-            >
-            <div class="video-scene">
-                <div class="video-bar"></div>
-                <div class="caption-line source">Je pensais connaitre cette scene par coeur.</div>
-                <div class="caption-line target">I thought I knew this scene by heart.</div>
-                <div class="token-rail">
-                    <span>pensais</span>
-                    <span>connaitre</span>
-                    <span>scene</span>
-                    <strong>by heart</strong>
-                </div>
+                <a class="button" href="{{ route('register') }}">Join paid beta</a>
+                <a class="button button-secondary" href="{{ route('marketing.pricing') }}">See pricing</a>
             </div>
         </div>
     </section>
 
-    <section class="section section-tight">
+    <section class="section product-preview-section">
         <div class="section-heading">
-            <p class="eyebrow">Workflow</p>
-            <h2>One explicit generation step, then a synced learning overlay.</h2>
+            <p class="eyebrow">Product preview</p>
+            <h2>Bring the video. Add the study layer.</h2>
+            <p>Preview the generation flow and study overlay before choosing a plan.</p>
         </div>
-        <div class="workflow-grid">
-            <article>
-                <span>1</span>
-                <h3>Open a public YouTube video</h3>
-                <p>The Chrome extension reads the current watch page and waits for you to start generation.</p>
-            </article>
-            <article>
-                <span>2</span>
-                <h3>Choose source and target languages</h3>
-                <p>Use Auto detect or pick a subtitle language, then choose the translation language for study.</p>
-            </article>
-            <article>
-                <span>3</span>
-                <h3>Review the generated track</h3>
-                <p>Synced captions, optional translation, romanization, and word cards stay in the YouTube page overlay.</p>
-            </article>
+        <div class="product-preview-grid" aria-label="Product preview frames">
+            <div class="product-frame product-frame-wide" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <div class="product-frame product-frame-narrow" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
         </div>
     </section>
 
-    <section class="section split-section">
+    <section class="section workflow-story" aria-labelledby="workflow-title">
+        <div class="section-heading workflow-story-heading">
+            <p class="eyebrow">Workflow</p>
+            <h2 id="workflow-title">Open, generate, learn.</h2>
+            <p>Move from video to study mode in three focused steps.</p>
+        </div>
+
+        <article class="workflow-feature">
+            <div class="workflow-copy">
+                <p class="workflow-step">Step 1</p>
+                <h3>Open a video</h3>
+                <p>Pick any public YouTube video you want to understand.</p>
+            </div>
+            <div class="workflow-visual workflow-visual-video" role="img" aria-label="Placeholder screenshot for opening a YouTube video">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </article>
+
+        <article class="workflow-feature workflow-feature-reverse">
+            <div class="workflow-copy">
+                <p class="workflow-step">Step 2</p>
+                <h3>Generate subtitles</h3>
+                <p>Choose your languages and start one explicit generation step.</p>
+            </div>
+            <div class="workflow-visual workflow-visual-generate" role="img" aria-label="Placeholder screenshot for generating subtitles">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </article>
+
+        <article class="workflow-feature">
+            <div class="workflow-copy">
+                <p class="workflow-step">Step 3</p>
+                <h3>Start learning instantly</h3>
+                <p>Break down the foreign-language track while you watch.</p>
+            </div>
+            <div class="workflow-visual workflow-visual-learn" role="img" aria-label="Placeholder screenshot for the learning overlay">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </article>
+    </section>
+
+    <section class="section split-section language-range-section">
         <div>
             <p class="eyebrow">Language range</p>
-            <h2>Built for polyglot watch lists.</h2>
+            <h2>Built for more than one watch list.</h2>
             <p>
-                Coverage follows the shared transcription catalog used by the extension and backend, with clear quality tiers instead of vague promises.
+                Start with popular study languages and keep going. The full catalog includes clear coverage tiers instead of vague promises.
             </p>
-            <a class="text-link strong-link" href="{{ route('marketing.languages') }}">View language coverage</a>
+            <a class="coverage-link" href="{{ route('marketing.languages') }}">
+                <span>View all language coverage</span>
+                <span>Browse the full catalog and quality tiers</span>
+            </a>
         </div>
         <ul class="language-strip" aria-label="Featured languages">
             @foreach ($featuredLanguages as $language)
                 <li>{{ $language }}</li>
             @endforeach
+            <li>and more</li>
         </ul>
     </section>
 
-    <section class="section pricing-preview">
-        <div class="section-heading">
-            <p class="eyebrow">Pricing</p>
-            <h2>Plans use generated video minutes.</h2>
-        </div>
-        <div class="plan-row">
-            @foreach ($plans as $plan)
-                <article class="plan-card">
-                    <h3>{{ $plan['name'] }}</h3>
-                    <p class="price">${{ number_format(((int) $plan['price_cents']) / 100, 0) }}<span>/month</span></p>
-                    <p>{{ $plan['monthly_minutes'] }} minutes, {{ $plan['speed_label'] }}.</p>
-                </article>
-            @endforeach
-        </div>
-        <a class="button button-secondary" href="{{ route('marketing.pricing') }}">Compare plans</a>
+    <section class="section final-cta">
+        <p class="eyebrow">Try it</p>
+        <h2>Try AI Language Subtitles on your next video.</h2>
+        <p>Join the paid beta, choose a plan, and start turning public YouTube videos into study sessions.</p>
+        <a class="button" href="{{ route('marketing.pricing') }}">Try AI Language Subtitles</a>
     </section>
 @endsection
