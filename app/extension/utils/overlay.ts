@@ -144,7 +144,7 @@ export class OverlayShell {
       <style>
         :host {
           all: initial;
-          bottom: 84px;
+          bottom: 82px;
           left: 16px;
           pointer-events: none;
           position: fixed;
@@ -166,35 +166,34 @@ export class OverlayShell {
         }
 
         .rail {
-          background: rgba(10, 15, 22, 0.88);
-          backdrop-filter: blur(18px) saturate(120%);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
-          box-shadow: 0 14px 42px rgba(0, 0, 0, 0.34);
-          color: #f8fafc;
+          background:
+            linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(255, 253, 247, 0.02)),
+            rgba(8, 10, 14, 0.86);
+          backdrop-filter: blur(20px) saturate(130%);
+          border: 1px solid rgba(255, 253, 247, 0.14);
+          border-radius: 10px;
+          box-shadow: 0 18px 54px rgba(0, 0, 0, 0.42);
+          color: #fffdf7;
           display: grid;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           gap: 12px;
-          grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+          grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
           line-height: 1.35;
           margin: 0 auto;
-          max-width: min(820px, calc(100vw - 32px));
+          max-width: min(860px, calc(100vw - 32px));
           min-height: auto;
           padding: 12px 16px;
           pointer-events: auto;
         }
 
         .rail--message {
-          grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
-          min-height: auto;
           max-width: min(720px, calc(100vw - 32px));
         }
 
         :host([data-position="compact"]) .rail {
           gap: 14px;
           grid-template-columns: minmax(0, 1fr);
-          min-height: auto;
-          padding: 18px;
+          padding: 16px;
         }
 
         .rail-meta {
@@ -206,17 +205,19 @@ export class OverlayShell {
         }
 
         .eyebrow {
-          color: #2dd4bf;
+          color: #99f6e4;
+          font-family: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
           font-size: 13px;
-          font-weight: 650;
+          font-weight: 850;
           letter-spacing: 0;
           white-space: nowrap;
         }
 
         .cue-time {
-          color: #a7b0bd;
-          font-size: 13px;
-          font-weight: 500;
+          color: #fbbf24;
+          font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+          font-size: 12px;
+          font-weight: 750;
           white-space: nowrap;
         }
 
@@ -232,18 +233,18 @@ export class OverlayShell {
         }
 
         .title {
-          color: #f8fafc;
+          color: #fffdf7;
           font-size: 15px;
-          font-weight: 700;
+          font-weight: 800;
         }
 
         .detail {
-          color: #cbd5e1;
+          color: #d1d5db;
           font-size: 13px;
         }
 
         .meta {
-          color: #94a3b8;
+          color: #9ca3af;
           display: flex;
           flex-wrap: wrap;
           font-size: 12px;
@@ -260,17 +261,17 @@ export class OverlayShell {
         }
 
         .translation {
-          color: #f8fafc;
+          color: #f8fffd;
           font-size: 17px;
-          font-weight: 500;
+          font-weight: 600;
           line-height: 1.25;
           overflow-wrap: anywhere;
         }
 
         .cue-romanization {
-          color: #b9d8dc;
+          color: #99f6e4;
           font-size: 13px;
-          font-weight: 500;
+          font-weight: 650;
         }
 
         .token-slot {
@@ -281,8 +282,8 @@ export class OverlayShell {
 
         .token-card {
           align-items: center;
-          background: rgba(255, 255, 255, 0.055);
-          border: 1px solid rgba(255, 255, 255, 0.075);
+          background: rgba(255, 253, 247, 0.075);
+          border: 1px solid rgba(255, 253, 247, 0.11);
           border-radius: 8px;
           color: inherit;
           cursor: pointer;
@@ -298,47 +299,49 @@ export class OverlayShell {
           transition:
             background 120ms ease,
             border-color 120ms ease,
-            box-shadow 120ms ease;
+            box-shadow 120ms ease,
+            transform 120ms ease;
         }
 
         .token-card:hover {
-          background: rgba(255, 255, 255, 0.09);
-          border-color: rgba(255, 255, 255, 0.16);
+          background: rgba(255, 253, 247, 0.11);
+          border-color: rgba(251, 191, 36, 0.38);
+          transform: translateY(-1px);
         }
 
         .token-card:focus-visible {
-          box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.32);
+          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.34);
           outline: none;
         }
 
         .token-card[aria-pressed="true"] {
-          background: linear-gradient(180deg, rgba(20, 184, 166, 0.18), rgba(20, 184, 166, 0.08));
-          border-color: rgba(45, 212, 191, 0.95);
-          box-shadow: inset 0 0 22px rgba(20, 184, 166, 0.08);
+          background: rgba(245, 158, 11, 0.18);
+          border-color: rgba(245, 158, 11, 0.78);
+          box-shadow: inset 0 0 24px rgba(245, 158, 11, 0.08), 0 0 22px rgba(245, 158, 11, 0.12);
         }
 
         .token-text {
-          color: #f8fafc;
+          color: #fffdf7;
           font-size: 22px;
-          font-weight: 650;
+          font-weight: 750;
           line-height: 1;
           overflow-wrap: anywhere;
         }
 
         .token-extra {
-          color: #b9d8dc;
+          color: #99f6e4;
           font-size: 11px;
-          font-weight: 500;
+          font-weight: 650;
           line-height: 1.3;
           overflow-wrap: anywhere;
         }
 
         .token-inline-preview,
         .token-popover {
-          background: rgba(12, 17, 24, 0.94);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 8px;
-          color: #e2e8f0;
+          background: rgba(9, 10, 12, 0.96);
+          border: 1px solid rgba(255, 253, 247, 0.14);
+          border-radius: 10px;
+          color: #e5e7eb;
           display: grid;
           font-size: 13px;
           gap: 8px;
@@ -347,7 +350,7 @@ export class OverlayShell {
 
         .token-inline-preview {
           bottom: calc(100% + 8px);
-          box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
+          box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
           display: none;
           left: 50%;
           min-width: 150px;
@@ -363,18 +366,18 @@ export class OverlayShell {
 
         .token-popover {
           bottom: calc(100% + 14px);
-          box-shadow: 0 16px 44px rgba(0, 0, 0, 0.42);
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.46);
           left: 50%;
           position: absolute;
           transform: translateX(-50%);
-          width: min(260px, calc(100vw - 48px));
+          width: min(270px, calc(100vw - 48px));
           z-index: 2;
         }
 
         .token-popover::after {
-          background: rgba(12, 17, 24, 0.94);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-          border-right: 1px solid rgba(255, 255, 255, 0.12);
+          background: rgba(9, 10, 12, 0.96);
+          border-bottom: 1px solid rgba(255, 253, 247, 0.14);
+          border-right: 1px solid rgba(255, 253, 247, 0.14);
           bottom: -6px;
           content: "";
           height: 10px;
@@ -392,17 +395,17 @@ export class OverlayShell {
         }
 
         .token-popover-title {
-          color: #f8fafc;
+          color: #fffdf7;
           font-size: 14px;
-          font-weight: 750;
+          font-weight: 850;
         }
 
         .icon-button {
           align-items: center;
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          border-radius: 6px;
-          color: #e2e8f0;
+          background: rgba(255, 253, 247, 0.08);
+          border: 1px solid rgba(255, 253, 247, 0.16);
+          border-radius: 7px;
+          color: #e5e7eb;
           cursor: pointer;
           display: inline-flex;
           font-size: 14px;
@@ -415,13 +418,14 @@ export class OverlayShell {
 
         .icon-button:hover,
         .icon-button:focus-visible {
-          background: rgba(255, 255, 255, 0.14);
+          background: rgba(255, 253, 247, 0.14);
+          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.22);
           outline: none;
         }
 
         .token-fields {
           display: grid;
-          gap: 4px;
+          gap: 5px;
           grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
         }
 
@@ -431,13 +435,13 @@ export class OverlayShell {
         }
 
         .field-label {
-          color: #94a3b8;
+          color: #9ca3af;
           font-size: 11px;
-          font-weight: 700;
+          font-weight: 800;
         }
 
         .field-value {
-          color: #f8fafc;
+          color: #fffdf7;
           overflow-wrap: anywhere;
         }
 
@@ -480,7 +484,6 @@ export class OverlayShell {
 
           .rail {
             grid-template-columns: minmax(0, 1fr);
-            min-height: auto;
             padding: 12px 14px;
           }
 
@@ -524,7 +527,7 @@ export class OverlayShell {
 
           .eyebrow,
           .cue-time {
-            font-size: 13px;
+            font-size: 12px;
           }
 
           .token-area {
