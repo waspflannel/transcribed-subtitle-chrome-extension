@@ -17,8 +17,10 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('Bonjour');
     expect(html).toContain('o-la');
     expect(html).toContain('hello');
+    expect(html).toContain('data-study-control="blur-source"');
+    expect(html).toContain('data-study-control="replay"');
+    expect(html).toContain('data-study-control="copy"');
     expect(html).not.toContain('egyptian');
-    expect(html).not.toContain('rail-control');
   });
 
   it('respects romanization and gloss visibility settings', () => {
@@ -42,6 +44,51 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('hola');
     expect(html).not.toContain('Bonjour');
     expect(html).not.toContain('class="translation"');
+  });
+
+  it('renders blur states, pressed controls, and paused reveal attributes', () => {
+    const html = renderOverlayContent(
+      readyStateWithSettings({
+        showTranslation: true,
+        blurSourceWords: true,
+        blurRomanization: true,
+        blurTranslation: true,
+      }),
+    );
+    const pausedHtml = renderOverlayContent({
+      ...readyStateWithSettings({
+        showTranslation: true,
+        blurSourceWords: true,
+        revealOnPause: true,
+      }),
+      videoPaused: true,
+    });
+
+    expect(html).toContain('data-reveal-on-pause="true"');
+    expect(html).toContain('data-video-paused="false"');
+    expect(html).toContain('class="token-text study-blur"');
+    expect(html).toContain('class="token-extra study-blur"');
+    expect(html).toContain('class="translation study-blur"');
+    expect(html).toContain('data-study-control="blur-source" aria-pressed="true"');
+    expect(html).toContain('data-study-control="blur-romanization" aria-pressed="true"');
+    expect(html).toContain('data-study-control="blur-translation" aria-pressed="true"');
+    expect(pausedHtml).toContain('data-video-paused="true"');
+  });
+
+  it('renders overlay copy feedback status', () => {
+    const copiedHtml = renderOverlayContent(readyState(), {
+      pinnedTokenIndex: null,
+      copyStatus: 'copied',
+    });
+    const failedHtml = renderOverlayContent(readyState(), {
+      pinnedTokenIndex: null,
+      copyStatus: 'failed',
+    });
+
+    expect(copiedHtml).toContain('Copied');
+    expect(copiedHtml).toContain('class="control-status copied"');
+    expect(failedHtml).toContain('Copy failed');
+    expect(failedHtml).toContain('class="control-status failed"');
   });
 
   it('renders hover preview and pinned token detail without null placeholders', () => {
