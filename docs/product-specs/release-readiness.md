@@ -47,10 +47,12 @@ Capture screenshots before release for:
 - Popup generation error state.
 - Popup generated-track state.
 - Popup after local clear-state action.
+- Popup Study tab with blur/reveal controls.
 - Overlay no-track state.
 - Overlay loading state.
 - Overlay error state.
 - Overlay active-cue state with token hover and pinned token detail.
+- Overlay blur/reveal states for source words, romanization, and translation.
 - Overlay compact, top, and bottom positions.
 
 ## Local Validation
