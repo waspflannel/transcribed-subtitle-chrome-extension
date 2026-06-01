@@ -433,13 +433,13 @@ export class OverlayShell {
           user-select: none;
         }
 
-        .study-blur--source:hover,
-        .token-card:focus-visible .study-blur--source,
-        .token-card[aria-pressed="true"] .study-blur--source,
-        .rail:has(.study-romanization:hover) .study-blur--romanization,
-        .rail:has(.study-romanization:focus-visible) .study-blur--romanization,
-        .rail:has(.study-translation:hover) .study-blur--translation,
-        .rail:has(.study-translation:focus-visible) .study-blur--translation {
+        .token-card:hover .study-blur--token,
+        .token-card:focus-visible .study-blur--token,
+        .token-card[aria-pressed="true"] .study-blur--token,
+        .study-cue-romanization:hover,
+        .study-cue-romanization:focus-visible,
+        .study-translation:hover,
+        .study-translation:focus-visible {
           filter: blur(0);
           opacity: 1;
           user-select: text;
@@ -794,7 +794,7 @@ export function renderOverlayContent(
 
     const cueRomanization =
       state.settings.showRomanization && cue.romanization
-        ? `<div class="cue-romanization study-romanization${studyBlurClass(
+        ? `<div class="cue-romanization study-cue-romanization${studyBlurClass(
             state.settings.blurRomanization,
             'romanization',
           )}"${state.settings.blurRomanization ? ' tabindex="0"' : ''}>${escapeHtml(cue.romanization)}</div>`
@@ -855,9 +855,9 @@ function renderSourceLine(
     .map((token) => {
       const extras = [
         settings.showRomanization && token.romanization
-          ? `<span class="token-extra study-romanization${studyBlurClass(
+          ? `<span class="token-extra study-token-romanization${studyBlurClass(
               settings.blurRomanization,
-              'romanization',
+              'token',
             )}">${escapeHtml(token.romanization)}</span>`
           : '',
         settings.showGloss && (token.gloss ?? token.translation)
@@ -871,7 +871,7 @@ function renderSourceLine(
           <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${
             isPinned ? 'true' : 'false'
           }" aria-label="Study word: ${escapeHtml(token.text)}">
-            <span class="token-text${studyBlurClass(settings.blurSourceWords, 'source')}">${escapeHtml(
+            <span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
               token.text,
             )}</span>
             ${extras}
@@ -949,7 +949,7 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
   }>${escapeHtml(cue.translatedText)}</div>`;
 }
 
-function studyBlurClass(enabled: boolean, layer: 'source' | 'romanization' | 'translation'): string {
+function studyBlurClass(enabled: boolean, layer: 'token' | 'romanization' | 'translation'): string {
   return enabled ? ` study-blur study-blur--${layer}` : '';
 }
 

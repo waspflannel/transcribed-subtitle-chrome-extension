@@ -9,7 +9,7 @@ Last updated: 2026-06-01
 
 Add a study-control layer to the existing YouTube subtitle overlay without changing backend generation, contracts, billing, or provider flows.
 
-The extension should let learners blur source words, romanization, and translation independently, reveal source text per token and romanization/translation by layer on direct hover/focus, pause playback when a word is hovered or focused by default, and expose compact replay/copy controls in the overlay. The popup should gain a dedicated Study tab for these controls while keeping generation-time controls separate.
+The extension should let learners blur token cards, full cue romanization, and translation independently, reveal token text plus token romanization per token and full cue romanization/translation by layer on direct hover/focus, pause playback when a word is hovered or focused by default, and expose compact replay/copy controls in the overlay. The popup should gain a dedicated Study tab for these controls while keeping generation-time controls separate.
 
 ## Scope
 
@@ -29,7 +29,7 @@ The extension should let learners blur source words, romanization, and translati
 
 - [x] Local settings persist `blurSourceWords`, `blurRomanization`, `blurTranslation`, and `pauseOnWordHover` with safe defaults.
 - [x] Overlay quick controls expose replay/copy only; blur settings live in the popup Study tab.
-- [x] Blurred source words, romanization, and translation keep layout stable; source words reveal per token on hover/focus/pin, while romanization and translation reveal by layer on their own hover/focus.
+- [x] Blurred token cards, full cue romanization, and translation keep layout stable; token text plus token romanization reveal per token on hover/focus/pin, while full cue romanization and translation reveal by layer on their own hover/focus.
 - [x] Hovering, focusing, or clicking a source token pauses the active YouTube video when hover pause is enabled and resumes only when the extension caused the pause.
 - [x] Replay seeks to the active cue start using the local timing offset and starts playback.
 - [x] Copy writes source text plus available romanization and non-duplicate visible translation, with visible success/failure status.
@@ -97,7 +97,7 @@ Evidence to capture:
 | 2026-06-01 | Added focused tests and durable docs for Study controls. | `Push-Location .\app\extension; npm test; npm run compile; npm run build; Pop-Location` passed; popup Study screenshot captured at `%TEMP%\tse-study-controls-shots\popup-study.png`. |
 | 2026-06-01 | Completed full validation and self-review. | `.\scripts\agent\check.ps1`, `.\scripts\agent\verify-pr.ps1`, and `.\scripts\agent\doc-gardening.ps1` passed. |
 | 2026-06-01 | Corrected hover behavior and overlay controls after review. | Overlay blur toggles removed; hover pause now resumes on pointer leave only when the extension caused the pause; manual pause no longer reveals blurred text by default. |
-| 2026-06-01 | Scoped reveal behavior after review. | Source reveal is token-scoped, romanization/translation reveal only on their own layer hover/focus, and blank rail hover does not reveal or pause. |
+| 2026-06-01 | Scoped reveal behavior after review. | Token text plus token romanization is token-scoped, full cue romanization/translation reveal only on their own layer hover/focus, and blank rail hover does not reveal or pause. |
 
 ## Completion Notes
 

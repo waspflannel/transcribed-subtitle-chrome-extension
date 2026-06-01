@@ -45,7 +45,7 @@ The root `revamped-design-document.md` and `detailed-design-document.md` files a
 - Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, same-agent split retry for invalid multi-cue batches, and visible generation failure when a single cue remains unreliable.
 - Optional non-Latin-script romanization when the user enables romanization, with visible generation failure when enabled romanization output is invalid.
 - Synchronized in-page overlay.
-- Local study controls for blurring source words, romanization, and translation, revealing source words per token on token hover/focus/pin while revealing romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying the active cue, and copying active cue text.
+- Local study controls for blurring token cards, full cue romanization, and translation, revealing token text plus token romanization per token on token hover/focus/pin while revealing full cue romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying the active cue, and copying active cue text.
 - Laravel SaaS web app for beta registration, billing, usage, recent jobs, support-safe job details, and public marketing/legal pages.
 
 ## Explicit Non-Goals

@@ -49,20 +49,26 @@ describe('renderOverlayContent', () => {
   });
 
   it('renders scoped blur states without paused rail reveal attributes', () => {
-    const html = renderOverlayContent(
-      readyStateWithSettings({
-        showTranslation: true,
-        blurSourceWords: true,
-        blurRomanization: true,
-        blurTranslation: true,
-      }),
-    );
+    const state = readyStateWithSettings({
+      showTranslation: true,
+      blurSourceWords: true,
+      blurRomanization: true,
+      blurTranslation: true,
+    });
+    const html = renderOverlayContent({
+      ...state,
+      activeCue: {
+        ...state.activeCue!,
+        romanization: 'o-la',
+      },
+    });
 
     expect(html).toContain('data-study-rail');
     expect(html).not.toContain('data-reveal-on-pause');
     expect(html).not.toContain('data-video-paused');
-    expect(html).toContain('class="token-text study-blur study-blur--source"');
-    expect(html).toContain('class="token-extra study-romanization study-blur study-blur--romanization"');
+    expect(html).toContain('class="token-text study-blur study-blur--token"');
+    expect(html).toContain('class="token-extra study-token-romanization study-blur study-blur--token"');
+    expect(html).toContain('class="cue-romanization study-cue-romanization study-blur study-blur--romanization"');
     expect(html).toContain('class="translation study-translation study-blur study-blur--translation"');
     expect(html).toContain('tabindex="0"');
     expect(html).not.toContain('data-study-control="blur-source"');
