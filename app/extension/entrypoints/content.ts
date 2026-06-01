@@ -31,8 +31,8 @@ export default defineContentScript({
       onCopyCue: (cue) => copyCueToClipboard(cue),
       onReplayCue: (cue) => replayCue(cue),
       onStudyHoverEnd: () => resumeVideoAfterStudyHover(),
-      onStudyHoverStart: () => pauseVideoForStudy(),
       onTokenPreview: () => pauseVideoForStudy(),
+      onTokenPreviewEnd: () => resumeVideoAfterStudyHover(),
       onTokenClick: (cue, token) => {
         pauseVideoForStudy();
         void enrichLearningToken(cue, token);

@@ -84,7 +84,6 @@ const blurSourceWordsInput = document.querySelector<HTMLInputElement>('input[nam
 const blurRomanizationInput = document.querySelector<HTMLInputElement>('input[name="blurRomanization"]')!;
 const blurTranslationInput = document.querySelector<HTMLInputElement>('input[name="blurTranslation"]')!;
 const pauseOnWordHoverInput = document.querySelector<HTMLInputElement>('input[name="pauseOnWordHover"]')!;
-const revealOnPauseInput = document.querySelector<HTMLInputElement>('input[name="revealOnPause"]')!;
 const fullTrackEnrichmentInput = document.querySelector<HTMLInputElement>('input[name="fullTrackEnrichment"]')!;
 const timingOffsetRangeInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetSeconds"]')!;
 const timingOffsetNumberInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetNumber"]')!;
@@ -154,9 +153,6 @@ blurTranslationInput.addEventListener('change', () =>
 );
 pauseOnWordHoverInput.addEventListener('change', () =>
   void updateSettings({ pauseOnWordHover: pauseOnWordHoverInput.checked }),
-);
-revealOnPauseInput.addEventListener('change', () =>
-  void updateSettings({ revealOnPause: revealOnPauseInput.checked }),
 );
 fullTrackEnrichmentInput.addEventListener('change', () =>
   void updateSettings({ fullTrackEnrichment: fullTrackEnrichmentInput.checked }),
@@ -379,7 +375,6 @@ function showPopupState(state: PopupState): void {
   blurRomanizationInput.checked = settings.blurRomanization;
   blurTranslationInput.checked = settings.blurTranslation;
   pauseOnWordHoverInput.checked = settings.pauseOnWordHover;
-  revealOnPauseInput.checked = settings.revealOnPause;
   fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
   showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
@@ -780,7 +775,6 @@ function setSettingsDisabled(disabled: boolean): void {
   blurRomanizationInput.disabled = disabled;
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
-  revealOnPauseInput.disabled = disabled;
   fullTrackEnrichmentInput.disabled = disabled;
   accountEmailInput.disabled = disabled;
   accountPasswordInput.disabled = disabled;

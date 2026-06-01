@@ -48,7 +48,7 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('class="translation"');
   });
 
-  it('renders blur states and paused reveal attributes', () => {
+  it('renders scoped blur states without paused rail reveal attributes', () => {
     const html = renderOverlayContent(
       readyStateWithSettings({
         showTranslation: true,
@@ -57,24 +57,15 @@ describe('renderOverlayContent', () => {
         blurTranslation: true,
       }),
     );
-    const pausedHtml = renderOverlayContent({
-      ...readyStateWithSettings({
-        showTranslation: true,
-        blurSourceWords: true,
-        revealOnPause: true,
-      }),
-      videoPaused: true,
-    });
 
-    expect(html).toContain('data-reveal-on-pause="false"');
-    expect(html).toContain('data-video-paused="false"');
     expect(html).toContain('data-study-rail');
-    expect(html).toContain('class="token-text study-blur"');
-    expect(html).toContain('class="token-extra study-blur"');
-    expect(html).toContain('class="translation study-blur"');
+    expect(html).not.toContain('data-reveal-on-pause');
+    expect(html).not.toContain('data-video-paused');
+    expect(html).toContain('class="token-text study-blur study-blur--source"');
+    expect(html).toContain('class="token-extra study-romanization study-blur study-blur--romanization"');
+    expect(html).toContain('class="translation study-translation study-blur study-blur--translation"');
+    expect(html).toContain('tabindex="0"');
     expect(html).not.toContain('data-study-control="blur-source"');
-    expect(pausedHtml).toContain('data-video-paused="true"');
-    expect(pausedHtml).toContain('data-reveal-on-pause="true"');
   });
 
   it('renders overlay copy feedback status', () => {

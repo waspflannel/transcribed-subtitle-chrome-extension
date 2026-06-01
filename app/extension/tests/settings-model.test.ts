@@ -21,7 +21,6 @@ describe('settings model', () => {
         blurRomanization: true,
         blurTranslation: true,
         pauseOnWordHover: false,
-        revealOnPause: false,
         fullTrackEnrichment: true,
         subtitleTimingOffsetSeconds: 4.54,
       }),
@@ -35,7 +34,6 @@ describe('settings model', () => {
       blurRomanization: true,
       blurTranslation: true,
       pauseOnWordHover: false,
-      revealOnPause: false,
       fullTrackEnrichment: true,
       subtitleTimingOffsetSeconds: 4.5,
     });
@@ -48,6 +46,13 @@ describe('settings model', () => {
         targetLanguage: 'auto' as never,
       }),
     ).toEqual(DEFAULT_EXTENSION_SETTINGS);
+  });
+
+  it('drops obsolete reveal-on-pause values from stored settings', () => {
+    const settings = createExtensionSettingsFromPartial({ revealOnPause: true } as never);
+
+    expect(settings).toEqual(DEFAULT_EXTENSION_SETTINGS);
+    expect(settings).not.toHaveProperty('revealOnPause');
   });
 
   it('does not keep old stored ISO-639-1 language compatibility aliases', () => {

@@ -42,9 +42,9 @@ export class OverlayShell {
       onCopyCue?: (cue: SubtitleCue) => Promise<boolean>;
       onReplayCue?: (cue: SubtitleCue) => void;
       onStudyHoverEnd?: () => void;
-      onStudyHoverStart?: () => void;
       onTokenClick?: (cue: SubtitleCue, token: LearningToken) => void;
       onTokenPreview?: () => void;
+      onTokenPreviewEnd?: () => void;
     } = {},
   ) {}
 
@@ -120,6 +120,10 @@ export class OverlayShell {
         this.options.onTokenPreview?.();
       });
 
+      button.addEventListener('blur', () => {
+        this.options.onTokenPreviewEnd?.();
+      });
+
       button.addEventListener('click', () => {
         this.options.onTokenPreview?.();
         const cue = this.currentState?.activeCue;
@@ -139,6 +143,10 @@ export class OverlayShell {
 
         this.render();
       });
+
+      button.addEventListener('pointerleave', () => {
+        this.options.onTokenPreviewEnd?.();
+      });
     }
 
     this.content.querySelector<HTMLButtonElement>('[data-close-token-detail]')?.addEventListener('click', () => {
@@ -147,10 +155,6 @@ export class OverlayShell {
     });
 
     const rail = this.content.querySelector<HTMLElement>('[data-study-rail]');
-
-    rail?.addEventListener('pointerenter', () => {
-      this.options.onStudyHoverStart?.();
-    });
 
     rail?.addEventListener('pointerleave', () => {
       this.options.onStudyHoverEnd?.();
@@ -429,10 +433,13 @@ export class OverlayShell {
           user-select: none;
         }
 
-        .rail:hover .study-blur,
-        .rail:focus-within .study-blur,
-        .rail[data-token-pinned="true"] .study-blur,
-        .rail[data-reveal-on-pause="true"][data-video-paused="true"] .study-blur {
+        .study-blur--source:hover,
+        .token-card:focus-visible .study-blur--source,
+        .token-card[aria-pressed="true"] .study-blur--source,
+        .rail:has(.study-romanization:hover) .study-blur--romanization,
+        .rail:has(.study-romanization:focus-visible) .study-blur--romanization,
+        .rail:has(.study-translation:hover) .study-blur--translation,
+        .rail:has(.study-translation:focus-visible) .study-blur--translation {
           filter: blur(0);
           opacity: 1;
           user-select: text;
@@ -787,16 +794,15 @@ export function renderOverlayContent(
 
     const cueRomanization =
       state.settings.showRomanization && cue.romanization
-        ? `<div class="cue-romanization${state.settings.blurRomanization ? ' study-blur' : ''}">${escapeHtml(
-            cue.romanization,
-          )}</div>`
+        ? `<div class="cue-romanization study-romanization${studyBlurClass(
+            state.settings.blurRomanization,
+            'romanization',
+          )}"${state.settings.blurRomanization ? ' tabindex="0"' : ''}>${escapeHtml(cue.romanization)}</div>`
         : '';
 
     return `
       <section class="rail" role="status" data-token-pinned="${
         interaction.pinnedTokenIndex === null ? 'false' : 'true'
-      }" data-reveal-on-pause="${state.settings.revealOnPause ? 'true' : 'false'}" data-video-paused="${
-        state.videoPaused ? 'true' : 'false'
       }" data-study-rail>
         <div class="rail-meta">
           <span class="eyebrow">AI subtitles</span>
@@ -849,9 +855,10 @@ function renderSourceLine(
     .map((token) => {
       const extras = [
         settings.showRomanization && token.romanization
-          ? `<span class="token-extra${settings.blurRomanization ? ' study-blur' : ''}">${escapeHtml(
-              token.romanization,
-            )}</span>`
+          ? `<span class="token-extra study-romanization${studyBlurClass(
+              settings.blurRomanization,
+              'romanization',
+            )}">${escapeHtml(token.romanization)}</span>`
           : '',
         settings.showGloss && (token.gloss ?? token.translation)
           ? `<span class="token-extra">${escapeHtml(token.gloss ?? token.translation ?? '')}</span>`
@@ -864,7 +871,9 @@ function renderSourceLine(
           <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${
             isPinned ? 'true' : 'false'
           }" aria-label="Study word: ${escapeHtml(token.text)}">
-            <span class="token-text${settings.blurSourceWords ? ' study-blur' : ''}">${escapeHtml(token.text)}</span>
+            <span class="token-text${studyBlurClass(settings.blurSourceWords, 'source')}">${escapeHtml(
+              token.text,
+            )}</span>
             ${extras}
             ${renderTokenPreview(token, settings)}
           </button>
@@ -935,9 +944,13 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
     return '';
   }
 
-  return `<div class="translation${settings.blurTranslation ? ' study-blur' : ''}">${escapeHtml(
-    cue.translatedText,
-  )}</div>`;
+  return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${
+    settings.blurTranslation ? ' tabindex="0"' : ''
+  }>${escapeHtml(cue.translatedText)}</div>`;
+}
+
+function studyBlurClass(enabled: boolean, layer: 'source' | 'romanization' | 'translation'): string {
+  return enabled ? ` study-blur study-blur--${layer}` : '';
 }
 
 function renderStudyControls(copyStatus: OverlayInteractionState['copyStatus']): string {
