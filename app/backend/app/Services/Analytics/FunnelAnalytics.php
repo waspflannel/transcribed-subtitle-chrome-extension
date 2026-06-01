@@ -86,12 +86,17 @@ final class FunnelAnalytics
 
     private function userHash(User $user): string
     {
-        return substr(hash('sha256', (string) $user->getKey()), 0, 16);
+        return $this->logHash((string) $user->getKey());
     }
 
     private function installHash(string $installId): string
     {
-        return substr(hash('sha256', $installId), 0, 16);
+        return $this->logHash($installId);
+    }
+
+    private function logHash(string $value): string
+    {
+        return substr(hash_hmac('sha256', $value, (string) config('app.key')), 0, 16);
     }
 
     /**

@@ -11,4 +11,4 @@ Canonical references generated for this revamp:
 - SaaS/account/pricing/job/auth board: `projects/2987099361838226750/screens/5848fe2d0ecf45a0b39cfcec75aeeacd`
 - Extension popup and overlay board: `projects/2987099361838226750/screens/b62765aa88c349a0843dd0c326db23b5`
 
-The Stitch `download_assets` tool reported success on 2026-05-25, including a final retry after implementation, but no files were created in this workspace path. Production visuals for the implementation are repo-owned under `app/backend/public/img/`; this document preserves the Stitch source references for future design review.
+The Stitch `download_assets` tool reported success on 2026-05-25, including a final retry after implementation, but no files were created in this workspace path. This document preserves the Stitch source references for future design review; production marketing imagery now waits on user-supplied product screenshots rather than generated artwork.

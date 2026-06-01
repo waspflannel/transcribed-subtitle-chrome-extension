@@ -10,7 +10,7 @@ The backend records persisted subtitle job, artifact, and track rows, acquires Y
 
 Billing state is inspectable through local user subscription fields, idempotent Stripe webhook event rows, and append-only usage ledger rows for monthly grants, reservations, debits, refunds, and support adjustments. `php artisan billing:usage-report --json` summarizes public minutes and provider-cost telemetry by plan.
 
-The SaaS website uses first-party Laravel structured logs for beta funnel analytics. `analytics.marketing_page_view`, `analytics.signup_completed`, `analytics.checkout_started`, `analytics.extension_connected`, `analytics.subtitle_generation_started`, `analytics.first_generation_started`, and `analytics.retention_generation_started` capture route/page, hashed user/install identifiers, plan, language pair, feature flags, and public timing/usage scalars only. These analytics logs intentionally exclude transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, and raw audio paths.
+The SaaS website uses first-party Laravel structured logs for beta funnel analytics. `analytics.marketing_page_view`, `analytics.signup_completed`, `analytics.checkout_started`, `analytics.extension_connected`, `analytics.subtitle_generation_started`, `analytics.first_generation_started`, and `analytics.retention_generation_started` capture route/page, app-key-HMAC user/install identifiers, plan, language pair, feature flags, and public timing/usage scalars only. These analytics logs intentionally exclude transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, and raw audio paths.
 
 ## Logging
 

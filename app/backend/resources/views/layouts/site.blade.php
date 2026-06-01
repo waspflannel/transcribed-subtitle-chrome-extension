@@ -5,7 +5,7 @@
     $canonical = $canonicalUrl ?? url()->current();
     $robotsValue = $robots ?? 'index,follow';
     $bodyClassValue = $bodyClass ?? 'marketing-body';
-    $socialImage = $socialImageUrl ?? asset('img/cinematic-study-console.svg');
+    $socialImage = $socialImageUrl ?? null;
 @endphp
 <!doctype html>
 <html lang="en">
@@ -21,11 +21,15 @@
         <meta property="og:title" content="{{ $title }}">
         <meta property="og:description" content="{{ $description }}">
         <meta property="og:url" content="{{ $canonical }}">
-        <meta property="og:image" content="{{ $socialImage }}">
-        <meta name="twitter:card" content="summary_large_image">
+        @if ($socialImage)
+            <meta property="og:image" content="{{ $socialImage }}">
+        @endif
+        <meta name="twitter:card" content="{{ $socialImage ? 'summary_large_image' : 'summary' }}">
         <meta name="twitter:title" content="{{ $title }}">
         <meta name="twitter:description" content="{{ $description }}">
-        <meta name="twitter:image" content="{{ $socialImage }}">
+        @if ($socialImage)
+            <meta name="twitter:image" content="{{ $socialImage }}">
+        @endif
         <link rel="stylesheet" href="{{ asset('css/site.css') }}">
     </head>
     <body class="{{ $bodyClassValue }}">

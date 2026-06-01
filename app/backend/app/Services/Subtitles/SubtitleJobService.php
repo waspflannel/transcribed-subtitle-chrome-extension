@@ -70,6 +70,7 @@ class SubtitleJobService
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
         $dispatchState = self::DISPATCH_STATE_REUSED;
+        $previousJobCount = null;
 
         try {
             $job = DB::transaction(function () use (
@@ -82,6 +83,7 @@ class SubtitleJobService
                 $includeRomanization,
                 $includeTranslation,
                 &$dispatchState,
+                &$previousJobCount,
             ): SubtitleJob {
                 $job = $this->compatibleJobQuery($payload, $user, $processingVersion)
                     ->with('track')
@@ -122,6 +124,9 @@ class SubtitleJobService
                 }
 
                 $entitlement = $this->billing->authorizeForGeneration($user, $payload);
+                $previousJobCount = SubtitleJob::query()
+                    ->whereBelongsTo($user)
+                    ->count();
                 $job = $this->createJob(
                     payload: $payload,
                     user: $user,
@@ -156,6 +161,10 @@ class SubtitleJobService
         }
 
         $job = $job->refresh()->load('track');
+
+        if ($dispatchState === self::DISPATCH_STATE_CREATED && $previousJobCount !== null) {
+            $this->analytics->generationStarted($job->load('user'), $previousJobCount);
+        }
 
         if ($this->hasReadyTrack($job)) {
             $this->logger->trackReused($job);
@@ -204,10 +213,6 @@ class SubtitleJobService
         bool $includeRomanization,
         bool $includeTranslation,
     ): SubtitleJob {
-        $previousJobCount = SubtitleJob::query()
-            ->whereBelongsTo($user)
-            ->count();
-
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
             'user_id' => $user->id,
@@ -239,8 +244,6 @@ class SubtitleJobService
             'generation_tier' => $job->generation_tier,
             'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
-
-        $this->analytics->generationStarted($job->load('user'), $previousJobCount);
 
         return $job;
     }
