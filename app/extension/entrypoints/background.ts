@@ -71,9 +71,6 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
     case 'content.enrichLearningToken':
       return enrichLearningTokenFromContent(message, sender);
 
-    case 'content.updateSettings':
-      return updateSettingsFromContent(message.patch, sender);
-
     case 'popup.getState':
       return getPopupState({ syncBackend: message.syncBackend ?? true });
 
@@ -125,23 +122,6 @@ async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promi
   }
 
   return getPopupState({ syncBackend: true });
-}
-
-async function updateSettingsFromContent(
-  patch: Partial<ExtensionSettings>,
-  sender: Browser.runtime.MessageSender,
-): Promise<{ ok: true; settings: ExtensionSettings }> {
-  const settings = await updateExtensionSettings(patch);
-  const senderTabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
-
-  if (senderTabId !== null) {
-    await sendTabMessage(senderTabId, {
-      type: 'background.settingsChanged',
-      settings,
-    });
-  }
-
-  return { ok: true, settings };
 }
 
 async function generateSubtitlesFromPopup(): Promise<PopupState> {

@@ -17,9 +17,11 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('Bonjour');
     expect(html).toContain('o-la');
     expect(html).toContain('hello');
-    expect(html).toContain('data-study-control="blur-source"');
     expect(html).toContain('data-study-control="replay"');
     expect(html).toContain('data-study-control="copy"');
+    expect(html).not.toContain('data-study-control="blur-source"');
+    expect(html).not.toContain('data-study-control="blur-romanization"');
+    expect(html).not.toContain('data-study-control="blur-translation"');
     expect(html).not.toContain('egyptian');
   });
 
@@ -46,7 +48,7 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('class="translation"');
   });
 
-  it('renders blur states, pressed controls, and paused reveal attributes', () => {
+  it('renders blur states and paused reveal attributes', () => {
     const html = renderOverlayContent(
       readyStateWithSettings({
         showTranslation: true,
@@ -64,15 +66,15 @@ describe('renderOverlayContent', () => {
       videoPaused: true,
     });
 
-    expect(html).toContain('data-reveal-on-pause="true"');
+    expect(html).toContain('data-reveal-on-pause="false"');
     expect(html).toContain('data-video-paused="false"');
+    expect(html).toContain('data-study-rail');
     expect(html).toContain('class="token-text study-blur"');
     expect(html).toContain('class="token-extra study-blur"');
     expect(html).toContain('class="translation study-blur"');
-    expect(html).toContain('data-study-control="blur-source" aria-pressed="true"');
-    expect(html).toContain('data-study-control="blur-romanization" aria-pressed="true"');
-    expect(html).toContain('data-study-control="blur-translation" aria-pressed="true"');
+    expect(html).not.toContain('data-study-control="blur-source"');
     expect(pausedHtml).toContain('data-video-paused="true"');
+    expect(pausedHtml).toContain('data-reveal-on-pause="true"');
   });
 
   it('renders overlay copy feedback status', () => {

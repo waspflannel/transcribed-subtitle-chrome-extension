@@ -41,9 +41,10 @@ export class OverlayShell {
     private readonly options: {
       onCopyCue?: (cue: SubtitleCue) => Promise<boolean>;
       onReplayCue?: (cue: SubtitleCue) => void;
+      onStudyHoverEnd?: () => void;
+      onStudyHoverStart?: () => void;
       onTokenClick?: (cue: SubtitleCue, token: LearningToken) => void;
       onTokenPreview?: () => void;
-      onToggleSetting?: (patch: Partial<ExtensionSettings>) => void;
     } = {},
   ) {}
 
@@ -145,6 +146,16 @@ export class OverlayShell {
       this.render();
     });
 
+    const rail = this.content.querySelector<HTMLElement>('[data-study-rail]');
+
+    rail?.addEventListener('pointerenter', () => {
+      this.options.onStudyHoverStart?.();
+    });
+
+    rail?.addEventListener('pointerleave', () => {
+      this.options.onStudyHoverEnd?.();
+    });
+
     for (const button of this.content.querySelectorAll<HTMLButtonElement>('[data-study-control]')) {
       button.addEventListener('click', () => {
         void this.handleStudyControl(button.dataset.studyControl);
@@ -160,18 +171,6 @@ export class OverlayShell {
     }
 
     switch (control) {
-      case 'blur-source':
-        this.options.onToggleSetting?.({ blurSourceWords: !this.currentState.settings.blurSourceWords });
-        return;
-
-      case 'blur-romanization':
-        this.options.onToggleSetting?.({ blurRomanization: !this.currentState.settings.blurRomanization });
-        return;
-
-      case 'blur-translation':
-        this.options.onToggleSetting?.({ blurTranslation: !this.currentState.settings.blurTranslation });
-        return;
-
       case 'replay':
         this.options.onReplayCue?.(cue);
         return;
@@ -798,7 +797,7 @@ export function renderOverlayContent(
         interaction.pinnedTokenIndex === null ? 'false' : 'true'
       }" data-reveal-on-pause="${state.settings.revealOnPause ? 'true' : 'false'}" data-video-paused="${
         state.videoPaused ? 'true' : 'false'
-      }">
+      }" data-study-rail>
         <div class="rail-meta">
           <span class="eyebrow">AI subtitles</span>
           <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
@@ -810,7 +809,7 @@ export function renderOverlayContent(
           ${cueRomanization}
           ${renderTranslation(cue, state.settings)}
         </div>
-        ${renderStudyControls(state.settings, interaction.copyStatus)}
+        ${renderStudyControls(interaction.copyStatus)}
       </section>
     `;
   }
@@ -941,10 +940,7 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
   )}</div>`;
 }
 
-function renderStudyControls(
-  settings: ExtensionSettings,
-  copyStatus: OverlayInteractionState['copyStatus'],
-): string {
+function renderStudyControls(copyStatus: OverlayInteractionState['copyStatus']): string {
   const status = copyStatus
     ? `<span class="control-status ${copyStatus}" role="status">${
         copyStatus === 'copied' ? 'Copied' : 'Copy failed'
@@ -953,15 +949,6 @@ function renderStudyControls(
 
   return `
     <div class="rail-controls" aria-label="Subtitle study controls">
-      <button class="study-control" type="button" data-study-control="blur-source" aria-pressed="${
-        settings.blurSourceWords ? 'true' : 'false'
-      }">Words</button>
-      <button class="study-control" type="button" data-study-control="blur-romanization" aria-pressed="${
-        settings.blurRomanization ? 'true' : 'false'
-      }">Romanization</button>
-      <button class="study-control" type="button" data-study-control="blur-translation" aria-pressed="${
-        settings.blurTranslation ? 'true' : 'false'
-      }">Translation</button>
       <button class="study-control" type="button" data-study-control="replay">Replay</button>
       <button class="study-control" type="button" data-study-control="copy">Copy</button>
       ${status}

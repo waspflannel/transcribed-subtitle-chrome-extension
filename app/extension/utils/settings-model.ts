@@ -41,7 +41,7 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   blurRomanization: false,
   blurTranslation: false,
   pauseOnWordHover: true,
-  revealOnPause: true,
+  revealOnPause: false,
   fullTrackEnrichment: false,
   subtitleTimingOffsetSeconds: 0,
 };

@@ -1,10 +1,6 @@
 import { browser, type Browser } from 'wxt/browser';
 
-import {
-  DEFAULT_EXTENSION_SETTINGS,
-  createExtensionSettingsFromPartial,
-  type ExtensionSettings,
-} from '../utils/settings-model';
+import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
 import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
@@ -26,6 +22,7 @@ export default defineContentScript({
     let stopWebVttTrack: (() => void) | null = null;
     let stopVideoStateListeners: (() => void) | null = null;
     let videoPaused = false;
+    let studyHoverPaused = false;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
@@ -33,12 +30,13 @@ export default defineContentScript({
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
       onReplayCue: (cue) => replayCue(cue),
+      onStudyHoverEnd: () => resumeVideoAfterStudyHover(),
+      onStudyHoverStart: () => pauseVideoForStudy(),
       onTokenPreview: () => pauseVideoForStudy(),
       onTokenClick: (cue, token) => {
         pauseVideoForStudy();
         void enrichLearningToken(cue, token);
       },
-      onToggleSetting: (patch) => void updateOverlaySettings(patch),
     });
     const handleYoutubeRouteChange = (): void => clearSubtitles();
 
@@ -152,6 +150,7 @@ export default defineContentScript({
       activeCue = null;
       activeVideo = null;
       videoPaused = false;
+      studyHoverPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
     }
@@ -256,6 +255,11 @@ export default defineContentScript({
         }
 
         videoPaused = nextVideoPaused;
+
+        if (!nextVideoPaused) {
+          studyHoverPaused = false;
+        }
+
         updateOverlay();
       };
 
@@ -275,9 +279,40 @@ export default defineContentScript({
         return;
       }
 
+      studyHoverPaused = true;
       activeVideo.pause();
       videoPaused = true;
       updateOverlay();
+    }
+
+    function resumeVideoAfterStudyHover(): void {
+      if (!studyHoverPaused || !activeVideo) {
+        return;
+      }
+
+      studyHoverPaused = false;
+
+      if (!activeVideo.paused) {
+        videoPaused = false;
+        updateOverlay();
+
+        return;
+      }
+
+      const playResult = activeVideo.play();
+
+      videoPaused = false;
+      updateOverlay();
+
+      if (playResult && typeof playResult.catch === 'function') {
+        playResult.catch((error: unknown) => {
+          videoPaused = activeVideo?.paused ?? videoPaused;
+          updateOverlay();
+          console.warn('extension.subtitle_study_resume_failed', {
+            error: error instanceof Error ? error.message : 'Unknown resume error',
+          });
+        });
+      }
     }
 
     function replayCue(cue: SubtitleCue): void {
@@ -291,6 +326,7 @@ export default defineContentScript({
       const startSeconds = Math.max(0, (sourceCue.startMs / 1000) + settings.subtitleTimingOffsetSeconds);
 
       activeVideo.currentTime = startSeconds;
+      studyHoverPaused = false;
       videoPaused = false;
       const playResult = activeVideo.play();
 
@@ -341,28 +377,6 @@ export default defineContentScript({
       }
 
       return lines.join('\n');
-    }
-
-    async function updateOverlaySettings(patch: Partial<ExtensionSettings>): Promise<void> {
-      try {
-        const response = (await browser.runtime.sendMessage({
-          type: 'content.updateSettings',
-          patch,
-        })) as { ok?: boolean; settings?: ExtensionSettings; error?: string };
-
-        if (response?.ok === false) {
-          throw new Error(response.error ?? 'Unable to update subtitle study settings.');
-        }
-
-        if (response?.settings) {
-          settings = createExtensionSettingsFromPartial(response.settings);
-          updateOverlay();
-        }
-      } catch (error) {
-        console.warn('extension.subtitle_study_settings_update_failed', {
-          error: error instanceof Error ? error.message : 'Unknown settings update error',
-        });
-      }
     }
 
     function currentVideoDurationSeconds(): number | undefined {

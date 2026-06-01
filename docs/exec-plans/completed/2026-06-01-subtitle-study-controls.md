@@ -83,8 +83,8 @@ Evidence to capture:
 
 | Date | Decision | Rationale |
 | --- | --- | --- |
-| 2026-06-01 | Keep all blur settings off by default and turn hover pause plus reveal-on-pause on by default. | Preserves current visible subtitle behavior while enabling the requested study interaction immediately. |
-| 2026-06-01 | Hover pause leaves playback paused until the user resumes manually. | Avoids accidental resume while learners inspect word cards or translations. |
+| 2026-06-01 | Keep all blur settings off by default, turn hover pause on by default, and keep reveal-on-manual-pause off by default. | Preserves current visible subtitle behavior while preventing manual pause from unexpectedly revealing hidden study text. |
+| 2026-06-01 | Hover pause resumes only when the pointer leaves after the extension paused playback. | Keeps the quick hover study loop reversible without resuming videos the user paused manually. |
 | 2026-06-01 | Add a popup Study tab and compact overlay controls, but defer a full shortcut/subtitle-browser console. | Delivers the requested controls without expanding into vocabulary review or navigation systems. |
 | 2026-06-01 | Keep all changes local to extension settings/runtime UI. | Blur/reveal/playback controls do not require backend contract or generation changes. |
 
@@ -96,10 +96,11 @@ Evidence to capture:
 | 2026-06-01 | Implemented settings/message boundary, content-script video pause/replay/copy actions, overlay study controls, and popup Study tab. | `Push-Location .\app\extension; npm run compile; Pop-Location` passed. |
 | 2026-06-01 | Added focused tests and durable docs for Study controls. | `Push-Location .\app\extension; npm test; npm run compile; npm run build; Pop-Location` passed; popup Study screenshot captured at `%TEMP%\tse-study-controls-shots\popup-study.png`. |
 | 2026-06-01 | Completed full validation and self-review. | `.\scripts\agent\check.ps1`, `.\scripts\agent\verify-pr.ps1`, and `.\scripts\agent\doc-gardening.ps1` passed. |
+| 2026-06-01 | Corrected hover behavior and overlay controls after review. | Overlay blur toggles removed; hover pause now resumes on pointer leave only when the extension caused the pause; manual pause no longer reveals blurred text by default. |
 
 ## Completion Notes
 
-- What changed: Added extension-local study settings, content-to-background setting updates, video hover-pause/replay/copy actions, overlay blur/reveal controls, a popup Study tab, focused tests, and durable docs.
+- What changed: Added extension-local study settings, temporary video hover-pause/replay/copy actions, overlay blur/reveal controls, a popup Study tab, focused tests, and durable docs. Overlay blur toggles were removed after review because those controls already live in popup settings.
 - Validation results: Baseline and final `.\scripts\agent\check.ps1` passed; focused extension `npm test`, `npm run compile`, and `npm run build` passed; `.\scripts\agent\verify-pr.ps1` passed; `.\scripts\agent\doc-gardening.ps1` reported no findings.
 - Simplicity/readability review: Kept the feature local to existing WXT settings/message/content/overlay/popup boundaries, avoided backend or contract changes, and used direct DOM/platform APIs without new dependencies.
 - Residual risk: Real loaded-extension overlay screenshot coverage still depends on the existing `TD-003`/`TD-007` browser smoke debt. A static popup Study screenshot was captured at `%TEMP%\tse-study-controls-shots\popup-study.png`.
