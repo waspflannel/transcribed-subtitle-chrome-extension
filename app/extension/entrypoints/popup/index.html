@@ -19,6 +19,7 @@
 
         <nav class="tabs" aria-label="Popup sections">
           <button type="button" class="tab active" data-tab="generate">Generate</button>
+          <button type="button" class="tab" data-tab="study">Study</button>
           <button type="button" class="tab" data-tab="jobs">Jobs</button>
           <button type="button" class="tab" data-tab="usage">Usage</button>
           <button type="button" class="tab" data-tab="account">Account</button>
@@ -97,6 +98,37 @@
             <p class="privacy-copy">
               The extension sends the selected video URL and generation controls to the backend only after you start generation.
             </p>
+          </section>
+        </section>
+
+        <section class="panel" data-panel="study">
+          <section class="surface">
+            <div class="section-heading">
+              <h2>Study</h2>
+              <p>Set the overlay reveal behavior for the active subtitle track.</p>
+            </div>
+            <div class="option-grid">
+              <label class="toggle">
+                <input type="checkbox" name="blurSourceWords" disabled />
+                <span>Blur source words</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" name="blurRomanization" disabled />
+                <span>Blur romanization</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" name="blurTranslation" disabled />
+                <span>Blur translation</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" name="pauseOnWordHover" disabled />
+                <span>Pause video on word hover</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" name="revealOnPause" disabled />
+                <span>Reveal blurred text while paused</span>
+              </label>
+            </div>
           </section>
         </section>
 

@@ -17,6 +17,11 @@ export interface ExtensionSettings {
   showRomanization: boolean;
   showTranslation: boolean;
   showGloss: boolean;
+  blurSourceWords: boolean;
+  blurRomanization: boolean;
+  blurTranslation: boolean;
+  pauseOnWordHover: boolean;
+  revealOnPause: boolean;
   fullTrackEnrichment: boolean;
   subtitleTimingOffsetSeconds: number;
 }
@@ -32,6 +37,11 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   showRomanization: true,
   showTranslation: false,
   showGloss: true,
+  blurSourceWords: false,
+  blurRomanization: false,
+  blurTranslation: false,
+  pauseOnWordHover: true,
+  revealOnPause: true,
   fullTrackEnrichment: false,
   subtitleTimingOffsetSeconds: 0,
 };
@@ -71,6 +81,26 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
 
   if (typeof value?.showGloss === 'boolean') {
     settings.showGloss = value.showGloss;
+  }
+
+  if (typeof value?.blurSourceWords === 'boolean') {
+    settings.blurSourceWords = value.blurSourceWords;
+  }
+
+  if (typeof value?.blurRomanization === 'boolean') {
+    settings.blurRomanization = value.blurRomanization;
+  }
+
+  if (typeof value?.blurTranslation === 'boolean') {
+    settings.blurTranslation = value.blurTranslation;
+  }
+
+  if (typeof value?.pauseOnWordHover === 'boolean') {
+    settings.pauseOnWordHover = value.pauseOnWordHover;
+  }
+
+  if (typeof value?.revealOnPause === 'boolean') {
+    settings.revealOnPause = value.revealOnPause;
   }
 
   if (typeof value?.fullTrackEnrichment === 'boolean') {

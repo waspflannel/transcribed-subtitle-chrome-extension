@@ -1,6 +1,10 @@
 import { browser, type Browser } from 'wxt/browser';
 
-import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
+import {
+  DEFAULT_EXTENSION_SETTINGS,
+  createExtensionSettingsFromPartial,
+  type ExtensionSettings,
+} from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
 import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
@@ -18,15 +22,23 @@ export default defineContentScript({
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
     let activeCue: SubtitleCue | null = null;
+    let activeVideo: HTMLVideoElement | null = null;
     let stopWebVttTrack: (() => void) | null = null;
+    let stopVideoStateListeners: (() => void) | null = null;
+    let videoPaused = false;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
 
     const overlay = new OverlayShell(document, {
+      onCopyCue: (cue) => copyCueToClipboard(cue),
+      onReplayCue: (cue) => replayCue(cue),
+      onTokenPreview: () => pauseVideoForStudy(),
       onTokenClick: (cue, token) => {
+        pauseVideoForStudy();
         void enrichLearningToken(cue, token);
       },
+      onToggleSetting: (patch) => void updateOverlaySettings(patch),
     });
     const handleYoutubeRouteChange = (): void => clearSubtitles();
 
@@ -126,6 +138,7 @@ export default defineContentScript({
         subtitleState,
         settings,
         activeCue,
+        videoPaused,
         pendingTokenKeys,
         failedTokenKeys,
       });
@@ -133,8 +146,12 @@ export default defineContentScript({
 
     function clearBoundWebVttTrack(): void {
       stopWebVttTrack?.();
+      stopVideoStateListeners?.();
       stopWebVttTrack = null;
+      stopVideoStateListeners = null;
       activeCue = null;
+      activeVideo = null;
+      videoPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
     }
@@ -205,6 +222,8 @@ export default defineContentScript({
         return;
       }
 
+      bindVideoStateListeners(video);
+
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
         track,
@@ -221,6 +240,127 @@ export default defineContentScript({
           youtubeVideoId: track.youtubeVideoId,
           trackId: track.trackId,
           offsetSeconds: settings.subtitleTimingOffsetSeconds,
+        });
+      }
+    }
+
+    function bindVideoStateListeners(video: HTMLVideoElement): void {
+      activeVideo = video;
+      videoPaused = video.paused;
+
+      const handlePlaybackStateChange = (): void => {
+        const nextVideoPaused = video.paused;
+
+        if (nextVideoPaused === videoPaused) {
+          return;
+        }
+
+        videoPaused = nextVideoPaused;
+        updateOverlay();
+      };
+
+      video.addEventListener('pause', handlePlaybackStateChange);
+      video.addEventListener('play', handlePlaybackStateChange);
+      video.addEventListener('playing', handlePlaybackStateChange);
+
+      stopVideoStateListeners = () => {
+        video.removeEventListener('pause', handlePlaybackStateChange);
+        video.removeEventListener('play', handlePlaybackStateChange);
+        video.removeEventListener('playing', handlePlaybackStateChange);
+      };
+    }
+
+    function pauseVideoForStudy(): void {
+      if (!settings.pauseOnWordHover || !activeVideo || activeVideo.paused) {
+        return;
+      }
+
+      activeVideo.pause();
+      videoPaused = true;
+      updateOverlay();
+    }
+
+    function replayCue(cue: SubtitleCue): void {
+      if (!activeVideo) {
+        return;
+      }
+
+      const sourceCue = subtitleState.type === 'ready'
+        ? subtitleState.track.cues.find((candidate) => candidate.cueId === cue.cueId) ?? cue
+        : cue;
+      const startSeconds = Math.max(0, (sourceCue.startMs / 1000) + settings.subtitleTimingOffsetSeconds);
+
+      activeVideo.currentTime = startSeconds;
+      videoPaused = false;
+      const playResult = activeVideo.play();
+
+      if (playResult && typeof playResult.catch === 'function') {
+        playResult.catch((error: unknown) => {
+          videoPaused = activeVideo?.paused ?? videoPaused;
+          updateOverlay();
+          console.warn('extension.subtitle_replay_failed', {
+            cueId: cue.cueId,
+            error: error instanceof Error ? error.message : 'Unknown replay error',
+          });
+        });
+      }
+    }
+
+    async function copyCueToClipboard(cue: SubtitleCue): Promise<boolean> {
+      const clipboard = navigator.clipboard;
+
+      if (!clipboard) {
+        return false;
+      }
+
+      try {
+        await clipboard.writeText(clipboardTextForCue(cue));
+
+        return true;
+      } catch (error) {
+        console.warn('extension.subtitle_copy_failed', {
+          cueId: cue.cueId,
+          error: error instanceof Error ? error.message : 'Unknown clipboard error',
+        });
+
+        return false;
+      }
+    }
+
+    function clipboardTextForCue(cue: SubtitleCue): string {
+      const lines = [cue.sourceText.trim()];
+      const cueRomanization = cue.romanization?.trim();
+      const translatedText = cue.translatedText.trim();
+
+      if (settings.showRomanization && cueRomanization) {
+        lines.push(cueRomanization);
+      }
+
+      if (settings.showTranslation && translatedText !== '' && translatedText !== cue.sourceText.trim()) {
+        lines.push(translatedText);
+      }
+
+      return lines.join('\n');
+    }
+
+    async function updateOverlaySettings(patch: Partial<ExtensionSettings>): Promise<void> {
+      try {
+        const response = (await browser.runtime.sendMessage({
+          type: 'content.updateSettings',
+          patch,
+        })) as { ok?: boolean; settings?: ExtensionSettings; error?: string };
+
+        if (response?.ok === false) {
+          throw new Error(response.error ?? 'Unable to update subtitle study settings.');
+        }
+
+        if (response?.settings) {
+          settings = createExtensionSettingsFromPartial(response.settings);
+          updateOverlay();
+        }
+      } catch (error) {
+        console.warn('extension.subtitle_study_settings_update_failed', {
+          error: error instanceof Error ? error.message : 'Unknown settings update error',
         });
       }
     }

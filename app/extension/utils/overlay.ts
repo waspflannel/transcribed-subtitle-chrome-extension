@@ -10,12 +10,14 @@ export interface OverlayRenderState {
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
   activeCue?: SubtitleCue | null;
+  videoPaused?: boolean;
   pendingTokenKeys?: ReadonlySet<string>;
   failedTokenKeys?: ReadonlySet<string>;
 }
 
 interface OverlayInteractionState {
   pinnedTokenIndex: number | null;
+  copyStatus?: 'copied' | 'failed' | null;
   pendingTokenKeys?: ReadonlySet<string>;
   failedTokenKeys?: ReadonlySet<string>;
 }
@@ -31,11 +33,17 @@ export class OverlayShell {
   private currentState: OverlayRenderState | null = null;
   private currentCueId: string | null = null;
   private pinnedTokenIndex: number | null = null;
+  private copyStatus: 'copied' | 'failed' | null = null;
+  private copyStatusTimeout: number | null = null;
 
   public constructor(
     private readonly documentRef: Document = document,
     private readonly options: {
+      onCopyCue?: (cue: SubtitleCue) => Promise<boolean>;
+      onReplayCue?: (cue: SubtitleCue) => void;
       onTokenClick?: (cue: SubtitleCue, token: LearningToken) => void;
+      onTokenPreview?: () => void;
+      onToggleSetting?: (patch: Partial<ExtensionSettings>) => void;
     } = {},
   ) {}
 
@@ -53,6 +61,8 @@ export class OverlayShell {
     if (activeCueId !== this.currentCueId) {
       this.currentCueId = activeCueId;
       this.pinnedTokenIndex = null;
+      this.copyStatus = null;
+      this.clearCopyStatusTimeout();
     }
 
     this.render();
@@ -66,6 +76,8 @@ export class OverlayShell {
     this.currentState = null;
     this.currentCueId = null;
     this.pinnedTokenIndex = null;
+    this.copyStatus = null;
+    this.clearCopyStatusTimeout();
   }
 
   private render(): void {
@@ -75,6 +87,7 @@ export class OverlayShell {
 
     const html = renderOverlayContent(this.currentState, {
       pinnedTokenIndex: this.pinnedTokenIndex,
+      copyStatus: this.copyStatus,
       pendingTokenKeys: this.currentState.pendingTokenKeys,
       failedTokenKeys: this.currentState.failedTokenKeys,
     });
@@ -98,7 +111,16 @@ export class OverlayShell {
         continue;
       }
 
+      button.addEventListener('pointerenter', () => {
+        this.options.onTokenPreview?.();
+      });
+
+      button.addEventListener('focus', () => {
+        this.options.onTokenPreview?.();
+      });
+
       button.addEventListener('click', () => {
+        this.options.onTokenPreview?.();
         const cue = this.currentState?.activeCue;
         const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
         const selectedTokenKey = cue && token ? tokenKey(cue.cueId, token.index) : null;
@@ -122,6 +144,72 @@ export class OverlayShell {
       this.pinnedTokenIndex = null;
       this.render();
     });
+
+    for (const button of this.content.querySelectorAll<HTMLButtonElement>('[data-study-control]')) {
+      button.addEventListener('click', () => {
+        void this.handleStudyControl(button.dataset.studyControl);
+      });
+    }
+  }
+
+  private async handleStudyControl(control: string | undefined): Promise<void> {
+    const cue = this.currentState?.activeCue;
+
+    if (!cue || !this.currentState) {
+      return;
+    }
+
+    switch (control) {
+      case 'blur-source':
+        this.options.onToggleSetting?.({ blurSourceWords: !this.currentState.settings.blurSourceWords });
+        return;
+
+      case 'blur-romanization':
+        this.options.onToggleSetting?.({ blurRomanization: !this.currentState.settings.blurRomanization });
+        return;
+
+      case 'blur-translation':
+        this.options.onToggleSetting?.({ blurTranslation: !this.currentState.settings.blurTranslation });
+        return;
+
+      case 'replay':
+        this.options.onReplayCue?.(cue);
+        return;
+
+      case 'copy':
+        this.showCopyStatus((await this.options.onCopyCue?.(cue)) === true ? 'copied' : 'failed');
+        return;
+
+      default:
+        return;
+    }
+  }
+
+  private showCopyStatus(status: 'copied' | 'failed'): void {
+    this.copyStatus = status;
+    this.render();
+    this.clearCopyStatusTimeout();
+
+    const view = this.documentRef.defaultView;
+
+    if (!view) {
+      return;
+    }
+
+    this.copyStatusTimeout = view.setTimeout(() => {
+      this.copyStatus = null;
+      this.copyStatusTimeout = null;
+      this.render();
+    }, 1400);
+  }
+
+  private clearCopyStatusTimeout(): void {
+    if (this.copyStatusTimeout === null) {
+      return;
+    }
+
+    this.documentRef.defaultView?.clearTimeout(this.copyStatusTimeout);
+    this.copyStatusTimeout = null;
   }
 
   private mount(): void {
@@ -177,7 +265,7 @@ export class OverlayShell {
           display: grid;
           font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
           gap: 12px;
-          grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+          grid-template-columns: minmax(112px, auto) minmax(0, 1fr) auto;
           line-height: 1.35;
           margin: 0 auto;
           max-width: min(860px, calc(100vw - 32px));
@@ -232,6 +320,65 @@ export class OverlayShell {
           gap: 6px;
         }
 
+        .rail-controls {
+          align-content: start;
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          justify-content: flex-end;
+          min-width: 0;
+        }
+
+        .study-control {
+          background: rgba(255, 253, 247, 0.07);
+          border: 1px solid rgba(255, 253, 247, 0.14);
+          border-radius: 8px;
+          color: #d1d5db;
+          cursor: pointer;
+          font: inherit;
+          font-size: 11px;
+          font-weight: 850;
+          min-height: 28px;
+          padding: 0 8px;
+          transition:
+            background 120ms ease,
+            border-color 120ms ease,
+            box-shadow 120ms ease,
+            color 120ms ease,
+            transform 120ms ease;
+          white-space: nowrap;
+        }
+
+        .study-control:hover {
+          background: rgba(255, 253, 247, 0.12);
+          border-color: rgba(94, 234, 212, 0.32);
+          transform: translateY(-1px);
+        }
+
+        .study-control:focus-visible {
+          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.34);
+          outline: none;
+        }
+
+        .study-control[aria-pressed="true"] {
+          background: rgba(245, 158, 11, 0.18);
+          border-color: rgba(245, 158, 11, 0.52);
+          color: #fde68a;
+        }
+
+        .control-status {
+          color: #99f6e4;
+          font-size: 11px;
+          font-weight: 850;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .control-status.failed {
+          color: #fca5a5;
+        }
+
         .title {
           color: #fffdf7;
           font-size: 15px;
@@ -272,6 +419,24 @@ export class OverlayShell {
           color: #99f6e4;
           font-size: 13px;
           font-weight: 650;
+        }
+
+        .study-blur {
+          filter: blur(6px);
+          opacity: 0.78;
+          transition:
+            filter 120ms ease,
+            opacity 120ms ease;
+          user-select: none;
+        }
+
+        .rail:hover .study-blur,
+        .rail:focus-within .study-blur,
+        .rail[data-token-pinned="true"] .study-blur,
+        .rail[data-reveal-on-pause="true"][data-video-paused="true"] .study-blur {
+          filter: blur(0);
+          opacity: 1;
+          user-select: text;
         }
 
         .token-slot {
@@ -446,7 +611,8 @@ export class OverlayShell {
         }
 
         :host([data-position="compact"]) .rail-meta,
-        :host([data-position="compact"]) .token-area {
+        :host([data-position="compact"]) .token-area,
+        :host([data-position="compact"]) .rail-controls {
           justify-content: flex-start;
         }
 
@@ -487,6 +653,11 @@ export class OverlayShell {
             padding: 12px 14px;
           }
 
+          .rail-controls {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+          }
+
           .rail-main {
             grid-column: 1 / -1;
           }
@@ -523,6 +694,16 @@ export class OverlayShell {
 
           .rail-meta {
             gap: 6px;
+          }
+
+          .rail-controls {
+            gap: 5px;
+          }
+
+          .study-control {
+            font-size: 10px;
+            min-height: 27px;
+            padding: 0 7px;
           }
 
           .eyebrow,
@@ -607,11 +788,17 @@ export function renderOverlayContent(
 
     const cueRomanization =
       state.settings.showRomanization && cue.romanization
-        ? `<div class="cue-romanization">${escapeHtml(cue.romanization)}</div>`
+        ? `<div class="cue-romanization${state.settings.blurRomanization ? ' study-blur' : ''}">${escapeHtml(
+            cue.romanization,
+          )}</div>`
         : '';
 
     return `
-      <section class="rail" role="status">
+      <section class="rail" role="status" data-token-pinned="${
+        interaction.pinnedTokenIndex === null ? 'false' : 'true'
+      }" data-reveal-on-pause="${state.settings.revealOnPause ? 'true' : 'false'}" data-video-paused="${
+        state.videoPaused ? 'true' : 'false'
+      }">
         <div class="rail-meta">
           <span class="eyebrow">AI subtitles</span>
           <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
@@ -623,6 +810,7 @@ export function renderOverlayContent(
           ${cueRomanization}
           ${renderTranslation(cue, state.settings)}
         </div>
+        ${renderStudyControls(state.settings, interaction.copyStatus)}
       </section>
     `;
   }
@@ -661,18 +849,23 @@ function renderSourceLine(
   return cue.tokens
     .map((token) => {
       const extras = [
-        settings.showRomanization ? token.romanization : null,
-        settings.showGloss ? token.gloss ?? token.translation : null,
-      ]
-        .filter((value): value is string => typeof value === 'string' && value.trim() !== '')
-        .map((value) => `<span class="token-extra">${escapeHtml(value)}</span>`)
-        .join('');
+        settings.showRomanization && token.romanization
+          ? `<span class="token-extra${settings.blurRomanization ? ' study-blur' : ''}">${escapeHtml(
+              token.romanization,
+            )}</span>`
+          : '',
+        settings.showGloss && (token.gloss ?? token.translation)
+          ? `<span class="token-extra">${escapeHtml(token.gloss ?? token.translation ?? '')}</span>`
+          : '',
+      ].join('');
       const isPinned = interaction.pinnedTokenIndex === token.index;
 
       return `
         <span class="token-slot">
-          <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${isPinned ? 'true' : 'false'}">
-            <span class="token-text">${escapeHtml(token.text)}</span>
+          <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${
+            isPinned ? 'true' : 'false'
+          }" aria-label="Study word: ${escapeHtml(token.text)}">
+            <span class="token-text${settings.blurSourceWords ? ' study-blur' : ''}">${escapeHtml(token.text)}</span>
             ${extras}
             ${renderTokenPreview(token, settings)}
           </button>
@@ -743,7 +936,37 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
     return '';
   }
 
-  return `<div class="translation">${escapeHtml(cue.translatedText)}</div>`;
+  return `<div class="translation${settings.blurTranslation ? ' study-blur' : ''}">${escapeHtml(
+    cue.translatedText,
+  )}</div>`;
+}
+
+function renderStudyControls(
+  settings: ExtensionSettings,
+  copyStatus: OverlayInteractionState['copyStatus'],
+): string {
+  const status = copyStatus
+    ? `<span class="control-status ${copyStatus}" role="status">${
+        copyStatus === 'copied' ? 'Copied' : 'Copy failed'
+      }</span>`
+    : '';
+
+  return `
+    <div class="rail-controls" aria-label="Subtitle study controls">
+      <button class="study-control" type="button" data-study-control="blur-source" aria-pressed="${
+        settings.blurSourceWords ? 'true' : 'false'
+      }">Words</button>
+      <button class="study-control" type="button" data-study-control="blur-romanization" aria-pressed="${
+        settings.blurRomanization ? 'true' : 'false'
+      }">Romanization</button>
+      <button class="study-control" type="button" data-study-control="blur-translation" aria-pressed="${
+        settings.blurTranslation ? 'true' : 'false'
+      }">Translation</button>
+      <button class="study-control" type="button" data-study-control="replay">Replay</button>
+      <button class="study-control" type="button" data-study-control="copy">Copy</button>
+      ${status}
+    </div>
+  `;
 }
 
 function formatCueTimeRange(cue: SubtitleCue): string {

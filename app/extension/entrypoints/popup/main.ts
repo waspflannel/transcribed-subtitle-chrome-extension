@@ -80,6 +80,11 @@ const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name
 const showRomanizationInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="showRomanization"]'));
 const showTranslationInput = document.querySelector<HTMLInputElement>('input[name="showTranslation"]')!;
 const showGlossInput = document.querySelector<HTMLInputElement>('input[name="showGloss"]')!;
+const blurSourceWordsInput = document.querySelector<HTMLInputElement>('input[name="blurSourceWords"]')!;
+const blurRomanizationInput = document.querySelector<HTMLInputElement>('input[name="blurRomanization"]')!;
+const blurTranslationInput = document.querySelector<HTMLInputElement>('input[name="blurTranslation"]')!;
+const pauseOnWordHoverInput = document.querySelector<HTMLInputElement>('input[name="pauseOnWordHover"]')!;
+const revealOnPauseInput = document.querySelector<HTMLInputElement>('input[name="revealOnPause"]')!;
 const fullTrackEnrichmentInput = document.querySelector<HTMLInputElement>('input[name="fullTrackEnrichment"]')!;
 const timingOffsetRangeInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetSeconds"]')!;
 const timingOffsetNumberInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetNumber"]')!;
@@ -138,6 +143,21 @@ showTranslationInput.addEventListener('change', () =>
   void updateSettings({ showTranslation: showTranslationInput.checked }),
 );
 showGlossInput.addEventListener('change', () => void updateSettings({ showGloss: showGlossInput.checked }));
+blurSourceWordsInput.addEventListener('change', () =>
+  void updateSettings({ blurSourceWords: blurSourceWordsInput.checked }),
+);
+blurRomanizationInput.addEventListener('change', () =>
+  void updateSettings({ blurRomanization: blurRomanizationInput.checked }),
+);
+blurTranslationInput.addEventListener('change', () =>
+  void updateSettings({ blurTranslation: blurTranslationInput.checked }),
+);
+pauseOnWordHoverInput.addEventListener('change', () =>
+  void updateSettings({ pauseOnWordHover: pauseOnWordHoverInput.checked }),
+);
+revealOnPauseInput.addEventListener('change', () =>
+  void updateSettings({ revealOnPause: revealOnPauseInput.checked }),
+);
 fullTrackEnrichmentInput.addEventListener('change', () =>
   void updateSettings({ fullTrackEnrichment: fullTrackEnrichmentInput.checked }),
 );
@@ -355,6 +375,11 @@ function showPopupState(state: PopupState): void {
   setChecked(showRomanizationInputs, settings.showRomanization);
   showTranslationInput.checked = settings.showTranslation;
   showGlossInput.checked = settings.showGloss;
+  blurSourceWordsInput.checked = settings.blurSourceWords;
+  blurRomanizationInput.checked = settings.blurRomanization;
+  blurTranslationInput.checked = settings.blurTranslation;
+  pauseOnWordHoverInput.checked = settings.pauseOnWordHover;
+  revealOnPauseInput.checked = settings.revealOnPause;
   fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
   showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
@@ -751,6 +776,11 @@ function setSettingsDisabled(disabled: boolean): void {
   setDisabled(showRomanizationInputs, disabled);
   showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
+  blurSourceWordsInput.disabled = disabled;
+  blurRomanizationInput.disabled = disabled;
+  blurTranslationInput.disabled = disabled;
+  pauseOnWordHoverInput.disabled = disabled;
+  revealOnPauseInput.disabled = disabled;
   fullTrackEnrichmentInput.disabled = disabled;
   accountEmailInput.disabled = disabled;
   accountPasswordInput.disabled = disabled;

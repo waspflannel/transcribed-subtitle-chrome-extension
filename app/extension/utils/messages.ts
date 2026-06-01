@@ -76,6 +76,10 @@ export type RuntimeMessage =
       patch: Partial<ExtensionSettings>;
     }
   | {
+      type: 'content.updateSettings';
+      patch: Partial<ExtensionSettings>;
+    }
+  | {
       type: 'popup.generateSubtitles';
     }
   | {
@@ -128,6 +132,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
       return optionalBoolean(value, 'syncBackend');
 
     case 'popup.updateSettings':
+    case 'content.updateSettings':
       return isRecord(value.patch);
 
     case 'content.enrichLearningToken':
