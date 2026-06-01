@@ -48,7 +48,7 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('class="translation"');
   });
 
-  it('renders scoped blur states without paused rail reveal attributes', () => {
+  it('renders token, romanization, and translation blur scopes', () => {
     const state = readyStateWithSettings({
       showTranslation: true,
       blurSourceWords: true,
@@ -64,8 +64,6 @@ describe('renderOverlayContent', () => {
     });
 
     expect(html).toContain('data-study-rail');
-    expect(html).not.toContain('data-reveal-on-pause');
-    expect(html).not.toContain('data-video-paused');
     expect(html).toContain('class="token-text study-blur study-blur--token"');
     expect(html).toContain('class="token-extra study-token-romanization study-blur study-blur--token"');
     expect(html).toContain('class="cue-romanization study-cue-romanization study-blur study-blur--romanization"');

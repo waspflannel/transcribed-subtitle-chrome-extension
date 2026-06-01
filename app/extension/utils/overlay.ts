@@ -10,7 +10,6 @@ export interface OverlayRenderState {
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
   activeCue?: SubtitleCue | null;
-  videoPaused?: boolean;
   pendingTokenKeys?: ReadonlySet<string>;
   failedTokenKeys?: ReadonlySet<string>;
 }
@@ -362,12 +361,6 @@ export class OverlayShell {
         .study-control:focus-visible {
           box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.34);
           outline: none;
-        }
-
-        .study-control[aria-pressed="true"] {
-          background: rgba(245, 158, 11, 0.18);
-          border-color: rgba(245, 158, 11, 0.52);
-          color: #fde68a;
         }
 
         .control-status {
@@ -801,9 +794,7 @@ export function renderOverlayContent(
         : '';
 
     return `
-      <section class="rail" role="status" data-token-pinned="${
-        interaction.pinnedTokenIndex === null ? 'false' : 'true'
-      }" data-study-rail>
+      <section class="rail" role="status" data-study-rail>
         <div class="rail-meta">
           <span class="eyebrow">AI subtitles</span>
           <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>

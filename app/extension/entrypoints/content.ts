@@ -21,7 +21,6 @@ export default defineContentScript({
     let activeVideo: HTMLVideoElement | null = null;
     let stopWebVttTrack: (() => void) | null = null;
     let stopVideoStateListeners: (() => void) | null = null;
-    let videoPaused = false;
     let studyHoverPaused = false;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
@@ -136,7 +135,6 @@ export default defineContentScript({
         subtitleState,
         settings,
         activeCue,
-        videoPaused,
         pendingTokenKeys,
         failedTokenKeys,
       });
@@ -149,7 +147,6 @@ export default defineContentScript({
       stopVideoStateListeners = null;
       activeCue = null;
       activeVideo = null;
-      videoPaused = false;
       studyHoverPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
@@ -245,32 +242,17 @@ export default defineContentScript({
 
     function bindVideoStateListeners(video: HTMLVideoElement): void {
       activeVideo = video;
-      videoPaused = video.paused;
 
-      const handlePlaybackStateChange = (): void => {
-        const nextVideoPaused = video.paused;
-
-        if (nextVideoPaused === videoPaused) {
-          return;
-        }
-
-        videoPaused = nextVideoPaused;
-
-        if (!nextVideoPaused) {
-          studyHoverPaused = false;
-        }
-
-        updateOverlay();
+      const clearStudyHoverPause = (): void => {
+        studyHoverPaused = false;
       };
 
-      video.addEventListener('pause', handlePlaybackStateChange);
-      video.addEventListener('play', handlePlaybackStateChange);
-      video.addEventListener('playing', handlePlaybackStateChange);
+      video.addEventListener('play', clearStudyHoverPause);
+      video.addEventListener('playing', clearStudyHoverPause);
 
       stopVideoStateListeners = () => {
-        video.removeEventListener('pause', handlePlaybackStateChange);
-        video.removeEventListener('play', handlePlaybackStateChange);
-        video.removeEventListener('playing', handlePlaybackStateChange);
+        video.removeEventListener('play', clearStudyHoverPause);
+        video.removeEventListener('playing', clearStudyHoverPause);
       };
     }
 
@@ -281,8 +263,6 @@ export default defineContentScript({
 
       studyHoverPaused = true;
       activeVideo.pause();
-      videoPaused = true;
-      updateOverlay();
     }
 
     function resumeVideoAfterStudyHover(): void {
@@ -293,21 +273,13 @@ export default defineContentScript({
       studyHoverPaused = false;
 
       if (!activeVideo.paused) {
-        videoPaused = false;
-        updateOverlay();
-
         return;
       }
 
       const playResult = activeVideo.play();
 
-      videoPaused = false;
-      updateOverlay();
-
       if (playResult && typeof playResult.catch === 'function') {
         playResult.catch((error: unknown) => {
-          videoPaused = activeVideo?.paused ?? videoPaused;
-          updateOverlay();
           console.warn('extension.subtitle_study_resume_failed', {
             error: error instanceof Error ? error.message : 'Unknown resume error',
           });
@@ -327,13 +299,10 @@ export default defineContentScript({
 
       activeVideo.currentTime = startSeconds;
       studyHoverPaused = false;
-      videoPaused = false;
       const playResult = activeVideo.play();
 
       if (playResult && typeof playResult.catch === 'function') {
         playResult.catch((error: unknown) => {
-          videoPaused = activeVideo?.paused ?? videoPaused;
-          updateOverlay();
           console.warn('extension.subtitle_replay_failed', {
             cueId: cue.cueId,
             error: error instanceof Error ? error.message : 'Unknown replay error',
