@@ -9,8 +9,9 @@ import type {
   LearningTokenResponse,
   SubtitleJobHistoryResponse,
 } from './contracts';
+import { resolveBackendApiBaseUrl } from './api-config';
 
-export const DEFAULT_BACKEND_API_BASE_URL = 'http://localhost:8000/v1';
+export const DEFAULT_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl(import.meta.env.WXT_BACKEND_API_BASE_URL);
 const JOB_HISTORY_TIMEOUT_MS = 2500;
 
 export class SubtitleApiError extends Error {

@@ -1,10 +1,15 @@
 import { defineConfig } from 'wxt';
+import { backendApiHostPermission, resolveBackendApiBaseUrl } from './utils/api-config';
 
 export default defineConfig({
-  manifest: {
-    name: 'AI Language Subtitles',
-    description: 'Generated subtitles and language-to-language word cards for public YouTube videos.',
-    permissions: ['activeTab', 'storage'],
-    host_permissions: ['*://*.youtube.com/*', 'http://localhost:8000/*'],
+  manifest: () => {
+    const backendApiBaseUrl = resolveBackendApiBaseUrl(import.meta.env.WXT_BACKEND_API_BASE_URL);
+
+    return {
+      name: 'AI Language Subtitles',
+      description: 'Generated subtitles and language-to-language word cards for public YouTube videos.',
+      permissions: ['activeTab', 'storage'],
+      host_permissions: ['*://*.youtube.com/*', backendApiHostPermission(backendApiBaseUrl)],
+    };
   },
 });
