@@ -12,8 +12,8 @@
     <section class="section timeline">
         <article>
             <span>01</span>
-            <h2>Choose a public YouTube video</h2>
-            <p>Only YouTube watch pages for public videos are in scope for beta. Live streams, private videos, other platforms, and subtitle editing are not supported.</p>
+            <h2>Choose a public YouTube video or Short</h2>
+            <p>Only YouTube watch pages and Shorts for public videos are in scope for beta. Live streams, private videos, other platforms, and subtitle editing are not supported.</p>
         </article>
         <article>
             <span>02</span>

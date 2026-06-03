@@ -8,11 +8,12 @@ import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
 import type { LearningToken, SubtitleCue, TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
+import { findActiveYoutubeVideo } from '../utils/youtube-video';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
 
 export default defineContentScript({
-  matches: ['*://*.youtube.com/watch*'],
+  matches: ['*://*.youtube.com/watch*', '*://*.youtube.com/shorts/*'],
   runAt: 'document_idle',
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
@@ -209,7 +210,7 @@ export default defineContentScript({
         return;
       }
 
-      const video = document.querySelector('video');
+      const video = findActiveYoutubeVideo(document);
 
       if (!video) {
         webVttTrackLogger.videoMissing(track);
@@ -349,7 +350,7 @@ export default defineContentScript({
     }
 
     function currentVideoDurationSeconds(): number | undefined {
-      const video = document.querySelector('video');
+      const video = findActiveYoutubeVideo(document);
       const duration = video?.duration;
 
       if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {

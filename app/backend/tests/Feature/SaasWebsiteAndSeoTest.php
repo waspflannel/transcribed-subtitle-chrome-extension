@@ -24,7 +24,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
             ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
             ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],
-            ['marketing.faq', 'Beta answers', 'Only public YouTube watch pages'],
+            ['marketing.faq', 'Beta answers', 'Only public YouTube watch pages and Shorts'],
             ['marketing.privacy', 'Video-derived data', 'raw audio is deleted'],
             ['marketing.terms', 'Paid beta terms', 'Refund requests'],
             ['marketing.support', 'Help for beta access', 'failure code'],

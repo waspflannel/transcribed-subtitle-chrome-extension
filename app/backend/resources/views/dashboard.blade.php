@@ -96,7 +96,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5">No subtitle jobs yet. Install the extension and start generation from a YouTube watch page.</td>
+                                        <td colspan="5">No subtitle jobs yet. Install the extension and start generation from a YouTube watch page or Short.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

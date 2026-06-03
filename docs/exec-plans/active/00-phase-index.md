@@ -52,7 +52,7 @@ Execute the SaaS roadmap phase by phase after explicit user request. Each phase 
 
 ## Global Constraints
 
-- Platform scope is YouTube watch pages only.
+- Platform scope is YouTube watch pages and YouTube Shorts only.
 - Supported videos are public YouTube videos only.
 - Maximum video length is 60 minutes.
 - Backend stack is Laravel.

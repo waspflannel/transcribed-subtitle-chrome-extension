@@ -22,7 +22,7 @@
     "youtubeUrl": {
       "type": "string",
       "format": "uri",
-      "description": "Watch URL captured by the extension for diagnostics and validation."
+      "description": "YouTube watch or Shorts URL captured by the extension for diagnostics and validation."
     },
     "videoDurationSeconds": {
       "type": "integer",

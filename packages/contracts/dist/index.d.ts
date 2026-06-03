@@ -23,7 +23,7 @@ export interface CreateSubtitleJobRequest {
    */
   youtubeVideoId: string;
   /**
-   * Watch URL captured by the extension for diagnostics and validation.
+   * YouTube watch or Shorts URL captured by the extension for diagnostics and validation.
    */
   youtubeUrl: string;
   /**

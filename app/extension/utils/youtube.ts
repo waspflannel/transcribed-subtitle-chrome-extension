@@ -1,9 +1,11 @@
 const YOUTUBE_VIDEO_ID_PATTERN = /^[A-Za-z0-9_-]{11}$/;
 
+export type YoutubeMediaKind = 'video' | 'short';
+
 export type UnsupportedYoutubePageReason =
   | 'invalid_url'
   | 'not_youtube'
-  | 'not_watch_page'
+  | 'unsupported_page'
   | 'missing_video_id'
   | 'invalid_video_id';
 
@@ -12,6 +14,7 @@ export type YoutubePageInfo =
       supported: true;
       videoId: string;
       url: string;
+      mediaKind: YoutubeMediaKind;
     }
   | {
       supported: false;
@@ -44,36 +47,57 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
     };
   }
 
-  if (url.pathname !== '/watch') {
-    return {
-      supported: false,
-      reason: 'not_watch_page',
+  if (url.pathname === '/watch') {
+    return pageInfoForVideoId({
+      videoId: url.searchParams.get('v')?.trim() ?? '',
       url: canonicalUrl,
-    };
+      mediaKind: 'video',
+    });
   }
 
-  const videoId = url.searchParams.get('v')?.trim() ?? '';
+  const pathSegments = url.pathname.split('/').filter((segment) => segment !== '');
 
-  if (videoId.length === 0) {
+  if (pathSegments[0] === 'shorts') {
+    return pageInfoForVideoId({
+      videoId: pathSegments.length === 2 ? pathSegments[1].trim() : '',
+      url: canonicalUrl,
+      mediaKind: 'short',
+    });
+  }
+
+  return {
+    supported: false,
+    reason: 'unsupported_page',
+    url: canonicalUrl,
+  };
+}
+
+function pageInfoForVideoId(options: {
+  videoId: string;
+  url: string;
+  mediaKind: YoutubeMediaKind;
+}): YoutubePageInfo {
+  if (options.videoId.length === 0) {
     return {
       supported: false,
       reason: 'missing_video_id',
-      url: canonicalUrl,
+      url: options.url,
     };
   }
 
-  if (!YOUTUBE_VIDEO_ID_PATTERN.test(videoId)) {
+  if (!YOUTUBE_VIDEO_ID_PATTERN.test(options.videoId)) {
     return {
       supported: false,
       reason: 'invalid_video_id',
-      url: canonicalUrl,
-      videoId,
+      url: options.url,
+      videoId: options.videoId,
     };
   }
 
   return {
     supported: true,
-    videoId,
-    url: canonicalUrl,
+    videoId: options.videoId,
+    url: options.url,
+    mediaKind: options.mediaKind,
   };
 }

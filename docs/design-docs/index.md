@@ -22,7 +22,7 @@ Each decision should include context, decision, consequences, validation expecta
 ## Current Durable Decisions
 
 - The product is YouTube-only for the first release.
-- Supported videos are public YouTube videos only.
+- Supported inputs are public YouTube watch videos and YouTube Shorts only.
 - Backend audio acquisition is the first implementation path.
 - Backend stack is Laravel.
 - Extension stack is WXT and TypeScript.

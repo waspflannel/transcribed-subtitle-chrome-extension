@@ -581,6 +581,43 @@ button:disabled {
   padding: 0.62rem;
 }
 
+.job-section,
+.job-section-list {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.job-section-heading {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.34rem;
+}
+
+.job-section-heading h3 {
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.job-section-heading span,
+.media-badge {
+  background: rgba(20, 184, 166, 0.13);
+  border-radius: 999px;
+  color: var(--teal-soft);
+  font-size: 0.61rem;
+  font-weight: 900;
+  padding: 0.14rem 0.38rem;
+  text-transform: uppercase;
+}
+
+.job-type-row {
+  display: flex;
+}
+
 .job-title {
   color: var(--text);
   display: block;

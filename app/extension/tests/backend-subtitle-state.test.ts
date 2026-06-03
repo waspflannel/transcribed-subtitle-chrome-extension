@@ -9,6 +9,7 @@ const pageStatus: YoutubePageInfo = {
   supported: true,
   videoId: 'dQw4w9WgXcQ',
   url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  mediaKind: 'video',
 };
 
 describe('backend subtitle state helpers', () => {

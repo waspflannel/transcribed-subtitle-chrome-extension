@@ -3,6 +3,7 @@ import './style.css';
 import { browser } from 'wxt/browser';
 
 import { escapeHtml } from '../../utils/html';
+import { groupJobHistoryByMediaKind, jobHistoryMediaKind } from '../../utils/job-history-media';
 import {
   SOURCE_LANGUAGE_OPTIONS,
   TARGET_LANGUAGE_OPTIONS,
@@ -505,12 +506,38 @@ function renderJobHistory(state: PopupState): void {
     return;
   }
 
-  jobsList.innerHTML = state.jobHistory.map((job) => jobHistoryItemHtml(job, state)).join('');
+  const groups = groupJobHistoryByMediaKind(state.jobHistory);
+
+  jobsList.innerHTML = [
+    jobHistorySectionHtml('Videos', groups.videos, state),
+    jobHistorySectionHtml('Shorts', groups.shorts, state),
+  ].join('');
+}
+
+function jobHistorySectionHtml(
+  title: string,
+  jobs: PopupState['jobHistory'],
+  state: PopupState,
+): string {
+  const content = jobs.length === 0
+    ? `<p class="muted empty-state">No ${title.toLowerCase()} jobs yet.</p>`
+    : jobs.map((job) => jobHistoryItemHtml(job, state)).join('');
+
+  return `
+    <section class="job-section" aria-label="${escapeHtml(title)} jobs">
+      <div class="job-section-heading">
+        <h3>${escapeHtml(title)}</h3>
+        <span>${jobs.length}</span>
+      </div>
+      <div class="job-section-list">${content}</div>
+    </section>
+  `;
 }
 
 function jobHistoryItemHtml(job: PopupState['jobHistory'][number], state: PopupState): string {
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
+  const mediaLabel = jobHistoryMediaKind(job) === 'short' ? 'Shorts' : 'Video';
   const meta = [
     languageRouteLabel(job),
     job.detectedSourceLanguage ? `Detected ${languageLabel(job.detectedSourceLanguage)}` : null,
@@ -535,6 +562,7 @@ function jobHistoryItemHtml(job: PopupState['jobHistory'][number], state: PopupS
         </div>
         <span class="job-badge ${job.status}">${escapeHtml(job.status)}</span>
       </header>
+      <div class="job-type-row"><span class="media-badge">${escapeHtml(mediaLabel)}</span></div>
       <div class="job-meta">${meta}</div>
       <div class="job-controls">${controls}</div>
       ${stageTimelineHtml(job)}

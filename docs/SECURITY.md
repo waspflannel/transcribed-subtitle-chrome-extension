@@ -36,7 +36,7 @@
   - Sanitized subtitle runtime trace rows for queue, batch, timing, and failure diagnostics.
   - SQLite persistence only inside PHPUnit's isolated in-memory test profile.
 - Sensitive operations:
-  - Validating supported public YouTube watch URLs and 60 minute duration limits.
+  - Validating supported public YouTube watch or Shorts URLs and 60 minute duration limits.
   - Writing and deleting temporary audio files.
   - Sending video-derived audio/text to configured AI services.
   - Persisting generated WebVTT and cue/token learning data.

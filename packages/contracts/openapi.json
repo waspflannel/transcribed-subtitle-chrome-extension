@@ -176,7 +176,7 @@
       },
       "post": {
         "operationId": "createSubtitleJob",
-        "summary": "Create a generated subtitle job for a public YouTube video.",
+        "summary": "Create a generated subtitle job for a public YouTube video or Short.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"

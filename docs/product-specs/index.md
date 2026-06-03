@@ -32,7 +32,7 @@ The root `revamped-design-document.md` and `detailed-design-document.md` files a
 
 ## First Release Scope
 
-- YouTube watch pages only.
+- YouTube watch pages and YouTube Shorts only.
 - Public videos only.
 - User-triggered subtitle generation.
 - Backend Laravel job pipeline.

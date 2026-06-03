@@ -12,7 +12,7 @@
     <section class="section faq-list">
         <details open>
             <summary>Which platforms are supported?</summary>
-            <p>Only public YouTube watch pages are supported for beta. Netflix, private videos, playlists as a source, live captions, and other platforms are out of scope.</p>
+            <p>Only public YouTube watch pages and Shorts are supported for beta. Netflix, private videos, playlists as a source, live captions, and other platforms are out of scope.</p>
         </details>
         <details>
             <summary>Do I need to start generation manually?</summary>

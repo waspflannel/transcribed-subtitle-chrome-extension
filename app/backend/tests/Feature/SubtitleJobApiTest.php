@@ -1487,6 +1487,69 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonStructure(['error' => ['code', 'message', 'details'], 'requestId']);
     }
 
+    public function test_create_subtitle_job_accepts_supported_youtube_url_shapes(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+        Queue::fake();
+
+        $shortsPayload = $this->validPayload([
+            'youtubeVideoId' => 'shorts00001',
+            'youtubeUrl' => 'https://www.youtube.com/shorts/shorts00001?feature=share',
+        ]);
+        $shortsResponse = $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $shortsPayload)
+            ->assertAccepted();
+
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'public_id' => $shortsResponse->json('jobId'),
+            'youtube_video_id' => 'shorts00001',
+            'youtube_url' => 'https://www.youtube.com/shorts/shorts00001?feature=share',
+        ]);
+
+        $shortUrlPayload = $this->validPayload([
+            'youtubeVideoId' => 'youtu000001',
+            'youtubeUrl' => 'https://youtu.be/youtu000001',
+        ]);
+        $shortUrlResponse = $this
+            ->withExtensionAuth($this->installId('b'))
+            ->postJson('/v1/subtitle-jobs', $shortUrlPayload)
+            ->assertAccepted();
+
+        $this->assertDatabaseHas('subtitle_jobs', [
+            'public_id' => $shortUrlResponse->json('jobId'),
+            'youtube_video_id' => 'youtu000001',
+            'youtube_url' => 'https://youtu.be/youtu000001',
+        ]);
+    }
+
+    public function test_create_subtitle_job_rejects_invalid_shorts_urls(): void
+    {
+        $invalidUrls = [
+            'https://www.youtube.com/shorts/dQw4w9WgXcQ',
+            'http://www.youtube.com/shorts/shorts00001',
+            'https://www.youtube.com/shorts/bad',
+        ];
+
+        foreach ($invalidUrls as $url) {
+            $this
+                ->withExtensionAuth($this->installId())
+                ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                    'youtubeVideoId' => 'shorts00001',
+                    'youtubeUrl' => $url,
+                ]))
+                ->assertStatus(422)
+                ->assertJsonPath('error.code', 'validation_failed')
+                ->assertJsonPath(
+                    'error.details.errors.youtubeUrl.0',
+                    'The YouTube URL must be a supported YouTube URL for the requested video ID.',
+                );
+        }
+    }
+
     public function test_create_subtitle_job_requires_explicit_generation_controls(): void
     {
         $payload = $this->validPayload();

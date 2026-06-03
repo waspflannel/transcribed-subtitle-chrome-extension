@@ -129,7 +129,7 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
   const activeTabId = activeTab?.id ?? null;
 
   if (activeTabId === null) {
-    throw new Error('Open a YouTube watch tab before generating subtitles.');
+    throw new Error('Open a supported YouTube video or Short before generating subtitles.');
   }
 
   const pageStatus = parseYoutubePage(activeTab?.url ?? '');
@@ -137,7 +137,7 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
   if (!pageStatus.supported) {
     const subtitleState: SubtitleState = {
       type: 'error',
-      message: 'Open a supported YouTube watch page before generating subtitles.',
+      message: 'Open a supported YouTube video or Short before generating subtitles.',
     };
 
     await publishSubtitleState(activeTabId, subtitleState);

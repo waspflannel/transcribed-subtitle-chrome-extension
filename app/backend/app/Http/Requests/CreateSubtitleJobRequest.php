@@ -76,7 +76,7 @@ class CreateSubtitleJobRequest extends FormRequest
                 }
 
                 if (! $this->youtubeUrlMatchesVideoId($url, (string) $this->input('youtubeVideoId'))) {
-                    $validator->errors()->add('youtubeUrl', 'The YouTube URL must be a supported watch URL for the requested video ID.');
+                    $validator->errors()->add('youtubeUrl', 'The YouTube URL must be a supported YouTube URL for the requested video ID.');
                 }
             },
         ];
@@ -97,12 +97,16 @@ class CreateSubtitleJobRequest extends FormRequest
             return trim($path, '/') === $videoId;
         }
 
-        if (! in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com'], true) || $path !== '/watch') {
+        if (! in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com'], true)) {
             return false;
         }
 
-        parse_str((string) ($parts['query'] ?? ''), $query);
+        if ($path === '/watch') {
+            parse_str((string) ($parts['query'] ?? ''), $query);
 
-        return ($query['v'] ?? null) === $videoId;
+            return ($query['v'] ?? null) === $videoId;
+        }
+
+        return trim($path, '/') === 'shorts/'.$videoId;
     }
 }

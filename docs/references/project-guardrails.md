@@ -70,7 +70,7 @@ WXT extension
   - background service worker for lifecycle, storage, and backend API calls
   - popup for command/status/settings UI
 - Keep content scripts focused on browser integration:
-  - detect YouTube watch pages
+  - detect YouTube watch pages and Shorts pages
   - parse video ID
   - mount/update/unmount overlay
 - Do not put AI logic, provider assumptions, or backend orchestration in the extension.

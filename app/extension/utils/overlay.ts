@@ -772,8 +772,8 @@ export function renderOverlayContent(
       title: 'Unsupported page',
       detail:
         state.page.reason === 'missing_video_id' || state.page.reason === 'invalid_video_id'
-          ? 'The current YouTube watch URL has no valid video ID.'
-          : 'YouTube watch page required.',
+          ? 'The current YouTube URL has no valid video ID.'
+          : 'YouTube video or Short required.',
       meta: [],
     });
   }
