@@ -141,3 +141,4 @@ Project-specific security defaults:
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
 - Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.
 - Phase 07 adds request IDs to extension-facing API errors, logs invalid install IDs and rate limits without raw install IDs, configures final install/IP throttle defaults, and schedules expired generated subtitle cleanup.
+- Production hosting uses `php artisan ops:production-check` and the production runbook to verify `APP_DEBUG=false`, HTTPS `APP_URL`, environment-only backend secrets, disabled billing test switcher, exact extension API host permissions, and sanitized logs before paid beta traffic.

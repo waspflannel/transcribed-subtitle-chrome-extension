@@ -12,6 +12,7 @@ This repository is designed for agentic development. Keep this file short; it is
 - Reliability expectations: `docs/RELIABILITY.md`
 - Security expectations: `docs/SECURITY.md`
 - Observability expectations: `docs/OBSERVABILITY.md`
+- Production operations: `docs/operations/production-hosting-and-ops.md`
 - Review expectations: `docs/REVIEW.md`
 - Repeated quality rules: `docs/quality/golden-principles.md`
 - Project guardrails: `docs/references/project-guardrails.md`

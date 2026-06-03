@@ -11,6 +11,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Application code lives in `app/backend` and `app/extension`.
 - Repository knowledge lives in `docs/`.
 - Agent harness scripts live in `scripts/agent/`.
+- Production/runtime operation scripts live in `scripts/runtime/`, with the production runbook in `docs/operations/production-hosting-and-ops.md`.
 - Execution plans live in `docs/exec-plans/`.
 - Canonical API/data contracts live in `packages/contracts`.
 - The canonical language catalog lives in `packages/contracts/languages.json`; `auto` is source-only and the real language choices use the provider WER-ranked transcription tags: Excellent, High Accuracy, Good, and Moderate.
@@ -120,6 +121,8 @@ Current local enforcement:
 - `app/extension`: `npm test`, `npm run compile`, and `npm run build`
 - repository harness: `.\scripts\agent\check.ps1`
 - local generation metrics: `php artisan subtitles:metrics --json`
+- production readiness: `php artisan ops:production-check --target=production --json`
+- managed Laravel deploy helper: `.\scripts\runtime\deploy-managed-laravel.ps1`
 
 Promote these into CI when a remote repository workflow is introduced.
 
