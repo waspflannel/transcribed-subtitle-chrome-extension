@@ -16,6 +16,10 @@ describe('settings model', () => {
         overlayPosition: 'side' as never,
         sourceLanguage: 'spa',
         targetLanguage: 'jpn',
+        captionFontSize: 'large',
+        captionDensity: 'compact',
+        captionContrastTheme: 'high',
+        keyboardShortcutsEnabled: false,
         showTranslation: true,
         blurSourceWords: true,
         blurRomanization: true,
@@ -28,6 +32,10 @@ describe('settings model', () => {
       ...DEFAULT_EXTENSION_SETTINGS,
       sourceLanguage: 'spa',
       targetLanguage: 'jpn',
+      captionFontSize: 'large',
+      captionDensity: 'compact',
+      captionContrastTheme: 'high',
+      keyboardShortcutsEnabled: false,
       overlayVisible: false,
       showTranslation: true,
       blurSourceWords: true,
@@ -44,6 +52,17 @@ describe('settings model', () => {
       createExtensionSettingsFromPartial({
         sourceLanguage: 'zz' as never,
         targetLanguage: 'auto' as never,
+      }),
+    ).toEqual(DEFAULT_EXTENSION_SETTINGS);
+  });
+
+  it('rejects invalid caption and shortcut display settings', () => {
+    expect(
+      createExtensionSettingsFromPartial({
+        captionFontSize: 'huge' as never,
+        captionDensity: 'spacious' as never,
+        captionContrastTheme: 'solarized' as never,
+        keyboardShortcutsEnabled: 'yes' as never,
       }),
     ).toEqual(DEFAULT_EXTENSION_SETTINGS);
   });

@@ -28,6 +28,7 @@ import {
   normalizeSubtitleTimingOffsetSeconds,
   type ExtensionSettings,
 } from '../../utils/settings-model';
+import { DEFAULT_KEYBOARD_SHORTCUTS } from '../../utils/keyboard-shortcuts';
 
 type PopupRequest =
   | {
@@ -77,6 +78,9 @@ const targetLanguageSelected = document.querySelector<HTMLElement>('[data-target
 const sourceLanguageList = document.querySelector<HTMLElement>('[data-source-language-list]')!;
 const targetLanguageList = document.querySelector<HTMLElement>('[data-target-language-list]')!;
 const overlayPositionSelect = document.querySelector<HTMLSelectElement>('select[name="overlayPosition"]')!;
+const captionFontSizeSelect = document.querySelector<HTMLSelectElement>('select[name="captionFontSize"]')!;
+const captionDensitySelect = document.querySelector<HTMLSelectElement>('select[name="captionDensity"]')!;
+const captionContrastThemeSelect = document.querySelector<HTMLSelectElement>('select[name="captionContrastTheme"]')!;
 const overlayVisibleInput = document.querySelector<HTMLInputElement>('input[name="overlayVisible"]')!;
 const showRomanizationInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="showRomanization"]'));
 const showTranslationInput = document.querySelector<HTMLInputElement>('input[name="showTranslation"]')!;
@@ -85,6 +89,7 @@ const blurSourceWordsInput = document.querySelector<HTMLInputElement>('input[nam
 const blurRomanizationInput = document.querySelector<HTMLInputElement>('input[name="blurRomanization"]')!;
 const blurTranslationInput = document.querySelector<HTMLInputElement>('input[name="blurTranslation"]')!;
 const pauseOnWordHoverInput = document.querySelector<HTMLInputElement>('input[name="pauseOnWordHover"]')!;
+const keyboardShortcutsEnabledInput = document.querySelector<HTMLInputElement>('input[name="keyboardShortcutsEnabled"]')!;
 const fullTrackEnrichmentInput = document.querySelector<HTMLInputElement>('input[name="fullTrackEnrichment"]')!;
 const timingOffsetRangeInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetSeconds"]')!;
 const timingOffsetNumberInput = document.querySelector<HTMLInputElement>('input[name="subtitleTimingOffsetNumber"]')!;
@@ -112,6 +117,7 @@ const logoutButton = document.querySelector<HTMLButtonElement>('[data-action="lo
 const accountFeedback = document.querySelector<HTMLElement>('[data-account-feedback]')!;
 const featureList = document.querySelector<HTMLElement>('[data-feature-list]')!;
 const settingsLanguageSummary = document.querySelector<HTMLElement>('[data-settings-language-summary]')!;
+const shortcutHelpList = document.querySelector<HTMLElement>('[data-shortcut-help]')!;
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-tab]'));
 const panels = Array.from(document.querySelectorAll<HTMLElement>('[data-panel]'));
 
@@ -135,6 +141,9 @@ targetLanguageSearchInput.addEventListener('input', handleTargetLanguageSearch);
 sourceLanguageList.addEventListener('click', handleSourceLanguageClick);
 targetLanguageList.addEventListener('click', handleTargetLanguageClick);
 overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
+captionFontSizeSelect.addEventListener('change', handleCaptionFontSizeChange);
+captionDensitySelect.addEventListener('change', handleCaptionDensityChange);
+captionContrastThemeSelect.addEventListener('change', handleCaptionContrastThemeChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 for (const input of showRomanizationInputs) {
   input.addEventListener('change', () => void updateSettings({ showRomanization: input.checked }));
@@ -155,6 +164,9 @@ blurTranslationInput.addEventListener('change', () =>
 pauseOnWordHoverInput.addEventListener('change', () =>
   void updateSettings({ pauseOnWordHover: pauseOnWordHoverInput.checked }),
 );
+keyboardShortcutsEnabledInput.addEventListener('change', () =>
+  void updateSettings({ keyboardShortcutsEnabled: keyboardShortcutsEnabledInput.checked }),
+);
 fullTrackEnrichmentInput.addEventListener('change', () =>
   void updateSettings({ fullTrackEnrichment: fullTrackEnrichmentInput.checked }),
 );
@@ -167,6 +179,7 @@ for (const button of tabButtons) {
   button.addEventListener('click', () => showTab(button.dataset.tab ?? 'generate'));
 }
 
+renderShortcutHelp();
 void loadPopupState();
 setInterval(() => void refreshBackendState(), BACKEND_REFRESH_INTERVAL_MS);
 
@@ -277,6 +290,30 @@ function handleOverlayPositionChange(): void {
   }
 }
 
+function handleCaptionFontSizeChange(): void {
+  const { value } = captionFontSizeSelect;
+
+  if (value === 'small' || value === 'medium' || value === 'large') {
+    void updateSettings({ captionFontSize: value });
+  }
+}
+
+function handleCaptionDensityChange(): void {
+  const { value } = captionDensitySelect;
+
+  if (value === 'compact' || value === 'comfortable') {
+    void updateSettings({ captionDensity: value });
+  }
+}
+
+function handleCaptionContrastThemeChange(): void {
+  const { value } = captionContrastThemeSelect;
+
+  if (value === 'default' || value === 'high') {
+    void updateSettings({ captionContrastTheme: value });
+  }
+}
+
 function handleSourceLanguageSearch(): void {
   sourceLanguageQuery = sourceLanguageSearchInput.value;
   renderLanguagePickers(currentSettings);
@@ -369,6 +406,9 @@ function showPopupState(state: PopupState): void {
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
+  captionFontSizeSelect.value = settings.captionFontSize;
+  captionDensitySelect.value = settings.captionDensity;
+  captionContrastThemeSelect.value = settings.captionContrastTheme;
   setChecked(showRomanizationInputs, settings.showRomanization);
   showTranslationInput.checked = settings.showTranslation;
   showGlossInput.checked = settings.showGloss;
@@ -376,6 +416,7 @@ function showPopupState(state: PopupState): void {
   blurRomanizationInput.checked = settings.blurRomanization;
   blurTranslationInput.checked = settings.blurTranslation;
   pauseOnWordHoverInput.checked = settings.pauseOnWordHover;
+  keyboardShortcutsEnabledInput.checked = settings.keyboardShortcutsEnabled;
   fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
   showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
@@ -651,6 +692,17 @@ function renderSettingsSummary(settings: ExtensionSettings): void {
   settingsLanguageSummary.textContent = `${languageLabel(settings.sourceLanguage)} to ${languageLabel(settings.targetLanguage)}`;
 }
 
+function renderShortcutHelp(): void {
+  shortcutHelpList.innerHTML = DEFAULT_KEYBOARD_SHORTCUTS.map(
+    (shortcut) => `
+      <div class="shortcut-row">
+        <span title="${escapeHtml(shortcut.description)}">${escapeHtml(shortcut.label)}</span>
+        <kbd>${escapeHtml(shortcut.display)}</kbd>
+      </div>
+    `,
+  ).join('');
+}
+
 function languageRouteLabel(job: PopupState['jobHistory'][number]): string {
   return `${languageLabel(job.sourceLanguage)} to ${languageLabel(job.targetLanguage)}`;
 }
@@ -689,6 +741,12 @@ function showError(error: unknown): void {
   settingsLanguageSummary.textContent = 'Unavailable';
   generateButton.disabled = true;
   generateButton.textContent = 'Generate subtitles';
+  overlayVisibleInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayVisible;
+  overlayPositionSelect.value = DEFAULT_EXTENSION_SETTINGS.overlayPosition;
+  captionFontSizeSelect.value = DEFAULT_EXTENSION_SETTINGS.captionFontSize;
+  captionDensitySelect.value = DEFAULT_EXTENSION_SETTINGS.captionDensity;
+  captionContrastThemeSelect.value = DEFAULT_EXTENSION_SETTINGS.captionContrastTheme;
+  keyboardShortcutsEnabledInput.checked = DEFAULT_EXTENSION_SETTINGS.keyboardShortcutsEnabled;
   showTimingOffset(0);
   setSettingsDisabled(true);
 }
@@ -796,6 +854,9 @@ function setSettingsDisabled(disabled: boolean): void {
   }
   overlayVisibleInput.disabled = disabled;
   overlayPositionSelect.disabled = disabled;
+  captionFontSizeSelect.disabled = disabled;
+  captionDensitySelect.disabled = disabled;
+  captionContrastThemeSelect.disabled = disabled;
   setDisabled(showRomanizationInputs, disabled);
   showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
@@ -803,6 +864,7 @@ function setSettingsDisabled(disabled: boolean): void {
   blurRomanizationInput.disabled = disabled;
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
+  keyboardShortcutsEnabledInput.disabled = disabled;
   fullTrackEnrichmentInput.disabled = disabled;
   accountEmailInput.disabled = disabled;
   accountPasswordInput.disabled = disabled;

@@ -1,8 +1,14 @@
 import { browser, type Browser } from 'wxt/browser';
 
-import { DEFAULT_EXTENSION_SETTINGS, createExtensionSettingsFromPartial } from '../utils/settings-model';
+import {
+  DEFAULT_EXTENSION_SETTINGS,
+  createExtensionSettingsFromPartial,
+  type ExtensionSettings,
+} from '../utils/settings-model';
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
+import { cueForNavigation, cueForPlaybackTime, cueStartPlaybackSeconds } from '../utils/cue-navigation';
+import { shortcutActionFromKeyboardEvent, type KeyboardShortcutAction } from '../utils/keyboard-shortcuts';
 import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
 import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
@@ -29,7 +35,9 @@ export default defineContentScript({
 
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
+      onJumpCue: (cue) => jumpToCue(cue),
       onReplayCue: (cue) => replayCue(cue),
+      onSaveCue: (cue) => showSaveCuePlaceholder(cue),
       onStudyHoverEnd: () => resumeVideoAfterStudyHover(),
       onTokenPreview: () => pauseVideoForStudy(),
       onTokenPreviewEnd: () => resumeVideoAfterStudyHover(),
@@ -44,6 +52,7 @@ export default defineContentScript({
       window.addEventListener(eventName, handleYoutubeRouteChange);
     }
 
+    window.addEventListener('keydown', handleKeyboardShortcut, true);
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
     void hydrateContentState();
 
@@ -54,6 +63,7 @@ export default defineContentScript({
       for (const eventName of YOUTUBE_ROUTE_EVENTS) {
         window.removeEventListener(eventName, handleYoutubeRouteChange);
       }
+      window.removeEventListener('keydown', handleKeyboardShortcut, true);
       browser.runtime.onMessage.removeListener(handleRuntimeMessage);
       clearBoundWebVttTrack();
       overlay.unmount();
@@ -106,6 +116,72 @@ export default defineContentScript({
       return false;
     }
 
+    function handleKeyboardShortcut(event: KeyboardEvent): void {
+      const action = shortcutActionFromKeyboardEvent(event, {
+        enabled: settings.keyboardShortcutsEnabled,
+      });
+
+      if (!action) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      void handleShortcutAction(action);
+    }
+
+    async function handleShortcutAction(action: KeyboardShortcutAction): Promise<void> {
+      switch (action) {
+        case 'replay-current-cue':
+          replayCueFromShortcut();
+          return;
+
+        case 'previous-cue':
+          jumpToNeighborCue('previous');
+          return;
+
+        case 'next-cue':
+          jumpToNeighborCue('next');
+          return;
+
+        case 'toggle-translation':
+          if (await updateSettingsFromShortcut({ showTranslation: !settings.showTranslation })) {
+            overlay.showActionStatus(settings.showTranslation ? 'Translation shown.' : 'Translation hidden.', 'success');
+          }
+
+          return;
+
+        case 'toggle-source-blur':
+          if (await updateSettingsFromShortcut({ blurSourceWords: !settings.blurSourceWords })) {
+            overlay.showActionStatus(settings.blurSourceWords ? 'Source words blurred.' : 'Source words revealed.', 'success');
+          }
+
+          return;
+
+        case 'toggle-auto-pause':
+          if (await updateSettingsFromShortcut({ pauseOnWordHover: !settings.pauseOnWordHover })) {
+            overlay.showActionStatus(settings.pauseOnWordHover ? 'Hover pause on.' : 'Hover pause off.', 'success');
+          }
+
+          return;
+
+        case 'toggle-transcript': {
+          const open = overlay.toggleTranscript();
+
+          overlay.showActionStatus(open ? 'Transcript opened.' : 'Transcript closed.', 'info');
+          return;
+        }
+
+        case 'copy-current-cue':
+          await copyCueFromShortcut();
+          return;
+
+        case 'save-current-cue':
+          showSaveCuePlaceholder(activeCueFromState());
+          return;
+      }
+    }
+
     async function hydrateContentState(): Promise<void> {
       try {
         const state = await browser.runtime.sendMessage({ type: 'content.getState' });
@@ -151,6 +227,7 @@ export default defineContentScript({
       studyHoverPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
+      overlay.setTranscriptOpen(false);
     }
 
     function clearSubtitles(): void {
@@ -288,6 +365,67 @@ export default defineContentScript({
       }
     }
 
+    function replayCueFromShortcut(): void {
+      const cue = activeCueFromState();
+
+      if (!cue) {
+        overlay.showActionStatus('No active cue to replay.', 'error');
+
+        return;
+      }
+
+      replayCue(cue);
+      overlay.showActionStatus('Replaying cue.', 'success');
+    }
+
+    function jumpToNeighborCue(direction: 'previous' | 'next'): void {
+      if (subtitleState.type !== 'ready') {
+        overlay.showActionStatus('No generated track is active.', 'error');
+
+        return;
+      }
+
+      const cue = cueForNavigation({
+        track: subtitleState.track,
+        activeCue,
+        currentTimeSeconds: typeof activeVideo?.currentTime === 'number' ? activeVideo.currentTime : null,
+        timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
+        direction,
+      });
+
+      if (!cue) {
+        overlay.showActionStatus('No cue to navigate to.', 'error');
+
+        return;
+      }
+
+      jumpToCue(cue);
+      overlay.showActionStatus(direction === 'previous' ? 'Previous cue.' : 'Next cue.', 'success');
+    }
+
+    function activeCueFromState(): SubtitleCue | null {
+      if (activeCue) {
+        return activeCue;
+      }
+
+      if (subtitleState.type !== 'ready' || !activeVideo) {
+        return null;
+      }
+
+      return cueForPlaybackTime(subtitleState.track, activeVideo.currentTime, settings.subtitleTimingOffsetSeconds);
+    }
+
+    function jumpToCue(cue: SubtitleCue): void {
+      if (!activeVideo) {
+        return;
+      }
+
+      activeVideo.currentTime = cueStartPlaybackSeconds(cue, settings.subtitleTimingOffsetSeconds);
+      activeCue = cue;
+      studyHoverPaused = false;
+      updateOverlay();
+    }
+
     function replayCue(cue: SubtitleCue): void {
       if (!activeVideo) {
         return;
@@ -296,10 +434,11 @@ export default defineContentScript({
       const sourceCue = subtitleState.type === 'ready'
         ? subtitleState.track.cues.find((candidate) => candidate.cueId === cue.cueId) ?? cue
         : cue;
-      const startSeconds = Math.max(0, (sourceCue.startMs / 1000) + settings.subtitleTimingOffsetSeconds);
 
-      activeVideo.currentTime = startSeconds;
+      activeVideo.currentTime = cueStartPlaybackSeconds(sourceCue, settings.subtitleTimingOffsetSeconds);
+      activeCue = sourceCue;
       studyHoverPaused = false;
+      updateOverlay();
       const playResult = activeVideo.play();
 
       if (playResult && typeof playResult.catch === 'function') {
@@ -310,6 +449,32 @@ export default defineContentScript({
           });
         });
       }
+    }
+
+    async function copyCueFromShortcut(): Promise<void> {
+      const cue = activeCueFromState();
+
+      if (!cue) {
+        overlay.showActionStatus('No active cue to copy.', 'error');
+
+        return;
+      }
+
+      if (await copyCueToClipboard(cue)) {
+        overlay.showActionStatus('Cue copied.', 'success');
+      } else {
+        overlay.showActionStatus('Copy failed.', 'error');
+      }
+    }
+
+    function showSaveCuePlaceholder(cue: SubtitleCue | null): void {
+      if (!cue) {
+        overlay.showActionStatus('No active cue to save.', 'error');
+
+        return;
+      }
+
+      overlay.showActionStatus('Save cue is reserved for Phase 02.', 'info');
     }
 
     async function copyCueToClipboard(cue: SubtitleCue): Promise<boolean> {
@@ -347,6 +512,31 @@ export default defineContentScript({
       }
 
       return lines.join('\n');
+    }
+
+    async function updateSettingsFromShortcut(patch: Partial<ExtensionSettings>): Promise<boolean> {
+      try {
+        const response = (await browser.runtime.sendMessage({
+          type: 'content.updateSettings',
+          patch,
+        })) as { ok?: boolean; settings?: ExtensionSettings; error?: string };
+
+        if (response?.settings) {
+          settings = createExtensionSettingsFromPartial(response.settings);
+          updateOverlay();
+
+          return true;
+        }
+
+        throw new Error(response?.error ?? 'Unable to update extension settings.');
+      } catch (error) {
+        overlay.showActionStatus(
+          error instanceof Error ? error.message : 'Unable to update extension settings.',
+          'error',
+        );
+
+        return false;
+      }
     }
 
     function currentVideoDurationSeconds(): number | undefined {

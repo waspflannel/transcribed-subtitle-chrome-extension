@@ -124,7 +124,12 @@
                 <input type="checkbox" name="pauseOnWordHover" disabled />
                 <span>Pause video on word hover</span>
               </label>
+              <label class="toggle">
+                <input type="checkbox" name="keyboardShortcutsEnabled" disabled />
+                <span>Keyboard shortcuts</span>
+              </label>
             </div>
+            <div class="shortcut-list" data-shortcut-help aria-label="Keyboard shortcuts"></div>
           </section>
         </section>
 
@@ -231,6 +236,28 @@
                 <option value="bottom">Bottom</option>
                 <option value="top">Top</option>
                 <option value="compact">Compact</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Caption size</span>
+              <select name="captionFontSize" disabled>
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Caption density</span>
+              <select name="captionDensity" disabled>
+                <option value="comfortable">Comfortable</option>
+                <option value="compact">Compact</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Contrast theme</span>
+              <select name="captionContrastTheme" disabled>
+                <option value="default">Default</option>
+                <option value="high">High contrast</option>
               </select>
             </label>
             <label class="toggle">

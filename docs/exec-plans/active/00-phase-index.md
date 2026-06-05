@@ -19,6 +19,18 @@ The phase sequence is designed to reach real transcription early, keep the Larav
 - Architecture map: `ARCHITECTURE.md`
 - Plan template: `docs/exec-plans/templates/exec-plan-template.md`
 
+## Priority Learning Upgrade
+
+The next product-learning priority is tracked in `00-learning-upgrade/` before the SaaS roadmap:
+
+- `00-learning-upgrade/00-roadmap-index.md`
+- `../completed/2026-06-03-keyboard-transcript-accessibility-foundation.md`
+- `00-learning-upgrade/02-vocabulary-sentence-mining-anki-export.md`
+- `00-learning-upgrade/03-listening-shadowing-speaking-practice.md`
+- `00-learning-upgrade/04-ai-current-line-coach.md`
+
+This roadmap accepts vocabulary review, sentence mining, Anki export, listening/speaking practice, and fixed-mode AI coaching as post-first-release learning-product work. The older first-release non-goals still apply to the completed original release phases unless a newer active plan explicitly supersedes them.
+
 ## SaaS Roadmap
 
 The original extension proof phases are completed. The next product direction is tracked separately in `saas-roadmap/`:
@@ -64,7 +76,7 @@ Execute the SaaS roadmap phase by phase after explicit user request. Each phase 
 - Contracts are schema-first and shared by Laravel and TypeScript.
 - Raw audio is temporary and deleted immediately after processing.
 - Completed tracks are retained for 30 days.
-- No cloud sync beyond the beta account, billing, extension-token, usage, and job-history records required for the SaaS release. Subtitle editing, Netflix support, and vocabulary review remain out of scope.
+- No cloud sync beyond the beta account, billing, extension-token, usage, and job-history records required for the SaaS release. Subtitle editing and Netflix support remain out of scope. Vocabulary review remains out of scope for the original first-release phases, but is now accepted by the prioritized Learning Upgrade roadmap.
 - Each phase must apply `docs/quality/golden-principles.md` before review so repeated simplicity and readability feedback does not need to be rediscovered.
 
 ## Cross-Phase Validation
@@ -106,3 +118,4 @@ As implementation code appears, each phase must add stack-specific checks rather
 | 2026-05-22 | SaaS Phase 03 accounts and extension auth completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md`; verified web accounts, scoped extension tokens, and authenticated job ownership. |
 | 2026-05-22 | Fortify/Sanctum auth migration completed and archived. | `docs/exec-plans/completed/2026-05-22-fortify-sanctum-auth-migration.md`; web auth moved to Fortify and extension bearer auth moved to Sanctum. |
 | 2026-05-22 | SaaS Phase 05 website and SEO completed and archived. | `docs/exec-plans/completed/2026-05-22-saas-roadmap-phase-05-saas-website-and-seo.md`; server-rendered marketing pages, dashboard, job detail pages, SEO files, and first-party funnel analytics. |
+| 2026-06-03 | Learning Upgrade Phase 01 keyboard transcript accessibility foundation completed and archived. | `docs/exec-plans/completed/2026-06-03-keyboard-transcript-accessibility-foundation.md` |

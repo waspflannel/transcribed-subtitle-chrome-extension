@@ -8,12 +8,19 @@ import {
 } from './languages';
 
 export type OverlayPosition = 'bottom' | 'top' | 'compact';
+export type CaptionFontSize = 'small' | 'medium' | 'large';
+export type CaptionDensity = 'compact' | 'comfortable';
+export type CaptionContrastTheme = 'default' | 'high';
 
 export interface ExtensionSettings {
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;
   overlayVisible: boolean;
   overlayPosition: OverlayPosition;
+  captionFontSize: CaptionFontSize;
+  captionDensity: CaptionDensity;
+  captionContrastTheme: CaptionContrastTheme;
+  keyboardShortcutsEnabled: boolean;
   showRomanization: boolean;
   showTranslation: boolean;
   showGloss: boolean;
@@ -33,6 +40,10 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
   overlayVisible: true,
   overlayPosition: 'bottom',
+  captionFontSize: 'medium',
+  captionDensity: 'comfortable',
+  captionContrastTheme: 'default',
+  keyboardShortcutsEnabled: true,
   showRomanization: true,
   showTranslation: false,
   showGloss: true,
@@ -67,6 +78,22 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
     value?.overlayPosition === 'compact'
   ) {
     settings.overlayPosition = value.overlayPosition;
+  }
+
+  if (value?.captionFontSize === 'small' || value?.captionFontSize === 'medium' || value?.captionFontSize === 'large') {
+    settings.captionFontSize = value.captionFontSize;
+  }
+
+  if (value?.captionDensity === 'compact' || value?.captionDensity === 'comfortable') {
+    settings.captionDensity = value.captionDensity;
+  }
+
+  if (value?.captionContrastTheme === 'default' || value?.captionContrastTheme === 'high') {
+    settings.captionContrastTheme = value.captionContrastTheme;
+  }
+
+  if (typeof value?.keyboardShortcutsEnabled === 'boolean') {
+    settings.keyboardShortcutsEnabled = value.keyboardShortcutsEnabled;
   }
 
   if (typeof value?.showRomanization === 'boolean') {

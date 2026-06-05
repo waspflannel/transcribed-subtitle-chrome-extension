@@ -88,6 +88,84 @@ describe('renderOverlayContent', () => {
     expect(failedHtml).toContain('class="control-status failed"');
   });
 
+  it('renders transcript cues with active state, metadata, and accessible controls', () => {
+    const track = trackResponse({
+      cues: [
+        subtitleCue({
+          cueId: 'cue-0001',
+          index: 0,
+          sourceText: 'hola',
+          translatedText: 'Bonjour',
+          romanization: 'o-la',
+        }),
+        subtitleCue({
+          cueId: 'cue-0002',
+          index: 1,
+          sourceText: 'adios',
+          translatedText: 'Au revoir',
+          romanization: 'a-dios',
+        }),
+      ],
+    });
+    const html = renderOverlayContent(readyState(track), {
+      pinnedTokenIndex: null,
+      transcriptOpen: true,
+    });
+
+    expect(html).toContain('role="complementary" aria-label="Generated transcript"');
+    expect(html).toContain('2 of 2 cues');
+    expect(html).toContain('Search cues');
+    expect(html).toContain('Cue 1');
+    expect(html).toContain('00:00 - 00:02');
+    expect(html).toContain('aria-current="true"');
+    expect(html).toContain('aria-label="Jump cue 1"');
+    expect(html).toContain('aria-label="Replay cue 1"');
+    expect(html).toContain('aria-label="Copy cue 1"');
+    expect(html).toContain('aria-label="Save cue 1"');
+    expect(html).toContain('Close');
+  });
+
+  it('filters transcript cues by source, romanization, translation, and token text', () => {
+    const track = trackResponse({
+      cues: [
+        subtitleCue({
+          cueId: 'cue-0001',
+          index: 0,
+          sourceText: 'hola',
+          translatedText: 'Bonjour',
+          romanization: 'o-la',
+        }),
+        subtitleCue({
+          cueId: 'cue-0002',
+          index: 1,
+          sourceText: 'adios',
+          translatedText: 'Au revoir',
+          romanization: 'a-dios',
+          tokenText: 'farewell',
+        }),
+      ],
+    });
+    const html = renderOverlayContent(readyState(track), {
+      pinnedTokenIndex: null,
+      transcriptOpen: true,
+      transcriptSearchQuery: 'farewell',
+    });
+
+    expect(html).toContain('1 of 2 cues');
+    expect(html).toContain('adios');
+    expect(html).not.toContain('Cue 1');
+  });
+
+  it('can show the transcript while the caption rail is hidden', () => {
+    const html = renderOverlayContent(readyStateWithSettings({ overlayVisible: false }), {
+      pinnedTokenIndex: null,
+      transcriptOpen: true,
+    });
+
+    expect(html).not.toContain('data-study-rail');
+    expect(html).toContain('class="transcript-panel"');
+  });
+
   it('renders hover preview and pinned token detail without null placeholders', () => {
     const hoverHtml = renderOverlayContent(readyState());
     const pinnedHtml = renderOverlayContent(readyState(), {
@@ -242,6 +320,7 @@ function trackResponse(
     sourceText?: string;
     translatedText?: string;
     tokens?: TrackResponse['cues'][number]['tokens'];
+    cues?: TrackResponse['cues'];
   } = {},
 ): TrackResponse {
   return {
@@ -253,7 +332,7 @@ function trackResponse(
     generatedAt: '2026-05-02T00:00:00Z',
     expiresAt: '2026-06-01T00:00:00Z',
     webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nhola\n",
-    cues: [
+    cues: overrides.cues ?? [
       {
         cueId: 'cue-0001',
         index: 0,
@@ -274,6 +353,33 @@ function trackResponse(
             usageNote: 'Common greeting.',
           },
         ],
+      },
+    ],
+  };
+}
+
+function subtitleCue(overrides: {
+  cueId: string;
+  index: number;
+  sourceText: string;
+  translatedText: string;
+  romanization?: string;
+  tokenText?: string;
+}): TrackResponse['cues'][number] {
+  return {
+    cueId: overrides.cueId,
+    index: overrides.index,
+    startMs: overrides.index === 0 ? 500 : 2600,
+    endMs: overrides.index === 0 ? 2100 : 4200,
+    sourceText: overrides.sourceText,
+    translatedText: overrides.translatedText,
+    romanization: overrides.romanization,
+    tokens: [
+      {
+        index: 0,
+        text: overrides.tokenText ?? overrides.sourceText,
+        normalizedText: overrides.tokenText ?? overrides.sourceText,
+        romanization: overrides.romanization,
       },
     ],
   };

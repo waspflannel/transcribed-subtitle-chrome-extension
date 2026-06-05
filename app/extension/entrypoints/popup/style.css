@@ -532,6 +532,46 @@ button:disabled {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.shortcut-list {
+  display: grid;
+  gap: 0.34rem;
+  min-width: 0;
+}
+
+.shortcut-row {
+  align-items: center;
+  background: rgba(255, 253, 247, 0.055);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--soft);
+  display: grid;
+  gap: 0.42rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0.42rem;
+}
+
+.shortcut-row span {
+  font-size: 0.72rem;
+  font-weight: 850;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-row kbd {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.64rem;
+  font-weight: 850;
+  padding: 0.16rem 0.32rem;
+  white-space: nowrap;
+}
+
 .toggle {
   align-items: center;
   background: rgba(255, 253, 247, 0.055);

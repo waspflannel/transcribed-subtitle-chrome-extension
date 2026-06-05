@@ -7,6 +7,7 @@ describe('runtime message validation', () => {
     expect(isRuntimeMessage({ type: 'content.getState' })).toBe(true);
     expect(isRuntimeMessage({ type: 'popup.getState', syncBackend: false })).toBe(true);
     expect(isRuntimeMessage({ type: 'popup.updateSettings', patch: { showTranslation: true } })).toBe(true);
+    expect(isRuntimeMessage({ type: 'content.updateSettings', patch: { blurSourceWords: true } })).toBe(true);
     expect(isRuntimeMessage({ type: 'popup.login', email: 'learner@example.com', password: 'secret' })).toBe(true);
     expect(isRuntimeMessage({ type: 'popup.logout' })).toBe(true);
     expect(
@@ -34,6 +35,7 @@ describe('runtime message validation', () => {
 
   it('rejects messages that only provide a type without the payload contract', () => {
     expect(isRuntimeMessage({ type: 'popup.updateSettings' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'content.updateSettings' })).toBe(false);
     expect(isRuntimeMessage({ type: 'popup.getState', syncBackend: 'yes' })).toBe(false);
     expect(isRuntimeMessage({ type: 'popup.login', email: 'learner@example.com' })).toBe(false);
     expect(
