@@ -29,6 +29,14 @@ The script starts Postgres and Redis through Docker Compose, writes the ignored 
 .\scripts\runtime\artisan.ps1 serve
 ```
 
+For local subtitle generation, prefer the runtime launcher from the repository root. It replaces any existing local backend server and subtitle queue workers for this project, then starts a fresh backend plus the configured worker groups:
+
+```powershell
+.\scripts\runtime\start-local-backend-workers.ps1
+```
+
+Script-managed workers run without a max-time limit by default; rerun the launcher when you want to replace the local backend and worker pool.
+
 Local generate requests auto-start subtitle queue workers by default through `SUBTITLE_AUTO_START_WORKERS=true`. The spawned workers use shared worker groups: generation priority workers listen to `subtitle-generation-ultimate,subtitle-generation-pro,subtitle-generation-plus,subtitle-generation-base`, batch priority workers listen to `subtitle-batch-ultimate,subtitle-batch-pro,subtitle-batch-plus,subtitle-batch-base`, and base guarantee workers listen only to base queues. Workers run with `SUBTITLE_AUTO_WORKER_TRIES=0` by default and exit after `SUBTITLE_AUTO_WORKER_MAX_TIME_SECONDS`. AI batch jobs allow unlimited release attempts with `maxExceptions=1`, so deliberate concurrency-delay releases do not fail as exhausted attempts while real exceptions still fail the job.
 
 Generation admission uses authenticated `user_id` before dispatch. AI batch concurrency limiter bookkeeping uses the dedicated Redis-backed cache store configured by `SUBTITLE_CONCURRENCY_CACHE_STORE=subtitle_concurrency`, with Redis connection and lock connection both defaulting to `cache`. The global `CACHE_STORE` can remain `database`; `subtitles:runtime-check --strict` verifies that Redis queues are not paired with database-backed limiter locks.
