@@ -38,7 +38,7 @@
     <body class="{{ $bodyClassValue }}">
         <header class="site-header">
             <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
-                <span class="brand-mark" aria-hidden="true">CC</span>
+                <span class="brand-mark" aria-hidden="true">TS</span>
                 <span>{{ $productName }}</span>
             </a>
             <nav class="site-nav" aria-label="Primary">
@@ -53,7 +53,7 @@
                     <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
-                    <a class="button button-small" href="{{ route('register') }}">Join paid beta</a>
+                    <a class="button button-small" href="{{ route('marketing.home') }}#download">Download extension</a>
                 @endauth
             </div>
         </header>
@@ -65,7 +65,7 @@
         <footer class="site-footer">
             <div>
                 <strong>{{ $productName }}</strong>
-                <p>AI subtitles, translations, romanization, and word cards for public YouTube videos.</p>
+                <p>Generated subtitles, translations, romanization, and word cards for public YouTube videos.</p>
             </div>
             <nav aria-label="Footer">
                 <a href="{{ route('marketing.privacy') }}">Privacy</a>

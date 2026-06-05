@@ -5,7 +5,7 @@
         <p class="eyebrow">FAQ</p>
         <h1>Beta answers without hidden product promises.</h1>
         <p>
-            AI Language Subtitles focuses on public YouTube videos, generated subtitle tracks, translations, romanization, and word-card study data.
+            Transcribed Subtitle Extension focuses on public YouTube videos, generated subtitle tracks, translations, romanization, and word-card study data.
         </p>
     </section>
 

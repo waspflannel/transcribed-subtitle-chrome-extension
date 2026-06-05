@@ -32,7 +32,7 @@ class WebSubtitleJobController extends Controller
             'track' => $job->track,
             'billableMinutes' => $usage->billableMinutes($job->video_duration_seconds),
             'languagePair' => $this->languagePair($job),
-            'pageTitle' => 'Subtitle job '.$job->public_id.' | AI Language Subtitles',
+            'pageTitle' => 'Subtitle job '.$job->public_id.' | '.config('marketing.product_name'),
             'metaDescription' => 'Public-safe subtitle job status for support.',
             'canonicalUrl' => route('dashboard.jobs.show', ['jobId' => $job->public_id]),
             'robots' => 'noindex,nofollow',

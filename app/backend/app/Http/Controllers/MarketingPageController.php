@@ -82,44 +82,46 @@ class MarketingPageController extends Controller
      */
     private function metadata(string $page): array
     {
+        $productName = (string) config('marketing.product_name');
+
         $metadata = [
             'home' => [
-                'title' => 'AI Language Subtitles for YouTube language learners',
+                'title' => $productName.' for YouTube language learners',
                 'description' => 'Generate study-ready subtitles, translations, romanization, and word cards for public YouTube videos.',
                 'route' => 'marketing.home',
             ],
             'pricing' => [
-                'title' => 'Pricing for AI Language Subtitles',
+                'title' => 'Pricing for '.$productName,
                 'description' => 'Compare generated-video-minute plans, queue speed, concurrency, and learning features for the paid beta.',
                 'route' => 'marketing.pricing',
             ],
             'languages' => [
-                'title' => 'Language coverage for AI subtitles',
+                'title' => 'Language coverage for '.$productName,
                 'description' => 'See supported subtitle and translation languages grouped by current transcription quality tier.',
                 'route' => 'marketing.languages',
             ],
             'how-it-works' => [
-                'title' => 'How AI Language Subtitles works',
+                'title' => 'How '.$productName.' works',
                 'description' => 'Learn how the Chrome extension sends public YouTube audio to the Laravel backend and returns synced subtitle tracks.',
                 'route' => 'marketing.how-it-works',
             ],
             'faq' => [
-                'title' => 'AI Language Subtitles FAQ',
+                'title' => $productName.' FAQ',
                 'description' => 'Answers about YouTube support, beta limits, billing, language coverage, generated tracks, and privacy.',
                 'route' => 'marketing.faq',
             ],
             'privacy' => [
-                'title' => 'Privacy for AI Language Subtitles',
+                'title' => 'Privacy for '.$productName,
                 'description' => 'How public YouTube audio, transcripts, generated tracks, providers, retention, and analytics are handled.',
                 'route' => 'marketing.privacy',
             ],
             'terms' => [
-                'title' => 'Terms for AI Language Subtitles',
+                'title' => 'Terms for '.$productName,
                 'description' => 'Beta terms covering subscriptions, refunds, support, acceptable use, AI limitations, and service availability.',
                 'route' => 'marketing.terms',
             ],
             'support' => [
-                'title' => 'Support for AI Language Subtitles',
+                'title' => 'Support for '.$productName,
                 'description' => 'Get help with beta access, extension setup, billing, refunds, generation failures, and language coverage.',
                 'route' => 'marketing.support',
             ],
