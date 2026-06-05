@@ -8,8 +8,11 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{{ $productName }}</title>
         <meta name="robots" content="noindex,nofollow">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="{{ asset('css/site.css') }}">
-    </head>
+        </head>
     <body class="auth-body">
         <header class="auth-header">
             <a class="brand" href="{{ route('marketing.home') }}">

@@ -1,33 +1,27 @@
 :root {
-    --ink: #111827;
-    --ink-soft: #34404d;
-    --muted: #6a7280;
-    --paper: #f4efe6;
-    --paper-strong: #fffdf7;
-    --paper-warm: #e9dfcf;
-    --void: #090a0c;
-    --console: #111419;
-    --console-soft: #191e25;
-    --console-high: #242b35;
-    --glass: rgba(10, 13, 18, 0.76);
-    --glass-light: rgba(255, 253, 247, 0.76);
-    --line: rgba(17, 24, 39, 0.14);
-    --line-dark: rgba(255, 253, 247, 0.14);
-    --teal: #0f766e;
-    --teal-bright: #5eead4;
-    --teal-soft: #ccfbf1;
-    --amber: #d97706;
-    --amber-bright: #f59e0b;
-    --amber-soft: #fef3c7;
+    --bg-black: #050505;
+    --obsidian: #0b0a08;
+    --raised: #15120e;
+    --ink: #15110d;
+    --ivory: #f4ead7;
+    --muted-parchment: #c8b99e;
+    --aged-paper: #f3ead8;
+    --brass: #b88a3b;
+    --brass-hover: #d4aa57;
+    --oxblood: #7f1d1d;
+    --library-green: #183b2d;
     --danger: #b91c1c;
-    --danger-bg: #fee2e2;
-    --success: #047857;
-    --success-bg: #d1fae5;
-    --shadow: 0 26px 72px rgba(8, 10, 12, 0.22);
-    --soft-shadow: 0 18px 48px rgba(17, 24, 39, 0.12);
+    --danger-bg: rgba(185, 28, 28, 0.15);
+    --line-dark: rgba(244, 234, 215, 0.14);
+    --line-light: rgba(21, 17, 13, 0.16);
+    --glass: rgba(11, 10, 8, 0.85);
+    --glass-light: rgba(243, 234, 216, 0.85);
+    --shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
+    --soft-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
     --content: 1180px;
-    color: var(--ink);
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    color: var(--ivory);
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
     line-height: 1.5;
 }
 
@@ -40,9 +34,8 @@ html {
 }
 
 body {
-    background:
-        radial-gradient(circle at 80% 0%, rgba(15, 118, 110, 0.14), transparent 34rem),
-        linear-gradient(180deg, #fbf7ef 0%, var(--paper) 36%, #efe4d5 100%);
+    background-color: var(--bg-black);
+    color: var(--ivory);
     margin: 0;
     min-height: 100vh;
     overflow-x: hidden;
@@ -55,7 +48,7 @@ a {
 p,
 dd,
 li {
-    color: var(--muted);
+    color: var(--muted-parchment);
     overflow-wrap: anywhere;
 }
 
@@ -72,12 +65,13 @@ ul {
 h1,
 h2,
 h3 {
-    color: var(--ink);
-    font-family: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
+    color: var(--ivory);
+    font-family: "Cormorant Garamond", "EB Garamond", serif;
     letter-spacing: 0;
-    line-height: 1.02;
+    line-height: 1.05;
     overflow-wrap: normal;
     word-break: normal;
+    font-weight: 400;
 }
 
 h1 {
@@ -188,8 +182,8 @@ summary:focus-visible {
 .site-footer a,
 .text-link,
 .button-link {
-    color: #26313d;
-    font-weight: 800;
+    color: var(--muted-parchment);
+    font-weight: 500;
     text-decoration: none;
     transition: color 150ms ease;
 }
@@ -198,7 +192,7 @@ summary:focus-visible {
 .site-footer a:hover,
 .text-link:hover,
 .button-link:hover {
-    color: var(--teal);
+    color: var(--brass);
 }
 
 .site-actions {
@@ -209,13 +203,16 @@ summary:focus-visible {
 .button,
 button {
     align-items: center;
-    background: var(--teal);
-    border: 1px solid var(--teal);
-    border-radius: 8px;
-    color: #f8fffd;
+    background: var(--brass);
+    border: 1px solid var(--brass);
+    border-radius: 4px;
+    color: var(--bg-black);
     cursor: pointer;
     display: inline-flex;
-    font-weight: 900;
+    font-weight: 500;
+    font-family: "IBM Plex Mono", monospace;
+    text-transform: uppercase;
+    font-size: 0.85rem;
     justify-content: center;
     min-height: 44px;
     padding: 0 18px;
@@ -223,16 +220,14 @@ button {
     transition:
         background 150ms ease,
         border-color 150ms ease,
-        box-shadow 150ms ease,
-        transform 150ms ease;
+        color 150ms ease;
 }
 
 .button:hover,
 button:hover {
-    background: #0b5f59;
-    border-color: #0b5f59;
-    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.16);
-    transform: translateY(-1px);
+    background: var(--brass-hover);
+    border-color: var(--brass-hover);
+    color: var(--bg-black);
 }
 
 .button-small {
@@ -241,15 +236,15 @@ button:hover {
 }
 
 .button-secondary {
-    background: rgba(255, 253, 247, 0.72);
-    border-color: rgba(17, 24, 39, 0.16);
-    color: var(--ink);
+    background: transparent;
+    border-color: var(--muted-parchment);
+    color: var(--ivory);
 }
 
 .button-secondary:hover {
-    background: #fffdf7;
-    border-color: rgba(15, 118, 110, 0.44);
-    color: var(--ink);
+    background: var(--raised);
+    border-color: var(--brass);
+    color: var(--brass);
 }
 
 .full-width {
@@ -449,9 +444,9 @@ button:hover {
 .auth-panel,
 .language-group,
 .faq-list details {
-    background: rgba(255, 253, 247, 0.74);
-    border: 1px solid rgba(17, 24, 39, 0.12);
-    border-radius: 10px;
+    background: var(--raised);
+    border: 1px solid var(--line-light);
+    border-radius: 4px;
     box-shadow: var(--soft-shadow);
 }
 
@@ -851,6 +846,10 @@ button:hover {
     display: grid;
     gap: 24px;
     max-width: 860px;
+    background: var(--obsidian);
+    padding: 48px;
+    border: 1px solid var(--line-light);
+    border-radius: 4px;
 }
 
 .legal-copy h2 {
@@ -858,9 +857,7 @@ button:hover {
 }
 
 .auth-body {
-    background:
-        radial-gradient(circle at 72% 16%, rgba(245, 158, 11, 0.18), transparent 24rem),
-        linear-gradient(135deg, var(--void), var(--console));
+    background-color: var(--bg-black);
 }
 
 .auth-header {
@@ -870,7 +867,7 @@ button:hover {
 }
 
 .auth-header .brand {
-    color: #fffdf7;
+    color: var(--ivory);
 }
 
 .auth-shell {
@@ -882,7 +879,7 @@ button:hover {
 }
 
 .auth-panel {
-    background: rgba(255, 253, 247, 0.9);
+    background: var(--obsidian);
     display: grid;
     gap: 20px;
     max-width: 360px;
@@ -903,10 +900,10 @@ button:hover {
 
 .auth-panel label,
 .stack-form label {
-    color: var(--ink-soft);
+    color: var(--muted-parchment);
     display: grid;
     font-size: 0.9rem;
-    font-weight: 850;
+    font-weight: 500;
     gap: 7px;
 }
 
@@ -918,10 +915,10 @@ button:hover {
 
 input,
 select {
-    background: #fffdf7;
-    border: 1px solid rgba(17, 24, 39, 0.18);
-    border-radius: 8px;
-    color: var(--ink);
+    background: var(--bg-black);
+    border: 1px solid var(--line-light);
+    border-radius: 4px;
+    color: var(--ivory);
     min-height: 42px;
     padding: 0 12px;
     width: 100%;
@@ -1430,4 +1427,195 @@ td small {
         padding: 20px;
         width: min(calc(100vw - 40px), 360px);
     }
+}
+
+/* --- DARK ACADEMIA HERMES-STYLE REFACTOR --- */
+.da-main {
+    background: #050505; /* Black */
+    color: var(--ivory);
+    font-family: "IBM Plex Mono", monospace;
+}
+
+.da-hero {
+    padding: 6vw 4vw;
+    border-bottom: 1px solid rgba(244, 234, 215, 0.14);
+}
+
+.da-hero-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1600px;
+    margin: 0 auto;
+    gap: 4vw;
+}
+
+.da-hero-text {
+    flex: 1;
+}
+
+.da-hero-visual {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.da-hero-visual img {
+    max-width: 100%;
+    height: auto;
+    filter: grayscale(100%) contrast(1.3) brightness(0.8);
+}
+
+.da-eyebrow {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+    color: var(--muted-parchment);
+}
+
+.da-h1 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: clamp(4rem, 8vw, 8rem);
+    line-height: 0.9;
+    font-weight: 400;
+    text-transform: uppercase;
+    margin: 0 0 3rem 0;
+    color: var(--ivory);
+}
+
+.da-button {
+    display: inline-flex;
+    align-items: center;
+    background: var(--ivory);
+    color: #050505;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 0;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.da-button:hover {
+    background: var(--brass);
+}
+.da-icon {
+    margin-right: 0.5rem;
+}
+
+/* Preview Section */
+.da-preview {
+    padding: 4vw;
+    background: #050505;
+}
+.da-preview-frame {
+    max-width: 1400px;
+    margin: 0 auto;
+    border: 1px solid rgba(244, 234, 215, 0.14);
+    position: relative;
+}
+.da-preview-frame img {
+    width: 100%;
+    display: block;
+}
+.da-preview-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem 1rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    border-top: 1px solid rgba(244, 234, 215, 0.14);
+    background: rgba(5, 5, 5, 0.8);
+    backdrop-filter: blur(4px);
+    color: var(--ivory);
+    text-transform: uppercase;
+}
+
+/* Features Section */
+.da-features-section {
+    background: var(--ivory);
+    color: #050505;
+    padding: 6vw 4vw;
+}
+.da-features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4vw;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+@media (max-width: 1024px) {
+    .da-features-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+    .da-features-grid { grid-template-columns: 1fr; }
+    .da-hero-content { flex-direction: column; }
+}
+
+.da-feature {
+    display: flex;
+    flex-direction: column;
+}
+.da-feature-header {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid #050505;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: #050505;
+}
+.da-h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: clamp(2.5rem, 4vw, 4rem);
+    line-height: 0.9;
+    font-weight: 400;
+    text-transform: uppercase;
+    margin: 0 0 2rem 0;
+    color: #050505;
+}
+.da-feature-image {
+    width: 100%;
+    aspect-ratio: 1;
+    margin-bottom: 1.5rem;
+    background: #050505;
+    overflow: hidden;
+    border: 1px solid #050505;
+}
+.da-feature-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    mix-blend-mode: multiply;
+    filter: grayscale(100%) contrast(1.5);
+}
+.da-feature-desc {
+    font-size: 0.75rem;
+    line-height: 1.6;
+    letter-spacing: 0.05em;
+    color: #050505;
+    text-transform: uppercase;
+}
+
+/* Final CTA */
+.da-final-cta {
+    background: #050505;
+    padding: 10vw 0;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.da-giant-text {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 24vw;
+    line-height: 0.8;
+    color: var(--ivory);
+    white-space: nowrap;
+    text-transform: uppercase;
 }
