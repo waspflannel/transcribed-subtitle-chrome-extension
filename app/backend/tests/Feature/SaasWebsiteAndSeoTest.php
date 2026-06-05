@@ -20,7 +20,7 @@ class SaasWebsiteAndSeoTest extends TestCase
     public function test_public_pages_render_seo_metadata_and_beta_copy(): void
     {
         $pages = [
-            ['marketing.home', 'Turn any public YouTube video into a study session.', 'Start learning instantly'],
+            ['marketing.home', 'Transcribed Subtitle Extension', 'learn languages using youtube'],
             ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
             ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
             ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],

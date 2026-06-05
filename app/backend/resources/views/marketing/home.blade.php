@@ -1,114 +1,136 @@
 @extends('layouts.site')
 
 @section('content')
-    <section class="hero">
+    @php
+        $assetBase = 'img/marketing/dark-academia';
+        $downloadHref = '#download';
+        $videoSources = [];
+        $webmDemoPath = 'video/marketing/extension-demo.webm';
+        $mp4DemoPath = 'video/marketing/extension-demo.mp4';
+
+        if (file_exists(public_path($webmDemoPath))) {
+            $videoSources[] = ['src' => asset($webmDemoPath), 'type' => 'video/webm'];
+        }
+
+        if (file_exists(public_path($mp4DemoPath))) {
+            $videoSources[] = ['src' => asset($mp4DemoPath), 'type' => 'video/mp4'];
+        }
+
+        $perks = [
+            [
+                'label' => '01',
+                'title' => 'Perk 1',
+                'body' => 'Placeholder body for the first approved language-learning benefit.',
+                'image' => 'perk-missing-captions.png',
+            ],
+            [
+                'label' => '02',
+                'title' => 'Perk 2',
+                'body' => 'Placeholder body for the second approved language-learning benefit.',
+                'image' => 'perk-translation-layer.png',
+            ],
+            [
+                'label' => '03',
+                'title' => 'Perk 3',
+                'body' => 'Placeholder body for the third approved language-learning benefit.',
+                'image' => 'perk-word-cards.png',
+            ],
+            [
+                'label' => '04',
+                'title' => 'Perk 4',
+                'body' => 'Placeholder body for the fourth approved language-learning benefit.',
+                'image' => null,
+            ],
+            [
+                'label' => '05',
+                'title' => 'Perk 5',
+                'body' => 'Placeholder body for the fifth approved language-learning benefit.',
+                'image' => null,
+            ],
+            [
+                'label' => '06',
+                'title' => 'Perk 6',
+                'body' => 'Placeholder body for the sixth approved language-learning benefit.',
+                'image' => null,
+            ],
+        ];
+    @endphp
+
+    <section class="hero hero-editorial">
+        <img class="hero-image" src="{{ asset($assetBase.'/hero-language-desk.png') }}" alt="" aria-hidden="true">
+        <div class="hero-scrim" aria-hidden="true"></div>
         <div class="hero-copy">
             <p class="eyebrow">Paid beta for YouTube language learners</p>
-            <h1>Turn any public YouTube video into a study session.</h1>
-            <p class="hero-lede">
-                Generate synced subtitles, translations, romanization, and word cards when captions are missing or not useful for learning.
-            </p>
+            <h1>Transcribed Subtitle Extension</h1>
+            <p class="hero-lede">learn languages using youtube</p>
             <div class="hero-actions">
-                <a class="button" href="{{ route('register') }}">Join paid beta</a>
-                <a class="button button-secondary" href="{{ route('marketing.pricing') }}">See pricing</a>
+                <a class="button" href="{{ $downloadHref }}">Download extension</a>
             </div>
         </div>
     </section>
 
-    <section class="section product-preview-section">
-        <div class="section-heading">
-            <p class="eyebrow">Product preview</p>
-            <h2>Bring the video. Add the study layer.</h2>
-            <p>Preview the generation flow and study overlay before choosing a plan.</p>
+    <section class="section product-video-section" aria-labelledby="product-video-title">
+        <div class="section-heading section-heading-centered">
+            <p class="eyebrow">Product video</p>
+            <h2 id="product-video-title">The study layer belongs center stage.</h2>
+            <p>A local MP4 or WebM demo can replace this generated poster when the extension-in-use recording is ready.</p>
         </div>
-        <div class="product-preview-grid" aria-label="Product preview frames">
-            <div class="product-frame product-frame-wide" aria-hidden="true">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-            <div class="product-frame product-frame-narrow" aria-hidden="true">
-                <span></span>
-                <span></span>
-                <span></span>
+
+        <div class="video-showcase">
+            <video
+                class="product-video"
+                controls
+                preload="metadata"
+                playsinline
+                poster="{{ asset($assetBase.'/product-video-poster.png') }}"
+                aria-label="Transcribed Subtitle Extension demo video"
+            >
+                @foreach ($videoSources as $source)
+                    <source src="{{ $source['src'] }}" type="{{ $source['type'] }}">
+                @endforeach
+                Your browser can display the generated poster until the demo video file is available.
+            </video>
+            <div class="video-frame-meta" aria-hidden="true">
+                <span>MP4/WebM slot ready</span>
+                <span>Generated poster fallback</span>
             </div>
         </div>
     </section>
 
-    <section class="section workflow-story" aria-labelledby="workflow-title">
-        <div class="section-heading workflow-story-heading">
-            <p class="eyebrow">Workflow</p>
-            <h2 id="workflow-title">Open, generate, learn.</h2>
-            <p>Move from video to study mode in three focused steps.</p>
+    <section class="why-section" aria-labelledby="why-title">
+        <div class="why-intro">
+            <p class="eyebrow">Why use it</p>
+            <h2 id="why-title">Six placeholder perk slots for approved claims.</h2>
         </div>
 
-        <article class="workflow-feature">
-            <div class="workflow-copy">
-                <p class="workflow-step">Step 1</p>
-                <h3>Open a video</h3>
-                <p>Pick any public YouTube video you want to understand.</p>
-            </div>
-            <div class="workflow-visual workflow-visual-video" role="img" aria-label="Placeholder screenshot for opening a YouTube video">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </article>
-
-        <article class="workflow-feature workflow-feature-reverse">
-            <div class="workflow-copy">
-                <p class="workflow-step">Step 2</p>
-                <h3>Generate subtitles</h3>
-                <p>Choose your languages and start one explicit generation step.</p>
-            </div>
-            <div class="workflow-visual workflow-visual-generate" role="img" aria-label="Placeholder screenshot for generating subtitles">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </article>
-
-        <article class="workflow-feature">
-            <div class="workflow-copy">
-                <p class="workflow-step">Step 3</p>
-                <h3>Start learning instantly</h3>
-                <p>Break down the foreign-language track while you watch.</p>
-            </div>
-            <div class="workflow-visual workflow-visual-learn" role="img" aria-label="Placeholder screenshot for the learning overlay">
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </article>
-    </section>
-
-    <section class="section split-section language-range-section">
-        <div>
-            <p class="eyebrow">Language range</p>
-            <h2>Built for more than one watch list.</h2>
-            <p>
-                Start with popular study languages and keep going. The full catalog includes clear coverage tiers instead of vague promises.
-            </p>
-            <a class="coverage-link" href="{{ route('marketing.languages') }}">
-                <span>View all language coverage</span>
-                <span>Browse the full catalog and quality tiers</span>
-            </a>
-        </div>
-        <ul class="language-strip" aria-label="Featured languages">
-            @foreach ($featuredLanguages as $language)
-                <li>{{ $language }}</li>
+        <div class="perk-grid">
+            @foreach ($perks as $perk)
+                <article class="perk-card">
+                    @if ($perk['image'])
+                        <img src="{{ asset($assetBase.'/'.$perk['image']) }}" alt="" aria-hidden="true">
+                    @else
+                        <div class="perk-index" aria-hidden="true">{{ $perk['label'] }}</div>
+                    @endif
+                    <div>
+                        <span>{{ $perk['label'] }}</span>
+                        <h3>{{ $perk['title'] }}</h3>
+                        <p>{{ $perk['body'] }}</p>
+                    </div>
+                </article>
             @endforeach
-            <li>and more</li>
-        </ul>
+        </div>
     </section>
 
-    <section class="section final-cta">
-        <p class="eyebrow">Try it</p>
-        <h2>Try AI Language Subtitles on your next video.</h2>
-        <p>Join the paid beta, choose a plan, and start turning public YouTube videos into study sessions.</p>
-        <a class="button" href="{{ route('marketing.pricing') }}">Try AI Language Subtitles</a>
+    <section class="section final-cta final-cta-image" id="download">
+        <div class="final-copy">
+            <p class="eyebrow">Download</p>
+            <h2>Bring the reading room to your next YouTube lesson.</h2>
+            <p>
+                The public download link is a placeholder until the Chrome Web Store or beta install path is ready.
+            </p>
+            <a class="button" href="{{ $downloadHref }}">Download extension</a>
+            <a class="button button-secondary" href="{{ route('marketing.pricing') }}">See pricing</a>
+        </div>
+        <img src="{{ asset($assetBase.'/final-reading-room.png') }}" alt="" aria-hidden="true">
     </section>
 @endsection
