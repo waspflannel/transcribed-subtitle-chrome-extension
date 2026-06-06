@@ -1374,3 +1374,785 @@ td small {
         font-size: 1.6rem;
     }
 }
+
+.hermes-landing-body {
+    --hermes-bg: #0a0a0a;
+    --hermes-surface-1: #111111;
+    --hermes-surface-2: #1a1a1a;
+    --hermes-surface-3: #242424;
+    --hermes-border: #2a2a2a;
+    --hermes-accent: #4a9eff;
+    --hermes-accent-hover: #72b8ff;
+    --hermes-text-primary: #f0f0f0;
+    --hermes-text-secondary: #aaaaaa;
+    --hermes-text-muted: #555555;
+    --hermes-badge-bg: #0e1726;
+    --hermes-badge-border: #1f3a6e;
+    --hermes-content: 1200px;
+    background: var(--hermes-bg);
+    color: var(--hermes-text-primary);
+    font-family: Geist, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.65;
+    min-height: 100vh;
+    position: relative;
+}
+
+.hermes-landing-body::after {
+    background-image:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+    background-size: 4px 4px;
+    content: "";
+    inset: 0;
+    opacity: 0.035;
+    pointer-events: none;
+    position: fixed;
+    z-index: 200;
+}
+
+.hermes-landing-body *,
+.hermes-landing-body *::before,
+.hermes-landing-body *::after {
+    box-sizing: border-box;
+}
+
+.hermes-landing-body a {
+    color: inherit;
+}
+
+.hermes-landing-body img,
+.hermes-landing-body video,
+.hermes-landing-body svg {
+    display: block;
+    max-width: 100%;
+}
+
+.hermes-landing-body p,
+.hermes-landing-body h1,
+.hermes-landing-body h2,
+.hermes-landing-body h3 {
+    margin: 0;
+}
+
+.hermes-landing-body h1,
+.hermes-landing-body h2,
+.hermes-landing-body h3 {
+    color: var(--hermes-text-primary);
+    font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 0;
+    line-height: 1;
+}
+
+.hermes-landing-body p {
+    color: var(--hermes-text-secondary);
+}
+
+.hermes-container {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: var(--hermes-content);
+    padding-left: 48px;
+    padding-right: 48px;
+    width: 100%;
+}
+
+.hermes-visually-hidden {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
+
+.hermes-navbar {
+    background: rgba(10, 10, 10, 0.75);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid transparent;
+    height: 56px;
+    left: 0;
+    position: fixed;
+    right: 0;
+    top: 0;
+    transition:
+        background 200ms ease,
+        border-color 200ms ease,
+        backdrop-filter 200ms ease;
+    z-index: 100;
+}
+
+.hermes-navbar.scrolled {
+    background: rgba(10, 10, 10, 0.86);
+    border-bottom-color: var(--hermes-border);
+}
+
+.hermes-nav-inner {
+    align-items: center;
+    display: flex;
+    gap: 24px;
+    height: 56px;
+    justify-content: space-between;
+    margin: 0 auto;
+    max-width: var(--hermes-content);
+    padding: 0 48px;
+}
+
+.hermes-nav-left,
+.hermes-nav-right {
+    align-items: center;
+    display: flex;
+    gap: 20px;
+    min-width: 0;
+}
+
+.hermes-nav-left a,
+.hermes-nav-right a {
+    color: var(--hermes-text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: color 150ms ease;
+    white-space: nowrap;
+}
+
+.hermes-nav-left a:hover,
+.hermes-nav-right a:hover {
+    color: var(--hermes-text-primary);
+}
+
+.hermes-nav-left .hermes-brand {
+    color: var(--hermes-text-primary);
+    font-size: 0.92rem;
+    font-weight: 700;
+    text-transform: none;
+}
+
+.hermes-nav-left .is-active {
+    color: var(--hermes-accent);
+    text-decoration: underline;
+    text-underline-offset: 7px;
+}
+
+.hermes-icon-link {
+    align-items: center;
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.hermes-icon-link svg {
+    fill: currentColor;
+    height: 20px;
+    width: 20px;
+}
+
+.hermes-button {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0 28px;
+    text-decoration: none;
+    transition:
+        background 150ms ease,
+        border-color 150ms ease,
+        box-shadow 150ms ease,
+        color 150ms ease,
+        transform 150ms ease;
+    white-space: nowrap;
+}
+
+.hermes-button:hover {
+    transform: translateY(-1px);
+}
+
+.hermes-button-primary {
+    background: var(--hermes-accent);
+    border: 1px solid var(--hermes-accent);
+    color: #ffffff;
+}
+
+.hermes-button-primary:hover {
+    background: var(--hermes-accent-hover);
+    border-color: var(--hermes-accent-hover);
+    box-shadow: 0 0 20px rgba(74, 158, 255, 0.4);
+    color: #ffffff;
+}
+
+.hermes-button-outline {
+    background: transparent;
+    border: 1px solid var(--hermes-border);
+    color: var(--hermes-text-primary);
+}
+
+.hermes-button-outline:hover {
+    background: var(--hermes-surface-2);
+    border-color: rgba(74, 158, 255, 0.4);
+    color: var(--hermes-text-primary);
+}
+
+.hermes-button-small {
+    font-size: 0.82rem;
+    min-height: 38px;
+    padding: 0 16px;
+}
+
+.hermes-hero {
+    background:
+        radial-gradient(ellipse 900px 600px at 50% 30%, rgba(74, 158, 255, 0.08) 0%, transparent 70%),
+        var(--hermes-bg);
+    isolation: isolate;
+    min-height: 100vh;
+    overflow: hidden;
+    padding: 120px 0 96px;
+    position: relative;
+}
+
+.hermes-hero-texture {
+    height: 100%;
+    inset: 0;
+    object-fit: cover;
+    opacity: 0.05;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    z-index: -1;
+}
+
+.hermes-hero-inner {
+    align-items: center;
+    display: grid;
+    gap: 36px;
+    justify-items: center;
+}
+
+.hermes-hero-art-wrap {
+    max-width: 920px;
+    position: relative;
+    width: 100%;
+}
+
+.hermes-hero-art-wrap::after {
+    background: rgba(74, 158, 255, 0.16);
+    border-radius: 999px;
+    content: "";
+    filter: blur(70px);
+    height: 34%;
+    inset: auto 10% 8%;
+    opacity: 0.65;
+    position: absolute;
+    z-index: -1;
+}
+
+.hermes-hero-art {
+    filter: drop-shadow(0 28px 80px rgba(0, 0, 0, 0.76));
+    margin: 0 auto;
+    width: min(100%, 900px);
+}
+
+.hermes-hero-copy {
+    align-items: center;
+    display: grid;
+    gap: 24px;
+    justify-items: center;
+    max-width: 980px;
+    text-align: center;
+}
+
+.hermes-badge {
+    align-items: center;
+    background: var(--hermes-badge-bg);
+    border: 1px solid var(--hermes-badge-border);
+    border-radius: 9999px;
+    color: var(--hermes-text-secondary);
+    display: inline-flex;
+    font-family: "Geist Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    gap: 9px;
+    letter-spacing: 0.08em;
+    padding: 7px 14px;
+    text-transform: uppercase;
+}
+
+.hermes-badge span {
+    background: var(--hermes-accent);
+    border-radius: 999px;
+    box-shadow: 0 0 6px var(--hermes-accent);
+    height: 6px;
+    width: 6px;
+}
+
+.hermes-hero h1 {
+    display: grid;
+    font-size: 6rem;
+    gap: 0;
+    line-height: 0.95;
+}
+
+.hermes-hero h1 span {
+    animation: hermes-rise 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    display: block;
+}
+
+.hermes-hero h1 span:nth-child(2) {
+    animation-delay: 120ms;
+}
+
+.hermes-hero h1 span:nth-child(3) {
+    animation-delay: 240ms;
+}
+
+.hermes-hero-cta {
+    min-width: 190px;
+    padding-left: 32px;
+    padding-right: 32px;
+}
+
+.hermes-video-shell {
+    border: 1px solid var(--hermes-border);
+    border-radius: 8px;
+    box-shadow: 0 0 80px rgba(74, 158, 255, 0.12);
+    max-width: 860px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.hermes-hero-video {
+    aspect-ratio: 16 / 9;
+    background: var(--hermes-surface-1);
+    object-fit: cover;
+    width: 100%;
+}
+
+.hermes-downloads {
+    background: var(--hermes-bg);
+    padding: 80px 0;
+}
+
+.hermes-download-grid {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 996px;
+}
+
+.hermes-platform-card {
+    align-items: center;
+    background: var(--hermes-surface-1);
+    border: 1px solid var(--hermes-border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    padding: 32px 24px;
+    text-align: center;
+    transition:
+        border-color 200ms ease,
+        box-shadow 200ms ease,
+        transform 150ms ease;
+}
+
+.hermes-platform-card:hover {
+    border-color: rgba(74, 158, 255, 0.4);
+    box-shadow: 0 0 24px rgba(74, 158, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.hermes-platform-card img {
+    aspect-ratio: 1 / 1;
+    height: 120px;
+    object-fit: contain;
+    width: 120px;
+}
+
+.hermes-platform-card p {
+    color: var(--hermes-text-muted);
+    font-family: "Geist Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.hermes-platform-card h3 {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.hermes-platform-card .hermes-button {
+    margin-top: 6px;
+    width: 100%;
+}
+
+.hermes-features {
+    background: var(--hermes-bg);
+}
+
+.hermes-feature-row {
+    background: var(--hermes-bg);
+    opacity: 0;
+    padding: 64px 0;
+    transform: translateY(30px);
+    transition:
+        opacity 500ms ease,
+        transform 500ms ease;
+}
+
+.hermes-feature-row:nth-child(even) {
+    background: var(--hermes-surface-1);
+}
+
+.hermes-feature-row.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.hermes-feature-inner {
+    align-items: center;
+    display: grid;
+    gap: 64px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+.hermes-feature-row:nth-child(even) .hermes-feature-content {
+    order: 2;
+}
+
+.hermes-feature-row:nth-child(even) .hermes-feature-image-wrap {
+    order: 1;
+}
+
+.hermes-feature-content {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
+.hermes-feature-number {
+    background: var(--hermes-badge-bg);
+    border: 1px solid var(--hermes-badge-border);
+    border-radius: 9999px;
+    color: var(--hermes-accent);
+    display: inline-flex;
+    font-family: "Geist Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    place-self: start;
+    text-transform: uppercase;
+}
+
+.hermes-feature-label,
+.hermes-overline,
+.hermes-tier-string {
+    font-family: "Geist Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.hermes-feature-label {
+    color: var(--hermes-text-muted);
+    font-size: 0.76rem;
+}
+
+.hermes-feature-content h2,
+.hermes-portal-copy h2 {
+    font-size: 3rem;
+    font-weight: 650;
+    line-height: 1.04;
+}
+
+.hermes-feature-content p:last-child,
+.hermes-portal-copy p:not(.hermes-overline, .hermes-tier-string) {
+    font-size: 1rem;
+    max-width: 540px;
+}
+
+.hermes-feature-image-wrap {
+    border: 1px solid var(--hermes-border);
+    border-radius: 8px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    transition: transform 500ms ease 150ms;
+}
+
+.hermes-feature-row.is-visible .hermes-feature-image-wrap {
+    transform: translateY(0);
+}
+
+.hermes-feature-image-wrap img {
+    aspect-ratio: 16 / 9;
+    background: var(--hermes-surface-2);
+    object-fit: cover;
+    width: 100%;
+}
+
+.hermes-portal {
+    background: var(--hermes-surface-1);
+    padding: 96px 0;
+}
+
+.hermes-portal-inner {
+    align-items: center;
+    display: grid;
+    gap: 48px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.hermes-portal-copy {
+    display: grid;
+    gap: 16px;
+    min-width: 0;
+}
+
+.hermes-overline {
+    color: var(--hermes-text-muted);
+    font-size: 0.78rem;
+}
+
+.hermes-tier-string {
+    color: var(--hermes-text-secondary);
+    font-size: 0.88rem;
+}
+
+.hermes-inline-link {
+    color: var(--hermes-accent);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    width: fit-content;
+}
+
+.hermes-inline-link:hover {
+    color: var(--hermes-accent-hover);
+}
+
+.hermes-portal-figure {
+    filter: drop-shadow(0 30px 80px rgba(0, 0, 0, 0.6));
+    justify-self: center;
+    max-width: 600px;
+    width: 100%;
+}
+
+.hermes-footer {
+    background: var(--hermes-bg);
+    border-top: 1px solid var(--hermes-border);
+    padding: 48px 0;
+}
+
+.hermes-footer-inner {
+    align-items: center;
+    display: grid;
+    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.hermes-footer-brand {
+    display: grid;
+    gap: 7px;
+    min-width: 0;
+}
+
+.hermes-footer-brand img {
+    height: 40px;
+    margin-bottom: 5px;
+    max-width: 120px;
+    object-fit: contain;
+    object-position: left center;
+    width: auto;
+}
+
+.hermes-footer-brand strong {
+    color: var(--hermes-text-primary);
+    font-size: 0.95rem;
+}
+
+.hermes-footer-brand p {
+    color: var(--hermes-text-muted);
+    font-family: "Geist Mono", "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.75rem;
+}
+
+.hermes-footer nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    justify-content: end;
+}
+
+.hermes-footer a {
+    color: var(--hermes-text-secondary);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.hermes-footer a:hover {
+    color: var(--hermes-accent-hover);
+}
+
+@keyframes hermes-rise {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 1024px) {
+    .hermes-hero h1 {
+        font-size: 4.5rem;
+    }
+
+    .hermes-feature-content h2,
+    .hermes-portal-copy h2 {
+        font-size: 2.5rem;
+    }
+}
+
+@media (max-width: 820px) {
+    .hermes-container,
+    .hermes-nav-inner {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+
+    .hermes-navbar {
+        height: auto;
+    }
+
+    .hermes-nav-inner {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 10px;
+        height: auto;
+        padding-bottom: 10px;
+        padding-top: 10px;
+    }
+
+    .hermes-nav-left,
+    .hermes-nav-right {
+        gap: 14px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+    }
+
+    .hermes-nav-right {
+        justify-content: start;
+    }
+
+    .hermes-hero {
+        padding-top: 140px;
+    }
+
+    .hermes-download-grid,
+    .hermes-feature-inner,
+    .hermes-portal-inner,
+    .hermes-footer-inner {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hermes-feature-row:nth-child(even) .hermes-feature-content,
+    .hermes-feature-row:nth-child(even) .hermes-feature-image-wrap {
+        order: initial;
+    }
+
+    .hermes-footer nav {
+        justify-content: start;
+    }
+}
+
+@media (max-width: 560px) {
+    .hermes-container,
+    .hermes-nav-inner {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .hermes-nav-left a,
+    .hermes-nav-right a {
+        font-size: 0.76rem;
+    }
+
+    .hermes-icon-link {
+        height: 34px;
+        width: 34px;
+    }
+
+    .hermes-button {
+        min-height: 44px;
+        padding-left: 18px;
+        padding-right: 18px;
+        white-space: normal;
+    }
+
+    .hermes-hero {
+        padding-bottom: 64px;
+    }
+
+    .hermes-hero-inner {
+        gap: 28px;
+    }
+
+    .hermes-hero h1 {
+        font-size: 3.25rem;
+    }
+
+    .hermes-badge {
+        font-size: 0.68rem;
+    }
+
+    .hermes-downloads {
+        padding-bottom: 56px;
+        padding-top: 56px;
+    }
+
+    .hermes-platform-card {
+        padding: 26px 20px;
+    }
+
+    .hermes-feature-row {
+        padding-bottom: 54px;
+        padding-top: 54px;
+    }
+
+    .hermes-feature-inner {
+        gap: 28px;
+    }
+
+    .hermes-feature-content h2,
+    .hermes-portal-copy h2 {
+        font-size: 2.15rem;
+    }
+
+    .hermes-portal {
+        padding-bottom: 64px;
+        padding-top: 64px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hermes-hero h1 span,
+    .hermes-feature-row,
+    .hermes-feature-image-wrap {
+        animation: none;
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}
