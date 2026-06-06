@@ -104,7 +104,7 @@
         <div class="da-giant-text">TRANSCRIBE</div>
         <div class="da-final-content">
             <div class="da-final-copy">
-                <div class="da-eyebrow">Download Extension</div>
+                <div class="da-eyebrow" style="color: rgba(255,255,255,0.7);">Download Extension</div>
                 <h2 class="da-h2">BRING THE READING ROOM<br>TO EVERY VIDEO</h2>
                 <p class="da-feature-desc">Join the paid beta for YouTube language learners. Professional subtitles, instant word cards, and persistent memory.</p>
                 <br><br>
@@ -113,7 +113,7 @@
                 </a>
             </div>
             <div class="da-final-image">
-                <img src="{{ asset('img/marketing/dark-academia/final-reading-room.png') }}" alt="Transcribed Subtitle Extension reading room">
+                <img src="{{ asset('img/desktop/portal-figure.webp') }}" alt="Transcribed Subtitle Extension study figure">
             </div>
         </div>
     </section>
