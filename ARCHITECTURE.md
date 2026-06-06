@@ -21,7 +21,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 - Web billing uses Stripe-hosted checkout and billing portal routes plus a verified `POST /stripe/webhook` endpoint. The app stores Cashier-style customer/subscription fields locally without adding Cashier as a dependency.
 - SaaS identity is email/password through Laravel Fortify plus scoped Laravel Sanctum personal access tokens for extension API requests. Verified users own subtitle jobs; extension install IDs remain on requests and rows as device/abuse signals, not ownership boundaries.
 - Subtitle jobs, per-run trace events, generated tracks, Laravel batch metadata, failed jobs, cache rows, and short-lived job artifacts persist in Postgres. SQLite is test-only through PHPUnit's isolated in-memory profile.
-- Current subtitle generation runs through Redis queues on tier/work-type named queues. Generation orchestration uses `subtitle-generation-{tier}` queues, AI cue/token/translation/romanization/enrichment batches use `subtitle-batch-{tier}` queues, and local generate requests auto-start shared priority plus base-guarantee worker groups. The first queued generation job acquires YouTube audio, sends it to ElevenLabs Scribe v2 for word timestamps using the requested source language or provider auto-detect, normalizes provider language codes into the catalog when possible, stores transcript/draft-cue artifacts, and dispatches OpenAI cue batch jobs on the account tier batch queue.
+- Current subtitle generation runs through Redis queues on tier/work-type named queues. Generation orchestration uses `subtitle-generation-{tier}` queues, AI cue/token/translation/romanization/enrichment batches use `subtitle-batch-{tier}` queues, and local generate requests auto-start shared priority plus base-guarantee worker groups. The first queued generation job acquires YouTube audio, prepares it as a 16 kHz mono WAV with FFmpeg, optionally runs ElevenLabs Audio Isolation when enabled, sends the prepared WAV to ElevenLabs Scribe v2 for word timestamps using the requested source language or provider auto-detect, normalizes provider language codes into the catalog when possible, stores transcript/draft-cue artifacts, and dispatches OpenAI cue batch jobs on the account tier batch queue.
 - Each created or reset subtitle generation has a `run_id` that is carried by queued work. Workers skip stale queued payloads before provider calls or artifact writes when the queued run no longer matches the current job row, and the skip is recorded in sanitized trace events.
 - Each subtitle job stores an internal `generation_tier` and `estimated_provider_cost_microusd`. Tier selection is server-side only until account auth exists; anonymous extension requests cannot choose paid-tier behavior.
 - Authenticated generation is gated by active subscription state, current-period minute credits, plan feature flags, and account-owned generation concurrency before queue dispatch. `user_id` is the generation concurrency owner; extension install IDs remain device/abuse diagnostics. New or reset jobs reserve generated-video minutes, completed tracks debit the reservation, and failures release the reservation when no track is produced. Compatible running jobs and cached tracks are reused without another generation slot or charge.
@@ -46,6 +46,8 @@ Backend
   - SQLite for PHPUnit in-memory tests only
   - Laravel AI SDK for structured OpenAI agents
   - Laravel HTTP client for the ElevenLabs Scribe speech-to-text request
+  - Laravel HTTP client for optional ElevenLabs Audio Isolation
+  - Configurable `ffmpeg` binary for Scribe audio preparation
   - Configurable `yt-dlp` binary for the first YouTube audio acquisition proof
   - Laravel Boost 2.x as development tooling
   - Local Boost skills routed by `docs/references/boost-skill-routing.md`
@@ -66,6 +68,8 @@ Chrome Extension
   -> polls GET /v1/subtitle-jobs/{jobId}
       -> Laravel Redis queue workers on `subtitle-generation-{tier}` and `subtitle-batch-{tier}`
       -> YouTube audio acquisition in controlled temporary storage
+      -> FFmpeg Scribe audio preparation to 16 kHz mono WAV
+      -> Optional ElevenLabs Audio Isolation with fail-open normalized WAV fallback
       -> ElevenLabs Scribe word-timestamp transcription
       -> Scribe word normalization into timed segments and WebVTT
       -> Postgres job artifacts for transcript, draft cues, and per-batch AI results

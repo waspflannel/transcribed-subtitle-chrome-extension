@@ -13,7 +13,7 @@ This runbook is provider-neutral. Fill in the hosting provider, region, managed 
 - Web/API host: managed VPS or Laravel-oriented host running PHP 8.4, Composer, Nginx or equivalent, HTTPS, and Supervisor.
 - Database: managed Postgres with private networking or IP restrictions where the provider supports it.
 - Cache/queue: managed Redis with separate logical DBs or equivalent isolation for default/cache/queue/concurrency use.
-- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, and `SUBTITLE_AUTO_START_WORKERS=false`.
+- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `SUBTITLE_AUTO_START_WORKERS=false`, configured `yt-dlp`, and configured `ffmpeg`.
 - Secrets: keep `APP_KEY`, provider keys, Stripe keys, database credentials, and Redis credentials in host/provider environment settings only. Do not put them in extension builds.
 - Extension: build with `WXT_BACKEND_API_BASE_URL=https://<api-host>/v1`; the built manifest should contain only the production API origin plus YouTube host permission.
 
@@ -35,14 +35,15 @@ Record these in the active phase plan before the first real staging deploy:
 3. Configure HTTPS and set `APP_URL` to the exact public API/web origin.
 4. Configure Laravel environment variables from [app/backend/.env.example](../../app/backend/.env.example).
 5. Set `SUBTITLE_AUTO_START_WORKERS=false`; production workers are owned by Supervisor.
-6. Run readiness checks:
+6. Install and configure `yt-dlp` and `ffmpeg`; set `YOUTUBE_AUDIO_BINARY` and `FFMPEG_BINARY` when the binaries are not available on the host `PATH`.
+7. Run readiness checks:
 
 ```powershell
 .\scripts\runtime\check-production-readiness.ps1 -Target staging
 .\scripts\runtime\check-production-readiness.ps1 -Target production
 ```
 
-7. Render Supervisor worker config from the checked-in queue group configuration:
+8. Render Supervisor worker config from the checked-in queue group configuration:
 
 ```powershell
 .\scripts\runtime\render-supervisor-config.ps1 `
@@ -51,7 +52,7 @@ Record these in the active phase plan before the first real staging deploy:
   -OutputPath ".\storage\ops\transcribed-subtitle-extension-workers.conf"
 ```
 
-8. Copy the rendered config to `/etc/supervisor/conf.d/transcribed-subtitle-extension-workers.conf`, then run:
+9. Copy the rendered config to `/etc/supervisor/conf.d/transcribed-subtitle-extension-workers.conf`, then run:
 
 ```bash
 sudo supervisorctl reread
@@ -60,13 +61,13 @@ sudo supervisorctl restart 'tse-*:*'
 sudo supervisorctl status 'tse-*:*'
 ```
 
-9. Install the Laravel scheduler cron on the host:
+10. Install the Laravel scheduler cron on the host:
 
 ```cron
 * * * * * cd /var/www/transcribed-subtitle-extension/app/backend/current && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-10. Confirm pruning is scheduled:
+11. Confirm pruning is scheduled:
 
 ```bash
 php artisan schedule:list
