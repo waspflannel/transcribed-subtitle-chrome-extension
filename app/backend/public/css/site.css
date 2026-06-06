@@ -1501,16 +1501,18 @@ input[type="checkbox"] {
 
 > /* --- DARK ACADEMIA HERMES-STYLE REFACTOR --- */
   .da-main {
-      background: #050505; /* Black */
-      color: var(--ivory);
-      font-family: "IBM Plex Mono", monospace;
+      background: transparent;
+      color: var(--hermes-text-primary);
+      font-family: "Geist Mono", "IBM Plex Mono", monospace;
   }
   
   .da-hero {
-      padding: 6vw 4vw;
-      border-bottom: 1px solid rgba(244, 234, 215, 0.14);
+      padding: 10vw 4vw;
+      border-bottom: 1px solid var(--hermes-border);
+      position: relative;
+      overflow: hidden;
   }
-  
+
   .da-hero-content {
       display: flex;
       justify-content: space-between;
@@ -1518,73 +1520,84 @@ input[type="checkbox"] {
       max-width: 1600px;
       margin: 0 auto;
       gap: 4vw;
+      position: relative;
+      z-index: 10;
   }
-  
+
   .da-hero-text {
       flex: 1;
   }
-  
+
   .da-hero-visual {
-      flex: 1;
+      flex: 1.2;
       display: flex;
       justify-content: flex-end;
   }
-  
+
   .da-hero-visual img {
       max-width: 100%;
       height: auto;
-      filter: grayscale(100%) contrast(1.3) brightness(0.8);
+      filter: drop-shadow(0 0 40px rgba(74, 158, 255, 0.15));
   }
-  
+
   .da-eyebrow {
       font-size: 0.75rem;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.15em;
       text-transform: uppercase;
       margin-bottom: 2rem;
-      color: var(--muted-parchment);
+      color: var(--hermes-accent);
+      font-weight: 600;
   }
-  
+
   .da-h1 {
-      font-family: "Cormorant Garamond", serif;
+      font-family: "Geist", "Cormorant Garamond", serif;
       font-size: clamp(4rem, 8vw, 8rem);
-      line-height: 0.9;
-      font-weight: 400;
+      line-height: 0.85;
+      font-weight: 700;
       text-transform: uppercase;
-      margin: 0 0 3rem 0;
-      color: var(--ivory);
+      margin: 0 0 3.5rem 0;
+      color: var(--hermes-text-primary);
+      letter-spacing: -0.04em;
   }
-  
+
   .da-button {
       display: inline-flex;
       align-items: center;
-      background: var(--ivory);
-      color: #050505;
-      padding: 0.75rem 1.5rem;
-      font-size: 0.75rem;
-      letter-spacing: 0.1em;
+      background: var(--hermes-accent);
+      color: #000;
+      padding: 1rem 2rem;
+      font-size: 0.82rem;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       text-decoration: none;
-      border-radius: 0;
-      font-weight: 500;
-      transition: background 0.2s;
+      border-radius: 4px;
+      font-weight: 700;
+      transition: all 0.2s;
   }
   .da-button:hover {
-      background: var(--brass);
+      background: var(--hermes-accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0,0,0,0.4);
   }
   .da-icon {
-      margin-right: 0.5rem;
+      margin-right: 0.75rem;
+      font-size: 1.2em;
   }
-  
+
   /* Preview Section */
   .da-preview {
-      padding: 4vw;
-      background: #050505;
+      padding: 8vw 4vw;
+      background: var(--hermes-surface-1);
+      border-bottom: 1px solid var(--hermes-border);
   }
   .da-preview-frame {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
-      border: 1px solid rgba(244, 234, 215, 0.14);
+      border: 1px solid var(--hermes-border);
       position: relative;
+      box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+      border-radius: 8px;
+      overflow: hidden;
   }
   .da-preview-frame img {
       width: 100%;
@@ -1595,26 +1608,27 @@ input[type="checkbox"] {
       bottom: 0;
       left: 0;
       right: 0;
-      padding: 0.5rem 1rem;
+      padding: 0.75rem 1.5rem;
       font-size: 0.65rem;
-      letter-spacing: 0.1em;
-      border-top: 1px solid rgba(244, 234, 215, 0.14);
-      background: rgba(5, 5, 5, 0.8);
-      backdrop-filter: blur(4px);
-      color: var(--ivory);
+      letter-spacing: 0.2em;
+      border-top: 1px solid var(--hermes-border);
+      background: rgba(10, 10, 10, 0.9);
+      backdrop-filter: blur(10px);
+      color: var(--hermes-text-secondary);
       text-transform: uppercase;
+      font-weight: 600;
   }
-  
+
   /* Features Section */
   .da-features-section {
-      background: var(--ivory);
-      color: #050505;
-      padding: 6vw 4vw;
+      background: var(--hermes-bg);
+      color: var(--hermes-text-primary);
+      padding: 10vw 4vw;
   }
   .da-features-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 4vw;
+      gap: 6vw 4vw;
       max-width: 1600px;
       margin: 0 auto;
   }
@@ -1623,9 +1637,10 @@ input[type="checkbox"] {
   }
   @media (max-width: 768px) {
       .da-features-grid { grid-template-columns: 1fr; }
-      .da-hero-content { flex-direction: column; }
+      .da-hero-content { flex-direction: column; text-align: center; }
+      .da-hero-visual { justify-content: center; margin-top: 4rem; }
   }
-  
+
   .da-feature {
       display: flex;
       flex-direction: column;
@@ -1633,61 +1648,73 @@ input[type="checkbox"] {
   .da-feature-header {
       display: flex;
       justify-content: space-between;
-      border-bottom: 1px solid #050505;
-      padding-bottom: 0.5rem;
-      margin-bottom: 1.5rem;
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
-      color: #050505;
+      border-bottom: 1px solid var(--hermes-border);
+      padding-bottom: 0.75rem;
+      margin-bottom: 2rem;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      color: var(--hermes-accent);
+      font-weight: 600;
   }
   .da-h2 {
-      font-family: "Cormorant Garamond", serif;
-      font-size: clamp(2.5rem, 4vw, 4rem);
-      line-height: 0.9;
-      font-weight: 400;
+      font-family: "Geist", sans-serif;
+      font-size: clamp(2rem, 3.5vw, 3.5rem);
+      line-height: 0.95;
+      font-weight: 700;
       text-transform: uppercase;
-      margin: 0 0 2rem 0;
-      color: #050505;
+      margin: 0 0 2.5rem 0;
+      color: var(--hermes-text-primary);
+      letter-spacing: -0.02em;
   }
   .da-feature-image {
       width: 100%;
-      aspect-ratio: 1;
-      margin-bottom: 1.5rem;
-      background: #050505;
+      aspect-ratio: 16/10;
+      margin-bottom: 2rem;
+      background: var(--hermes-surface-2);
       overflow: hidden;
-      border: 1px solid #050505;
+      border: 1px solid var(--hermes-border);
+      border-radius: 4px;
   }
   .da-feature-image img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      mix-blend-mode: multiply;
-      filter: grayscale(100%) contrast(1.5);
+      opacity: 0.8;
+      transition: opacity 0.3s;
+  }
+  .da-feature:hover .da-feature-image img {
+      opacity: 1;
   }
   .da-feature-desc {
-      font-size: 0.75rem;
+      font-size: 0.85rem;
       line-height: 1.6;
-      letter-spacing: 0.05em;
-      color: #050505;
+      letter-spacing: 0.02em;
+      color: var(--hermes-text-secondary);
       text-transform: uppercase;
+      font-weight: 500;
   }
-  
+
   /* Final CTA */
   .da-final-cta {
-      background: #050505;
-      padding: 10vw 0;
+      background: var(--hermes-bg);
+      padding: 15vw 0;
       overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
+      border-top: 1px solid var(--hermes-border);
   }
   .da-giant-text {
-      font-family: "Cormorant Garamond", serif;
-      font-size: 24vw;
+      font-family: "Geist", sans-serif;
+      font-size: 20vw;
       line-height: 0.8;
-      color: var(--ivory);
+      color: var(--hermes-text-primary);
       white-space: nowrap;
       text-transform: uppercase;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      opacity: 0.1;
   }
+
 
 
