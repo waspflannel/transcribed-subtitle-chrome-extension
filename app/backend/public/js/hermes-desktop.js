@@ -41,7 +41,7 @@
         }, 40);
     }
 
-    const featureRows = document.querySelectorAll('.hermes-feature-row');
+    const featureRows = document.querySelectorAll('.hermes-feature-row, .da-feature');
 
     if ('IntersectionObserver' in window) {
         const observer = new IntersectionObserver((entries) => {

@@ -20,8 +20,8 @@ class SaasWebsiteAndSeoTest extends TestCase
     public function test_public_pages_render_seo_metadata_and_beta_copy(): void
     {
         $pages = [
-            ['marketing.home', 'Hermes Desktop', 'The Agent'],
-            ['marketing.desktop', 'Hermes Desktop', 'Nous Portal'],
+            ['marketing.home', 'TRANSCRIBED', 'learn languages using youtube'],
+            ['marketing.desktop', 'Transcribed Subtitle Extension', 'AI Language Study'],
             ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
             ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
             ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],
@@ -64,36 +64,20 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertDontSee('/dashboard');
     }
 
-    public function test_hermes_desktop_landing_page_matches_supplied_design_plan(): void
+    public function test_hermes_desktop_landing_page_matches_supplied_design_plan()
     {
         $this
             ->get(route('marketing.home', absolute: false))
             ->assertOk()
-            ->assertSeeText('Open Source • MIT License')
-            ->assertSeeText('The Agent')
-            ->assertSeeText('That Grows')
-            ->assertSeeText('With You')
-            ->assertSeeText('Mac OS')
-            ->assertSeeText('Windows')
-            ->assertSeeText('Linux')
-            ->assertSeeText('Lives Everywhere')
-            ->assertSeeText('Persistent Memory')
-            ->assertSeeText('Focused Automation')
-            ->assertSeeText('Tasks Multiplied')
-            ->assertSeeText('Browse the Web')
-            ->assertSeeText('Isolated Sandboxing')
-            ->assertSeeText('Free • Plus • Super • Ultra')
-            ->assertSeeText('All paid tiers include monthly credits for use in Hermes Agent, access to 300+ cutting-edge models and built-in tool use')
-            ->assertSeeText('Hermes Agent v0.15.2')
-            ->assertSeeText('MIT License · 2026')
-            ->assertSee('https://hermes-assets.nousresearch.com/Hermes-Setup.dmg', false)
-            ->assertSee('https://hermes-assets.nousresearch.com/Hermes-Setup.exe', false)
-            ->assertSee('/desktop', false);
-
+            ->assertSeeText('TRANSCRIBED')
+            ->assertSeeText('SUBTITLE')
+            ->assertSeeText('EXTENSION')
+            ->assertSeeText('AI Language Study');
+            
         $this
             ->get(route('marketing.desktop', absolute: false))
             ->assertOk()
-            ->assertSeeText('Hermes Desktop')
+            ->assertSeeText('Transcribed Subtitle Extension')
             ->assertSee('<link rel="canonical" href="'.route('marketing.desktop').'">', false);
     }
 

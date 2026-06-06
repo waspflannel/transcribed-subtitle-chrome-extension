@@ -4,6 +4,7 @@
 <main class="da-main">
     <!-- HERO -->
     <section class="da-hero">
+        <img class="hermes-hero-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
         <div class="da-hero-content">
             <div class="da-hero-text">
                 <div class="da-eyebrow">learn languages using youtube</div>
@@ -99,8 +100,40 @@
     </section>
 
     <!-- FINAL CTA -->
-    <section class="da-final-cta">
+    <section class="da-final-cta" id="download">
         <div class="da-giant-text">TRANSCRIBE</div>
+        <div class="da-final-content">
+            <div class="da-final-copy">
+                <div class="da-eyebrow">Download Extension</div>
+                <h2 class="da-h2">BRING THE READING ROOM<br>TO EVERY VIDEO</h2>
+                <p class="da-feature-desc">Join the paid beta for YouTube language learners. Professional subtitles, instant word cards, and persistent memory.</p>
+                <br><br>
+                <a href="#download" class="da-button">
+                    <span class="da-icon">↓</span> Get Started Now
+                </a>
+            </div>
+            <div class="da-final-image">
+                <img src="{{ asset('img/marketing/dark-academia/final-reading-room.png') }}" alt="Transcribed Subtitle Extension reading room">
+            </div>
+        </div>
     </section>
+
+    <footer class="hermes-footer">
+        <div class="hermes-container hermes-footer-inner">
+            <div class="hermes-footer-brand">
+                <img src="{{ asset('img/desktop/nous.webp') }}" alt="" aria-hidden="true" style="filter: brightness(0) invert(1);">
+                <strong>Transcribed Subtitle Extension</strong>
+                <p>AI Language Study v1.0.0-beta</p>
+                <p>&copy; 2026</p>
+            </div>
+            <nav aria-label="Footer">
+                <a href="{{ route('marketing.faq') }}">FAQ</a>
+                <a href="{{ route('marketing.privacy') }}">Privacy</a>
+                <a href="{{ route('marketing.support') }}">Support</a>
+            </nav>
+        </div>
+    </footer>
 </main>
 @endsection
+
+
