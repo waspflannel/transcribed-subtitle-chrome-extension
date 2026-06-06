@@ -24,22 +24,22 @@
     <!-- HERO -->
     <section class="da-hero">
         <img class="hermes-hero-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
-        <div class="hermes-container da-hero-content">
-            <div class="da-hero-text">
+        <div class="hermes-container da-hero-layered-content">
+            <div class="da-hero-visual-bg">
+                <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="">
+            </div>
+            <div class="da-hero-text-overlay">
                 <div class="da-eyebrow">learn languages using youtube</div>
-                <h1 class="da-h1">
+                <h1 class="da-h1-overlay">
                     <span>TRANSCRIBED</span>
                     <span>SUBTITLE</span>
                     <span>EXTENSION</span>
                 </h1>
-                <p class="da-hero-lede">Turn any public YouTube video into a language learning masterclass. AI-powered transcription and translation layers built for serious learners.</p>
-                <br>
+                <p class="da-hero-lede-center">Turn any public YouTube video into a language learning masterclass. AI-powered transcription and translation layers built for serious learners.</p>
+                <br><br>
                 <a href="#download" class="da-button">
                     <span class="da-icon">↓</span> Download Extension [Beta]
                 </a>
-            </div>
-            <div class="da-hero-visual">
-                <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="Transcribed Subtitle Extension">
             </div>
         </div>
     </section>
