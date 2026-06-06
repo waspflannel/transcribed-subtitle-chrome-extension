@@ -123,6 +123,16 @@ return [
         'temp_directory' => storage_path('app/private/audio-processing'),
     ],
 
+    'audio_preparation' => [
+        'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
+        'ffmpeg_timeout_seconds' => (int) env('SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS', 600),
+        'voice_isolation' => [
+            'enabled' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_ENABLED', false),
+            'timeout_seconds' => (int) env('ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS', 600),
+            'fail_open' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN', true),
+        ],
+    ],
+
     'transcription' => [
         'timeout_seconds' => (int) env('ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
     ],

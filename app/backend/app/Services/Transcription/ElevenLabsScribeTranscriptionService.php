@@ -3,16 +3,19 @@
 namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\TemporaryAudioFile;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 class ElevenLabsScribeTranscriptionService
 {
-    public function __construct(private readonly ScribeTranscriptNormalizer $normalizer) {}
+    public function __construct(
+        private readonly ScribeTranscriptNormalizer $normalizer,
+        private readonly ElevenLabsScribeAudioPreparer $audioPreparer,
+    ) {}
 
     public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
     {
@@ -37,8 +40,11 @@ class ElevenLabsScribeTranscriptionService
         $apiKey = trim($apiKey);
         $model = trim($model);
 
+        $this->assertSupportedAudioMime($audio);
+
         try {
-            $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
+            $preparedAudio = $this->audioPreparer->prepare($audio);
+            $response = $this->sendTranscriptionRequest($preparedAudio, $sourceLanguage, $provider, $apiKey, $model);
 
             if ($response->failed()) {
                 throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
@@ -63,7 +69,7 @@ class ElevenLabsScribeTranscriptionService
             return $this->normalizer->normalize(
                 payload: $payload,
                 requestedSourceLanguage: $sourceLanguage,
-                durationSeconds: $audio->durationSeconds,
+                durationSeconds: $preparedAudio->durationSeconds,
             );
         } catch (SubtitleProcessingException $exception) {
             throw $exception;
@@ -101,15 +107,21 @@ class ElevenLabsScribeTranscriptionService
             $payload['language_code'] = $languageCode;
         }
 
-        return Http::withHeaders(['xi-api-key' => $apiKey])
-            ->timeout((int) config('subtitles.transcription.timeout_seconds'))
-            ->attach(
-                'file',
-                File::get($audio->path),
-                $this->audioFilename($audio),
-                ['Content-Type' => $audio->mimeType],
-            )
-            ->post($this->transcriptionUrl($provider), $payload);
+        $stream = $this->openAudioStream($audio);
+
+        try {
+            return Http::withHeaders(['xi-api-key' => $apiKey])
+                ->timeout((int) config('subtitles.transcription.timeout_seconds'))
+                ->attach(
+                    'file',
+                    $stream,
+                    $this->audioFilename($audio),
+                    ['Content-Type' => $audio->mimeType],
+                )
+                ->post($this->transcriptionUrl($provider), $payload);
+        } finally {
+            fclose($stream);
+        }
     }
 
     private function languageCode(string $sourceLanguage): ?string
@@ -135,6 +147,21 @@ class ElevenLabsScribeTranscriptionService
         return rtrim(trim($url), '/').'/speech-to-text';
     }
 
+    private function assertSupportedAudioMime(TemporaryAudioFile $audio): void
+    {
+        match ($audio->mimeType) {
+            'audio/mp4',
+            'audio/mpeg',
+            'audio/wav',
+            'audio/x-wav',
+            'audio/webm',
+            'audio/ogg' => true,
+            default => throw SubtitleProcessingException::transcriptionFailed('Transcription audio type is not supported.', [
+                'mime_type' => $audio->mimeType,
+            ]),
+        };
+    }
+
     private function audioFilename(TemporaryAudioFile $audio): string
     {
         return match ($audio->mimeType) {
@@ -147,5 +174,23 @@ class ElevenLabsScribeTranscriptionService
                 'mime_type' => $audio->mimeType,
             ]),
         };
+    }
+
+    /**
+     * @return resource
+     */
+    private function openAudioStream(TemporaryAudioFile $audio)
+    {
+        $stream = fopen($audio->path, 'rb');
+
+        if ($stream === false) {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription audio could not be opened.', [
+                'provider' => Lab::ElevenLabs->value,
+                'adapter' => 'elevenlabs-http',
+                'reason' => 'file_open_failed',
+            ]);
+        }
+
+        return $stream;
     }
 }

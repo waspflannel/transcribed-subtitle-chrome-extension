@@ -116,6 +116,7 @@ class CheckProductionReadiness extends Command
                 ->every(fn (array $plan): bool => $this->configured($plan['stripe_price_id'] ?? null)),
             'billingTestPlanSwitcherEnabled' => (bool) config('billing.testing_plan_switcher.enabled'),
             'youtubeAudioBinaryConfigured' => $this->configured(config('subtitles.youtube.binary')),
+            'ffmpegBinaryConfigured' => $this->configured(config('subtitles.audio_preparation.ffmpeg_binary')),
         ];
     }
 
@@ -145,6 +146,7 @@ class CheckProductionReadiness extends Command
             $this->check('billing.price_ids', $summary['stripePriceIdsConfigured'] === true, 'All Stripe plan price IDs must be configured.'),
             $this->check('billing.test_switcher', $summary['billingTestPlanSwitcherEnabled'] === false, 'BILLING_TEST_PLAN_SWITCHER must be false.'),
             $this->check('youtube.binary', $summary['youtubeAudioBinaryConfigured'] === true, 'YOUTUBE_AUDIO_BINARY must be configured.'),
+            $this->check('audio_preparation.ffmpeg_binary', $summary['ffmpegBinaryConfigured'] === true, 'FFMPEG_BINARY must be configured.'),
         ];
     }
 
