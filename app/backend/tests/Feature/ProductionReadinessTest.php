@@ -32,6 +32,7 @@ class ProductionReadinessTest extends TestCase
             'ai.providers.openai.key' => '',
             'billing.testing_plan_switcher.enabled' => true,
             'queue.connections.redis.retry_after' => 60,
+            'subtitles.audio_preparation.ffmpeg_binary' => '',
         ]);
 
         $this->assertSame(1, Artisan::call('ops:production-check', ['--json' => true]));
@@ -44,6 +45,7 @@ class ProductionReadinessTest extends TestCase
         $this->assertContains('APP_URL must use HTTPS.', $payload['problems']);
         $this->assertContains('OPENAI_API_KEY must be configured in the environment.', $payload['problems']);
         $this->assertContains('Queue retry_after must be greater than the subtitle worker timeout.', $payload['problems']);
+        $this->assertContains('FFMPEG_BINARY must be configured.', $payload['problems']);
         $this->assertStringNotContainsString('sk-test-stripe', $output);
     }
 
@@ -75,6 +77,7 @@ class ProductionReadinessTest extends TestCase
             'billing.plans.plus.stripe_price_id' => 'price_plus',
             'billing.plans.pro.stripe_price_id' => 'price_pro',
             'subtitles.youtube.binary' => 'yt-dlp',
+            'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg',
         ]);
     }
 }

@@ -12,6 +12,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -1772,7 +1773,7 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 {
     public function __construct()
     {
-        parent::__construct(new ScribeTranscriptNormalizer);
+        parent::__construct(new ScribeTranscriptNormalizer, new ElevenLabsScribeAudioPreparer);
     }
 
     public bool $shouldFail = false;
