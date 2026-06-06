@@ -2173,31 +2173,37 @@ td small {
         transparent;
 }
 
-.hermes-landing-body .da-hero-content {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    max-width: var(--hermes-content);
-    margin: 0 auto;
-    gap: 64px;
+.hermes-landing-body .da-hero-centered-content {
+    display: grid;
+    gap: 48px;
+    justify-items: center;
+    text-align: center;
     position: relative;
     z-index: 10;
 }
-
-.hermes-landing-body .da-hero-text {
-    flex: 1;
+.hermes-landing-body .da-hero-visual-center {
+    max-width: 900px;
+    width: 100%;
 }
-
-.hermes-landing-body .da-hero-visual {
-    flex: 1.2;
-    display: flex;
-    justify-content: flex-end;
+.hermes-landing-body .da-hero-visual-center img {
+    filter: drop-shadow(0 20px 60px rgba(74, 158, 255, 0.2));
 }
-
-.hermes-landing-body .da-hero-visual img {
-    max-width: 100%;
-    height: auto;
-    filter: drop-shadow(0 0 40px rgba(74, 158, 255, 0.15));
+.hermes-landing-body .da-hero-text-center {
+    display: grid;
+    gap: 24px;
+    justify-items: center;
+}
+.hermes-landing-body .da-h1-center {
+    font-family: "Geist", sans-serif;
+    font-size: clamp(3.5rem, 8vw, 7rem);
+    line-height: 0.9;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.05em;
+    display: grid;
+}
+.hermes-landing-body .da-h1-center span {
+    display: block;
 }
 
 .hermes-landing-body .da-eyebrow {

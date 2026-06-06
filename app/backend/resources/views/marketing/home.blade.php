@@ -1,20 +1,43 @@
 @extends('layouts.hermes-desktop')
 
 @section('content')
-<main class="da-main">
+<nav class="hermes-navbar" id="navbar">
+    <div class="hermes-nav-inner">
+        <div class="hermes-nav-left">
+            <a href="/" class="hermes-brand" aria-label="Transcribed Subtitle Extension">
+                <img src="{{ asset('img/desktop/nous.webp') }}" alt="" aria-hidden="true" style="height: 18px; width: auto; filter: brightness(0) invert(1);">
+            </a>
+            <a href="#home" class="is-active">Home</a>
+            <a href="{{ route('marketing.how-it-works') }}">How it works</a>
+            <a href="{{ route('marketing.pricing') }}">Pricing</a>
+        </div>
+        <div class="hermes-nav-right">
+            <a href="{{ route('login') }}" class="hermes-nav-link">Login</a>
+            <a href="{{ route('register') }}" class="hermes-button hermes-button-primary hermes-button-small">
+                Get Started
+            </a>
+        </div>
+    </div>
+</nav>
+
+<main class="da-main" id="home">
     <!-- HERO -->
     <section class="da-hero">
         <img class="hermes-hero-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
-        <div class="da-hero-content">
-            <div class="da-hero-text">
+        <div class="hermes-container da-hero-centered-content">
+            <div class="da-hero-visual-center">
+                <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="Transcribed Subtitle Extension">
+            </div>
+            <div class="da-hero-text-center">
                 <div class="da-eyebrow">learn languages using youtube</div>
-                <h1 class="da-h1">TRANSCRIBED<br>SUBTITLE<br>EXTENSION</h1>
+                <h1 class="da-h1-center">
+                    <span>TRANSCRIBED</span>
+                    <span>SUBTITLE</span>
+                    <span>EXTENSION</span>
+                </h1>
                 <a href="#download" class="da-button">
                     <span class="da-icon">↓</span> Download Extension [Beta]
                 </a>
-            </div>
-            <div class="da-hero-visual">
-                <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="Transcribed Subtitle Extension">
             </div>
         </div>
     </section>
