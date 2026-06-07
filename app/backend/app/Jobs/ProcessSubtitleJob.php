@@ -38,14 +38,6 @@ class ProcessSubtitleJob implements ShouldQueue
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 
-    /**
-     * @return array<int, object>
-     */
-    public function middleware(): array
-    {
-        return [];
-    }
-
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
         $pipeline->transcribeSourceAudioAndDispatchAnalysis($this->subtitleJobId, $this->runId, $this->queuedAtMs);
