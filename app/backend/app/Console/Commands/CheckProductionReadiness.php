@@ -117,6 +117,8 @@ class CheckProductionReadiness extends Command
             'billingTestPlanSwitcherEnabled' => (bool) config('billing.testing_plan_switcher.enabled'),
             'youtubeAudioBinaryConfigured' => $this->configured(config('subtitles.youtube.binary')),
             'ffmpegBinaryConfigured' => $this->configured(config('subtitles.audio_preparation.ffmpeg_binary')),
+            'audioIsolationEnabled' => (bool) config('subtitles.audio_preparation.voice_isolation.enabled'),
+            'audioIsolationFailOpen' => (bool) config('subtitles.audio_preparation.voice_isolation.fail_open'),
         ];
     }
 
@@ -147,6 +149,8 @@ class CheckProductionReadiness extends Command
             $this->check('billing.test_switcher', $summary['billingTestPlanSwitcherEnabled'] === false, 'BILLING_TEST_PLAN_SWITCHER must be false.'),
             $this->check('youtube.binary', $summary['youtubeAudioBinaryConfigured'] === true, 'YOUTUBE_AUDIO_BINARY must be configured.'),
             $this->check('audio_preparation.ffmpeg_binary', $summary['ffmpegBinaryConfigured'] === true, 'FFMPEG_BINARY must be configured.'),
+            $this->check('audio_preparation.voice_isolation_enabled', $summary['audioIsolationEnabled'] === true, 'ELEVENLABS_AUDIO_ISOLATION_ENABLED must be true.'),
+            $this->check('audio_preparation.voice_isolation_fail_open', $summary['audioIsolationFailOpen'] === true, 'ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.'),
         ];
     }
 

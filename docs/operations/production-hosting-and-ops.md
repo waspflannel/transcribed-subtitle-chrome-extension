@@ -13,7 +13,7 @@ This runbook is provider-neutral. Fill in the hosting provider, region, managed 
 - Web/API host: managed VPS or Laravel-oriented host running PHP 8.4, Composer, Nginx or equivalent, HTTPS, and Supervisor.
 - Database: managed Postgres with private networking or IP restrictions where the provider supports it.
 - Cache/queue: managed Redis with separate logical DBs or equivalent isolation for default/cache/queue/concurrency use.
-- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `SUBTITLE_AUTO_START_WORKERS=false`, configured `yt-dlp`, and configured `ffmpeg`.
+- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `SUBTITLE_AUTO_START_WORKERS=false`, configured `yt-dlp`, configured `ffmpeg`, and enabled ElevenLabs Audio Isolation.
 - Secrets: keep `APP_KEY`, provider keys, Stripe keys, database credentials, and Redis credentials in host/provider environment settings only. Do not put them in extension builds.
 - Extension: build with `WXT_BACKEND_API_BASE_URL=https://<api-host>/v1`; the built manifest should contain only the production API origin plus YouTube host permission.
 
@@ -36,14 +36,29 @@ Record these in the active phase plan before the first real staging deploy:
 4. Configure Laravel environment variables from [app/backend/.env.example](../../app/backend/.env.example).
 5. Set `SUBTITLE_AUTO_START_WORKERS=false`; production workers are owned by Supervisor.
 6. Install and configure `yt-dlp` and `ffmpeg`; set `YOUTUBE_AUDIO_BINARY` and `FFMPEG_BINARY` when the binaries are not available on the host `PATH`.
-7. Run readiness checks:
+7. Configure provider and audio-preparation environment variables:
+
+```env
+ELEVENLABS_API_KEY=<server-side ElevenLabs API key>
+ELEVENLABS_URL=https://api.elevenlabs.io/v1
+ELEVENLABS_TRANSCRIPTION_MODEL=scribe_v2
+ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS=600
+ELEVENLABS_AUDIO_ISOLATION_ENABLED=true
+ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS=600
+ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true
+FFMPEG_BINARY=ffmpeg
+SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS=600
+```
+
+Keep the ElevenLabs key only in backend host/provider secret storage. The extension build must never contain provider keys.
+8. Run readiness checks:
 
 ```powershell
 .\scripts\runtime\check-production-readiness.ps1 -Target staging
 .\scripts\runtime\check-production-readiness.ps1 -Target production
 ```
 
-8. Render Supervisor worker config from the checked-in queue group configuration:
+9. Render Supervisor worker config from the checked-in queue group configuration:
 
 ```powershell
 .\scripts\runtime\render-supervisor-config.ps1 `
@@ -52,7 +67,7 @@ Record these in the active phase plan before the first real staging deploy:
   -OutputPath ".\storage\ops\transcribed-subtitle-extension-workers.conf"
 ```
 
-9. Copy the rendered config to `/etc/supervisor/conf.d/transcribed-subtitle-extension-workers.conf`, then run:
+10. Copy the rendered config to `/etc/supervisor/conf.d/transcribed-subtitle-extension-workers.conf`, then run:
 
 ```bash
 sudo supervisorctl reread
@@ -61,13 +76,13 @@ sudo supervisorctl restart 'tse-*:*'
 sudo supervisorctl status 'tse-*:*'
 ```
 
-10. Install the Laravel scheduler cron on the host:
+11. Install the Laravel scheduler cron on the host:
 
 ```cron
 * * * * * cd /var/www/transcribed-subtitle-extension/app/backend/current && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-11. Confirm pruning is scheduled:
+12. Confirm pruning is scheduled:
 
 ```bash
 php artisan schedule:list

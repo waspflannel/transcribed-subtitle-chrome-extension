@@ -278,14 +278,14 @@ The normalizer and downstream subtitle generation should not need to know whethe
 
 ## Configuration Plan
 
-Add config with conservative defaults:
+Add config with fail-open defaults:
 
 ```php
 'audio_preparation' => [
     'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
     'ffmpeg_timeout_seconds' => (int) env('SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS', 600),
     'voice_isolation' => [
-        'enabled' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_ENABLED', false),
+        'enabled' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_ENABLED', true),
         'timeout_seconds' => (int) env('ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS', 600),
         'fail_open' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN', true),
     ],
@@ -297,12 +297,12 @@ Recommended `.env.example` additions:
 ```text
 FFMPEG_BINARY=ffmpeg
 SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS=600
-ELEVENLABS_AUDIO_ISOLATION_ENABLED=false
+ELEVENLABS_AUDIO_ISOLATION_ENABLED=true
 ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS=600
 ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true
 ```
 
-Default `ELEVENLABS_AUDIO_ISOLATION_ENABLED=false` keeps rollout safe. Turn it on in staging after sandbox verification.
+Default `ELEVENLABS_AUDIO_ISOLATION_ENABLED=true` enables the quality stage. Keep `ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true` until staging proves response format, latency, cost, and transcript quality on real clips.
 
 ## Error Handling
 
@@ -350,7 +350,7 @@ Avoid:
 
 ## Cost And Runtime Notes
 
-Voice Isolation adds a second ElevenLabs provider call before Scribe. Keep it disabled by default until staging evidence justifies enabling it.
+Voice Isolation adds a second ElevenLabs provider call before Scribe. It is enabled by default, so staging must record latency, provider cost, and transcript-quality evidence before fail-open behavior is tightened.
 
 Approximate file-size concern:
 
@@ -420,10 +420,10 @@ Evidence to capture:
 
 ## Rollout Plan
 
-1. Keep `ELEVENLABS_AUDIO_ISOLATION_ENABLED=false` after merge.
+1. Keep `ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true` after merge.
 2. Verify the Audio Isolation response format with one controlled staging request.
-3. Enable in staging for a small set of manual jobs.
-4. Compare results against the existing raw Scribe path.
+3. Run staging for a small set of manual jobs.
+4. Compare results against `ELEVENLABS_AUDIO_ISOLATION_ENABLED=false` jobs from the same clip set.
 5. If quality is neutral or better and runtime is acceptable, enable for internal/beta usage.
 6. If regressions appear, keep the preparer but leave Voice Isolation disabled and use only normalized WAV.
 
@@ -439,6 +439,7 @@ Evidence to capture:
 | 2026-06-06 | Implement this phase on `codex/voice-isolation-scribe-audio-quality` from `main`, with only this untracked plan copied from `codex/hermes-design-plan`. | The website branch has unrelated active work and must remain isolated. |
 | 2026-06-06 | Normalize to a Scribe-ready WAV even when Voice Isolation is disabled. | This keeps the preparer useful during disabled rollout and gives Scribe predictable 16 kHz mono WAV input. |
 | 2026-06-06 | Treat empty or undecodable Audio Isolation output as fallback-eligible unless fail-open is disabled. | Current ElevenLabs docs still show an empty JSON 200 body for the endpoint, and this local environment has no sandbox provider call evidence. |
+| 2026-06-07 | Enable Audio Isolation by default while keeping fail-open enabled. | The product decision changed from staged opt-in to default-on quality prep, but staging evidence is still required before tightening fallback behavior. |
 
 ## Progress Log
 
