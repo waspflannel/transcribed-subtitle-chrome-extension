@@ -11,9 +11,9 @@
     </section>
 
     <section class="section">
-        <div class="plan-row">
+        <div class="plan-row" data-reveal>
             @foreach ($plans as $plan)
-                <article class="plan-card plan-card-detailed">
+                <article @class(['plan-card', 'plan-card-detailed', 'plan-card-featured' => $loop->index === intdiv($loop->count - 1, 2)])>
                     <div>
                         <h2>{{ $plan['name'] }}</h2>
                         <p class="price">${{ number_format(((int) $plan['price_cents']) / 100, 0) }}<span>/month</span></p>
@@ -39,13 +39,13 @@
     </section>
 
     <section class="section split-section">
-        <div>
+        <div data-reveal>
             <h2>What counts as usage?</h2>
             <p>
                 Usage is based on the public YouTube video's generated duration, rounded up to whole minutes. Running jobs reserve minutes, completed tracks debit them, and failed jobs release unused reservations.
             </p>
         </div>
-        <div>
+        <div data-reveal data-reveal-delay="100">
             <h2>Refund posture</h2>
             <p>
                 Beta refunds are handled through support when billing, access, or generation failures prevent reasonable use of the subscription.

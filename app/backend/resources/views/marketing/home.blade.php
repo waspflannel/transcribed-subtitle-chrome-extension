@@ -1,26 +1,9 @@
-@extends('layouts.hermes-desktop')
+@extends('layouts.site')
+
+@section('body_class', 'hermes-landing-body marketing-body')
 
 @section('content')
-<nav class="hermes-navbar" id="navbar">
-    <div class="hermes-nav-inner">
-        <div class="hermes-nav-left">
-            <a href="/" class="hermes-brand" aria-label="Transcribed Subtitle Extension">
-                <img src="{{ asset('img/desktop/nous.webp') }}" alt="" aria-hidden="true" style="height: 18px; width: auto; filter: brightness(0) invert(1);">
-            </a>
-            <a href="#home" class="is-active">Home</a>
-            <a href="{{ route('marketing.how-it-works') }}">How it works</a>
-            <a href="{{ route('marketing.pricing') }}">Pricing</a>
-        </div>
-        <div class="hermes-nav-right">
-            <a href="{{ route('login') }}" class="hermes-nav-link">Login</a>
-            <a href="{{ route('register') }}" class="hermes-button hermes-button-primary hermes-button-small">
-                Get Started
-            </a>
-        </div>
-    </div>
-</nav>
-
-<main class="da-main" id="home">
+<div class="da-main" id="home">
     <!-- HERO -->
     <section class="da-hero">
         <img class="hermes-hero-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
@@ -36,7 +19,6 @@
                     <span>EXTENSION</span>
                 </h1>
                 <p class="da-hero-lede-center">Turn any public YouTube video into a language learning masterclass. AI-powered transcription and translation layers built for serious learners.</p>
-                <br><br>
                 <a href="#download" class="da-button">
                     <span class="da-icon">↓</span> Download Extension [Beta]
                 </a>
@@ -46,119 +28,103 @@
 
     <!-- VIDEO/PREVIEW -->
     <section class="da-preview">
-        <div class="da-preview-frame">
+        <div class="da-preview-frame" data-reveal>
              <img src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="Product Preview">
              <div class="da-preview-bar">PRODUCT DEMO — BETA PREVIEW</div>
         </div>
     </section>
 
-    <!-- FEATURES / WHY USE IT -->
-    <section class="da-features-section">
-        <div class="da-features-grid">
-            <!-- Perk 1 -->
-            <div class="da-feature">
-                <div class="da-feature-header">
-                    <span class="da-feature-num">#1 MISSING CAPTIONS</span>
+    <!-- FEATURES -->
+    <section class="da-features">
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">01 / Missing captions</span>
+                    <h2>Study any video</h2>
+                    <p>Turns missing or poor captions into useful study subtitles. One click, every video.</p>
                 </div>
-                <h2 class="da-h2">STUDY ANY<br>VIDEO</h2>
-                <div class="da-feature-image">
-                    <img src="{{ asset('img/desktop/feature-connect.webp') }}" alt="Missing Captions">
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-connect.webp') }}" alt="Missing captions">
                 </div>
-                <p class="da-feature-desc">TURNS MISSING OR POOR CAPTIONS INTO USEFUL STUDY SUBTITLES. ONE CLICK, EVERY VIDEO.</p>
             </div>
-            <!-- Perk 2 -->
-            <div class="da-feature">
-                <div class="da-feature-header">
-                    <span class="da-feature-num">#2 TRANSLATION</span>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">02 / Translation</span>
+                    <h2>Layered context</h2>
+                    <p>Injects translation and romanization layers directly into the player for immediate comprehension.</p>
                 </div>
-                <h2 class="da-h2">LAYERED<br>CONTEXT</h2>
-                <div class="da-feature-image">
-                    <img src="{{ asset('img/desktop/feature-memory.webp') }}" alt="Translation Layer">
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-memory.webp') }}" alt="Translation layer">
                 </div>
-                <p class="da-feature-desc">INJECTS TRANSLATION AND ROMANIZATION LAYERS DIRECTLY INTO THE PLAYER. IMMEDIATE COMPREHENSION.</p>
             </div>
-            <!-- Perk 3 -->
-            <div class="da-feature">
-                <div class="da-feature-header">
-                    <span class="da-feature-num">#3 RETENTION</span>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">03 / Retention</span>
+                    <h2>Word cards</h2>
+                    <p>Vocabulary word cards generated from video subtitles — automatic flashcards for spaced repetition.</p>
                 </div>
-                <h2 class="da-h2">WORD<br>CARDS</h2>
-                <div class="da-feature-image">
-                    <img src="{{ asset('img/desktop/feature-tasks.webp') }}" alt="Word Cards">
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-tasks.webp') }}" alt="Word cards">
                 </div>
-                <p class="da-feature-desc">VOCABULARY WORD CARDS GENERATED FROM VIDEO SUBTITLES. AUTOMATIC FLASHCARDS FOR SPACED REPETITION.</p>
             </div>
-            <!-- Perk 4 -->
-             <div class="da-feature">
-                <div class="da-feature-header">
-                    <span class="da-feature-num">#4 EXPORT</span>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">04 / Export</span>
+                    <h2>Take it with you</h2>
+                    <p>Export your learned vocabulary to Anki, CSV, or Notion. Own your progress data.</p>
                 </div>
-                <h2 class="da-h2">TAKE IT<br>WITH YOU</h2>
-                <div class="da-feature-image">
+                <div class="feature-media">
                     <img src="{{ asset('img/desktop/feature-automation.webp') }}" alt="Export">
                 </div>
-                <p class="da-feature-desc">EXPORT YOUR LEARNED VOCABULARY TO ANKI, CSV, OR NOTION. OWN YOUR PROGRESS DATA.</p>
             </div>
-            <!-- Perk 5 -->
-             <div class="da-feature">
-                <div class="da-feature-header">
-                    <span class="da-feature-num">#5 OFFLINE</span>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">05 / Offline</span>
+                    <h2>Read anywhere</h2>
+                    <p>Download full transcripts as PDF or text and study along without an internet connection.</p>
                 </div>
-                <h2 class="da-h2">READ<br>ANYWHERE</h2>
-                <div class="da-feature-image">
-                    <img src="{{ asset('img/desktop/feature-browse.webp') }}" alt="Read Anywhere">
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-browse.webp') }}" alt="Read anywhere">
                 </div>
-                <p class="da-feature-desc">DOWNLOAD FULL TRANSCRIPTS AS PDF OR TEXT. STUDY ALONG WITHOUT AN INTERNET CONNECTION.</p>
             </div>
-            <!-- Perk 6 -->
-             <div class="da-feature">
-                <div class="da-feature-header">
-                    <span class="da-feature-num">#6 PRIVACY</span>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">06 / Privacy</span>
+                    <h2>Local processing</h2>
+                    <p>Your watch history stays private; transcriptions run securely on managed infrastructure.</p>
                 </div>
-                <h2 class="da-h2">LOCAL<br>PROCESSING</h2>
-                <div class="da-feature-image">
+                <div class="feature-media">
                     <img src="{{ asset('img/desktop/feature-sandbox.webp') }}" alt="Privacy">
                 </div>
-                <p class="da-feature-desc">YOUR WATCH HISTORY REMAINS PRIVATE. TRANSCRIPTIONS RUN SECURELY ON MANAGED INFRASTRUCTURE.</p>
             </div>
         </div>
     </section>
 
     <!-- FINAL CTA -->
     <section class="da-final-cta" id="download">
-        <div class="da-giant-text">TRANSCRIBE</div>
         <div class="da-final-content">
-            <div class="da-final-copy">
-                <div class="da-eyebrow" style="color: rgba(255,255,255,0.7);">Download Extension</div>
+            <div class="da-final-copy" data-reveal>
+                <div class="da-eyebrow">Download Extension</div>
                 <h2 class="da-h2">BRING THE READING ROOM<br>TO EVERY VIDEO</h2>
                 <p class="da-feature-desc">Join the paid beta for YouTube language learners. Professional subtitles, instant word cards, and persistent memory.</p>
-                <br><br>
                 <a href="#download" class="da-button">
                     <span class="da-icon">↓</span> Get Started Now
                 </a>
             </div>
-            <div class="da-final-image">
+            <div class="da-final-image" data-reveal data-reveal-delay="120">
                 <img src="{{ asset('img/desktop/portal-figure.webp') }}" alt="Transcribed Subtitle Extension study figure">
             </div>
         </div>
     </section>
-
-    <footer class="hermes-footer">
-        <div class="hermes-container hermes-footer-inner">
-            <div class="hermes-footer-brand">
-                <img src="{{ asset('img/desktop/nous.webp') }}" alt="" aria-hidden="true" style="filter: brightness(0) invert(1);">
-                <strong>Transcribed Subtitle Extension</strong>
-                <p>AI Language Study v1.0.0-beta</p>
-                <p>&copy; 2026</p>
-            </div>
-            <nav aria-label="Footer">
-                <a href="{{ route('marketing.faq') }}">FAQ</a>
-                <a href="{{ route('marketing.privacy') }}">Privacy</a>
-                <a href="{{ route('marketing.support') }}">Support</a>
-            </nav>
-        </div>
-    </footer>
-</main>
+</div>
 @endsection
-
-

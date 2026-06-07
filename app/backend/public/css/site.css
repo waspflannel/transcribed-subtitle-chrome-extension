@@ -1,25 +1,26 @@
 ﻿:root {
-    --black: #050505;
-    --obsidian: #0b0a08;
-    --surface: #15120e;
-    --surface-high: #211c14;
+    --black: #0a0a0a;
+    --obsidian: #0d0d0d;
+    --surface: #141414;
+    --surface-high: #1e1e1e;
     --paper: #f3ead8;
     --paper-strong: #fff8ea;
-    --paper-muted: #c8b99e;
-    --ink: #15110d;
-    --ink-soft: #4b4034;
-    --ivory: #f4ead7;
-    --ivory-muted: #d8c7a8;
-    --brass: #b88a3b;
-    --brass-bright: #d4aa57;
+    --paper-muted: #b6b3ae;
+    --ink: #121212;
+    --ink-soft: #3a3a3a;
+    --ivory: #f1f1f1;
+    --ivory-muted: #b4b4b4;
+    --brass: #b23030;
+    --brass-bright: #d83b3b;
     --oxblood: #7f1d1d;
     --green: #183b2d;
     --failure: #b91c1c;
     --success: #3d8b68;
-    --line-dark: rgba(244, 234, 215, 0.14);
-    --line-light: rgba(21, 17, 13, 0.16);
+    --line-dark: rgba(255, 255, 255, 0.1);
+    --line-light: rgba(0, 0, 0, 0.14);
     --content: 1180px;
     --wide-content: 1320px;
+    --font-display: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
     color: var(--ivory);
     font-family: Inter, "Source Sans 3", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.5;
@@ -32,11 +33,12 @@
 html {
     background: var(--black);
     scroll-behavior: smooth;
+    scroll-padding-top: 84px;
 }
 
 body {
     background:
-        linear-gradient(180deg, rgba(184, 138, 59, 0.08), transparent 360px),
+        linear-gradient(180deg, rgba(216, 59, 59, 0.08), transparent 360px),
         var(--black);
     margin: 0;
     min-height: 100vh;
@@ -74,8 +76,8 @@ h1,
 h2,
 h3 {
     color: var(--ivory);
-    font-family: "Cormorant Garamond", "EB Garamond", Georgia, "Times New Roman", serif;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-weight: 600;
     letter-spacing: 0;
     line-height: 1;
     overflow-wrap: normal;
@@ -123,16 +125,27 @@ summary:focus-visible {
 
 .site-header {
     align-items: center;
-    background: rgba(5, 5, 5, 0.88);
-    backdrop-filter: blur(18px);
-    border-bottom: 1px solid var(--line-dark);
+    background: transparent;
+    border-bottom: 1px solid transparent;
     display: grid;
     gap: 18px;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    min-height: 68px;
-    position: sticky;
+    left: 0;
+    min-height: 64px;
+    position: fixed;
+    right: 0;
     top: 0;
-    z-index: 20;
+    transition:
+        background 240ms ease,
+        border-color 240ms ease,
+        backdrop-filter 240ms ease;
+    z-index: 100;
+}
+
+.site-header.scrolled {
+    background: rgba(5, 5, 5, 0.82);
+    backdrop-filter: blur(20px) saturate(140%);
+    border-bottom-color: var(--line-dark);
 }
 
 .site-header > *,
@@ -170,7 +183,7 @@ summary:focus-visible {
 .brand-mark {
     align-items: center;
     background: var(--surface);
-    border: 1px solid rgba(184, 138, 59, 0.48);
+    border: 1px solid rgba(216, 59, 59, 0.48);
     border-radius: 6px;
     color: var(--brass-bright);
     display: inline-flex;
@@ -400,7 +413,7 @@ th,
 
 .video-showcase {
     background: var(--surface);
-    border: 1px solid rgba(184, 138, 59, 0.28);
+    border: 1px solid rgba(216, 59, 59, 0.28);
     border-radius: 8px;
     display: grid;
     gap: 14px;
@@ -484,7 +497,7 @@ th,
     align-items: center;
     color: rgba(244, 234, 215, 0.24);
     display: flex;
-    font-family: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+    font-family: var(--font-display);
     font-size: 7rem;
     justify-content: center;
     line-height: 1;
@@ -537,7 +550,7 @@ th,
 
 .final-cta-image > img {
     aspect-ratio: 16 / 10;
-    border: 1px solid rgba(184, 138, 59, 0.28);
+    border: 1px solid rgba(216, 59, 59, 0.28);
     border-radius: 8px;
     height: 100%;
     object-fit: cover;
@@ -645,8 +658,8 @@ th,
 
 .language-strip li,
 .language-cloud li {
-    background: rgba(184, 138, 59, 0.12);
-    border: 1px solid rgba(184, 138, 59, 0.24);
+    background: rgba(216, 59, 59, 0.12);
+    border: 1px solid rgba(216, 59, 59, 0.24);
     border-radius: 4px;
     color: var(--ivory);
     display: inline-flex;
@@ -665,9 +678,9 @@ th,
 
 .price {
     color: var(--ivory);
-    font-family: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+    font-family: var(--font-display);
     font-size: 3.4rem;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .price span {
@@ -773,7 +786,7 @@ th,
 .faq-list summary {
     color: var(--ivory);
     cursor: pointer;
-    font-family: "Cormorant Garamond", "EB Garamond", Georgia, serif;
+    font-family: var(--font-display);
     font-size: 1.45rem;
     font-weight: 600;
 }
@@ -784,7 +797,7 @@ th,
 
 .legal-copy {
     background: var(--paper);
-    border: 1px solid rgba(184, 138, 59, 0.22);
+    border: 1px solid rgba(216, 59, 59, 0.22);
     border-radius: 8px;
     color: var(--ink);
     display: grid;
@@ -1099,7 +1112,7 @@ td small {
 .status-running,
 .status-queued,
 .status-processing {
-    background: rgba(184, 138, 59, 0.2);
+    background: rgba(216, 59, 59, 0.2);
     color: #f8d08b;
 }
 
@@ -1125,8 +1138,8 @@ td small {
 }
 
 .plan-button:hover {
-    background: rgba(184, 138, 59, 0.14);
-    border-color: rgba(184, 138, 59, 0.42);
+    background: rgba(216, 59, 59, 0.14);
+    border-color: rgba(216, 59, 59, 0.42);
 }
 
 .failure-panel {
@@ -1376,37 +1389,40 @@ td small {
 }
 
 .hermes-landing-body {
-    --hermes-bg: #0a0a0a;
-    --hermes-surface-1: #111111;
-    --hermes-surface-2: #1a1a1a;
-    --hermes-surface-3: #242424;
-    --hermes-border: #2a2a2a;
-    --hermes-accent: #4a9eff;
-    --hermes-accent-hover: #72b8ff;
-    --hermes-text-primary: #f0f0f0;
-    --hermes-text-secondary: #aaaaaa;
-    --hermes-text-muted: #555555;
-    --hermes-badge-bg: #0e1726;
-    --hermes-badge-border: #1f3a6e;
-    --hermes-content: 1200px;
-    background: var(--hermes-bg);
+    --hermes-bg: var(--black);
+    --hermes-surface-1: var(--obsidian);
+    --hermes-surface-2: var(--surface);
+    --hermes-surface-3: var(--surface-high);
+    --hermes-border: var(--line-dark);
+    --hermes-accent: var(--brass-bright);
+    --hermes-accent-hover: #e85d5d;
+    --hermes-text-primary: var(--ivory);
+    --hermes-text-secondary: var(--ivory-muted);
+    --hermes-text-muted: var(--paper-muted);
+    --hermes-badge-bg: rgba(216, 59, 59, 0.1);
+    --hermes-badge-border: rgba(216, 59, 59, 0.32);
+    --hermes-content: 1600px;
+    background:
+        radial-gradient(ellipse 1200px 720px at 50% -8%, rgba(216, 59, 59, 0.08), transparent 70%),
+        var(--hermes-bg);
     color: var(--hermes-text-primary);
-    font-family: Geist, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    line-height: 1.65;
+    font-family: Inter, "Source Sans 3", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.6;
     min-height: 100vh;
     position: relative;
 }
 
+.marketing-body::after,
 .hermes-landing-body::after {
     background-image:
         radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
     background-size: 4px 4px;
     content: "";
     inset: 0;
-    opacity: 0.035;
+    opacity: 0.03;
     pointer-events: none;
     position: fixed;
-    z-index: 200;
+    z-index: 5;
 }
 
 .hermes-landing-body *,
@@ -1417,6 +1433,24 @@ td small {
 
 .hermes-landing-body a {
     color: inherit;
+}
+
+/* The broad inherit rule above would otherwise swallow the colors of
+   the shared-shell buttons/links now rendered inside this scope. */
+.hermes-landing-body .button,
+.hermes-landing-body button {
+    color: var(--ink);
+}
+
+.hermes-landing-body .button-secondary {
+    color: var(--ivory);
+}
+
+.hermes-landing-body .site-nav a,
+.hermes-landing-body .site-footer a,
+.hermes-landing-body .text-link,
+.hermes-landing-body .button-link {
+    color: var(--paper-muted);
 }
 
 .hermes-landing-body img,
@@ -1437,8 +1471,8 @@ td small {
 .hermes-landing-body h2,
 .hermes-landing-body h3 {
     color: var(--hermes-text-primary);
-    font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
-    font-weight: 700;
+    font-family: var(--font-display);
+    font-weight: 600;
     letter-spacing: 0;
     line-height: 1;
 }
@@ -1483,7 +1517,7 @@ td small {
 }
 
 .hermes-navbar.scrolled {
-    background: rgba(10, 10, 10, 0.86);
+    background: rgba(10, 10, 10, 0.9);
     border-bottom-color: var(--hermes-border);
 }
 
@@ -1577,14 +1611,14 @@ td small {
 .hermes-button-primary {
     background: var(--hermes-accent);
     border: 1px solid var(--hermes-accent);
-    color: #ffffff;
+    color: var(--ink);
 }
 
 .hermes-button-primary:hover {
     background: var(--hermes-accent-hover);
     border-color: var(--hermes-accent-hover);
-    box-shadow: 0 0 20px rgba(74, 158, 255, 0.4);
-    color: #ffffff;
+    box-shadow: 0 0 20px rgba(216, 59, 59, 0.4);
+    color: var(--ink);
 }
 
 .hermes-button-outline {
@@ -1595,7 +1629,7 @@ td small {
 
 .hermes-button-outline:hover {
     background: var(--hermes-surface-2);
-    border-color: rgba(74, 158, 255, 0.4);
+    border-color: rgba(216, 59, 59, 0.4);
     color: var(--hermes-text-primary);
 }
 
@@ -1607,7 +1641,7 @@ td small {
 
 .hermes-hero {
     background:
-        radial-gradient(ellipse 900px 600px at 50% 30%, rgba(74, 158, 255, 0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 900px 600px at 50% 30%, rgba(216, 59, 59, 0.08) 0%, transparent 70%),
         var(--hermes-bg);
     isolation: isolate;
     min-height: 100vh;
@@ -1641,7 +1675,7 @@ td small {
 }
 
 .hermes-hero-art-wrap::after {
-    background: rgba(74, 158, 255, 0.16);
+    background: rgba(216, 59, 59, 0.16);
     border-radius: 999px;
     content: "";
     filter: blur(70px);
@@ -1720,7 +1754,7 @@ td small {
 .hermes-video-shell {
     border: 1px solid var(--hermes-border);
     border-radius: 8px;
-    box-shadow: 0 0 80px rgba(74, 158, 255, 0.12);
+    box-shadow: 0 0 80px rgba(216, 59, 59, 0.12);
     max-width: 860px;
     overflow: hidden;
     width: 100%;
@@ -1763,8 +1797,8 @@ td small {
 }
 
 .hermes-platform-card:hover {
-    border-color: rgba(74, 158, 255, 0.4);
-    box-shadow: 0 0 24px rgba(74, 158, 255, 0.08);
+    border-color: rgba(216, 59, 59, 0.4);
+    box-shadow: 0 0 24px rgba(216, 59, 59, 0.08);
     transform: translateY(-2px);
 }
 
@@ -2160,113 +2194,195 @@ td small {
 .hermes-landing-body .da-main {
     background: transparent;
     color: var(--hermes-text-primary);
-    font-family: "Geist Mono", "Fira Code", monospace;
+    font-family: "IBM Plex Mono", "Geist Mono", "Fira Code", monospace;
 }
 
 .hermes-landing-body .da-hero {
-    padding: 120px 48px 96px;
-    border-bottom: 1px solid var(--hermes-border);
-    position: relative;
-    overflow: hidden;
-    background: 
-        radial-gradient(ellipse 900px 600px at 50% 30%, rgba(74, 158, 255, 0.1) 0%, transparent 70%),
+    background:
+        radial-gradient(ellipse 900px 600px at 58% 30%, rgba(216, 59, 59, 0.1) 0%, transparent 68%),
         transparent;
+    isolation: isolate;
+    min-height: 100svh;
+    overflow: hidden;
+    padding: 104px 48px 72px;
+    position: relative;
+}
+
+.hermes-landing-body .da-hero::before {
+    background:
+        linear-gradient(90deg, rgba(10, 10, 10, 0.96) 0%, rgba(10, 10, 10, 0.82) 40%, rgba(10, 10, 10, 0.12) 72%, transparent 100%),
+        linear-gradient(180deg, rgba(10, 10, 10, 0.04), rgba(10, 10, 10, 0.54));
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+}
+
+.hermes-landing-body .da-hero .hermes-hero-texture {
+    mix-blend-mode: screen;
+    opacity: 0.06;
+    transform: scaleX(-1);
+    z-index: 0;
+}
+
+.hermes-landing-body .da-hero .hermes-container {
+    padding-left: 0;
 }
 
 .hermes-landing-body .da-hero-layered-content {
+    align-items: center;
     display: grid;
-    place-items: center;
+    min-height: calc(100svh - 176px);
     position: relative;
     z-index: 10;
-    min-height: 700px;
 }
+
 .hermes-landing-body .da-hero-visual-bg {
-    grid-area: 1 / 1;
-    max-width: 1000px;
-    width: 100%;
-    opacity: 0.8;
-    filter: drop-shadow(0 0 100px rgba(74, 158, 255, 0.2));
+    top: 50%;
+    transform: translateY(-50%);
+    filter: drop-shadow(0 0 90px rgba(216, 59, 59, 0.28));
+    max-width: none;
+    mix-blend-mode: screen;
+    opacity: 1;
+    pointer-events: none;
+    position: absolute;
+    right: clamp(-90px, -3vw, -24px);
+    width: min(56vw, 900px);
+    z-index: 3;
 }
+
 .hermes-landing-body .da-hero-visual-bg img {
+    display: block;
     width: 100%;
 }
+
 .hermes-landing-body .da-hero-text-overlay {
-    grid-area: 1 / 1;
-    text-align: center;
+    align-items: flex-start;
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 24px;
+    padding: 2rem 0;
+    position: relative;
+    text-align: left;
+    width: min(56%, 640px);
     z-index: 20;
-    padding: 2rem;
 }
+
 .hermes-landing-body .da-h1-overlay {
-    font-family: "Geist", sans-serif;
-    font-size: clamp(3.5rem, 8vw, 7.5rem);
+    font-family: var(--font-display);
+    font-size: clamp(3.6rem, 6.8vw, 6.6rem);
     line-height: 0.85;
-    font-weight: 800;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: -0.05em;
+    letter-spacing: 0;
     margin-bottom: 2rem;
-    text-shadow: 0 0 40px rgba(0,0,0,0.5);
+    color: var(--hermes-text-primary);
 }
 .hermes-landing-body .da-h1-overlay span {
     display: block;
 }
+
 .hermes-landing-body .da-hero-lede-center {
-    font-size: 1.15rem;
+    font-family: var(--font-display);
+    font-size: clamp(1.15rem, 2vw, 1.5rem);
     line-height: 1.6;
-    color: var(--hermes-text-primary);
-    max-width: 60ch;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+    color: var(--hermes-text-secondary);
+    max-width: 42ch;
 }
-@media (max-width: 768px) {
-    .hermes-landing-body .da-hero-layered-content {
-        min-height: 500px;
+
+@media (max-width: 900px) {
+    .hermes-landing-body .da-hero {
+        min-height: auto;
+        padding: 104px 24px 56px;
     }
+
+    .hermes-landing-body .da-hero .hermes-container {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .hermes-landing-body .da-hero::before {
+        background:
+            linear-gradient(180deg, rgba(10, 10, 10, 0.9) 0%, rgba(10, 10, 10, 0.7) 52%, rgba(10, 10, 10, 0.9) 100%);
+    }
+
+    .hermes-landing-body .da-hero-layered-content {
+        gap: 28px;
+        min-height: auto;
+    }
+
+    .hermes-landing-body .da-hero-text-overlay {
+        margin-bottom: 0;
+        width: 100%;
+    }
+
+    .hermes-landing-body .da-hero-visual-bg {
+        bottom: auto;
+        justify-self: center;
+        max-width: 520px;
+        opacity: 0.82;
+        position: relative;
+        right: auto;
+        top: auto;
+        transform: none;
+        width: min(100%, 520px);
+    }
+}
+
+@media (max-width: 768px) {
     .hermes-landing-body .da-h1-overlay {
-        font-size: 3rem;
+        font-size: clamp(2.6rem, 12.5vw, 4.2rem);
+        line-height: 0.9;
     }
 }
 
 .hermes-landing-body .da-eyebrow {
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.75rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     margin-bottom: 2rem;
-    color: var(--hermes-accent);
+    color: var(--hermes-text-secondary);
     font-weight: 700;
 }
 
 .hermes-landing-body .da-h1 {
-    font-family: "Geist", sans-serif;
+    font-family: var(--font-display);
     font-size: clamp(3.5rem, 7vw, 6rem);
     line-height: 0.9;
-    font-weight: 800;
+    font-weight: 600;
     text-transform: uppercase;
     margin: 0 0 3.5rem 0;
     color: var(--hermes-text-primary);
-    letter-spacing: -0.04em;
+    letter-spacing: 0;
 }
 
 .hermes-landing-body .da-button {
     display: inline-flex;
     align-items: center;
     background: var(--hermes-accent);
-    color: #000;
+    border: 1px solid var(--hermes-accent);
+    border-radius: 8px;
+    color: var(--ink);
     padding: 1rem 2.5rem;
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.82rem;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     text-decoration: none;
-    border-radius: 4px;
     font-weight: 800;
+    justify-self: start;
+    max-width: 100%;
     transition: all 200ms ease;
+    width: fit-content;
 }
 .hermes-landing-body .da-button:hover {
     background: var(--hermes-accent-hover);
+    border-color: var(--hermes-accent-hover);
+    color: var(--ink);
     transform: translateY(-2px);
-    box-shadow: 0 10px 24px rgba(74, 158, 255, 0.2);
+    box-shadow: 0 0 20px rgba(216, 59, 59, 0.35);
 }
 .hermes-landing-body .da-icon {
     margin-right: 0.75rem;
@@ -2275,29 +2391,39 @@ td small {
 
 /* Preview Section */
 .hermes-landing-body .da-preview {
-    padding: 96px 48px;
     background: var(--hermes-surface-1);
-    border-bottom: 1px solid var(--hermes-border);
+    padding: 88px 48px;
 }
+
 .hermes-landing-body .da-preview-frame {
-    max-width: 1200px;
-    margin: 0 auto;
+    aspect-ratio: 16 / 9;
+    background: var(--hermes-bg);
     border: 1px solid var(--hermes-border);
-    position: relative;
-    box-shadow: 0 40px 100px rgba(0,0,0,0.6);
     border-radius: 8px;
+    box-shadow: 0 0 70px rgba(216, 59, 59, 0.1);
+    margin: 0 auto;
+    max-width: 1200px;
     overflow: hidden;
-}
-.hermes-landing-body .da-preview-frame img {
+    position: relative;
     width: 100%;
-    display: block;
 }
+
+.hermes-landing-body .da-preview-frame img {
+    display: block;
+    height: 100%;
+    mix-blend-mode: screen;
+    object-fit: cover;
+    opacity: 0.42;
+    width: 100%;
+}
+
 .hermes-landing-body .da-preview-bar {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
     padding: 12px 24px;
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.65rem;
     letter-spacing: 0.2em;
     border-top: 1px solid var(--hermes-border);
@@ -2326,13 +2452,13 @@ td small {
 }
 @media (max-width: 768px) {
     .hermes-landing-body .da-features-grid { grid-template-columns: 1fr; }
-    .hermes-landing-body .da-hero-content { flex-direction: column; text-align: center; }
-    .hermes-landing-body .da-hero-visual { justify-content: center; margin-top: 4rem; }
 }
 
 .hermes-landing-body .da-feature {
     display: flex;
     flex-direction: column;
+}
+.has-js .hermes-landing-body .da-feature {
     opacity: 0;
     transform: translateY(20px);
     transition: opacity 600ms ease, transform 600ms ease;
@@ -2348,41 +2474,44 @@ td small {
     border-bottom: 1px solid var(--hermes-border);
     padding-bottom: 12px;
     margin-bottom: 24px;
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.7rem;
     letter-spacing: 0.15em;
-    color: var(--hermes-accent);
+    color: var(--hermes-text-secondary);
     font-weight: 700;
 }
 .hermes-landing-body .da-h2 {
-    font-family: "Geist", sans-serif;
+    font-family: var(--font-display);
     font-size: clamp(2rem, 3.5vw, 3rem);
     line-height: 1;
-    font-weight: 700;
+    font-weight: 600;
     text-transform: uppercase;
     margin: 0 0 24px 0;
     color: var(--hermes-text-primary);
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
 }
 .hermes-landing-body .da-feature-image {
     width: 100%;
     aspect-ratio: 16/10;
     margin-bottom: 24px;
-    background: var(--hermes-surface-2);
+    background: transparent;
     overflow: hidden;
-    border: 1px solid var(--hermes-border);
-    border-radius: 4px;
+    border: none;
+    border-radius: 0;
 }
 .hermes-landing-body .da-feature-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     opacity: 0.8;
-    transition: opacity 0.3s;
+    transition: opacity 0.3s, transform 0.5s ease;
 }
 .hermes-landing-body .da-feature:hover .da-feature-image img {
     opacity: 1;
+    transform: scale(1.03);
 }
 .hermes-landing-body .da-feature-desc {
+    font-family: "IBM Plex Mono", monospace;
     font-size: 0.85rem;
     line-height: 1.65;
     letter-spacing: 0.02em;
@@ -2393,80 +2522,605 @@ td small {
 
 /* Final CTA */
 .hermes-landing-body .da-final-cta {
-    background: #0000FF; /* Royal Blue from reference */
-    padding: 160px 48px;
-    overflow: hidden;
+    align-items: center;
+    background:
+        radial-gradient(ellipse 820px 520px at 78% 52%, rgba(216, 59, 59, 0.12) 0%, transparent 68%),
+        var(--hermes-surface-1);
     display: flex;
     flex-direction: column;
     justify-content: center;
-    align-items: center;
+    min-height: 720px;
+    overflow: hidden;
+    padding: clamp(104px, 12vw, 156px) 48px;
     position: relative;
-    margin-top: 100px;
+    scroll-margin-top: 96px;
 }
+
 .hermes-landing-body .da-final-cta::before {
+    background:
+        linear-gradient(180deg, transparent 0%, var(--hermes-surface-1) 72%),
+        radial-gradient(ellipse 70% 100% at 50% 100%, rgba(17, 17, 17, 0.98) 0%, transparent 72%);
     content: "";
-    position: absolute;
-    top: -100px;
+    height: 128px;
     left: 0;
-    right: 0;
-    height: 100px;
-    background: #0000FF;
-    clip-path: ellipse(60% 100% at 50% 100%);
-}
-.hermes-landing-body .da-giant-text {
-    font-family: "Geist", sans-serif;
-    font-size: 20vw;
-    line-height: 0.8;
-    color: #FFF;
-    white-space: nowrap;
-    text-transform: uppercase;
-    font-weight: 900;
-    letter-spacing: -0.06em;
-    opacity: 0.1;
     pointer-events: none;
     position: absolute;
-    z-index: 1;
+    right: 0;
+    top: -127px;
 }
+
 .hermes-landing-body .da-final-content {
-    position: relative;
-    z-index: 10;
-    display: flex;
     align-items: center;
+    display: grid;
     gap: 64px;
+    grid-template-columns: minmax(0, 0.92fr) minmax(280px, 1.08fr);
     max-width: var(--hermes-content);
+    position: relative;
     width: 100%;
+    z-index: 10;
 }
+
 .hermes-landing-body .da-final-copy {
-    flex: 1;
-    color: #FFF;
+    color: var(--hermes-text-primary);
+    display: grid;
+    gap: 18px;
+    min-width: 0;
 }
+
+.hermes-landing-body .da-final-copy .da-eyebrow {
+    color: var(--hermes-text-secondary);
+    margin-bottom: 0;
+}
+
 .hermes-landing-body .da-final-copy .da-h2 {
-    color: #FFF;
-    font-weight: 800;
-    margin-bottom: 24px;
+    color: var(--hermes-text-primary);
+    font-weight: 600;
+    margin-bottom: 0;
 }
+
 .hermes-landing-body .da-final-copy .da-feature-desc {
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--hermes-text-secondary);
+    max-width: 52ch;
 }
+
 .hermes-landing-body .da-final-image {
-    flex: 1.2;
     display: flex;
     justify-content: center;
+    min-width: 0;
 }
+
 .hermes-landing-body .da-final-image img {
-    width: 100%;
-    max-width: 600px;
     display: block;
     filter: drop-shadow(0 20px 50px rgba(0,0,0,0.5));
+    max-height: min(68vh, 620px);
+    max-width: 600px;
+    object-fit: contain;
+    width: 100%;
 }
 .hermes-landing-body .da-final-cta .da-button {
-    background: #FFF;
-    color: #000;
+    background: var(--hermes-accent);
+    border: 1px solid var(--hermes-accent);
+    border-radius: 8px;
+    color: var(--ink);
 }
 .hermes-landing-body .da-final-cta .da-button:hover {
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 10px 24px rgba(0,0,0,0.2);
+    background: var(--hermes-accent-hover);
+    color: var(--ink);
+    box-shadow: 0 0 20px rgba(216, 59, 59, 0.35);
 }
 
+@media (max-width: 900px) {
+    .hermes-landing-body .da-preview,
+    .hermes-landing-body .da-features-section,
+    .hermes-landing-body .da-final-cta {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
 
+    .hermes-landing-body .da-final-cta {
+        min-height: auto;
+        scroll-margin-top: 128px;
+    }
 
+    .hermes-landing-body .da-final-content {
+        gap: 36px;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hermes-landing-body .da-final-image {
+        justify-content: start;
+    }
+
+    .hermes-landing-body .da-final-image img {
+        max-height: 520px;
+        max-width: min(100%, 460px);
+    }
+}
+
+@media (max-width: 560px) {
+    .hermes-landing-body .da-preview,
+    .hermes-landing-body .da-features-section,
+    .hermes-landing-body .da-final-cta {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .hermes-landing-body .da-preview {
+        padding-bottom: 56px;
+        padding-top: 56px;
+    }
+
+    .hermes-landing-body .da-final-cta {
+        padding-bottom: 76px;
+        padding-top: 92px;
+    }
+
+}
+
+/* ============================================================
+   MOTION SYSTEM + POLISH — Hermes structure, warm dark-academia
+   (Global reduced-motion guard near top neutralizes all of this.)
+   ============================================================ */
+
+/* Scroll-reveal primitive — JS toggles .is-visible.
+   Gated on .has-js so content is never hidden without JS. */
+.has-js [data-reveal] {
+    opacity: 0;
+    transform: translateY(22px);
+    transition:
+        opacity 720ms cubic-bezier(0.16, 1, 0.3, 1),
+        transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+[data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+}
+
+/* Hero entrance — one orchestrated page-load cascade (home) */
+@keyframes da-rise {
+    from { opacity: 0; transform: translateY(26px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes da-float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-14px); }
+}
+
+.hermes-landing-body .da-eyebrow,
+.hermes-landing-body .da-h1-overlay span,
+.hermes-landing-body .da-hero-lede-center,
+.hermes-landing-body .da-hero-text-overlay .da-button {
+    animation: da-rise 760ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.hermes-landing-body .da-eyebrow { animation-delay: 80ms; }
+.hermes-landing-body .da-h1-overlay span:nth-child(1) { animation-delay: 170ms; }
+.hermes-landing-body .da-h1-overlay span:nth-child(2) { animation-delay: 270ms; }
+.hermes-landing-body .da-h1-overlay span:nth-child(3) { animation-delay: 370ms; }
+.hermes-landing-body .da-hero-lede-center { animation-delay: 480ms; }
+.hermes-landing-body .da-hero-text-overlay .da-button { animation-delay: 580ms; }
+
+.hermes-landing-body .da-hero-visual-bg img {
+    animation: da-float 9s ease-in-out infinite;
+}
+
+/* Inner-page hero entrance — JS-free CSS load cascade */
+.page-hero > * {
+    animation: da-rise 700ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+.page-hero > *:nth-child(1) { animation-delay: 60ms; }
+.page-hero > *:nth-child(2) { animation-delay: 150ms; }
+.page-hero > *:nth-child(3) { animation-delay: 240ms; }
+.page-hero > *:nth-child(4) { animation-delay: 330ms; }
+
+/* Feature-grid reveal stagger (per row of three) */
+.has-js .hermes-landing-body .da-features-grid .da-feature:nth-child(2),
+.has-js .hermes-landing-body .da-features-grid .da-feature:nth-child(5) {
+    transition-delay: 80ms;
+}
+
+.has-js .hermes-landing-body .da-features-grid .da-feature:nth-child(3),
+.has-js .hermes-landing-body .da-features-grid .da-feature:nth-child(6) {
+    transition-delay: 160ms;
+}
+
+/* Nav links — brass underline grow on hover */
+.site-nav a {
+    position: relative;
+}
+
+.site-nav a::after {
+    background: var(--brass-bright);
+    bottom: -3px;
+    content: "";
+    height: 1px;
+    left: 0;
+    position: absolute;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 220ms ease;
+    width: 100%;
+}
+
+.site-nav a:hover::after {
+    transform: scaleX(1);
+}
+
+/* Pricing — hover lift + recommended tier */
+.plan-card {
+    transition:
+        border-color 200ms ease,
+        box-shadow 200ms ease,
+        transform 180ms ease;
+}
+
+.plan-card:hover {
+    border-color: rgba(216, 59, 59, 0.45);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42);
+    transform: translateY(-3px);
+}
+
+.plan-card-featured {
+    border-color: rgba(216, 59, 59, 0.55);
+    box-shadow: 0 0 0 1px rgba(216, 59, 59, 0.3), 0 24px 60px rgba(0, 0, 0, 0.45);
+    position: relative;
+}
+
+.plan-card-featured::after {
+    background: var(--brass-bright);
+    border-radius: 999px;
+    color: var(--ink);
+    content: "Recommended";
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    font-weight: 900;
+    left: 24px;
+    letter-spacing: 0.12em;
+    padding: 5px 12px;
+    position: absolute;
+    text-transform: uppercase;
+    top: -12px;
+}
+
+/* Perk cards (paper section) — hover lift */
+.perk-card {
+    transition:
+        border-color 200ms ease,
+        box-shadow 200ms ease,
+        transform 180ms ease;
+}
+
+.perk-card:hover {
+    border-color: rgba(216, 59, 59, 0.5);
+    box-shadow: 0 18px 44px rgba(21, 17, 13, 0.16);
+    transform: translateY(-3px);
+}
+
+/* How-it-works timeline — connected brass spine + number badges */
+.timeline {
+    position: relative;
+}
+
+.timeline::before {
+    background: linear-gradient(180deg, transparent, rgba(216, 59, 59, 0.45) 6%, rgba(216, 59, 59, 0.45) 94%, transparent);
+    content: "";
+    inset: 28px auto 28px 22px;
+    position: absolute;
+    width: 1px;
+}
+
+.timeline article {
+    grid-template-columns: 56px minmax(0, 0.42fr) minmax(0, 0.58fr);
+}
+
+.timeline span {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid rgba(216, 59, 59, 0.5);
+    border-radius: 999px;
+    color: var(--brass-bright);
+    display: inline-flex;
+    font-size: 0.92rem;
+    height: 44px;
+    justify-content: center;
+    position: relative;
+    width: 44px;
+    z-index: 1;
+}
+
+/* FAQ — brass toggle marker + answer fade */
+.faq-list details {
+    transition: border-color 200ms ease;
+}
+
+.faq-list details[open] {
+    border-color: rgba(216, 59, 59, 0.42);
+}
+
+.faq-list summary {
+    align-items: center;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+    list-style: none;
+}
+
+.faq-list summary::-webkit-details-marker {
+    display: none;
+}
+
+.faq-list summary::after {
+    color: var(--brass-bright);
+    content: "+";
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 1.5rem;
+    font-weight: 400;
+    line-height: 1;
+    transition: transform 260ms ease;
+}
+
+.faq-list details[open] summary::after {
+    transform: rotate(45deg);
+}
+
+.faq-list details[open] p {
+    animation: da-rise 380ms ease both;
+}
+
+/* Brand mark hover */
+.brand-mark {
+    transition:
+        border-color 200ms ease,
+        color 200ms ease,
+        transform 200ms ease;
+}
+
+.brand:hover .brand-mark {
+    border-color: var(--brass-bright);
+    color: var(--paper-strong);
+    transform: translateY(-1px);
+}
+
+/* ============================================================
+   CRIMSON RETHEME — Hermes-style buttons, alternating feature
+   rows, dark legal pages.
+   ============================================================ */
+
+/* ---- Buttons: Hermes style (crimson fill + glow, sentence case, sans) ---- */
+.marketing-body .button,
+.marketing-body button,
+.hermes-landing-body .button,
+.hermes-landing-body button,
+.hermes-landing-body .da-button,
+.hermes-landing-body .da-final-cta .da-button {
+    background: var(--brass-bright);
+    border: 1px solid var(--brass-bright);
+    border-radius: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: none;
+}
+
+.marketing-body .button:hover,
+.marketing-body button:hover,
+.hermes-landing-body .button:hover,
+.hermes-landing-body button:hover,
+.hermes-landing-body .da-button:hover,
+.hermes-landing-body .da-final-cta .da-button:hover {
+    background: #e85d5d;
+    border-color: #e85d5d;
+    box-shadow: 0 0 24px rgba(216, 59, 59, 0.45);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.marketing-body .button-secondary,
+.hermes-landing-body .button-secondary {
+    background: transparent;
+    border-color: var(--line-dark);
+    color: var(--ivory);
+}
+
+.marketing-body .button-secondary:hover,
+.hermes-landing-body .button-secondary:hover {
+    background: rgba(216, 59, 59, 0.1);
+    border-color: var(--brass-bright);
+    color: var(--ivory);
+}
+
+.hermes-landing-body .da-button .da-icon {
+    margin-right: 0.6rem;
+}
+
+.marketing-body .button-small,
+.hermes-landing-body .button-small {
+    font-size: 0.86rem;
+}
+
+/* ---- Hero lede: clean body sans (not display) ---- */
+.hermes-landing-body .da-hero-lede-center {
+    font-family: var(--font-display);
+    font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+    font-weight: 400;
+    line-height: 1.6;
+}
+
+/* ---- Feature rows: Hermes-style alternating full-width flow ---- */
+.hermes-landing-body .da-features {
+    background: var(--hermes-bg);
+}
+
+.hermes-landing-body .feature-row {
+    border-top: 1px solid var(--hermes-border);
+    padding: 80px 0;
+}
+
+.hermes-landing-body .feature-row:first-child {
+    border-top: none;
+}
+
+.hermes-landing-body .feature-row:nth-child(even) {
+    background: var(--hermes-surface-1);
+}
+
+.hermes-landing-body .feature-row-inner {
+    align-items: center;
+    display: grid;
+    gap: 64px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+    margin: 0 auto;
+    max-width: var(--hermes-content);
+    padding: 0 48px;
+}
+
+.hermes-landing-body .feature-row:nth-child(even) .feature-text {
+    order: 2;
+}
+
+.hermes-landing-body .feature-row:nth-child(even) .feature-media {
+    order: 1;
+}
+
+.hermes-landing-body .feature-text {
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+}
+
+.hermes-landing-body .feature-num {
+    color: var(--hermes-accent);
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.hermes-landing-body .feature-text h2 {
+    font-size: clamp(2rem, 3.4vw, 3.05rem);
+    line-height: 1.05;
+}
+
+.hermes-landing-body .feature-text p {
+    color: var(--hermes-text-secondary);
+    font-size: 1.04rem;
+    line-height: 1.62;
+    max-width: 46ch;
+}
+
+.hermes-landing-body .feature-media {
+    border: 1px solid var(--hermes-border);
+    border-radius: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.hermes-landing-body .feature-media img {
+    aspect-ratio: 16 / 10;
+    display: block;
+    object-fit: cover;
+    transition: transform 600ms ease;
+    width: 100%;
+}
+
+.hermes-landing-body .feature-row:hover .feature-media img {
+    transform: scale(1.03);
+}
+
+@media (max-width: 900px) {
+    .hermes-landing-body .feature-row {
+        padding: 56px 0;
+    }
+
+    .hermes-landing-body .feature-row-inner {
+        gap: 32px;
+        grid-template-columns: minmax(0, 1fr);
+        padding: 0 24px;
+    }
+
+    .hermes-landing-body .feature-row:nth-child(even) .feature-text,
+    .hermes-landing-body .feature-row:nth-child(even) .feature-media {
+        order: initial;
+    }
+}
+
+/* ---- Legal pages: dark surface to match the theme ---- */
+.legal-copy {
+    background: var(--surface);
+    border-color: var(--line-dark);
+    color: var(--ivory);
+}
+
+.legal-copy h2 {
+    color: var(--ivory);
+}
+
+.legal-copy p {
+    color: var(--ivory-muted);
+}
+
+/* ---- Wider, Hermes-like content width + edge gutters (marketing only) ---- */
+.marketing-body {
+    --content: 1600px;
+}
+
+/* Nav runs near-full-width with a small gutter (like Hermes), not capped narrow */
+.site-header {
+    padding-left: clamp(20px, 4vw, 48px);
+    padding-right: clamp(20px, 4vw, 48px);
+}
+
+/* Top scrim anchored to the navbar so the hero art never leaks into the header.
+   Sits above the art (nav stacking context) and fades out just below the nav. */
+.site-header::after {
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.96) 0%, rgba(10, 10, 10, 0.6) 50%, transparent 100%);
+    content: "";
+    height: 150px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: opacity 240ms ease;
+    z-index: -1;
+}
+
+.site-header.scrolled::after {
+    opacity: 0;
+}
+
+/* Hero dissolves into the section below it (clean merge, no hard edge) */
+.hermes-landing-body .da-hero::after {
+    background: linear-gradient(to bottom, transparent 52%, var(--hermes-surface-1) 100%);
+    bottom: 0;
+    content: "";
+    height: 260px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    z-index: 4;
+}
+
+/* Nav "Download" is a bold text-link, not a filled button (Hermes-style) */
+.nav-cta,
+.hermes-landing-body .nav-cta {
+    color: var(--brass-bright);
+    font-weight: 800;
+}
+
+.nav-cta:hover,
+.hermes-landing-body .nav-cta:hover {
+    color: var(--brass-bright);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+    text-decoration-thickness: 1px;
+}

@@ -12,7 +12,7 @@
     <section class="section">
         <div class="language-groups">
             @foreach ($languageGroups as $group)
-                <section class="language-group">
+                <section class="language-group" data-reveal data-reveal-delay="{{ $loop->index * 80 }}">
                     <div>
                         <h2>{{ $group['label'] }}</h2>
                         <p>{{ $group['description'] }}</p>

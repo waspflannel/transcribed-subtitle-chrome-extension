@@ -9,7 +9,7 @@
         </p>
     </section>
 
-    <section class="section timeline">
+    <section class="section timeline" data-reveal>
         <article>
             <span>01</span>
             <h2>Choose a public YouTube video or Short</h2>
@@ -33,14 +33,14 @@
     </section>
 
     <section class="section split-section" id="install">
-        <div>
+        <div data-reveal>
             <p class="eyebrow">Install path</p>
             <h2>Install the Chrome extension, then connect a verified account.</h2>
             <p>
                 During beta, use the install link supplied with your account invitation or support response. After installing, sign in from the extension Account tab with the same verified email.
             </p>
         </div>
-        <div class="action-stack">
+        <div class="action-stack" data-reveal data-reveal-delay="100">
             @if (config('marketing.chrome_extension_url'))
                 <a class="button" href="{{ config('marketing.chrome_extension_url') }}">Open Chrome listing</a>
             @else

@@ -32,11 +32,13 @@
         @endif
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="{{ asset('css/site.css') }}">
+        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <script>document.documentElement.classList.add('has-js');</script>
+        <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ filemtime(public_path('css/site.css')) }}">
+        <script defer src="{{ asset('js/hermes-desktop.js') }}?v={{ filemtime(public_path('js/hermes-desktop.js')) }}"></script>
     </head>
-    <body class="{{ $bodyClassValue }}">
-        <header class="site-header">
+    <body class="@yield('body_class', $bodyClassValue)">
+        <header class="site-header" id="navbar">
             <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
                 <span class="brand-mark" aria-hidden="true">TS</span>
                 <span>{{ $productName }}</span>
@@ -53,7 +55,7 @@
                     <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
-                    <a class="button button-small" href="{{ route('marketing.home') }}#download">Download extension</a>
+                    <a class="text-link nav-cta" href="{{ route('marketing.home') }}#download">Download extension</a>
                 @endauth
             </div>
         </header>
