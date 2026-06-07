@@ -44,7 +44,7 @@ class SubtitleGenerationPipeline
             return;
         }
 
-        $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
+        $this->telemetry->recordQueueWait($job, 'acquiring-audio', null, $queuedAtMs);
         $this->telemetry->recordStageStarted($job, 'acquiring-audio');
 
         $audio = null;
@@ -65,14 +65,22 @@ class SubtitleGenerationPipeline
             $this->logger->audioAcquisitionCompleted($job->refresh(), $audio);
             $this->telemetry->recordStageCompleted($job->refresh(), 'acquiring-audio', $audioStartedAtMs);
 
+            $stage = 'optimizing-audio';
+            $this->markJobRunning($job, 'optimizing-audio', 35);
+            $this->telemetry->recordStageStarted($job->refresh(), 'optimizing-audio');
+
+            $audioOptimizationStartedAtMs = $this->telemetry->currentTimeMs();
+            $preparedAudio = $this->transcriptionService->prepareAudio($audio);
+            $this->telemetry->recordStageCompleted($job->refresh(), 'optimizing-audio', $audioOptimizationStartedAtMs);
+
             $stage = 'transcribing';
-            $this->markJobRunning($job, 'transcribing', 45);
-            $this->logger->transcriptionStarted($job);
+            $this->markJobRunning($job, 'transcribing', 50);
+            $this->logger->transcriptionStarted($job->refresh());
             $this->telemetry->recordStageStarted($job->refresh(), 'transcribing');
 
             $transcriptionStartedAtMs = $this->telemetry->currentTimeMs();
-            $transcript = $this->transcriptionService->transcribe(
-                audio: $audio,
+            $transcript = $this->transcriptionService->transcribePreparedAudio(
+                audio: $preparedAudio,
                 sourceLanguage: $job->source_language,
             );
             $this->telemetry->recordStageCompleted($job, 'transcribing', $transcriptionStartedAtMs);

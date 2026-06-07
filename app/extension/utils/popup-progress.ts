@@ -3,6 +3,7 @@ import type { SubtitleJobHistoryItem } from './contracts';
 export const GENERATION_STAGES = [
   'preparing',
   'acquiring-audio',
+  'optimizing-audio',
   'transcribing',
   'tokenizing',
   'romanizing',
@@ -47,6 +48,9 @@ export function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>):
 
     case 'acquiring-audio':
       return 'Acquiring audio';
+
+    case 'optimizing-audio':
+      return 'Optimizing audio';
 
     case 'transcribing':
       return 'Transcribing audio';

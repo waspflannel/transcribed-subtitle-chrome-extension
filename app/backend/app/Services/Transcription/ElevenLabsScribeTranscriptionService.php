@@ -19,32 +19,29 @@ class ElevenLabsScribeTranscriptionService
 
     public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
     {
+        return $this->transcribePreparedAudio(
+            $this->prepareAudio($audio),
+            $sourceLanguage,
+        );
+    }
+
+    public function prepareAudio(TemporaryAudioFile $audio): TemporaryAudioFile
+    {
+        $this->transcriptionConfig(Lab::ElevenLabs);
+        $this->assertSupportedAudioMime($audio);
+
+        return $this->audioPreparer->prepare($audio);
+    }
+
+    public function transcribePreparedAudio(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
+    {
         $provider = Lab::ElevenLabs;
-        $apiKey = config('ai.providers.'.$provider->value.'.key');
-        $model = config('ai.providers.'.$provider->value.'.models.transcription.default');
-
-        if (! is_string($apiKey) || trim($apiKey) === '') {
-            throw SubtitleProcessingException::transcriptionFailed('Transcription provider is not configured.', [
-                'provider' => $provider->value,
-                'adapter' => 'elevenlabs-http',
-            ]);
-        }
-
-        if (! is_string($model) || trim($model) === '') {
-            throw SubtitleProcessingException::transcriptionFailed('Transcription model is not configured.', [
-                'provider' => $provider->value,
-                'adapter' => 'elevenlabs-http',
-            ]);
-        }
-
-        $apiKey = trim($apiKey);
-        $model = trim($model);
+        ['apiKey' => $apiKey, 'model' => $model] = $this->transcriptionConfig($provider);
 
         $this->assertSupportedAudioMime($audio);
 
         try {
-            $preparedAudio = $this->audioPreparer->prepare($audio);
-            $response = $this->sendTranscriptionRequest($preparedAudio, $sourceLanguage, $provider, $apiKey, $model);
+            $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
 
             if ($response->failed()) {
                 throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
@@ -69,7 +66,7 @@ class ElevenLabsScribeTranscriptionService
             return $this->normalizer->normalize(
                 payload: $payload,
                 requestedSourceLanguage: $sourceLanguage,
-                durationSeconds: $preparedAudio->durationSeconds,
+                durationSeconds: $audio->durationSeconds,
             );
         } catch (SubtitleProcessingException $exception) {
             throw $exception;
@@ -84,6 +81,34 @@ class ElevenLabsScribeTranscriptionService
                 previous: $exception,
             );
         }
+    }
+
+    /**
+     * @return array{apiKey: string, model: string}
+     */
+    private function transcriptionConfig(Lab $provider): array
+    {
+        $apiKey = config('ai.providers.'.$provider->value.'.key');
+        $model = config('ai.providers.'.$provider->value.'.models.transcription.default');
+
+        if (! is_string($apiKey) || trim($apiKey) === '') {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription provider is not configured.', [
+                'provider' => $provider->value,
+                'adapter' => 'elevenlabs-http',
+            ]);
+        }
+
+        if (! is_string($model) || trim($model) === '') {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription model is not configured.', [
+                'provider' => $provider->value,
+                'adapter' => 'elevenlabs-http',
+            ]);
+        }
+
+        return [
+            'apiKey' => trim($apiKey),
+            'model' => trim($model),
+        ];
     }
 
     private function sendTranscriptionRequest(

@@ -100,7 +100,7 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
                 && str_contains($body, 'name="file_format"')
                 && str_contains($body, 'pcm_s16le_16');
 
-            return Http::response('isolated-provider-audio', 200);
+            return Http::response('isolated-provider-audio', 200, ['Content-Type' => 'audio/mpeg']);
         });
 
         Process::preventStrayProcesses();
@@ -132,13 +132,79 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
         $this->assertTrue($isolationRequestMatched);
     }
 
+    public function test_it_accepts_base64_json_audio_isolation_output_when_provider_returns_structured_audio(): void
+    {
+        config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
+        $commands = [];
+
+        Http::fake([
+            'api.elevenlabs.test/v1/audio-isolation' => Http::response([
+                'audio' => base64_encode('isolated-json-audio'),
+            ], 200),
+        ]);
+
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) use (&$commands) {
+            $commands[] = $process->command;
+            $outputPath = $this->lastCommandArgument($process);
+
+            if (str_ends_with($outputPath, 'isolation-input.pcm')) {
+                File::put($outputPath, 'raw-pcm');
+
+                return Process::result();
+            }
+
+            $this->assertSame('isolated-json-audio', File::get($this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin'));
+            File::put($outputPath, 'json-decoded-wav');
+
+            return Process::result();
+        });
+
+        $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
+
+        $this->assertSame('json-decoded-wav', File::get($preparedAudio->path));
+        $this->assertCount(2, $commands);
+    }
+
+    public function test_it_falls_back_when_audio_isolation_returns_json_without_audio(): void
+    {
+        config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
+        $commands = [];
+
+        Log::spy();
+        Http::fake([
+            'api.elevenlabs.test/v1/audio-isolation' => Http::response([], 200),
+        ]);
+
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) use (&$commands) {
+            $commands[] = $process->command;
+            $outputPath = $this->lastCommandArgument($process);
+
+            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'fallback-wav');
+
+            return Process::result();
+        });
+
+        $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
+
+        $this->assertSame('fallback-wav', File::get($preparedAudio->path));
+        $this->assertCount(2, $commands);
+
+        Log::shouldHaveReceived('warning')
+            ->with('backend.audio_preparation_fallback_used', Mockery::on(
+                fn (array $context): bool => $context['reason'] === 'json_without_audio'
+                    && $context['failure_stage'] === 'audio_isolation',
+            ));
+    }
+
     public function test_it_retries_isolated_output_as_raw_pcm_when_container_decode_fails(): void
     {
         config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
         $commands = [];
 
         Http::fake([
-            'api.elevenlabs.test/v1/audio-isolation' => Http::response('raw-isolated-pcm', 200),
+            'api.elevenlabs.test/v1/audio-isolation' => Http::response('raw-isolated-pcm', 200, ['Content-Type' => 'audio/wav']),
         ]);
 
         Process::preventStrayProcesses();
@@ -247,7 +313,7 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
         config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
 
         Http::fake([
-            'api.elevenlabs.test/v1/audio-isolation' => Http::response('isolated-provider-audio', 200),
+            'api.elevenlabs.test/v1/audio-isolation' => Http::response('isolated-provider-audio', 200, ['Content-Type' => 'audio/mpeg']),
         ]);
 
         Process::preventStrayProcesses();

@@ -259,6 +259,7 @@
       "enum": [
         "preparing",
         "acquiring-audio",
+        "optimizing-audio",
         "transcribing",
         "tokenizing",
         "romanizing",

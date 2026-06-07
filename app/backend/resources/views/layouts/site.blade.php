@@ -38,6 +38,7 @@
         <script defer src="{{ asset('js/hermes-desktop.js') }}?v={{ filemtime(public_path('js/hermes-desktop.js')) }}"></script>
     </head>
     <body class="@yield('body_class', $bodyClassValue)">
+        <img class="site-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
         <header class="site-header" id="navbar">
             <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
                 <span class="brand-mark" aria-hidden="true">TS</span>

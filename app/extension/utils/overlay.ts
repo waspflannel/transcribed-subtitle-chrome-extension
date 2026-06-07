@@ -557,15 +557,15 @@ export class OverlayShell {
 
         .rail {
           background:
-            linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(255, 253, 247, 0.02)),
-            rgba(8, 10, 14, 0.86);
+            linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+            rgba(10, 10, 10, 0.86);
           backdrop-filter: blur(20px) saturate(130%);
-          border: 1px solid rgba(255, 253, 247, 0.14);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 10px;
           box-shadow: 0 18px 54px rgba(0, 0, 0, 0.42);
-          color: #fffdf7;
+          color: #f1f1f1;
           display: grid;
-          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-family: "Geist", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
           gap: 12px;
           grid-template-columns: minmax(112px, auto) minmax(0, 1fr) auto;
           line-height: 1.35;
@@ -595,8 +595,8 @@ export class OverlayShell {
         }
 
         .eyebrow {
-          color: #99f6e4;
-          font-family: "Space Grotesk", Inter, ui-sans-serif, system-ui, sans-serif;
+          color: #ec9b9b;
+          font-family: "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
           font-size: 13px;
           font-weight: 850;
           letter-spacing: 0;
@@ -604,7 +604,7 @@ export class OverlayShell {
         }
 
         .cue-time {
-          color: #fbbf24;
+          color: #e85d5d;
           font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
           font-size: 12px;
           font-weight: 750;
@@ -633,8 +633,8 @@ export class OverlayShell {
         }
 
         .study-control {
-          background: rgba(255, 253, 247, 0.07);
-          border: 1px solid rgba(255, 253, 247, 0.14);
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 8px;
           color: #d1d5db;
           cursor: pointer;
@@ -653,18 +653,18 @@ export class OverlayShell {
         }
 
         .study-control:hover {
-          background: rgba(255, 253, 247, 0.12);
-          border-color: rgba(94, 234, 212, 0.32);
+          background: rgba(255, 255, 255, 0.12);
+          border-color: rgba(216, 59, 59, 0.32);
           transform: translateY(-1px);
         }
 
         .study-control:focus-visible {
-          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.34);
+          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.34);
           outline: none;
         }
 
         .control-status {
-          color: #99f6e4;
+          color: #ec9b9b;
           font-size: 11px;
           font-weight: 850;
           line-height: 1;
@@ -680,18 +680,23 @@ export class OverlayShell {
           color: #d1d5db;
         }
 
+        .control-status.copied,
+        .control-status.success {
+          color: #5ec99a;
+        }
+
         .transcript-panel {
           background:
-            linear-gradient(180deg, rgba(255, 253, 247, 0.08), rgba(255, 253, 247, 0.02)),
-            rgba(8, 10, 14, 0.94);
+            linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+            rgba(10, 10, 10, 0.94);
           backdrop-filter: blur(20px) saturate(130%);
-          border: 1px solid rgba(255, 253, 247, 0.16);
+          border: 1px solid rgba(255, 255, 255, 0.16);
           border-radius: 10px;
           bottom: 92px;
           box-shadow: 0 18px 54px rgba(0, 0, 0, 0.46);
-          color: #fffdf7;
+          color: #f1f1f1;
           display: grid;
-          font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          font-family: "Geist", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
           gap: 12px;
           grid-template-rows: auto auto minmax(0, 1fr) auto;
           line-height: 1.35;
@@ -714,7 +719,7 @@ export class OverlayShell {
         }
 
         .transcript-title {
-          color: #fffdf7;
+          color: #f1f1f1;
           font-size: 15px;
           font-weight: 900;
         }
@@ -738,9 +743,9 @@ export class OverlayShell {
 
         .transcript-search input {
           background: rgba(0, 0, 0, 0.32);
-          border: 1px solid rgba(255, 253, 247, 0.16);
+          border: 1px solid rgba(255, 255, 255, 0.16);
           border-radius: 8px;
-          color: #fffdf7;
+          color: #f1f1f1;
           font: inherit;
           font-size: 13px;
           min-height: 34px;
@@ -749,7 +754,7 @@ export class OverlayShell {
 
         .transcript-search input:focus-visible,
         .transcript-action:focus-visible {
-          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.34);
+          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.34);
           outline: none;
         }
 
@@ -759,7 +764,7 @@ export class OverlayShell {
           min-height: 0;
           overflow-y: auto;
           padding-right: 2px;
-          scrollbar-color: rgba(94, 234, 212, 0.58) rgba(255, 253, 247, 0.08);
+          scrollbar-color: rgba(216, 59, 59, 0.58) rgba(255, 255, 255, 0.08);
           scrollbar-width: thin;
         }
 
@@ -768,23 +773,23 @@ export class OverlayShell {
         }
 
         .transcript-list::-webkit-scrollbar-track {
-          background: rgba(255, 253, 247, 0.08);
+          background: rgba(255, 255, 255, 0.08);
           border-radius: 999px;
         }
 
         .transcript-list::-webkit-scrollbar-thumb {
-          background: rgba(94, 234, 212, 0.58);
-          border: 2px solid rgba(8, 10, 14, 0.94);
+          background: rgba(216, 59, 59, 0.58);
+          border: 2px solid rgba(10, 10, 10, 0.94);
           border-radius: 999px;
         }
 
         .transcript-list::-webkit-scrollbar-thumb:hover {
-          background: rgba(251, 191, 36, 0.72);
+          background: rgba(216, 59, 59, 0.72);
         }
 
         .transcript-cue {
-          background: rgba(255, 253, 247, 0.055);
-          border: 1px solid rgba(255, 253, 247, 0.11);
+          background: rgba(255, 255, 255, 0.055);
+          border: 1px solid rgba(255, 255, 255, 0.11);
           border-radius: 8px;
           display: grid;
           gap: 8px;
@@ -792,9 +797,9 @@ export class OverlayShell {
         }
 
         .transcript-cue[aria-current="true"] {
-          background: rgba(20, 184, 166, 0.16);
-          border-color: rgba(94, 234, 212, 0.42);
-          box-shadow: inset 3px 0 0 #5eead4;
+          background: rgba(216, 59, 59, 0.16);
+          border-color: rgba(216, 59, 59, 0.42);
+          box-shadow: inset 3px 0 0 #e85d5d;
         }
 
         .transcript-cue-header,
@@ -808,7 +813,7 @@ export class OverlayShell {
 
         .transcript-cue-index,
         .transcript-cue-time {
-          color: #fbbf24;
+          color: #e85d5d;
           font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
           font-size: 11px;
           font-weight: 850;
@@ -820,7 +825,7 @@ export class OverlayShell {
         }
 
         .transcript-source {
-          color: #fffdf7;
+          color: #f1f1f1;
           font-size: 14px;
           font-weight: 800;
           overflow-wrap: anywhere;
@@ -834,12 +839,12 @@ export class OverlayShell {
         }
 
         .transcript-romanization {
-          color: #99f6e4;
+          color: #ec9b9b;
         }
 
         .transcript-action {
-          background: rgba(255, 253, 247, 0.07);
-          border: 1px solid rgba(255, 253, 247, 0.14);
+          background: rgba(255, 255, 255, 0.07);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 8px;
           color: #e5e7eb;
           cursor: pointer;
@@ -851,8 +856,8 @@ export class OverlayShell {
         }
 
         .transcript-action:hover {
-          background: rgba(255, 253, 247, 0.12);
-          border-color: rgba(94, 234, 212, 0.32);
+          background: rgba(255, 255, 255, 0.12);
+          border-color: rgba(216, 59, 59, 0.32);
         }
 
         .transcript-status {
@@ -863,7 +868,7 @@ export class OverlayShell {
         }
 
         .transcript-status.success {
-          color: #99f6e4;
+          color: #5ec99a;
         }
 
         .transcript-status.error {
@@ -877,7 +882,7 @@ export class OverlayShell {
         }
 
         .title {
-          color: #fffdf7;
+          color: #f1f1f1;
           font-size: 15px;
           font-weight: 800;
         }
@@ -905,7 +910,7 @@ export class OverlayShell {
         }
 
         .translation {
-          color: #f8fffd;
+          color: #f5f5f5;
           font-size: 17px;
           font-weight: 600;
           line-height: 1.25;
@@ -913,7 +918,7 @@ export class OverlayShell {
         }
 
         .cue-romanization {
-          color: #99f6e4;
+          color: #ec9b9b;
           font-size: 13px;
           font-weight: 650;
         }
@@ -947,8 +952,8 @@ export class OverlayShell {
 
         .token-card {
           align-items: center;
-          background: rgba(255, 253, 247, 0.075);
-          border: 1px solid rgba(255, 253, 247, 0.11);
+          background: rgba(255, 255, 255, 0.075);
+          border: 1px solid rgba(255, 255, 255, 0.11);
           border-radius: 8px;
           color: inherit;
           cursor: pointer;
@@ -969,24 +974,24 @@ export class OverlayShell {
         }
 
         .token-card:hover {
-          background: rgba(255, 253, 247, 0.11);
-          border-color: rgba(251, 191, 36, 0.38);
+          background: rgba(255, 255, 255, 0.11);
+          border-color: rgba(216, 59, 59, 0.38);
           transform: translateY(-1px);
         }
 
         .token-card:focus-visible {
-          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.34);
+          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.34);
           outline: none;
         }
 
         .token-card[aria-pressed="true"] {
-          background: rgba(245, 158, 11, 0.18);
-          border-color: rgba(245, 158, 11, 0.78);
-          box-shadow: inset 0 0 24px rgba(245, 158, 11, 0.08), 0 0 22px rgba(245, 158, 11, 0.12);
+          background: rgba(216, 59, 59, 0.18);
+          border-color: rgba(216, 59, 59, 0.78);
+          box-shadow: inset 0 0 24px rgba(216, 59, 59, 0.08), 0 0 22px rgba(216, 59, 59, 0.12);
         }
 
         .token-text {
-          color: #fffdf7;
+          color: #f1f1f1;
           font-size: 22px;
           font-weight: 750;
           line-height: 1;
@@ -994,7 +999,7 @@ export class OverlayShell {
         }
 
         .token-extra {
-          color: #99f6e4;
+          color: #ec9b9b;
           font-size: 11px;
           font-weight: 650;
           line-height: 1.3;
@@ -1003,8 +1008,8 @@ export class OverlayShell {
 
         .token-inline-preview,
         .token-popover {
-          background: rgba(9, 10, 12, 0.96);
-          border: 1px solid rgba(255, 253, 247, 0.14);
+          background: rgba(12, 12, 12, 0.96);
+          border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 10px;
           color: #e5e7eb;
           display: grid;
@@ -1040,9 +1045,9 @@ export class OverlayShell {
         }
 
         .token-popover::after {
-          background: rgba(9, 10, 12, 0.96);
-          border-bottom: 1px solid rgba(255, 253, 247, 0.14);
-          border-right: 1px solid rgba(255, 253, 247, 0.14);
+          background: rgba(12, 12, 12, 0.96);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+          border-right: 1px solid rgba(255, 255, 255, 0.14);
           bottom: -6px;
           content: "";
           height: 10px;
@@ -1060,15 +1065,15 @@ export class OverlayShell {
         }
 
         .token-popover-title {
-          color: #fffdf7;
+          color: #f1f1f1;
           font-size: 14px;
           font-weight: 850;
         }
 
         .icon-button {
           align-items: center;
-          background: rgba(255, 253, 247, 0.08);
-          border: 1px solid rgba(255, 253, 247, 0.16);
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.16);
           border-radius: 7px;
           color: #e5e7eb;
           cursor: pointer;
@@ -1083,8 +1088,8 @@ export class OverlayShell {
 
         .icon-button:hover,
         .icon-button:focus-visible {
-          background: rgba(255, 253, 247, 0.14);
-          box-shadow: 0 0 0 3px rgba(94, 234, 212, 0.22);
+          background: rgba(255, 255, 255, 0.14);
+          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.22);
           outline: none;
         }
 
@@ -1106,7 +1111,7 @@ export class OverlayShell {
         }
 
         .field-value {
-          color: #fffdf7;
+          color: #f1f1f1;
           overflow-wrap: anywhere;
         }
 
@@ -1212,11 +1217,11 @@ export class OverlayShell {
         :host([data-caption-theme="high"]) .token-extra,
         :host([data-caption-theme="high"]) .transcript-romanization,
         :host([data-caption-theme="high"]) .eyebrow {
-          color: #5eead4;
+          color: #e85d5d;
         }
 
         :host([data-caption-theme="high"]) .transcript-list {
-          scrollbar-color: #5eead4 #111;
+          scrollbar-color: #e85d5d #111;
         }
 
         :host([data-caption-theme="high"]) .transcript-list::-webkit-scrollbar-track {
@@ -1225,7 +1230,7 @@ export class OverlayShell {
         }
 
         :host([data-caption-theme="high"]) .transcript-list::-webkit-scrollbar-thumb {
-          background: #5eead4;
+          background: #e85d5d;
           border-color: #000;
         }
 

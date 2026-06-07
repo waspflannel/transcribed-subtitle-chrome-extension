@@ -65,7 +65,7 @@ class ElevenLabsScribeAudioPreparer
         $this->isolateSpeech($rawPcmPath, $isolatedOutputPath);
         $this->convertIsolatedOutputToWav($isolatedOutputPath, $preparedWavPath, $audio->directory);
 
-        return $this->preparedAudioFile($preparedWavPath, $audio);
+        return $this->preparedAudioFile($preparedWavPath, $audio, 'audio_isolation_output_to_wav');
     }
 
     private function normalizeSourceToWav(TemporaryAudioFile $audio): TemporaryAudioFile
@@ -89,7 +89,7 @@ class ElevenLabsScribeAudioPreparer
             $preparedWavPath,
         ], 'source_to_wav', $audio->directory);
 
-        return $this->preparedAudioFile($preparedWavPath, $audio);
+        return $this->preparedAudioFile($preparedWavPath, $audio, 'source_to_wav');
     }
 
     private function convertSourceToRawPcm(string $sourcePath, string $rawPcmPath, string $workDirectory): void
@@ -164,6 +164,7 @@ class ElevenLabsScribeAudioPreparer
             'provider' => $provider->value,
             'adapter' => self::ADAPTER,
             'status' => $response->status(),
+            ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
             'elapsed_ms' => $this->elapsedMs($startedAt),
         ]);
 
@@ -239,16 +240,17 @@ class ElevenLabsScribeAudioPreparer
     {
         $body = $response->body();
 
-        if ($body === '' || trim($body) === '{}') {
+        if ($body === '') {
             throw $this->failure('Audio isolation provider returned empty output.', [
                 'stage' => 'audio_isolation',
                 'provider' => $provider->value,
                 'reason' => 'empty_output',
                 'status' => $response->status(),
+                ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
             ]);
         }
 
-        File::put($isolatedOutputPath, $body);
+        File::put($isolatedOutputPath, $this->isolationAudioBytes($body, $response, $provider));
 
         $this->assertUsableFile($isolatedOutputPath, 'audio_isolation', 'empty_output');
     }
@@ -290,9 +292,82 @@ class ElevenLabsScribeAudioPreparer
         ]);
     }
 
-    private function preparedAudioFile(string $preparedWavPath, TemporaryAudioFile $sourceAudio): TemporaryAudioFile
+    private function isolationAudioBytes(string $body, Response $response, Lab $provider): string
     {
-        $this->assertUsableFile($preparedWavPath, 'source_to_wav', 'empty_output');
+        if (! $this->looksLikeJsonResponse($body, $response)) {
+            return $body;
+        }
+
+        $payload = json_decode($body, true);
+
+        if (! is_array($payload)) {
+            throw $this->failure('Audio isolation provider returned invalid JSON.', [
+                'stage' => 'audio_isolation',
+                'provider' => $provider->value,
+                'reason' => 'invalid_json',
+                'status' => $response->status(),
+                ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
+            ]);
+        }
+
+        foreach (['audio', 'isolated_audio', 'file'] as $key) {
+            if (is_string($payload[$key] ?? null) && trim($payload[$key]) !== '') {
+                return $this->decodeJsonAudioPayload(trim($payload[$key]), $response, $provider);
+            }
+        }
+
+        throw $this->failure('Audio isolation provider returned JSON without audio output.', [
+            'stage' => 'audio_isolation',
+            'provider' => $provider->value,
+            'reason' => 'json_without_audio',
+            'status' => $response->status(),
+            ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
+        ]);
+    }
+
+    private function looksLikeJsonResponse(string $body, Response $response): bool
+    {
+        $contentType = strtolower((string) $response->header('Content-Type', ''));
+        $trimmedBody = ltrim($body);
+
+        return str_contains($contentType, 'application/json')
+            || str_starts_with($trimmedBody, '{')
+            || str_starts_with($trimmedBody, '[');
+    }
+
+    private function decodeJsonAudioPayload(string $payload, Response $response, Lab $provider): string
+    {
+        if (str_contains($payload, ',')) {
+            [$prefix, $payload] = explode(',', $payload, 2);
+
+            if (! str_starts_with(strtolower($prefix), 'data:audio/')) {
+                throw $this->unsupportedJsonAudioPayload($response, $provider);
+            }
+        }
+
+        $decoded = base64_decode($payload, true);
+
+        if (! is_string($decoded) || $decoded === '') {
+            throw $this->unsupportedJsonAudioPayload($response, $provider);
+        }
+
+        return $decoded;
+    }
+
+    private function unsupportedJsonAudioPayload(Response $response, Lab $provider): never
+    {
+        throw $this->failure('Audio isolation provider returned unsupported JSON audio output.', [
+            'stage' => 'audio_isolation',
+            'provider' => $provider->value,
+            'reason' => 'unsupported_json_audio',
+            'status' => $response->status(),
+            ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
+        ]);
+    }
+
+    private function preparedAudioFile(string $preparedWavPath, TemporaryAudioFile $sourceAudio, string $stage): TemporaryAudioFile
+    {
+        $this->assertUsableFile($preparedWavPath, $stage, 'empty_output');
 
         return new TemporaryAudioFile(
             path: $preparedWavPath,

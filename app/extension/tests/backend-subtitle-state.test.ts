@@ -51,6 +51,19 @@ describe('backend subtitle state helpers', () => {
     });
   });
 
+  it('shows the audio optimization stage while prepared audio is being improved', async () => {
+    await expect(
+      stateWithBackendProgress({ type: 'no-track' }, pageStatus, [
+        jobHistory({ status: 'running', stage: 'optimizing-audio', progressPercent: 35 }),
+      ]),
+    ).resolves.toMatchObject({
+      type: 'loading',
+      message: 'Optimizing audio...',
+      stage: 'optimizing-audio',
+      progressPercent: 35,
+    });
+  });
+
   it('prefers an active backend job over older completed history for the same video', async () => {
     const resolver = vi.fn(async (): Promise<JobResponse> => completedJobResponse(trackResponse()));
 

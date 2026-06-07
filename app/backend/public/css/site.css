@@ -1425,6 +1425,21 @@ td small {
     z-index: 5;
 }
 
+/* Site-wide atmospheric backdrop. Fixed, faint and screen-blended so the
+   texture spans every page (not just the hero) and stays put while scrolling.
+   Natural orientation - the former hero-only copy was mirrored (scaleX(-1)). */
+.site-texture {
+    height: 100%;
+    inset: 0;
+    mix-blend-mode: screen;
+    object-fit: cover;
+    opacity: 0.06;
+    pointer-events: none;
+    position: fixed;
+    width: 100%;
+    z-index: 4;
+}
+
 .hermes-landing-body *,
 .hermes-landing-body *::before,
 .hermes-landing-body *::after {
@@ -1519,19 +1534,6 @@ td small {
     z-index: 2;
 }
 
-.hermes-landing-body .da-hero .hermes-hero-texture {
-    height: 100%;
-    inset: 0;
-    mix-blend-mode: screen;
-    object-fit: cover;
-    opacity: 0.06;
-    pointer-events: none;
-    position: absolute;
-    transform: scaleX(-1);
-    width: 100%;
-    z-index: 0;
-}
-
 .hermes-landing-body .da-hero .hermes-container {
     padding-left: 0;
 }
@@ -1548,18 +1550,25 @@ td small {
     top: 50%;
     transform: translateY(-50%);
     filter: drop-shadow(0 0 90px rgba(216, 59, 59, 0.28));
+    aspect-ratio: 1 / 1;
     max-width: none;
     mix-blend-mode: screen;
     opacity: 1;
     pointer-events: none;
     position: absolute;
-    right: clamp(-90px, -3vw, -24px);
-    width: min(56vw, 900px);
+    right: clamp(0px, 3vw, 100px);
+    width: 100svh;
     z-index: 3;
 }
 
+/* Large square art, centred-right (~half the viewport wide). cover + top
+   anchor crops the portrait to a 1:1 frame, keeping the figure and full
+   sunburst while trimming the sparse downward rays at the bottom. */
 .hermes-landing-body .da-hero-visual-bg img {
     display: block;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
     width: 100%;
 }
 
@@ -1626,13 +1635,12 @@ td small {
     .hermes-landing-body .da-hero-visual-bg {
         bottom: auto;
         justify-self: center;
-        max-width: 520px;
         opacity: 0.82;
         position: relative;
         right: auto;
         top: auto;
         transform: none;
-        width: min(100%, 520px);
+        width: min(100%, 460px);
     }
 }
 
