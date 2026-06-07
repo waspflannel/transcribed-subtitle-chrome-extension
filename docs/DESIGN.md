@@ -10,11 +10,18 @@
 ## Design System Status
 
 - Current state: Stitch-led frontend revamp active across the Laravel website and extension.
-- Marketing/account direction: Dark Academia Website. The Laravel public website and account surfaces now use an obsidian academic reading-room system: full-bleed image-led hero, ivory serif hierarchy, brass action accents, oxblood emphasis, parchment contrast sections, generated language-learning imagery, and dense ledger-like account panels.
+- Marketing/account direction: Dark Academia Website for existing public/account support pages, with a user-directed Hermes Desktop black-theme landing-page override on `/` and `/desktop`. The override follows `C:/Users/jaden/Desktop/hermes_design_doc.docx` and uses the Hermes/Nous black technical page structure, copy, and image assets.
 - Extension direction: Cinematic Study Console. The extension popup and YouTube overlay stay compact, dark, video-native, and operational.
 - Stitch sources: dark academia website `projects/11285798713880801131`, design system `assets/5ee04fe765404b7fb7e1d34e23d44d50`, manifest `docs/design-assets/stitch-dark-academia/README.md`; earlier marketing refresh `projects/17285330433703510860`, design system `assets/64644ce61714457b96a97064b15560fc`, manifest `docs/design-assets/stitch-clean-marketing/README.md`; cinematic extension/account revamp `projects/2987099361838226750`, design system `assets/871d344e6dab43e185c4573dfa4b95ce`, manifest `docs/design-assets/stitch-cinematic/README.md`.
 - Source of truth: `app/backend/public/css/site.css` for the beta Laravel website styles, `app/extension/entrypoints/popup/style.css` for the extension popup, and `app/extension/utils/overlay.ts` for the isolated YouTube overlay styles.
 - References: place long framework or design-system notes in `docs/references/`.
+
+## Hermes Landing Override
+
+- The Laravel homepage and `/desktop` alias intentionally render the Hermes Desktop black-theme landing page from `C:/Users/jaden/Desktop/hermes_design_doc.docx`.
+- Keep this override scoped to the landing page unless a future plan explicitly changes pricing, legal, auth, dashboard, or extension UI surfaces.
+- Source of truth for implementation: `app/backend/resources/views/marketing/home.blade.php`, `app/backend/resources/views/layouts/hermes-desktop.blade.php`, `app/backend/public/css/site.css`, `app/backend/public/js/hermes-desktop.js`, and local image copies in `app/backend/public/img/desktop/`.
+- The MP4 demo and installer downloads remain remote links to the Hermes asset host; do not commit those large binaries into the repository without a separate asset policy decision.
 
 ## Dark Academia Website Rules
 

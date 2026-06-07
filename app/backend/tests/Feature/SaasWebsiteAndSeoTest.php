@@ -20,7 +20,8 @@ class SaasWebsiteAndSeoTest extends TestCase
     public function test_public_pages_render_seo_metadata_and_beta_copy(): void
     {
         $pages = [
-            ['marketing.home', 'Transcribed Subtitle Extension', 'learn languages using youtube'],
+            ['marketing.home', 'TRANSCRIBED', 'learn languages using youtube'],
+            ['marketing.desktop', 'Transcribed Subtitle Extension', 'Download Extension [Beta]'],
             ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
             ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
             ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],
@@ -57,9 +58,27 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/xml; charset=UTF-8')
             ->assertSee(route('marketing.home'), false)
+            ->assertSee(route('marketing.desktop'), false)
             ->assertSee(route('marketing.pricing'), false)
             ->assertSee(route('marketing.privacy'), false)
             ->assertDontSee('/dashboard');
+    }
+
+    public function test_hermes_desktop_landing_page_matches_supplied_design_plan()
+    {
+        $this
+            ->get(route('marketing.home', absolute: false))
+            ->assertOk()
+            ->assertSeeText('TRANSCRIBED')
+            ->assertSeeText('SUBTITLE')
+            ->assertSeeText('EXTENSION')
+            ->assertSeeText('Download Extension [Beta]');
+            
+        $this
+            ->get(route('marketing.desktop', absolute: false))
+            ->assertOk()
+            ->assertSeeText('Transcribed Subtitle Extension')
+            ->assertSee('<link rel="canonical" href="'.route('marketing.desktop').'">', false);
     }
 
     public function test_dashboard_is_protected_and_guides_extension_billing_usage_and_jobs(): void

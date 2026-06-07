@@ -9,7 +9,7 @@
         </p>
     </section>
 
-    <section class="section legal-copy">
+    <section class="section legal-copy" data-reveal>
         <h2>Beta service</h2>
         <p>Transcribed Subtitle Extension is a beta Chrome extension and Laravel web app for generating study-oriented subtitle tracks for public YouTube videos. Availability, speed, quality, language accuracy, and provider behavior can change during beta.</p>
 

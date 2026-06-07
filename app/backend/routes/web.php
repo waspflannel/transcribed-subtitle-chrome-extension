@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [MarketingPageController::class, 'home'])
     ->name('marketing.home');
+Route::get('/desktop', [MarketingPageController::class, 'desktop'])
+    ->name('marketing.desktop');
 Route::get('/pricing', [MarketingPageController::class, 'pricing'])
     ->name('marketing.pricing');
 Route::get('/languages', [MarketingPageController::class, 'languages'])
