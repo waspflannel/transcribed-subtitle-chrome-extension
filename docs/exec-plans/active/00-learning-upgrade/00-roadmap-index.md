@@ -3,7 +3,7 @@
 Status: active
 Owner: agent
 Created: 2026-06-03
-Last updated: 2026-06-03
+Last updated: 2026-06-07
 
 ## Summary
 
@@ -90,3 +90,4 @@ UI phases must capture browser screenshots or video for the popup, overlay, tran
 | --- | --- | --- |
 | 2026-06-03 | Roadmap created from the selected missing-feature plan. | `docs/exec-plans/active/00-learning-upgrade/` |
 | 2026-06-03 | Phase 01 completed and archived. | `docs/exec-plans/completed/2026-06-03-keyboard-transcript-accessibility-foundation.md` |
+| 2026-06-07 | Removed stale active Voice Isolation plan after that backend phase was completed and archived. | `docs/exec-plans/completed/2026-06-06-voice-isolation-scribe-audio-quality.md` |
