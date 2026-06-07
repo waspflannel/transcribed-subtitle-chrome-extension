@@ -19,9 +19,7 @@
                     <span>EXTENSION</span>
                 </h1>
                 <p class="da-hero-lede-center">Turn any public YouTube video into a language learning masterclass. AI-powered transcription and translation layers built for serious learners.</p>
-                <a href="#download" class="da-button">
-                    <span class="da-icon">↓</span> Download Extension [Beta]
-                </a>
+                <a href="#download" class="da-button">Download Extension [Beta]</a>
             </div>
         </div>
     </section>
@@ -30,7 +28,7 @@
     <section class="da-preview">
         <div class="da-preview-frame" data-reveal>
              <img src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="Product Preview">
-             <div class="da-preview-bar">PRODUCT DEMO — BETA PREVIEW</div>
+             <div class="da-preview-bar">PRODUCT DEMO - BETA PREVIEW</div>
         </div>
     </section>
 
@@ -65,7 +63,7 @@
                 <div class="feature-text">
                     <span class="feature-num">03 / Retention</span>
                     <h2>Word cards</h2>
-                    <p>Vocabulary word cards generated from video subtitles — automatic flashcards for spaced repetition.</p>
+                    <p>Vocabulary word cards generated from video subtitles - automatic flashcards for spaced repetition.</p>
                 </div>
                 <div class="feature-media">
                     <img src="{{ asset('img/desktop/feature-tasks.webp') }}" alt="Word cards">
@@ -117,9 +115,7 @@
                 <div class="da-eyebrow">Download Extension</div>
                 <h2 class="da-h2">BRING THE READING ROOM<br>TO EVERY VIDEO</h2>
                 <p class="da-feature-desc">Join the paid beta for YouTube language learners. Professional subtitles, instant word cards, and persistent memory.</p>
-                <a href="#download" class="da-button">
-                    <span class="da-icon">↓</span> Get Started Now
-                </a>
+                <a href="#download" class="da-button">Get Started Now</a>
             </div>
             <div class="da-final-image" data-reveal data-reveal-delay="120">
                 <img src="{{ asset('img/desktop/portal-figure.webp') }}" alt="Transcribed Subtitle Extension study figure">
