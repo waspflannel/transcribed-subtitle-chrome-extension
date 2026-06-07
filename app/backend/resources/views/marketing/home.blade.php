@@ -1,136 +1,130 @@
 @extends('layouts.site')
 
+@section('body_class', 'hermes-landing-body marketing-body')
+
 @section('content')
-    @php
-        $assetBase = 'img/marketing/dark-academia';
-        $downloadHref = '#download';
-        $videoSources = [];
-        $webmDemoPath = 'video/marketing/extension-demo.webm';
-        $mp4DemoPath = 'video/marketing/extension-demo.mp4';
-
-        if (file_exists(public_path($webmDemoPath))) {
-            $videoSources[] = ['src' => asset($webmDemoPath), 'type' => 'video/webm'];
-        }
-
-        if (file_exists(public_path($mp4DemoPath))) {
-            $videoSources[] = ['src' => asset($mp4DemoPath), 'type' => 'video/mp4'];
-        }
-
-        $perks = [
-            [
-                'label' => '01',
-                'title' => 'Perk 1',
-                'body' => 'Placeholder body for the first approved language-learning benefit.',
-                'image' => 'perk-missing-captions.png',
-            ],
-            [
-                'label' => '02',
-                'title' => 'Perk 2',
-                'body' => 'Placeholder body for the second approved language-learning benefit.',
-                'image' => 'perk-translation-layer.png',
-            ],
-            [
-                'label' => '03',
-                'title' => 'Perk 3',
-                'body' => 'Placeholder body for the third approved language-learning benefit.',
-                'image' => 'perk-word-cards.png',
-            ],
-            [
-                'label' => '04',
-                'title' => 'Perk 4',
-                'body' => 'Placeholder body for the fourth approved language-learning benefit.',
-                'image' => null,
-            ],
-            [
-                'label' => '05',
-                'title' => 'Perk 5',
-                'body' => 'Placeholder body for the fifth approved language-learning benefit.',
-                'image' => null,
-            ],
-            [
-                'label' => '06',
-                'title' => 'Perk 6',
-                'body' => 'Placeholder body for the sixth approved language-learning benefit.',
-                'image' => null,
-            ],
-        ];
-    @endphp
-
-    <section class="hero hero-editorial">
-        <img class="hero-image" src="{{ asset($assetBase.'/hero-language-desk.png') }}" alt="" aria-hidden="true">
-        <div class="hero-scrim" aria-hidden="true"></div>
-        <div class="hero-copy">
-            <p class="eyebrow">Paid beta for YouTube language learners</p>
-            <h1>Transcribed Subtitle Extension</h1>
-            <p class="hero-lede">learn languages using youtube</p>
-            <div class="hero-actions">
-                <a class="button" href="{{ $downloadHref }}">Download extension</a>
+<div class="da-main" id="home">
+    <!-- HERO -->
+    <section class="da-hero">
+        <img class="hermes-hero-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
+        <div class="hermes-container da-hero-layered-content">
+            <div class="da-hero-visual-bg">
+                <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="">
+            </div>
+            <div class="da-hero-text-overlay">
+                <div class="da-eyebrow">learn languages using youtube</div>
+                <h1 class="da-h1-overlay">
+                    <span>TRANSCRIBED</span>
+                    <span>SUBTITLE</span>
+                    <span>EXTENSION</span>
+                </h1>
+                <p class="da-hero-lede-center">Turn any public YouTube video into a language learning masterclass. AI-powered transcription and translation layers built for serious learners.</p>
+                <a href="#download" class="da-button">
+                    <span class="da-icon">↓</span> Download Extension [Beta]
+                </a>
             </div>
         </div>
     </section>
 
-    <section class="section product-video-section" aria-labelledby="product-video-title">
-        <div class="section-heading section-heading-centered">
-            <p class="eyebrow">Product video</p>
-            <h2 id="product-video-title">The study layer belongs center stage.</h2>
-            <p>A local MP4 or WebM demo can replace this generated poster when the extension-in-use recording is ready.</p>
+    <!-- VIDEO/PREVIEW -->
+    <section class="da-preview">
+        <div class="da-preview-frame" data-reveal>
+             <img src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="Product Preview">
+             <div class="da-preview-bar">PRODUCT DEMO — BETA PREVIEW</div>
         </div>
+    </section>
 
-        <div class="video-showcase">
-            <video
-                class="product-video"
-                controls
-                preload="metadata"
-                playsinline
-                poster="{{ asset($assetBase.'/product-video-poster.png') }}"
-                aria-label="Transcribed Subtitle Extension demo video"
-            >
-                @foreach ($videoSources as $source)
-                    <source src="{{ $source['src'] }}" type="{{ $source['type'] }}">
-                @endforeach
-                Your browser can display the generated poster until the demo video file is available.
-            </video>
-            <div class="video-frame-meta" aria-hidden="true">
-                <span>MP4/WebM slot ready</span>
-                <span>Generated poster fallback</span>
+    <!-- FEATURES -->
+    <section class="da-features">
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">01 / Missing captions</span>
+                    <h2>Study any video</h2>
+                    <p>Turns missing or poor captions into useful study subtitles. One click, every video.</p>
+                </div>
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-connect.webp') }}" alt="Missing captions">
+                </div>
+            </div>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">02 / Translation</span>
+                    <h2>Layered context</h2>
+                    <p>Injects translation and romanization layers directly into the player for immediate comprehension.</p>
+                </div>
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-memory.webp') }}" alt="Translation layer">
+                </div>
+            </div>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">03 / Retention</span>
+                    <h2>Word cards</h2>
+                    <p>Vocabulary word cards generated from video subtitles — automatic flashcards for spaced repetition.</p>
+                </div>
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-tasks.webp') }}" alt="Word cards">
+                </div>
+            </div>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">04 / Export</span>
+                    <h2>Take it with you</h2>
+                    <p>Export your learned vocabulary to Anki, CSV, or Notion. Own your progress data.</p>
+                </div>
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-automation.webp') }}" alt="Export">
+                </div>
+            </div>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">05 / Offline</span>
+                    <h2>Read anywhere</h2>
+                    <p>Download full transcripts as PDF or text and study along without an internet connection.</p>
+                </div>
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-browse.webp') }}" alt="Read anywhere">
+                </div>
+            </div>
+        </div>
+        <div class="feature-row" data-reveal>
+            <div class="feature-row-inner">
+                <div class="feature-text">
+                    <span class="feature-num">06 / Privacy</span>
+                    <h2>Local processing</h2>
+                    <p>Your watch history stays private; transcriptions run securely on managed infrastructure.</p>
+                </div>
+                <div class="feature-media">
+                    <img src="{{ asset('img/desktop/feature-sandbox.webp') }}" alt="Privacy">
+                </div>
             </div>
         </div>
     </section>
 
-    <section class="why-section" aria-labelledby="why-title">
-        <div class="why-intro">
-            <p class="eyebrow">Why use it</p>
-            <h2 id="why-title">Six placeholder perk slots for approved claims.</h2>
-        </div>
-
-        <div class="perk-grid">
-            @foreach ($perks as $perk)
-                <article class="perk-card">
-                    @if ($perk['image'])
-                        <img src="{{ asset($assetBase.'/'.$perk['image']) }}" alt="" aria-hidden="true">
-                    @else
-                        <div class="perk-index" aria-hidden="true">{{ $perk['label'] }}</div>
-                    @endif
-                    <div>
-                        <span>{{ $perk['label'] }}</span>
-                        <h3>{{ $perk['title'] }}</h3>
-                        <p>{{ $perk['body'] }}</p>
-                    </div>
-                </article>
-            @endforeach
+    <!-- FINAL CTA -->
+    <section class="da-final-cta" id="download">
+        <div class="da-final-content">
+            <div class="da-final-copy" data-reveal>
+                <div class="da-eyebrow">Download Extension</div>
+                <h2 class="da-h2">BRING THE READING ROOM<br>TO EVERY VIDEO</h2>
+                <p class="da-feature-desc">Join the paid beta for YouTube language learners. Professional subtitles, instant word cards, and persistent memory.</p>
+                <a href="#download" class="da-button">
+                    <span class="da-icon">↓</span> Get Started Now
+                </a>
+            </div>
+            <div class="da-final-image" data-reveal data-reveal-delay="120">
+                <img src="{{ asset('img/desktop/portal-figure.webp') }}" alt="Transcribed Subtitle Extension study figure">
+            </div>
         </div>
     </section>
-
-    <section class="section final-cta final-cta-image" id="download">
-        <div class="final-copy">
-            <p class="eyebrow">Download</p>
-            <h2>Bring the reading room to your next YouTube lesson.</h2>
-            <p>
-                The public download link is a placeholder until the Chrome Web Store or beta install path is ready.
-            </p>
-            <a class="button" href="{{ $downloadHref }}">Download extension</a>
-            <a class="button button-secondary" href="{{ route('marketing.pricing') }}">See pricing</a>
-        </div>
-        <img src="{{ asset($assetBase.'/final-reading-room.png') }}" alt="" aria-hidden="true">
-    </section>
+</div>
 @endsection

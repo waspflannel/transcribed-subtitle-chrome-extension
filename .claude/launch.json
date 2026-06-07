@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "marketing",
+      "runtimeExecutable": "php",
+      "runtimeArgs": ["C:/transcribed-subtitle-extension/app/backend/artisan", "serve", "--port=8124"],
+      "port": 8124
+    }
+  ]
+}

@@ -18,6 +18,13 @@ class MarketingPageController extends Controller
         ]);
     }
 
+    public function desktop(Request $request, FunnelAnalytics $analytics): View
+    {
+        return $this->marketingView($request, $analytics, 'desktop', 'marketing.home', [
+            'featuredLanguages' => $this->featuredLanguages(),
+        ]);
+    }
+
     public function pricing(Request $request, FunnelAnalytics $analytics, BillingPlanCatalog $plans): View
     {
         return $this->marketingView($request, $analytics, 'pricing', 'marketing.pricing', [
@@ -86,9 +93,14 @@ class MarketingPageController extends Controller
 
         $metadata = [
             'home' => [
-                'title' => $productName.' for YouTube language learners',
-                'description' => 'Generate study-ready subtitles, translations, romanization, and word cards for public YouTube videos.',
+                'title' => 'Hermes Desktop | Nous Research',
+                'description' => 'The Agent That Grows With You.',
                 'route' => 'marketing.home',
+            ],
+            'desktop' => [
+                'title' => 'Hermes Desktop | Nous Research',
+                'description' => 'The Agent That Grows With You.',
+                'route' => 'marketing.desktop',
             ],
             'pricing' => [
                 'title' => 'Pricing for '.$productName,

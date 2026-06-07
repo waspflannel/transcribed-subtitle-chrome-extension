@@ -9,7 +9,7 @@
         </p>
     </section>
 
-    <section class="section legal-copy">
+    <section class="section legal-copy" data-reveal>
         <h2>Processing scope</h2>
         <p>When you start generation, the extension sends the selected public YouTube URL, language choices, and feature controls to the Laravel backend. The backend may acquire temporary audio and send audio or generated text to configured AI providers for transcription, translation, romanization, and word-card metadata.</p>
 

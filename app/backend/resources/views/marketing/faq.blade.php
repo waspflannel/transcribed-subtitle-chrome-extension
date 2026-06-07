@@ -9,7 +9,7 @@
         </p>
     </section>
 
-    <section class="section faq-list">
+    <section class="section faq-list" data-reveal>
         <details open>
             <summary>Which platforms are supported?</summary>
             <p>Only public YouTube watch pages and Shorts are supported for beta. Netflix, private videos, playlists as a source, live captions, and other platforms are out of scope.</p>
