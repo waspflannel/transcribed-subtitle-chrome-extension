@@ -21,7 +21,7 @@ class SaasWebsiteAndSeoTest extends TestCase
     {
         $pages = [
             ['marketing.home', 'TRANSCRIBED', 'learn languages using youtube'],
-            ['marketing.desktop', 'Transcribed Subtitle Extension', 'AI Language Study'],
+            ['marketing.desktop', 'Transcribed Subtitle Extension', 'Download Extension [Beta]'],
             ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
             ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
             ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],
@@ -72,7 +72,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText('TRANSCRIBED')
             ->assertSeeText('SUBTITLE')
             ->assertSeeText('EXTENSION')
-            ->assertSeeText('AI Language Study');
+            ->assertSeeText('Download Extension [Beta]');
             
         $this
             ->get(route('marketing.desktop', absolute: false))
