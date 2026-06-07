@@ -6,7 +6,6 @@
 <div class="da-main" id="home">
     <!-- HERO -->
     <section class="da-hero">
-        <img class="hermes-hero-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
         <div class="hermes-container da-hero-layered-content">
             <div class="da-hero-visual-bg">
                 <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="">
