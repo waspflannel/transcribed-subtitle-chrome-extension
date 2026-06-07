@@ -73,7 +73,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText('SUBTITLE')
             ->assertSeeText('EXTENSION')
             ->assertSeeText('Download Extension [Beta]');
-            
+
         $this
             ->get(route('marketing.desktop', absolute: false))
             ->assertOk()

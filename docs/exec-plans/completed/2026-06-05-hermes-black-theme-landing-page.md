@@ -124,4 +124,3 @@ Evidence to capture:
 - Simplicity/readability review: The implementation keeps the existing Laravel Blade route/controller/test shape, avoids adding a frontend build step, scopes the new page through a dedicated layout/body class, and leaves non-home marketing/account surfaces untouched.
 - Residual risk: The design document's Hermes/Nous brand and assets intentionally do not match the repository's normal Transcribed Subtitle Extension product direction. This branch implements that requested override verbatim for the landing page only.
 - Follow-up debt: None for the requested scope.
-

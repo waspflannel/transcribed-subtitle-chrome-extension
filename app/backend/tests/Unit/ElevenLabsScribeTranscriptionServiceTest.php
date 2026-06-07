@@ -3,12 +3,15 @@
 namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use Illuminate\Http\Client\Request;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -39,10 +42,23 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             'ai.providers.eleven.key' => 'test-key',
             'ai.providers.eleven.url' => 'https://api.elevenlabs.test/v1',
             'ai.providers.eleven.models.transcription.default' => 'scribe_v2',
+            'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg-test',
+            'subtitles.audio_preparation.ffmpeg_timeout_seconds' => 45,
+            'subtitles.audio_preparation.voice_isolation.enabled' => false,
+            'subtitles.audio_preparation.voice_isolation.timeout_seconds' => 55,
+            'subtitles.audio_preparation.voice_isolation.fail_open' => true,
             'subtitles.transcription.timeout_seconds' => 30,
         ]);
 
         Http::preventStrayRequests();
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) {
+            $command = $process->command;
+            $this->assertIsArray($command);
+            File::put($command[array_key_last($command)], 'prepared-wav');
+
+            return Process::result();
+        });
     }
 
     protected function tearDown(): void
@@ -54,9 +70,27 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
     public function test_it_requests_scribe_word_timestamps_and_normalizes_segments(): void
     {
-        Http::fake([
-            'api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload(), 200),
-        ]);
+        $requestMatched = false;
+
+        Http::fake(function (Request $request) use (&$requestMatched) {
+            $body = $request->body();
+            $requestMatched = $request->url() === 'https://api.elevenlabs.test/v1/speech-to-text'
+                && $request->hasHeader('xi-api-key', 'test-key')
+                && str_contains($body, 'name="file"; filename="audio.wav"')
+                && str_contains($body, 'prepared-wav')
+                && str_contains($body, 'name="model_id"')
+                && str_contains($body, 'scribe_v2')
+                && str_contains($body, 'name="timestamps_granularity"')
+                && str_contains($body, 'word')
+                && str_contains($body, 'name="diarize"')
+                && str_contains($body, 'false')
+                && str_contains($body, 'name="tag_audio_events"')
+                && str_contains($body, 'name="no_verbatim"')
+                && str_contains($body, 'name="language_code"')
+                && str_contains($body, 'spa');
+
+            return Http::response($this->sampleScribePayload(), 200);
+        });
 
         $transcript = $this->service()->transcribe($this->audio, 'spa');
 
@@ -65,48 +99,80 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertStringStartsWith('WEBVTT', $transcript->webVtt);
         $this->assertCount(2, $transcript->segments);
         $this->assertSame('Hola mundo.', $transcript->segments[0]->text);
+        $this->assertTrue($requestMatched);
+    }
 
-        Http::assertSent(function (Request $request): bool {
-            return $request->url() === 'https://api.elevenlabs.test/v1/speech-to-text'
-                && $request->hasHeader('xi-api-key', 'test-key')
-                && $request->hasFile('file', 'fake-audio', 'audio.m4a')
-                && str_contains($request->body(), 'name="model_id"')
-                && str_contains($request->body(), 'scribe_v2')
-                && str_contains($request->body(), 'name="timestamps_granularity"')
-                && str_contains($request->body(), 'word')
-                && str_contains($request->body(), 'name="language_code"')
-                && str_contains($request->body(), 'spa');
+    public function test_it_uploads_voice_isolated_prepared_wav_when_audio_isolation_is_enabled(): void
+    {
+        config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
+        $scribeRequestMatched = false;
+
+        Process::fake(function (PendingProcess $process) {
+            $command = $process->command;
+            $this->assertIsArray($command);
+            $outputPath = $command[array_key_last($command)];
+
+            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'isolated-wav');
+
+            return Process::result();
         });
+
+        Http::fake(function (Request $request) use (&$scribeRequestMatched) {
+            if (str_ends_with($request->url(), '/audio-isolation')) {
+                return Http::response('isolated-provider-audio', 200);
+            }
+
+            $body = $request->body();
+            $scribeRequestMatched = $request->url() === 'https://api.elevenlabs.test/v1/speech-to-text'
+                && str_contains($body, 'name="file"; filename="audio.wav"')
+                && str_contains($body, 'isolated-wav')
+                && str_contains($body, 'name="diarize"')
+                && str_contains($body, 'false');
+
+            return Http::response($this->sampleScribePayload(), 200);
+        });
+
+        $transcript = $this->service()->transcribe($this->audio, 'spa');
+
+        $this->assertSame('spa', $transcript->language);
+        $this->assertTrue($scribeRequestMatched);
     }
 
     public function test_it_passes_catalog_language_codes_directly_to_scribe(): void
     {
-        Http::fake([
-            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+        $requestMatched = false;
+
+        Http::fake(function (Request $request) use (&$requestMatched) {
+            $body = $request->body();
+            $requestMatched = str_contains($body, 'name="language_code"')
+                && str_contains($body, 'jpn');
+
+            return Http::response([
                 ...$this->sampleScribePayload(),
                 'language_code' => 'jpn',
-            ], 200),
-        ]);
+            ], 200);
+        });
 
         $transcript = $this->service()->transcribe($this->audio, 'jpn');
 
         $this->assertSame('jpn', $transcript->language);
-
-        Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'name="language_code"')
-            && str_contains($request->body(), 'jpn'));
+        $this->assertTrue($requestMatched);
     }
 
     public function test_it_omits_language_for_auto_detection(): void
     {
-        Http::fake([
-            'api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload()),
-        ]);
+        $requestMatched = false;
+
+        Http::fake(function (Request $request) use (&$requestMatched) {
+            $requestMatched = ! str_contains($request->body(), 'name="language_code"');
+
+            return Http::response($this->sampleScribePayload());
+        });
 
         $transcript = $this->service()->transcribe($this->audio, 'auto');
 
         $this->assertSame('spa', $transcript->language);
-
-        Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), 'name="language_code"'));
+        $this->assertTrue($requestMatched);
     }
 
     public function test_it_maps_provider_http_failures_to_stable_errors(): void
@@ -201,6 +267,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
     {
         return new ElevenLabsScribeTranscriptionService(
             new ScribeTranscriptNormalizer,
+            new ElevenLabsScribeAudioPreparer,
         );
     }
 

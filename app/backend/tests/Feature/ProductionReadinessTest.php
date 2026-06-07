@@ -19,6 +19,8 @@ class ProductionReadinessTest extends TestCase
         $this->assertTrue($payload['ok']);
         $this->assertSame('https://api.example.test', $payload['summary']['appUrl']);
         $this->assertTrue($payload['summary']['openaiKeyConfigured']);
+        $this->assertTrue($payload['summary']['audioIsolationEnabled']);
+        $this->assertTrue($payload['summary']['audioIsolationFailOpen']);
         $this->assertStringNotContainsString('sk-test-openai', $output);
         $this->assertStringNotContainsString('whsec_test', $output);
     }
@@ -32,6 +34,9 @@ class ProductionReadinessTest extends TestCase
             'ai.providers.openai.key' => '',
             'billing.testing_plan_switcher.enabled' => true,
             'queue.connections.redis.retry_after' => 60,
+            'subtitles.audio_preparation.ffmpeg_binary' => '',
+            'subtitles.audio_preparation.voice_isolation.enabled' => false,
+            'subtitles.audio_preparation.voice_isolation.fail_open' => false,
         ]);
 
         $this->assertSame(1, Artisan::call('ops:production-check', ['--json' => true]));
@@ -44,6 +49,9 @@ class ProductionReadinessTest extends TestCase
         $this->assertContains('APP_URL must use HTTPS.', $payload['problems']);
         $this->assertContains('OPENAI_API_KEY must be configured in the environment.', $payload['problems']);
         $this->assertContains('Queue retry_after must be greater than the subtitle worker timeout.', $payload['problems']);
+        $this->assertContains('FFMPEG_BINARY must be configured.', $payload['problems']);
+        $this->assertContains('ELEVENLABS_AUDIO_ISOLATION_ENABLED must be true.', $payload['problems']);
+        $this->assertContains('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.', $payload['problems']);
         $this->assertStringNotContainsString('sk-test-stripe', $output);
     }
 
@@ -75,6 +83,9 @@ class ProductionReadinessTest extends TestCase
             'billing.plans.plus.stripe_price_id' => 'price_plus',
             'billing.plans.pro.stripe_price_id' => 'price_pro',
             'subtitles.youtube.binary' => 'yt-dlp',
+            'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg',
+            'subtitles.audio_preparation.voice_isolation.enabled' => true,
+            'subtitles.audio_preparation.voice_isolation.fail_open' => true,
         ]);
     }
 }
