@@ -185,6 +185,7 @@ function isSubtitleStateValue(value: unknown): value is SubtitleState {
 function isSubtitleStage(value: unknown): value is SubtitleJobHistoryItem['stage'] {
   return value === 'preparing'
     || value === 'acquiring-audio'
+    || value === 'optimizing-audio'
     || value === 'transcribing'
     || value === 'tokenizing'
     || value === 'romanizing'

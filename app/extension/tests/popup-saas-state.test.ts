@@ -96,13 +96,14 @@ describe('popup SaaS state helpers', () => {
       'done',
       'done',
       'done',
+      'done',
       'current',
       'pending',
       'pending',
       'pending',
       'pending',
     ]);
-    expect(stageTimeline(jobHistory({ status: 'failed', stage: 'transcribing' }))[2]).toMatchObject({
+    expect(stageTimeline(jobHistory({ status: 'failed', stage: 'transcribing' }))[3]).toMatchObject({
       stage: 'transcribing',
       state: 'failed',
     });

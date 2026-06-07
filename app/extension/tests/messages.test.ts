@@ -25,9 +25,9 @@ describe('runtime message validation', () => {
         subtitleState: {
           type: 'loading',
           youtubeVideoId: 'dQw4w9WgXcQ',
-          message: 'Tokenizing subtitles...',
-          stage: 'tokenizing',
-          progressPercent: 65,
+          message: 'Optimizing audio...',
+          stage: 'optimizing-audio',
+          progressPercent: 35,
         },
       }),
     ).toBe(true);

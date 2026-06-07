@@ -543,6 +543,7 @@ export type JobResponse = {
   stage:
     | 'preparing'
     | 'acquiring-audio'
+    | 'optimizing-audio'
     | 'transcribing'
     | 'tokenizing'
     | 'romanizing'
@@ -1017,6 +1018,7 @@ export type SubtitleJobHistoryItem = {
   stage:
     | 'preparing'
     | 'acquiring-audio'
+    | 'optimizing-audio'
     | 'transcribing'
     | 'tokenizing'
     | 'romanizing'

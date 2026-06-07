@@ -80,6 +80,9 @@ export function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): 
     case 'acquiring-audio':
       return 'Acquiring audio...';
 
+    case 'optimizing-audio':
+      return 'Optimizing audio...';
+
     case 'transcribing':
       return 'Transcribing audio...';
 

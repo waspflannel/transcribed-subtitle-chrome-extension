@@ -369,6 +369,37 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, $this->audioSource->calls);
     }
 
+    public function test_generation_runs_audio_optimization_before_scribe_transcription(): void
+    {
+        $this->transcriptionService->beforePrepareResult = function (TemporaryAudioFile $audio): void {
+            $this->assertSame('audio/mp4', $audio->mimeType);
+            $this->assertDatabaseHas('subtitle_jobs', [
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'status' => 'running',
+                'stage' => 'optimizing-audio',
+                'progress_percent' => 35,
+            ]);
+        };
+        $this->transcriptionService->beforeTranscriptionResult = function (TemporaryAudioFile $audio): void {
+            $this->assertSame('audio/mp4', $audio->mimeType);
+            $this->assertDatabaseHas('subtitle_jobs', [
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'status' => 'running',
+                'stage' => 'transcribing',
+                'progress_percent' => 50,
+            ]);
+        };
+
+        $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertOk()
+            ->assertJsonPath('status', 'completed');
+
+        $this->assertSame(1, $this->transcriptionService->prepareCalls);
+        $this->assertSame(['auto'], $this->transcriptionService->sourceLanguages);
+    }
+
     public function test_queue_database_lock_failure_returns_specific_public_message(): void
     {
         $job = SubtitleJob::factory()->create([
@@ -1780,14 +1811,29 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 
     public ?TimestampedTranscript $transcript = null;
 
+    public int $prepareCalls = 0;
+
+    public ?\Closure $beforePrepareResult = null;
+
+    public ?\Closure $beforeTranscriptionResult = null;
+
     /**
      * @var array<int, string>
      */
     public array $sourceLanguages = [];
 
-    public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
+    public function prepareAudio(TemporaryAudioFile $audio): TemporaryAudioFile
+    {
+        $this->prepareCalls++;
+        $this->beforePrepareResult?->__invoke($audio);
+
+        return $audio;
+    }
+
+    public function transcribePreparedAudio(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
     {
         $this->sourceLanguages[] = $sourceLanguage;
+        $this->beforeTranscriptionResult?->__invoke($audio);
 
         if ($this->shouldFail) {
             throw SubtitleProcessingException::transcriptionFailed();
