@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Subtitles</title>
+  </head>
+  <body>
+    <div id="app" class="panel">
+      <nav class="rail-nav" aria-label="Sections">
+        <span class="brandmark" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+            <rect x="3" y="6" width="18" height="12" />
+            <line x1="7" y1="12" x2="11" y2="12" />
+            <line x1="14" y1="12" x2="17" y2="12" />
+          </svg>
+        </span>
+        <button class="rbtn" type="button" data-tab="generate" id="tab-generate" aria-selected="true" aria-controls="panel-generate">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true">
+            <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" />
+          </svg>
+          <span class="tip">Generate</span>
+        </button>
+        <button class="rbtn" type="button" data-tab="study" id="tab-study" aria-selected="false" aria-controls="panel-study">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true">
+            <rect x="3" y="9" width="6" height="6" />
+            <rect x="15" y="9" width="6" height="6" />
+            <line x1="9" y1="12" x2="15" y2="12" />
+            <path d="M3 11V8a2 2 0 0 1 2-2" />
+            <path d="M21 11V8a2 2 0 0 0-2-2" />
+          </svg>
+          <span class="tip">Study</span>
+        </button>
+        <span class="rspacer"></span>
+        <button class="rbtn" type="button" data-tab="jobs" id="tab-jobs" aria-selected="false" aria-controls="panel-jobs">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="4" />
+            <rect x="4" y="11" width="16" height="4" />
+            <rect x="4" y="18" width="10" height="2.5" />
+          </svg>
+          <span class="tip">Jobs</span>
+        </button>
+        <button class="rbtn" type="button" data-tab="account" id="tab-account" aria-selected="false" aria-controls="panel-account">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true">
+            <circle cx="12" cy="8" r="3.4" />
+            <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+          </svg>
+          <span class="tip">Account</span>
+        </button>
+      </nav>
+
+      <div class="body">
+        <header class="np">
+          <div class="np-text">
+            <div class="ey" data-now-playing-eyebrow>Now playing</div>
+            <div class="title" data-now-playing-title>—</div>
+            <div class="meta" data-now-playing-meta></div>
+          </div>
+          <button class="np-collapse" type="button" data-action="collapse-panel" title="Hide panel" aria-label="Hide panel">»</button>
+        </header>
+
+        <main class="scroll">
+          <!-- ============================ GENERATE ============================ -->
+          <section class="view" data-panel="generate" id="panel-generate" role="tabpanel" aria-labelledby="tab-generate" tabindex="0">
+            <section class="sec status-surface">
+              <div class="status-line">
+                <p class="status idle" data-status role="status" aria-live="polite">Loading</p>
+              </div>
+              <div class="progress" data-progress role="status" aria-live="polite" hidden>
+                <span data-progress-label>Preparing request</span>
+                <strong data-progress-percent>0%</strong>
+                <div class="progress-bar" aria-hidden="true"><span data-progress-bar></span></div>
+              </div>
+            </section>
+
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Generation</h2>
+                <p>Choose the subtitle route and optional learning data for the active video.</p>
+              </div>
+              <div class="language-grid">
+                <div class="language-picker" data-language-picker="source">
+                  <label class="field">
+                    <span>Subtitle language</span>
+                    <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+                  </label>
+                  <div class="selected-language" data-source-language-selected></div>
+                  <div class="language-options" data-source-language-list role="listbox" aria-label="Subtitle language"></div>
+                </div>
+                <div class="language-picker" data-language-picker="target">
+                  <label class="field">
+                    <span>Translation language</span>
+                    <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+                  </label>
+                  <div class="selected-language" data-target-language-selected></div>
+                  <div class="language-options" data-target-language-list role="listbox" aria-label="Translation language"></div>
+                </div>
+              </div>
+              <div class="option-grid">
+                <label class="toggle">
+                  <input type="checkbox" name="showTranslation" disabled />
+                  <span>Translate subtitles</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" name="showRomanization" disabled />
+                  <span>Romanization</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" name="fullTrackEnrichment" disabled />
+                  <span>Full word cards</span>
+                </label>
+              </div>
+              <button type="button" class="primary-button" data-action="generate" disabled>Generate subtitles</button>
+              <p class="privacy-copy">
+                The extension sends the selected video URL and generation controls to the backend only after you start generation.
+              </p>
+            </section>
+          </section>
+
+          <!-- ============================= STUDY ============================= -->
+          <section class="view" data-panel="study" id="panel-study" role="tabpanel" aria-labelledby="tab-study" tabindex="0">
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Caption display</h2>
+                <p>How generated captions appear on the video.</p>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" name="overlayVisible" disabled />
+                <span>Show overlay</span>
+              </label>
+              <div class="field-grid">
+                <label class="field">
+                  <span>Position</span>
+                  <select name="overlayPosition" disabled>
+                    <option value="bottom">Bottom</option>
+                    <option value="top">Top</option>
+                    <option value="compact">Compact</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Caption size</span>
+                  <select name="captionFontSize" disabled>
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Density</span>
+                  <select name="captionDensity" disabled>
+                    <option value="comfortable">Comfortable</option>
+                    <option value="compact">Compact</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Contrast</span>
+                  <select name="captionContrastTheme" disabled>
+                    <option value="default">Default</option>
+                    <option value="high">High contrast</option>
+                  </select>
+                </label>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" name="showGloss" disabled />
+                <span>Gloss</span>
+              </label>
+              <label class="field">
+                <span>Timing delay</span>
+                <div class="timing-control">
+                  <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled />
+                  <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled />
+                  <output data-timing-offset>0.0s</output>
+                </div>
+              </label>
+              <div class="button-row">
+                <button type="button" class="secondary-button" data-action="reset-timing" disabled>Reset timing</button>
+              </div>
+            </section>
+
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Study &amp; shortcuts</h2>
+                <p>Active-recall controls and keyboard shortcuts for the subtitle track.</p>
+              </div>
+              <div class="option-grid">
+                <label class="toggle">
+                  <input type="checkbox" name="blurSourceWords" disabled />
+                  <span>Blur source words</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" name="blurRomanization" disabled />
+                  <span>Blur romanization</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" name="blurTranslation" disabled />
+                  <span>Blur translation</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" name="pauseOnWordHover" disabled />
+                  <span>Pause video on word hover</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" name="keyboardShortcutsEnabled" disabled />
+                  <span>Keyboard shortcuts</span>
+                </label>
+              </div>
+              <div class="shortcut-list" data-shortcut-help aria-label="Keyboard shortcuts"></div>
+            </section>
+          </section>
+
+          <!-- ============================== JOBS ============================= -->
+          <section class="view" data-panel="jobs" id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs" tabindex="0">
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Jobs</h2>
+                <p>Recent backend jobs for this local extension install.</p>
+              </div>
+              <div class="jobs-list" data-jobs-list></div>
+              <p class="muted" data-jobs-error hidden></p>
+            </section>
+          </section>
+
+          <!-- ============================ ACCOUNT ============================ -->
+          <section class="view" data-panel="account" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="0">
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Account</h2>
+                <p>Sign in with your verified beta account to enable generation.</p>
+              </div>
+              <dl class="facts compact account-facts">
+                <div>
+                  <dt>Status</dt>
+                  <dd data-account-status>Not signed in</dd>
+                </div>
+                <div>
+                  <dt>Plan</dt>
+                  <dd data-account-plan>Local beta</dd>
+                </div>
+                <div>
+                  <dt>Speed</dt>
+                  <dd data-account-speed>Standard queue</dd>
+                </div>
+              </dl>
+              <p class="account-feedback" data-account-feedback role="status" aria-live="polite" hidden></p>
+              <form class="account-form" data-account-login-form>
+                <label class="field">
+                  <span>Email</span>
+                  <input type="email" name="accountEmail" autocomplete="email" required />
+                </label>
+                <label class="field">
+                  <span>Password</span>
+                  <input type="password" name="accountPassword" autocomplete="current-password" required />
+                </label>
+                <button type="submit" class="primary-button" data-action="login">Sign in</button>
+              </form>
+              <div class="button-row">
+                <button type="button" class="secondary-button" data-action="logout" disabled>Log out</button>
+              </div>
+              <div class="feature-list" data-feature-list></div>
+            </section>
+
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Usage</h2>
+                <p>Projected local beta minutes from public-safe job history.</p>
+              </div>
+              <div class="usage-meter">
+                <div class="usage-meter-label">
+                  <span data-usage-summary>0 of 60 min used</span>
+                  <strong data-usage-remaining>60 min left</strong>
+                </div>
+                <div class="progress-bar usage-bar" aria-hidden="true"><span data-usage-bar></span></div>
+              </div>
+              <dl class="facts compact">
+                <div>
+                  <dt>Current plan</dt>
+                  <dd data-usage-plan>Local beta</dd>
+                </div>
+                <div>
+                  <dt>Pending jobs</dt>
+                  <dd data-usage-pending>0 min pending</dd>
+                </div>
+                <div>
+                  <dt>Reset date</dt>
+                  <dd data-usage-reset>Loading</dd>
+                </div>
+              </dl>
+              <button type="button" class="secondary-button" data-action="upgrade" disabled>Upgrade</button>
+            </section>
+
+            <section class="sec">
+              <div class="section-heading">
+                <h2>Local data</h2>
+                <p>Defaults and on-device state for this browser.</p>
+              </div>
+              <dl class="facts compact">
+                <div>
+                  <dt>Language defaults</dt>
+                  <dd data-settings-language-summary>Loading</dd>
+                </div>
+              </dl>
+              <div class="button-row">
+                <button type="button" class="secondary-button danger" data-action="clear-state" disabled>Clear local state</button>
+              </div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
