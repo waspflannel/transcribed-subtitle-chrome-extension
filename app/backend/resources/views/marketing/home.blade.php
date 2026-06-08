@@ -2,13 +2,33 @@
 
 @section('body_class', 'hermes-landing-body marketing-body')
 
+@push('body_start')
+    <img
+        class="site-texture"
+        src="{{ asset('img/desktop/filler-bg0.webp') }}"
+        alt=""
+        aria-hidden="true"
+        width="1444"
+        height="1444"
+        loading="lazy"
+        decoding="async"
+    >
+@endpush
+
 @section('content')
 <div class="da-main" id="home">
     <!-- HERO -->
     <section class="da-hero">
         <div class="hermes-container da-hero-layered-content">
             <div class="da-hero-visual-bg">
-                <img src="{{ asset('img/desktop/hero-art.webp') }}" alt="">
+                <img
+                    src="{{ asset('img/desktop/hero-art.webp') }}"
+                    alt=""
+                    width="1129"
+                    height="1418"
+                    fetchpriority="high"
+                    decoding="async"
+                >
             </div>
             <div class="da-hero-text-overlay">
                 <div class="da-eyebrow">learn languages using youtube</div>
@@ -26,85 +46,23 @@
     <!-- VIDEO/PREVIEW -->
     <section class="da-preview">
         <div class="da-preview-frame" data-reveal>
-             <img src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="Product Preview">
+             <img
+                src="{{ asset('img/desktop/filler-bg0.webp') }}"
+                alt="Preview frame for generated subtitles and study controls"
+                width="1444"
+                height="1444"
+                loading="lazy"
+                decoding="async"
+            >
              <div class="da-preview-bar">PRODUCT DEMO - BETA PREVIEW</div>
         </div>
     </section>
 
     <!-- FEATURES -->
     <section class="da-features">
-        <div class="feature-row" data-reveal>
-            <div class="feature-row-inner">
-                <div class="feature-text">
-                    <span class="feature-num">01 / Missing captions</span>
-                    <h2>Study any video</h2>
-                    <p>Turns missing or poor captions into useful study subtitles. One click, every video.</p>
-                </div>
-                <div class="feature-media">
-                    <img src="{{ asset('img/desktop/feature-connect.webp') }}" alt="Missing captions">
-                </div>
-            </div>
-        </div>
-        <div class="feature-row" data-reveal>
-            <div class="feature-row-inner">
-                <div class="feature-text">
-                    <span class="feature-num">02 / Translation</span>
-                    <h2>Layered context</h2>
-                    <p>Injects translation and romanization layers directly into the player for immediate comprehension.</p>
-                </div>
-                <div class="feature-media">
-                    <img src="{{ asset('img/desktop/feature-memory.webp') }}" alt="Translation layer">
-                </div>
-            </div>
-        </div>
-        <div class="feature-row" data-reveal>
-            <div class="feature-row-inner">
-                <div class="feature-text">
-                    <span class="feature-num">03 / Retention</span>
-                    <h2>Word cards</h2>
-                    <p>Vocabulary word cards generated from video subtitles - automatic flashcards for spaced repetition.</p>
-                </div>
-                <div class="feature-media">
-                    <img src="{{ asset('img/desktop/feature-tasks.webp') }}" alt="Word cards">
-                </div>
-            </div>
-        </div>
-        <div class="feature-row" data-reveal>
-            <div class="feature-row-inner">
-                <div class="feature-text">
-                    <span class="feature-num">04 / Export</span>
-                    <h2>Take it with you</h2>
-                    <p>Export your learned vocabulary to Anki, CSV, or Notion. Own your progress data.</p>
-                </div>
-                <div class="feature-media">
-                    <img src="{{ asset('img/desktop/feature-automation.webp') }}" alt="Export">
-                </div>
-            </div>
-        </div>
-        <div class="feature-row" data-reveal>
-            <div class="feature-row-inner">
-                <div class="feature-text">
-                    <span class="feature-num">05 / Offline</span>
-                    <h2>Read anywhere</h2>
-                    <p>Download full transcripts as PDF or text and study along without an internet connection.</p>
-                </div>
-                <div class="feature-media">
-                    <img src="{{ asset('img/desktop/feature-browse.webp') }}" alt="Read anywhere">
-                </div>
-            </div>
-        </div>
-        <div class="feature-row" data-reveal>
-            <div class="feature-row-inner">
-                <div class="feature-text">
-                    <span class="feature-num">06 / Privacy</span>
-                    <h2>Local processing</h2>
-                    <p>Your watch history stays private; transcriptions run securely on managed infrastructure.</p>
-                </div>
-                <div class="feature-media">
-                    <img src="{{ asset('img/desktop/feature-sandbox.webp') }}" alt="Privacy">
-                </div>
-            </div>
-        </div>
+        @foreach ($landingFeatures as $feature)
+            <x-marketing.feature-row :feature="$feature" />
+        @endforeach
     </section>
 
     <!-- FINAL CTA -->
@@ -117,7 +75,14 @@
                 <a href="#download" class="da-button">Get Started Now</a>
             </div>
             <div class="da-final-image" data-reveal data-reveal-delay="120">
-                <img src="{{ asset('img/desktop/portal-figure.webp') }}" alt="Transcribed Subtitle Extension study figure">
+                <img
+                    src="{{ asset('img/desktop/portal-figure.webp') }}"
+                    alt="Transcribed Subtitle Extension study figure"
+                    width="1284"
+                    height="1590"
+                    loading="lazy"
+                    decoding="async"
+                >
             </div>
         </div>
     </section>

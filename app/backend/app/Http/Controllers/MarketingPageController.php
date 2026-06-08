@@ -14,14 +14,14 @@ class MarketingPageController extends Controller
     public function home(Request $request, FunnelAnalytics $analytics): View
     {
         return $this->marketingView($request, $analytics, 'home', 'marketing.home', [
-            'featuredLanguages' => $this->featuredLanguages(),
+            'landingFeatures' => $this->landingFeatures(),
         ]);
     }
 
     public function desktop(Request $request, FunnelAnalytics $analytics): View
     {
         return $this->marketingView($request, $analytics, 'desktop', 'marketing.home', [
-            'featuredLanguages' => $this->featuredLanguages(),
+            'landingFeatures' => $this->landingFeatures(),
         ]);
     }
 
@@ -93,13 +93,13 @@ class MarketingPageController extends Controller
 
         $metadata = [
             'home' => [
-                'title' => 'Hermes Desktop | Nous Research',
-                'description' => 'The Agent That Grows With You.',
+                'title' => $productName,
+                'description' => 'AI subtitles, translations, romanization, and word cards for public YouTube language study.',
                 'route' => 'marketing.home',
             ],
             'desktop' => [
-                'title' => 'Hermes Desktop | Nous Research',
-                'description' => 'The Agent That Grows With You.',
+                'title' => $productName.' Chrome extension',
+                'description' => 'Download the beta Chrome extension for generated YouTube subtitles and language-learning word cards.',
                 'route' => 'marketing.desktop',
             ],
             'pricing' => [
@@ -147,14 +147,66 @@ class MarketingPageController extends Controller
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, array{eyebrow: string, title: string, description: string, image: string, alt: string, width: int, height: int}>
      */
-    private function featuredLanguages(): array
+    private function landingFeatures(): array
     {
-        return array_map(
-            static fn (string $code): string => LanguageCatalog::label($code),
-            ['spa', 'jpn', 'fra', 'deu', 'kor', 'cmn', 'ara', 'por'],
-        );
+        return [
+            [
+                'eyebrow' => '01 / Missing captions',
+                'title' => 'Study any video',
+                'description' => 'Turn missing or weak captions into useful study subtitles for public YouTube videos.',
+                'image' => 'img/desktop/feature-connect.webp',
+                'alt' => 'Generated caption setup for a YouTube language study session',
+                'width' => 1334,
+                'height' => 1148,
+            ],
+            [
+                'eyebrow' => '02 / Translation',
+                'title' => 'Layered context',
+                'description' => 'Add translation and romanization layers inside the player for immediate comprehension.',
+                'image' => 'img/desktop/feature-memory.webp',
+                'alt' => 'Caption translation and romanization controls',
+                'width' => 1334,
+                'height' => 1148,
+            ],
+            [
+                'eyebrow' => '03 / Retention',
+                'title' => 'Word cards',
+                'description' => 'Open vocabulary cards from generated subtitles and inspect gloss, romanization, and usage notes.',
+                'image' => 'img/desktop/feature-tasks.webp',
+                'alt' => 'Vocabulary word cards generated from subtitle cues',
+                'width' => 1334,
+                'height' => 1148,
+            ],
+            [
+                'eyebrow' => '04 / History',
+                'title' => 'Review recent jobs',
+                'description' => 'Track recent generations, job status, and public-safe support IDs from the popup and account dashboard.',
+                'image' => 'img/desktop/feature-automation.webp',
+                'alt' => 'Recent subtitle generation jobs and status history',
+                'width' => 1334,
+                'height' => 1148,
+            ],
+            [
+                'eyebrow' => '05 / Timing',
+                'title' => 'Sync the study flow',
+                'description' => 'Adjust caption timing, density, size, contrast, and overlay position without leaving the video.',
+                'image' => 'img/desktop/feature-browse.webp',
+                'alt' => 'Subtitle display controls for timing and caption layout',
+                'width' => 1334,
+                'height' => 1148,
+            ],
+            [
+                'eyebrow' => '06 / Privacy',
+                'title' => 'Clear boundaries',
+                'description' => 'The extension sends the selected public video details only when you start generation.',
+                'image' => 'img/desktop/feature-sandbox.webp',
+                'alt' => 'Privacy and account controls for subtitle generation',
+                'width' => 1334,
+                'height' => 1148,
+            ],
+        ];
     }
 
     /**
