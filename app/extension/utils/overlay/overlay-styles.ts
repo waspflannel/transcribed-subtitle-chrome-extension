@@ -1,5 +1,9 @@
 ﻿export const overlayStyles = String.raw`        :host {
           all: initial;
+          --accent: #d83b3b;
+          --accent-bright: #e85d5d;
+          --accent-soft: #ec9b9b;
+          --hairline: rgba(255, 255, 255, 0.12);
           bottom: calc(82px + env(safe-area-inset-bottom));
           left: max(16px, env(safe-area-inset-left));
           pointer-events: none;
@@ -23,15 +27,16 @@
 
         .rail {
           background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
-            rgba(10, 10, 10, 0.86);
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+            rgba(8, 8, 8, 0.88);
           backdrop-filter: blur(20px) saturate(130%);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 10px;
-          box-shadow: 0 18px 54px rgba(0, 0, 0, 0.42);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-left: 2px solid var(--accent, #d83b3b);
+          border-radius: 0;
+          box-shadow: 0 18px 54px rgba(0, 0, 0, 0.5);
           color: #f1f1f1;
           display: grid;
-          font-family: "Geist", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+          font-family: 'Geist Sans', "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
           gap: 12px;
           grid-template-columns: minmax(112px, auto) minmax(0, 1fr) auto;
           line-height: 1.35;
@@ -61,19 +66,21 @@
         }
 
         .eyebrow {
-          color: #ec9b9b;
-          font-family: "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
-          font-size: 13px;
-          font-weight: 850;
-          letter-spacing: 0;
+          color: var(--accent-soft);
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
           white-space: nowrap;
         }
 
         .cue-time {
-          color: #e85d5d;
-          font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+          color: var(--accent-bright);
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
           font-size: 12px;
-          font-weight: 750;
+          font-weight: 500;
+          letter-spacing: 0.04em;
           white-space: nowrap;
         }
 
@@ -99,29 +106,31 @@
         }
 
         .study-control {
-          background: rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 8px;
+          border-radius: 0;
           color: #d1d5db;
           cursor: pointer;
           font: inherit;
-          font-size: 11px;
-          font-weight: 850;
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 0.1em;
           min-height: 28px;
-          padding: 0 8px;
+          padding: 0 10px;
+          text-transform: uppercase;
           transition:
             background 120ms ease,
             border-color 120ms ease,
             box-shadow 120ms ease,
-            color 120ms ease,
-            transform 120ms ease;
+            color 120ms ease;
           white-space: nowrap;
         }
 
         .study-control:hover {
-          background: rgba(255, 255, 255, 0.12);
-          border-color: rgba(216, 59, 59, 0.32);
-          transform: translateY(-1px);
+          background: rgba(216, 59, 59, 0.16);
+          border-color: rgba(216, 59, 59, 0.55);
+          color: #fff;
         }
 
         .study-control:focus-visible {
@@ -153,16 +162,17 @@
 
         .transcript-panel {
           background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
-            rgba(10, 10, 10, 0.94);
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+            rgba(8, 8, 8, 0.95);
           backdrop-filter: blur(20px) saturate(130%);
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          border-radius: 10px;
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          border-left: 2px solid var(--accent);
+          border-radius: 0;
           bottom: 92px;
           box-shadow: 0 18px 54px rgba(0, 0, 0, 0.46);
           color: #f1f1f1;
           display: grid;
-          font-family: "Geist", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+          font-family: 'Geist Sans', "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
           gap: 12px;
           grid-template-rows: auto auto minmax(0, 1fr) auto;
           line-height: 1.35;
@@ -208,9 +218,9 @@
         }
 
         .transcript-search input {
-          background: rgba(0, 0, 0, 0.32);
+          background: rgba(0, 0, 0, 0.42);
           border: 1px solid rgba(255, 255, 255, 0.16);
-          border-radius: 8px;
+          border-radius: 0;
           color: #f1f1f1;
           font: inherit;
           font-size: 13px;
@@ -239,14 +249,14 @@
         }
 
         .transcript-list::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.08);
-          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.06);
+          border-radius: 0;
         }
 
         .transcript-list::-webkit-scrollbar-thumb {
           background: rgba(216, 59, 59, 0.58);
-          border: 2px solid rgba(10, 10, 10, 0.94);
-          border-radius: 999px;
+          border: 2px solid rgba(8, 8, 8, 0.95);
+          border-radius: 0;
         }
 
         .transcript-list::-webkit-scrollbar-thumb:hover {
@@ -254,9 +264,9 @@
         }
 
         .transcript-cue {
-          background: rgba(255, 255, 255, 0.055);
-          border: 1px solid rgba(255, 255, 255, 0.11);
-          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 0;
           content-visibility: auto;
           contain-intrinsic-size: 152px;
           display: grid;
@@ -281,10 +291,11 @@
 
         .transcript-cue-index,
         .transcript-cue-time {
-          color: #e85d5d;
-          font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+          color: var(--accent-bright);
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
           font-size: 11px;
-          font-weight: 850;
+          font-weight: 500;
+          letter-spacing: 0.04em;
         }
 
         .transcript-cue-body {
@@ -307,25 +318,30 @@
         }
 
         .transcript-romanization {
-          color: #ec9b9b;
+          color: var(--accent-soft);
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
         }
 
         .transcript-action {
-          background: rgba(255, 255, 255, 0.07);
+          background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 8px;
+          border-radius: 0;
           color: #e5e7eb;
           cursor: pointer;
           font: inherit;
-          font-size: 11px;
-          font-weight: 850;
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 0.08em;
           min-height: 28px;
-          padding: 0 8px;
+          padding: 0 10px;
+          text-transform: uppercase;
         }
 
         .transcript-action:hover {
-          background: rgba(255, 255, 255, 0.12);
-          border-color: rgba(216, 59, 59, 0.32);
+          background: rgba(216, 59, 59, 0.16);
+          border-color: rgba(216, 59, 59, 0.55);
+          color: #fff;
         }
 
         .transcript-status {
@@ -386,9 +402,11 @@
         }
 
         .cue-romanization {
-          color: #ec9b9b;
-          font-size: 13px;
-          font-weight: 650;
+          color: var(--accent-soft);
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 12px;
+          font-weight: 400;
+          letter-spacing: 0.02em;
         }
 
         .study-blur {
@@ -420,14 +438,16 @@
 
         .token-card {
           align-items: center;
-          background: rgba(255, 255, 255, 0.075);
-          border: 1px solid rgba(255, 255, 255, 0.11);
-          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 0;
           color: inherit;
           cursor: pointer;
-          display: inline-grid;
+          display: inline-flex;
+          flex-direction: column;
           font: inherit;
-          gap: 3px;
+          gap: 4px;
+          justify-content: center;
           line-height: 1;
           min-height: 42px;
           min-width: 0;
@@ -437,48 +457,48 @@
           transition:
             background 120ms ease,
             border-color 120ms ease,
-            box-shadow 120ms ease,
-            transform 120ms ease;
+            box-shadow 120ms ease;
         }
 
         .token-card:hover {
-          background: rgba(255, 255, 255, 0.11);
-          border-color: rgba(216, 59, 59, 0.38);
-          transform: translateY(-1px);
+          background: rgba(216, 59, 59, 0.1);
+          border-color: rgba(216, 59, 59, 0.45);
         }
 
         .token-card:focus-visible {
-          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.34);
+          box-shadow: 0 0 0 2px rgba(216, 59, 59, 0.5);
           outline: none;
         }
 
         .token-card[aria-pressed="true"] {
-          background: rgba(216, 59, 59, 0.18);
-          border-color: rgba(216, 59, 59, 0.78);
-          box-shadow: inset 0 0 24px rgba(216, 59, 59, 0.08), 0 0 22px rgba(216, 59, 59, 0.12);
+          background: rgba(216, 59, 59, 0.16);
+          border-color: var(--accent);
+          box-shadow: inset 0 -2px 0 0 var(--accent);
         }
 
         .token-text {
-          color: #f1f1f1;
+          color: #f5f5f5;
           font-size: 22px;
-          font-weight: 750;
-          line-height: 1;
+          font-weight: 600;
+          line-height: 1.05;
           overflow-wrap: anywhere;
         }
 
         .token-extra {
-          color: #ec9b9b;
+          color: var(--accent-soft);
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
           font-size: 11px;
-          font-weight: 650;
+          font-weight: 400;
+          letter-spacing: 0.02em;
           line-height: 1.3;
           overflow-wrap: anywhere;
         }
 
         .token-inline-preview,
         .token-popover {
-          background: rgba(12, 12, 12, 0.96);
+          background: rgba(8, 8, 8, 0.97);
           border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 10px;
+          border-radius: 0;
           color: #e5e7eb;
           display: grid;
           font-size: 13px;
@@ -503,8 +523,9 @@
         }
 
         .token-popover {
+          border-top: 2px solid var(--accent);
           bottom: calc(100% + 14px);
-          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.46);
+          box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
           left: 50%;
           position: absolute;
           transform: translateX(-50%);
@@ -513,7 +534,7 @@
         }
 
         .token-popover::after {
-          background: rgba(12, 12, 12, 0.96);
+          background: rgba(8, 8, 8, 0.97);
           border-bottom: 1px solid rgba(255, 255, 255, 0.14);
           border-right: 1px solid rgba(255, 255, 255, 0.14);
           bottom: -6px;
@@ -533,16 +554,16 @@
         }
 
         .token-popover-title {
-          color: #f1f1f1;
-          font-size: 14px;
-          font-weight: 850;
+          color: #f5f5f5;
+          font-size: 15px;
+          font-weight: 600;
         }
 
         .icon-button {
           align-items: center;
-          background: rgba(255, 255, 255, 0.08);
+          background: rgba(255, 255, 255, 0.06);
           border: 1px solid rgba(255, 255, 255, 0.16);
-          border-radius: 7px;
+          border-radius: 0;
           color: #e5e7eb;
           cursor: pointer;
           display: inline-flex;
@@ -556,8 +577,10 @@
 
         .icon-button:hover,
         .icon-button:focus-visible {
-          background: rgba(255, 255, 255, 0.14);
-          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.22);
+          background: rgba(216, 59, 59, 0.18);
+          border-color: rgba(216, 59, 59, 0.55);
+          box-shadow: none;
+          color: #fff;
           outline: none;
         }
 
@@ -574,12 +597,17 @@
 
         .field-label {
           color: #9ca3af;
-          font-size: 11px;
-          font-weight: 800;
+          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+          font-size: 10px;
+          font-weight: 500;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
         }
 
         .field-value {
           color: #f1f1f1;
+          font-size: 13px;
+          line-height: 1.35;
           overflow-wrap: anywhere;
         }
 

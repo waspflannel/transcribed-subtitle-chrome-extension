@@ -1,8 +1,33 @@
+import { browser } from 'wxt/browser';
 import type { LearningToken, SubtitleCue } from './contracts';
 import { renderOverlayContent } from './overlay/overlay-render';
 import { overlayStyles } from './overlay/overlay-styles';
 import type { OverlayRenderState, OverlayStatus } from './overlay/types';
 import { hasLearningMetadata, tokenKey } from './track-tokens';
+
+const OVERLAY_FONTS: ReadonlyArray<readonly [string, number, string]> = [
+  ['Geist Sans', 400, 'geist-sans-latin-400-normal.woff2'],
+  ['Geist Sans', 500, 'geist-sans-latin-500-normal.woff2'],
+  ['Geist Sans', 600, 'geist-sans-latin-600-normal.woff2'],
+  ['Geist Sans', 700, 'geist-sans-latin-700-normal.woff2'],
+  ['IBM Plex Mono', 400, 'ibm-plex-mono-latin-400-normal.woff2'],
+  ['IBM Plex Mono', 500, 'ibm-plex-mono-latin-500-normal.woff2'],
+];
+
+function buildOverlayFontFaces(): string {
+  const runtime = (globalThis as { browser?: typeof browser }).browser?.runtime ?? browser?.runtime;
+
+  if (!runtime?.getURL) {
+    return '';
+  }
+
+  return OVERLAY_FONTS.map(
+    ([family, weight, file]) =>
+      `@font-face{font-family:'${family}';font-style:normal;font-weight:${weight};font-display:swap;src:url('${runtime.getURL(
+        ('fonts/' + file) as never,
+      )}') format('woff2');}`,
+  ).join('');
+}
 
 export { renderOverlayContent } from './overlay/overlay-render';
 export type { OverlayRenderState, OverlayStatus } from './overlay/types';
@@ -505,7 +530,7 @@ export class OverlayShell {
     const shadowRoot = host.attachShadow({ mode: 'open' });
     shadowRoot.innerHTML = `
       <style>
-        ${overlayStyles}
+        ${buildOverlayFontFaces()}${overlayStyles}
       </style>
       <div data-overlay-content></div>
     `;
