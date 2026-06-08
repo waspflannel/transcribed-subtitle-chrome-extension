@@ -36,9 +36,9 @@
 
       <nav class="tabs" role="tablist" aria-label="Popup sections">
         <button type="button" class="tab active" data-tab="generate" role="tab" aria-selected="true" aria-controls="panel-generate" id="tab-generate">Generate</button>
-        <button type="button" class="tab" data-tab="study" role="tab" aria-selected="false" aria-controls="panel-study" id="tab-study">Study</button>
-        <button type="button" class="tab" data-tab="account" role="tab" aria-selected="false" aria-controls="panel-account" id="tab-account">Account</button>
-        <button type="button" class="tab" data-tab="jobs" role="tab" aria-selected="false" aria-controls="panel-jobs" id="tab-jobs">Jobs</button>
+        <button type="button" class="tab" data-tab="study" role="tab" aria-selected="false" aria-controls="panel-study" id="tab-study" tabindex="-1">Study</button>
+        <button type="button" class="tab" data-tab="account" role="tab" aria-selected="false" aria-controls="panel-account" id="tab-account" tabindex="-1">Account</button>
+        <button type="button" class="tab" data-tab="jobs" role="tab" aria-selected="false" aria-controls="panel-jobs" id="tab-jobs" tabindex="-1">Jobs</button>
       </nav>
 
       <main>
@@ -46,7 +46,7 @@
         <section class="panel active" data-panel="generate" id="panel-generate" role="tabpanel" aria-labelledby="tab-generate" tabindex="0">
           <section class="surface status-surface">
             <div class="status-line">
-              <p class="status idle" data-status>Loading</p>
+              <p class="status idle" data-status role="status" aria-live="polite">Loading</p>
             </div>
             <dl class="facts">
               <div>
@@ -66,7 +66,7 @@
                 <dd data-job-label>No job</dd>
               </div>
             </dl>
-            <div class="progress" data-progress hidden>
+            <div class="progress" data-progress role="status" aria-live="polite" hidden>
               <span data-progress-label>Preparing request</span>
               <strong data-progress-percent>0%</strong>
               <div class="progress-bar" aria-hidden="true"><span data-progress-bar></span></div>

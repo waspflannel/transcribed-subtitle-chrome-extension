@@ -10,6 +10,14 @@ import type {
   SubtitleJobHistoryResponse,
 } from './contracts';
 import { resolveBackendApiBaseUrl } from './api-config';
+import {
+  guardExtensionAccountResponse,
+  guardExtensionAuthResponse,
+  guardJobResponse,
+  guardLearningTokenResponse,
+  guardOkResponse,
+  guardSubtitleJobHistoryResponse,
+} from './api-response-guards';
 
 export const DEFAULT_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl(import.meta.env.WXT_BACKEND_API_BASE_URL);
 const JOB_HISTORY_TIMEOUT_MS = 2500;
@@ -36,21 +44,21 @@ export class SubtitleApiClient {
     return this.request<ExtensionAuthResponse>('extension-auth/login', installId, {
       method: 'POST',
       body: JSON.stringify(payload),
-    });
+    }, guardExtensionAuthResponse);
   }
 
   public async getExtensionAccount(installId: string, authToken: string): Promise<ExtensionAccountResponse> {
     return this.request<ExtensionAccountResponse>('extension-auth/account', installId, {
       method: 'GET',
       authToken,
-    });
+    }, guardExtensionAccountResponse);
   }
 
   public async logoutExtension(installId: string, authToken: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>('extension-auth/logout', installId, {
       method: 'POST',
       authToken,
-    });
+    }, guardOkResponse);
   }
 
   public async createSubtitleJob(
@@ -62,14 +70,14 @@ export class SubtitleApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
       authToken,
-    });
+    }, guardJobResponse);
   }
 
   public async getSubtitleJob(installId: string, authToken: string, jobId: string): Promise<JobResponse> {
     return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
       method: 'GET',
       authToken,
-    });
+    }, guardJobResponse);
   }
 
   public async listSubtitleJobs(installId: string, authToken: string): Promise<SubtitleJobHistoryResponse> {
@@ -77,7 +85,7 @@ export class SubtitleApiClient {
       method: 'GET',
       timeoutMs: JOB_HISTORY_TIMEOUT_MS,
       authToken,
-    });
+    }, guardSubtitleJobHistoryResponse);
   }
 
   public async enrichLearningToken(
@@ -89,13 +97,14 @@ export class SubtitleApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
       authToken,
-    });
+    }, guardLearningTokenResponse);
   }
 
   private async request<TResponse>(
     path: string,
     installId: string,
     init: Pick<RequestInit, 'method' | 'body'> & { timeoutMs?: number; authToken?: string },
+    guardResponse: (body: unknown) => TResponse,
   ): Promise<TResponse> {
     const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
     const controller = typeof init.timeoutMs === 'number' ? new AbortController() : undefined;
@@ -153,7 +162,7 @@ export class SubtitleApiClient {
       throw new TypeError('Backend returned invalid JSON.');
     }
 
-    return body as TResponse;
+    return guardResponse(body);
   }
 }
 

@@ -36,6 +36,8 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
+let cachedPopupJobHistory: SubtitleJobHistoryItem[] = [];
+let cachedPopupJobHistoryError: string | undefined;
 const JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
@@ -121,7 +123,7 @@ async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promi
     });
   }
 
-  return getPopupState({ syncBackend: true });
+  return getPopupState({ syncBackend: false });
 }
 
 async function generateSubtitlesFromPopup(): Promise<PopupState> {
@@ -458,12 +460,12 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     effectiveSession = await syncExtensionAccount(installId, effectiveSession);
   }
 
-  const history = effectiveSession && options.syncBackend
-    ? await listBackendJobHistory(installId, effectiveSession.plainTextToken)
-    : { jobs: [] as SubtitleJobHistoryItem[], error: undefined, sessionInvalid: false };
+  const history = await getPopupJobHistory(installId, effectiveSession, options.syncBackend);
 
   if (history.sessionInvalid) {
     effectiveSession = null;
+    cachedPopupJobHistory = [];
+    cachedPopupJobHistoryError = undefined;
   }
 
   const localState =
@@ -490,6 +492,34 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     jobHistory: history.jobs,
     jobHistoryError: history.error,
   };
+}
+
+async function getPopupJobHistory(
+  installId: string,
+  session: StoredExtensionSession | null,
+  syncBackend: boolean,
+): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string; sessionInvalid: boolean }> {
+  if (!session) {
+    cachedPopupJobHistory = [];
+    cachedPopupJobHistoryError = undefined;
+
+    return { jobs: [], error: undefined, sessionInvalid: false };
+  }
+
+  if (!syncBackend) {
+    return {
+      jobs: cachedPopupJobHistory,
+      error: cachedPopupJobHistoryError,
+      sessionInvalid: false,
+    };
+  }
+
+  const history = await listBackendJobHistory(installId, session.plainTextToken);
+
+  cachedPopupJobHistory = history.jobs;
+  cachedPopupJobHistoryError = history.error;
+
+  return history;
 }
 
 async function getPageSnapshotFromTab(tabId: number): Promise<PageSnapshot> {

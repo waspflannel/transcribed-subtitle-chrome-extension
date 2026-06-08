@@ -1,0 +1,27 @@
+﻿/* ============================ Responsive ============================ */
+@media (max-width: 360px) {
+  main {
+    padding: 0.62rem 0.6rem 0.85rem;
+  }
+
+  .app-header,
+  .tabs {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .tabs {
+    margin: 0.6rem 0.6rem 0;
+  }
+
+  .field-grid,
+  .facts,
+  .facts.account-facts,
+  .timing-control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tab {
+    font-size: 0.7rem;
+  }
+}

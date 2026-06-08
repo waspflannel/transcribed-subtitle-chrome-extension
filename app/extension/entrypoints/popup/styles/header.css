@@ -1,0 +1,67 @@
+﻿/* ============================== Header ============================== */
+.app-header {
+  align-items: center;
+  background: linear-gradient(180deg, rgba(20, 20, 20, 0.9), rgba(10, 10, 10, 0.72));
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.6rem;
+  justify-content: space-between;
+  padding: 0.7rem 0.85rem;
+}
+
+.brand {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.brand-mark {
+  align-items: center;
+  background: linear-gradient(155deg, var(--accent), var(--oxblood));
+  border: 1px solid var(--accent-line);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(216, 59, 59, 0.28);
+  color: #fff;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+
+.brand-text {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+.eyebrow {
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-pill {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-pill);
+  color: var(--accent-hover);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  max-width: 9rem;
+  overflow: hidden;
+  padding: 0.12rem 0.46rem;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+  width: max-content;
+}
+

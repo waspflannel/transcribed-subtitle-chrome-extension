@@ -1,0 +1,199 @@
+﻿/* =============================== Jobs =============================== */
+.job-section,
+.job-section-list {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.job-section-heading {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.36rem;
+}
+
+.job-section-heading h3 {
+  color: var(--text);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.job-section-heading span {
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  color: var(--accent-hover);
+  font-size: 0.62rem;
+  font-weight: 800;
+  min-width: 1.4rem;
+  padding: 0.1rem 0.4rem;
+  text-align: center;
+}
+
+.job-item {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.7rem;
+}
+
+.job-item header {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.job-title {
+  color: var(--text);
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.job-id,
+.muted,
+.empty-state {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.job-id {
+  margin-top: 0.1rem;
+}
+
+.empty-state {
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem;
+  text-align: center;
+}
+
+.job-badge,
+.media-badge {
+  border-radius: var(--radius-pill);
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 0.16rem 0.46rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.media-badge {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.job-badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--soft);
+}
+
+.job-badge.completed {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.job-badge.running,
+.job-badge.queued,
+.job-badge.processing {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+.job-badge.failed {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.job-type-row {
+  display: flex;
+}
+
+.job-meta,
+.job-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.job-meta span,
+.job-controls span {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--soft);
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+}
+
+.stage-timeline {
+  display: grid;
+  gap: 0.22rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stage-timeline li {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  height: 7px;
+  overflow: hidden;
+}
+
+.stage-timeline li span {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.stage-timeline li.done {
+  background: var(--accent-deep);
+}
+
+.stage-timeline li.current {
+  animation: status-pulse 1.2s ease-in-out infinite;
+  background: var(--accent-hover);
+}
+
+.stage-timeline li.failed {
+  background: var(--danger);
+}
+
+.job-message {
+  color: var(--soft);
+  font-size: 0.74rem;
+}
+
+.job-message.error-copy,
+.error-copy {
+  color: var(--danger);
+}
+
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.46rem;
+}
+
+.job-action-button {
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+}
+

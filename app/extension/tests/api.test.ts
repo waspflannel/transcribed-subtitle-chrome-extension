@@ -220,6 +220,32 @@ describe('SubtitleApiClient', () => {
       } satisfies Partial<SubtitleApiError>);
   });
 
+  it('rejects malformed successful backend responses before they enter extension state', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        {
+          jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+          youtubeVideoId: 'dQw4w9WgXcQ',
+          sourceLanguage: 'auto',
+          targetLanguage: 'fra',
+          enrichmentMode: 'on_demand',
+          includeRomanization: true,
+          includeTranslation: true,
+          status: 'completed',
+          stage: 'finalizing',
+          createdAt: '2026-04-30T00:00:00Z',
+          updatedAt: '2026-04-30T00:00:00Z',
+        },
+        200,
+      ),
+    );
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(client.getSubtitleJob(installId, authToken, '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001')).rejects.toThrow(
+      TypeError,
+    );
+  });
+
   it('maps stable backend errors to public release copy', () => {
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('unauthenticated', 'Token required.', 401)),
