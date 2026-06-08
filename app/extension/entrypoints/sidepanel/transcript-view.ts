@@ -43,7 +43,7 @@ export function bindTranscriptView(dom: {
     setData(nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
       cues = nextCues; settings = nextSettings; render();
     },
-    setActiveCue(cueId: string | null) { activeCueId = cueId; render(); },
+    setActiveCue(cueId: string | null) { if (cueId === activeCueId) return; activeCueId = cueId; render(); },
     focus() { dom.transcriptSearch.focus(); },
   };
 }

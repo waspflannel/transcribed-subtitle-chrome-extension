@@ -230,6 +230,12 @@ export default defineContentScript({
       stopWebVttTrack = null;
       stopVideoStateListeners = null;
       activeCue = null;
+      const clearedPage = parseYoutubePage(window.location.href);
+      if (clearedPage.supported) {
+        void browser.runtime
+          .sendMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: clearedPage.videoId })
+          .catch(() => {});
+      }
       activeVideo = null;
       studyHoverPaused = false;
       pendingTokenKeys.clear();

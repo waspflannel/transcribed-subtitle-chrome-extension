@@ -116,7 +116,7 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
       return { ok: true };
 
     case 'popup.seekToCue': {
-      const tab = await activeYoutubeTabId();
+      const tab = (await getActiveTab())?.id ?? null;
       if (tab !== null) {
         await sendTabMessage(tab, { type: 'background.seekToCue', cueId: message.cueId, mode: message.mode });
       }
@@ -701,11 +701,6 @@ async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
   });
 
   return activeTab;
-}
-
-async function activeYoutubeTabId(): Promise<number | null> {
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  return activeTab?.id ?? null;
 }
 
 async function sendTabMessage(tabId: number, message: RuntimeMessage): Promise<void> {
