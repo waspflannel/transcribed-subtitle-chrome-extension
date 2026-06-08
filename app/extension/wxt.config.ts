@@ -8,8 +8,12 @@ export default defineConfig({
     return {
       name: 'AI Language Subtitles',
       description: 'Generated subtitles and language-to-language word cards for public YouTube videos.',
-      permissions: ['activeTab', 'storage'],
+      action: {},
+      permissions: ['activeTab', 'storage', 'sidePanel'],
       host_permissions: ['*://*.youtube.com/*', backendApiHostPermission(backendApiBaseUrl)],
+      web_accessible_resources: [
+        { resources: ['fonts/*'], matches: ['*://*.youtube.com/*'] },
+      ],
     };
   },
 });

@@ -43,6 +43,14 @@ type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
 
 export default defineBackground(() => {
+  // Chrome: clicking the toolbar action opens the side panel. No-op where the API is
+  // absent (e.g. Firefox, which uses its native sidebar button), and overridden by the
+  // popup's default_popup until the popup entrypoint is removed.
+  const actionSidePanel = (browser as unknown as {
+    sidePanel?: { setPanelBehavior(options: { openPanelOnActionClick: boolean }): Promise<void> };
+  }).sidePanel;
+  void actionSidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!isRuntimeMessage(message)) {
       return false;
