@@ -24,7 +24,6 @@ import {
   generateButtonLabel,
   statusClass,
   statusLabel,
-  shortDisplayId,
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';

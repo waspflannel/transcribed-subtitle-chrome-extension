@@ -25,20 +25,6 @@ export function statusLabel(subtitleStateType: PopupState['subtitleState']['type
   return supported ? 'Ready to generate' : 'Unsupported page';
 }
 
-export function jobIdForState(subtitleState: PopupState['subtitleState']): string | null {
-  switch (subtitleState.type) {
-    case 'loading':
-    case 'error':
-      return subtitleState.jobId ? shortDisplayId(subtitleState.jobId) : null;
-
-    case 'ready':
-      return shortDisplayId(subtitleState.track.jobId);
-
-    case 'no-track':
-      return null;
-  }
-}
-
 export function videoDurationLabel(state: PopupState): string {
   const duration = videoDurationForState(state);
 
@@ -71,8 +57,4 @@ export function generateButtonLabel(
   }
 
   return 'Generate subtitles';
-}
-
-export function shortDisplayId(id: string): string {
-  return id.length > 13 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
 }
