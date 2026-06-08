@@ -2,16 +2,14 @@
 import { escapeHtml } from '../html';
 import type { LearningToken, SubtitleCue } from '../contracts';
 import { hasLearningMetadata, tokenKey } from '../track-tokens';
-import { EMPTY_INTERACTION, type OverlayInteractionState, type OverlayRenderState, type OverlayStatus } from './types';
+import { EMPTY_INTERACTION, type OverlayInteractionState, type OverlayRenderState } from './types';
 
 export function renderOverlayContent(
   state: OverlayRenderState,
   interaction: OverlayInteractionState = EMPTY_INTERACTION,
 ): string {
   const renderFrame = (railHtml: string): string => {
-    const visibleRail = state.settings.overlayVisible ? railHtml : '';
-
-    return `${visibleRail}${renderTranscriptPanel(state, interaction)}`;
+    return state.settings.overlayVisible ? railHtml : '';
   };
 
   if (!state.page.supported) {
@@ -190,147 +188,6 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
   return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${
     settings.blurTranslation ? ' tabindex="0" aria-label="Cue translation, focus to reveal blurred text"' : ''
   }>${escapeHtml(cue.translatedText)}</div>`;
-}
-
-function renderTranscriptPanel(state: OverlayRenderState, interaction: OverlayInteractionState): string {
-  if (!interaction.transcriptOpen) {
-    return '';
-  }
-
-  const query = interaction.transcriptSearchQuery ?? '';
-  const readyState = state.subtitleState.type === 'ready' ? state.subtitleState : null;
-  const cues = readyState ? filteredTranscriptCues(readyState.track.cues, query) : [];
-  const totalCueCount = readyState?.track.cues.length ?? 0;
-  const status = interaction.transcriptStatus ?? {
-    message: readyState
-      ? `${cues.length} of ${totalCueCount} cues`
-      : 'Generate subtitles before using the transcript.',
-    tone: 'info' as const,
-  };
-  const list = readyState
-    ? renderTranscriptCueList(cues, state.activeCue?.cueId ?? null, state.settings)
-    : '<p class="transcript-empty">No generated transcript is available for this video yet.</p>';
-
-  return `
-    <aside class="transcript-panel" data-transcript-panel role="complementary" aria-label="Generated transcript">
-      <header class="transcript-header">
-        <div>
-          <div class="transcript-title">Transcript</div>
-          <div class="transcript-summary">${escapeHtml(status.message)}</div>
-        </div>
-        <button
-          class="transcript-action"
-          type="button"
-          data-transcript-close
-          data-focus-key="transcript-close"
-          aria-label="Close transcript"
-        >Close</button>
-      </header>
-      <div class="transcript-search">
-        <label for="tse-transcript-search">Search cues</label>
-        <input
-          id="tse-transcript-search"
-          type="search"
-          value="${escapeHtml(query)}"
-          data-transcript-search
-          data-focus-key="transcript-search"
-          aria-describedby="tse-transcript-status"
-          autocomplete="off"
-        />
-      </div>
-      <div class="transcript-list" data-transcript-list role="list" aria-label="Generated cues">
-        ${list}
-      </div>
-      <div
-        id="tse-transcript-status"
-        class="transcript-status ${escapeHtml(status.tone)}"
-        role="status"
-        aria-live="polite"
-      >${escapeHtml(status.message)}</div>
-    </aside>
-  `;
-}
-
-function renderTranscriptCueList(
-  cues: readonly SubtitleCue[],
-  activeCueId: string | null,
-  settings: ExtensionSettings,
-): string {
-  if (cues.length === 0) {
-    return '<p class="transcript-empty">No cues match that search.</p>';
-  }
-
-  return cues.map((cue) => renderTranscriptCue(cue, cue.cueId === activeCueId, settings)).join('');
-}
-
-function renderTranscriptCue(cue: SubtitleCue, active: boolean, settings: ExtensionSettings): string {
-  const romanization = settings.showRomanization && cue.romanization
-    ? `<div class="transcript-romanization">${escapeHtml(cue.romanization)}</div>`
-    : '';
-  const translation =
-    settings.showTranslation && cue.translatedText.trim() !== cue.sourceText.trim()
-      ? `<div class="transcript-translation">${escapeHtml(cue.translatedText)}</div>`
-      : '';
-
-  return `
-    <article class="transcript-cue" role="listitem" aria-current="${active ? 'true' : 'false'}">
-      <div class="transcript-cue-header">
-        <span class="transcript-cue-index">Cue ${cue.index + 1}</span>
-        <span class="transcript-cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
-      </div>
-      <div class="transcript-cue-body">
-        <div class="transcript-source">${escapeHtml(cue.sourceText)}</div>
-        ${romanization}
-        ${translation}
-      </div>
-      <div class="transcript-cue-actions" aria-label="Cue ${cue.index + 1} actions">
-        ${transcriptActionButton('jump', cue, 'Jump')}
-        ${transcriptActionButton('replay', cue, 'Replay')}
-        ${transcriptActionButton('copy', cue, 'Copy')}
-        ${transcriptActionButton('save', cue, 'Save')}
-      </div>
-    </article>
-  `;
-}
-
-function transcriptActionButton(action: string, cue: SubtitleCue, label: string): string {
-  return `
-    <button
-      class="transcript-action"
-      type="button"
-      data-transcript-action="${escapeHtml(action)}"
-      data-cue-id="${escapeHtml(cue.cueId)}"
-      data-focus-key="transcript-${escapeHtml(cue.cueId)}-${escapeHtml(action)}"
-      aria-label="${escapeHtml(`${label} cue ${cue.index + 1}`)}"
-    >${escapeHtml(label)}</button>
-  `;
-}
-
-function filteredTranscriptCues(cues: readonly SubtitleCue[], query: string): readonly SubtitleCue[] {
-  const normalizedQuery = query.trim().toLowerCase();
-
-  if (normalizedQuery === '') {
-    return cues;
-  }
-
-  return cues.filter((cue) => transcriptSearchText(cue).includes(normalizedQuery));
-}
-
-function transcriptSearchText(cue: SubtitleCue): string {
-  return [
-    cue.sourceText,
-    cue.romanization ?? '',
-    cue.translatedText,
-    ...cue.tokens.flatMap((token) => [
-      token.text,
-      token.normalizedText,
-      token.romanization ?? '',
-      token.gloss ?? '',
-      token.translation ?? '',
-    ]),
-  ]
-    .join(' ')
-    .toLowerCase();
 }
 
 function studyBlurClass(enabled: boolean, layer: 'token' | 'romanization' | 'translation'): string {

@@ -35,9 +35,7 @@ export default defineContentScript({
 
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
-      onJumpCue: (cue) => jumpToCue(cue),
       onReplayCue: (cue) => replayCue(cue),
-      onSaveCue: (cue) => showSaveCuePlaceholder(cue),
       onStudyHoverEnd: () => resumeVideoAfterStudyHover(),
       onTokenPreview: () => pauseVideoForStudy(),
       onTokenPreviewEnd: () => resumeVideoAfterStudyHover(),
@@ -113,6 +111,17 @@ export default defineContentScript({
         return false;
       }
 
+      if (message.type === 'background.seekToCue') {
+        if (subtitleState.type === 'ready') {
+          const cue = subtitleState.track.cues.find((c) => c.cueId === message.cueId);
+          if (cue) {
+            if (message.mode === 'replay') replayCue(cue); else jumpToCue(cue);
+          }
+        }
+        sendResponse({ ok: true });
+        return false;
+      }
+
       return false;
     }
 
@@ -165,12 +174,10 @@ export default defineContentScript({
 
           return;
 
-        case 'toggle-transcript': {
-          const open = overlay.toggleTranscript();
-
-          overlay.showActionStatus(open ? 'Transcript opened.' : 'Transcript closed.', 'info');
+        case 'toggle-transcript':
+          void browser.runtime.sendMessage({ type: 'content.focusPanelTranscript' }).catch(() => {});
+          overlay.showActionStatus('Transcript is in the side panel.', 'info');
           return;
-        }
 
         case 'copy-current-cue':
           await copyCueFromShortcut();
@@ -227,7 +234,6 @@ export default defineContentScript({
       studyHoverPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
-      overlay.setTranscriptOpen(false);
     }
 
     function clearSubtitles(): void {
@@ -305,6 +311,14 @@ export default defineContentScript({
         onCueChange(change) {
           activeCue = change.activeCue;
           updateOverlay();
+          const page = parseYoutubePage(window.location.href);
+          if (page.supported) {
+            void browser.runtime.sendMessage({
+              type: 'content.activeCueChanged',
+              cueId: change.activeCue?.cueId ?? null,
+              youtubeVideoId: page.videoId,
+            }).catch(() => {});
+          }
         },
         logger: webVttTrackLogger,
       });
