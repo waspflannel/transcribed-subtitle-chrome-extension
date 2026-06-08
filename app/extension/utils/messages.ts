@@ -110,7 +110,13 @@ export type RuntimeMessage =
   | {
       type: 'background.subtitleStateChanged';
       subtitleState: SubtitleState;
-    };
+    }
+  | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
+  | { type: 'background.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
+  | { type: 'popup.seekToCue'; cueId: string; mode: 'jump' | 'replay' }
+  | { type: 'background.seekToCue'; cueId: string; mode: 'jump' | 'replay' }
+  | { type: 'content.focusPanelTranscript' }
+  | { type: 'background.focusTranscript' };
 
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   if (!isRecord(value) || typeof value.type !== 'string') {
@@ -146,6 +152,18 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
     case 'background.subtitleStateChanged':
       return isSubtitleStateValue(value.subtitleState);
+
+    case 'content.focusPanelTranscript':
+    case 'background.focusTranscript':
+      return true;
+
+    case 'content.activeCueChanged':
+    case 'background.activeCueChanged':
+      return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId');
+
+    case 'popup.seekToCue':
+    case 'background.seekToCue':
+      return hasString(value, 'cueId') && (value.mode === 'jump' || value.mode === 'replay');
 
     default:
       return false;

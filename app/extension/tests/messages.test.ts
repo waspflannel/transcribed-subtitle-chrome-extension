@@ -61,3 +61,26 @@ describe('runtime message validation', () => {
     ).toBe(false);
   });
 });
+
+describe('isRuntimeMessage — phase 2 transcript relay', () => {
+  it('accepts content.activeCueChanged with a cueId or null', () => {
+    expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: 'v' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1' })).toBe(false);
+  });
+
+  it('accepts background.activeCueChanged', () => {
+    expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v' })).toBe(true);
+  });
+
+  it('accepts popup.seekToCue and background.seekToCue with a valid mode', () => {
+    expect(isRuntimeMessage({ type: 'popup.seekToCue', cueId: 'cue-1', mode: 'jump' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'background.seekToCue', cueId: 'cue-1', mode: 'replay' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'popup.seekToCue', cueId: 'cue-1', mode: 'nope' })).toBe(false);
+  });
+
+  it('accepts the transcript-focus signals', () => {
+    expect(isRuntimeMessage({ type: 'content.focusPanelTranscript' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'background.focusTranscript' })).toBe(true);
+  });
+});
