@@ -67,7 +67,7 @@ function jobHistoryItemHtml(job: PopupState['jobHistory'][number], state: PopupS
     <article class="job-item">
       <header>
         <div>
-          <span class="job-title">${escapeHtml(job.youtubeVideoId)}</span>
+          <a class="job-title job-open-link" href="${escapeHtml(job.youtubeUrl)}" target="_blank" rel="noopener">${escapeHtml(job.youtubeVideoId)}</a>
           <p class="job-id">Job ${escapeHtml(telemetry.publicJobId)}</p>
         </div>
         <span class="job-badge ${job.status}">${escapeHtml(job.status)}</span>
