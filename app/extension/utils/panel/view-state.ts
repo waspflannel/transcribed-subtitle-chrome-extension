@@ -1,6 +1,6 @@
 import type { PopupState } from '../messages';
 
-export type PanelView = 'generate' | 'study' | 'jobs' | 'account';
+export type PanelView = 'generate' | 'study' | 'transcript' | 'jobs' | 'account';
 
 export function selectDefaultView(state: PopupState): PanelView {
   if (state.accountState.status !== 'authenticated') {

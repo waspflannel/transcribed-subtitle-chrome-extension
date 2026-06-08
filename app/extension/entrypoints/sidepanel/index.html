@@ -31,6 +31,15 @@
           </svg>
           <span class="tip">Study</span>
         </button>
+        <button class="rbtn" type="button" data-tab="transcript" id="tab-transcript" aria-selected="false" aria-controls="panel-transcript">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true">
+            <line x1="4" y1="6" x2="20" y2="6" />
+            <line x1="4" y1="10" x2="20" y2="10" />
+            <line x1="4" y1="14" x2="14" y2="14" />
+            <line x1="4" y1="18" x2="17" y2="18" />
+          </svg>
+          <span class="tip">Transcript</span>
+        </button>
         <span class="rspacer"></span>
         <button class="rbtn" type="button" data-tab="jobs" id="tab-jobs" aria-selected="false" aria-controls="panel-jobs">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="butt" stroke-linejoin="miter" aria-hidden="true">
@@ -206,6 +215,17 @@
               </div>
               <div class="shortcut-list" data-shortcut-help aria-label="Keyboard shortcuts"></div>
             </section>
+          </section>
+
+          <!-- =========================== TRANSCRIPT ========================== -->
+          <section class="view" data-panel="transcript" id="panel-transcript" role="tabpanel" aria-labelledby="tab-transcript" tabindex="0">
+            <div class="sec">
+              <label class="search-field">
+                <input type="search" data-transcript-search placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" />
+              </label>
+            </div>
+            <div class="transcript-list" data-transcript-list role="list" aria-label="Generated cues"></div>
+            <p class="transcript-status muted" data-transcript-status role="status" aria-live="polite"></p>
           </section>
 
           <!-- ============================== JOBS ============================= -->
