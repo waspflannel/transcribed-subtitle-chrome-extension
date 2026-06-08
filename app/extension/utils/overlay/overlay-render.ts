@@ -397,21 +397,21 @@ function renderTokenPreview(token: LearningToken, settings: ExtensionSettings): 
 }
 
 function tokenDetailRows(token: LearningToken, settings: ExtensionSettings): { label: string; value: string }[] {
-  const rows: { label: string; value: string }[] = [
-    { label: 'Text', value: token.text },
-    { label: 'Lemma', value: token.lemma ?? '' },
-    { label: 'Root', value: token.root ?? '' },
-    { label: 'Part of speech', value: token.partOfSpeech ?? '' },
-  ];
+  const rows: { label: string; value: string }[] = [{ label: 'Text', value: token.text }];
 
   if (settings.showRomanization) {
     rows.push({ label: 'Romanization', value: token.romanization ?? '' });
   }
 
+  rows.push({ label: 'Translation', value: token.translation ?? '' });
+
   if (settings.showGloss) {
-    rows.push({ label: 'Gloss', value: token.gloss ?? token.translation ?? '' });
+    rows.push({ label: 'Gloss', value: token.gloss ?? '' });
   }
 
+  rows.push({ label: 'Part of speech', value: token.partOfSpeech ?? '' });
+  rows.push({ label: 'Lemma', value: token.lemma ?? '' });
+  rows.push({ label: 'Root', value: token.root ?? '' });
   rows.push({ label: 'Usage note', value: token.usageNote ?? '' });
 
   return rows.filter((row) => row.value.trim() !== '');
