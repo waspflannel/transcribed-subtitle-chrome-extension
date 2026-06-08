@@ -14,19 +14,19 @@ import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/popup-progress';
 import { accountStateFromJobHistory, formatResetDate } from '../../utils/popup-saas-state';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
-import { accountFeatureListHtml } from '../popup/render/account';
-import { renderJobHistory } from '../popup/render/job-history';
-import { renderLanguagePicker } from '../popup/render/language-picker';
-import { shortcutHelpHtml } from '../popup/render/shortcuts';
-import { setupTabs, showTab } from '../popup/tabs';
-import { bindTimingOffsetControl } from '../popup/timing-control';
+import { accountFeatureListHtml } from './render/account';
+import { renderJobHistory } from './render/job-history';
+import { renderLanguagePicker } from './render/language-picker';
+import { shortcutHelpHtml } from './render/shortcuts';
+import { setupTabs, showTab } from './tabs';
+import { bindTimingOffsetControl } from './timing-control';
 import {
   generateButtonLabel,
   statusClass,
   statusLabel,
   shortDisplayId,
   videoDurationLabel,
-} from '../popup/view-model';
+} from './view-model';
 import { getPanelDom } from './dom';
 
 type PopupRequest =

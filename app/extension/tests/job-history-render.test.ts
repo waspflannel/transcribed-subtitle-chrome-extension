@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 
-import { renderJobHistory } from '../entrypoints/popup/render/job-history';
+import { renderJobHistory } from '../entrypoints/sidepanel/render/job-history';
 import { accountStateFromJobHistory } from '../utils/popup-saas-state';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { PopupState } from '../utils/messages';
