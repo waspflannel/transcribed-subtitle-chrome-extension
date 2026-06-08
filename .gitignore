@@ -19,6 +19,7 @@ build/
 app/backend/.codex/
 coverage/
 database/*.sqlite
+.superpowers/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

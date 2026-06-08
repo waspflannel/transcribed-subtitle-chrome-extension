@@ -1,0 +1,1275 @@
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/geist-sans/700.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+/* =========================================================================
+   Sharp side panel — square corners, hairline rules, mono micro-labels.
+   Styles the REAL reused popup markup/classes (native select/checkbox/range,
+   .surface/.field/.toggle/.primary-button/.facts/.job-item/.language-picker…),
+   not the prototype's mocked .seg/.chk/.sw demo divs.
+   View visibility is driven by the [hidden] attribute (showTab sets
+   panel.hidden); .view is normally visible.
+   ========================================================================= */
+
+:root {
+  --bg: #0a0a0a;
+  --panel: #0c0c0c;
+  --surface: #141414;
+  --surface-2: #191919;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.17);
+  --text: #f1f1f1;
+  --muted: #b0b0b0;
+  --faint: #787878;
+  --accent: #d83b3b;
+  --accent-hover: #e85d5d;
+  --accent-soft: rgba(216, 59, 59, 0.12);
+  --accent-line: rgba(216, 59, 59, 0.42);
+  --sans: 'Geist Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+
+  /* Status accents (sharp neutral palette + crimson). */
+  --ok: #5ec99a;
+  --ok-line: rgba(94, 201, 154, 0.42);
+  --ok-soft: rgba(94, 201, 154, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(110% 60% at 88% -8%, rgba(216, 59, 59, 0.1), transparent 55%),
+    radial-gradient(80% 50% at 0% 0%, rgba(127, 29, 29, 0.1), transparent 50%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-synthesis: none;
+  line-height: 1.45;
+  min-width: 320px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+p,
+dl,
+dd,
+dt {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+/* Square focus ring everywhere. */
+:where(button, input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+/* ============================== Layout ============================== */
+.panel {
+  background: var(--panel);
+  display: flex;
+  height: 100vh;
+  min-height: 520px;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* ----- Left icon rail ----- */
+.rail-nav {
+  align-items: center;
+  background: #080808;
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 0;
+  width: 56px;
+}
+
+.brandmark {
+  align-items: center;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  flex: 0 0 auto;
+  height: 26px;
+  justify-content: center;
+  margin-bottom: 14px;
+  width: 26px;
+}
+
+.brandmark svg {
+  display: block;
+}
+
+.rbtn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--faint);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  height: 40px;
+  justify-content: center;
+  position: relative;
+  transition: color 120ms ease, background 120ms ease;
+  width: 40px;
+}
+
+.rbtn svg {
+  display: block;
+}
+
+.rbtn:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+}
+
+.rbtn.active,
+.rbtn[aria-selected='true'] {
+  color: var(--accent);
+}
+
+/* Left accent bar on the active rail item. */
+.rbtn.active::before,
+.rbtn[aria-selected='true']::before {
+  background: var(--accent);
+  bottom: 6px;
+  content: '';
+  left: -14px;
+  position: absolute;
+  top: 6px;
+  width: 2px;
+}
+
+/* Hover tooltip. */
+.rbtn .tip {
+  background: #000;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  left: 48px;
+  letter-spacing: 0.12em;
+  opacity: 0;
+  padding: 4px 7px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: uppercase;
+  transition: opacity 120ms ease;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.rbtn:hover .tip,
+.rbtn:focus-visible .tip {
+  opacity: 1;
+}
+
+.rspacer {
+  flex: 1;
+}
+
+/* ----- Body column ----- */
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ----- Sticky "now playing" header ----- */
+.np {
+  align-items: flex-start;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 14px 14px 14px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.np-text {
+  min-width: 0;
+}
+
+.np .ey {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.np .title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.np .meta {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.np-collapse {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 15px;
+  height: 27px;
+  justify-content: center;
+  line-height: 1;
+  width: 27px;
+}
+
+.np-collapse:hover {
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+
+/* ----- Scroll region ----- */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-color: var(--accent-line) transparent;
+  scrollbar-width: thin;
+}
+
+.scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--accent-line);
+  border: 3px solid var(--panel);
+}
+
+.scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ============================== Views / sections ============================== */
+.view {
+  display: block;
+  padding: 4px 0 18px;
+}
+
+/* Hairline-divided section blocks (replace rounded .surface cards). */
+.sec {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 0.72rem;
+  padding: 15px 16px;
+}
+
+.sec:last-child {
+  border-bottom: none;
+}
+
+.status-surface {
+  background: linear-gradient(180deg, var(--accent-soft), transparent 60%);
+  gap: 0.6rem;
+}
+
+/* ----- Section heading: mono uppercase micro-label + sublede ----- */
+.section-heading {
+  display: grid;
+  gap: 0.34rem;
+}
+
+.section-heading h2,
+.sec > h2 {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.section-heading p,
+.privacy-copy,
+.sublede {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.privacy-copy,
+.note {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.01em;
+  line-height: 1.6;
+}
+
+/* ============================== Status line ============================== */
+.status-line {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.status {
+  align-items: center;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  gap: 0.5rem;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+  padding: 0.42rem 0.62rem;
+  text-transform: uppercase;
+}
+
+.status::before {
+  content: '';
+  flex: 0 0 auto;
+  height: 7px;
+  width: 7px;
+}
+
+.status.idle {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.status.idle::before {
+  background: var(--faint);
+}
+
+.status.ok {
+  background: var(--ok-soft);
+  border-color: var(--ok-line);
+  color: var(--ok);
+}
+
+.status.ok::before {
+  background: var(--ok);
+}
+
+.status.loading {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+.status.loading::before {
+  animation: status-pulse 1.1s ease-in-out infinite;
+  background: var(--accent-hover);
+}
+
+.status.error {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+.status.error::before {
+  background: var(--accent);
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* ============================== Progress ============================== */
+.progress {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: 1fr auto;
+}
+
+.progress span,
+.progress strong {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.progress strong {
+  color: var(--accent-hover);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.progress-bar {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+}
+
+.progress-bar span {
+  background: var(--accent);
+  display: block;
+  height: 100%;
+  transition: width 200ms ease;
+}
+
+/* ============================== Fields ============================== */
+.field {
+  color: var(--muted);
+  display: grid;
+  font-size: 11px;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.field > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.field-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.language-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.language-picker,
+.account-form,
+.feature-list,
+.jobs-list {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* ============================== Native inputs (sharp) ============================== */
+input[type='search'],
+input[type='email'],
+input[type='password'],
+input[type='number'],
+input[type='text'],
+select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 13px;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0 12px;
+  transition: border-color 130ms ease, box-shadow 130ms ease;
+  width: 100%;
+}
+
+input[type='number'] {
+  padding: 0 8px;
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled) {
+  border-color: var(--accent-line);
+}
+
+input:focus-visible,
+select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  outline: none;
+}
+
+input::placeholder {
+  color: var(--faint);
+}
+
+input:disabled,
+select:disabled {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+/* Custom square caret for selects (two chevron strokes). */
+select {
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) center, calc(100% - 10px) center;
+  background-repeat: no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  cursor: pointer;
+  padding-right: 1.8rem;
+}
+
+select:hover:not(:disabled) {
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent-hover) 50%),
+    linear-gradient(135deg, var(--accent-hover) 50%, transparent 50%);
+}
+
+select option {
+  background: #121212;
+  color: var(--text);
+}
+
+/* ============================== Checkboxes / toggles ============================== */
+.option-grid {
+  display: grid;
+  gap: 0.46rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Toggle = full-width hairline row with a square checkbox; not a rounded card. */
+.toggle {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  gap: 0.6rem;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.toggle:hover {
+  border-color: var(--line-2);
+}
+
+.toggle:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.toggle:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.toggle > span {
+  min-width: 0;
+}
+
+/* Custom square checkbox (sharp, crimson when checked). */
+input[type='checkbox'] {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line-2);
+  cursor: pointer;
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 0;
+  position: relative;
+  transition: background 120ms ease, border-color 120ms ease;
+  width: 18px;
+}
+
+input[type='checkbox']:hover:not(:disabled) {
+  border-color: var(--accent-line);
+}
+
+input[type='checkbox']:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Checkmark. */
+input[type='checkbox']:checked::after {
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  content: '';
+  height: 9px;
+  left: 5px;
+  position: absolute;
+  top: 1px;
+  transform: rotate(45deg);
+  width: 5px;
+}
+
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+input[type='checkbox']:disabled {
+  cursor: not-allowed;
+}
+
+/* ============================== Range / timing ============================== */
+.timing-control {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(0, 1fr) 4.5rem auto;
+}
+
+input[type='range'] {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 18px;
+  min-width: 0;
+  width: 100%;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  background: var(--line-2);
+  height: 2px;
+}
+
+input[type='range']::-moz-range-track {
+  background: var(--line-2);
+  height: 2px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  background: var(--accent);
+  border: 0;
+  height: 14px;
+  margin-top: -6px;
+  width: 14px;
+}
+
+input[type='range']::-moz-range-thumb {
+  background: var(--accent);
+  border: 0;
+  border-radius: 0;
+  height: 14px;
+  width: 14px;
+}
+
+input[type='range']:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+output {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* ============================== Buttons ============================== */
+.primary-button,
+.secondary-button,
+.job-action-button {
+  align-items: center;
+  border-radius: 0;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.4rem;
+  justify-content: center;
+  text-align: center;
+  transition: background 130ms ease, border-color 130ms ease, color 130ms ease;
+}
+
+/* Filled crimson primary. */
+.primary-button {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #fff;
+  font-family: var(--sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  min-height: 44px;
+  padding: 0 0.9rem;
+  width: 100%;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Thin square outline secondary. */
+.secondary-button,
+.job-action-button {
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  min-height: 40px;
+  padding: 0 0.8rem;
+}
+
+.secondary-button:hover:not(:disabled),
+.job-action-button:hover:not(:disabled) {
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+
+/* Crimson-outline danger. */
+.danger {
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+.danger:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.button-row .secondary-button {
+  flex: 1 1 auto;
+}
+
+/* ============================== Language picker ============================== */
+.selected-language {
+  align-items: center;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  font-weight: 500;
+  gap: 0.4rem;
+  min-height: 38px;
+  min-width: 0;
+  padding: 0.42rem 0.6rem;
+}
+
+.language-code {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+.language-options {
+  display: grid;
+  gap: 0.34rem;
+  max-height: 8.4rem;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+  scrollbar-color: var(--accent-line) transparent;
+  scrollbar-width: thin;
+}
+
+.language-options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.language-options::-webkit-scrollbar-thumb {
+  background: var(--accent-line);
+}
+
+.language-option {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: space-between;
+  min-height: 40px;
+  min-width: 0;
+  padding: 0.36rem 0.55rem;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+  width: 100%;
+}
+
+.language-option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent-line);
+}
+
+.language-option.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.language-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.language-option-main {
+  display: grid;
+  font-size: 13px;
+  gap: 0.04rem;
+  min-width: 0;
+}
+
+/* ============================== Badges ============================== */
+.language-badge,
+.media-badge,
+.job-badge {
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  padding: 0.16rem 0.44rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.language-badge.auto,
+.language-badge.excellent,
+.language-badge.high,
+.media-badge {
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+.language-badge.good,
+.language-badge.moderate {
+  border-color: var(--line-2);
+  color: var(--muted);
+}
+
+/* ============================== Jobs ============================== */
+.job-section,
+.job-section-list {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.job-section-heading {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 0.4rem;
+}
+
+.job-section-heading h3 {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.job-section-heading span {
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  min-width: 1.4rem;
+  padding: 0.1rem 0.4rem;
+  text-align: center;
+}
+
+.job-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--line-2);
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+}
+
+.job-item header {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.job-title {
+  color: var(--text);
+  display: block;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+
+.job-open-link:hover {
+  color: var(--accent-hover);
+}
+
+.job-id,
+.muted,
+.empty-state {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.job-id {
+  color: var(--faint);
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  margin-top: 0.16rem;
+}
+
+.empty-state {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--line-2);
+  color: var(--faint);
+  padding: 0.8rem;
+  text-align: center;
+}
+
+.job-badge.completed {
+  border-color: var(--ok-line);
+  color: var(--ok);
+}
+
+.job-badge.running,
+.job-badge.queued,
+.job-badge.processing {
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+.job-badge.failed {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.job-type-row {
+  display: flex;
+}
+
+.job-meta,
+.job-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.job-meta span,
+.job-controls span {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.4rem;
+  text-transform: uppercase;
+}
+
+.stage-timeline {
+  display: grid;
+  gap: 0.22rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stage-timeline li {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  height: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.stage-timeline li span {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.stage-timeline li.done {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.stage-timeline li.current {
+  animation: status-pulse 1.2s ease-in-out infinite;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.stage-timeline li.failed {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.job-message {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.job-message.error-copy,
+.error-copy {
+  color: var(--accent-hover);
+}
+
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.46rem;
+}
+
+.job-action-button {
+  flex: 1 1 auto;
+  font-size: 11.5px;
+  min-height: 36px;
+}
+
+/* ============================== Facts ============================== */
+.facts {
+  display: grid;
+  gap: 0.46rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.facts.account-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.facts div {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.5rem 0.55rem;
+}
+
+.facts dt {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ============================== Usage meter ============================== */
+.usage-meter {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.usage-meter-label {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.usage-meter-label span,
+.usage-meter-label strong {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.usage-meter-label strong {
+  color: var(--accent-hover);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.usage-bar {
+  height: 6px;
+}
+
+/* ============================== Account feedback / features ============================== */
+.account-feedback {
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0.5rem 0.62rem;
+}
+
+.account-feedback.info {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--line-2);
+  color: var(--muted);
+}
+
+.account-feedback.success {
+  background: var(--ok-soft);
+  border-color: var(--ok-line);
+  color: var(--ok);
+}
+
+.account-feedback.error {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+.feature-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 0.5rem;
+  justify-content: space-between;
+  padding: 0.46rem 0.6rem;
+}
+
+.feature-row strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ============================== Shortcuts ============================== */
+.shortcut-list {
+  display: grid;
+  gap: 0.34rem;
+  min-width: 0;
+}
+
+.shortcut-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  display: grid;
+  font-family: var(--mono);
+  gap: 0.44rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 0.44rem 0.55rem;
+}
+
+.shortcut-row span {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-row kbd {
+  background: #000;
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 0.16rem 0.42rem;
+  white-space: nowrap;
+}
+
+/* ============================== Responsive ============================== */
+@media (max-width: 360px) {
+  .field-grid,
+  .facts,
+  .facts.account-facts,
+  .timing-control,
+  .option-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sec {
+    padding: 13px 12px;
+  }
+
+  .np {
+    padding: 12px 12px 12px 13px;
+  }
+}

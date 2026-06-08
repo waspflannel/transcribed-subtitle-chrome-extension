@@ -6,6 +6,11 @@
     $robotsValue = $robots ?? 'index,follow';
     $bodyClassValue = $bodyClass ?? 'marketing-body';
     $socialImage = $socialImageUrl ?? null;
+    $siteCssPaths = [
+        public_path('css/site.css'),
+        ...glob(public_path('css/site/*.css')),
+    ];
+    $siteCssVersion = max(array_map(static fn (string $path): int => is_file($path) ? filemtime($path) : 0, $siteCssPaths));
 @endphp
 <!doctype html>
 <html lang="en">
@@ -34,11 +39,14 @@
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
         <script>document.documentElement.classList.add('has-js');</script>
-        <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ filemtime(public_path('css/site.css')) }}">
-        <script defer src="{{ asset('js/hermes-desktop.js') }}?v={{ filemtime(public_path('js/hermes-desktop.js')) }}"></script>
+        <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ $siteCssVersion }}">
+        @stack('styles')
+        <script defer src="{{ asset('js/site-interactions.js') }}?v={{ filemtime(public_path('js/site-interactions.js')) }}"></script>
+        @stack('scripts')
     </head>
     <body class="@yield('body_class', $bodyClassValue)">
-        <img class="site-texture" src="{{ asset('img/desktop/filler-bg0.webp') }}" alt="" aria-hidden="true">
+        <x-layout.skip-link />
+        @stack('body_start')
         <header class="site-header" id="navbar">
             <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
                 <span class="brand-mark" aria-hidden="true">TS</span>
@@ -50,6 +58,12 @@
                 <a href="{{ route('marketing.pricing') }}">Pricing</a>
                 <a href="{{ route('marketing.faq') }}">FAQ</a>
                 <a href="{{ route('marketing.support') }}">Support</a>
+                @auth
+                    <a class="site-nav-action" href="{{ route('dashboard') }}">Dashboard</a>
+                @else
+                    <a class="site-nav-action" href="{{ route('login') }}">Sign in</a>
+                    <a class="site-nav-action nav-cta" href="{{ route('marketing.home') }}#download">Download</a>
+                @endauth
             </nav>
             <div class="site-actions">
                 @auth
@@ -61,7 +75,7 @@
             </div>
         </header>
 
-        <main>
+        <main id="main-content" tabindex="-1">
             @yield('content')
         </main>
 

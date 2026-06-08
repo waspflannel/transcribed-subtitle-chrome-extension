@@ -17,8 +17,14 @@
   },
   "devDependencies": {
     "@transcribed-subtitle-extension/contracts": "file:../../packages/contracts",
+    "@types/jsdom": "^28.0.3",
+    "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.5",
     "wxt": "^0.20.25"
+  },
+  "dependencies": {
+    "@fontsource/geist-sans": "^5.2.5",
+    "@fontsource/ibm-plex-mono": "^5.2.7"
   }
 }

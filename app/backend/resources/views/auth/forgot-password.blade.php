@@ -10,20 +10,13 @@
         <p class="status">{{ session('status') }}</p>
     @endif
 
-    @if ($errors->any())
-        <ul class="error-list">
-            @foreach ($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    @endif
+    <x-form.error-list :errors="$errors" />
 
     <form method="post" action="{{ route('password.email') }}">
         @csrf
-        <label>
-            Email
+        <x-form.field label="Email">
             <input type="email" name="email" value="{{ old('email') }}" autocomplete="email" required>
-        </label>
+        </x-form.field>
         <div class="actions">
             <a class="button-link" href="{{ route('login') }}">Back to sign in</a>
             <button type="submit">Send reset link</button>

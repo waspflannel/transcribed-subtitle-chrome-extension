@@ -10,24 +10,16 @@
         <p class="status">{{ session('status') }}</p>
     @endif
 
-    @if ($errors->any())
-        <ul class="error-list">
-            @foreach ($errors->all() as $error)
-                <li>{{ $error }}</li>
-            @endforeach
-        </ul>
-    @endif
+    <x-form.error-list :errors="$errors" />
 
     <form method="post" action="{{ route('login.store') }}">
         @csrf
-        <label>
-            Email
+        <x-form.field label="Email">
             <input type="email" name="email" value="{{ old('email') }}" autocomplete="email" required>
-        </label>
-        <label>
-            Password
+        </x-form.field>
+        <x-form.field label="Password">
             <input type="password" name="password" autocomplete="current-password" required>
-        </label>
+        </x-form.field>
         <label>
             <span>
                 <input type="checkbox" name="remember" value="1">

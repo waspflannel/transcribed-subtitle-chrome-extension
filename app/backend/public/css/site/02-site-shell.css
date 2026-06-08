@@ -1,0 +1,134 @@
+﻿.site-header,
+.site-footer,
+.section,
+.page-hero,
+.workspace,
+.auth-header,
+.auth-shell,
+.why-section {
+    padding-left: max(20px, calc((100vw - var(--content)) / 2));
+    padding-right: max(20px, calc((100vw - var(--content)) / 2));
+}
+
+.skip-link {
+    background: var(--brass-bright);
+    border-radius: 0 0 6px 6px;
+    color: var(--ink);
+    font-weight: 800;
+    left: max(20px, calc((100vw - var(--content)) / 2));
+    padding: 10px 14px;
+    position: fixed;
+    top: 0;
+    transform: translateY(-120%);
+    transition: transform 160ms ease;
+    z-index: 1000;
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+.site-header {
+    align-items: center;
+    background: transparent;
+    border-bottom: 1px solid transparent;
+    display: grid;
+    gap: 18px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    left: 0;
+    min-height: 64px;
+    position: fixed;
+    right: 0;
+    top: 0;
+    transition:
+        background 240ms ease,
+        border-color 240ms ease,
+        backdrop-filter 240ms ease;
+    z-index: 100;
+}
+
+.site-header.scrolled {
+    background: rgba(5, 5, 5, 0.82);
+    backdrop-filter: blur(20px) saturate(140%);
+    border-bottom-color: var(--line-dark);
+}
+
+.site-header > *,
+.brand > span,
+.site-actions,
+.hero > *,
+.hero-copy {
+    min-width: 0;
+}
+
+.brand,
+.site-nav,
+.site-actions,
+.hero-actions,
+.action-stack,
+.horizontal-actions {
+    align-items: center;
+    display: flex;
+}
+
+.brand {
+    color: var(--ivory);
+    font-weight: 800;
+    gap: 10px;
+    letter-spacing: 0;
+    text-decoration: none;
+}
+
+.brand span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.brand-mark {
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid rgba(216, 59, 59, 0.48);
+    border-radius: 6px;
+    color: var(--brass-bright);
+    display: inline-flex;
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 800;
+    height: 32px;
+    justify-content: center;
+    letter-spacing: 0;
+    width: 38px;
+}
+
+.site-nav {
+    gap: 22px;
+    justify-content: center;
+}
+
+.site-nav a,
+.site-footer a,
+.text-link,
+.button-link {
+    color: var(--paper-muted);
+    font-weight: 800;
+    text-decoration: none;
+    transition: color 150ms ease;
+}
+
+.site-nav a:hover,
+.site-footer a:hover,
+.text-link:hover,
+.button-link:hover {
+    color: var(--brass-bright);
+}
+
+.site-actions {
+    gap: 12px;
+    justify-content: end;
+}
+
+.site-nav-action {
+    display: none;
+}
+

@@ -1,0 +1,235 @@
+﻿/* ============================================================
+   CRIMSON RETHEME - Hermes-style buttons, alternating feature
+   rows, dark legal pages.
+   ============================================================ */
+
+/* ---- Buttons: Hermes style (crimson fill + glow, sentence case, sans) ---- */
+.marketing-body .button,
+.marketing-body button,
+.hermes-landing-body .button,
+.hermes-landing-body button,
+.hermes-landing-body .da-button,
+.hermes-landing-body .da-final-cta .da-button {
+    background: var(--brass-bright);
+    border: 1px solid var(--brass-bright);
+    border-radius: 0;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: none;
+}
+
+.marketing-body .button:hover,
+.marketing-body button:hover,
+.hermes-landing-body .button:hover,
+.hermes-landing-body button:hover,
+.hermes-landing-body .da-button:hover,
+.hermes-landing-body .da-final-cta .da-button:hover {
+    background: #e85d5d;
+    border-color: #e85d5d;
+    box-shadow: 0 0 24px rgba(216, 59, 59, 0.45);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.marketing-body .button-secondary,
+.hermes-landing-body .button-secondary {
+    background: transparent;
+    border-color: var(--line-dark);
+    color: var(--ivory);
+}
+
+.marketing-body .button-secondary:hover,
+.hermes-landing-body .button-secondary:hover {
+    background: rgba(216, 59, 59, 0.1);
+    border-color: var(--brass-bright);
+    color: var(--ivory);
+}
+
+.marketing-body .button-small,
+.hermes-landing-body .button-small {
+    font-size: 0.86rem;
+}
+
+/* ---- Hero lede: clean body sans (not display) ---- */
+.hermes-landing-body .da-hero-lede-center {
+    font-family: var(--font-display);
+    font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+    font-weight: 400;
+    line-height: 1.6;
+}
+
+/* ---- Feature rows: Hermes-style alternating full-width flow ---- */
+.hermes-landing-body .da-features {
+    background: var(--hermes-bg);
+}
+
+.hermes-landing-body .feature-row {
+    border-top: 1px solid var(--hermes-border);
+    padding: 80px 0;
+}
+
+.hermes-landing-body .feature-row:first-child {
+    border-top: none;
+}
+
+.hermes-landing-body .feature-row:nth-child(even) {
+    background: var(--hermes-surface-1);
+}
+
+.hermes-landing-body .feature-row-inner {
+    align-items: center;
+    display: grid;
+    gap: 64px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+    margin: 0 auto;
+    max-width: var(--hermes-content);
+    padding: 0 48px;
+}
+
+.hermes-landing-body .feature-row:nth-child(even) .feature-text {
+    order: 2;
+}
+
+.hermes-landing-body .feature-row:nth-child(even) .feature-media {
+    order: 1;
+}
+
+.hermes-landing-body .feature-text {
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+}
+
+.hermes-landing-body .feature-num {
+    color: var(--hermes-accent);
+    font-family: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.hermes-landing-body .feature-text h2 {
+    font-size: clamp(2rem, 3.4vw, 3.05rem);
+    line-height: 1.05;
+}
+
+.hermes-landing-body .feature-text p {
+    color: var(--hermes-text-secondary);
+    font-size: 1.04rem;
+    line-height: 1.62;
+    max-width: 46ch;
+}
+
+.hermes-landing-body .feature-media {
+    border: 1px solid var(--hermes-border);
+    border-radius: 12px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.hermes-landing-body .feature-media img {
+    aspect-ratio: 16 / 10;
+    display: block;
+    object-fit: cover;
+    transition: transform 600ms ease;
+    width: 100%;
+}
+
+.hermes-landing-body .feature-row:hover .feature-media img {
+    transform: scale(1.03);
+}
+
+@media (max-width: 900px) {
+    .hermes-landing-body .feature-row {
+        padding: 56px 0;
+    }
+
+    .hermes-landing-body .feature-row-inner {
+        gap: 32px;
+        grid-template-columns: minmax(0, 1fr);
+        padding: 0 24px;
+    }
+
+    .hermes-landing-body .feature-row:nth-child(even) .feature-text,
+    .hermes-landing-body .feature-row:nth-child(even) .feature-media {
+        order: initial;
+    }
+}
+
+/* ---- Legal pages: dark surface to match the theme ---- */
+.legal-copy {
+    background: var(--surface);
+    border-color: var(--line-dark);
+    color: var(--ivory);
+}
+
+.legal-copy h2 {
+    color: var(--ivory);
+}
+
+.legal-copy p {
+    color: var(--ivory-muted);
+}
+
+/* ---- Wider, Hermes-like content width + edge gutters (marketing only) ---- */
+.marketing-body {
+    --content: 1600px;
+}
+
+/* Nav runs near-full-width with a small gutter (like Hermes), not capped narrow */
+.site-header {
+    padding-left: clamp(20px, 4vw, 48px);
+    padding-right: clamp(20px, 4vw, 48px);
+}
+
+/* Top scrim anchored to the navbar so the hero art never leaks into the header.
+   Sits above the art (nav stacking context) and fades out just below the nav. */
+.site-header::after {
+    background: linear-gradient(180deg, rgba(10, 10, 10, 0.96) 0%, rgba(10, 10, 10, 0.6) 50%, transparent 100%);
+    content: "";
+    height: 150px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    transition: opacity 240ms ease;
+    z-index: -1;
+}
+
+.site-header.scrolled::after {
+    opacity: 0;
+}
+
+/* Hero dissolves into the section below it (clean merge, no hard edge) */
+.hermes-landing-body .da-hero::after {
+    background: linear-gradient(to bottom, transparent 52%, var(--hermes-surface-1) 100%);
+    bottom: 0;
+    content: "";
+    height: 260px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    z-index: 4;
+}
+
+/* Nav "Download" is a bold text-link, not a filled button (Hermes-style) */
+.nav-cta,
+.hermes-landing-body .nav-cta {
+    color: var(--brass-bright);
+    font-weight: 800;
+}
+
+.nav-cta:hover,
+.hermes-landing-body .nav-cta:hover {
+    color: var(--brass-bright);
+    text-decoration: underline;
+    text-underline-offset: 0.3em;
+    text-decoration-thickness: 1px;
+}

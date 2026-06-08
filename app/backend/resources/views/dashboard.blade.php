@@ -36,11 +36,7 @@
 
         <div class="workspace-grid">
             <section class="workspace-main">
-                <section class="panel">
-                    <div class="panel-heading">
-                        <h2>Usage</h2>
-                        <p>{{ $account['monthlyMinutesRemaining'] }} minutes remaining this period.</p>
-                    </div>
+                <x-ui.panel title="Usage" description="{{ $account['monthlyMinutesRemaining'] }} minutes remaining this period.">
                     <div class="usage-meter">
                         <div class="usage-meter-label">
                             <span>{{ $account['monthlyMinutesUsed'] }} used, {{ $account['monthlyMinutesPending'] }} reserved</span>
@@ -64,13 +60,9 @@
                             <dd>{{ $account['resetAt'] }}</dd>
                         </div>
                     </dl>
-                </section>
+                </x-ui.panel>
 
-                <section class="panel">
-                    <div class="panel-heading">
-                        <h2>Recent jobs</h2>
-                        <p>Public-safe support details for your latest subtitle generations.</p>
-                    </div>
+                <x-ui.panel title="Recent jobs" description="Public-safe support details for your latest subtitle generations.">
                     <div class="table-wrap">
                         <table>
                             <thead>
@@ -86,7 +78,7 @@
                                 @forelse ($recentJobs as $job)
                                     <tr>
                                         <td>
-                                            <span class="status-pill status-{{ $job['status'] }}">{{ $job['status'] }}</span>
+                                            <x-ui.status-pill :status="$job['status']" />
                                             <small>{{ $job['stage'] }}</small>
                                         </td>
                                         <td>{{ $job['languagePair'] }}</td>
@@ -102,26 +94,18 @@
                             </tbody>
                         </table>
                     </div>
-                </section>
+                </x-ui.panel>
             </section>
 
             <aside class="workspace-side">
-                <section class="panel">
-                    <div class="panel-heading">
-                        <h2>Billing</h2>
-                        <p>{{ $user->billing_subscription_status ?? 'No active subscription' }}</p>
-                    </div>
+                <x-ui.panel title="Billing" description="{{ $user->billing_subscription_status ?? 'No active subscription' }}">
                     <form method="post" action="{{ route('billing.portal') }}">
                         @csrf
                         <button type="submit" class="button full-width">Manage billing</button>
                     </form>
-                </section>
+                </x-ui.panel>
 
-                <section class="panel">
-                    <div class="panel-heading">
-                        <h2>Plans</h2>
-                        <p>Checkout opens in Stripe.</p>
-                    </div>
+                <x-ui.panel title="Plans" description="Checkout opens in Stripe.">
                     <div class="mini-plan-list">
                         @foreach ($plans as $plan)
                             <form method="post" action="{{ route('billing.checkout', ['planCode' => $plan['code']]) }}">
@@ -133,13 +117,9 @@
                             </form>
                         @endforeach
                     </div>
-                </section>
+                </x-ui.panel>
 
-                <section class="panel">
-                    <div class="panel-heading">
-                        <h2>Extension</h2>
-                        <p>{{ $extensionTokens->isEmpty() ? 'No connected extension installs.' : $extensionTokens->count().' recent connection(s).' }}</p>
-                    </div>
+                <x-ui.panel title="Extension" description="{{ $extensionTokens->isEmpty() ? 'No connected extension installs.' : $extensionTokens->count().' recent connection(s).' }}">
                     <dl class="stacked-list">
                         @forelse ($extensionTokens as $token)
                             <div>
@@ -153,14 +133,10 @@
                             </div>
                         @endforelse
                     </dl>
-                </section>
+                </x-ui.panel>
 
                 @if ($testingPlanSwitcherEnabled)
-                    <section class="panel">
-                        <div class="panel-heading">
-                            <h2>Test billing</h2>
-                            <p>Switch plans without Stripe.</p>
-                        </div>
+                    <x-ui.panel title="Test billing" description="Switch plans without Stripe.">
                         <form method="post" action="{{ route('billing.testing-plan') }}" class="stack-form">
                             @csrf
                             <label>
@@ -180,20 +156,16 @@
                             <input type="hidden" name="plan_code" value="none">
                             <button type="submit" class="button button-secondary full-width">Clear test plan</button>
                         </form>
-                    </section>
+                    </x-ui.panel>
                 @endif
 
-                <section class="panel">
-                    <div class="panel-heading">
-                        <h2>Support</h2>
-                        <p>Use job details for public-safe troubleshooting.</p>
-                    </div>
+                <x-ui.panel title="Support" description="Use job details for public-safe troubleshooting.">
                     <a class="button button-secondary full-width" href="{{ route('marketing.support') }}">Open support</a>
                     <form method="post" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="text-button full-width">Log out</button>
                     </form>
-                </section>
+                </x-ui.panel>
             </aside>
         </div>
     </section>

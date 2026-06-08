@@ -22,10 +22,10 @@ color. All images keep their current files and placements; all copy stays as-is
   - **Hermes landing override** (`.hermes-landing-body` / `.da-*` / `.feature-*`):
     remaps Hermes structure and motion into the warm palette. Used by **home only**.
 - Layouts: `layouts.site` is the canonical shared shell with sticky `.site-header`,
-  full nav, footer, dotted-grain overlay, and `hermes-desktop.js`. The old
+  full nav, footer, dotted-grain overlay, and `site-interactions.js`. The old
   `layouts.hermes-desktop` path is not present.
 - Both layouts already load the same three fonts.
-- Motion is centralized in `public/js/hermes-desktop.js`: scroll-aware navbar and
+- Motion is centralized in `public/js/site-interactions.js`: scroll-aware navbar and
   `IntersectionObserver` fade-up for `[data-reveal]` elements. The removed
   text-scramble path is intentionally not part of the current implementation.
 
@@ -113,7 +113,7 @@ consistently. Hermes-like generous section padding and a unified vertical rhythm
   - Per-page polish: timeline line, pricing recommended tier, FAQ expand/marker, hovers.
   - Remove dead `.hermes-feature-row`/standalone Hermes layout styles and keep the
     live `.feature-row` landing section.
-- **`public/js/hermes-desktop.js`** (shared marketing JS)
+- **`public/js/site-interactions.js`** (shared marketing JS)
   - Keep navbar scroll toggle (target unified nav id).
   - Generalize `IntersectionObserver` to `[data-reveal]`.
 - **`resources/views/layouts/site.blade.php`** (canonical shell)
