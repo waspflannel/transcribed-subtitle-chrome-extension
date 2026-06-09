@@ -1378,6 +1378,20 @@ button:disabled {
   color: var(--accent-hover);
 }
 
+/* Instant press feedback while the button is held */
+.cue-action:active {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-hover);
+}
+
+/* Click acknowledgment flash (toggled in JS on click) */
+.cue-action.acted {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* Empty-state hint inside the transcript list */
 .transcript-empty {
   color: var(--faint);

@@ -24,6 +24,16 @@ export function bindTranscriptView(dom: {
     activeRow?.scrollIntoView({ block: 'nearest' });
   }
 
+  function ackButton(button: HTMLButtonElement, label?: string): void {
+    button.classList.add('acted');
+    window.setTimeout(() => button.classList.remove('acted'), 300);
+    if (label) {
+      if (button.dataset.label === undefined) button.dataset.label = button.textContent ?? '';
+      button.textContent = label;
+      window.setTimeout(() => { button.textContent = button.dataset.label ?? ''; }, 1000);
+    }
+  }
+
   dom.transcriptSearch.addEventListener('input', render);
   dom.transcriptList.addEventListener('click', (event) => {
     const button = (event.target as Element)?.closest<HTMLButtonElement>('[data-transcript-action]');
@@ -32,11 +42,20 @@ export function bindTranscriptView(dom: {
     const action = button.dataset.transcriptAction;
     if (action === 'jump' || action === 'replay') {
       void browser.runtime.sendMessage({ type: 'popup.seekToCue', cueId, mode: action }).catch(() => {});
+      ackButton(button);
     } else if (action === 'copy') {
-      const cue = cues.find((c) => c.cueId === cueId);
-      if (cue) void navigator.clipboard?.writeText(cue.sourceText).catch(() => {});
+      const text = cues.find((c) => c.cueId === cueId)?.sourceText;
+      if (text && navigator.clipboard) {
+        void navigator.clipboard.writeText(text)
+          .then(() => ackButton(button, 'Copied'))
+          .catch(() => ackButton(button, 'Failed'));
+      } else {
+        ackButton(button, 'Failed');
+      }
+    } else if (action === 'save') {
+      // Save is the existing Phase-02 placeholder — acknowledge the click only.
+      ackButton(button, 'Soon');
     }
-    // 'save' is the existing Phase-02 placeholder — no-op for now.
   });
 
   return {
