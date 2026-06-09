@@ -40,8 +40,8 @@ export function bindTranscriptView(dom: {
     const cueId = button?.dataset.cueId;
     if (!button || !cueId) return;
     const action = button.dataset.transcriptAction;
-    if (action === 'jump' || action === 'replay') {
-      void browser.runtime.sendMessage({ type: 'popup.seekToCue', cueId, mode: action }).catch(() => {});
+    if (action === 'jump') {
+      void browser.runtime.sendMessage({ type: 'popup.seekToCue', cueId, mode: 'jump' }).catch(() => {});
       ackButton(button);
     } else if (action === 'copy') {
       const text = cues.find((c) => c.cueId === cueId)?.sourceText;

@@ -49,7 +49,6 @@ function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSet
         ${tr}
         <div class="cue-actions">
           <button type="button" class="cue-action" data-transcript-action="jump" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Jump to cue ${cue.index + 1}">Jump</button>
-          <button type="button" class="cue-action" data-transcript-action="replay" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Replay cue ${cue.index + 1}">Replay</button>
           <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Copy cue ${cue.index + 1}">Copy</button>
           <button type="button" class="cue-action" data-transcript-action="save" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Save cue ${cue.index + 1}">Save</button>
         </div>
