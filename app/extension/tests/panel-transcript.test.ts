@@ -27,7 +27,8 @@ describe('panelTranscriptListHtml', () => {
     expect(html).toContain('goodbye');
     expect(html).toContain('aria-current="true"');
     expect(html).toContain('data-transcript-action="jump"');
-    expect(html).toContain('data-transcript-action="replay"');
+    expect(html).toContain('data-transcript-action="copy"');
+    expect(html).not.toContain('data-transcript-action="replay"');
   });
   it('shows an empty-state when the query matches nothing', () => {
     expect(panelTranscriptListHtml({ cues, activeCueId: null, query: 'zzz', settings: DEFAULT_EXTENSION_SETTINGS })).toContain('No cues match');

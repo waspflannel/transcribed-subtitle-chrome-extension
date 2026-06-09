@@ -115,7 +115,14 @@ export default defineContentScript({
         if (subtitleState.type === 'ready') {
           const cue = subtitleState.track.cues.find((c) => c.cueId === message.cueId);
           if (cue) {
-            if (message.mode === 'replay') replayCue(cue); else jumpToCue(cue);
+            if (message.mode === 'replay') {
+              replayCue(cue);
+            } else {
+              // Transcript "jump" should take you to the cue AND play it — seeking
+              // without playing looks like nothing happened on a paused video.
+              jumpToCue(cue);
+              void activeVideo?.play()?.catch(() => {});
+            }
           }
         }
         sendResponse({ ok: true });
