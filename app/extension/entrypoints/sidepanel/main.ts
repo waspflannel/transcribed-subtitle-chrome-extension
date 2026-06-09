@@ -9,6 +9,7 @@ import {
   isTargetLanguage,
   languageLabel,
 } from '../../utils/languages';
+import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PopupState } from '../../utils/messages';
 import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/popup-progress';
@@ -20,6 +21,7 @@ import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
 import { setupTabs, showTab } from './tabs';
 import { bindTimingOffsetControl } from './timing-control';
+import { bindTranscriptView } from './transcript-view';
 import {
   generateButtonLabel,
   statusClass,
@@ -62,6 +64,9 @@ const BACKEND_REFRESH_INTERVAL_MS = 10000;
 const {
   railButtons,
   panels,
+  transcriptSearch,
+  transcriptList,
+  transcriptStatus,
   collapseButton,
   nowPlayingEyebrow,
   nowPlayingTitle,
@@ -179,9 +184,20 @@ const timingControl = bindTimingOffsetControl({
 });
 
 setupTabs(railButtons, panels);
+const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
 renderShortcutHelp();
 void loadPanelState();
 setInterval(() => void refreshBackendState(), BACKEND_REFRESH_INTERVAL_MS);
+
+browser.runtime.onMessage.addListener((message) => {
+  if (!isRuntimeMessage(message)) return;
+  if (message.type === 'background.activeCueChanged') {
+    transcriptView.setActiveCue(message.cueId);
+  } else if (message.type === 'background.focusTranscript') {
+    showTab(railButtons, panels, 'transcript');
+    transcriptView.focus();
+  }
+});
 
 let backendRefreshInFlight = false;
 
@@ -383,6 +399,11 @@ function showPanelState(state: PopupState): void {
   statusText.textContent = statusLabel(subtitleState.type, supported);
 
   showTrackState(state);
+  if (subtitleState.type === 'ready') {
+    transcriptView.setData(subtitleState.track.cues, settings);
+  } else {
+    transcriptView.setData([], settings);
+  }
   renderJobHistory(state, { jobsList, jobsError });
   renderUsage(accountState);
   renderAccount(accountState, settings);

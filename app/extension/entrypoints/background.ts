@@ -100,6 +100,28 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
 
     case 'background.getPageSnapshot':
       throw new Error('Page snapshot requests are handled by the content script.');
+
+    case 'content.activeCueChanged':
+      // Re-broadcast to extension pages (the open side panel). runtime.sendMessage
+      // reaches the panel but not content scripts, so this won't echo back to content.
+      void browser.runtime.sendMessage({
+        type: 'background.activeCueChanged',
+        cueId: message.cueId,
+        youtubeVideoId: message.youtubeVideoId,
+      }).catch(() => {});
+      return { ok: true };
+
+    case 'content.focusPanelTranscript':
+      void browser.runtime.sendMessage({ type: 'background.focusTranscript' }).catch(() => {});
+      return { ok: true };
+
+    case 'popup.seekToCue': {
+      const tab = (await getActiveTab())?.id ?? null;
+      if (tab !== null) {
+        await sendTabMessage(tab, { type: 'background.seekToCue', cueId: message.cueId, mode: message.mode });
+      }
+      return { ok: true };
+    }
   }
 }
 

@@ -160,211 +160,6 @@
           color: #5ec99a;
         }
 
-        .transcript-panel {
-          background:
-            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
-            rgba(8, 8, 8, 0.95);
-          backdrop-filter: blur(20px) saturate(130%);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          border-left: 2px solid var(--accent);
-          border-radius: 0;
-          bottom: 92px;
-          box-shadow: 0 18px 54px rgba(0, 0, 0, 0.46);
-          color: #f1f1f1;
-          display: grid;
-          font-family: 'Geist Sans', "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
-          gap: 12px;
-          grid-template-rows: auto auto minmax(0, 1fr) auto;
-          line-height: 1.35;
-          max-width: calc(100vw - 32px);
-          min-height: 280px;
-          padding: 14px;
-          pointer-events: auto;
-          position: fixed;
-          right: 16px;
-          top: 72px;
-          width: min(430px, calc(100vw - 32px));
-          z-index: 2147483647;
-        }
-
-        .transcript-header {
-          align-items: start;
-          display: grid;
-          gap: 10px;
-          grid-template-columns: minmax(0, 1fr) auto;
-        }
-
-        .transcript-title {
-          color: #f1f1f1;
-          font-size: 15px;
-          font-weight: 900;
-        }
-
-        .transcript-summary {
-          color: #d1d5db;
-          font-size: 12px;
-          margin-top: 2px;
-        }
-
-        .transcript-search {
-          display: grid;
-          gap: 5px;
-        }
-
-        .transcript-search label {
-          color: #d1d5db;
-          font-size: 12px;
-          font-weight: 850;
-        }
-
-        .transcript-search input {
-          background: rgba(0, 0, 0, 0.42);
-          border: 1px solid rgba(255, 255, 255, 0.16);
-          border-radius: 0;
-          color: #f1f1f1;
-          font: inherit;
-          font-size: 13px;
-          min-height: 34px;
-          padding: 0 10px;
-        }
-
-        .transcript-search input:focus-visible,
-        .transcript-action:focus-visible {
-          box-shadow: 0 0 0 3px rgba(216, 59, 59, 0.34);
-          outline: none;
-        }
-
-        .transcript-list {
-          display: grid;
-          gap: 8px;
-          min-height: 0;
-          overflow-y: auto;
-          padding-right: 2px;
-          scrollbar-color: rgba(216, 59, 59, 0.58) rgba(255, 255, 255, 0.08);
-          scrollbar-width: thin;
-        }
-
-        .transcript-list::-webkit-scrollbar {
-          width: 10px;
-        }
-
-        .transcript-list::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.06);
-          border-radius: 0;
-        }
-
-        .transcript-list::-webkit-scrollbar-thumb {
-          background: rgba(216, 59, 59, 0.58);
-          border: 2px solid rgba(8, 8, 8, 0.95);
-          border-radius: 0;
-        }
-
-        .transcript-list::-webkit-scrollbar-thumb:hover {
-          background: rgba(216, 59, 59, 0.72);
-        }
-
-        .transcript-cue {
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 0;
-          content-visibility: auto;
-          contain-intrinsic-size: 152px;
-          display: grid;
-          gap: 8px;
-          padding: 10px;
-        }
-
-        .transcript-cue[aria-current="true"] {
-          background: rgba(216, 59, 59, 0.16);
-          border-color: rgba(216, 59, 59, 0.42);
-          box-shadow: inset 3px 0 0 #e85d5d;
-        }
-
-        .transcript-cue-header,
-        .transcript-cue-actions {
-          align-items: center;
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          justify-content: space-between;
-        }
-
-        .transcript-cue-index,
-        .transcript-cue-time {
-          color: var(--accent-bright);
-          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
-          font-size: 11px;
-          font-weight: 500;
-          letter-spacing: 0.04em;
-        }
-
-        .transcript-cue-body {
-          display: grid;
-          gap: 5px;
-        }
-
-        .transcript-source {
-          color: #f1f1f1;
-          font-size: 14px;
-          font-weight: 800;
-          overflow-wrap: anywhere;
-        }
-
-        .transcript-romanization,
-        .transcript-translation {
-          color: #d1d5db;
-          font-size: 12px;
-          overflow-wrap: anywhere;
-        }
-
-        .transcript-romanization {
-          color: var(--accent-soft);
-          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
-        }
-
-        .transcript-action {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.14);
-          border-radius: 0;
-          color: #e5e7eb;
-          cursor: pointer;
-          font: inherit;
-          font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
-          font-size: 10px;
-          font-weight: 500;
-          letter-spacing: 0.08em;
-          min-height: 28px;
-          padding: 0 10px;
-          text-transform: uppercase;
-        }
-
-        .transcript-action:hover {
-          background: rgba(216, 59, 59, 0.16);
-          border-color: rgba(216, 59, 59, 0.55);
-          color: #fff;
-        }
-
-        .transcript-status {
-          color: #d1d5db;
-          font-size: 12px;
-          font-weight: 850;
-          min-height: 16px;
-        }
-
-        .transcript-status.success {
-          color: #5ec99a;
-        }
-
-        .transcript-status.error {
-          color: #fca5a5;
-        }
-
-        .transcript-empty {
-          color: #d1d5db;
-          font-size: 13px;
-          margin: 0;
-        }
-
         .title {
           color: #f1f1f1;
           font-size: 15px;
@@ -684,7 +479,6 @@
         }
 
         :host([data-caption-theme="high"]) .rail,
-        :host([data-caption-theme="high"]) .transcript-panel,
         :host([data-caption-theme="high"]) .token-popover,
         :host([data-caption-theme="high"]) .token-inline-preview {
           background: #000;
@@ -694,40 +488,21 @@
         }
 
         :host([data-caption-theme="high"]) .token-card,
-        :host([data-caption-theme="high"]) .study-control,
-        :host([data-caption-theme="high"]) .transcript-action,
-        :host([data-caption-theme="high"]) .transcript-cue {
+        :host([data-caption-theme="high"]) .study-control {
           background: #111;
           border-color: #fff;
           color: #fff;
         }
 
         :host([data-caption-theme="high"]) .token-text,
-        :host([data-caption-theme="high"]) .translation,
-        :host([data-caption-theme="high"]) .transcript-source,
-        :host([data-caption-theme="high"]) .transcript-title {
+        :host([data-caption-theme="high"]) .translation {
           color: #fff;
         }
 
         :host([data-caption-theme="high"]) .cue-romanization,
         :host([data-caption-theme="high"]) .token-extra,
-        :host([data-caption-theme="high"]) .transcript-romanization,
         :host([data-caption-theme="high"]) .eyebrow {
           color: #e85d5d;
-        }
-
-        :host([data-caption-theme="high"]) .transcript-list {
-          scrollbar-color: #e85d5d #111;
-        }
-
-        :host([data-caption-theme="high"]) .transcript-list::-webkit-scrollbar-track {
-          background: #111;
-          border: 1px solid #fff;
-        }
-
-        :host([data-caption-theme="high"]) .transcript-list::-webkit-scrollbar-thumb {
-          background: #e85d5d;
-          border-color: #000;
         }
 
         @media (max-width: 899px) {
@@ -756,12 +531,6 @@
 
           .token-card {
             min-height: 40px;
-          }
-
-          .transcript-panel {
-            left: 16px;
-            right: 16px;
-            width: auto;
           }
 
           .token-text {
@@ -845,19 +614,5 @@
 
           .token-popover::after {
             display: none;
-          }
-
-          .transcript-panel {
-            bottom: 96px;
-            left: 10px;
-            min-height: 260px;
-            padding: 12px;
-            right: 10px;
-            top: 64px;
-            width: auto;
-          }
-
-          .transcript-cue-actions {
-            justify-content: flex-start;
           }
         }`;

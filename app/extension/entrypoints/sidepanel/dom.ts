@@ -1,6 +1,9 @@
 export interface PanelDom {
   railButtons: HTMLButtonElement[];
   panels: HTMLElement[];
+  transcriptSearch: HTMLInputElement;
+  transcriptList: HTMLElement;
+  transcriptStatus: HTMLElement;
   collapseButton: HTMLButtonElement;
   nowPlayingEyebrow: HTMLElement;
   nowPlayingTitle: HTMLElement;
@@ -62,6 +65,9 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
   return {
     railButtons: queryAll<HTMLButtonElement>(root, '[data-tab]'),
     panels: queryAll<HTMLElement>(root, '[data-panel]'),
+    transcriptSearch: query<HTMLInputElement>(root, '[data-transcript-search]', HTMLInputElement),
+    transcriptList: query<HTMLElement>(root, '[data-transcript-list]', HTMLElement),
+    transcriptStatus: query<HTMLElement>(root, '[data-transcript-status]', HTMLElement),
     collapseButton: query(root, '[data-action="collapse-panel"]', HTMLButtonElement),
     nowPlayingEyebrow: query(root, '[data-now-playing-eyebrow]', HTMLElement),
     nowPlayingTitle: query(root, '[data-now-playing-title]', HTMLElement),

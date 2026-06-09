@@ -18,9 +18,6 @@ export interface OverlayInteractionState {
   copyStatus?: 'copied' | 'failed' | null;
   pendingTokenKeys?: ReadonlySet<string>;
   failedTokenKeys?: ReadonlySet<string>;
-  transcriptOpen?: boolean;
-  transcriptSearchQuery?: string;
-  transcriptStatus?: OverlayStatus | null;
 }
 
 export const EMPTY_INTERACTION: OverlayInteractionState = {

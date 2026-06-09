@@ -49,20 +49,12 @@ export class OverlayShell {
   private actionStatusTimeout: number | null = null;
   private copyStatus: 'copied' | 'failed' | null = null;
   private copyStatusTimeout: number | null = null;
-  private transcriptOpen = false;
-  private transcriptSearchQuery = '';
-  private transcriptStatus: OverlayStatus | null = null;
-  private transcriptStatusTimeout: number | null = null;
-  private transcriptReturnFocus: HTMLElement | null = null;
-  private focusTranscriptSearchAfterRender = false;
 
   public constructor(
     private readonly documentRef: Document = document,
     private readonly options: {
       onCopyCue?: (cue: SubtitleCue) => Promise<boolean>;
-      onJumpCue?: (cue: SubtitleCue) => void;
       onReplayCue?: (cue: SubtitleCue) => void;
-      onSaveCue?: (cue: SubtitleCue) => void;
       onStudyHoverEnd?: () => void;
       onTokenClick?: (cue: SubtitleCue, token: LearningToken) => void;
       onTokenPreview?: () => void;
@@ -79,7 +71,7 @@ export class OverlayShell {
     this.host!.dataset.captionSize = state.settings.captionFontSize;
     this.host!.dataset.captionDensity = state.settings.captionDensity;
     this.host!.dataset.captionTheme = state.settings.captionContrastTheme;
-    this.host!.style.display = state.settings.overlayVisible || this.transcriptOpen ? 'block' : 'none';
+    this.host!.style.display = state.settings.overlayVisible ? 'block' : 'none';
     this.currentState = state;
 
     const activeCueId = state.subtitleState.type === 'ready' ? state.activeCue?.cueId ?? null : null;
@@ -106,59 +98,13 @@ export class OverlayShell {
     this.pinnedTokenIndex = null;
     this.actionStatus = null;
     this.copyStatus = null;
-    this.transcriptOpen = false;
-    this.transcriptSearchQuery = '';
-    this.transcriptStatus = null;
-    this.transcriptReturnFocus = null;
-    this.focusTranscriptSearchAfterRender = false;
     this.clearActionStatusTimeout();
     this.clearCopyStatusTimeout();
-    this.clearTranscriptStatusTimeout();
-  }
-
-  public isTranscriptOpen(): boolean {
-    return this.transcriptOpen;
-  }
-
-  public toggleTranscript(): boolean {
-    this.setTranscriptOpen(!this.transcriptOpen);
-
-    return this.transcriptOpen;
-  }
-
-  public setTranscriptOpen(open: boolean): void {
-    if (open === this.transcriptOpen) {
-      return;
-    }
-
-    this.transcriptOpen = open;
-
-    if (open) {
-      const activeElement = this.documentRef.activeElement;
-
-      this.transcriptReturnFocus = activeElement instanceof HTMLElement ? activeElement : null;
-      this.focusTranscriptSearchAfterRender = true;
-    } else {
-      this.transcriptSearchQuery = '';
-      this.transcriptStatus = null;
-      this.clearTranscriptStatusTimeout();
-    }
-
-    this.render();
-
-    if (!open) {
-      this.restoreTranscriptReturnFocus();
-    }
   }
 
   public showActionStatus(message: string, tone: OverlayStatus['tone'] = 'info'): void {
     this.actionStatus = { message, tone };
-
-    if (this.transcriptOpen) {
-      this.showTranscriptStatus(message, tone);
-    } else {
-      this.render();
-    }
+    this.render();
 
     this.clearActionStatusTimeout();
 
@@ -186,21 +132,15 @@ export class OverlayShell {
       copyStatus: this.copyStatus,
       pendingTokenKeys: this.currentState.pendingTokenKeys,
       failedTokenKeys: this.currentState.failedTokenKeys,
-      transcriptOpen: this.transcriptOpen,
-      transcriptSearchQuery: this.transcriptSearchQuery,
-      transcriptStatus: this.transcriptStatus,
     });
 
     if (html !== this.renderedHtml) {
       const focusSnapshot = this.focusSnapshotBeforeRender();
-      const transcriptScrollTop = this.transcriptScrollTopBeforeRender();
 
       this.content.innerHTML = html;
       this.renderedHtml = html;
       this.bindTokenInteractions();
-      this.bindTranscriptInteractions();
       this.restoreFocusAfterRender(focusSnapshot);
-      this.restoreTranscriptScrollAfterRender(transcriptScrollTop);
     }
   }
 
@@ -271,40 +211,6 @@ export class OverlayShell {
     }
   }
 
-  private bindTranscriptInteractions(): void {
-    if (!this.content) {
-      return;
-    }
-
-    const searchInput = this.content.querySelector<HTMLInputElement>('[data-transcript-search]');
-
-    searchInput?.addEventListener('input', () => {
-      this.transcriptSearchQuery = searchInput.value;
-      this.render();
-    });
-
-    const panel = this.content.querySelector<HTMLElement>('[data-transcript-panel]');
-
-    panel?.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-
-      event.preventDefault();
-      this.setTranscriptOpen(false);
-    });
-
-    this.content.querySelector<HTMLButtonElement>('[data-transcript-close]')?.addEventListener('click', () => {
-      this.setTranscriptOpen(false);
-    });
-
-    for (const button of this.content.querySelectorAll<HTMLButtonElement>('[data-transcript-action]')) {
-      button.addEventListener('click', () => {
-        void this.handleTranscriptAction(button.dataset.transcriptAction, button.dataset.cueId);
-      });
-    }
-  }
-
   private async handleStudyControl(control: string | undefined): Promise<void> {
     const cue = this.currentState?.activeCue;
 
@@ -326,59 +232,6 @@ export class OverlayShell {
     }
   }
 
-  private async handleTranscriptAction(action: string | undefined, cueId: string | undefined): Promise<void> {
-    const cue = this.findCue(cueId);
-
-    if (action === 'close') {
-      this.setTranscriptOpen(false);
-
-      return;
-    }
-
-    if (!cue) {
-      this.showTranscriptStatus('No cue selected.', 'error');
-
-      return;
-    }
-
-    switch (action) {
-      case 'jump':
-        this.options.onJumpCue?.(cue);
-        this.showTranscriptStatus('Jumped to cue.', 'success');
-        return;
-
-      case 'replay':
-        this.options.onReplayCue?.(cue);
-        this.showTranscriptStatus('Replaying cue.', 'success');
-        return;
-
-      case 'copy':
-        if ((await this.options.onCopyCue?.(cue)) === true) {
-          this.showTranscriptStatus('Cue copied.', 'success');
-        } else {
-          this.showTranscriptStatus('Copy failed.', 'error');
-        }
-
-        return;
-
-      case 'save':
-        this.options.onSaveCue?.(cue);
-        this.showTranscriptStatus('Save cue is reserved for Phase 02.', 'info');
-        return;
-
-      default:
-        return;
-    }
-  }
-
-  private findCue(cueId: string | undefined): SubtitleCue | null {
-    if (!cueId || this.currentState?.subtitleState.type !== 'ready') {
-      return null;
-    }
-
-    return this.currentState.subtitleState.track.cues.find((cue) => cue.cueId === cueId) ?? null;
-  }
-
   private showCopyStatus(status: 'copied' | 'failed'): void {
     this.copyStatus = status;
     this.render();
@@ -397,24 +250,6 @@ export class OverlayShell {
     }, 1400);
   }
 
-  private showTranscriptStatus(message: string, tone: OverlayStatus['tone']): void {
-    this.transcriptStatus = { message, tone };
-    this.render();
-    this.clearTranscriptStatusTimeout();
-
-    const view = this.documentRef.defaultView;
-
-    if (!view) {
-      return;
-    }
-
-    this.transcriptStatusTimeout = view.setTimeout(() => {
-      this.transcriptStatus = null;
-      this.transcriptStatusTimeout = null;
-      this.render();
-    }, 1600);
-  }
-
   private clearActionStatusTimeout(): void {
     if (this.actionStatusTimeout === null) {
       return;
@@ -431,15 +266,6 @@ export class OverlayShell {
 
     this.documentRef.defaultView?.clearTimeout(this.copyStatusTimeout);
     this.copyStatusTimeout = null;
-  }
-
-  private clearTranscriptStatusTimeout(): void {
-    if (this.transcriptStatusTimeout === null) {
-      return;
-    }
-
-    this.documentRef.defaultView?.clearTimeout(this.transcriptStatusTimeout);
-    this.transcriptStatusTimeout = null;
   }
 
   private focusSnapshotBeforeRender(): FocusSnapshot | null {
@@ -465,13 +291,6 @@ export class OverlayShell {
       return;
     }
 
-    if (this.focusTranscriptSearchAfterRender) {
-      this.focusTranscriptSearchAfterRender = false;
-      this.content.querySelector<HTMLInputElement>('[data-transcript-search]')?.focus();
-
-      return;
-    }
-
     if (!focusSnapshot) {
       return;
     }
@@ -484,31 +303,6 @@ export class OverlayShell {
 
     if (focusTarget instanceof HTMLInputElement && typeof focusSnapshot.selectionStart === 'number') {
       focusTarget.setSelectionRange(focusSnapshot.selectionStart, focusSnapshot.selectionEnd ?? focusSnapshot.selectionStart);
-    }
-  }
-
-  private restoreTranscriptReturnFocus(): void {
-    this.transcriptReturnFocus?.focus();
-    this.transcriptReturnFocus = null;
-  }
-
-  private transcriptScrollTopBeforeRender(): number | null {
-    if (!this.transcriptOpen) {
-      return null;
-    }
-
-    return this.content?.querySelector<HTMLElement>('[data-transcript-list]')?.scrollTop ?? null;
-  }
-
-  private restoreTranscriptScrollAfterRender(scrollTop: number | null): void {
-    if (scrollTop === null) {
-      return;
-    }
-
-    const transcriptList = this.content?.querySelector<HTMLElement>('[data-transcript-list]');
-
-    if (transcriptList) {
-      transcriptList.scrollTop = scrollTop;
     }
   }
 
