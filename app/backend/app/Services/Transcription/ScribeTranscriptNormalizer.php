@@ -58,7 +58,7 @@ class ScribeTranscriptNormalizer
 
     /**
      * @param  array<string, mixed>  $payload
-     * @return array<int, array{text: string, start: float, end: float, speakerId: ?string}>
+     * @return array<int, array{text: string, start: float, end: float}>
      */
     private function timedWords(array $payload): array
     {
@@ -115,7 +115,6 @@ class ScribeTranscriptNormalizer
                 'text' => $text,
                 'start' => $start,
                 'end' => $end,
-                'speakerId' => is_string($token['speaker_id'] ?? null) ? $token['speaker_id'] : null,
             ];
         }
 
@@ -154,7 +153,7 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $words
+     * @param  array<int, array{text: string, start: float, end: float}>  $words
      * @return array<int, TimestampedTranscriptSegment>
      */
     private function segmentsFromWords(array $words): array
@@ -189,15 +188,11 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $currentWords
-     * @param  array{text: string, start: float, end: float, speakerId: ?string}|null  $previousWord
+     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
+     * @param  array{text: string, start: float, end: float}|null  $previousWord
      */
     private function startsNewCue(array $currentWords, array $word, ?array $previousWord): bool
     {
-        if ($previousWord !== null && $word['speakerId'] !== $previousWord['speakerId']) {
-            return true;
-        }
-
         if ($previousWord !== null && ($word['start'] - $previousWord['end']) >= self::PAUSE_BREAK_SECONDS) {
             return true;
         }
@@ -208,7 +203,7 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $words
+     * @param  array<int, array{text: string, start: float, end: float}>  $words
      */
     private function shouldCloseCue(array $words): bool
     {
@@ -218,7 +213,7 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $words
+     * @param  array<int, array{text: string, start: float, end: float}>  $words
      */
     private function segmentFromWords(array $words, ?float $previousSegmentEnd): TimestampedTranscriptSegment
     {
@@ -244,8 +239,8 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $currentWords
-     * @param  array{text: string, start: float, end: float, speakerId: ?string}  $candidate
+     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
+     * @param  array{text: string, start: float, end: float}  $candidate
      */
     private function cueDuration(array $currentWords, array $candidate): float
     {
@@ -255,8 +250,8 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float, speakerId: ?string}>  $currentWords
-     * @param  array{text: string, start: float, end: float, speakerId: ?string}  $candidate
+     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
+     * @param  array{text: string, start: float, end: float}  $candidate
      */
     private function cueCharacterCount(array $currentWords, array $candidate): int
     {
