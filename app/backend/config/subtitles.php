@@ -54,7 +54,9 @@ return [
         'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
         'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 10),
         'lock_seconds' => (int) env('SUBTITLE_CONCURRENCY_LOCK_SECONDS', 10),
-        'counter_seconds' => (int) env('SUBTITLE_CONCURRENCY_COUNTER_SECONDS', 1800),
+        // ~2x the batch job timeout (300s): a slot leaked by a SIGKILLed worker
+        // recovers in minutes instead of wedging the user for half an hour.
+        'counter_seconds' => (int) env('SUBTITLE_CONCURRENCY_COUNTER_SECONDS', 600),
         'plans' => [
             'ultimate' => [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_ULTIMATE', 'subtitle-generation-ultimate'),
