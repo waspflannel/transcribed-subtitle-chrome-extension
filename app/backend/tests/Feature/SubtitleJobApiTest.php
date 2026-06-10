@@ -40,7 +40,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
-use PDOException;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
@@ -220,23 +219,20 @@ class SubtitleJobApiTest extends TestCase
         $this->assertGreaterThan($processJobTimeout, config('queue.connections.redis.retry_after'));
     }
 
-    public function test_generate_request_auto_starts_configured_subtitle_workers(): void
+    public function test_dev_worker_command_starts_configured_subtitle_workers(): void
     {
         config([
-            'queue.default' => 'database',
-            'subtitles.queue.connection' => 'database',
+            'subtitles.queue.connection' => 'redis',
             'subtitles.queue.auto_start.enabled' => true,
             'subtitles.queue.auto_start.enabled_in_tests' => true,
             'subtitles.queue.auto_start.worker_count' => 2,
         ]);
-        Queue::fake();
         Process::preventStrayProcesses();
         Process::fake(fn (): FakeProcessResult => Process::result("43210\n"));
 
-        $this
-            ->withExtensionAuth($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'autowork001']))
-            ->assertAccepted();
+        $exitCode = Artisan::call('subtitles:dev-workers');
+
+        $this->assertSame(0, $exitCode);
 
         Process::assertRanTimes(
             fn (PendingProcess $process): bool => $this->processCommandContains($process, 'queue:work')
@@ -262,7 +258,7 @@ class SubtitleJobApiTest extends TestCase
             'youtube_video_id' => 'stalejob001',
             'youtube_url' => 'https://www.youtube.com/watch?v=stalejob001',
             'install_id' => $installId,
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
+            'processing_version' => SubtitleJobService::processingVersionFor('on_demand', true, false),
             'enrichment_mode' => 'on_demand',
             'include_romanization' => true,
             'include_translation' => false,
@@ -398,37 +394,6 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(1, $this->transcriptionService->prepareCalls);
         $this->assertSame(['auto'], $this->transcriptionService->sourceLanguages);
-    }
-
-    public function test_queue_database_lock_failure_returns_specific_public_message(): void
-    {
-        $job = SubtitleJob::factory()->create([
-            'stage' => 'tokenizing',
-            'progress_percent' => 65,
-        ]);
-
-        app(SubtitleJobFailureHandler::class)->failJob(
-            $job->id,
-            'tokenizing',
-            new PDOException('SQLSTATE[HY000]: General error: 5 database is locked'),
-            $job->run_id,
-        );
-
-        $this
-            ->withExtensionAuth($job->install_id)
-            ->getJson('/v1/subtitle-jobs/'.$job->public_id)
-            ->assertOk()
-            ->assertJsonPath('status', 'failed')
-            ->assertJsonPath('stage', 'tokenizing')
-            ->assertJsonPath('errorCode', 'queue_unavailable')
-            ->assertJsonPath('message', 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.');
-
-        $this->assertDatabaseHas('subtitle_jobs', [
-            'id' => $job->id,
-            'status' => 'failed',
-            'error_code' => 'queue_unavailable',
-            'error_message' => 'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.',
-        ]);
     }
 
     public function test_late_batch_result_does_not_recreate_artifacts_after_job_failure(): void

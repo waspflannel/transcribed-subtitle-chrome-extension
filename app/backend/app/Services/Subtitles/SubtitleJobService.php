@@ -7,38 +7,24 @@ use App\Models\SubtitleJob;
 use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Billing\BillingEntitlementService;
+use App\Support\PostgresErrors;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
+use InvalidArgumentException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SubtitleJobService
 {
-    public const PROCESSING_VERSION_ON_DEMAND = 'scribe-v2-tokenizer-v8-async-on-demand';
+    private const VERSION_PREFIX = 'scribe-v2-tokenizer-v8-async-';
 
-    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED = 'scribe-v2-tokenizer-v8-async-on-demand-romanized';
+    private const PROCESSING_MODES = ['on_demand', 'full'];
 
-    public const PROCESSING_VERSION_ON_DEMAND_TRANSLATED = 'scribe-v2-tokenizer-v8-async-on-demand-translated';
-
-    public const PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v8-async-on-demand-romanized-translated';
-
-    public const PROCESSING_VERSION_FULL = 'scribe-v2-tokenizer-v8-async-full';
-
-    public const PROCESSING_VERSION_FULL_ROMANIZED = 'scribe-v2-tokenizer-v8-async-full-romanized';
-
-    public const PROCESSING_VERSION_FULL_TRANSLATED = 'scribe-v2-tokenizer-v8-async-full-translated';
-
-    public const PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED = 'scribe-v2-tokenizer-v8-async-full-romanized-translated';
-
-    public const CURRENT_PROCESSING_VERSIONS = [
-        self::PROCESSING_VERSION_ON_DEMAND,
-        self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED,
-        self::PROCESSING_VERSION_ON_DEMAND_TRANSLATED,
-        self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED,
-        self::PROCESSING_VERSION_FULL,
-        self::PROCESSING_VERSION_FULL_ROMANIZED,
-        self::PROCESSING_VERSION_FULL_TRANSLATED,
-        self::PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED,
+    private const PROCESSING_FEATURE_SETS = [
+        [false, false],
+        [true, false],
+        [false, true],
+        [true, true],
     ];
 
     private const DISPATCH_STATE_REUSED = 'reused';
@@ -50,10 +36,42 @@ class SubtitleJobService
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleRuntimeTracer $tracer,
-        private readonly SubtitleQueueWorkerBootstrapper $workers,
         private readonly BillingEntitlementService $billing,
         private readonly FunnelAnalytics $analytics,
     ) {}
+
+    /**
+     * @return array<int, string>
+     */
+    public static function currentProcessingVersions(): array
+    {
+        $versions = [];
+
+        foreach (self::PROCESSING_MODES as $mode) {
+            foreach (self::PROCESSING_FEATURE_SETS as [$includeRomanization, $includeTranslation]) {
+                $versions[] = self::processingVersionFor($mode, $includeRomanization, $includeTranslation);
+            }
+        }
+
+        return $versions;
+    }
+
+    public static function processingVersionFor(
+        string $enrichmentMode,
+        bool $includeRomanization,
+        bool $includeTranslation,
+    ): string {
+        $mode = match ($enrichmentMode) {
+            'on_demand' => 'on-demand',
+            'full' => 'full',
+            default => throw new InvalidArgumentException('Unsupported subtitle enrichment mode.'),
+        };
+
+        return self::VERSION_PREFIX
+            .$mode
+            .($includeRomanization ? '-romanized' : '')
+            .($includeTranslation ? '-translated' : '');
+    }
 
     /**
      * @param  array<string, mixed>  $payload
@@ -91,7 +109,7 @@ class SubtitleJobService
                     ->first();
 
                 if ($job) {
-                    if ($this->hasReadyTrack($job)) {
+                    if ($job->hasReadyTrack()) {
                         $dispatchState = self::DISPATCH_STATE_REUSED;
 
                         return $job;
@@ -145,7 +163,7 @@ class SubtitleJobService
                 return $job;
             });
         } catch (QueryException $exception) {
-            if (! $this->isUniqueConstraintViolation($exception)) {
+            if (! PostgresErrors::isUniqueViolation($exception)) {
                 throw $exception;
             }
 
@@ -166,7 +184,7 @@ class SubtitleJobService
             $this->analytics->generationStarted($job->load('user'), $previousJobCount);
         }
 
-        if ($this->hasReadyTrack($job)) {
+        if ($job->hasReadyTrack()) {
             $this->logger->trackReused($job);
 
             return $job;
@@ -179,8 +197,6 @@ class SubtitleJobService
 
             $job = $job->refresh()->load('track');
         }
-
-        $this->workers->ensureRunning();
 
         return $job;
     }
@@ -300,37 +316,7 @@ class SubtitleJobService
 
     private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string
     {
-        if ($enrichmentMode === 'full') {
-            if ($includeRomanization && $includeTranslation) {
-                return self::PROCESSING_VERSION_FULL_ROMANIZED_TRANSLATED;
-            }
-
-            if ($includeRomanization) {
-                return self::PROCESSING_VERSION_FULL_ROMANIZED;
-            }
-
-            return $includeTranslation
-                ? self::PROCESSING_VERSION_FULL_TRANSLATED
-                : self::PROCESSING_VERSION_FULL;
-        }
-
-        if ($includeRomanization && $includeTranslation) {
-            return self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED_TRANSLATED;
-        }
-
-        if ($includeRomanization) {
-            return self::PROCESSING_VERSION_ON_DEMAND_ROMANIZED;
-        }
-
-        return $includeTranslation
-            ? self::PROCESSING_VERSION_ON_DEMAND_TRANSLATED
-            : self::PROCESSING_VERSION_ON_DEMAND;
-    }
-
-    private function hasReadyTrack(SubtitleJob $job): bool
-    {
-        return $job->track !== null
-            && ! $job->track->isExpired();
+        return self::processingVersionFor($enrichmentMode, $includeRomanization, $includeTranslation);
     }
 
     private function isStalePreparingJob(SubtitleJob $job): bool
@@ -344,10 +330,4 @@ class SubtitleJobService
         return $job->updated_at->lte(now()->subSeconds($seconds));
     }
 
-    private function isUniqueConstraintViolation(QueryException $exception): bool
-    {
-        $sqlState = $exception->errorInfo[0] ?? null;
-
-        return in_array($sqlState, ['23000', '23505'], true);
-    }
 }

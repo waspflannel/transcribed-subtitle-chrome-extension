@@ -14,7 +14,7 @@ final class SubtitleQueue
 
     public static function connection(): string
     {
-        return (string) config('subtitles.queue.connection', 'database');
+        return (string) config('subtitles.queue.connection', 'redis');
     }
 
     public static function generationName(): string

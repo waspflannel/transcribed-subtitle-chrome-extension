@@ -30,7 +30,7 @@ class SubtitleJobFactory extends Factory
             'source_language' => 'auto',
             'detected_source_language' => null,
             'target_language' => 'eng',
-            'processing_version' => SubtitleJobService::PROCESSING_VERSION_ON_DEMAND,
+            'processing_version' => SubtitleJobService::processingVersionFor('on_demand', false, false),
             'generation_tier' => 'base',
             'enrichment_mode' => 'on_demand',
             'include_romanization' => true,

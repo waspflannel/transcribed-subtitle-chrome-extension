@@ -53,7 +53,7 @@ class DashboardController extends Controller
         return SubtitleJob::query()
             ->with('track')
             ->whereBelongsTo($user)
-            ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
             ->latest('updated_at')
             ->limit(8)
             ->get()
@@ -88,8 +88,6 @@ class DashboardController extends Controller
 
     private function languagePair(SubtitleJob $job): string
     {
-        $source = $job->detected_source_language ?: $job->source_language;
-
-        return LanguageCatalog::label((string) $source).' to '.LanguageCatalog::label((string) $job->target_language);
+        return LanguageCatalog::label($job->effectiveSourceLanguage()).' to '.LanguageCatalog::label((string) $job->target_language);
     }
 }

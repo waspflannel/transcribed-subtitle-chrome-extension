@@ -45,7 +45,7 @@ class LearningTokenEnrichmentService
             fn (): array => $this->translationAnalysis->enrichToken(
                 cue: $cue,
                 token: $token,
-                sourceLanguage: $this->effectiveSourceLanguage($track),
+                sourceLanguage: $track->effectiveSourceLanguage(),
                 targetLanguage: $track->target_language,
             ),
         );
@@ -180,11 +180,6 @@ class LearningTokenEnrichmentService
         }
 
         return trim($model);
-    }
-
-    private function effectiveSourceLanguage(SubtitleTrack $track): string
-    {
-        return $track->detected_source_language ?: $track->source_language;
     }
 
     /**

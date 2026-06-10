@@ -6,7 +6,6 @@ use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Billing\UsageLedger;
-use PDOException;
 use Throwable;
 
 class SubtitleJobFailureHandler
@@ -51,18 +50,6 @@ class SubtitleJobFailureHandler
             return;
         }
 
-        if ($this->isDatabaseLocked($exception)) {
-            $queueException = SubtitleProcessingException::queueUnavailable(
-                'Subtitle queue storage was busy while processing. Retry generation after the current job finishes.',
-                ['reason' => 'database_locked'],
-                $exception,
-            );
-
-            $this->failExpectedException($job, $stage, $queueException, $context);
-
-            return;
-        }
-
         $this->markFailed($job, $stage, 'internal_error', 'Generation did not complete.');
         $this->cleanupReservedWork($job);
         $this->logger->unexpectedFailure($job->refresh(), $stage, $exception);
@@ -100,14 +87,4 @@ class SubtitleJobFailureHandler
         ]);
     }
 
-    private function isDatabaseLocked(Throwable $exception): bool
-    {
-        for ($current = $exception; $current !== null; $current = $current->getPrevious()) {
-            if ($current instanceof PDOException && str_contains($current->getMessage(), 'database is locked')) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

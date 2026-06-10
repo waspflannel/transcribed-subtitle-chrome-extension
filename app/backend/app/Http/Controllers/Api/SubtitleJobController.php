@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateSubtitleJobRequest;
+use App\Http\Resources\SubtitleJobHistoryResource;
 use App\Http\Resources\SubtitleJobResource;
 use App\Models\SubtitleJob;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use LogicException;
 
 class SubtitleJobController extends Controller
 {
@@ -24,7 +24,7 @@ class SubtitleJobController extends Controller
         $jobs = SubtitleJob::query()
             ->with('track')
             ->whereBelongsTo($user)
-            ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
             ->where('created_at', '>=', now()->subDays(30))
             ->where(function ($query) use ($now, $recentIncompleteCutoff): void {
                 $query
@@ -33,7 +33,7 @@ class SubtitleJobController extends Controller
                             ->where('expires_at', '>', $now)
                             ->whereHas('track', function ($query) use ($now): void {
                                 $query
-                                    ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
+                                    ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
                                     ->where('expires_at', '>', $now);
                             });
                     })
@@ -48,7 +48,7 @@ class SubtitleJobController extends Controller
             ->latest('updated_at')
             ->limit(25)
             ->get()
-            ->map(fn (SubtitleJob $job): array => $this->jobHistoryItem($job))
+            ->map(fn (SubtitleJob $job): array => SubtitleJobHistoryResource::make($job)->resolve())
             ->values();
 
         return response()->json(['jobs' => $jobs]);
@@ -65,7 +65,7 @@ class SubtitleJobController extends Controller
 
         return response()->json(
             SubtitleJobResource::make($job)->resolve(),
-            $this->hasReadyTrack($job) ? 200 : 202,
+            $job->hasReadyTrack() ? 200 : 202,
         );
     }
 
@@ -75,117 +75,13 @@ class SubtitleJobController extends Controller
             ->with('track')
             ->where('public_id', $jobId)
             ->whereBelongsTo($this->extensionUser($request))
-            ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
             ->first();
 
-        if ($job === null || ($job->status === 'completed' && ! $this->hasReadyTrack($job))) {
+        if ($job === null || ($job->status === 'completed' && ! $job->hasReadyTrack())) {
             abort(404);
         }
 
         return response()->json(SubtitleJobResource::make($job)->resolve());
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function jobHistoryItem(SubtitleJob $job): array
-    {
-        $track = $job->track;
-        $status = $this->requiredString($job->status, 'status');
-        $enrichmentMode = $this->requiredEnrichmentMode($job->enrichment_mode);
-        $includeRomanization = $this->requiredBoolean($job->include_romanization, 'include_romanization');
-        $includeTranslation = $this->requiredBoolean($job->include_translation, 'include_translation');
-
-        if (! in_array($status, ['running', 'completed', 'failed'], true)) {
-            throw new LogicException('Subtitle job has an invalid status.');
-        }
-
-        if ($status === 'completed' && $track === null) {
-            throw new LogicException('Completed subtitle job is missing a track.');
-        }
-
-        if ($track !== null && $status !== 'completed') {
-            throw new LogicException('Subtitle job has a track before completion.');
-        }
-
-        $item = [
-            'youtubeVideoId' => $job->youtube_video_id,
-            'youtubeUrl' => $job->youtube_url,
-            'status' => $status,
-            'startedAt' => $job->created_at->toJSON(),
-            'lastUpdatedAt' => $job->updated_at->toJSON(),
-            'sourceLanguage' => $job->source_language,
-            'targetLanguage' => $job->target_language,
-            'enrichmentMode' => $enrichmentMode,
-            'includeRomanization' => $includeRomanization,
-            'includeTranslation' => $includeTranslation,
-            'jobId' => $job->public_id,
-            'stage' => $this->requiredString($job->stage, 'stage'),
-            'progressPercent' => $this->requiredProgressPercent($job->progress_percent),
-        ];
-
-        if (is_int($job->video_duration_seconds)) {
-            $item['videoDurationSeconds'] = $job->video_duration_seconds;
-        }
-
-        if (is_string($job->detected_source_language) && $job->detected_source_language !== '') {
-            $item['detectedSourceLanguage'] = $job->detected_source_language;
-        }
-
-        if ($track !== null) {
-            $item['completedAt'] = $track->generated_at->toJSON();
-            $item['trackId'] = $track->public_id;
-            $item['expiresAt'] = $track->expires_at->toJSON();
-        }
-
-        if ($status === 'failed') {
-            $item['completedAt'] = $job->updated_at->toJSON();
-            $item['errorCode'] = $this->requiredString($job->error_code, 'error_code');
-            $item['message'] = $this->requiredString($job->error_message, 'error_message');
-        }
-
-        return $item;
-    }
-
-    private function hasReadyTrack(SubtitleJob $job): bool
-    {
-        return $job->track !== null
-            && ! $job->track->isExpired();
-    }
-
-    private function requiredEnrichmentMode(mixed $value): string
-    {
-        if ($value !== 'on_demand' && $value !== 'full') {
-            throw new LogicException('Subtitle job has an invalid enrichment_mode.');
-        }
-
-        return $value;
-    }
-
-    private function requiredBoolean(mixed $value, string $field): bool
-    {
-        if (! is_bool($value)) {
-            throw new LogicException("Subtitle job is missing {$field}.");
-        }
-
-        return $value;
-    }
-
-    private function requiredString(mixed $value, string $field): string
-    {
-        if (! is_string($value) || $value === '') {
-            throw new LogicException("Subtitle job is missing {$field}.");
-        }
-
-        return $value;
-    }
-
-    private function requiredProgressPercent(mixed $value): int
-    {
-        if (! is_int($value)) {
-            throw new LogicException('Subtitle job is missing progress_percent.');
-        }
-
-        return $value;
     }
 }

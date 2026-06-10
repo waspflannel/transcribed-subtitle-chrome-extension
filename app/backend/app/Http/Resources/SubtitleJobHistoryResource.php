@@ -9,7 +9,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use LogicException;
 
 /** @mixin SubtitleJob */
-class SubtitleJobResource extends JsonResource
+class SubtitleJobHistoryResource extends JsonResource
 {
     use ValidatesSubtitleResourceFields;
 
@@ -23,8 +23,6 @@ class SubtitleJobResource extends JsonResource
         $track = $this->track;
         $hasReadyTrack = $this->hasReadyTrack();
         $status = $this->requiredString($this->status, 'status');
-        $stage = $this->requiredString($this->stage, 'stage');
-        $progressPercent = $this->progress_percent;
         $enrichmentMode = $this->requiredEnrichmentMode($this->enrichment_mode);
         $includeRomanization = $this->requiredBoolean($this->include_romanization, 'include_romanization');
         $includeTranslation = $this->requiredBoolean($this->include_translation, 'include_translation');
@@ -41,41 +39,42 @@ class SubtitleJobResource extends JsonResource
             throw new LogicException('Subtitle job has a ready track before completion.');
         }
 
-        $progressPercent = $this->requiredProgressPercent($progressPercent);
-
-        $resource = [
-            'jobId' => $this->public_id,
+        $item = [
             'youtubeVideoId' => $this->youtube_video_id,
+            'youtubeUrl' => $this->youtube_url,
+            'status' => $status,
+            'startedAt' => $this->created_at->toJSON(),
+            'lastUpdatedAt' => $this->updated_at->toJSON(),
             'sourceLanguage' => $this->source_language,
             'targetLanguage' => $this->target_language,
             'enrichmentMode' => $enrichmentMode,
             'includeRomanization' => $includeRomanization,
             'includeTranslation' => $includeTranslation,
-            'status' => $status,
-            'stage' => $stage,
-            'progressPercent' => $progressPercent,
-            'createdAt' => $this->created_at->toJSON(),
-            'updatedAt' => $this->updated_at->toJSON(),
+            'jobId' => $this->public_id,
+            'stage' => $this->requiredString($this->stage, 'stage'),
+            'progressPercent' => $this->requiredProgressPercent($this->progress_percent),
         ];
 
         if (is_int($this->video_duration_seconds)) {
-            $resource['videoDurationSeconds'] = $this->video_duration_seconds;
+            $item['videoDurationSeconds'] = $this->video_duration_seconds;
         }
 
         if (is_string($this->detected_source_language) && $this->detected_source_language !== '') {
-            $resource['detectedSourceLanguage'] = $this->detected_source_language;
+            $item['detectedSourceLanguage'] = $this->detected_source_language;
         }
 
-        if ($hasReadyTrack) {
-            $resource['track'] = SubtitleTrackResource::make($track)->resolve();
-            $resource['expiresAt'] = $track->expires_at->toJSON();
+        if ($track !== null) {
+            $item['completedAt'] = $track->generated_at->toJSON();
+            $item['trackId'] = $track->public_id;
+            $item['expiresAt'] = $track->expires_at->toJSON();
         }
 
         if ($status === 'failed') {
-            $resource['errorCode'] = $this->requiredString($this->error_code, 'error_code');
-            $resource['message'] = $this->requiredString($this->error_message, 'error_message');
+            $item['completedAt'] = $this->updated_at->toJSON();
+            $item['errorCode'] = $this->requiredString($this->error_code, 'error_code');
+            $item['message'] = $this->requiredString($this->error_message, 'error_message');
         }
 
-        return $resource;
+        return $item;
     }
 }

@@ -62,21 +62,23 @@ class SubtitleGenerationPipeline
             $job->update(['video_duration_seconds' => $audio->durationSeconds]);
             $job = $job->refresh()->load('user');
             $this->billing->syncJobReservationToActualDuration($job);
-            $this->logger->audioAcquisitionCompleted($job->refresh(), $audio);
-            $this->telemetry->recordStageCompleted($job->refresh(), 'acquiring-audio', $audioStartedAtMs);
+            $this->logger->audioAcquisitionCompleted($job, $audio);
+            $this->telemetry->recordStageCompleted($job, 'acquiring-audio', $audioStartedAtMs);
 
             $stage = 'optimizing-audio';
             $this->markJobRunning($job, 'optimizing-audio', 35);
-            $this->telemetry->recordStageStarted($job->refresh(), 'optimizing-audio');
+            $job = $job->refresh();
+            $this->telemetry->recordStageStarted($job, 'optimizing-audio');
 
             $audioOptimizationStartedAtMs = $this->telemetry->currentTimeMs();
             $preparedAudio = $this->transcriptionService->prepareAudio($audio);
-            $this->telemetry->recordStageCompleted($job->refresh(), 'optimizing-audio', $audioOptimizationStartedAtMs);
+            $this->telemetry->recordStageCompleted($job, 'optimizing-audio', $audioOptimizationStartedAtMs);
 
             $stage = 'transcribing';
             $this->markJobRunning($job, 'transcribing', 50);
-            $this->logger->transcriptionStarted($job->refresh());
-            $this->telemetry->recordStageStarted($job->refresh(), 'transcribing');
+            $job = $job->refresh();
+            $this->logger->transcriptionStarted($job);
+            $this->telemetry->recordStageStarted($job, 'transcribing');
 
             $transcriptionStartedAtMs = $this->telemetry->currentTimeMs();
             $transcript = $this->transcriptionService->transcribePreparedAudio(
@@ -84,7 +86,7 @@ class SubtitleGenerationPipeline
                 sourceLanguage: $job->source_language,
             );
             $this->telemetry->recordStageCompleted($job, 'transcribing', $transcriptionStartedAtMs);
-            $this->costs->recordTranscription($job->refresh(), $audio->durationSeconds);
+            $this->costs->recordTranscription($job, $audio->durationSeconds);
 
             $this->logger->transcriptionCompleted($job, $transcript, $audio);
             $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
@@ -191,10 +193,11 @@ class SubtitleGenerationPipeline
         }
 
         $this->markJobRunning($job, 'finalizing', 95);
+        $job = $job->refresh();
 
         $track = DB::transaction(function () use ($job, $transcript, $enrichment) {
             $job->track()->delete();
-            $track = $this->tracks->generate($job->refresh(), $transcript, $enrichment);
+            $track = $this->tracks->generate($job, $transcript, $enrichment);
             $job->update([
                 'status' => 'completed',
                 'stage' => 'finalizing',
@@ -203,21 +206,22 @@ class SubtitleGenerationPipeline
                 'error_message' => null,
                 'expires_at' => $track->expires_at,
             ]);
-            $this->usageLedger->debitCompletedJob($job->refresh()->load('user'), $track);
-            $this->artifacts->deleteForJob($job);
+            $completedJob = $job->refresh()->load('user');
+            $this->usageLedger->debitCompletedJob($completedJob, $track);
+            $this->artifacts->deleteForJob($completedJob);
 
             return $track;
         });
 
-        $job = $job->refresh();
+        $job = $job->refresh()->load('track');
         $this->logger->trackGenerated(
-            job: $job->load('track'),
+            job: $job,
             track: $track,
             audioDurationSeconds: (int) ($job->video_duration_seconds ?? $transcript->durationSeconds ?? 0),
         );
         $this->telemetry->recordStageCompleted($job, 'finalizing', $startedAtMs);
-        $this->logger->completedTrackTiming($job->refresh(), (int) abs(now()->diffInMilliseconds($job->created_at)));
-        $this->telemetry->recordJobCompleted($job->refresh());
+        $this->logger->completedTrackTiming($job, (int) abs(now()->diffInMilliseconds($job->created_at)));
+        $this->telemetry->recordJobCompleted($job);
     }
 
     private function dispatchTokenizationAndTranslationBatches(SubtitleJob $job): void
@@ -350,7 +354,7 @@ class SubtitleGenerationPipeline
             return null;
         }
 
-        if ($job->status !== 'running' || $this->hasReadyTrack($job)) {
+        if ($job->status !== 'running' || $job->hasReadyTrack()) {
             return null;
         }
 
@@ -432,14 +436,9 @@ class SubtitleGenerationPipeline
         $job->update(['detected_source_language' => $detectedSourceLanguage]);
     }
 
-    private function effectiveSourceLanguage(SubtitleJob $job): string
-    {
-        return $job->detected_source_language ?: $job->source_language;
-    }
-
     private function isSameLanguageGeneration(SubtitleJob $job): bool
     {
-        return $this->effectiveSourceLanguage($job) === $job->target_language;
+        return $job->effectiveSourceLanguage() === $job->target_language;
     }
 
     private function markJobRunning(SubtitleJob $job, string $stage, int $progressPercent): void
@@ -451,12 +450,6 @@ class SubtitleGenerationPipeline
             'error_code' => null,
             'error_message' => null,
         ]);
-    }
-
-    private function hasReadyTrack(SubtitleJob $job): bool
-    {
-        return $job->track !== null
-            && ! $job->track->isExpired();
     }
 
     private function failIncompleteState(string $reason): never

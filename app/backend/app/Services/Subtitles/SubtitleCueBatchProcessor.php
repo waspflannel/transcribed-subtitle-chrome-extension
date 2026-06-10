@@ -30,7 +30,7 @@ class SubtitleCueBatchProcessor
                 return $this->translationAnalysis->tokenizeCueBatch(
                     batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
                     allCues: $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues,
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
+                    sourceLanguage: $job->effectiveSourceLanguage(),
                 );
             },
         );
@@ -50,7 +50,7 @@ class SubtitleCueBatchProcessor
 
                 return $this->translationAnalysis->translateCueBatch(
                     batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
+                    sourceLanguage: $job->effectiveSourceLanguage(),
                     targetLanguage: $job->target_language,
                     allCues: $draftCues,
                 );
@@ -70,7 +70,7 @@ class SubtitleCueBatchProcessor
             process: function (SubtitleJob $job, int $batchIndex): CueEnrichmentResult {
                 return $this->translationAnalysis->romanizeCueBatch(
                     batch: $this->artifacts->cueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, $batchIndex)->cues,
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
+                    sourceLanguage: $job->effectiveSourceLanguage(),
                 );
             },
         );
@@ -88,7 +88,7 @@ class SubtitleCueBatchProcessor
             process: function (SubtitleJob $job, int $batchIndex): CueEnrichmentResult {
                 return $this->translationAnalysis->enrichCueBatch(
                     batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::MERGED_CUES, $batchIndex),
-                    sourceLanguage: $this->effectiveSourceLanguage($job),
+                    sourceLanguage: $job->effectiveSourceLanguage(),
                     targetLanguage: $job->target_language,
                     includeRomanization: $job->include_romanization,
                 );
@@ -160,7 +160,7 @@ class SubtitleCueBatchProcessor
             return null;
         }
 
-        if ($job->status !== 'running' || $this->hasReadyTrack($job)) {
+        if ($job->status !== 'running' || $job->hasReadyTrack()) {
             return null;
         }
 
@@ -185,14 +185,4 @@ class SubtitleCueBatchProcessor
         return $job;
     }
 
-    private function effectiveSourceLanguage(SubtitleJob $job): string
-    {
-        return $job->detected_source_language ?: $job->source_language;
-    }
-
-    private function hasReadyTrack(SubtitleJob $job): bool
-    {
-        return $job->track !== null
-            && ! $job->track->isExpired();
-    }
 }

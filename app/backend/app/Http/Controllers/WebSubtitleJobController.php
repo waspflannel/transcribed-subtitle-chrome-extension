@@ -24,7 +24,7 @@ class WebSubtitleJobController extends Controller
             ->with('track')
             ->whereBelongsTo($user)
             ->where('public_id', $jobId)
-            ->whereIn('processing_version', SubtitleJobService::CURRENT_PROCESSING_VERSIONS)
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
             ->firstOrFail();
 
         return view('account.job-show', [
@@ -42,8 +42,6 @@ class WebSubtitleJobController extends Controller
 
     private function languagePair(SubtitleJob $job): string
     {
-        $source = $job->detected_source_language ?: $job->source_language;
-
-        return LanguageCatalog::label((string) $source).' to '.LanguageCatalog::label((string) $job->target_language);
+        return LanguageCatalog::label($job->effectiveSourceLanguage()).' to '.LanguageCatalog::label((string) $job->target_language);
     }
 }

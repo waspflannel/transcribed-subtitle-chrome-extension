@@ -362,15 +362,6 @@ class SubtitleQueueWorkerBootstrapper
             ]];
         }
 
-        if ($this->databaseDriver() === 'sqlite') {
-            return [[
-                'name' => 'sqlite-local',
-                'queue_family' => 'all',
-                'queues' => SubtitleQueue::workerQueues(),
-                'worker_count' => 1,
-            ]];
-        }
-
         return SubtitleQueue::workerGroups();
     }
 
@@ -409,13 +400,6 @@ class SubtitleQueueWorkerBootstrapper
         $connection = SubtitleQueue::connection();
 
         return (string) config("queue.connections.{$connection}.driver", $connection);
-    }
-
-    private function databaseDriver(): string
-    {
-        $connection = (string) config('database.default');
-
-        return (string) config("database.connections.{$connection}.driver", $connection);
     }
 
     private function lockSeconds(): int

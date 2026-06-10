@@ -12,7 +12,7 @@ return [
     ],
 
     'queue' => [
-        'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'database'),
+        'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'redis'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
         'auto_start' => [

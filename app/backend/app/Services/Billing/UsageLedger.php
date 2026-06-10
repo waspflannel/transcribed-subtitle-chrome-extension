@@ -7,6 +7,7 @@ use App\Models\BillingUsageEvent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Support\PostgresErrors;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
 use InvalidArgumentException;
@@ -351,7 +352,7 @@ final class UsageLedger
                 'note' => $note,
             ]);
         } catch (QueryException $exception) {
-            if (! $this->isUniqueConstraintViolation($exception)) {
+            if (! PostgresErrors::isUniqueViolation($exception)) {
                 throw $exception;
             }
 
@@ -361,10 +362,4 @@ final class UsageLedger
         }
     }
 
-    private function isUniqueConstraintViolation(QueryException $exception): bool
-    {
-        $sqlState = $exception->errorInfo[0] ?? null;
-
-        return in_array($sqlState, ['23000', '23505'], true);
-    }
 }

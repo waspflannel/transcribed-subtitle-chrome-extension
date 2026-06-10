@@ -60,6 +60,20 @@ class SubtitleJob extends Model
         return $this->hasMany(SubtitleJobEvent::class);
     }
 
+    public function hasReadyTrack(): bool
+    {
+        $track = $this->relationLoaded('track')
+            ? $this->track
+            : $this->track()->first();
+
+        return $track !== null && ! $track->isExpired();
+    }
+
+    public function effectiveSourceLanguage(): string
+    {
+        return $this->detected_source_language ?: $this->source_language;
+    }
+
     protected function casts(): array
     {
         return [

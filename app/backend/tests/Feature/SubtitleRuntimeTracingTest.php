@@ -61,7 +61,9 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
         $staleRunId = (string) Str::uuid();
 
-        TokenizeSubtitleCueBatch::dispatch($job->id, 0, $staleRunId);
+        TokenizeSubtitleCueBatch::dispatch($job->id, 0, $staleRunId)
+            ->onConnection(SubtitleQueue::connection())
+            ->onQueue(SubtitleQueue::batchName());
 
         Artisan::call('queue:work', [
             '--queue' => SubtitleQueue::workerQueueList().',default',
