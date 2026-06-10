@@ -12,6 +12,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Queue\SerializesModels;
 use RuntimeException;
@@ -48,7 +49,13 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
+        $middleware = [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
+
+        if ($this->globalAiRateLimitEnabled()) {
+            $middleware[] = new RateLimited('subtitle-ai-batch');
+        }
+
+        return $middleware;
     }
 
     /**
@@ -93,6 +100,17 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
     abstract protected function stage(): string;
 
     abstract protected function failureMessage(): string;
+
+    private function globalAiRateLimitEnabled(): bool
+    {
+        if ((int) config('subtitles.enrichment.global_rate_limit_per_minute', 0) <= 0) {
+            return false;
+        }
+
+        // The sync driver cannot release jobs back to a queue, so rate limiting
+        // (like the per-user concurrency gate) only applies to real queues.
+        return (string) config('queue.connections.'.SubtitleQueue::connection().'.driver') !== 'sync';
+    }
 
     private function currentTimeMs(): int
     {

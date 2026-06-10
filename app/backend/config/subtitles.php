@@ -140,5 +140,8 @@ return [
     'enrichment' => [
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
         'cue_batch_size' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE', 10),
+        // Org-level guardrail across all users and workers; per-user tier caps
+        // are enforced separately by LimitSubtitleBatchConcurrency. 0 disables.
+        'global_rate_limit_per_minute' => (int) env('SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE', 300),
     ],
 ];

@@ -40,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
+        RateLimiter::for('subtitle-ai-batch', function (): Limit {
+            return Limit::perMinute(max(1, (int) config('subtitles.enrichment.global_rate_limit_per_minute', 300)));
+        });
+
         RateLimiter::for('extension-auth', function (Request $request): array {
             $email = $request->input('email');
             $emailKey = is_string($email) ? Str::lower($email) : 'invalid-email';
