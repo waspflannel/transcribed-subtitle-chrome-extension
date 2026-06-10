@@ -30,7 +30,7 @@ class ElevenLabsScribeAudioPreparer
         ]);
 
         if (! $voiceIsolationEnabled) {
-            $preparedAudio = $this->normalizeSourceToWav($audio);
+            $preparedAudio = $this->normalizeSourceToFlac($audio);
             $this->logPreparedAudioReady($preparedAudio, false, false);
 
             return $preparedAudio;
@@ -48,7 +48,7 @@ class ElevenLabsScribeAudioPreparer
 
             $this->logVoiceIsolationFallback($exception);
 
-            $preparedAudio = $this->normalizeSourceToWav($audio);
+            $preparedAudio = $this->normalizeSourceToFlac($audio);
             $this->logPreparedAudioReady($preparedAudio, false, true);
 
             return $preparedAudio;
@@ -59,19 +59,21 @@ class ElevenLabsScribeAudioPreparer
     {
         $rawPcmPath = $audio->directory.DIRECTORY_SEPARATOR.'isolation-input.pcm';
         $isolatedOutputPath = $audio->directory.DIRECTORY_SEPARATOR.'isolated-output.bin';
-        $preparedWavPath = $audio->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav';
+        $preparedFlacPath = $audio->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac';
 
         $this->convertSourceToRawPcm($audio->path, $rawPcmPath, $audio->directory);
         $this->isolateSpeech($rawPcmPath, $isolatedOutputPath);
-        $this->convertIsolatedOutputToWav($isolatedOutputPath, $preparedWavPath, $audio->directory);
+        $this->convertIsolatedOutputToFlac($isolatedOutputPath, $preparedFlacPath, $audio->directory);
 
-        return $this->preparedAudioFile($preparedWavPath, $audio, 'audio_isolation_output_to_wav');
+        return $this->preparedAudioFile($preparedFlacPath, $audio, 'audio_isolation_output_to_flac');
     }
 
-    private function normalizeSourceToWav(TemporaryAudioFile $audio): TemporaryAudioFile
+    private function normalizeSourceToFlac(TemporaryAudioFile $audio): TemporaryAudioFile
     {
-        $preparedWavPath = $audio->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav';
+        $preparedFlacPath = $audio->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac';
 
+        // FLAC is bit-exact lossless at Scribe's native 16 kHz mono resolution
+        // and roughly halves the upload size compared to PCM WAV.
         $this->runFfmpeg([
             $this->ffmpegBinary(),
             '-hide_banner',
@@ -85,11 +87,11 @@ class ElevenLabsScribeAudioPreparer
             '-ar',
             '16000',
             '-c:a',
-            'pcm_s16le',
-            $preparedWavPath,
-        ], 'source_to_wav', $audio->directory);
+            'flac',
+            $preparedFlacPath,
+        ], 'source_to_flac', $audio->directory);
 
-        return $this->preparedAudioFile($preparedWavPath, $audio, 'source_to_wav');
+        return $this->preparedAudioFile($preparedFlacPath, $audio, 'source_to_flac');
     }
 
     private function convertSourceToRawPcm(string $sourcePath, string $rawPcmPath, string $workDirectory): void
@@ -180,7 +182,7 @@ class ElevenLabsScribeAudioPreparer
         $this->storeIsolationResponse($response, $isolatedOutputPath, $provider);
     }
 
-    private function convertIsolatedOutputToWav(string $isolatedOutputPath, string $preparedWavPath, string $workDirectory): void
+    private function convertIsolatedOutputToFlac(string $isolatedOutputPath, string $preparedFlacPath, string $workDirectory): void
     {
         try {
             $this->runFfmpeg([
@@ -196,9 +198,9 @@ class ElevenLabsScribeAudioPreparer
                 '-ar',
                 '16000',
                 '-c:a',
-                'pcm_s16le',
-                $preparedWavPath,
-            ], 'isolated_output_to_wav', $workDirectory);
+                'flac',
+                $preparedFlacPath,
+            ], 'isolated_output_to_flac', $workDirectory);
 
             return;
         } catch (SubtitleProcessingException $containerDecodeFailure) {
@@ -217,9 +219,9 @@ class ElevenLabsScribeAudioPreparer
                     '-i',
                     $isolatedOutputPath,
                     '-c:a',
-                    'pcm_s16le',
-                    $preparedWavPath,
-                ], 'isolated_raw_pcm_to_wav', $workDirectory);
+                    'flac',
+                    $preparedFlacPath,
+                ], 'isolated_raw_pcm_to_flac', $workDirectory);
             } catch (SubtitleProcessingException $rawDecodeFailure) {
                 $reason = ($rawDecodeFailure->context['reason'] ?? null) === 'ffmpeg_missing'
                     ? 'ffmpeg_missing'
@@ -365,16 +367,16 @@ class ElevenLabsScribeAudioPreparer
         ]);
     }
 
-    private function preparedAudioFile(string $preparedWavPath, TemporaryAudioFile $sourceAudio, string $stage): TemporaryAudioFile
+    private function preparedAudioFile(string $preparedFlacPath, TemporaryAudioFile $sourceAudio, string $stage): TemporaryAudioFile
     {
-        $this->assertUsableFile($preparedWavPath, $stage, 'empty_output');
+        $this->assertUsableFile($preparedFlacPath, $stage, 'empty_output');
 
         return new TemporaryAudioFile(
-            path: $preparedWavPath,
+            path: $preparedFlacPath,
             directory: $sourceAudio->directory,
             durationSeconds: $sourceAudio->durationSeconds,
-            sizeBytes: File::size($preparedWavPath),
-            mimeType: 'audio/wav',
+            sizeBytes: File::size($preparedFlacPath),
+            mimeType: 'audio/flac',
         );
     }
 

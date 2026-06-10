@@ -175,6 +175,7 @@ class ElevenLabsScribeTranscriptionService
     private function assertSupportedAudioMime(TemporaryAudioFile $audio): void
     {
         match ($audio->mimeType) {
+            'audio/flac',
             'audio/mp4',
             'audio/mpeg',
             'audio/wav',
@@ -190,6 +191,7 @@ class ElevenLabsScribeTranscriptionService
     private function audioFilename(TemporaryAudioFile $audio): string
     {
         return match ($audio->mimeType) {
+            'audio/flac' => 'audio.flac',
             'audio/mp4' => 'audio.m4a',
             'audio/mpeg' => 'audio.mp3',
             'audio/wav', 'audio/x-wav' => 'audio.wav',

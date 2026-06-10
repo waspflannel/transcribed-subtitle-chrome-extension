@@ -55,7 +55,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         Process::fake(function (PendingProcess $process) {
             $command = $process->command;
             $this->assertIsArray($command);
-            File::put($command[array_key_last($command)], 'prepared-wav');
+            File::put($command[array_key_last($command)], 'prepared-flac');
 
             return Process::result();
         });
@@ -76,8 +76,8 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             $body = $request->body();
             $requestMatched = $request->url() === 'https://api.elevenlabs.test/v1/speech-to-text'
                 && $request->hasHeader('xi-api-key', 'test-key')
-                && str_contains($body, 'name="file"; filename="audio.wav"')
-                && str_contains($body, 'prepared-wav')
+                && str_contains($body, 'name="file"; filename="audio.flac"')
+                && str_contains($body, 'prepared-flac')
                 && str_contains($body, 'name="model_id"')
                 && str_contains($body, 'scribe_v2')
                 && str_contains($body, 'name="timestamps_granularity"')
@@ -102,7 +102,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertTrue($requestMatched);
     }
 
-    public function test_it_uploads_voice_isolated_prepared_wav_when_audio_isolation_is_enabled(): void
+    public function test_it_uploads_voice_isolated_prepared_flac_when_audio_isolation_is_enabled(): void
     {
         config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
         $scribeRequestMatched = false;
@@ -112,7 +112,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             $this->assertIsArray($command);
             $outputPath = $command[array_key_last($command)];
 
-            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'isolated-wav');
+            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'isolated-flac');
 
             return Process::result();
         });
@@ -124,8 +124,8 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
             $body = $request->body();
             $scribeRequestMatched = $request->url() === 'https://api.elevenlabs.test/v1/speech-to-text'
-                && str_contains($body, 'name="file"; filename="audio.wav"')
-                && str_contains($body, 'isolated-wav')
+                && str_contains($body, 'name="file"; filename="audio.flac"')
+                && str_contains($body, 'isolated-flac')
                 && str_contains($body, 'name="diarize"')
                 && str_contains($body, 'false');
 

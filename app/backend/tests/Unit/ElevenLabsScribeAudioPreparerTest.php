@@ -59,33 +59,33 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_it_normalizes_source_audio_to_scribe_wav_when_voice_isolation_is_disabled(): void
+    public function test_it_normalizes_source_audio_to_scribe_flac_when_voice_isolation_is_disabled(): void
     {
         $commands = [];
 
         Process::preventStrayProcesses();
         Process::fake(function (PendingProcess $process) use (&$commands) {
             $commands[] = $process->command;
-            File::put($this->lastCommandArgument($process), 'normalized-wav');
+            File::put($this->lastCommandArgument($process), 'normalized-flac');
 
             return Process::result();
         });
 
         $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
 
-        $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav', $preparedAudio->path);
+        $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac', $preparedAudio->path);
         $this->assertSame($this->directory, $preparedAudio->directory);
         $this->assertSame(42, $preparedAudio->durationSeconds);
-        $this->assertSame(strlen('normalized-wav'), $preparedAudio->sizeBytes);
-        $this->assertSame('audio/wav', $preparedAudio->mimeType);
-        $this->assertSame('normalized-wav', File::get($preparedAudio->path));
+        $this->assertSame(strlen('normalized-flac'), $preparedAudio->sizeBytes);
+        $this->assertSame('audio/flac', $preparedAudio->mimeType);
+        $this->assertSame('normalized-flac', File::get($preparedAudio->path));
         $this->assertCount(1, $commands);
-        $this->assertFfmpegNormalizesToWav($commands[0], $this->audio->path);
+        $this->assertFfmpegNormalizesToFlac($commands[0], $this->audio->path);
 
         Http::assertNothingSent();
     }
 
-    public function test_it_calls_audio_isolation_with_raw_pcm_and_converts_the_response_to_wav(): void
+    public function test_it_calls_audio_isolation_with_raw_pcm_and_converts_the_response_to_flac(): void
     {
         config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
         $commands = [];
@@ -114,20 +114,20 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
                 return Process::result();
             }
 
-            $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav', $outputPath);
+            $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac', $outputPath);
             $this->assertFileExists($this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin');
-            File::put($outputPath, 'isolated-wav');
+            File::put($outputPath, 'isolated-flac');
 
             return Process::result();
         });
 
         $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
 
-        $this->assertSame('isolated-wav', File::get($preparedAudio->path));
-        $this->assertSame('audio/wav', $preparedAudio->mimeType);
+        $this->assertSame('isolated-flac', File::get($preparedAudio->path));
+        $this->assertSame('audio/flac', $preparedAudio->mimeType);
         $this->assertCount(2, $commands);
         $this->assertFfmpegCreatesRawPcmForIsolation($commands[0]);
-        $this->assertFfmpegNormalizesToWav($commands[1], $this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin');
+        $this->assertFfmpegNormalizesToFlac($commands[1], $this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin');
 
         $this->assertTrue($isolationRequestMatched);
     }
@@ -155,14 +155,14 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
             }
 
             $this->assertSame('isolated-json-audio', File::get($this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin'));
-            File::put($outputPath, 'json-decoded-wav');
+            File::put($outputPath, 'json-decoded-flac');
 
             return Process::result();
         });
 
         $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
 
-        $this->assertSame('json-decoded-wav', File::get($preparedAudio->path));
+        $this->assertSame('json-decoded-flac', File::get($preparedAudio->path));
         $this->assertCount(2, $commands);
     }
 
@@ -181,14 +181,14 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
             $commands[] = $process->command;
             $outputPath = $this->lastCommandArgument($process);
 
-            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'fallback-wav');
+            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'fallback-flac');
 
             return Process::result();
         });
 
         $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
 
-        $this->assertSame('fallback-wav', File::get($preparedAudio->path));
+        $this->assertSame('fallback-flac', File::get($preparedAudio->path));
         $this->assertCount(2, $commands);
 
         Log::shouldHaveReceived('warning')
@@ -222,17 +222,17 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
                 return Process::result(errorOutput: 'container decode failed', exitCode: 1);
             }
 
-            File::put($outputPath, 'raw-decoded-wav');
+            File::put($outputPath, 'raw-decoded-flac');
 
             return Process::result();
         });
 
         $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
 
-        $this->assertSame('raw-decoded-wav', File::get($preparedAudio->path));
+        $this->assertSame('raw-decoded-flac', File::get($preparedAudio->path));
         $this->assertCount(3, $commands);
-        $this->assertFfmpegNormalizesToWav($commands[1], $this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin');
-        $this->assertFfmpegReadsRawPcmForPreparedWav($commands[2]);
+        $this->assertFfmpegNormalizesToFlac($commands[1], $this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin');
+        $this->assertFfmpegReadsRawPcmForPreparedFlac($commands[2]);
     }
 
     public function test_it_falls_back_to_normalized_source_audio_when_audio_isolation_fails_open(): void
@@ -250,17 +250,17 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
             $commands[] = $process->command;
             $outputPath = $this->lastCommandArgument($process);
 
-            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'fallback-wav');
+            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'fallback-flac');
 
             return Process::result();
         });
 
         $preparedAudio = (new ElevenLabsScribeAudioPreparer)->prepare($this->audio);
 
-        $this->assertSame('fallback-wav', File::get($preparedAudio->path));
+        $this->assertSame('fallback-flac', File::get($preparedAudio->path));
         $this->assertCount(2, $commands);
         $this->assertFfmpegCreatesRawPcmForIsolation($commands[0]);
-        $this->assertFfmpegNormalizesToWav($commands[1], $this->audio->path);
+        $this->assertFfmpegNormalizesToFlac($commands[1], $this->audio->path);
 
         Log::shouldHaveReceived('warning')
             ->with('backend.audio_preparation_fallback_used', Mockery::on(function (array $context): bool {
@@ -305,7 +305,7 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
             $this->assertSame('elevenlabs-audio-preparer', $exception->context['adapter']);
         }
 
-        $this->assertFileDoesNotExist($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav');
+        $this->assertFileDoesNotExist($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac');
     }
 
     public function test_temporary_audio_delete_removes_prepared_and_intermediate_files(): void
@@ -319,7 +319,7 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
         Process::preventStrayProcesses();
         Process::fake(function (PendingProcess $process) {
             $outputPath = $this->lastCommandArgument($process);
-            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'prepared-wav');
+            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'prepared-flac');
 
             return Process::result();
         });
@@ -338,15 +338,15 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
     /**
      * @param  array<int, string>  $command
      */
-    private function assertFfmpegNormalizesToWav(array $command, string $inputPath): void
+    private function assertFfmpegNormalizesToFlac(array $command, string $inputPath): void
     {
         $this->assertSame('ffmpeg-test', $command[0]);
         $this->assertCommandOption($command, '-i', $inputPath);
         $this->assertContains('-vn', $command);
         $this->assertCommandOption($command, '-ac', '1');
         $this->assertCommandOption($command, '-ar', '16000');
-        $this->assertCommandOption($command, '-c:a', 'pcm_s16le');
-        $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav', $command[array_key_last($command)]);
+        $this->assertCommandOption($command, '-c:a', 'flac');
+        $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac', $command[array_key_last($command)]);
     }
 
     /**
@@ -367,15 +367,15 @@ class ElevenLabsScribeAudioPreparerTest extends TestCase
     /**
      * @param  array<int, string>  $command
      */
-    private function assertFfmpegReadsRawPcmForPreparedWav(array $command): void
+    private function assertFfmpegReadsRawPcmForPreparedFlac(array $command): void
     {
         $this->assertSame('ffmpeg-test', $command[0]);
         $this->assertCommandOption($command, '-f', 's16le');
         $this->assertCommandOption($command, '-ar', '16000');
         $this->assertCommandOption($command, '-ac', '1');
         $this->assertCommandOption($command, '-i', $this->directory.DIRECTORY_SEPARATOR.'isolated-output.bin');
-        $this->assertCommandOption($command, '-c:a', 'pcm_s16le');
-        $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.wav', $command[array_key_last($command)]);
+        $this->assertCommandOption($command, '-c:a', 'flac');
+        $this->assertSame($this->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac', $command[array_key_last($command)]);
     }
 
     /**

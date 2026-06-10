@@ -43,7 +43,7 @@ ELEVENLABS_API_KEY=<server-side ElevenLabs API key>
 ELEVENLABS_URL=https://api.elevenlabs.io/v1
 ELEVENLABS_TRANSCRIPTION_MODEL=scribe_v2
 ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS=600
-ELEVENLABS_AUDIO_ISOLATION_ENABLED=true
+ELEVENLABS_AUDIO_ISOLATION_ENABLED=false
 ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS=600
 ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true
 FFMPEG_BINARY=ffmpeg
@@ -51,6 +51,8 @@ SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS=600
 ```
 
 Keep the ElevenLabs key only in backend host/provider secret storage. The extension build must never contain provider keys.
+
+Voice isolation stays disabled until the clean/noisy/music-heavy A/B comparison (TD-014) proves it improves transcript quality for its added provider cost and latency; when enabling it, keep `ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true`.
 8. Run readiness checks:
 
 ```powershell
