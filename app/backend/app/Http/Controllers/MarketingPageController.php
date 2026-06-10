@@ -18,11 +18,9 @@ class MarketingPageController extends Controller
         ]);
     }
 
-    public function desktop(Request $request, FunnelAnalytics $analytics): View
+    public function extension(Request $request, FunnelAnalytics $analytics): View
     {
-        return $this->marketingView($request, $analytics, 'desktop', 'marketing.home', [
-            'landingFeatures' => $this->landingFeatures(),
-        ]);
+        return $this->marketingView($request, $analytics, 'extension', 'marketing.extension');
     }
 
     public function pricing(Request $request, FunnelAnalytics $analytics, BillingPlanCatalog $plans): View
@@ -97,10 +95,10 @@ class MarketingPageController extends Controller
                 'description' => 'AI subtitles, translations, romanization, and word cards for public YouTube language study.',
                 'route' => 'marketing.home',
             ],
-            'desktop' => [
+            'extension' => [
                 'title' => $productName.' Chrome extension',
                 'description' => 'Download the beta Chrome extension for generated YouTube subtitles and language-learning word cards.',
-                'route' => 'marketing.desktop',
+                'route' => 'marketing.extension',
             ],
             'pricing' => [
                 'title' => 'Pricing for '.$productName,
@@ -156,7 +154,7 @@ class MarketingPageController extends Controller
                 'eyebrow' => '01 / Missing captions',
                 'title' => 'Study any video',
                 'description' => 'Turn missing or weak captions into useful study subtitles for public YouTube videos.',
-                'image' => 'img/desktop/feature-connect.webp',
+                'image' => 'img/desktop/landing-study-any-video.webp',
                 'alt' => 'Generated caption setup for a YouTube language study session',
                 'width' => 1334,
                 'height' => 1148,
@@ -165,7 +163,7 @@ class MarketingPageController extends Controller
                 'eyebrow' => '02 / Translation',
                 'title' => 'Layered context',
                 'description' => 'Add translation and romanization layers inside the player for immediate comprehension.',
-                'image' => 'img/desktop/feature-memory.webp',
+                'image' => 'img/desktop/landing-layered-context.webp',
                 'alt' => 'Caption translation and romanization controls',
                 'width' => 1334,
                 'height' => 1148,
@@ -174,7 +172,7 @@ class MarketingPageController extends Controller
                 'eyebrow' => '03 / Retention',
                 'title' => 'Word cards',
                 'description' => 'Open vocabulary cards from generated subtitles and inspect gloss, romanization, and usage notes.',
-                'image' => 'img/desktop/feature-tasks.webp',
+                'image' => 'img/desktop/landing-word-cards.webp',
                 'alt' => 'Vocabulary word cards generated from subtitle cues',
                 'width' => 1334,
                 'height' => 1148,
@@ -182,8 +180,8 @@ class MarketingPageController extends Controller
             [
                 'eyebrow' => '04 / History',
                 'title' => 'Review recent jobs',
-                'description' => 'Track recent generations, job status, and public-safe support IDs from the popup and account dashboard.',
-                'image' => 'img/desktop/feature-automation.webp',
+                'description' => 'Track recent generations, job status, and public-safe support IDs from the side panel and account dashboard.',
+                'image' => 'img/desktop/landing-review-recent-jobs.webp',
                 'alt' => 'Recent subtitle generation jobs and status history',
                 'width' => 1334,
                 'height' => 1148,
@@ -192,7 +190,7 @@ class MarketingPageController extends Controller
                 'eyebrow' => '05 / Timing',
                 'title' => 'Sync the study flow',
                 'description' => 'Adjust caption timing, density, size, contrast, and overlay position without leaving the video.',
-                'image' => 'img/desktop/feature-browse.webp',
+                'image' => 'img/desktop/landing-sync-study-flow.webp',
                 'alt' => 'Subtitle display controls for timing and caption layout',
                 'width' => 1334,
                 'height' => 1148,
@@ -201,7 +199,7 @@ class MarketingPageController extends Controller
                 'eyebrow' => '06 / Privacy',
                 'title' => 'Clear boundaries',
                 'description' => 'The extension sends the selected public video details only when you start generation.',
-                'image' => 'img/desktop/feature-sandbox.webp',
+                'image' => 'img/desktop/landing-clear-boundaries.webp',
                 'alt' => 'Privacy and account controls for subtitle generation',
                 'width' => 1334,
                 'height' => 1148,

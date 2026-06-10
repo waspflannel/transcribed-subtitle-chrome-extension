@@ -11,7 +11,7 @@ class SitemapController extends Controller
     {
         $routes = [
             ['marketing.home', '1.0'],
-            ['marketing.desktop', '0.9'],
+            ['marketing.extension', '0.9'],
             ['marketing.how-it-works', '0.8'],
             ['marketing.pricing', '0.9'],
             ['marketing.languages', '0.8'],

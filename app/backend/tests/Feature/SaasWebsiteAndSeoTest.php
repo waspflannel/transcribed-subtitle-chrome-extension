@@ -21,7 +21,7 @@ class SaasWebsiteAndSeoTest extends TestCase
     {
         $pages = [
             ['marketing.home', 'TRANSCRIBED', 'learn languages using youtube'],
-            ['marketing.desktop', 'Transcribed Subtitle Extension', 'Download Extension [Beta]'],
+            ['marketing.extension', 'Transcribed Subtitle Extension for YouTube study', 'side panel Account tab'],
             ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
             ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
             ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],
@@ -58,13 +58,14 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/xml; charset=UTF-8')
             ->assertSee(route('marketing.home'), false)
-            ->assertSee(route('marketing.desktop'), false)
+            ->assertSee(route('marketing.extension'), false)
             ->assertSee(route('marketing.pricing'), false)
             ->assertSee(route('marketing.privacy'), false)
+            ->assertDontSee('/desktop', false)
             ->assertDontSee('/dashboard');
     }
 
-    public function test_hermes_desktop_landing_page_matches_supplied_design_plan()
+    public function test_hermes_landing_page_and_extension_route_match_product_routes()
     {
         $this
             ->get(route('marketing.home', absolute: false))
@@ -75,10 +76,14 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText('Download Extension [Beta]');
 
         $this
-            ->get(route('marketing.desktop', absolute: false))
+            ->get('/desktop')
+            ->assertRedirect(route('marketing.extension', absolute: false));
+
+        $this
+            ->get(route('marketing.extension', absolute: false))
             ->assertOk()
-            ->assertSeeText('Transcribed Subtitle Extension')
-            ->assertSee('<link rel="canonical" href="'.route('marketing.desktop').'">', false);
+            ->assertSeeText('Transcribed Subtitle Extension for YouTube study')
+            ->assertSee('<link rel="canonical" href="'.route('marketing.extension').'">', false);
     }
 
     public function test_dashboard_is_protected_and_guides_extension_billing_usage_and_jobs(): void

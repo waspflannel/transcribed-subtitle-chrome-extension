@@ -3,7 +3,7 @@
 @section('content')
     <div>
         <h1>Choose new password</h1>
-        <p>Use the new password in the extension popup after signing in.</p>
+        <p>Use the new password in the extension side panel after signing in.</p>
     </div>
 
     <x-form.error-list :errors="$errors" />

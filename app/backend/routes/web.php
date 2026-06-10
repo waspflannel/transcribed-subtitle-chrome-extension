@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [MarketingPageController::class, 'home'])
     ->name('marketing.home');
-Route::get('/desktop', [MarketingPageController::class, 'desktop'])
+Route::redirect('/desktop', '/extension', 301)
     ->name('marketing.desktop');
+Route::get('/extension', [MarketingPageController::class, 'extension'])
+    ->name('marketing.extension');
 Route::get('/pricing', [MarketingPageController::class, 'pricing'])
     ->name('marketing.pricing');
 Route::get('/languages', [MarketingPageController::class, 'languages'])

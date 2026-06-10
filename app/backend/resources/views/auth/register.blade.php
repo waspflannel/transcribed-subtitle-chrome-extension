@@ -3,7 +3,7 @@
 @section('content')
     <div>
         <h1>Create account</h1>
-        <p>Use the same email in the extension popup after verification.</p>
+        <p>Use the same email in the extension side panel after verification.</p>
     </div>
 
     <x-form.error-list :errors="$errors" />
