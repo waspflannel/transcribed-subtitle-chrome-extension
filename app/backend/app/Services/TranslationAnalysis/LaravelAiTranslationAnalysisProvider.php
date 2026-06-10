@@ -9,6 +9,7 @@ use App\Ai\Agents\CueTranslationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
@@ -205,8 +206,32 @@ class LaravelAiTranslationAnalysisProvider
                 'exception' => $exception::class,
             ];
 
+            if ($exception instanceof ConnectionException) {
+                throw SubtitleProcessingException::providerUnavailable(
+                    'Subtitle AI provider did not respond.',
+                    [...$context, 'reason' => 'connection_failure'],
+                    $exception,
+                );
+            }
+
             if ($exception instanceof RequestException) {
                 $context['status'] = $exception->response->status();
+
+                if ($exception->response->status() === 429) {
+                    throw SubtitleProcessingException::rateLimited(
+                        'Subtitle AI processing is temporarily rate limited.',
+                        $context,
+                        $exception,
+                    );
+                }
+
+                if ($exception->response->serverError()) {
+                    throw SubtitleProcessingException::providerUnavailable(
+                        'Subtitle AI provider is temporarily unavailable.',
+                        $context,
+                        $exception,
+                    );
+                }
             }
 
             throw SubtitleProcessingException::enrichmentFailed('Subtitle AI processing failed.', $context, $exception);

@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -136,9 +137,14 @@ class SubtitleCueBatchProcessor
             $this->costs->recordCueBatch($job, $stage, count($result->cues));
             $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs, $batchIndex);
         } catch (Throwable $exception) {
-            $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId, [
-                'batch_index' => $batchIndex,
-            ]);
+            // Transient provider failures are retried by the queue job; failing
+            // the subtitle job here would delete its artifacts and force the
+            // whole pipeline to re-run from audio acquisition.
+            if (! ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {
+                $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId, [
+                    'batch_index' => $batchIndex,
+                ]);
+            }
 
             throw $exception;
         }

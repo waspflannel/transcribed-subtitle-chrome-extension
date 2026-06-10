@@ -76,6 +76,23 @@ class SubtitleProcessingException extends Exception
     /**
      * @param  array<string, mixed>  $context
      */
+    public static function providerUnavailable(string $message = 'Subtitle provider is temporarily unavailable.', array $context = [], ?Throwable $previous = null): self
+    {
+        return new self('provider_unavailable', $message, 503, $context, $previous);
+    }
+
+    /**
+     * Transient transport-level provider failures (rate limits, 5xx, timeouts)
+     * are weather, not programming errors — they are safe to retry.
+     */
+    public function isTransient(): bool
+    {
+        return in_array($this->publicCode, ['rate_limited', 'provider_unavailable'], true);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
     public static function queueUnavailable(string $message = 'Subtitle queue storage is temporarily unavailable.', array $context = [], ?Throwable $previous = null): self
     {
         return new self('queue_unavailable', $message, 503, $context, $previous);

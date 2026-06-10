@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
@@ -26,7 +27,7 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
 
     public int $tries = 0;
 
-    public int $maxExceptions = 1;
+    public int $maxExceptions = 3;
 
     public int $timeout = 300;
 
@@ -50,9 +51,30 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
         return [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
     }
 
+    /**
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return [15, 60];
+    }
+
     public function handle(SubtitleCueBatchProcessor $processor): void
     {
-        $this->process($processor);
+        try {
+            $this->process($processor);
+        } catch (Throwable $exception) {
+            // Transient provider failures (429/5xx/timeout) are released back to
+            // the queue with backoff until $maxExceptions is exhausted; anything
+            // else (validation, programming errors) still fails the job loudly
+            // on the first occurrence.
+            if ($this->job === null
+                || ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {
+                throw $exception;
+            }
+
+            $this->fail($exception);
+        }
     }
 
     public function failed(?Throwable $exception): void

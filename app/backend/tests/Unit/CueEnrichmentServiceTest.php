@@ -12,6 +12,7 @@ use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use GuzzleHttp\Psr7\Response as PsrResponse;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Laravel\Ai\Exceptions\RateLimitedException;
@@ -977,6 +978,70 @@ class CueEnrichmentServiceTest extends TestCase
         }
 
         $this->fail('Expected provider request failure to map to a subtitle processing exception.');
+    }
+
+    public function test_provider_http_429_maps_to_transient_rate_limited_error(): void
+    {
+        CueTokenizationAgent::fake(
+            fn (): never => throw new RequestException(new Response(new PsrResponse(429))),
+        )->preventStrayPrompts();
+
+        try {
+            $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('rate_limited', $exception->publicCode);
+            $this->assertSame(429, $exception->context['status'] ?? null);
+            $this->assertTrue($exception->isTransient());
+
+            return;
+        }
+
+        $this->fail('Expected provider 429 to map to a transient subtitle processing exception.');
+    }
+
+    public function test_provider_server_errors_map_to_transient_provider_unavailable_error(): void
+    {
+        CueTokenizationAgent::fake(
+            fn (): never => throw new RequestException(new Response(new PsrResponse(503))),
+        )->preventStrayPrompts();
+
+        try {
+            $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_unavailable', $exception->publicCode);
+            $this->assertSame(503, $exception->context['status'] ?? null);
+            $this->assertTrue($exception->isTransient());
+
+            return;
+        }
+
+        $this->fail('Expected provider 503 to map to a transient subtitle processing exception.');
+    }
+
+    public function test_provider_connection_failures_map_to_transient_provider_unavailable_error(): void
+    {
+        CueTokenizationAgent::fake(
+            fn (): never => throw new ConnectionException('cURL error 28: Operation timed out'),
+        )->preventStrayPrompts();
+
+        try {
+            $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_unavailable', $exception->publicCode);
+            $this->assertSame('connection_failure', $exception->context['reason'] ?? null);
+            $this->assertTrue($exception->isTransient());
+
+            return;
+        }
+
+        $this->fail('Expected provider connection failure to map to a transient subtitle processing exception.');
+    }
+
+    public function test_validation_failures_are_not_transient(): void
+    {
+        $exception = SubtitleProcessingException::enrichmentFailed('Invalid output.', ['reason' => 'missing_cues']);
+
+        $this->assertFalse($exception->isTransient());
     }
 
     public function test_provider_rate_limits_map_to_stable_rate_limited_error(): void
