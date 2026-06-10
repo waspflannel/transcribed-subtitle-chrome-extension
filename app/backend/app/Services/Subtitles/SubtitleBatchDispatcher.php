@@ -100,8 +100,8 @@ class SubtitleBatchDispatcher
                     $batch,
                 );
             })
-            ->progress(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName): void {
-                app(SubtitlePipelineTelemetry::class)->recordBatchProgress($subtitleJobId, $runId, $batchName, $batch);
+            ->progress(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName, $stage): void {
+                app(SubtitlePipelineTelemetry::class)->recordBatchProgress($subtitleJobId, $runId, $batchName, $stage, $batch);
             })
             ->then(static function (Batch $batch) use (
                 $subtitleJobId,

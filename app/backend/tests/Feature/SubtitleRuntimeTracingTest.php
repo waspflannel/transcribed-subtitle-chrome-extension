@@ -15,6 +15,7 @@ use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
+use App\Services\Subtitles\SubtitleBatchDispatcher;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
@@ -93,6 +94,37 @@ class SubtitleRuntimeTracingTest extends TestCase
             'queue' => SubtitleQueue::batchName(),
         ]);
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_batch_progress_callbacks_write_real_progress_into_the_job_row(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'status' => 'running',
+            'stage' => 'tokenizing',
+            'progress_percent' => 65,
+        ]);
+        $staleRunId = (string) Str::uuid();
+
+        // Stale-run batch jobs no-op successfully, which still advances the
+        // Laravel batch and fires the progress callback with the real run id.
+        app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
+            new TokenizeSubtitleCueBatch($job->id, 0, $staleRunId),
+            new TokenizeSubtitleCueBatch($job->id, 1, $staleRunId),
+        ]);
+
+        Artisan::call('queue:work', [
+            '--queue' => SubtitleQueue::workerQueueList().',default',
+            '--once' => true,
+            '--tries' => 1,
+            '--sleep' => 0,
+        ]);
+
+        // 1 of 2 analysis jobs done -> halfway through the 65-78 band.
+        $this->assertSame(71, $job->refresh()->progress_percent);
+        $this->assertDatabaseHas('subtitle_job_events', [
+            'subtitle_job_id' => $job->id,
+            'event' => 'batch.progress',
+        ]);
     }
 
     public function test_pipeline_records_queue_wait_stage_timing_and_slow_warning(): void
@@ -277,20 +309,30 @@ class SubtitleRuntimeTracingTest extends TestCase
     public function test_concurrency_limited_jobs_allow_release_retries_but_cap_exceptions(): void
     {
         $runId = (string) Str::uuid();
-        $jobs = [
+        $serialJobs = [
             new ProcessSubtitleJob(1, $runId),
+            new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
+            new MergeSubtitleCuesAfterRomanizationBatches(1, $runId),
+            new FinalizeSubtitleJob(1, false, $runId),
+        ];
+        $cueBatchJobs = [
             new TokenizeSubtitleCueBatch(1, 0, $runId),
             new TranslateSubtitleCueBatch(1, 0, $runId),
             new RomanizeSubtitleCueBatch(1, 0, $runId),
-            new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
-            new MergeSubtitleCuesAfterRomanizationBatches(1, $runId),
             new EnrichSubtitleCueBatch(1, 0, $runId),
-            new FinalizeSubtitleJob(1, false, $runId),
         ];
 
-        foreach ($jobs as $job) {
+        foreach ([...$serialJobs, ...$cueBatchJobs] as $job) {
             $this->assertSame(0, $job->tries, get_class($job));
+        }
+
+        foreach ($serialJobs as $job) {
             $this->assertSame(1, $job->maxExceptions, get_class($job));
+        }
+
+        foreach ($cueBatchJobs as $job) {
+            $this->assertSame(3, $job->maxExceptions, get_class($job));
+            $this->assertSame([15, 60], $job->backoff(), get_class($job));
         }
     }
 

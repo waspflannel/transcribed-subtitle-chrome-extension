@@ -129,7 +129,18 @@ class SubtitlePipelineTelemetry
         ]);
     }
 
-    public function recordBatchProgress(int $subtitleJobId, string $runId, string $batchName, Batch $batch): void
+    /**
+     * Maps each batch stage's real completion ratio into the job's overall
+     * progress band so users see movement during the longest phase instead
+     * of a frozen hardcoded percentage.
+     */
+    private const BATCH_PROGRESS_BANDS = [
+        'analysis' => [65, 78],
+        'romanizing' => [78, 90],
+        'enriching' => [90, 95],
+    ];
+
+    public function recordBatchProgress(int $subtitleJobId, string $runId, string $batchName, string $stage, Batch $batch): void
     {
         $this->tracer->jobEventById($subtitleJobId, 'batch.progress', [
             'run_id' => $runId,
@@ -137,6 +148,29 @@ class SubtitlePipelineTelemetry
             ...$this->batchContext($batchName, $batch),
             'progress_percent' => $batch->progress(),
         ]);
+
+        $this->writeJobBatchProgress($subtitleJobId, $runId, $stage, $batch);
+    }
+
+    private function writeJobBatchProgress(int $subtitleJobId, string $runId, string $stage, Batch $batch): void
+    {
+        $band = self::BATCH_PROGRESS_BANDS[$stage] ?? null;
+
+        if ($band === null) {
+            return;
+        }
+
+        [$from, $to] = $band;
+        $percent = min($to, $from + (int) floor(($to - $from) * min(100, max(0, $batch->progress())) / 100));
+
+        // The monotonic guard doubles as a write throttle: only batch
+        // completions that move the integer percent forward touch the row.
+        SubtitleJob::query()
+            ->whereKey($subtitleJobId)
+            ->where('run_id', $runId)
+            ->where('status', 'running')
+            ->where('progress_percent', '<', $percent)
+            ->update(['progress_percent' => $percent]);
     }
 
     public function recordBatchCompleted(int $subtitleJobId, string $runId, string $batchName, Batch $batch): void
