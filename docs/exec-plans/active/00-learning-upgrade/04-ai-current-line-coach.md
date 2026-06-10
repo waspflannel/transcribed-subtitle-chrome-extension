@@ -17,7 +17,7 @@ This phase makes the product feel like a contextual tutor while avoiding the com
   - Fixed AI coach modes for active cue: grammar explanation, literal vs natural translation, simplify, quiz, and pronunciation/shadowing prompt.
   - Backend AI endpoint keyed by authenticated account, `trackId`, `cueId`, source/target language, mode, and prompt/model version.
   - Structured output schemas and validation for each mode or a shared mode-aware response.
-  - Overlay/transcript UI for mode buttons, loading state, cached result display, retry on failure, and copy/save hooks where appropriate.
+  - Overlay and side-panel Transcript UI for mode buttons, loading state, cached result display, retry on failure, and copy/save hooks where appropriate.
   - Caching to avoid repeated provider calls for the same cue/mode/version.
   - Sanitized logs and rate limits.
 - Out of scope:
@@ -29,7 +29,7 @@ This phase makes the product feel like a contextual tutor while avoiding the com
 
 ## Acceptance Criteria
 
-- [ ] Learners can request each fixed coach mode from the active cue in the overlay and transcript/sidebar.
+- [ ] Learners can request each fixed coach mode from the active cue in the overlay and side-panel Transcript view.
 - [ ] Backend validates account ownership of the track/cue before provider calls.
 - [ ] Coach requests use bounded cue context and do not log prompts, full transcripts, provider payloads, or generated learning content.
 - [ ] Responses are structured, validated, user-safe, and mode-specific.
@@ -70,7 +70,7 @@ This phase makes the product feel like a contextual tutor while avoiding the com
 - [ ] Add backend route, request, controller, service, AI agent(s), cache, rate limits, and sanitized tracing/logging.
 - [ ] Add canonical contracts, fixtures, OpenAPI entries, generated TypeScript types, and backend contract validation tests.
 - [ ] Add extension API method and runtime messages for cue coach requests.
-- [ ] Add overlay/transcript UI for mode buttons, loading, cached result, retry, copy, and save-to-study-library hooks where already available.
+- [ ] Add overlay and side-panel Transcript UI for mode buttons, loading, cached result, retry, copy, and save-to-study-library hooks where already available.
 - [ ] Add focused backend and extension tests.
 - [ ] Capture browser screenshots or video for coach modes and failure states.
 - [ ] Check the implementation against `docs/quality/golden-principles.md`.

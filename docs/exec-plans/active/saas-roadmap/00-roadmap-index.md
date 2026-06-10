@@ -37,7 +37,7 @@ Move to public launch only after the paid beta proves:
 | Phase | Document | Primary Outcome | Exit Gate |
 | --- | --- | --- | --- |
 | 01 | `../../completed/2026-05-20-saas-roadmap-phase-01-generation-optimization.md` | Measured, faster, tier-aware generation pipeline. | Completed 2026-05-21; medium and near-limit provider timing proof remains tracked as `TD-010`. |
-| 02 | `../../completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md` | Product-grade extension popup and job visibility. | Completed 2026-05-21; Browser bridge automation remains tracked as screenshot-harness debt before beta. |
+| 02 | `../../completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md` | Product-grade extension control surface and job visibility. | Completed 2026-05-21; the former popup was later replaced by the side panel, and browser automation remains tracked as screenshot-harness debt before beta. |
 | 03 | `../../completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md` | User accounts and authenticated extension requests. | Completed 2026-05-22; jobs, tracks, and tokens are scoped to authenticated users. Fortify/Sanctum follow-up completed in `../../completed/2026-05-22-fortify-sanctum-auth-migration.md`. |
 | 04 | `04-billing-tiers-and-usage.md` | Paid plans, minute credits, and entitlement checks. | Billing and usage gates protect margins before beta traffic. |
 | 04a | `04a-tiered-worker-queues-and-concurrency.md` | Tiered generation and AI batch worker queues. | Account-owned concurrency limits and shared worker pools are ready for beta traffic. |
@@ -53,7 +53,7 @@ Move to public launch only after the paid beta proves:
 - Each phase should be completed and validated before moving to the next.
 - The roadmap targets polyglot power users first, not schools or teams.
 - The SaaS web app should live inside the existing Laravel backend unless a future plan proves a separate frontend is necessary.
-- Extension login will use email/password in the popup, implemented through scoped backend-issued Sanctum bearer tokens.
+- Extension login uses email/password in the side panel, implemented through scoped backend-issued Sanctum bearer tokens.
 - Public pricing should use generated video minutes; internal telemetry may track provider tokens, model, and cost for margin analysis.
 - Higher tiers should receive faster queues, higher concurrency, more monthly minutes, and stronger feature access.
 - Production should start with a managed Laravel VPS-style deployment, managed Postgres, managed Redis, supervised workers, and scheduled cleanup.

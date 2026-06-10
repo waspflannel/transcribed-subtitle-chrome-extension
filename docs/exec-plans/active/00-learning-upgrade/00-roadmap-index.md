@@ -23,7 +23,7 @@ The next product promise is:
 
 | Phase | Document | Primary Outcome | Exit Gate |
 | --- | --- | --- | --- |
-| 01 | `../../completed/2026-06-03-keyboard-transcript-accessibility-foundation.md` | Keyboard-first subtitle controls, transcript/sidebar, cue navigation, and accessibility controls. | Completed 2026-06-03. |
+| 01 | `../../completed/2026-06-03-keyboard-transcript-accessibility-foundation.md` | Keyboard-first subtitle controls, side-panel Transcript view, cue navigation, and accessibility controls. | Completed 2026-06-03. |
 | 02 | `02-vocabulary-sentence-mining-anki-export.md` | Account-scoped saved words/sentences, review state, CSV export, and local AnkiConnect export. | A learner can save from the overlay/transcript and export useful cards to Anki. |
 | 03 | `03-listening-shadowing-speaking-practice.md` | Auto-pause, repeat, AB loop, listen-then-reveal, shadowing prompts, microphone recording, and backend speech scoring. | A learner can practice listening and speaking against the active subtitle cue. |
 | 04 | `04-ai-current-line-coach.md` | Fixed-mode AI coach for current cue explanation, grammar, literal/natural translation, simplification, quiz, and pronunciation prompts. | A learner can ask focused questions about the active line without freeform chat. |
@@ -64,7 +64,7 @@ Docs-only updates should at minimum run:
 git diff --check
 ```
 
-UI phases must capture browser screenshots or video for the popup, overlay, transcript/sidebar, and relevant mobile/compact states.
+UI phases must capture browser screenshots or video for the side panel, overlay, Transcript view, and relevant mobile/compact states.
 
 ## External References
 

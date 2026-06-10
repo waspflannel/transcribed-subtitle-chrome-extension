@@ -28,7 +28,7 @@ Recommended format:
 - Many-to-many language refactor record: `../exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`
 - Phase index: `../exec-plans/active/00-phase-index.md`
 
-The root `revamped-design-document.md` and `detailed-design-document.md` files are historical pre-refactor notes. They do not override the current source-language plus target-language workflow.
+The `docs/history/revamped-design-document.md` and `docs/history/detailed-design-document.md` files are historical pre-refactor notes. They do not override the current source-language plus target-language workflow.
 
 ## First Release Scope
 
@@ -45,7 +45,7 @@ The root `revamped-design-document.md` and `detailed-design-document.md` files a
 - Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, same-agent split retry for invalid multi-cue batches, and visible generation failure when a single cue remains unreliable.
 - Optional non-Latin-script romanization when the user enables romanization, with visible generation failure when enabled romanization output is invalid.
 - Synchronized in-page overlay.
-- Local study controls for blurring token cards, full cue romanization, and translation, revealing token text plus token romanization per token on token hover/focus/pin while revealing full cue romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying/copying the active cue, navigating cues with keyboard shortcuts, and inspecting/searching the generated transcript sidebar without opening the popup.
+- Local study controls for blurring token cards, full cue romanization, and translation, revealing token text plus token romanization per token on token hover/focus/pin while revealing full cue romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying/copying the active cue, navigating cues with keyboard shortcuts, and inspecting/searching the generated Transcript view in the side panel.
 - Caption display preferences for local overlay font size, density, and high-contrast rendering.
 - Laravel SaaS web app for beta registration, billing, usage, recent jobs, support-safe job details, and public marketing/legal pages.
 

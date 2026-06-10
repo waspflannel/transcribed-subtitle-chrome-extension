@@ -14,14 +14,10 @@ Tooling notes:
 - `create_design_system_from_design_md` succeeded on 2026-06-05 and created the `Obsidian Scriptorium` design system asset.
 - Screen-generation tools for homepage, public templates, auth, dashboard, and job detail screens were not exposed in this Codex session. The implementation uses the uploaded Stitch brief and generated design-system output as the accepted design direction.
 
-Production image assets copied into the Laravel public tree:
+Historical public image assets:
 
-- Hero scholarly language desk: `app/backend/public/img/marketing/dark-academia/hero-language-desk.png`
-- Product video poster fallback: `app/backend/public/img/marketing/dark-academia/product-video-poster.png`
-- Perk tile for missing captions: `app/backend/public/img/marketing/dark-academia/perk-missing-captions.png`
-- Perk tile for translation layers: `app/backend/public/img/marketing/dark-academia/perk-translation-layer.png`
-- Perk tile for word cards: `app/backend/public/img/marketing/dark-academia/perk-word-cards.png`
-- Final reading room CTA: `app/backend/public/img/marketing/dark-academia/final-reading-room.png`
+- The generated dark-academia PNGs were removed from `app/backend/public/img/marketing/dark-academia/` on 2026-06-09 after the active homepage moved to optimized Hermes-inspired WebP assets.
+- Keep this file as the Stitch/design-system manifest only; do not treat it as an active asset inventory.
 
 Generated image source directory:
 

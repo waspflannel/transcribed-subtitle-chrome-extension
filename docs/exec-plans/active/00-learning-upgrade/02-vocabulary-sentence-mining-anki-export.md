@@ -16,8 +16,8 @@ This phase converts one-off subtitle understanding into a reusable personal stud
 - In scope:
   - Account-scoped saved study-item backend data for word and sentence items.
   - Extension API contracts for save, list/filter, update review state, delete, and CSV export.
-  - Save actions from overlay token detail, active cue controls, and transcript/sidebar.
-  - Study Library popup tab or account dashboard surface for saved items, filters, review state, and export controls.
+  - Save actions from overlay token detail, active cue controls, and the side-panel Transcript view.
+  - Study Library side-panel view or account dashboard surface for saved items, filters, review state, and export controls.
   - Direct extension-local AnkiConnect adapter for localhost deck/model discovery, duplicate checks, and note creation.
   - Clear Anki unavailable/misconfigured failure copy.
   - Contract, backend, extension, and UI tests.
@@ -71,12 +71,12 @@ This phase converts one-off subtitle understanding into a reusable personal stud
 
 ## Implementation Steps
 
-- [ ] Inspect current auth, contracts, migrations, API controller, extension API client, popup, overlay, and transcript/sidebar state.
+- [ ] Inspect current auth, contracts, migrations, API controller, extension API client, side panel, overlay, and Transcript view state.
 - [ ] Create account-scoped study-item migrations, model, factories, policies or ownership checks, and cleanup posture.
 - [ ] Add canonical JSON schemas, fixtures, OpenAPI entries, generated contract types, and backend contract validation tests.
 - [ ] Add Laravel requests/controllers/services for save, list/filter, update state, delete, and CSV export.
 - [ ] Add extension API methods and runtime messages for saving items and syncing saved/export state.
-- [ ] Add save controls to token detail, active cue controls, and transcript/sidebar.
+- [ ] Add save controls to token detail, active cue controls, and the side-panel Transcript view.
 - [ ] Add Study Library UI for saved items, filters, review states, delete, CSV export, and Anki export.
 - [ ] Add extension-local AnkiConnect adapter for deck/model discovery, duplicate checks, note creation, and failure copy.
 - [ ] Add backend, contracts, extension, and UI tests.

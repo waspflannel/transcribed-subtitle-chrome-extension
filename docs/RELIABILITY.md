@@ -12,10 +12,10 @@
 - SQLite is test-only through PHPUnit's in-memory configuration. It is not a supported app runtime or smoke profile.
 - `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, Redis queue configuration, or Redis-backed subtitle concurrency bookkeeping is missing.
 - `php artisan ops:production-check` verifies paid-beta deployment posture: `APP_DEBUG=false`, HTTPS `APP_URL`, configured `APP_KEY`, Postgres, Redis subtitle queues, retry-after greater than worker timeout, disabled production worker auto-start, Redis concurrency cache, configured provider/Stripe keys, enabled fail-open Audio Isolation, disabled billing test switcher, non-debug logging, and configured `yt-dlp`/`ffmpeg`.
-- Local generate requests auto-start subtitle queue workers when `SUBTITLE_AUTO_START_WORKERS=true`; auto-start defaults off when `APP_ENV=production` unless explicitly enabled, so production can run supervised workers instead.
+- Local subtitle queue workers are started explicitly with `scripts/runtime/start-local-backend-workers.ps1` or `php artisan subtitles:dev-workers`; production uses supervised workers instead of request-time process startup.
 - Workers listen through shared worker groups. Defaults are `generation-priority` for all generation queues in `ultimate,pro,plus,base` order, `batch-priority` for all batch queues in the same order, plus `base-generation-guarantee` and `base-batch-guarantee` pools that listen only to base queues.
 - Production worker process heartbeat is monitored through Supervisor status for the rendered `tse-*` worker programs; app-level queue health remains visible through `php artisan subtitles:runtime --json`, `subtitles:slow --json`, and `subtitles:metrics --json`.
-- Auto-started workers and subtitle batch jobs default to unlimited release attempts because account-scoped AI batch concurrency throttling intentionally releases queued batch jobs for a later attempt; subtitle jobs cap real exceptions with `maxExceptions=1`, while capped one-attempt jobs would turn normal delays into `MaxAttemptsExceededException` failures.
+- Local dev workers and subtitle batch jobs default to unlimited release attempts because account-scoped AI batch concurrency throttling intentionally releases queued batch jobs for a later attempt; subtitle jobs cap real exceptions with `maxExceptions=1`, while capped one-attempt jobs would turn normal delays into `MaxAttemptsExceededException` failures.
 - Conservative beta concurrency limits are configurable by tier: generation limits are base 1, plus 2, pro 3, ultimate 5; active AI batch limits are base 3, plus 8, pro 14, ultimate 20.
 - Account generation admission is enforced before queue dispatch by authenticated `user_id`. AI batch concurrency caps are enforced for database/Redis queue workers through the dedicated `subtitle_concurrency` cache store, keyed by hashed user ID, tier, and limiter type. This keeps limiter locks and counters on Redis DB 1 while the global `CACHE_STORE` can remain database-backed. The sync queue driver bypasses batch caps so feature tests and local synchronous proofs still complete inline.
 - Add a startup smoke check to `scripts/agent/check.ps1`.
@@ -52,7 +52,7 @@ Generated tracks expire after 30 days. The scheduled `subtitles:prune-expired` c
 
 Production backups use Postgres custom-format dumps plus restore tests against a disposable restore-test database. A backup is not considered valid release evidence until restore succeeds and the restored database can run `migrate:status` and subtitle runtime inspection.
 
-The popup local clear-state action removes local extension settings and anonymous install ID, clears in-memory tab subtitle state, and republishes default settings/no-track state to the active YouTube tab. It does not delete backend tracks because the first release has no user account or ownership model.
+The side-panel local clear-state action removes local extension settings, anonymous install ID, extension session, account cache, and active-track state, then republishes default settings/no-track state to the active YouTube tab. It does not delete backend tracks; account-owned track retention and pruning are handled by the backend.
 
 ## Future Harness Targets
 

@@ -7,14 +7,14 @@ Last updated: 2026-05-22
 
 ## Goal
 
-This index splits `detailed-design-document.md` into implementation phases for the YouTube AI Language Subtitle Extension.
+This index split `docs/history/detailed-design-document.md` into implementation phases for the original YouTube AI Language Subtitle Extension proof.
 
 The phase sequence is designed to reach real transcription early, keep the Laravel backend and WXT extension simple, and preserve schema-first contracts across PHP and TypeScript.
 
 ## Source Documents
 
-- Product pivot: `revamped-design-document.md`
-- Detailed baseline: `detailed-design-document.md`
+- Product pivot: `docs/history/revamped-design-document.md`
+- Detailed baseline: `docs/history/detailed-design-document.md`
 - Agent map: `AGENTS.md`
 - Architecture map: `ARCHITECTURE.md`
 - Plan template: `docs/exec-plans/templates/exec-plan-template.md`
