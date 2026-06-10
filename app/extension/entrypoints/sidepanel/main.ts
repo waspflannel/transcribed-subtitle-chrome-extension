@@ -10,10 +10,10 @@ import {
   languageLabel,
 } from '../../utils/languages';
 import { isRuntimeMessage } from '../../utils/messages';
-import type { AccountState, PopupState } from '../../utils/messages';
+import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
 import { selectDefaultView } from '../../utils/panel/view-state';
-import { generationProgress } from '../../utils/popup-progress';
-import { accountStateFromJobHistory, formatResetDate } from '../../utils/popup-saas-state';
+import { generationProgress } from '../../utils/panel-progress';
+import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { accountFeatureListHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
@@ -30,32 +30,8 @@ import {
 } from './view-model';
 import { getPanelDom } from './dom';
 
-type PopupRequest =
-  | {
-      type: 'popup.getState';
-      syncBackend?: boolean;
-    }
-  | {
-      type: 'popup.updateSettings';
-      patch: Partial<ExtensionSettings>;
-    }
-  | {
-      type: 'popup.generateSubtitles';
-    }
-  | {
-      type: 'popup.login';
-      email: string;
-      password: string;
-    }
-  | {
-      type: 'popup.logout';
-    }
-  | {
-      type: 'popup.clearLocalState';
-    };
-
-type PopupErrorResponse = { ok: false; error: string };
-type PopupResponse = PopupState | PopupErrorResponse;
+type PanelErrorResponse = { ok: false; error: string };
+type PanelResponse = PanelState | PanelErrorResponse;
 type RequestErrorTarget = 'global' | 'account';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
@@ -125,7 +101,7 @@ const {
 } = getPanelDom();
 
 let currentSettings: ExtensionSettings | null = null;
-let latestState: PopupState | null = null;
+let latestState: PanelState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
@@ -202,7 +178,7 @@ browser.runtime.onMessage.addListener((message) => {
 let backendRefreshInFlight = false;
 
 async function loadPanelState(): Promise<void> {
-  await sendPanelRequest({ type: 'popup.getState', syncBackend: false });
+  await sendPanelRequest({ type: 'panel.getState', syncBackend: false });
   void refreshBackendState();
 }
 
@@ -214,22 +190,22 @@ async function refreshBackendState(): Promise<void> {
   backendRefreshInFlight = true;
 
   try {
-    await sendPanelRequest({ type: 'popup.getState', syncBackend: true });
+    await sendPanelRequest({ type: 'panel.getState', syncBackend: true });
   } finally {
     backendRefreshInFlight = false;
   }
 }
 
 async function generateSubtitles(): Promise<void> {
-  await sendPanelRequest({ type: 'popup.generateSubtitles' });
+  await sendPanelRequest({ type: 'panel.generateSubtitles' });
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  await sendPanelRequest({ type: 'popup.updateSettings', patch });
+  await sendPanelRequest({ type: 'panel.updateSettings', patch });
 }
 
 async function clearLocalState(): Promise<void> {
-  await sendPanelRequest({ type: 'popup.clearLocalState' });
+  await sendPanelRequest({ type: 'panel.clearLocalState' });
 }
 
 async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
@@ -240,7 +216,7 @@ async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
   try {
     const signedIn = await sendPanelRequest(
       {
-        type: 'popup.login',
+        type: 'panel.login',
         email: accountEmailInput.value,
         password: accountPasswordInput.value,
       },
@@ -261,7 +237,7 @@ async function logoutAccount(): Promise<void> {
   setAccountRequestBusy(true, 'Signing out...');
 
   try {
-    const signedOut = await sendPanelRequest({ type: 'popup.logout' }, 'account');
+    const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account');
 
     if (signedOut) {
       showAccountFeedback('success', 'Signed out.');
@@ -271,9 +247,9 @@ async function logoutAccount(): Promise<void> {
   }
 }
 
-async function sendPanelRequest(request: PopupRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
+async function sendPanelRequest(request: PanelRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
   try {
-    const response = (await browser.runtime.sendMessage(request)) as PopupResponse;
+    const response = (await browser.runtime.sendMessage(request)) as PanelResponse;
 
     if ('ok' in response) {
       showRequestError(response.error, errorTarget);
@@ -385,7 +361,7 @@ function handleJobsListClick(event: MouseEvent): void {
   void browser.tabs.create({ url: videoUrl });
 }
 
-function showPanelState(state: PopupState): void {
+function showPanelState(state: PanelState): void {
   latestState = state;
 
   const pageStatus = state.pageStatus;
@@ -400,9 +376,9 @@ function showPanelState(state: PopupState): void {
 
   showTrackState(state);
   if (subtitleState.type === 'ready') {
-    transcriptView.setData(subtitleState.track.cues, settings);
+    transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
   } else {
-    transcriptView.setData([], settings);
+    transcriptView.setData(null, [], settings);
   }
   renderJobHistory(state, { jobsList, jobsError });
   renderUsage(accountState);
@@ -442,7 +418,7 @@ function showPanelState(state: PopupState): void {
   }
 }
 
-function showTrackState(state: PopupState): void {
+function showTrackState(state: PanelState): void {
   const subtitleState = state.subtitleState;
 
   if (subtitleState.type === 'ready') {
@@ -485,6 +461,17 @@ function renderLanguagePickers(settings: ExtensionSettings | null): void {
 }
 
 function renderUsage(accountState: AccountState): void {
+  if (accountState.status !== 'authenticated') {
+    usageSummary.textContent = 'Sign in to see usage';
+    usageRemaining.textContent = 'Usage unavailable';
+    usageBar.style.width = '0%';
+    usagePlan.textContent = 'Not signed in';
+    usagePending.textContent = 'Sign in required';
+    usageReset.textContent = 'Unavailable';
+
+    return;
+  }
+
   const totalCommitted = accountState.monthlyMinutesUsed + accountState.monthlyMinutesPending;
   const percent = accountState.monthlyMinuteLimit === 0
     ? 0
@@ -501,9 +488,9 @@ function renderUsage(accountState: AccountState): void {
 function renderAccount(accountState: AccountState, settings: ExtensionSettings): void {
   const authenticated = accountState.status === 'authenticated';
 
-  accountStatus.textContent = authenticated ? accountState.email ?? 'Signed in' : 'Not signed in';
-  accountPlan.textContent = accountState.planName;
-  accountSpeed.textContent = accountState.tierSpeedLabel;
+  accountStatus.textContent = authenticated ? accountState.email : 'Not signed in';
+  accountPlan.textContent = authenticated ? accountState.planName : 'Sign in required';
+  accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Unavailable';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;
@@ -522,7 +509,7 @@ function renderShortcutHelp(): void {
 }
 
 function showError(error: unknown): void {
-  const emptyAccountState = accountStateFromJobHistory([]);
+  const emptyAccountState = anonymousAccountState();
 
   latestState = null;
   currentSettings = null;

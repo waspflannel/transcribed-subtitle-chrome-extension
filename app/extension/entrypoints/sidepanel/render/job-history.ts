@@ -1,11 +1,11 @@
 import { escapeHtml } from '../../../utils/html';
 import { groupJobHistoryByMediaKind, jobHistoryMediaKind } from '../../../utils/job-history-media';
 import { languageLabel } from '../../../utils/languages';
-import type { PopupState } from '../../../utils/messages';
-import { formatHistoryTimestamp, generationProgress } from '../../../utils/popup-progress';
-import { formatDurationSeconds, formatJobTiming, publicJobTelemetry, stageTimeline } from '../../../utils/popup-saas-state';
+import type { PanelState } from '../../../utils/messages';
+import { formatHistoryTimestamp, generationProgress } from '../../../utils/panel-progress';
+import { formatDurationSeconds, formatJobTiming, publicJobTelemetry, stageTimeline } from '../../../utils/account-state';
 
-export function renderJobHistory(state: PopupState, elements: { jobsList: HTMLElement; jobsError: HTMLElement }): void {
+export function renderJobHistory(state: PanelState, elements: { jobsList: HTMLElement; jobsError: HTMLElement }): void {
   if (state.jobHistoryError) {
     elements.jobsError.hidden = false;
     elements.jobsError.textContent = state.jobHistoryError;
@@ -28,7 +28,7 @@ export function renderJobHistory(state: PopupState, elements: { jobsList: HTMLEl
   ].join('');
 }
 
-function jobHistorySectionHtml(title: string, jobs: PopupState['jobHistory'], state: PopupState): string {
+function jobHistorySectionHtml(title: string, jobs: PanelState['jobHistory'], state: PanelState): string {
   const content = jobs.length === 0
     ? `<p class="muted empty-state">No ${title.toLowerCase()} jobs yet.</p>`
     : jobs.map((job) => jobHistoryItemHtml(job, state)).join('');
@@ -44,7 +44,7 @@ function jobHistorySectionHtml(title: string, jobs: PopupState['jobHistory'], st
   `;
 }
 
-function jobHistoryItemHtml(job: PopupState['jobHistory'][number], state: PopupState): string {
+function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelState): string {
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
   const mediaLabel = jobHistoryMediaKind(job) === 'short' ? 'Shorts' : 'Video';
@@ -93,7 +93,7 @@ function jobHistoryItemHtml(job: PopupState['jobHistory'][number], state: PopupS
   `;
 }
 
-function stageTimelineHtml(job: PopupState['jobHistory'][number]): string {
+function stageTimelineHtml(job: PanelState['jobHistory'][number]): string {
   return `
     <ol class="stage-timeline" aria-label="Generation stage timeline">
       ${stageTimeline(job)
@@ -103,7 +103,7 @@ function stageTimelineHtml(job: PopupState['jobHistory'][number]): string {
   `;
 }
 
-function jobControls(job: PopupState['jobHistory'][number]): string[] {
+function jobControls(job: PanelState['jobHistory'][number]): string[] {
   return [
     job.includeTranslation ? 'Translated cues' : 'Transcript cues',
     job.includeRomanization ? 'Romanization when available' : 'Romanization off',
@@ -111,6 +111,6 @@ function jobControls(job: PopupState['jobHistory'][number]): string[] {
   ];
 }
 
-function languageRouteLabel(job: PopupState['jobHistory'][number]): string {
+function languageRouteLabel(job: PanelState['jobHistory'][number]): string {
   return `${languageLabel(job.sourceLanguage)} to ${languageLabel(job.targetLanguage)}`;
 }

@@ -234,7 +234,7 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
       return 'Subtitle generation is temporarily rate limited. Wait a minute and try again.';
 
     case 'queue_unavailable':
-      return 'The subtitle queue database is busy. Wait for the current generation to finish, then try again.';
+      return 'The subtitle queue is temporarily unavailable. Wait a moment, then try again.';
 
     case 'not_found':
     case 'expired':

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatHistoryTimestamp, generationProgress } from '../utils/popup-progress';
+import { formatHistoryTimestamp, generationProgress } from '../utils/panel-progress';
 
-describe('popup progress helpers', () => {
+describe('panel progress helpers', () => {
   it('maps backend stages to user-facing labels', () => {
     expect(generationProgress({ stage: 'romanizing', progressPercent: 82 })).toEqual({
       percent: 82,

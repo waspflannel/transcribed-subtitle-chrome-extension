@@ -6,12 +6,16 @@ export interface PageSnapshot {
   videoDurationSeconds?: number;
 }
 
-export interface AccountState {
-  status: 'anonymous' | 'authenticated';
-  id?: string;
-  email?: string;
-  name?: string;
-  emailVerified?: boolean;
+export interface AnonymousAccountState {
+  status: 'anonymous';
+}
+
+export interface AuthenticatedAccountState {
+  status: 'authenticated';
+  id: string;
+  email: string;
+  name: string;
+  emailVerified: boolean;
   planName: string;
   tierName: string;
   tierSpeedLabel: string;
@@ -22,6 +26,8 @@ export interface AccountState {
   resetAt: string;
   upgradeAvailable: boolean;
 }
+
+export type AccountState = AnonymousAccountState | AuthenticatedAccountState;
 
 export type SubtitleState =
   | {
@@ -51,7 +57,7 @@ export type SubtitleState =
 
 export const DEFAULT_SUBTITLE_STATE: SubtitleState = { type: 'no-track' };
 
-export interface PopupState {
+export interface PanelState {
   installId: string;
   settings: ExtensionSettings;
   activeTabId?: number;
@@ -63,16 +69,16 @@ export interface PopupState {
   jobHistoryError?: string;
 }
 
-export type RuntimeMessage =
+export type BackgroundRequest =
   | {
       type: 'content.getState';
     }
   | {
-      type: 'popup.getState';
+      type: 'panel.getState';
       syncBackend?: boolean;
     }
   | {
-      type: 'popup.updateSettings';
+      type: 'panel.updateSettings';
       patch: Partial<ExtensionSettings>;
     }
   | {
@@ -80,15 +86,15 @@ export type RuntimeMessage =
       patch: Partial<ExtensionSettings>;
     }
   | {
-      type: 'popup.generateSubtitles';
+      type: 'panel.generateSubtitles';
     }
   | {
-      type: 'popup.login';
+      type: 'panel.login';
       email: string;
       password: string;
     }
   | {
-      type: 'popup.logout';
+      type: 'panel.logout';
     }
   | {
       type: 'content.enrichLearningToken';
@@ -98,10 +104,15 @@ export type RuntimeMessage =
       tokenIndex: number;
     }
   | {
-      type: 'background.getPageSnapshot';
+      type: 'panel.clearLocalState';
     }
+  | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
+  | { type: 'panel.seekToCue'; youtubeVideoId: string; cueId: string; mode: 'jump' | 'replay' }
+  | { type: 'content.focusPanelTranscript' };
+
+export type ContentRequest =
   | {
-      type: 'popup.clearLocalState';
+      type: 'background.getPageSnapshot';
     }
   | {
       type: 'background.settingsChanged';
@@ -111,12 +122,14 @@ export type RuntimeMessage =
       type: 'background.subtitleStateChanged';
       subtitleState: SubtitleState;
     }
-  | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
+  | { type: 'background.seekToCue'; cueId: string; mode: 'jump' | 'replay' };
+
+export type PanelNotice =
   | { type: 'background.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
-  | { type: 'popup.seekToCue'; cueId: string; mode: 'jump' | 'replay' }
-  | { type: 'background.seekToCue'; cueId: string; mode: 'jump' | 'replay' }
-  | { type: 'content.focusPanelTranscript' }
   | { type: 'background.focusTranscript' };
+
+export type PanelRequest = Extract<BackgroundRequest, { type: `panel.${string}` }>;
+export type RuntimeMessage = BackgroundRequest | ContentRequest | PanelNotice;
 
 export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   if (!isRecord(value) || typeof value.type !== 'string') {
@@ -125,19 +138,19 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
   switch (value.type) {
     case 'content.getState':
-    case 'popup.generateSubtitles':
-    case 'popup.logout':
-    case 'popup.clearLocalState':
+    case 'panel.generateSubtitles':
+    case 'panel.logout':
+    case 'panel.clearLocalState':
     case 'background.getPageSnapshot':
       return true;
 
-    case 'popup.login':
+    case 'panel.login':
       return hasString(value, 'email') && hasString(value, 'password');
 
-    case 'popup.getState':
+    case 'panel.getState':
       return optionalBoolean(value, 'syncBackend');
 
-    case 'popup.updateSettings':
+    case 'panel.updateSettings':
     case 'content.updateSettings':
       return isRecord(value.patch);
 
@@ -161,11 +174,39 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'background.activeCueChanged':
       return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId');
 
-    case 'popup.seekToCue':
+    case 'panel.seekToCue':
     case 'background.seekToCue':
-      return hasString(value, 'cueId') && (value.mode === 'jump' || value.mode === 'replay');
+      return hasString(value, 'cueId')
+        && (value.type !== 'panel.seekToCue' || hasString(value, 'youtubeVideoId'))
+        && (value.mode === 'jump' || value.mode === 'replay');
 
     default:
+      return false;
+  }
+}
+
+export function isBackgroundRequest(message: RuntimeMessage): message is BackgroundRequest {
+  switch (message.type) {
+    case 'content.getState':
+    case 'content.updateSettings':
+    case 'content.enrichLearningToken':
+    case 'content.activeCueChanged':
+    case 'content.focusPanelTranscript':
+    case 'panel.getState':
+    case 'panel.updateSettings':
+    case 'panel.generateSubtitles':
+    case 'panel.login':
+    case 'panel.logout':
+    case 'panel.clearLocalState':
+    case 'panel.seekToCue':
+      return true;
+
+    case 'background.getPageSnapshot':
+    case 'background.settingsChanged':
+    case 'background.subtitleStateChanged':
+    case 'background.activeCueChanged':
+    case 'background.seekToCue':
+    case 'background.focusTranscript':
       return false;
   }
 }

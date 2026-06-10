@@ -29,9 +29,6 @@ function buildOverlayFontFaces(): string {
   ).join('');
 }
 
-export { renderOverlayContent } from './overlay/overlay-render';
-export type { OverlayRenderState, OverlayStatus } from './overlay/types';
-
 interface FocusSnapshot {
   key: string;
   selectionStart?: number | null;

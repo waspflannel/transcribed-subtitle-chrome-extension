@@ -126,7 +126,7 @@ describe('SubtitleApiClient', () => {
     );
   });
 
-  it('times out backend job history instead of blocking popup startup', async () => {
+  it('times out backend job history instead of blocking panel startup', async () => {
     vi.useFakeTimers();
 
     try {
@@ -258,7 +258,7 @@ describe('SubtitleApiClient', () => {
     ).toBe('Subtitle generation is temporarily rate limited. Wait a minute and try again.');
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('queue_unavailable', 'Queue busy.', 503)),
-    ).toBe('The subtitle queue database is busy. Wait for the current generation to finish, then try again.');
+    ).toBe('The subtitle queue is temporarily unavailable. Wait a moment, then try again.');
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('audio_unavailable', 'Private video.', 422)),
     ).toBe('This video is not available for subtitle generation. Use a public non-live YouTube video.');
@@ -369,7 +369,7 @@ function extensionAuthResponse() {
       email: 'learner@example.com',
       name: 'Beta Learner',
       emailVerified: true,
-      planName: 'Local beta',
+      planName: 'Beta Base',
       tierName: 'Base',
       tierSpeedLabel: 'Standard queue',
       monthlyMinuteLimit: 60,

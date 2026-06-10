@@ -1,7 +1,7 @@
-import type { AccountState, PopupState } from '../../utils/messages';
-import { formatDurationSeconds } from '../../utils/popup-saas-state';
+import type { AccountState, PanelState } from '../../utils/messages';
+import { formatDurationSeconds } from '../../utils/account-state';
 
-export function statusClass(subtitleStateType: PopupState['subtitleState']['type'], supported: boolean): string {
+export function statusClass(subtitleStateType: PanelState['subtitleState']['type'], supported: boolean): string {
   if (subtitleStateType === 'error') {
     return 'error';
   }
@@ -13,7 +13,7 @@ export function statusClass(subtitleStateType: PopupState['subtitleState']['type
   return supported ? 'ok' : 'idle';
 }
 
-export function statusLabel(subtitleStateType: PopupState['subtitleState']['type'], supported: boolean): string {
+export function statusLabel(subtitleStateType: PanelState['subtitleState']['type'], supported: boolean): string {
   if (subtitleStateType === 'error') {
     return 'Generation failed';
   }
@@ -25,13 +25,13 @@ export function statusLabel(subtitleStateType: PopupState['subtitleState']['type
   return supported ? 'Ready to generate' : 'Unsupported page';
 }
 
-export function videoDurationLabel(state: PopupState): string {
+export function videoDurationLabel(state: PanelState): string {
   const duration = videoDurationForState(state);
 
   return typeof duration === 'number' ? formatDurationSeconds(duration) : 'No supported video';
 }
 
-export function videoDurationForState(state: PopupState): number | undefined {
+export function videoDurationForState(state: PanelState): number | undefined {
   if (typeof state.pageVideoDurationSeconds === 'number') {
     return state.pageVideoDurationSeconds;
   }
@@ -46,7 +46,7 @@ export function videoDurationForState(state: PopupState): number | undefined {
 
 export function generateButtonLabel(
   accountState: AccountState,
-  subtitleStateType: PopupState['subtitleState']['type'],
+  subtitleStateType: PanelState['subtitleState']['type'],
 ): string {
   if (subtitleStateType === 'loading') {
     return 'Generating...';

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
-import { renderOverlayContent, type OverlayRenderState } from '../utils/overlay';
+import { renderOverlayContent } from '../utils/overlay/overlay-render';
+import type { OverlayRenderState } from '../utils/overlay/types';
 import type { TrackResponse } from '../utils/contracts';
 
 describe('renderOverlayContent', () => {

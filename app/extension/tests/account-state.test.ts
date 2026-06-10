@@ -1,64 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  accountStateFromJobHistory,
+  anonymousAccountState,
   accountStateFromSummary,
   formatJobTiming,
   formatResetDate,
   publicJobTelemetry,
   stageTimeline,
-} from '../utils/popup-saas-state';
-import type { SubtitleJobHistoryItem } from '../utils/contracts';
+} from '../utils/account-state';
+import type { AccountSummary, SubtitleJobHistoryItem } from '../utils/contracts';
 
-describe('popup SaaS state helpers', () => {
-  it('projects anonymous usage from public-safe completed and running job durations', () => {
-    const account = accountStateFromJobHistory(
-      [
-        jobHistory({ status: 'completed', videoDurationSeconds: 121 }),
-        jobHistory({ status: 'running', videoDurationSeconds: 60 }),
-        jobHistory({ status: 'failed', videoDurationSeconds: 600 }),
-      ],
-      new Date('2026-05-21T12:00:00Z'),
-    );
-
-    expect(account).toMatchObject({
-      status: 'anonymous',
-      planName: 'Local beta',
-      tierName: 'Base',
-      monthlyMinuteLimit: 60,
-      monthlyMinutesUsed: 3,
-      monthlyMinutesPending: 1,
-      monthlyMinutesRemaining: 56,
-      resetAt: '2026-06-01T00:00:00.000Z',
-    });
-    expect(formatResetDate(account.resetAt)).toBe('Jun 1');
+describe('account and job-history state helpers', () => {
+  it('uses an honest anonymous account state without fabricated usage', () => {
+    expect(anonymousAccountState()).toEqual({ status: 'anonymous' });
   });
 
   it('uses authenticated account summaries from the backend without local install identity', () => {
-    expect(
-      accountStateFromSummary({
-        status: 'authenticated',
-        id: '1',
-        email: 'learner@example.com',
-        name: 'Beta Learner',
-        emailVerified: true,
-        planName: 'Local beta',
-        tierName: 'Base',
-        tierSpeedLabel: 'Standard queue',
-        monthlyMinuteLimit: 60,
-        monthlyMinutesUsed: 10,
-        monthlyMinutesPending: 2,
-        monthlyMinutesRemaining: 48,
-        resetAt: '2026-06-01T00:00:00.000Z',
-        upgradeAvailable: true,
-      }),
-    ).toMatchObject({
+    const account = accountStateFromSummary(accountSummary());
+
+    expect(account).toMatchObject({
       status: 'authenticated',
       email: 'learner@example.com',
       monthlyMinutesUsed: 10,
       monthlyMinutesPending: 2,
       monthlyMinutesRemaining: 48,
     });
+    expect(account.status).toBe('authenticated');
+    if (account.status !== 'authenticated') {
+      throw new Error('Expected authenticated account state.');
+    }
+    expect(formatResetDate(account.resetAt)).toBe('Jun 1');
   });
 
   it('keeps job telemetry public-safe even when unexpected sensitive fields are present', () => {
@@ -135,5 +106,24 @@ function jobHistory(overrides: Partial<SubtitleJobHistoryItem & {
     enrichmentMode: overrides.enrichmentMode ?? 'on_demand',
     includeRomanization: overrides.includeRomanization ?? true,
     includeTranslation: overrides.includeTranslation ?? false,
+  };
+}
+
+function accountSummary(): AccountSummary {
+  return {
+    status: 'authenticated',
+    id: '1',
+    email: 'learner@example.com',
+    name: 'Beta Learner',
+    emailVerified: true,
+    planName: 'Beta Base',
+    tierName: 'Base',
+    tierSpeedLabel: 'Standard queue',
+    monthlyMinuteLimit: 60,
+    monthlyMinutesUsed: 10,
+    monthlyMinutesPending: 2,
+    monthlyMinutesRemaining: 48,
+    resetAt: '2026-06-01T00:00:00.000Z',
+    upgradeAvailable: true,
   };
 }

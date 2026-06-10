@@ -78,7 +78,7 @@ function authResponse(): ExtensionAuthResponse {
       email: 'learner@example.com',
       name: 'Beta Learner',
       emailVerified: true,
-      planName: 'Local beta',
+      planName: 'Beta Base',
       tierName: 'Base',
       tierSpeedLabel: 'Standard queue',
       monthlyMinuteLimit: 60,

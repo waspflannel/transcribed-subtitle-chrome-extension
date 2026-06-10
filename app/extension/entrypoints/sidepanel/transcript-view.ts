@@ -11,6 +11,7 @@ export function bindTranscriptView(dom: {
 }) {
   let cues: readonly SubtitleCue[] = [];
   let settings: ExtensionSettings | null = null;
+  let youtubeVideoId: string | null = null;
   let activeCueId: string | null = null;
 
   function render(): void {
@@ -41,7 +42,9 @@ export function bindTranscriptView(dom: {
     if (!button || !cueId) return;
     const action = button.dataset.transcriptAction;
     if (action === 'jump') {
-      void browser.runtime.sendMessage({ type: 'popup.seekToCue', cueId, mode: 'jump' }).catch(() => {});
+      if (youtubeVideoId) {
+        void browser.runtime.sendMessage({ type: 'panel.seekToCue', youtubeVideoId, cueId, mode: 'jump' }).catch(() => {});
+      }
       ackButton(button);
     } else if (action === 'copy') {
       const text = cues.find((c) => c.cueId === cueId)?.sourceText;
@@ -59,8 +62,8 @@ export function bindTranscriptView(dom: {
   });
 
   return {
-    setData(nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
-      cues = nextCues; settings = nextSettings; render();
+    setData(nextYoutubeVideoId: string | null, nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
+      youtubeVideoId = nextYoutubeVideoId; cues = nextCues; settings = nextSettings; render();
     },
     setActiveCue(cueId: string | null) { if (cueId === activeCueId) return; activeCueId = cueId; render(); },
     focus() { dom.transcriptSearch.focus(); },

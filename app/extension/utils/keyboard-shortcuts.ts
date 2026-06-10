@@ -91,7 +91,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
   {
     action: 'toggle-transcript',
     label: 'Transcript',
-    description: 'Open or close the transcript sidebar.',
+    description: 'Focus the side-panel Transcript view.',
     display: 'Alt+Shift+X',
     key: 'x',
     altKey: true,

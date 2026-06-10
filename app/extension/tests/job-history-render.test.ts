@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 
 import { renderJobHistory } from '../entrypoints/sidepanel/render/job-history';
-import { accountStateFromJobHistory } from '../utils/popup-saas-state';
+import { anonymousAccountState } from '../utils/account-state';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
-import type { PopupState } from '../utils/messages';
+import type { PanelState } from '../utils/messages';
 import type { SubtitleJobHistoryItem } from '../utils/contracts';
 
 function makeJob(overrides: Partial<SubtitleJobHistoryItem> = {}): SubtitleJobHistoryItem {
@@ -29,12 +29,12 @@ function makeJob(overrides: Partial<SubtitleJobHistoryItem> = {}): SubtitleJobHi
   };
 }
 
-function stateWithJob(): PopupState {
+function stateWithJob(): PanelState {
   const jobs = [makeJob()];
   return {
     installId: 'i',
     settings: DEFAULT_EXTENSION_SETTINGS,
-    accountState: accountStateFromJobHistory(jobs),
+    accountState: anonymousAccountState(),
     subtitleState: { type: 'no-track' },
     jobHistory: jobs,
   };

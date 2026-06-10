@@ -7,7 +7,7 @@
 
 /* =========================================================================
    Sharp side panel — square corners, hairline rules, mono micro-labels.
-   Styles the REAL reused popup markup/classes (native select/checkbox/range,
+   Styles the REAL reused panel markup/classes (native select/checkbox/range,
    .surface/.field/.toggle/.primary-button/.facts/.job-item/.language-picker…),
    not the prototype's mocked .seg/.chk/.sw demo divs.
    View visibility is driven by the [hidden] attribute (showTab sets

@@ -1,9 +1,7 @@
 import type { AccountSummary, SubtitleJobHistoryItem } from './contracts';
 import { publicSubtitleErrorMessage, SubtitleApiError } from './api';
 import type { AccountState } from './messages';
-import { GENERATION_STAGES, stageLabel } from './popup-progress';
-
-const LOCAL_BETA_MONTHLY_MINUTES = 60;
+import { GENERATION_STAGES, stageLabel } from './panel-progress';
 
 export interface PublicJobTelemetry {
   publicJobId: string;
@@ -17,31 +15,8 @@ export interface StageTimelineItem {
   state: 'done' | 'current' | 'pending' | 'failed';
 }
 
-export function accountStateFromJobHistory(
-  jobs: readonly SubtitleJobHistoryItem[],
-  now: Date = new Date(),
-): AccountState {
-  const completedMinutes = jobs.reduce(
-    (total, job) => total + (job.status === 'completed' ? billableMinutes(job) : 0),
-    0,
-  );
-  const pendingMinutes = jobs.reduce(
-    (total, job) => total + (job.status === 'running' ? billableMinutes(job) : 0),
-    0,
-  );
-
-  return {
-    status: 'anonymous',
-    planName: 'Local beta',
-    tierName: 'Base',
-    tierSpeedLabel: 'Standard queue',
-    monthlyMinuteLimit: LOCAL_BETA_MONTHLY_MINUTES,
-    monthlyMinutesUsed: completedMinutes,
-    monthlyMinutesPending: pendingMinutes,
-    monthlyMinutesRemaining: Math.max(0, LOCAL_BETA_MONTHLY_MINUTES - completedMinutes - pendingMinutes),
-    resetAt: nextMonthlyReset(now).toISOString(),
-    upgradeAvailable: true,
-  };
+export function anonymousAccountState(): AccountState {
+  return { status: 'anonymous' };
 }
 
 export function accountStateFromSummary(account: AccountSummary): AccountState {
@@ -148,16 +123,6 @@ function failedJobPublicErrorMessage(job: SubtitleJobHistoryItem): string | unde
   }
 
   return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
-}
-
-function billableMinutes(job: SubtitleJobHistoryItem): number {
-  const { videoDurationSeconds: seconds } = job;
-
-  return isPositiveInteger(seconds) ? Math.max(1, Math.ceil(seconds / 60)) : 0;
-}
-
-function nextMonthlyReset(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0));
 }
 
 function shortPublicId(id: string): string {

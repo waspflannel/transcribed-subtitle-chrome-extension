@@ -17,13 +17,15 @@ import {
 } from '../utils/backend-subtitle-state';
 import {
   DEFAULT_SUBTITLE_STATE,
+  isBackgroundRequest,
   isRuntimeMessage,
+  type BackgroundRequest,
+  type ContentRequest,
   type PageSnapshot,
-  type PopupState,
-  type RuntimeMessage,
+  type PanelState,
   type SubtitleState,
 } from '../utils/messages';
-import { accountStateFromJobHistory, accountStateFromSummary } from '../utils/popup-saas-state';
+import { anonymousAccountState, accountStateFromSummary } from '../utils/account-state';
 import {
   clearLocalExtensionState,
   getExtensionSettings,
@@ -36,8 +38,8 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
-let cachedPopupJobHistory: SubtitleJobHistoryItem[] = [];
-let cachedPopupJobHistoryError: string | undefined;
+let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
+let cachedPanelJobHistoryError: string | undefined;
 const JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
@@ -51,7 +53,7 @@ export default defineBackground(() => {
   void actionSidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (!isRuntimeMessage(message)) {
+    if (!isRuntimeMessage(message) || !isBackgroundRequest(message)) {
       return false;
     }
 
@@ -72,34 +74,34 @@ export default defineBackground(() => {
   });
 });
 
-async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.runtime.MessageSender): Promise<unknown> {
+async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.runtime.MessageSender): Promise<unknown> {
   switch (message.type) {
     case 'content.getState':
       return getContentState(sender);
 
+    case 'content.updateSettings':
+      return updateSettingsFromContent(message.patch, sender);
+
     case 'content.enrichLearningToken':
       return enrichLearningTokenFromContent(message, sender);
 
-    case 'popup.getState':
-      return getPopupState({ syncBackend: message.syncBackend ?? true });
+    case 'panel.getState':
+      return getPanelState({ syncBackend: message.syncBackend ?? true });
 
-    case 'popup.updateSettings':
-      return updateSettingsFromPopup(message.patch);
+    case 'panel.updateSettings':
+      return updateSettingsFromPanel(message.patch);
 
-    case 'popup.generateSubtitles':
-      return generateSubtitlesFromPopup();
+    case 'panel.generateSubtitles':
+      return generateSubtitlesFromPanel();
 
-    case 'popup.login':
-      return loginFromPopup(message.email, message.password);
+    case 'panel.login':
+      return loginFromPanel(message.email, message.password);
 
-    case 'popup.logout':
-      return logoutFromPopup();
+    case 'panel.logout':
+      return logoutFromPanel();
 
-    case 'popup.clearLocalState':
-      return clearLocalStateFromPopup();
-
-    case 'background.getPageSnapshot':
-      throw new Error('Page snapshot requests are handled by the content script.');
+    case 'panel.clearLocalState':
+      return clearLocalStateFromPanel();
 
     case 'content.activeCueChanged':
       // Re-broadcast to extension pages (the open side panel). runtime.sendMessage
@@ -115,13 +117,16 @@ async function handleRuntimeMessage(message: RuntimeMessage, sender: Browser.run
       void browser.runtime.sendMessage({ type: 'background.focusTranscript' }).catch(() => {});
       return { ok: true };
 
-    case 'popup.seekToCue': {
-      const tab = (await getActiveTab())?.id ?? null;
-      if (tab !== null) {
-        await sendTabMessage(tab, { type: 'background.seekToCue', cueId: message.cueId, mode: message.mode });
+    case 'panel.seekToCue': {
+      const tabId = await tabIdForVideo(message.youtubeVideoId);
+      if (tabId !== null) {
+        await sendTabMessage(tabId, { type: 'background.seekToCue', cueId: message.cueId, mode: message.mode });
       }
       return { ok: true };
     }
+
+    default:
+      return assertNever(message);
   }
 }
 
@@ -140,7 +145,7 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
   };
 }
 
-async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promise<PopupState> {
+async function updateSettingsFromPanel(patch: Partial<ExtensionSettings>): Promise<PanelState> {
   const settings = await updateExtensionSettings(patch);
   const activeTab = await getActiveTab();
   const activeTabId = activeTab?.id ?? null;
@@ -152,10 +157,27 @@ async function updateSettingsFromPopup(patch: Partial<ExtensionSettings>): Promi
     });
   }
 
-  return getPopupState({ syncBackend: false });
+  return getPanelState({ syncBackend: false });
 }
 
-async function generateSubtitlesFromPopup(): Promise<PopupState> {
+async function updateSettingsFromContent(
+  patch: Partial<ExtensionSettings>,
+  sender: Browser.runtime.MessageSender,
+): Promise<{ ok: true; settings: ExtensionSettings }> {
+  const settings = await updateExtensionSettings(patch);
+  const senderTabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
+
+  if (senderTabId !== null) {
+    await sendTabMessage(senderTabId, {
+      type: 'background.settingsChanged',
+      settings,
+    });
+  }
+
+  return { ok: true, settings };
+}
+
+async function generateSubtitlesFromPanel(): Promise<PanelState> {
   const activeTab = await getActiveTab();
   const activeTabId = activeTab?.id ?? null;
 
@@ -173,7 +195,7 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
 
     await publishSubtitleState(activeTabId, subtitleState);
 
-    return getPopupState({ syncBackend: true });
+    return getPanelState({ syncBackend: true });
   }
 
   const currentState = await getSubtitleStateForPage(activeTabId, pageStatus);
@@ -197,7 +219,7 @@ async function generateSubtitlesFromPopup(): Promise<PopupState> {
     void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot);
   }
 
-  return getPopupState({ syncBackend: false });
+  return getPanelState({ syncBackend: false });
 }
 
 async function generateSubtitlesForTab(
@@ -335,7 +357,7 @@ function delay(milliseconds: number): Promise<void> {
 }
 
 async function enrichLearningTokenFromContent(
-  message: Extract<RuntimeMessage, { type: 'content.enrichLearningToken' }>,
+  message: Extract<BackgroundRequest, { type: 'content.enrichLearningToken' }>,
   sender: Browser.runtime.MessageSender,
 ): Promise<unknown> {
   const tabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
@@ -370,7 +392,7 @@ async function enrichLearningTokenFromContent(
     throw error;
   }
 
-  const track = patchActiveTrack(currentState.track, response.cueId, response.token);
+  const track = trackWithLearningToken(currentState.track, response.cueId, response.token);
 
   await storeReadySubtitleState(tabId, {
     type: 'ready',
@@ -417,7 +439,7 @@ async function readySubtitleStateForEnrichment(
   return null;
 }
 
-async function clearLocalStateFromPopup(): Promise<PopupState> {
+async function clearLocalStateFromPanel(): Promise<PanelState> {
   await clearLocalExtensionState();
   await clearRememberedTracks();
   tabSubtitleStates.clear();
@@ -439,10 +461,10 @@ async function clearLocalStateFromPopup(): Promise<PopupState> {
     await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
   }
 
-  return getPopupState({ syncBackend: true });
+  return getPanelState({ syncBackend: true });
 }
 
-async function loginFromPopup(email: string, password: string): Promise<PopupState> {
+async function loginFromPanel(email: string, password: string): Promise<PanelState> {
   const installId = await getOrCreateInstallId();
   const response = await subtitleApi.loginExtension(installId, { email, password });
 
@@ -450,10 +472,10 @@ async function loginFromPopup(email: string, password: string): Promise<PopupSta
 
   console.info('extension.account_login_completed');
 
-  return getPopupState({ syncBackend: true });
+  return getPanelState({ syncBackend: true });
 }
 
-async function logoutFromPopup(): Promise<PopupState> {
+async function logoutFromPanel(): Promise<PanelState> {
   const installId = await getOrCreateInstallId();
   const session = await getStoredExtensionSession();
 
@@ -471,10 +493,10 @@ async function logoutFromPopup(): Promise<PopupState> {
 
   console.info('extension.account_logout_completed');
 
-  return getPopupState({ syncBackend: true });
+  return getPanelState({ syncBackend: true });
 }
 
-async function getPopupState(options: { syncBackend: boolean }): Promise<PopupState> {
+async function getPanelState(options: { syncBackend: boolean }): Promise<PanelState> {
   const activeTab = await getActiveTab();
   const activeTabId = activeTab?.id ?? null;
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
@@ -489,12 +511,12 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     effectiveSession = await syncExtensionAccount(installId, effectiveSession);
   }
 
-  const history = await getPopupJobHistory(installId, effectiveSession, options.syncBackend);
+  const history = await getPanelJobHistory(installId, effectiveSession, options.syncBackend);
 
   if (history.sessionInvalid) {
     effectiveSession = null;
-    cachedPopupJobHistory = [];
-    cachedPopupJobHistoryError = undefined;
+    cachedPanelJobHistory = [];
+    cachedPanelJobHistoryError = undefined;
   }
 
   const localState =
@@ -516,37 +538,37 @@ async function getPopupState(options: { syncBackend: boolean }): Promise<PopupSt
     activeTabId: activeTabId ?? undefined,
     pageStatus,
     pageVideoDurationSeconds: pageSnapshot.videoDurationSeconds,
-    accountState: effectiveSession ? accountStateFromSummary(effectiveSession.account) : accountStateFromJobHistory(history.jobs),
+    accountState: effectiveSession ? accountStateFromSummary(effectiveSession.account) : anonymousAccountState(),
     subtitleState,
     jobHistory: history.jobs,
     jobHistoryError: history.error,
   };
 }
 
-async function getPopupJobHistory(
+async function getPanelJobHistory(
   installId: string,
   session: StoredExtensionSession | null,
   syncBackend: boolean,
 ): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string; sessionInvalid: boolean }> {
   if (!session) {
-    cachedPopupJobHistory = [];
-    cachedPopupJobHistoryError = undefined;
+    cachedPanelJobHistory = [];
+    cachedPanelJobHistoryError = undefined;
 
     return { jobs: [], error: undefined, sessionInvalid: false };
   }
 
   if (!syncBackend) {
     return {
-      jobs: cachedPopupJobHistory,
-      error: cachedPopupJobHistoryError,
+      jobs: cachedPanelJobHistory,
+      error: cachedPanelJobHistoryError,
       sessionInvalid: false,
     };
   }
 
   const history = await listBackendJobHistory(installId, session.plainTextToken);
 
-  cachedPopupJobHistory = history.jobs;
-  cachedPopupJobHistoryError = history.error;
+  cachedPanelJobHistory = history.jobs;
+  cachedPanelJobHistoryError = history.error;
 
   return history;
 }
@@ -632,10 +654,6 @@ async function syncExtensionAccount(
   }
 }
 
-function patchActiveTrack(track: TrackResponse, cueId: string, token: Parameters<typeof trackWithLearningToken>[2]): TrackResponse {
-  return trackWithLearningToken(track, cueId, token);
-}
-
 async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInfo): Promise<SubtitleState> {
   const subtitleState = tabSubtitleStates.get(tabId) ?? DEFAULT_SUBTITLE_STATE;
 
@@ -657,6 +675,26 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
   tabSubtitleStates.set(tabId, restoredState);
 
   return restoredState;
+}
+
+async function tabIdForVideo(youtubeVideoId: string): Promise<number | null> {
+  for (const [tabId, subtitleState] of tabSubtitleStates) {
+    if (subtitleState.type === 'ready' && subtitleState.track.youtubeVideoId === youtubeVideoId) {
+      return tabId;
+    }
+
+    if (subtitleState.type === 'loading' && subtitleState.youtubeVideoId === youtubeVideoId) {
+      return tabId;
+    }
+  }
+
+  const activeTab = await getActiveTab();
+  const activeTabId = activeTab?.id ?? null;
+  const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
+
+  return activeTabId !== null && pageStatus?.supported === true && pageStatus.videoId === youtubeVideoId
+    ? activeTabId
+    : null;
 }
 
 function isSubtitleStateForVideo(subtitleState: SubtitleState, youtubeVideoId: string): boolean {
@@ -703,11 +741,11 @@ async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
   return activeTab;
 }
 
-async function sendTabMessage(tabId: number, message: RuntimeMessage): Promise<void> {
+async function sendTabMessage(tabId: number, message: ContentRequest): Promise<void> {
   try {
     await browser.tabs.sendMessage(tabId, message);
   } catch {
-    // Unsupported pages do not have this content script; popup state still updates locally.
+    // Unsupported pages do not have this content script; panel state still updates locally.
   }
 }
 
@@ -732,4 +770,8 @@ async function clearSessionIfInvalid(error: unknown): Promise<boolean> {
   await clearExtensionSession();
 
   return true;
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled background request: ${JSON.stringify(value)}`);
 }
