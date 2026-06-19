@@ -525,7 +525,6 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'hola a todos',
                         'translatedText' => 'bonjour a tous',
                     ],
                 ],
@@ -563,19 +562,16 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'the song begins',
                         'translatedText' => 'the song begins',
                     ],
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
-                        'sourceText' => 'ambiguous idiom',
                         'translatedText' => 'contextual meaning',
                     ],
                     [
                         'cueId' => 'cue-0003',
                         'index' => 2,
-                        'sourceText' => 'the crowd answers',
                         'translatedText' => 'the crowd answers',
                     ],
                 ],
@@ -622,9 +618,8 @@ class CueEnrichmentServiceTest extends TestCase
             [
                 'cues' => [
                     [
-                        'cueId' => 'cue-0001',
+                        'cueId' => 'different-cue',
                         'index' => 0,
-                        'sourceText' => 'changed source',
                         'translatedText' => 'bonjour',
                     ],
                 ],
@@ -637,7 +632,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_translation_rejects_empty_translated_text(): void
+    public function test_translation_degrades_empty_translated_text_to_source_text(): void
     {
         CueTranslationAgent::fake([
             [
@@ -645,17 +640,42 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'hola a todos',
                         'translatedText' => '   ',
                     ],
                 ],
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
-            'missing_translation',
-        );
+        $result = $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra');
+
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
+    }
+
+    public function test_translation_tolerates_cjk_source_without_echoed_source_text(): void
+    {
+        $sourceText = '我喜欢学习中文';
+
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'translatedText' => 'I like studying Chinese',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCue = [
+            ...$this->sourceCue('cue-0001', 0, $sourceText),
+            'tokens' => [['index' => 0, 'text' => $sourceText, 'normalizedText' => $sourceText]],
+        ];
+
+        $result = $this->translateBatch([$sourceCue], 'cmn', 'eng');
+
+        $this->assertSame('I like studying Chinese', $result->cues[0]['translatedText']);
+        $this->assertSame($sourceText, $result->cues[0]['sourceText']);
     }
 
     public function test_translation_requires_configured_model(): void
@@ -668,7 +688,6 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'hola a todos',
                         'translatedText' => 'bonjour',
                     ],
                 ],

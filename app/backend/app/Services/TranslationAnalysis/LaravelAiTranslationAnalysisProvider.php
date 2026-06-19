@@ -535,13 +535,10 @@ class LaravelAiTranslationAnalysisProvider
 
         foreach ($sourceCues as $position => $sourceCue) {
             $outputCue = $outputCues[$position];
-            $this->validateCueIdentity($sourceCue, $outputCue, $position);
+            $this->validateCueIdentity($sourceCue, $outputCue, $position, validateSourceText: false);
 
-            $translatedText = $this->cleanString($outputCue['translatedText'] ?? null);
-
-            if ($translatedText === null) {
-                $this->failInvalidOutput('missing_translation', ['cue_index' => $sourceCue['index']]);
-            }
+            $translatedText = $this->cleanString($outputCue['translatedText'] ?? null)
+                ?? (string) $sourceCue['sourceText'];
 
             $cues[] = [
                 ...$sourceCue,
