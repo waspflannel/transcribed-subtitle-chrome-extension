@@ -19,6 +19,18 @@ class AiAgentInstructionTest extends TestCase
         $this->assertStringContainsString('Do not return punctuation-only tokens.', $instructions);
         $this->assertStringContainsString('Do not censor profanity', $instructions);
         $this->assertStringContainsString('transcription artifacts', $instructions);
+        $this->assertStringContainsString('Every token must begin and end on a word boundary of the source language.', $instructions);
+
+        $this->assertStringContainsString('Orphan fragment', $instructions);
+        $this->assertStringContainsString('never strand a single kana that is part of a neighboring content word.', $instructions);
+        $this->assertStringContainsString('Truncated word', $instructions);
+        $this->assertStringContainsString('Sokuon', $instructions);
+        $this->assertStringContainsString('Never drop a leading character to emit うて.', $instructions);
+
+        $this->assertStringContainsString('Mandarin examples:', $instructions);
+        $this->assertStringContainsString('Split 我喜欢学习中文 as 我 / 喜欢 / 学习 / 中文', $instructions);
+        $this->assertStringContainsString('Thai examples:', $instructions);
+        $this->assertStringContainsString('Split ผมชอบกินข้าว as ผม / ชอบ / กิน / ข้าว', $instructions);
     }
 
     public function test_romanization_agent_owns_stable_romanization_rules(): void
