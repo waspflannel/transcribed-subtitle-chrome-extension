@@ -37,7 +37,12 @@ class EvalTokenization extends Command
         }
 
         $languages = $this->languages();
-        $model = $this->modelOverride();
+
+        if ($languages === null) {
+            return self::FAILURE;
+        }
+
+        $model = $this->applyModelOverride();
         $provider = $this->laravel->make(LaravelAiTranslationAnalysisProvider::class);
         $this->metric = new TokenizationBoundaryMetric(new LearningTokenOutputValidator);
 
@@ -77,7 +82,7 @@ class EvalTokenization extends Command
         return is_string(config('ai.providers.openai.key')) && trim((string) config('ai.providers.openai.key')) !== '';
     }
 
-    private function modelOverride(): ?string
+    private function applyModelOverride(): ?string
     {
         $model = trim((string) $this->option('model'));
 
@@ -91,9 +96,9 @@ class EvalTokenization extends Command
     }
 
     /**
-     * @return list<string>
+     * @return list<string>|null
      */
-    private function languages(): array
+    private function languages(): ?array
     {
         $lang = trim((string) $this->option('lang'));
 
@@ -104,7 +109,7 @@ class EvalTokenization extends Command
         if (! in_array($lang, self::LANGUAGES, true)) {
             $this->components->error("Unsupported language [{$lang}]. Supported: jpn, cmn, tha, all.");
 
-            exit(self::FAILURE);
+            return null;
         }
 
         return [$lang];
@@ -278,7 +283,7 @@ class EvalTokenization extends Command
                 'goldWordSplits' => $summary->goldWordSplits,
                 'orphanFragments' => $summary->orphanFragments,
                 'truncatedWords' => $summary->truncatedWords,
-                'lostCharacters' => $summary->lostCharacters,
+                'unlocatableGoldTokens' => $summary->unlocatableGoldTokens,
             ],
         ];
     }
@@ -304,18 +309,16 @@ class EvalTokenization extends Command
             'predictedTokens' => $evaluation->predictedTokens,
             'note' => $evaluation->note,
             'boundary' => $this->ratesPayload(
-                $this->metricRate($evaluation->truePositiveBoundaries, $evaluation->predictedBoundaryCount),
-                $this->metricRate($evaluation->truePositiveBoundaries, $evaluation->goldBoundaryCount),
-                $this->metricF1($evaluation->truePositiveBoundaries, $evaluation->predictedBoundaryCount, $evaluation->goldBoundaryCount),
-                $evaluation->truePositiveBoundaries,
-                $evaluation->predictedBoundaryCount,
-                $evaluation->goldBoundaryCount,
+                ...$this->metric->rates($evaluation->truePositiveBoundaries, $evaluation->predictedBoundaryCount, $evaluation->goldBoundaryCount),
+                truePositives: $evaluation->truePositiveBoundaries,
+                predictedCount: $evaluation->predictedBoundaryCount,
+                goldCount: $evaluation->goldBoundaryCount,
             ),
             'failureModes' => [
                 'goldWordSplits' => $evaluation->goldWordSplits,
                 'orphanFragments' => $evaluation->orphanFragments,
                 'truncatedWords' => $evaluation->truncatedWords,
-                'lostCharacters' => $evaluation->lostCharacters,
+                'unlocatableGoldTokens' => $evaluation->unlocatableGoldTokens,
             ],
         ];
     }
@@ -335,19 +338,6 @@ class EvalTokenization extends Command
         ];
     }
 
-    private function metricRate(int $truePositives, int $count): float
-    {
-        return $count > 0 ? $truePositives / $count : 0.0;
-    }
-
-    private function metricF1(int $truePositives, int $predictedCount, int $goldCount): float
-    {
-        $precision = $this->metricRate($truePositives, $predictedCount);
-        $recall = $this->metricRate($truePositives, $goldCount);
-
-        return $precision + $recall > 0.0 ? 2 * $precision * $recall / ($precision + $recall) : 0.0;
-    }
-
     /**
      * @param  array<string, mixed>  $payload
      */
@@ -355,8 +345,10 @@ class EvalTokenization extends Command
     {
         $directory = dirname($path);
 
-        if ($directory !== '' && ! is_dir($directory)) {
-            @mkdir($directory, 0775, true);
+        if ($directory !== '' && ! is_dir($directory) && ! mkdir($directory, 0775, true)) {
+            $this->components->error("Failed to create output directory [{$directory}].");
+
+            return;
         }
 
         file_put_contents($path, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
@@ -396,7 +388,7 @@ class EvalTokenization extends Command
                 ['gold-word splits', (string) $summary['failureModes']['goldWordSplits']],
                 ['orphan fragments', (string) $summary['failureModes']['orphanFragments']],
                 ['truncated words', (string) $summary['failureModes']['truncatedWords']],
-                ['lost characters (transcription)', (string) $summary['failureModes']['lostCharacters']],
+                ['unlocatable gold tokens (transcription)', (string) $summary['failureModes']['unlocatableGoldTokens']],
             ],
         );
 

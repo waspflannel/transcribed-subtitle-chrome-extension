@@ -55,7 +55,7 @@ class TokenizationBoundaryMetric
             }
         }
 
-        $lostCharacters = $this->lostCharacterCount($goldSpans);
+        $unlocatableGoldTokens = $this->unlocatableGoldTokenCount($goldSpans);
         [$goldWordSplits, $orphanFragments, $truncatedWords] = $this->failureModes(
             $goldSpans,
             $validPredictedSpans,
@@ -81,8 +81,8 @@ class TokenizationBoundaryMetric
             goldWordSplits: $goldWordSplits,
             orphanFragments: $orphanFragments,
             truncatedWords: $truncatedWords,
-            lostCharacters: $lostCharacters,
-            transcriptionFault: $lostCharacters > 0,
+            unlocatableGoldTokens: $unlocatableGoldTokens,
+            transcriptionFault: $unlocatableGoldTokens > 0,
             note: $note,
         );
     }
@@ -124,7 +124,7 @@ class TokenizationBoundaryMetric
             goldWordSplits: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->goldWordSplits, $scored)),
             orphanFragments: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->orphanFragments, $scored)),
             truncatedWords: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->truncatedWords, $scored)),
-            lostCharacters: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->lostCharacters, $evaluations)),
+            unlocatableGoldTokens: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->unlocatableGoldTokens, $evaluations)),
         );
     }
 
@@ -220,7 +220,7 @@ class TokenizationBoundaryMetric
     /**
      * @param  array<int, array{0: int, 1: int}|null>  $goldSpans
      */
-    private function lostCharacterCount(array $goldSpans): int
+    private function unlocatableGoldTokenCount(array $goldSpans): int
     {
         return count(array_filter($goldSpans, fn ($span) => $span === null));
     }
@@ -399,7 +399,7 @@ class TokenizationBoundaryMetric
     /**
      * @return array{0: float, 1: float, 2: float}
      */
-    private function rates(int $truePositives, int $predictedCount, int $goldCount): array
+    public function rates(int $truePositives, int $predictedCount, int $goldCount): array
     {
         $precision = $predictedCount > 0 ? $truePositives / $predictedCount : 0.0;
         $recall = $goldCount > 0 ? $truePositives / $goldCount : 0.0;

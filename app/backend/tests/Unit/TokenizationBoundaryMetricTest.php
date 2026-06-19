@@ -26,7 +26,7 @@ class TokenizationBoundaryMetricTest extends TestCase
         $this->assertSame(0, $evaluation->goldWordSplits);
         $this->assertSame(0, $evaluation->orphanFragments);
         $this->assertSame(0, $evaluation->truncatedWords);
-        $this->assertSame(0, $evaluation->lostCharacters);
+        $this->assertSame(0, $evaluation->unlocatableGoldTokens);
     }
 
     public function test_flags_orphan_fragment_when_a_content_word_is_split_losing_a_single_mora(): void
@@ -74,7 +74,7 @@ class TokenizationBoundaryMetricTest extends TestCase
             ['寝返り', 'うて', 'ばっか'],
         );
 
-        $this->assertSame(1, $evaluation->lostCharacters);
+        $this->assertSame(1, $evaluation->unlocatableGoldTokens);
         $this->assertTrue($evaluation->transcriptionFault);
     }
 
@@ -106,7 +106,7 @@ class TokenizationBoundaryMetricTest extends TestCase
         $this->assertSame(1, $summary->transcriptionFaultCues);
         $this->assertSame(1.0, $summary->boundaryF1);
         $this->assertSame(1.0, $summary->wordF1);
-        $this->assertSame(1, $summary->lostCharacters);
+        $this->assertSame(1, $summary->unlocatableGoldTokens);
     }
 
     private function metric(): TokenizationBoundaryMetric

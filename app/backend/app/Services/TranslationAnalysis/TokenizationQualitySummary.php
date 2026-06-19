@@ -9,8 +9,8 @@ namespace App\Services\TranslationAnalysis;
  * tokenization-testable cues (transcription-faulty cues are excluded from the
  * F1 pools because their gold segmentation references characters the source no
  * longer contains, so no tokenizer can recover them). Failure-mode counts are
- * summed over the same scored cues; lost characters and the transcription-fault
- * cue count are reported separately to attribute that class correctly.
+ * summed over the same scored cues; unlocatable gold tokens and the
+ * transcription-fault cue count are reported separately to attribute that class correctly.
  */
 final readonly class TokenizationQualitySummary
 {
@@ -34,6 +34,6 @@ final readonly class TokenizationQualitySummary
         public int $goldWordSplits,
         public int $orphanFragments,
         public int $truncatedWords,
-        public int $lostCharacters,
+        public int $unlocatableGoldTokens,
     ) {}
 }

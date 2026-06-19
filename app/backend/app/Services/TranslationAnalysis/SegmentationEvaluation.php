@@ -37,7 +37,7 @@ final readonly class SegmentationEvaluation
         public int $goldWordSplits,
         public int $orphanFragments,
         public int $truncatedWords,
-        public int $lostCharacters,
+        public int $unlocatableGoldTokens,
         public bool $transcriptionFault,
         public ?string $note,
     ) {}
