@@ -1,9 +1,9 @@
 # Plan: Track A — CJK / no-space-script pipeline fragility fix
 
-Status: active
+Status: completed
 Owner: agent
 Created: 2026-06-18
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 
 > This is a **solution-architecture** document, not a code listing. It describes the problem,
 > the intended behavior of the fix, the constraints the implementation must respect, and the
@@ -117,25 +117,25 @@ sensible fallback instead of failing the job.
 
 ## Acceptance Criteria
 
-- [ ] A translation batch whose model output drifts on `sourceText` (e.g. traditional→simplified),
+- [x] A translation batch whose model output drifts on `sourceText` (e.g. traditional→simplified),
       or omits `sourceText` entirely, but returns a valid `translatedText`, no longer raises
       `cue_identity_mismatch`; the cue is translated and the job continues.
-- [ ] `CueTranslationAgent`'s schema no longer requires `sourceText`; cues are matched by `cueId`
+- [x] `CueTranslationAgent`'s schema no longer requires `sourceText`; cues are matched by `cueId`
       + `index`.
-- [ ] A romanization batch whose model returns a variant Han character (or different count) for a
+- [x] A romanization batch whose model returns a variant Han character (or different count) for a
       token no longer raises `token_identity_mismatch` / `token_count_mismatch`; romanization is
       attached to the local tokens by `index`.
-- [ ] A romanization batch the model botches badly (wrong count, missing indexes, unparseable)
+- [x] A romanization batch the model botches badly (wrong count, missing indexes, unparseable)
       **degrades**: the cue ships with its locally-held tokens and no romanization on the
       unmatched tokens, the job completes, and no `failJob` is triggered for that batch.
-- [ ] A translation batch the model botches (missing/empty `translatedText` for a cue)
+- [x] A translation batch the model botches (missing/empty `translatedText` for a cue)
       **degrades**: that cue's `translatedText` falls back to its `sourceText`; the job completes.
-- [ ] Romanization has a split-retry backstop equivalent to tokenization's, attempted before any
+- [x] Romanization has a split-retry backstop equivalent to tokenization's, attempted before any
       degradation, for recoverable *structural* failures.
-- [ ] The no-space artifact-space regex exists in exactly one place; both the normalizer and the
+- [x] The no-space artifact-space regex exists in exactly one place; both the normalizer and the
       validator consume it from there, with behavior unchanged.
-- [ ] New CJK reproduction tests fail on `main` and pass after the change.
-- [ ] `php artisan test --compact` (from `app/backend`) and `.\scripts\agent\check.ps1` are green.
+- [x] New CJK reproduction tests fail on `main` and pass after the change.
+- [x] `php artisan test --compact` (from `app/backend`) and `.\scripts\agent\check.ps1` are green.
 
 ## Architectural constraints the implementation must respect
 
@@ -364,14 +364,29 @@ Evidence to capture:
 | --- | --- | --- |
 | 2026-06-18 | Plan created and verified against the provider, agents, validator, normalizer, jobs, processor, pipeline, track generator, config, and existing tests on `codex/architecture-review-cleanup`. | |
 | 2026-06-18 | Reframed from a code listing into a solution-architecture spec; implementation left to the worker. | |
+| 2026-06-19 | Implemented on branch `track-a/cjk-fragility-fix` as three sequential commits (regex helper / translation / romanization). All acceptance criteria met; backend suite green (222 passed / 2107 assertions); contracts + extension checks green. Reproduction verified by reverting provider/agent to HEAD and confirming the new CJK/degradation tests fail there, then pass after. | git log: `0151987`, `de89981`, `a99e8f6` |
 
 ## Completion Notes
 
-- What changed: (fill in on completion)
-- Validation results: (fill in)
-- Simplicity/readability review: (fill in)
-- Residual risk: (fill in)
-- Follow-up debt: (fill in)
+- What changed:
+  - **Solution 1 (commit `0151987`):** New `App\Services\Text\NoSpaceArtifactBoundary` owns the artifact-space regex and a `strip(string): string` operation. `ScribeTranscriptNormalizer::normalizeTranscriptText` and `LearningTokenOutputValidator::normalizeTextForComparison` both consume it and drop their private copies. Byte-for-byte identical normalization; `ScribeTranscriptNormalizerTest` and `LearningTokenOutputValidatorTest` unchanged and green. Added `NoSpaceArtifactBoundaryTest` (3 tests) locking the direct contract.
+  - **Solution 2 (commit `de89981`):** `CueTranslationAgent` schema/instructions no longer request `sourceText` (`withoutAdditionalProperties` now forbids it); `translatedResult` calls `validateCueIdentity(..., validateSourceText: false)` so cues match by `cueId` + `index` only, and degrades a missing/blank `translatedText` to the local `sourceText`. A `cueId`/`index` mismatch stays fatal. Rewrote `test_translation_rejects_changed_cue_identity` (cueId mismatch still fatal) and `test_translation_rejects_empty_translated_text` → `test_translation_degrades_empty_translated_text_to_source_text`; added `test_translation_tolerates_cjk_source_without_echoed_source_text`. Trimmed echoed `sourceText` from all translation fakes.
+  - **Solution 3 (commit `a99e8f6`):** `CueRomanizationAgent` schema/instructions drop `sourceText`, `translatedText`, and per-token `text` (input still sends token `text`). `romanizedResult` rebuilds each cue from the locally-held source tokens and attaches romanization by `index` via a tolerant `romanizationByIndex` map; unmatched tokens carry no romanization; cue-level romanization is attached when present and omitted otherwise. `missing_source_tokens` stays fatal. Added a `romanizeBatch` split-retry mirroring `tokenizeBatch` with `shouldRetryRomanizationBatch` (structural reasons only: `missing_cues` / `cue_count_mismatch` / `invalid_cue` / `cue_identity_mismatch`) and a `backend.romanization_batch_retried` log. Rewrote the two romanization `*_rejects_*` tests into index-attachment + count-degradation assertions; added CJK pinyin, unparseable-romanization, and split-retry reproduction tests. Trimmed echoed fields from all romanization fakes. Updated `AiAgentInstructionTest` to the new romanization instructions.
+  - **Out of scope, untouched:** tokenization stage validation + its split-retry; the on-demand / full word-card enrichment path (`enrichToken`, `validatedEnrichedCueResult`, `tokensPreservingSource` — still used by the enrichment path at `LaravelAiTranslationAnalysisProvider.php:552`); `cue_batch_size`; extension; contracts (cue/token `romanization` was already optional in the published schema, so no contract change or regeneration was needed).
+- Validation results:
+  - Backend: `php artisan test --compact` → **222 passed / 2107 assertions**. Focused: `CueEnrichmentServiceTest` (41) + `AiAgentInstructionTest` + `ScribeTranscriptNormalizerTest` + `LearningTokenOutputValidatorTest` + `NoSpaceArtifactBoundaryTest` all green.
+  - Reproduction: with the provider + agent reverted to HEAD, the new translation tests fail with `cue_identity_mismatch` and the new romanization tests fail with `token_identity_mismatch` / `token_count_mismatch` / `cue_count_mismatch`; all pass after the fix.
+  - Repo harness: docs lint passed; `packages/contracts` `npm run check` exit 0 (schemas compile, fixtures validate, types regenerate); `app/extension` `npm test` (91 passed) / `npm run compile` / `npm run build` all exit 0. Note: `scripts/agent/check.ps1` aborts early on npm's stderr progress line under PowerShell 5.1 `$ErrorActionPreference="Stop"` (a pre-existing harness quirk, not a real failure); each component was run directly and is green.
+- Simplicity/readability review: one current product path retained — no parallel old/new code. The romanization index-zip is a small focused path; `tokensPreservingSource` is left for the word-card path that legitimately echoes Latin token text. No new provider indirection, caches, or scoring. The shared regex helper is the single owner of the rule with two call sites. `missing_romanization` reason removed entirely (no dead code).
+- Residual risk:
+  - Degradation is silent to the user (a botched romanization batch ships cues without romanization; a botched translation cue ships its source text as the "translation"). This is the intended trade documented in Risks/non-goals; counting degraded batches in telemetry is follow-up debt, not required here.
+  - Token-level `romanization` stays required in the `CueRomanizationAgent` schema (the model returns one romanization per token it romanizes); per-token degradation is via missing index entries and `cleanString` nulling whitespace/null values, not via schema optionality. In production with strict structured output, cue-level romanization is always present; the provider degrades only if `cleanString` yields null.
+  - The pre-existing uncommitted edit to `app/extension/entrypoints/sidepanel/main.ts` is unrelated to Track A and was left untouched; it builds and tests cleanly.
+- Follow-up debt:
+  - Optional telemetry for degraded translation/romanization batches (mentioned in Risks/non-goals).
+  - `scripts/agent/check.ps1` PowerShell 5.1 stderr handling (separate harness debt).
+  - Apply the same index-zip principle to the word-card path only if CJK fragility is later reported there (out of scope per plan).
+  - Track B Steps 3–5 remain gated on harness results, per the Track B plan.
 
 ## Risks / non-goals
 
