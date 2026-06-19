@@ -38,7 +38,9 @@ class AiAgentInstructionTest extends TestCase
         $instructions = (new CueRomanizationAgent)->instructions();
 
         $this->assertStringContainsString('Do not translate, retokenize', $instructions);
-        $this->assertStringContainsString('Set translatedText exactly equal to sourceText.', $instructions);
+        $this->assertStringContainsString('Preserve cueId and cue index exactly.', $instructions);
+        $this->assertStringContainsString('return the same index', $instructions);
+        $this->assertStringContainsString('Do not echo the token text.', $instructions);
         $this->assertStringContainsString('Hepburn for Japanese and pinyin for Mandarin', $instructions);
     }
 

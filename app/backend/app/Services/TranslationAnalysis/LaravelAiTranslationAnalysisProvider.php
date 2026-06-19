@@ -138,13 +138,60 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        return $this->romanizedResult(
-            $this->promptAgent(
-                CueRomanizationAgent::class,
-                $this->romanizationInput($batch, $sourceLanguage),
-            ),
-            $batch,
+        return $this->romanizeBatch($batch, $sourceLanguage);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $batch
+     */
+    private function romanizeBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
+    {
+        $output = $this->promptAgent(
+            CueRomanizationAgent::class,
+            $this->romanizationInput($batch, $sourceLanguage),
         );
+
+        try {
+            return $this->romanizedResult($output, $batch);
+        } catch (SubtitleProcessingException $exception) {
+            if (! $this->shouldRetryRomanizationBatch($exception, count($batch))) {
+                throw $exception;
+            }
+
+            $reason = $exception->context['reason'] ?? 'unknown';
+
+            Log::info('backend.romanization_batch_retried', [
+                'provider' => Lab::OpenAI->value,
+                'adapter' => 'laravel-ai-sdk',
+                'model' => $this->openAiModel('romanization'),
+                'source_language' => $sourceLanguage,
+                'cue_count' => count($batch),
+                'reason' => is_string($reason) ? $reason : 'unknown',
+            ]);
+
+            $splitAt = intdiv(count($batch), 2);
+            $left = $this->romanizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage);
+            $right = $this->romanizeBatch(array_slice($batch, $splitAt), $sourceLanguage);
+
+            return new CueEnrichmentResult(
+                [...$left->cues, ...$right->cues],
+                $left->sourceDialect !== 'unknown' ? $left->sourceDialect : $right->sourceDialect,
+            );
+        }
+    }
+
+    private function shouldRetryRomanizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
+    {
+        if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
+            return false;
+        }
+
+        return in_array($exception->context['reason'] ?? null, [
+            'missing_cues',
+            'cue_count_mismatch',
+            'invalid_cue',
+            'cue_identity_mismatch',
+        ], true);
     }
 
     /**
@@ -561,32 +608,77 @@ class LaravelAiTranslationAnalysisProvider
 
         foreach ($sourceCues as $position => $sourceCue) {
             $outputCue = $outputCues[$position];
-            $this->validateCueIdentity($sourceCue, $outputCue, $position);
+            $this->validateCueIdentity($sourceCue, $outputCue, $position, validateSourceText: false);
 
-            $cueRomanization = $this->cleanString($outputCue['romanization'] ?? null);
+            $sourceTokens = $this->sourceTokens($sourceCue);
+            $romanizationByIndex = $this->romanizationByIndex($outputCue['tokens'] ?? null);
 
-            if ($cueRomanization === null) {
-                $this->failInvalidOutput('missing_romanization', [
-                    'cue_index' => $sourceCue['index'],
-                ]);
+            $tokens = [];
+            foreach ($sourceTokens as $sourceToken) {
+                $token = [
+                    'index' => $sourceToken['index'],
+                    'text' => $sourceToken['text'],
+                    'normalizedText' => $sourceToken['normalizedText'],
+                ];
+
+                $tokenRomanization = $romanizationByIndex[$sourceToken['index']] ?? null;
+
+                if ($tokenRomanization !== null) {
+                    $token['romanization'] = $tokenRomanization;
+                }
+
+                $tokens[] = $token;
             }
 
-            $cues[] = [
+            $cue = [
                 ...$sourceCue,
                 'translatedText' => $this->cleanString($sourceCue['translatedText'] ?? null)
                     ?? (string) $sourceCue['sourceText'],
-                'romanization' => $cueRomanization,
-                'tokens' => $this->tokensPreservingSource(
-                    $outputCue['tokens'] ?? null,
-                    $this->sourceTokens($sourceCue),
-                    (int) $sourceCue['index'],
-                    true,
-                    true,
-                ),
             ];
+
+            $cueRomanization = $this->cleanString($outputCue['romanization'] ?? null);
+
+            if ($cueRomanization !== null) {
+                $cue['romanization'] = $cueRomanization;
+            }
+
+            $cue['tokens'] = $tokens;
+            $cues[] = $cue;
         }
 
         return new CueEnrichmentResult($cues, $dialect);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function romanizationByIndex(mixed $outputTokens): array
+    {
+        if (! is_array($outputTokens)) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach ($outputTokens as $outputToken) {
+            if (! is_array($outputToken)) {
+                continue;
+            }
+
+            $index = $outputToken['index'] ?? null;
+
+            if (! is_int($index)) {
+                continue;
+            }
+
+            $romanization = $this->cleanString($outputToken['romanization'] ?? null);
+
+            if ($romanization !== null) {
+                $map[$index] = $romanization;
+            }
+        }
+
+        return $map;
     }
 
     /**
