@@ -554,7 +554,6 @@ class LaravelAiTranslationAnalysisProvider
                     $this->sourceTokens($sourceCue),
                     (int) $sourceCue['index'],
                     $includeRomanization,
-                    false,
                 ),
             ];
 
@@ -763,7 +762,6 @@ class LaravelAiTranslationAnalysisProvider
         array $sourceTokens,
         int $cueIndex,
         bool $includeRomanization,
-        bool $requireRomanization,
     ): array {
         if (! is_array($outputTokens)) {
             $this->failInvalidOutput('invalid_tokens', ['cue_index' => $cueIndex]);
@@ -815,13 +813,6 @@ class LaravelAiTranslationAnalysisProvider
 
             $romanization = $this->cleanString($sourceToken['romanization'] ?? null)
                 ?? $this->cleanString($outputToken['romanization'] ?? null);
-
-            if ($requireRomanization && $romanization === null) {
-                $this->failInvalidOutput('missing_token_romanization', [
-                    'cue_index' => $cueIndex,
-                    'token_position' => $position,
-                ]);
-            }
 
             if ($includeRomanization && $romanization !== null) {
                 $token['romanization'] = $romanization;
