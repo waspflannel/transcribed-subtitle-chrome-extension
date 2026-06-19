@@ -1,0 +1,74 @@
+[
+  {
+    "id": "tha-001",
+    "sourceText": "ผมชอบกินข้าว",
+    "goldTokens": ["ผม", "ชอบ", "กิน", "ข้าว"],
+    "note": "I / like / eat / rice; group into dictionary words, never per-character"
+  },
+  {
+    "id": "tha-002",
+    "sourceText": "ฉันรักภาษาไทย",
+    "goldTokens": ["ฉัน", "รัก", "ภาษา", "ไทย"],
+    "note": "ภาษา (language) and ไทย (Thai) separate learner units"
+  },
+  {
+    "id": "tha-003",
+    "sourceText": "วันนี้อากาศดีมาก",
+    "goldTokens": ["วันนี้", "อากาศ", "ดี", "มาก"],
+    "note": "วันนี้ today together; อากาศ weather together; มาก very separate"
+  },
+  {
+    "id": "tha-004",
+    "sourceText": "เขาไปโรงเรียนทุกวัน",
+    "goldTokens": ["เขา", "ไป", "โรงเรียน", "ทุกวัน"],
+    "note": "โรงเรียน school together; ทุกวัน every day together"
+  },
+  {
+    "id": "tha-005",
+    "sourceText": "พวกเรากินข้าวด้วยกัน",
+    "goldTokens": ["พวกเรา", "กิน", "ข้าว", "ด้วยกัน"],
+    "note": "พวกเรา we together; ด้วยกัน together as one adverbial unit"
+  },
+  {
+    "id": "tha-006",
+    "sourceText": "ที่นี่อากาศร้อนมาก",
+    "goldTokens": ["ที่นี่", "อากาศ", "ร้อน", "มาก"],
+    "note": "ที่นี่ here together; ร้อน hot together"
+  },
+  {
+    "id": "tha-007",
+    "sourceText": "ฉันอยากไปกรุงเทพฯ",
+    "goldTokens": ["ฉัน", "อยาก", "ไป", "กรุงเทพฯ"],
+    "note": "กรุงเทพฯ Bangkok abbreviation kept whole"
+  },
+  {
+    "id": "tha-008",
+    "sourceText": "คุณพูดภาษาอังกฤษได้ไหม",
+    "goldTokens": ["คุณ", "พูด", "ภาษา", "อังกฤษ", "ได้", "ไหม"],
+    "note": "อังกฤษ English together; ได้ไหม can-you split into ได้ / ไหม"
+  },
+  {
+    "id": "tha-009",
+    "sourceText": "นักเรียนกำลังอ่านหนังสือ",
+    "goldTokens": ["นักเรียน", "กำลัง", "อ่าน", "หนังสือ"],
+    "note": "นักเรียน student together; กำลัง progressive marker separate; หนังสือ book together"
+  },
+  {
+    "id": "tha-010",
+    "sourceText": "พ่อแม่ทำงานทุกวัน",
+    "goldTokens": ["พ่อแม่", "ทำงาน", "ทุกวัน"],
+    "note": "พ่อแม่ parents together; ทำงาน work together"
+  },
+  {
+    "id": "tha-011",
+    "sourceText": "ฉันซื้อหนังสือเล่มใหม่",
+    "goldTokens": ["ฉัน", "ซื้อ", "หนังสือ", "เล่ม", "ใหม่"],
+    "note": "หนังสือ book together; เล่ม classifier separate; ใหม่ new separate"
+  },
+  {
+    "id": "tha-012",
+    "sourceText": "อาหารไทยอร่อยมาก",
+    "goldTokens": ["อาหาร", "ไทย", "อร่อย", "มาก"],
+    "note": "อาหาร food and ไทย Thai separate; อร่อย delicious together"
+  }
+]

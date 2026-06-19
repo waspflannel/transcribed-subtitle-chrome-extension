@@ -1,0 +1,74 @@
+[
+  {
+    "id": "cmn-001",
+    "sourceText": "我喜欢学习中文",
+    "goldTokens": ["我", "喜欢", "学习", "中文"],
+    "note": "pronoun / verb / verb / noun; never split 喜欢 or 学习 into single characters"
+  },
+  {
+    "id": "cmn-002",
+    "sourceText": "这是一个很好的例子",
+    "goldTokens": ["这", "是", "一个", "很", "好", "的", "例子"],
+    "note": "keep 一个 together; keep 例子 together; 的 particle separate"
+  },
+  {
+    "id": "cmn-003",
+    "sourceText": "我的朋友今天来我家",
+    "goldTokens": ["我", "的", "朋友", "今天", "来", "我家"],
+    "note": "朋友 together; 我家 together as a learner unit"
+  },
+  {
+    "id": "cmn-004",
+    "sourceText": "他每天早上七点起床",
+    "goldTokens": ["他", "每天", "早上", "七点", "起床"],
+    "note": "time expressions kept as learner units; 起床 together"
+  },
+  {
+    "id": "cmn-005",
+    "sourceText": "我们一起去吃饭吧",
+    "goldTokens": ["我们", "一起", "去", "吃饭", "吧"],
+    "note": "我们 together; 吃饭 together; 吧 particle separate"
+  },
+  {
+    "id": "cmn-006",
+    "sourceText": "因为下雨所以没去",
+    "goldTokens": ["因为", "下雨", "所以", "没", "去"],
+    "note": "因为/所以 conjunctions together; 下雨 together"
+  },
+  {
+    "id": "cmn-007",
+    "sourceText": "这本书非常有趣",
+    "goldTokens": ["这", "本", "书", "非常", "有趣"],
+    "note": "本 classifier separate from 书; 有趣 together"
+  },
+  {
+    "id": "cmn-008",
+    "sourceText": "你现在在做什么",
+    "goldTokens": ["你", "现在", "在", "做", "什么"],
+    "note": "在 progressive marker separate; 什么 together"
+  },
+  {
+    "id": "cmn-009",
+    "sourceText": "我打算明天去看电影",
+    "goldTokens": ["我", "打算", "明天", "去", "看", "电影"],
+    "note": "打算 together; 电影 together"
+  },
+  {
+    "id": "cmn-010",
+    "sourceText": "她是老师教我们中文",
+    "goldTokens": ["她", "是", "老师", "教", "我们", "中文"],
+    "note": "老师 together; 我们 together"
+  },
+  {
+    "id": "cmn-011",
+    "sourceText": "北京是中国的首都",
+    "goldTokens": ["北京", "是", "中国", "的", "首都"],
+    "note": "proper nouns together; 的 separate; 首都 together"
+  },
+  {
+    "id": "cmn-012",
+    "sourceText": "我想说一口流利的中文",
+    "goldTokens": ["我", "想", "说", "一口", "流利", "的", "中文"],
+    "note": "一口 classifier phrase together; 流利 together; 的 separate"
+  }
+]

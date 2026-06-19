@@ -1,0 +1,76 @@
+[
+  {
+    "id": "jpn-001",
+    "sourceText": "か聞いてみた",
+    "goldTokens": ["か", "聞いて", "みた"],
+    "note": "prompt anchor example: leading particle split from content verb"
+  },
+  {
+    "id": "jpn-002",
+    "sourceText": "みたいと",
+    "goldTokens": ["みたい", "と"],
+    "note": "prompt anchor example: trailing particle split, never いと"
+  },
+  {
+    "id": "jpn-003",
+    "sourceText": "打って",
+    "goldTokens": ["打って"],
+    "note": "sokuon: keep 打って whole, never drop the leading character to うて"
+  },
+  {
+    "id": "jpn-004",
+    "sourceText": "日本語を勉強しています",
+    "goldTokens": ["日本語", "を", "勉強", "して", "います"],
+    "note": "particle を separate; te-form して + auxiliary います"
+  },
+  {
+    "id": "jpn-005",
+    "sourceText": "私は毎日学校へ行きます",
+    "goldTokens": ["私", "は", "毎日", "学校", "へ", "行きます"],
+    "note": "particles は/へ separate; ます-form verb kept whole"
+  },
+  {
+    "id": "jpn-006",
+    "sourceText": "今日はとても良い天気ですね",
+    "goldTokens": ["今日", "は", "とても", "良い", "天気", "です", "ね"],
+    "note": "final particle ね separate; です kept whole"
+  },
+  {
+    "id": "jpn-007",
+    "sourceText": "友達と一緒に昼ご飯を食べた",
+    "goldTokens": ["友達", "と", "一緒に", "昼ご飯", "を", "食べた"],
+    "note": "一緒に as one adverbial learner unit; を separate"
+  },
+  {
+    "id": "jpn-008",
+    "sourceText": "この本はとても面白いです",
+    "goldTokens": ["この", "本", "は", "とても", "面白い", "です"],
+    "note": "この determiner separate from 本"
+  },
+  {
+    "id": "jpn-009",
+    "sourceText": "私は日本語を勉強しています",
+    "goldTokens": ["私", "は", "日本語", "を", "勉強", "して", "います"],
+    "note": "standard learner sentence with particle separation"
+  },
+  {
+    "id": "jpn-010",
+    "sourceText": "来週東京へ行く予定です",
+    "goldTokens": ["来週", "東京", "へ", "行く", "予定", "です"],
+    "note": "noun+particle+verb plain form"
+  },
+  {
+    "id": "jpn-011",
+    "sourceText": "なり大事な友達へ素直にならなくちゃ",
+    "goldTokens": ["なり", "大事", "な", "友達", "へ", "素直", "に", "ならなくちゃ"],
+    "note": "documented failure case: gold keeps なり whole and ならなくちゃ whole; bad model output strands り and truncates to ならなく",
+    "tag": "tokenization-testable"
+  },
+  {
+    "id": "jpn-012",
+    "sourceText": "騒いでるって寝返りうてばっか",
+    "goldTokens": ["騒いでる", "って", "寝返り", "打って", "ばっか"],
+    "note": "documented transcription fault: source contains うて (lost っ), gold references 打って which is absent from sourceText; harness must flag as transcription-corrupted and exclude from tokenization F1",
+    "tag": "transcription-corrupted"
+  }
+]
