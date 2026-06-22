@@ -153,6 +153,76 @@ describe('SubtitleApiClient', () => {
     }
   });
 
+  it('times out account fetches with the default budget when fetch never resolves', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const fetchMock = vi.fn(
+        (_url: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const error = new Error('Aborted');
+
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      );
+      const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+      const request = client.getExtensionAccount(installId, authToken);
+      const assertion = expect(request).rejects.toThrow(TypeError);
+
+      // Default budget is 10s; advancing just under it should not resolve the request.
+      await vi.advanceTimersByTimeAsync(9999);
+      expect(fetchMock).toHaveBeenCalledOnce();
+
+      await vi.advanceTimersByTimeAsync(1);
+
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('times out subtitle job polls with the 4s poll budget so a stalled poll fails fast', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const fetchMock = vi.fn(
+        (_url: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const error = new Error('Aborted');
+
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      );
+      const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+      const request = client.getSubtitleJob(installId, authToken, '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001');
+      const assertion = expect(request).rejects.toThrow(TypeError);
+
+      // Poll budget is 4s; advancing just under it should not resolve the request.
+      await vi.advanceTimersByTimeAsync(3999);
+
+      await vi.advanceTimersByTimeAsync(1);
+
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resolves quickly when the backend responds fast and the default timeout does not interfere', async () => {
+    const accountResponse = { account: extensionAuthResponse().account };
+    const fetchMock = vi.fn(async () => jsonResponse(accountResponse, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(client.getExtensionAccount(installId, authToken)).resolves.toEqual(accountResponse);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('enriches one clicked learning token', async () => {
     const tokenResponse: LearningTokenResponse = {
       trackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3002',

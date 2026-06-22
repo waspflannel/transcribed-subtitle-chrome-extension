@@ -20,7 +20,9 @@ import {
 } from './api-response-guards';
 
 export const DEFAULT_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl(import.meta.env.WXT_BACKEND_API_BASE_URL);
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const JOB_HISTORY_TIMEOUT_MS = 2500;
+const SUBTITLE_JOB_POLL_TIMEOUT_MS = 4000;
 
 export class SubtitleApiError extends Error {
   public constructor(
@@ -76,6 +78,7 @@ export class SubtitleApiClient {
   public async getSubtitleJob(installId: string, authToken: string, jobId: string): Promise<JobResponse> {
     return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
       method: 'GET',
+      timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
       authToken,
     }, guardJobResponse);
   }
@@ -107,11 +110,9 @@ export class SubtitleApiClient {
     guardResponse: (body: unknown) => TResponse,
   ): Promise<TResponse> {
     const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
-    const controller = typeof init.timeoutMs === 'number' ? new AbortController() : undefined;
-    const timeoutId =
-      controller && init.timeoutMs
-        ? globalThis.setTimeout(() => controller.abort(), init.timeoutMs)
-        : undefined;
+    const timeoutMs = init.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
 
@@ -130,7 +131,7 @@ export class SubtitleApiClient {
         method: init.method,
         headers,
         body: init.body,
-        signal: controller?.signal,
+        signal: controller.signal,
       });
     } catch (error) {
       if (isAbortError(error)) {
@@ -139,9 +140,7 @@ export class SubtitleApiClient {
 
       throw error;
     } finally {
-      if (timeoutId !== undefined) {
-        globalThis.clearTimeout(timeoutId);
-      }
+      globalThis.clearTimeout(timeoutId);
     }
 
     const body = await response.json().catch(() => null);
