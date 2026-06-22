@@ -138,60 +138,13 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        return $this->romanizeBatch($batch, $sourceLanguage);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
-    private function romanizeBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
-    {
-        $output = $this->promptAgent(
-            CueRomanizationAgent::class,
-            $this->romanizationInput($batch, $sourceLanguage),
+        return $this->romanizedResult(
+            $this->promptAgent(
+                CueRomanizationAgent::class,
+                $this->romanizationInput($batch, $sourceLanguage),
+            ),
+            $batch,
         );
-
-        try {
-            return $this->romanizedResult($output, $batch);
-        } catch (SubtitleProcessingException $exception) {
-            if (! $this->shouldRetryRomanizationBatch($exception, count($batch))) {
-                throw $exception;
-            }
-
-            $reason = $exception->context['reason'] ?? 'unknown';
-
-            Log::info('backend.romanization_batch_retried', [
-                'provider' => Lab::OpenAI->value,
-                'adapter' => 'laravel-ai-sdk',
-                'model' => $this->openAiModel('romanization'),
-                'source_language' => $sourceLanguage,
-                'cue_count' => count($batch),
-                'reason' => is_string($reason) ? $reason : 'unknown',
-            ]);
-
-            $splitAt = intdiv(count($batch), 2);
-            $left = $this->romanizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage);
-            $right = $this->romanizeBatch(array_slice($batch, $splitAt), $sourceLanguage);
-
-            return new CueEnrichmentResult(
-                [...$left->cues, ...$right->cues],
-                $left->sourceDialect !== 'unknown' ? $left->sourceDialect : $right->sourceDialect,
-            );
-        }
-    }
-
-    private function shouldRetryRomanizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
-    {
-        if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
-            return false;
-        }
-
-        return in_array($exception->context['reason'] ?? null, [
-            'missing_cues',
-            'cue_count_mismatch',
-            'invalid_cue',
-            'cue_identity_mismatch',
-        ], true);
     }
 
     /**
@@ -576,12 +529,15 @@ class LaravelAiTranslationAnalysisProvider
      */
     private function translatedResult(array $output, array $sourceCues): CueEnrichmentResult
     {
-        $outputCues = $this->validatedOutputCues($output, $sourceCues);
+        $outputByCueId = $this->outputCuesByCueId($output['cues'] ?? null);
         $cues = [];
 
-        foreach ($sourceCues as $position => $sourceCue) {
-            $outputCue = $outputCues[$position];
-            $this->validateCueIdentity($sourceCue, $outputCue, $position, validateSourceText: false);
+        foreach ($sourceCues as $sourceCue) {
+            // Translation is an optional enrichment. Match the model output to the
+            // source cue by its stable cueId (never by array position), and degrade
+            // to the source text when the model dropped, reordered, or returned an
+            // empty translation for a cue, rather than failing the whole job.
+            $outputCue = $outputByCueId[$sourceCue['cueId']] ?? [];
 
             $translatedText = $this->cleanString($outputCue['translatedText'] ?? null)
                 ?? (string) $sourceCue['sourceText'];
@@ -602,12 +558,15 @@ class LaravelAiTranslationAnalysisProvider
     private function romanizedResult(array $output, array $sourceCues): CueEnrichmentResult
     {
         $dialect = $this->cleanString($output['dialect'] ?? null) ?? 'unknown';
-        $outputCues = $this->validatedOutputCues($output, $sourceCues);
+        $outputByCueId = $this->outputCuesByCueId($output['cues'] ?? null);
         $cues = [];
 
-        foreach ($sourceCues as $position => $sourceCue) {
-            $outputCue = $outputCues[$position];
-            $this->validateCueIdentity($sourceCue, $outputCue, $position, validateSourceText: false);
+        foreach ($sourceCues as $sourceCue) {
+            // Romanization is an optional annotation. Match the model output to the
+            // source cue by its stable cueId (never by array position), and degrade
+            // to source tokens with no romanization when the model dropped, reordered,
+            // or mangled a cue. The source tokens are always authoritative.
+            $outputCue = $outputByCueId[$sourceCue['cueId']] ?? [];
 
             $sourceTokens = $this->sourceTokens($sourceCue);
             $romanizationByIndex = $this->romanizationByIndex($outputCue['tokens'] ?? null);
@@ -646,6 +605,36 @@ class LaravelAiTranslationAnalysisProvider
         }
 
         return new CueEnrichmentResult($cues, $dialect);
+    }
+
+    /**
+     * Maps optional-enrichment output cues by cueId so each source cue is matched by
+     * its stable contract id rather than array position. Tolerant: cues without a
+     * usable cueId are skipped and the corresponding source cue degrades.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function outputCuesByCueId(mixed $outputCues): array
+    {
+        if (! is_array($outputCues)) {
+            return [];
+        }
+
+        $byCueId = [];
+
+        foreach ($outputCues as $outputCue) {
+            if (! is_array($outputCue)) {
+                continue;
+            }
+
+            $cueId = $outputCue['cueId'] ?? null;
+
+            if (is_string($cueId) && $cueId !== '') {
+                $byCueId[$cueId] = $outputCue;
+            }
+        }
+
+        return $byCueId;
     }
 
     /**
