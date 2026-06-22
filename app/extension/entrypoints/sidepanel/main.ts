@@ -15,6 +15,7 @@ import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/panel-progress';
 import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
+import { ACTIVE_POLL_INTERVAL_MS, IDLE_POLL_INTERVAL_MS, shouldPollNow } from '../../utils/poll-schedule';
 import { accountFeatureListHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -35,7 +36,7 @@ type PanelResponse = PanelState | PanelErrorResponse;
 type RequestErrorTarget = 'global' | 'account';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
-const BACKEND_REFRESH_INTERVAL_MS = 10000;
+const BACKEND_REFRESH_INTERVAL_MS = ACTIVE_POLL_INTERVAL_MS;
 
 const {
   railButtons,
@@ -106,6 +107,10 @@ let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
 let hasAppliedDefaultView = false;
+let panelWindowId: number | undefined;
+let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
+let stateSeq = 0;
+let latestAppliedSeq = 0;
 
 collapseButton.addEventListener('click', () => {
   window.close();
@@ -163,7 +168,22 @@ setupTabs(railButtons, panels);
 const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
 renderShortcutHelp();
 void loadPanelState();
-setInterval(() => void refreshBackendState(), BACKEND_REFRESH_INTERVAL_MS);
+scheduleNextBackendPoll();
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    void refreshBackendState();
+    scheduleNextBackendPoll();
+  }
+});
+
+void resolvePanelWindowId().then(attachTabListeners);
+
+try {
+  browser.runtime.connect({ name: 'panel' });
+} catch {
+  // Background may be unavailable briefly; the panel still works without the port.
+}
 
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;
@@ -176,8 +196,54 @@ browser.runtime.onMessage.addListener((message) => {
 });
 
 let backendRefreshInFlight = false;
+let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleNextBackendPoll(): void {
+  if (backendPollTimer) clearTimeout(backendPollTimer);
+  const hasInFlightJob = latestState?.subtitleState.type === 'loading';
+  const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
+  backendPollTimer = setTimeout(() => {
+    if (shouldPollNow({ visibilityState: document.visibilityState, hasInFlightJob })) {
+      void refreshBackendState();
+    }
+    scheduleNextBackendPoll();
+  }, interval);
+}
 
 async function loadPanelState(): Promise<void> {
+  await sendPanelRequest({ type: 'panel.getState', syncBackend: false });
+  void refreshBackendState();
+}
+
+async function resolvePanelWindowId(): Promise<void> {
+  try {
+    const win = await browser.windows.getCurrent();
+    panelWindowId = typeof win.id === 'number' ? win.id : undefined;
+  } catch {
+    panelWindowId = undefined;
+  }
+}
+
+function attachTabListeners(): void {
+  browser.tabs.onActivated.addListener((info) => {
+    if (panelWindowId !== undefined && info.windowId !== panelWindowId) return;
+    scheduleTabChangeRefresh();
+  });
+
+  browser.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    if (panelWindowId !== undefined && tab.windowId !== panelWindowId) return;
+    if (!tab.active) return;
+    if (!changeInfo.url) return;
+    scheduleTabChangeRefresh();
+  });
+}
+
+function scheduleTabChangeRefresh(): void {
+  if (tabChangeTimer) clearTimeout(tabChangeTimer);
+  tabChangeTimer = setTimeout(() => void onActiveTabChanged(), 60);
+}
+
+async function onActiveTabChanged(): Promise<void> {
   await sendPanelRequest({ type: 'panel.getState', syncBackend: false });
   void refreshBackendState();
 }
@@ -248,19 +314,34 @@ async function logoutAccount(): Promise<void> {
 }
 
 async function sendPanelRequest(request: PanelRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
+  const requestWithWindow = typeof panelWindowId === 'number'
+    ? { ...request, windowId: panelWindowId }
+    : request;
+  const seq = ++stateSeq;
+
   try {
-    const response = (await browser.runtime.sendMessage(request)) as PanelResponse;
+    const response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse;
 
     if ('ok' in response) {
+      if (seq >= latestAppliedSeq) {
+        latestAppliedSeq = seq;
+      }
       showRequestError(response.error, errorTarget);
 
       return false;
     }
 
+    if (seq < latestAppliedSeq) {
+      return true;
+    }
+    latestAppliedSeq = seq;
     showPanelState(response);
 
     return true;
   } catch (error) {
+    if (seq >= latestAppliedSeq) {
+      latestAppliedSeq = seq;
+    }
     showRequestError(error, errorTarget);
 
     return false;
@@ -362,6 +443,7 @@ function handleJobsListClick(event: MouseEvent): void {
 }
 
 function showPanelState(state: PanelState): void {
+  const previousStateType = latestState?.subtitleState.type;
   latestState = state;
 
   const pageStatus = state.pageStatus;
@@ -415,6 +497,10 @@ function showPanelState(state: PanelState): void {
   if (!hasAppliedDefaultView) {
     hasAppliedDefaultView = true;
     showTab(railButtons, panels, selectDefaultView(state));
+  }
+
+  if (previousStateType !== state.subtitleState.type) {
+    scheduleNextBackendPoll();
   }
 }
 
