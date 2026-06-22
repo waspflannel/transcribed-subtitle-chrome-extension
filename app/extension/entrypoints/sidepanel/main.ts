@@ -249,7 +249,18 @@ async function logoutAccount(): Promise<void> {
 
 async function sendPanelRequest(request: PanelRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
   try {
-    const response = (await browser.runtime.sendMessage(request)) as PanelResponse;
+    let response = (await browser.runtime.sendMessage(request)) as PanelResponse | undefined;
+
+    if (!response) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      response = (await browser.runtime.sendMessage(request)) as PanelResponse | undefined;
+    }
+
+    if (!response) {
+      showRequestError('The extension background did not respond. Try again.', errorTarget);
+
+      return false;
+    }
 
     if ('ok' in response) {
       showRequestError(response.error, errorTarget);
