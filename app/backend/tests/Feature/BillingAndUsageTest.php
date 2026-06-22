@@ -247,6 +247,111 @@ class BillingAndUsageTest extends TestCase
         $this->assertStringContainsString('did not match a local user', (string) $event->processing_error);
     }
 
+    public function test_stale_subscription_updated_does_not_overwrite_newer_period_and_status(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+            'billing.plans.pro.stripe_price_id' => 'price_pro',
+        ]);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_789']);
+
+        $newerStart = now()->startOfMonth()->timestamp;
+        $newerEnd = now()->addMonthNoOverflow()->startOfMonth()->timestamp;
+        $olderStart = now()->subMonthNoOverflow()->startOfMonth()->timestamp;
+        $olderEnd = now()->startOfMonth()->timestamp;
+
+        $newerCreatedAt = now()->timestamp;
+        $olderCreatedAt = now()->subHour()->timestamp;
+
+        $this->postStripeEventWithCreated('evt_newer', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_pro',
+            status: 'active',
+            periodStart: $newerStart,
+            periodEnd: $newerEnd,
+        ), $newerCreatedAt);
+
+        $this->postStripeEventWithCreated('evt_older', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_plus',
+            status: 'past_due',
+            periodStart: $olderStart,
+            periodEnd: $olderEnd,
+        ), $olderCreatedAt);
+
+        $user = $user->fresh();
+        $this->assertSame('pro', $user->billing_plan_code);
+        $this->assertSame('active', $user->billing_subscription_status);
+        $this->assertSame($newerStart, $user->billing_current_period_start->timestamp);
+        $this->assertSame($newerEnd, $user->billing_current_period_end->timestamp);
+    }
+
+    public function test_subscription_updated_first_event_null_marker_applies(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+        ]);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_null_marker']);
+        $periodStart = now()->startOfMonth()->timestamp;
+        $periodEnd = now()->addMonthNoOverflow()->startOfMonth()->timestamp;
+        $createdAt = now()->timestamp;
+
+        $this->assertNull($user->fresh()->billing_subscription_event_at);
+
+        $this->postStripeEventWithCreated('evt_first', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_plus',
+            status: 'active',
+            periodStart: $periodStart,
+            periodEnd: $periodEnd,
+        ), $createdAt);
+
+        $user = $user->fresh();
+        $this->assertSame('plus', $user->billing_plan_code);
+        $this->assertSame('active', $user->billing_subscription_status);
+        $this->assertSame($createdAt, $user->billing_subscription_event_at->timestamp);
+        $this->assertSame(1, BillingUsageEvent::query()->where('event_type', 'monthly_grant')->count());
+    }
+
+    public function test_subscription_updated_in_order_applies_each_event(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+            'billing.plans.pro.stripe_price_id' => 'price_pro',
+        ]);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_inorder']);
+
+        $firstStart = now()->subMonthNoOverflow()->startOfMonth()->timestamp;
+        $firstEnd = now()->startOfMonth()->timestamp;
+        $secondStart = now()->startOfMonth()->timestamp;
+        $secondEnd = now()->addMonthNoOverflow()->startOfMonth()->timestamp;
+
+        $this->postStripeEventWithCreated('evt_first', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_plus',
+            status: 'active',
+            periodStart: $firstStart,
+            periodEnd: $firstEnd,
+        ), now()->subMonthNoOverflow()->startOfMonth()->timestamp);
+
+        $this->postStripeEventWithCreated('evt_second', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_pro',
+            status: 'active',
+            periodStart: $secondStart,
+            periodEnd: $secondEnd,
+        ), now()->startOfMonth()->timestamp);
+
+        $user = $user->fresh();
+        $this->assertSame('pro', $user->billing_plan_code);
+        $this->assertSame('active', $user->billing_subscription_status);
+        $this->assertSame($secondStart, $user->billing_current_period_start->timestamp);
+        $this->assertSame($secondEnd, $user->billing_current_period_end->timestamp);
+    }
+
     public function test_webhooks_cover_checkout_failed_payment_cancellation_and_plan_change(): void
     {
         config([
@@ -535,6 +640,23 @@ class BillingAndUsageTest extends TestCase
         $payload = $this->stripePayload([
             'id' => $eventId,
             'type' => $type,
+            'data' => ['object' => $object],
+        ]);
+
+        $this
+            ->call('POST', '/stripe/webhook', [], [], [], $this->stripeHeaders($payload), $payload)
+            ->assertOk();
+    }
+
+    /**
+     * @param  array<string, mixed>  $object
+     */
+    private function postStripeEventWithCreated(string $eventId, string $type, array $object, int $createdAt): void
+    {
+        $payload = $this->stripePayload([
+            'id' => $eventId,
+            'type' => $type,
+            'created' => $createdAt,
             'data' => ['object' => $object],
         ]);
 

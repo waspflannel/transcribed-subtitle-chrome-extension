@@ -54,7 +54,7 @@ final class StripeWebhookService
                     'payload_hash' => hash('sha256', $payload),
                 ]);
 
-                $this->apply($event);
+                $this->apply($event, $this->eventCreatedAt($event));
                 $record->forceFill([
                     'processed_at' => now(),
                     'processing_error' => null,
@@ -78,7 +78,7 @@ final class StripeWebhookService
     /**
      * @param  array<string, mixed>  $event
      */
-    private function apply(array $event): void
+    private function apply(array $event, ?CarbonImmutable $eventCreatedAt): void
     {
         $type = data_get($event, 'type');
 
@@ -96,7 +96,7 @@ final class StripeWebhookService
             'checkout.session.completed' => $this->handleCheckoutCompleted($object),
             'customer.subscription.created',
             'customer.subscription.updated',
-            'customer.subscription.deleted' => $this->handleSubscriptionChanged($object),
+            'customer.subscription.deleted' => $this->handleSubscriptionChanged($object, $eventCreatedAt),
             'invoice.payment_failed' => $this->handleInvoicePaymentFailed($object),
             default => null,
         };
@@ -122,9 +122,21 @@ final class StripeWebhookService
     /**
      * @param  array<string, mixed>  $subscription
      */
-    private function handleSubscriptionChanged(array $subscription): void
+    private function handleSubscriptionChanged(array $subscription, ?CarbonImmutable $eventCreatedAt): void
     {
         $user = $this->requireUserForObject($subscription);
+
+        $user = User::query()
+            ->whereKey($user->id)
+            ->lockForUpdate()
+            ->first() ?? $user;
+
+        $lastAppliedAt = $user->billing_subscription_event_at;
+
+        if ($lastAppliedAt !== null && $eventCreatedAt !== null && $eventCreatedAt <= $lastAppliedAt) {
+            return;
+        }
+
         $plan = $this->requirePlanForObject($subscription);
         $periodStart = $this->timestamp(data_get($subscription, 'current_period_start'));
         $periodEnd = $this->timestamp(data_get($subscription, 'current_period_end'));
@@ -147,6 +159,7 @@ final class StripeWebhookService
             'billing_cancel_at_period_end' => (bool) data_get($subscription, 'cancel_at_period_end', false),
             'billing_trial_ends_at' => $trialEndsAt,
             'billing_ends_at' => $endedAt,
+            'billing_subscription_event_at' => $eventCreatedAt ?? $user->billing_subscription_event_at,
         ])->save();
 
         if (in_array($user->billing_subscription_status, ['active', 'trialing'], true) && $periodStart !== null && $periodEnd !== null) {
@@ -227,5 +240,13 @@ final class StripeWebhookService
         }
 
         return CarbonImmutable::createFromTimestampUTC((int) $value);
+    }
+
+    /**
+     * @param  array<string, mixed>  $event
+     */
+    private function eventCreatedAt(array $event): ?CarbonImmutable
+    {
+        return $this->timestamp(data_get($event, 'created'));
     }
 }
