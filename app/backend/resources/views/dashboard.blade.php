@@ -34,6 +34,10 @@
             <p class="error-copy">Checkout was cancelled.</p>
         @endif
 
+        @if (session('jobs_status'))
+            <p class="status">{{ session('jobs_status') }}</p>
+        @endif
+
         <div class="workspace-grid">
             <section class="workspace-main">
                 <x-ui.panel title="Usage" description="{{ $account['monthlyMinutesRemaining'] }} minutes remaining this period.">
@@ -63,6 +67,13 @@
                 </x-ui.panel>
 
                 <x-ui.panel title="Recent jobs" description="Public-safe support details for your latest subtitle generations.">
+                    @if ($recentJobs->isNotEmpty())
+                        <form method="post" action="{{ route('dashboard.jobs.clear') }}" data-confirm="Clear all of your subtitle jobs? Running jobs will release their reserved minutes.">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="button button-secondary button-small">Clear all jobs</button>
+                        </form>
+                    @endif
                     <div class="table-wrap">
                         <table>
                             <thead>
@@ -72,6 +83,7 @@
                                     <th>Minutes</th>
                                     <th>Updated</th>
                                     <th>Support ID</th>
+                                    <th aria-label="Actions"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -85,10 +97,17 @@
                                         <td>{{ $job['minutes'] }}</td>
                                         <td>{{ $job['updatedAt'] }}</td>
                                         <td><a class="text-link" href="{{ $job['href'] }}">{{ $job['jobId'] }}</a></td>
+                                        <td>
+                                            <form method="post" action="{{ route('dashboard.jobs.destroy', ['jobId' => $job['jobId']]) }}" data-confirm="Delete subtitle job {{ $job['jobId'] }}?">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="text-button button-small" aria-label="Delete job {{ $job['jobId'] }}">Delete</button>
+                                            </form>
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5">No subtitle jobs yet. Install the extension and start generation from a YouTube watch page or Short.</td>
+                                        <td colspan="6">No subtitle jobs yet. Install the extension and start generation from a YouTube watch page or Short.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
