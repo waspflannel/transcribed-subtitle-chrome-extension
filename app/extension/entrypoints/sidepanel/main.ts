@@ -15,7 +15,8 @@ import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/panel-progress';
 import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
-import { ACTIVE_POLL_INTERVAL_MS, IDLE_POLL_INTERVAL_MS, shouldPollNow } from '../../utils/poll-schedule';
+import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
+import { PanelPortConnector } from '../../utils/panel-port-registry';
 import { accountFeatureListHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -35,8 +36,6 @@ type PanelErrorResponse = { ok: false; error: string };
 type PanelResponse = PanelState | PanelErrorResponse;
 type RequestErrorTarget = 'global' | 'account';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
-
-const BACKEND_REFRESH_INTERVAL_MS = ACTIVE_POLL_INTERVAL_MS;
 
 const {
   railButtons,
@@ -179,11 +178,8 @@ document.addEventListener('visibilitychange', () => {
 
 void resolvePanelWindowId().then(attachTabListeners);
 
-try {
-  browser.runtime.connect({ name: 'panel' });
-} catch {
-  // Background may be unavailable briefly; the panel still works without the port.
-}
+const panelPortConnector = new PanelPortConnector((name) => browser.runtime.connect({ name }));
+panelPortConnector.connect();
 
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;
@@ -201,9 +197,9 @@ let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);
   const hasInFlightJob = latestState?.subtitleState.type === 'loading';
-  const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
+  const interval = pollIntervalMs(hasInFlightJob);
   backendPollTimer = setTimeout(() => {
-    if (shouldPollNow({ visibilityState: document.visibilityState, hasInFlightJob })) {
+    if (shouldPollNow({ visibilityState: document.visibilityState })) {
       void refreshBackendState();
     }
     scheduleNextBackendPoll();
@@ -323,9 +319,10 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     const response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse;
 
     if ('ok' in response) {
-      if (seq >= latestAppliedSeq) {
-        latestAppliedSeq = seq;
+      if (seq < latestAppliedSeq) {
+        return false;
       }
+      latestAppliedSeq = seq;
       showRequestError(response.error, errorTarget);
 
       return false;
@@ -339,9 +336,10 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
 
     return true;
   } catch (error) {
-    if (seq >= latestAppliedSeq) {
-      latestAppliedSeq = seq;
+    if (seq < latestAppliedSeq) {
+      return false;
     }
+    latestAppliedSeq = seq;
     showRequestError(error, errorTarget);
 
     return false;
