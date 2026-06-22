@@ -180,7 +180,11 @@ class SubtitleRuntimeTracingTest extends TestCase
             'stage' => 'tokenizing',
         ]);
         $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        Cache::store('subtitle_concurrency_test')->put($counterKey, 1, now()->addMinute());
+        Cache::store('subtitle_concurrency_test')->put(
+            $counterKey,
+            json_encode([['token' => 'occupied', 'expiresAt' => time() + 60]]),
+            now()->addMinute(),
+        );
         $queuedJob = new class($job->id)
         {
             public bool $released = false;
@@ -267,6 +271,175 @@ class SubtitleRuntimeTracingTest extends TestCase
             'subtitle_job_id' => $job->id,
             'event' => 'queue.concurrency_delayed',
         ]);
+    }
+
+    public function test_batch_concurrency_middleware_evicts_stale_slot_tokens_on_claim(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.batch_concurrency' => 2,
+        ]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
+        // One live slot plus one stale slot whose deadline has already passed.
+        // Without eviction the active count would be 2 (at the limit) and the
+        // claim would be rejected; with eviction the stale token is dropped
+        // and the new claim succeeds.
+        Cache::store('subtitle_concurrency_test')->put(
+            $counterKey,
+            json_encode([
+                ['token' => 'live', 'expiresAt' => time() + 60],
+                ['token' => 'stale', 'expiresAt' => time() - 60],
+            ]),
+            now()->addMinute(),
+        );
+        $queuedJob = new class($job->id)
+        {
+            public bool $released = false;
+
+            public function __construct(public readonly int $subtitleJobId) {}
+
+            public function release(int $delay): void
+            {
+                $this->released = true;
+            }
+        };
+        $processed = false;
+
+        app(LimitSubtitleBatchConcurrency::class)->handle(
+            $queuedJob,
+            function () use (&$processed): void {
+                $processed = true;
+            },
+        );
+
+        $this->assertTrue($processed);
+        $this->assertFalse($queuedJob->released);
+        // After the claim/release cycle, the stale token is gone, the live
+        // pre-existing slot remains, and the newly claimed token was released
+        // by the finally block - leaving exactly one slot.
+        $slots = json_decode((string) Cache::store('subtitle_concurrency_test')->get($counterKey), true);
+        $tokens = array_column($slots, 'token');
+        $this->assertNotContains('stale', $tokens);
+        $this->assertContains('live', $tokens);
+        $this->assertCount(1, $slots);
+    }
+
+    public function test_batch_concurrency_middleware_leaked_slot_frees_capacity_when_deadline_passes(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.batch_concurrency' => 1,
+        ]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
+        // Simulate a worker that was killed mid-batch: its slot was never
+        // released, but the absolute deadline has now passed. The next claim
+        // must observe the slot as evicted and admit the new job.
+        Cache::store('subtitle_concurrency_test')->put(
+            $counterKey,
+            json_encode([['token' => 'leaked', 'expiresAt' => time() - 1]]),
+            now()->addMinute(),
+        );
+        $queuedJob = new class($job->id)
+        {
+            public bool $released = false;
+
+            public function __construct(public readonly int $subtitleJobId) {}
+
+            public function release(int $delay): void
+            {
+                $this->released = true;
+            }
+        };
+        $processed = false;
+
+        app(LimitSubtitleBatchConcurrency::class)->handle(
+            $queuedJob,
+            function () use (&$processed): void {
+                $processed = true;
+            },
+        );
+
+        $this->assertTrue($processed);
+        $this->assertFalse($queuedJob->released);
+    }
+
+    public function test_batch_concurrency_middleware_releasing_token_frees_capacity_immediately(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.batch_concurrency' => 1,
+        ]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        $queuedJob = new class($job->id)
+        {
+            public bool $released = false;
+
+            public function __construct(public readonly int $subtitleJobId) {}
+
+            public function release(int $delay): void
+            {
+                $this->released = true;
+            }
+        };
+        $processedCount = 0;
+
+        app(LimitSubtitleBatchConcurrency::class)->handle(
+            $queuedJob,
+            function () use (&$processedCount): void {
+                $processedCount++;
+            },
+        );
+
+        $this->assertSame(1, $processedCount);
+        $this->assertFalse($queuedJob->released);
+
+        // A second immediate claim must succeed because the first slot was
+        // released in the finally block of the first handle() call.
+        app(LimitSubtitleBatchConcurrency::class)->handle(
+            $queuedJob,
+            function () use (&$processedCount): void {
+                $processedCount++;
+            },
+        );
+
+        $this->assertSame(2, $processedCount);
+        $this->assertFalse($queuedJob->released);
+    }
+
+    public function test_batch_concurrency_middleware_releasing_already_evicted_token_is_safe_noop(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.batch_concurrency' => 1,
+        ]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
+        // A live slot from an unrelated worker, plus a 'ghost' token that was
+        // already evicted (e.g. its deadline passed and another claim evicted
+        // it). Releasing 'ghost' must not error and must not disturb 'live'.
+        Cache::store('subtitle_concurrency_test')->put(
+            $counterKey,
+            json_encode([['token' => 'live', 'expiresAt' => time() + 60]]),
+            now()->addMinute(),
+        );
+
+        $middleware = app(LimitSubtitleBatchConcurrency::class);
+        $release = new \ReflectionMethod($middleware, 'releaseSlot');
+        $release->invoke($middleware, $counterKey, 'ghost');
+
+        $slots = json_decode((string) Cache::store('subtitle_concurrency_test')->get($counterKey), true);
+        $this->assertCount(1, $slots);
+        $this->assertSame('live', $slots[0]['token']);
     }
 
     public function test_batch_concurrency_middleware_bypasses_sync_queue_driver(): void

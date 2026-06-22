@@ -10,6 +10,7 @@ use Closure;
 use Illuminate\Cache\Repository;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 final class LimitSubtitleBatchConcurrency
 {
@@ -40,7 +41,7 @@ final class LimitSubtitleBatchConcurrency
         try {
             return $next($job);
         } finally {
-            $this->releaseSlot($counterKey);
+            $this->releaseSlot($counterKey, $claim['token']);
         }
     }
 
@@ -54,33 +55,37 @@ final class LimitSubtitleBatchConcurrency
     }
 
     /**
-     * @return array{claimed: bool, delay_reason: string|null, observed_active_count: int|null}
+     * @return array{claimed: bool, token: string|null, delay_reason: string|null, observed_active_count: int|null}
      */
     private function claimSlot(string $counterKey, int $limit): array
     {
         $cache = $this->cache();
         $claimed = false;
+        $token = null;
         $activeCount = null;
 
         try {
             $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
-                ->block(1, function () use ($cache, $counterKey, $limit, &$claimed, &$activeCount): void {
-                    $activeCount = max(0, (int) $cache->get($counterKey, 0));
+                ->block(1, function () use ($cache, $counterKey, $limit, &$claimed, &$token, &$activeCount): void {
+                    $slots = $this->evictExpired($this->readSlots($cache, $counterKey));
+                    $activeCount = count($slots);
 
                     if ($activeCount >= $limit) {
                         return;
                     }
 
-                    $cache->put(
-                        $counterKey,
-                        $activeCount + 1,
-                        now()->addSeconds(SubtitleTier::concurrencyCounterSeconds()),
-                    );
+                    $token = (string) Str::uuid();
+                    $slots[] = [
+                        'token' => $token,
+                        'expiresAt' => time() + SubtitleTier::concurrencyCounterSeconds(),
+                    ];
+                    $this->writeSlots($cache, $counterKey, $slots);
                     $claimed = true;
                 });
         } catch (LockTimeoutException) {
             return [
                 'claimed' => false,
+                'token' => null,
                 'delay_reason' => 'lock_timeout',
                 'observed_active_count' => $activeCount,
             ];
@@ -88,34 +93,44 @@ final class LimitSubtitleBatchConcurrency
 
         return [
             'claimed' => $claimed,
+            'token' => $token,
             'delay_reason' => $claimed ? null : 'limit_reached',
             'observed_active_count' => $activeCount,
         ];
     }
 
-    private function releaseSlot(string $counterKey): void
+    private function releaseSlot(string $counterKey, string $token): void
     {
         $cache = $this->cache();
 
         try {
             $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
-                ->block(1, function () use ($cache, $counterKey): void {
-                    $active = max(0, (int) $cache->get($counterKey, 0) - 1);
+                ->block(1, function () use ($cache, $counterKey, $token): void {
+                    $slots = $this->readSlots($cache, $counterKey);
 
-                    if ($active === 0) {
+                    if ($slots === []) {
                         $cache->forget($counterKey);
 
                         return;
                     }
 
-                    $cache->put(
-                        $counterKey,
-                        $active,
-                        now()->addSeconds(SubtitleTier::concurrencyCounterSeconds()),
-                    );
+                    $remaining = array_values(array_filter(
+                        $slots,
+                        fn (array $slot): bool => $slot['token'] !== $token,
+                    ));
+
+                    // Token not present (already evicted by deadline or never
+                    // claimed): treat as a no-op so a dead worker's late
+                    // release cannot refresh or corrupt other live slots.
+                    if (count($remaining) === count($slots)) {
+                        return;
+                    }
+
+                    $this->writeSlots($cache, $counterKey, $remaining);
                 });
         } catch (LockTimeoutException) {
-            $cache->forget($counterKey);
+            // Best-effort release; the leaked token ages out at its own
+            // absolute deadline regardless of other activity.
         }
     }
 
@@ -127,7 +142,7 @@ final class LimitSubtitleBatchConcurrency
     }
 
     /**
-     * @param  array{claimed: bool, delay_reason: string|null, observed_active_count: int|null}  $claim
+     * @param  array{claimed: bool, token: string|null, delay_reason: string|null, observed_active_count: int|null}  $claim
      */
     private function traceDelay(SubtitleJob $job, string $tier, int $limit, array $claim): void
     {
@@ -148,6 +163,71 @@ final class LimitSubtitleBatchConcurrency
     private function counterKey(SubtitleJob $job, string $tier): string
     {
         return 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':'.$tier;
+    }
+
+    /**
+     * @return array<int, array{token: string, expiresAt: int}>
+     */
+    private function readSlots(Repository $cache, string $counterKey): array
+    {
+        $raw = $cache->get($counterKey);
+
+        if (! is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        if (! is_array($decoded)) {
+            return [];
+        }
+
+        $slots = [];
+
+        foreach ($decoded as $slot) {
+            if (! is_array($slot) || ! array_key_exists('token', $slot) || ! array_key_exists('expiresAt', $slot)) {
+                continue;
+            }
+
+            $slots[] = [
+                'token' => (string) $slot['token'],
+                'expiresAt' => (int) $slot['expiresAt'],
+            ];
+        }
+
+        return $slots;
+    }
+
+    /**
+     * @param  array<int, array{token: string, expiresAt: int}>  $slots
+     */
+    private function writeSlots(Repository $cache, string $counterKey, array $slots): void
+    {
+        if ($slots === []) {
+            $cache->forget($counterKey);
+
+            return;
+        }
+
+        $cache->put(
+            $counterKey,
+            json_encode($slots, JSON_THROW_ON_ERROR),
+            now()->addSeconds(SubtitleTier::concurrencyCounterSeconds()),
+        );
+    }
+
+    /**
+     * @param  array<int, array{token: string, expiresAt: int}>  $slots
+     * @return array<int, array{token: string, expiresAt: int}>
+     */
+    private function evictExpired(array $slots): array
+    {
+        $now = time();
+
+        return array_values(array_filter(
+            $slots,
+            fn (array $slot): bool => $slot['expiresAt'] > $now,
+        ));
     }
 
     private function cache(): Repository
