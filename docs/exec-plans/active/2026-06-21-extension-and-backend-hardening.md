@@ -811,3 +811,115 @@ Backend:
 | --- | --- | --- |
 | 2026-06-21 | Consolidated plan written (tab-switch + audit findings) for single-branch handoff. | This document. |
 | 2026-06-21 | Items 1–6, 8–11 implemented; Item 7 documented as decision. | Commits on `feature/extension-backend-hardening`. |
+| 2026-06-21 | Branch reviewed against this document item-by-item. | §Review findings below. |
+| 2026-06-21 | Review follow-ups R1–R5 implemented on the same branch. | Commits `6945588` (R1) and `60f84ec` (R2–R5). R6 tracked separately as pre-existing. |
+
+---
+
+# Review findings (post-implementation)
+
+Reviewed `origin/feature/extension-backend-hardening` against this plan on 2026-06-21.
+
+**Verdict:** strong implementation. All 11 items are addressed with good, targeted tests.
+Validation run during review: extension `tsc --noEmit` clean; backend feature tests green
+(`SubtitleJobFailureHandlerTest`, `WebSubtitleJobDeletionTest`, `BillingAndUsageTest`,
+`SubtitleRuntimeTracingTest` — 51 tests incl. all new item-8/9/10/11 coverage); extension
+vitest 125 pass, 1 **pre-existing/unrelated** failure (see R6). Commit hygiene matches the
+plan (per-item commits).
+
+Item-by-item: 1 ✅, 2 ✅ (excellent — node-identity test), 3 ✅ (caveat R3), 4 ✅, 5 ⚠️ (R1),
+6 ✅ (gap R4), 7 ✅ (documented), 8 ✅, 9 ✅, 10 ✅, 11 ✅.
+
+The following follow-ups were found. **R1 is the only one recommended as a blocker before
+merge;** R2–R5 are quick cleanups worth folding into the same branch. R6 is out of scope.
+
+## R1 — Medium — Panel port is never reconnected (regresses Item 5's intent)
+
+`entrypoints/sidepanel/main.ts` (~`:183`) calls `browser.runtime.connect({ name: 'panel' })`
+**once**, fire-and-forget, with no `onDisconnect` handler and no reconnect. The port carries
+no messages — it's only a presence beacon for `PanelPortRegistry.hasOpenPanel()` in the
+background (used to gate the `content.activeCueChanged` re-broadcast). Chrome tears down an
+idle port after ~5 minutes (and whenever the service worker recycles). Once that happens,
+`hasOpenPanel()` is permanently `false`, so the background stops broadcasting
+`background.activeCueChanged` — **the side-panel transcript's active-cue highlight stops
+tracking playback while the panel is still open.** Users routinely keep the panel open longer
+than 5 minutes, so this will trigger on most videos.
+
+Scope: only the sidepanel transcript highlight degrades (the in-page overlay tracks cues
+locally and is unaffected; `focusTranscript` is not gated). Not a crash, but a visible
+regression of a core feature.
+
+**Fix:** hold the port and reconnect on disconnect (debounced). The reconnect also re-keeps
+the SW alive while the panel lives — acceptable; the SW idles back out and the cycle repeats
+cheaply.
+
+```ts
+function connectPanelPort(): void {
+  try {
+    const port = browser.runtime.connect({ name: 'panel' });
+    port.onDisconnect.addListener(() => setTimeout(connectPanelPort, 1000));
+  } catch {
+    setTimeout(connectPanelPort, 1000);
+  }
+}
+```
+
+Add a test (or manual evidence) that the transcript highlight keeps updating after a
+simulated port disconnect / SW recycle.
+
+## R2 — Minor — Duplicate cast key in `User.php`
+
+`app/backend/app/Models/User.php` `casts()` now lists
+`'billing_current_period_end' => 'immutable_datetime'` **twice**. Same value, so functionally
+harmless (the later key just overwrites), but it's a careless artifact from the Item-10 edit.
+Remove the duplicate line.
+
+## R3 — Minor — `enrichLearningToken` is bounded by the 10s default
+
+`utils/api.ts` applies `DEFAULT_REQUEST_TIMEOUT_MS = 10000` to `enrichLearningToken`, which
+is a **foreground single-token LLM call**. Under provider latency a valid enrichment can
+exceed 10s and would now abort with a timeout, surfacing as a spurious "word card failed."
+The plan (Item 3) explicitly warned against making this one too tight. Give enrichment a
+dedicated, longer budget (≈20–30s) while keeping the 10s default for the rest.
+
+## R4 — Minor — Seq guard doesn't drop stale *error* responses
+
+`sendPanelRequest` (Item 6 / 1.C) guards the success path
+(`if (seq < latestAppliedSeq) return true;`) but the **error branch** still calls
+`showRequestError` even when `seq < latestAppliedSeq`. So a late error from an older request
+can clobber newer good state — and for a `global` error target `showError` resets
+`latestState` and blanks the UI. Add the same staleness check to the error branch:
+
+```ts
+if ('ok' in response) {
+  if (seq < latestAppliedSeq) return false; // drop stale error
+  latestAppliedSeq = seq;
+  showRequestError(response.error, errorTarget);
+  return false;
+}
+```
+
+Low likelihood (getState rarely errors), but it's a one-line tightening of the guard the item
+is supposed to provide.
+
+## R5 — Trivial — Dead/duplicated poll helper
+
+`utils/poll-schedule.ts` exports `pollIntervalMs(hasInFlightJob)`, but `main.ts` inlines the
+same `hasInFlightJob ? ACTIVE : IDLE` ternary instead of calling it; and `shouldPollNow`
+accepts `hasInFlightJob` but ignores it. Either use `pollIntervalMs` in `main.ts` and drop
+the unused param from `shouldPollNow`, or remove the dead export. Cosmetic.
+
+## R6 — Out of scope — Pre-existing, unrelated test failure
+
+`tests/account-session.test.ts › drops expired sessions and updates safe account summaries`
+fails, but neither `account-session.ts` nor its test is in this branch's diff — it fails
+identically on `main`. Cause: `updateStoredAccount()` calls `getStoredExtensionSession()` with
+the **real** system clock, and the fixture token's `expiresAt` is `2026-06-21` (today), so it
+now reads as expired. It's a time-bomb test, not a regression. Track separately (fix the test
+to inject a clock).
+
+## Suggested disposition
+
+- Fix **R1** on this branch before merge (+ test).
+- Fold **R2, R4, R5** in as a small cleanup commit; **R3** as a one-line constant.
+- File **R6** as its own ticket against `main`.
