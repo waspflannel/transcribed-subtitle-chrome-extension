@@ -41,6 +41,12 @@ Route::get('/dashboard', DashboardController::class)
 Route::get('/dashboard/jobs/{jobId}', [WebSubtitleJobController::class, 'show'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard.jobs.show');
+Route::delete('/dashboard/jobs/{jobId}', [WebSubtitleJobController::class, 'destroy'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.jobs.destroy');
+Route::delete('/dashboard/jobs', [WebSubtitleJobController::class, 'clearAll'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.jobs.clear');
 
 Route::post('/billing/checkout/{planCode}', [BillingController::class, 'checkout'])
     ->middleware(['auth', 'verified'])
