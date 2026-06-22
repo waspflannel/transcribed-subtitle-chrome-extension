@@ -23,6 +23,7 @@ export const DEFAULT_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl(import.meta
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const JOB_HISTORY_TIMEOUT_MS = 2500;
 const SUBTITLE_JOB_POLL_TIMEOUT_MS = 4000;
+const LEARNING_TOKEN_TIMEOUT_MS = 25000;
 
 export class SubtitleApiError extends Error {
   public constructor(
@@ -99,6 +100,7 @@ export class SubtitleApiClient {
     return this.request<LearningTokenResponse>('learning-tokens', installId, {
       method: 'POST',
       body: JSON.stringify(payload),
+      timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
       authToken,
     }, guardLearningTokenResponse);
   }

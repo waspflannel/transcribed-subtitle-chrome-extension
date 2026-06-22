@@ -1,6 +1,5 @@
 export interface PollDecisionInputs {
   visibilityState: 'visible' | 'hidden';
-  hasInFlightJob: boolean;
 }
 
 export const ACTIVE_POLL_INTERVAL_MS = 10_000;

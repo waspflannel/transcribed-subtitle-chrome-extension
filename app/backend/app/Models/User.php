@@ -54,7 +54,6 @@ class User extends Authenticatable implements MustVerifyEmail
             'billing_cancel_at_period_end' => 'boolean',
             'billing_current_period_end' => 'immutable_datetime',
             'billing_current_period_start' => 'immutable_datetime',
-            'billing_current_period_end' => 'immutable_datetime',
             'billing_ends_at' => 'immutable_datetime',
             'billing_subscription_event_at' => 'immutable_datetime',
             'billing_trial_ends_at' => 'immutable_datetime',
