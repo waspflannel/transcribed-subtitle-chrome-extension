@@ -13,16 +13,41 @@ export function bindTranscriptView(dom: {
   let settings: ExtensionSettings | null = null;
   let youtubeVideoId: string | null = null;
   let activeCueId: string | null = null;
+  let renderedSignature: string | null = null;
+
+  function renderSignature(): string {
+    return JSON.stringify([
+      youtubeVideoId,
+      cues.map((cue) => cue.cueId),
+      dom.transcriptSearch.value,
+      settings?.showRomanization ?? false,
+      settings?.showTranslation ?? false,
+    ]);
+  }
 
   function render(): void {
     if (!settings) return;
     const total = cues.length;
+    const signature = renderSignature();
+    dom.transcriptStatus.textContent = total === 0 ? '' : `${total} cues`;
+    if (signature === renderedSignature) return;
+    renderedSignature = signature;
     dom.transcriptList.innerHTML = total === 0
       ? '<p class="transcript-empty muted">Generate subtitles to see the transcript.</p>'
       : panelTranscriptListHtml({ cues, activeCueId, query: dom.transcriptSearch.value, settings });
-    dom.transcriptStatus.textContent = total === 0 ? '' : `${total} cues`;
-    const activeRow = dom.transcriptList.querySelector('.cue.on');
-    activeRow?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function applyActiveCue(nextCueId: string | null): void {
+    for (const row of dom.transcriptList.querySelectorAll('.cue.on')) {
+      row.classList.remove('on');
+      row.setAttribute('aria-current', 'false');
+    }
+    if (nextCueId === null) return;
+    const nextRow = dom.transcriptList.querySelector(`[data-cue-id="${cssAttributeValue(nextCueId)}"]`);
+    if (!nextRow) return;
+    nextRow.classList.add('on');
+    nextRow.setAttribute('aria-current', 'true');
+    nextRow.scrollIntoView({ block: 'nearest' });
   }
 
   function ackButton(button: HTMLButtonElement, label?: string): void {
@@ -65,7 +90,15 @@ export function bindTranscriptView(dom: {
     setData(nextYoutubeVideoId: string | null, nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
       youtubeVideoId = nextYoutubeVideoId; cues = nextCues; settings = nextSettings; render();
     },
-    setActiveCue(cueId: string | null) { if (cueId === activeCueId) return; activeCueId = cueId; render(); },
+    setActiveCue(cueId: string | null) {
+      if (cueId === activeCueId) return;
+      activeCueId = cueId;
+      applyActiveCue(cueId);
+    },
     focus() { dom.transcriptSearch.focus(); },
   };
+}
+
+function cssAttributeValue(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
