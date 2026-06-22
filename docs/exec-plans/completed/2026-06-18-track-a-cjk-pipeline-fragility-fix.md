@@ -11,6 +11,13 @@ Last updated: 2026-06-19
 > File paths and line numbers are pointers verified on 2026-06-18 against branch
 > `codex/architecture-review-cleanup`; treat them as "look here," not "type this."
 
+> **Amendment (2026-06-19):** the first implementation passed all tests but still hard-failed in
+> production with `cue_identity_mismatch`, because romanization (and translation) paired model
+> output to source cues **by array position** and treated identity drift as fatal — instead of
+> matching by `cueId` and degrading, as this plan intended. Corrected by matching on `cueId` and
+> degrading unmatched cues; the romanization split-retry was removed as superseded. Full detail in
+> **"Amendment — 2026-06-19"** near the end.
+
 ## Goal
 
 Stop the subtitle-generation pipeline from hard-failing entire jobs for no-space scripts
@@ -130,8 +137,10 @@ sensible fallback instead of failing the job.
       unmatched tokens, the job completes, and no `failJob` is triggered for that batch.
 - [x] A translation batch the model botches (missing/empty `translatedText` for a cue)
       **degrades**: that cue's `translatedText` falls back to its `sourceText`; the job completes.
-- [x] Romanization has a split-retry backstop equivalent to tokenization's, attempted before any
-      degradation, for recoverable *structural* failures.
+- [~] ~~Romanization has a split-retry backstop equivalent to tokenization's, attempted before any
+      degradation, for recoverable *structural* failures.~~ **Superseded 2026-06-19** — the
+      structural failures it guarded now degrade via cueId-matching, so the retry was removed as
+      dead code. See Amendment.
 - [x] The no-space artifact-space regex exists in exactly one place; both the normalizer and the
       validator consume it from there, with behavior unchanged.
 - [x] New CJK reproduction tests fail on `main` and pass after the change.
@@ -357,6 +366,8 @@ Evidence to capture:
 | 2026-06-18 | Add a romanization split-retry mirroring tokenization, for recoverable structural reasons only. | Backstop for wrong-cue-count outputs and consistency with the established pattern. |
 | 2026-06-18 | Extract the no-space artifact-space regex into one shared helper. | One producer and one comparer must normalize identically; duplication risks silent drift. |
 | 2026-06-18 | NFKC is complementary/optional, not the fix. | It cannot fold traditional↔simplified; only "don't exact-match" is robust, and `intl` is not guaranteed. |
+| 2026-06-19 | Match BOTH translation and romanization output to source cues by `cueId`, never by array position; degrade any unmatched cue. | Production jobs failed `cue_identity_mismatch`: positional pairing + a fatal identity gate broke when the model reordered/renumbered a batch's cues. Matching by the stable contract id and degrading is what actually realizes the "match by identity + degrade" intent. |
+| 2026-06-19 | Remove the romanization split-retry (`romanizeBatch` / `shouldRetryRomanizationBatch` / `backend.romanization_batch_retried`); supersedes the 2026-06-18 decision above. | Once structural mismatches degrade via cueId-matching, the reasons the retry guarded can no longer be thrown — it was dead code (how_to_build: no dead code / no evidence-free retries). |
 
 ## Progress Log
 
@@ -365,6 +376,7 @@ Evidence to capture:
 | 2026-06-18 | Plan created and verified against the provider, agents, validator, normalizer, jobs, processor, pipeline, track generator, config, and existing tests on `codex/architecture-review-cleanup`. | |
 | 2026-06-18 | Reframed from a code listing into a solution-architecture spec; implementation left to the worker. | |
 | 2026-06-19 | Implemented on branch `track-a/cjk-fragility-fix` as three sequential commits (regex helper / translation / romanization). All acceptance criteria met; backend suite green (222 passed / 2107 assertions); contracts + extension checks green. Reproduction verified by reverting provider/agent to HEAD and confirming the new CJK/degradation tests fail there, then pass after. | git log: `0151987`, `de89981`, `a99e8f6` |
+| 2026-06-19 | Post-completion regression found in production: `romanizing` stage failing `cue_identity_mismatch` (video `Df9pky-e2gg`), with the progress bar climbing then collapsing as sibling batches reported progress before cancellation. Root cause: positional pairing + fatal identity gate. Fixed by matching translation + romanization output by `cueId` (`outputCuesByCueId`) and degrading unmatched cues; removed the now-dead romanization split-retry. Backend suite green (224 passed / 2114 assertions); Pint clean. | logs: `backend.romanizing_failed`; provider `romanizedResult` / `translatedResult` / `outputCuesByCueId` |
 
 ## Completion Notes
 
@@ -387,6 +399,43 @@ Evidence to capture:
   - `scripts/agent/check.ps1` PowerShell 5.1 stderr handling (separate harness debt).
   - Apply the same index-zip principle to the word-card path only if CJK fragility is later reported there (out of scope per plan).
   - Track B Steps 3–5 remain gated on harness results, per the Track B plan.
+
+## Amendment — 2026-06-19: production regression and corrected fix
+
+**Symptom.** After this plan was marked complete, real generations still failed with the
+user-facing "The AI subtitle analysis step failed." Trace logs showed the `romanizing` stage
+failing with `error_code: enrichment_failed`, `reason: cue_identity_mismatch` (e.g. video
+`Df9pky-e2gg`, job `b1d73592`). The progress bar also appeared to break: sibling batches kept
+reporting progress (20→40→60→80%) before the batch was cancelled.
+
+**Root cause.** Solutions 2 and 3 *validated* cue identity but still **paired model output to
+source cues by array position** (`$outputCues[$position]`) and treated any `cueId`/`index`
+mismatch as **fatal** (split-retried, then thrown at a single cue). When the model returned a
+batch's cues slightly reordered or renumbered — common, and likelier with the leaner romanization
+schema — positional pairing mismatched and the whole job died. This contradicted this plan's own
+stated intent ("match cues by the keys we already own … and degrade"): the implementation kept
+positional pairing + a fatal gate instead of matching by `cueId` and degrading.
+
+**Fix.**
+- `romanizedResult` and `translatedResult` now look the model output up **by `cueId`** (shared
+  `outputCuesByCueId` helper) rather than by array position. Any source cue with no usable match
+  **degrades** — romanization ships its source tokens with no romanization; translation falls back
+  to source text — instead of failing. The model's cue `index` is no longer trusted at all (the
+  authoritative `index` is the local source cue's).
+- The romanization split-retry (`romanizeBatch` / `shouldRetryRomanizationBatch` and the
+  `backend.romanization_batch_retried` log) was **removed**: once structural mismatches degrade
+  instead of throwing, the retry can never fire, so it was dead code.
+
+**Tests.** The split-retry test was replaced with reproductions of the real failure:
+`test_romanization_matches_cues_by_id_when_model_reorders_output`,
+`test_romanization_degrades_cue_absent_from_model_output`, and the translation analogues
+`test_translation_matches_cues_by_id_when_model_reorders_output` /
+`test_translation_degrades_cue_absent_from_model_output`. Backend suite: **224 passed / 2114
+assertions**; Pint clean.
+
+**Residual.** Degradation is still silent (no telemetry when a cue degrades). This was already
+listed as follow-up debt and is now more pressing: a reorder under a garbled `cueId` will silently
+drop that cue's enrichment. A debug/info log on each degrade is the recommended next step.
 
 ## Risks / non-goals
 
