@@ -153,20 +153,6 @@ class SubtitleJobArtifactStore
         return max(1, (int) ceil(count($cues) / $this->payloadBatchSize($payload)));
     }
 
-    public function batchArtifactCount(SubtitleJob $job, string $artifactType): int
-    {
-        $count = SubtitleJobArtifact::query()
-            ->where('subtitle_job_id', $job->id)
-            ->where('artifact_type', $artifactType)
-            ->count();
-
-        if ($count < 1) {
-            $this->failMissingArtifact($artifactType);
-        }
-
-        return $count;
-    }
-
     public function cueCount(SubtitleJob $job, string $artifactType): int
     {
         $payload = $this->payload($job, $artifactType);
