@@ -72,7 +72,7 @@ Chrome Extension
       -> Optional ElevenLabs Audio Isolation with fail-open normalized WAV fallback
       -> ElevenLabs Scribe word-timestamp transcription
       -> Scribe word normalization into timed segments and WebVTT
-      -> Postgres job artifacts for transcript, draft cues, and per-batch AI results
+      -> Postgres job artifacts for transcript, draft cues, and per-batch AI results (each artifact carries the job's current `run_id` so a stale batch cannot overwrite current-run data after a reset)
       -> Postgres job trace events for queue, batch, timing, artifact, budget, cost, and failure diagnostics
       -> OpenAI/Laravel AI cue tokenization batches on the job tier queue
       -> Optional OpenAI/Laravel AI cue translation batches in parallel with tokenization
