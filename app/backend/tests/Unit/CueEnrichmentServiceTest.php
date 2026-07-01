@@ -60,37 +60,58 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_tokenization_validation_failure_fails_generation(): void
+    public function test_tokenization_validation_failure_falls_back_to_deterministic_tokens(): void
     {
         $sourceText = 'Hola a todos';
+        $invalidCue = [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+        ];
 
+        // First attempt and one re-prompt both return invalid output.
         CueTokenizationAgent::fake([
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'cue-0001',
-                        'index' => 0,
-                        'tokens' => $this->generatedTokens($sourceText, ['missing']),
-                    ],
-                ],
-            ],
-        ])->preventStrayPrompts();
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
+        ]);
 
-        $this->assertProviderFailureReason(
-            fn () => $this->tokenizeBatch([
-                $this->sourceCue('cue-0001', 0, $sourceText),
-            ], 'jpn'),
-            'token_text_not_in_source',
-        );
+        $result = $this->tokenizeBatch([
+            $this->sourceCue('cue-0001', 0, $sourceText),
+        ], 'jpn');
 
-        CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
-                && ! array_key_exists('qualityFailures', $this->promptInput($prompt)),
-        );
+        $this->assertSame(['Hola', 'a', 'todos'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame([0, 1, 2], array_column($result->cues[0]['tokens'], 'index'));
+        $this->assertSame($sourceText, $result->cues[0]['translatedText']);
     }
 
-    public function test_tokenization_fails_batch_when_any_cue_has_invalid_tokens(): void
+    public function test_tokenization_validation_failure_recovers_when_reprompt_succeeds(): void
+    {
+        $sourceText = 'Hola a todos';
+        $invalidCue = [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+        ];
+        $validCue = [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'sourceText' => $sourceText,
+            'tokens' => $this->generatedTokens($sourceText, ['Hola', 'a', 'todos']),
+        ];
+
+        CueTokenizationAgent::fake([
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
+            ['dialect' => 'unknown', 'cues' => [$validCue]],
+        ]);
+
+        $result = $this->tokenizeBatch([
+            $this->sourceCue('cue-0001', 0, $sourceText),
+        ], 'jpn');
+
+        $this->assertSame(['Hola', 'a', 'todos'], array_column($result->cues[0]['tokens'], 'text'));
+    }
+
+    public function test_tokenization_degrades_single_invalid_cue_when_split_retry_bottoms_out(): void
     {
         $validSourceText = 'Hola amiga';
         $failedSourceText = 'good morning';
@@ -133,13 +154,15 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->tokenizeBatch([
-                $this->sourceCue('cue-0001', 0, $validSourceText),
-                $this->sourceCue('cue-0002', 1, $failedSourceText),
-            ], 'jpn'),
-            'token_text_not_in_source',
-        );
+        $result = $this->tokenizeBatch([
+            $this->sourceCue('cue-0001', 0, $validSourceText),
+            $this->sourceCue('cue-0002', 1, $failedSourceText),
+        ], 'jpn');
+
+        // The healthy cue keeps agent-chosen boundaries; the bad cue degrades
+        // to deterministic whitespace-split tokens instead of failing the job.
+        $this->assertSame(['Hola', 'amiga'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame(['good', 'morning'], array_column($result->cues[1]['tokens'], 'text'));
 
         CueTokenizationAgent::assertPrompted(
             fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.default')
@@ -218,7 +241,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_tokenization_count_mismatch_fails_generation(): void
+    public function test_tokenization_count_mismatch_degrades_failing_split_cue(): void
     {
         $firstSourceText = 'Bonjour a tous';
         $secondSourceText = 'Je suis tres heureux';
@@ -250,13 +273,15 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->tokenizeBatch([
-                $this->sourceCue('cue-0001', 0, $firstSourceText),
-                $this->sourceCue('cue-0002', 1, $secondSourceText),
-            ], 'fra'),
-            'cue_count_mismatch',
-        );
+        $result = $this->tokenizeBatch([
+            $this->sourceCue('cue-0001', 0, $firstSourceText),
+            $this->sourceCue('cue-0002', 1, $secondSourceText),
+        ], 'fra');
+
+        // The 2-source batch mismatches, splits; the cue that returns zero
+        // output degrades to deterministic tokens rather than failing the job.
+        $this->assertSame(['Bonjour', 'a tous'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame(['Je', 'suis', 'tres', 'heureux'], array_column($result->cues[1]['tokens'], 'text'));
 
         CueTokenizationAgent::assertPrompted(
             fn ($prompt): bool => $prompt->contains('"cueId":"cue-0001"')
@@ -340,27 +365,29 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_tokenization_changed_cue_identity_fails_generation(): void
+    public function test_tokenization_changed_cue_identity_degrades_to_deterministic_tokens(): void
     {
         $sourceText = '違う姿違う形なの';
 
+        $invalidCue = [
+            'cueId' => 'different-cue',
+            'index' => 0,
+            'sourceText' => $sourceText,
+            'tokens' => $this->generatedTokens($sourceText, ['違う']),
+        ];
+
+        // First attempt and one top-level re-prompt both return a mismatched
+        // cue id; the cue then degrades to per-character deterministic tokens.
         CueTokenizationAgent::fake([
-            [
-                'dialect' => 'unknown',
-                'cues' => [
-                    [
-                        'cueId' => 'different-cue',
-                        'index' => 0,
-                        'sourceText' => $sourceText,
-                        'tokens' => $this->generatedTokens($sourceText, ['違う']),
-                    ],
-                ],
-            ],
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn'),
-            'cue_identity_mismatch',
+        $result = $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, $sourceText)], 'jpn');
+
+        $this->assertSame(
+            ['違', 'う', '姿', '違', 'う', '形', 'な', 'の'],
+            array_column($result->cues[0]['tokens'], 'text'),
         );
 
         CueTokenizationAgent::assertPrompted(

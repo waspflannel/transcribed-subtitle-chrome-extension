@@ -38,47 +38,144 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_context_cues');
         }
 
-        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues);
+        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues, allowReprompt: true);
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    private function tokenizeBatch(array $batch, string $sourceLanguage, array $allCues): CueEnrichmentResult
+    private function tokenizeBatch(array $batch, string $sourceLanguage, array $allCues, bool $allowReprompt): CueEnrichmentResult
     {
         $output = $this->promptAgent(
             CueTokenizationAgent::class,
             $this->tokenizationInput($batch, $sourceLanguage, $allCues),
         );
 
+        $cueCount = count($batch);
+
         try {
             return $this->tokenizedBatchResult($output, $batch);
         } catch (SubtitleProcessingException $exception) {
-            if (! $this->shouldRetryTokenizationBatch($exception, count($batch))) {
-                throw $exception;
+            if ($this->shouldRetryTokenizationBatch($exception, $cueCount)) {
+                $reason = $exception->context['reason'] ?? 'unknown';
+
+                Log::info('backend.tokenization_batch_retried', [
+                    'provider' => Lab::OpenAI->value,
+                    'adapter' => 'laravel-ai-sdk',
+                    'model' => $this->openAiModel('tokenization'),
+                    'source_language' => $sourceLanguage,
+                    'cue_count' => $cueCount,
+                    'reason' => is_string($reason) ? $reason : 'unknown',
+                ]);
+
+                $splitAt = intdiv($cueCount, 2);
+                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false);
+                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false);
+
+                return new CueEnrichmentResult(
+                    [...$left->cues, ...$right->cues],
+                    $left->sourceDialect !== 'unknown' ? $left->sourceDialect : $right->sourceDialect,
+                );
             }
 
-            $reason = $exception->context['reason'] ?? 'unknown';
+            if ($cueCount <= 1) {
+                return $this->tokenizeSingleCueWithFallback($batch, $sourceLanguage, $allCues, $allowReprompt);
+            }
 
-            Log::info('backend.tokenization_batch_retried', [
-                'provider' => Lab::OpenAI->value,
-                'adapter' => 'laravel-ai-sdk',
-                'model' => $this->openAiModel('tokenization'),
-                'source_language' => $sourceLanguage,
-                'cue_count' => count($batch),
-                'reason' => is_string($reason) ? $reason : 'unknown',
-            ]);
-
-            $splitAt = intdiv(count($batch), 2);
-            $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues);
-            $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues);
-
-            return new CueEnrichmentResult(
-                [...$left->cues, ...$right->cues],
-                $left->sourceDialect !== 'unknown' ? $left->sourceDialect : $right->sourceDialect,
-            );
+            throw $exception;
         }
+    }
+
+    /**
+     * A single pathological cue that still fails validation degrades to
+     * deterministic tokenization (whitespace-split for spaced scripts,
+     * per-character grouping for no-space scripts) rather than failing the
+     * whole job the user paid minutes for. A top-level single cue gets one
+     * extra agent re-prompt first (the model is nondeterministic); a cue
+     * reached by split-retry has already been re-prompted, so it falls back
+     * immediately.
+     *
+     * @param  array<int, array<string, mixed>>  $batch
+     * @param  array<int, array<string, mixed>>  $allCues
+     */
+    private function tokenizeSingleCueWithFallback(
+        array $batch,
+        string $sourceLanguage,
+        array $allCues,
+        bool $allowReprompt,
+    ): CueEnrichmentResult {
+        if ($allowReprompt) {
+            try {
+                $output = $this->promptAgent(
+                    CueTokenizationAgent::class,
+                    $this->tokenizationInput($batch, $sourceLanguage, $allCues),
+                );
+
+                return $this->tokenizedBatchResult($output, $batch);
+            } catch (SubtitleProcessingException) {
+                // fall through to deterministic fallback below
+            }
+        }
+
+        $reason = 'invalid_single_cue_tokenization';
+
+        Log::info('backend.tokenization_fallback', [
+            'provider' => Lab::OpenAI->value,
+            'adapter' => 'laravel-ai-sdk',
+            'model' => $this->openAiModel('tokenization'),
+            'source_language' => $sourceLanguage,
+            'cue_index' => $batch[0]['index'] ?? null,
+            'reason' => $reason,
+        ]);
+
+        $sourceCue = $batch[0];
+        $sourceText = (string) $sourceCue['sourceText'];
+
+        return new CueEnrichmentResult([
+            [
+                ...$sourceCue,
+                'translatedText' => $sourceText,
+                'tokens' => $this->deterministicTokens($sourceText),
+            ],
+        ], 'unknown');
+    }
+
+    /**
+     * @return array<int, array{index: int, text: string, normalizedText: string}>
+     */
+    private function deterministicTokens(string $sourceText): array
+    {
+        $pieces = preg_match('/\s/u', $sourceText) === 1
+            ? preg_split('/\s+/u', $sourceText)
+            : preg_split('//u', $sourceText, -1, PREG_SPLIT_NO_EMPTY);
+
+        $tokens = [];
+
+        foreach ($pieces ?: [] as $piece) {
+            $piece = trim((string) $piece);
+
+            if ($piece === '' || preg_match('/[\p{L}\p{N}\p{M}]/u', $piece) !== 1) {
+                continue;
+            }
+
+            $tokens[] = [
+                'index' => count($tokens),
+                'text' => $piece,
+                'normalizedText' => $this->tokenValidator->normalizeTokenText($piece),
+            ];
+        }
+
+        if ($tokens === []) {
+            $whole = trim($sourceText);
+            $tokens[] = [
+                'index' => 0,
+                'text' => $whole,
+                'normalizedText' => $this->tokenValidator->normalizeTokenText($whole),
+            ];
+        }
+
+        return $tokens;
     }
 
     /**
