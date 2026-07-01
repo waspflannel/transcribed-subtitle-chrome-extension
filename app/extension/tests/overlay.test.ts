@@ -49,6 +49,12 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('class="translation"');
   });
 
+  it('stamps dir="auto" so RTL source text and translations lay out correctly', () => {
+    const html = renderOverlayContent(readyStateWithSettings({ showTranslation: true }));
+
+    expect(html).toContain('dir="auto"');
+  });
+
   it('renders token, romanization, and translation blur scopes', () => {
     const state = readyStateWithSettings({
       showTranslation: true,

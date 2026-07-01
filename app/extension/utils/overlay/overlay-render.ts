@@ -50,7 +50,7 @@ export function renderOverlayContent(
           <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
         </div>
         <div class="rail-main">
-          <div class="token-area" lang="${
+          <div class="token-area" dir="auto" lang="${
             state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage
           }">${renderSourceLine(cue, state.settings, interaction)}</div>
           ${cueRomanization}
@@ -187,7 +187,7 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
 
   return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${
     settings.blurTranslation ? ' tabindex="0" aria-label="Cue translation, focus to reveal blurred text"' : ''
-  }>${escapeHtml(cue.translatedText)}</div>`;
+  } dir="auto">${escapeHtml(cue.translatedText)}</div>`;
 }
 
 function studyBlurClass(enabled: boolean, layer: 'token' | 'romanization' | 'translation'): string {
