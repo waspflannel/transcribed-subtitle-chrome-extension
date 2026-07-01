@@ -71,50 +71,48 @@ export function offsetTrackTiming(track: TrackResponse, offsetSeconds: number): 
   }
 
   const offsetMs = Math.round(offsetSeconds * 1000);
+  const shifted: SubtitleCue[] = [];
+  let previousEnd = Number.NEGATIVE_INFINITY;
+
+  for (const cue of track.cues) {
+    let startMs = cue.startMs + offsetMs;
+    let endMs = cue.endMs + offsetMs;
+
+    if (endMs <= 0) {
+      continue; // entirely before the timeline start: drop
+    }
+
+    if (startMs < 0) {
+      startMs = 0; // partially visible: clamp the leading edge
+    }
+
+    if (startMs < previousEnd) {
+      startMs = previousEnd; // repair overlaps introduced by clamping/rounding
+    }
+
+    if (endMs <= startMs) {
+      endMs = startMs + 1;
+    }
+
+    shifted.push({ ...cue, startMs, endMs });
+    previousEnd = endMs;
+  }
 
   return {
     ...track,
-    webVtt: offsetWebVtt(track.webVtt, offsetMs),
-    cues: track.cues.map((cue) => {
-      const startMs = shiftedMilliseconds(cue.startMs, offsetMs);
-      const endMs = Math.max(startMs + 1, shiftedMilliseconds(cue.endMs, offsetMs));
-
-      return {
-        ...cue,
-        startMs,
-        endMs,
-      };
-    }) as TrackResponse['cues'],
+    cues: shifted as unknown as TrackResponse['cues'],
+    webVtt: buildWebVttFromCues(shifted),
   };
 }
 
-function offsetWebVtt(webVtt: string, offsetMs: number): string {
-  return webVtt
-    .split('\n')
-    .map((line) => {
-      if (!line.includes('-->')) {
-        return line;
-      }
+function buildWebVttFromCues(cues: readonly SubtitleCue[]): string {
+  const blocks = ['WEBVTT'];
 
-      return line.replace(/\b(?:(\d+):)?(\d{2}):(\d{2})\.(\d{3})\b/g, (timestamp) =>
-        formatTimestamp(shiftedMilliseconds(parseTimestampMilliseconds(timestamp), offsetMs)),
-      );
-    })
-    .join('\n');
-}
+  for (const cue of cues) {
+    blocks.push(`${cue.cueId}\n${formatTimestamp(cue.startMs)} --> ${formatTimestamp(cue.endMs)}\n${cue.sourceText}`);
+  }
 
-function parseTimestampMilliseconds(timestamp: string): number {
-  const parts = timestamp.split(':');
-  const secondsPart = parts.pop() ?? '0.000';
-  const seconds = Number(secondsPart);
-  const minutes = Number(parts.pop() ?? 0);
-  const hours = Number(parts.pop() ?? 0);
-
-  return Math.round(((hours * 3600) + (minutes * 60) + seconds) * 1000);
-}
-
-function shiftedMilliseconds(milliseconds: number, offsetMs: number): number {
-  return Math.max(0, milliseconds + offsetMs);
+  return `${blocks.join('\n\n')}\n`;
 }
 
 function formatTimestamp(milliseconds: number): string {
@@ -143,6 +141,17 @@ function findActiveTextCue(textTrack: TextTrack): VTTCue | null {
 }
 
 function findTrackCue(track: TrackResponse, textCue: VTTCue): SubtitleCue | null {
+  const id = typeof textCue.id === 'string' ? textCue.id : '';
+
+  if (id !== '') {
+    const byId = track.cues.find((cue) => cue.cueId === id);
+
+    if (byId) {
+      return byId;
+    }
+  }
+
+  // Fallback for tracks whose VTT cues carry no stable ids.
   const startMs = Math.round(textCue.startTime * 1000);
   const endMs = Math.round(textCue.endTime * 1000);
 
