@@ -1,0 +1,92 @@
+import { describe, expect, it } from 'vitest';
+
+import { activeTabQuery } from '../utils/active-tab';
+import { isRuntimeMessage } from '../utils/messages';
+
+describe('activeTabQuery', () => {
+  it('scopes to a specific window when a windowId is provided', () => {
+    expect(activeTabQuery(42)).toEqual({ active: true, windowId: 42 });
+  });
+
+  it('falls back to currentWindow when no windowId is given', () => {
+    expect(activeTabQuery(undefined)).toEqual({ active: true, currentWindow: true });
+  });
+});
+
+describe('windowId validation on panel requests', () => {
+  it('accepts panel.getState with a numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false, windowId: 7 })).toBe(true);
+  });
+
+  it('accepts panel.getState without a windowId (backward compatible)', () => {
+    expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false })).toBe(true);
+  });
+
+  it('rejects panel.getState with a non-numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false, windowId: 'seven' })).toBe(false);
+  });
+
+  it('accepts panel.generateSubtitles with a numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', windowId: 3 })).toBe(true);
+  });
+
+  it('accepts panel.updateSettings with a numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.updateSettings', patch: { showTranslation: true }, windowId: 3 })).toBe(true);
+  });
+
+  it('accepts panel.clearLocalState with a numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.clearLocalState', windowId: 3 })).toBe(true);
+  });
+
+  it('accepts panel.seekToCue with a numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', youtubeVideoId: 'v', cueId: 'c', mode: 'jump', windowId: 3 })).toBe(true);
+  });
+
+  it('rejects panel.seekToCue with a non-numeric windowId', () => {
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', youtubeVideoId: 'v', cueId: 'c', mode: 'jump', windowId: 'x' })).toBe(false);
+  });
+});
+
+describe('request sequencing guard', () => {
+  it('drops an older response when a newer one has already been applied', () => {
+    let stateSeq = 0;
+    let latestAppliedSeq = 0;
+
+    function startRequest(): number {
+      return ++stateSeq;
+    }
+
+    function shouldApply(seq: number): boolean {
+      if (seq < latestAppliedSeq) return false;
+      latestAppliedSeq = seq;
+      return true;
+    }
+
+    const seqA = startRequest();
+    const seqB = startRequest();
+
+    expect(shouldApply(seqB)).toBe(true);
+    expect(shouldApply(seqA)).toBe(false);
+  });
+
+  it('applies responses in order when there are no races', () => {
+    let stateSeq = 0;
+    let latestAppliedSeq = 0;
+
+    function startRequest(): number {
+      return ++stateSeq;
+    }
+
+    function shouldApply(seq: number): boolean {
+      if (seq < latestAppliedSeq) return false;
+      latestAppliedSeq = seq;
+      return true;
+    }
+
+    const seqA = startRequest();
+    expect(shouldApply(seqA)).toBe(true);
+
+    const seqB = startRequest();
+    expect(shouldApply(seqB)).toBe(true);
+  });
+});

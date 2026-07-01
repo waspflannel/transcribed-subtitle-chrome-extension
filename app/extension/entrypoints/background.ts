@@ -1,5 +1,8 @@
 import { browser, type Browser } from 'wxt/browser';
 
+import { activeTabQuery } from '../utils/active-tab';
+import { PanelPortRegistry } from '../utils/panel-port-registry';
+
 import {
   clearExtensionSession,
   getStoredExtensionSession,
@@ -38,6 +41,7 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
+const panelPorts = new PanelPortRegistry();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
 let cachedPanelJobHistoryError: string | undefined;
 const JOB_POLL_INTERVAL_MS = 2000;
@@ -51,6 +55,13 @@ export default defineBackground(() => {
     sidePanel?: { setPanelBehavior(options: { openPanelOnActionClick: boolean }): Promise<void> };
   }).sidePanel;
   void actionSidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name === 'panel') {
+      panelPorts.add(port);
+      port.onDisconnect.addListener(() => panelPorts.remove(port));
+    }
+  });
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!isRuntimeMessage(message) || !isBackgroundRequest(message)) {
@@ -86,13 +97,13 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return enrichLearningTokenFromContent(message, sender);
 
     case 'panel.getState':
-      return getPanelState({ syncBackend: message.syncBackend ?? true });
+      return getPanelState({ syncBackend: message.syncBackend ?? true, windowId: message.windowId });
 
     case 'panel.updateSettings':
-      return updateSettingsFromPanel(message.patch);
+      return updateSettingsFromPanel(message.patch, message.windowId);
 
     case 'panel.generateSubtitles':
-      return generateSubtitlesFromPanel();
+      return generateSubtitlesFromPanel(message.windowId);
 
     case 'panel.login':
       return loginFromPanel(message.email, message.password);
@@ -101,16 +112,16 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return logoutFromPanel();
 
     case 'panel.clearLocalState':
-      return clearLocalStateFromPanel();
+      return clearLocalStateFromPanel(message.windowId);
 
     case 'content.activeCueChanged':
-      // Re-broadcast to extension pages (the open side panel). runtime.sendMessage
-      // reaches the panel but not content scripts, so this won't echo back to content.
-      void browser.runtime.sendMessage({
-        type: 'background.activeCueChanged',
-        cueId: message.cueId,
-        youtubeVideoId: message.youtubeVideoId,
-      }).catch(() => {});
+      if (panelPorts.hasOpenPanel()) {
+        void browser.runtime.sendMessage({
+          type: 'background.activeCueChanged',
+          cueId: message.cueId,
+          youtubeVideoId: message.youtubeVideoId,
+        }).catch(() => {});
+      }
       return { ok: true };
 
     case 'content.focusPanelTranscript':
@@ -118,7 +129,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return { ok: true };
 
     case 'panel.seekToCue': {
-      const tabId = await tabIdForVideo(message.youtubeVideoId);
+      const tabId = await tabIdForVideo(message.youtubeVideoId, message.windowId);
       if (tabId !== null) {
         await sendTabMessage(tabId, { type: 'background.seekToCue', cueId: message.cueId, mode: message.mode });
       }
@@ -145,9 +156,9 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
   };
 }
 
-async function updateSettingsFromPanel(patch: Partial<ExtensionSettings>): Promise<PanelState> {
+async function updateSettingsFromPanel(patch: Partial<ExtensionSettings>, windowId?: number): Promise<PanelState> {
   const settings = await updateExtensionSettings(patch);
-  const activeTab = await getActiveTab();
+  const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
 
   if (activeTabId !== null) {
@@ -177,8 +188,8 @@ async function updateSettingsFromContent(
   return { ok: true, settings };
 }
 
-async function generateSubtitlesFromPanel(): Promise<PanelState> {
-  const activeTab = await getActiveTab();
+async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState> {
+  const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
 
   if (activeTabId === null) {
@@ -439,12 +450,12 @@ async function readySubtitleStateForEnrichment(
   return null;
 }
 
-async function clearLocalStateFromPanel(): Promise<PanelState> {
+async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> {
   await clearLocalExtensionState();
   await clearRememberedTracks();
   tabSubtitleStates.clear();
 
-  const activeTab = await getActiveTab();
+  const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
   const settings = await getExtensionSettings();
 
@@ -496,8 +507,8 @@ async function logoutFromPanel(): Promise<PanelState> {
   return getPanelState({ syncBackend: true });
 }
 
-async function getPanelState(options: { syncBackend: boolean }): Promise<PanelState> {
-  const activeTab = await getActiveTab();
+async function getPanelState(options: { syncBackend: boolean; windowId?: number }): Promise<PanelState> {
+  const activeTab = await getActiveTab(options.windowId);
   const activeTabId = activeTab?.id ?? null;
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
   const installId = await getOrCreateInstallId();
@@ -677,7 +688,7 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
   return restoredState;
 }
 
-async function tabIdForVideo(youtubeVideoId: string): Promise<number | null> {
+async function tabIdForVideo(youtubeVideoId: string, windowId?: number): Promise<number | null> {
   for (const [tabId, subtitleState] of tabSubtitleStates) {
     if (subtitleState.type === 'ready' && subtitleState.track.youtubeVideoId === youtubeVideoId) {
       return tabId;
@@ -688,7 +699,7 @@ async function tabIdForVideo(youtubeVideoId: string): Promise<number | null> {
     }
   }
 
-  const activeTab = await getActiveTab();
+  const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
 
@@ -732,11 +743,8 @@ async function publishSubtitleState(tabId: number, subtitleState: SubtitleState)
   });
 }
 
-async function getActiveTab(): Promise<Browser.tabs.Tab | undefined> {
-  const [activeTab] = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
+async function getActiveTab(windowId?: number): Promise<Browser.tabs.Tab | undefined> {
+  const [activeTab] = await browser.tabs.query(activeTabQuery(windowId));
 
   return activeTab;
 }

@@ -10,6 +10,7 @@ use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -74,28 +75,31 @@ class WebSubtitleJobController extends Controller
             abort(403);
         }
 
-        $jobs = SubtitleJob::query()
-            ->whereBelongsTo($user)
-            ->latest('updated_at')
-            ->get();
+        $total = SubtitleJob::query()->whereBelongsTo($user)->count();
 
-        if ($jobs->isEmpty()) {
+        if ($total === 0) {
             return redirect()
                 ->route('dashboard')
                 ->with('jobs_status', 'No subtitle jobs to clear.');
         }
 
-        $deleted = DB::transaction(function () use ($jobs, $billing): int {
-            $count = 0;
+        $deleted = 0;
 
-            foreach ($jobs as $job) {
-                $this->releaseReservationSafely($job, $billing);
-                $job->delete();
-                $count++;
-            }
+        SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->chunkById(200, function (Collection $jobs) use ($billing, &$deleted): void {
+                $deleted += DB::transaction(function () use ($jobs, $billing): int {
+                    $count = 0;
 
-            return $count;
-        });
+                    foreach ($jobs as $job) {
+                        $this->releaseReservationSafely($job, $billing);
+                        $job->delete();
+                        $count++;
+                    }
+
+                    return $count;
+                });
+            });
 
         return redirect()
             ->route('dashboard')

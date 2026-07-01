@@ -170,6 +170,70 @@ class WebSubtitleJobDeletionTest extends TestCase
         $this->assertSame(2, SubtitleJob::query()->whereBelongsTo($otherUser)->count());
     }
 
+    public function test_clear_all_deletes_histories_larger_than_chunk_size_and_reports_accurate_count(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+
+        SubtitleJob::factory()->for($user)->count(250)->create([
+            'status' => 'completed',
+            'stage' => 'finalizing',
+        ]);
+        SubtitleJob::factory()->for($otherUser)->count(2)->create([
+            'status' => 'completed',
+            'stage' => 'finalizing',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->from(route('dashboard', absolute: false))
+            ->delete(route('dashboard.jobs.clear', absolute: false))
+            ->assertRedirect(route('dashboard', absolute: false))
+            ->assertSessionHas('jobs_status', '250 subtitle job(s) cleared.');
+
+        $this->assertSame(0, SubtitleJob::query()->whereBelongsTo($user)->count());
+        $this->assertSame(2, SubtitleJob::query()->whereBelongsTo($otherUser)->count());
+    }
+
+    public function test_clear_all_releases_reservations_for_running_jobs_in_each_chunk(): void
+    {
+        $user = $this->userWithActiveBilling();
+
+        $jobs = SubtitleJob::factory()->for($user)->count(3)->create([
+            'status' => 'running',
+            'stage' => 'preparing',
+            'video_duration_seconds' => 120,
+        ]);
+
+        $ledger = app(UsageLedger::class);
+        $plans = app(BillingPlanCatalog::class);
+        $period = $ledger->periodForUser($user);
+        $this->assertNotNull($period);
+
+        foreach ($jobs as $job) {
+            $ledger->reserveForJob($job, $user, $plans->requirePlan('base'), $ledger->billableMinutes($job->video_duration_seconds));
+            $this->assertGreaterThan(0, $ledger->reservedMinutesForJob($job));
+        }
+
+        $this
+            ->actingAs($user)
+            ->from(route('dashboard', absolute: false))
+            ->delete(route('dashboard.jobs.clear', absolute: false))
+            ->assertRedirect(route('dashboard', absolute: false))
+            ->assertSessionHas('jobs_status', '3 subtitle job(s) cleared.');
+
+        foreach ($jobs as $job) {
+            $this->assertDatabaseMissing('subtitle_jobs', ['id' => $job->id]);
+        }
+
+        $refundEvents = BillingUsageEvent::query()
+            ->where('user_id', $user->id)
+            ->where('event_type', 'refund')
+            ->whereNull('subtitle_job_id')
+            ->count();
+        $this->assertSame(3, $refundEvents, 'Each running job should have released its reservation, producing a refund event.');
+    }
+
     public function test_clear_all_reports_when_there_are_no_jobs(): void
     {
         $user = User::factory()->create();

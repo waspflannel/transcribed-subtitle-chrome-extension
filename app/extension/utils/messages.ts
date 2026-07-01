@@ -76,10 +76,12 @@ export type BackgroundRequest =
   | {
       type: 'panel.getState';
       syncBackend?: boolean;
+      windowId?: number;
     }
   | {
       type: 'panel.updateSettings';
       patch: Partial<ExtensionSettings>;
+      windowId?: number;
     }
   | {
       type: 'content.updateSettings';
@@ -87,6 +89,7 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.generateSubtitles';
+      windowId?: number;
     }
   | {
       type: 'panel.login';
@@ -105,9 +108,10 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.clearLocalState';
+      windowId?: number;
     }
   | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
-  | { type: 'panel.seekToCue'; youtubeVideoId: string; cueId: string; mode: 'jump' | 'replay' }
+  | { type: 'panel.seekToCue'; youtubeVideoId: string; cueId: string; mode: 'jump' | 'replay'; windowId?: number }
   | { type: 'content.focusPanelTranscript' };
 
 export type ContentRequest =
@@ -142,17 +146,17 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'panel.logout':
     case 'panel.clearLocalState':
     case 'background.getPageSnapshot':
-      return true;
+      return optionalNumber(value, 'windowId');
 
     case 'panel.login':
       return hasString(value, 'email') && hasString(value, 'password');
 
     case 'panel.getState':
-      return optionalBoolean(value, 'syncBackend');
+      return optionalBoolean(value, 'syncBackend') && optionalNumber(value, 'windowId');
 
     case 'panel.updateSettings':
     case 'content.updateSettings':
-      return isRecord(value.patch);
+      return isRecord(value.patch) && optionalNumber(value, 'windowId');
 
     case 'content.enrichLearningToken':
       return hasString(value, 'youtubeVideoId')
@@ -178,7 +182,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'background.seekToCue':
       return hasString(value, 'cueId')
         && (value.type !== 'panel.seekToCue' || hasString(value, 'youtubeVideoId'))
-        && (value.mode === 'jump' || value.mode === 'replay');
+        && (value.mode === 'jump' || value.mode === 'replay')
+        && optionalNumber(value, 'windowId');
 
     default:
       return false;
@@ -267,6 +272,10 @@ function optionalString(value: Record<string, unknown>, key: string): boolean {
 
 function optionalBoolean(value: Record<string, unknown>, key: string): boolean {
   return !(key in value) || typeof value[key] === 'boolean';
+}
+
+function optionalNumber(value: Record<string, unknown>, key: string): boolean {
+  return !(key in value) || typeof value[key] === 'number';
 }
 
 function isNonNegativeInteger(value: unknown): value is number {

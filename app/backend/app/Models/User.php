@@ -30,6 +30,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'billing_cancel_at_period_end',
         'billing_trial_ends_at',
         'billing_ends_at',
+        'billing_subscription_event_at',
     ];
 
     protected $hidden = [
@@ -54,6 +55,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'billing_current_period_end' => 'immutable_datetime',
             'billing_current_period_start' => 'immutable_datetime',
             'billing_ends_at' => 'immutable_datetime',
+            'billing_subscription_event_at' => 'immutable_datetime',
             'billing_trial_ends_at' => 'immutable_datetime',
             'email_verified_at' => 'immutable_datetime',
             'password' => 'hashed',
