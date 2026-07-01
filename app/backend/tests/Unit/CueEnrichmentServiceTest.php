@@ -518,7 +518,7 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertArrayNotHasKey('romanization', $result->cues[0]['tokens'][0]);
     }
 
-    public function test_enrichment_rejects_changed_token_boundaries(): void
+    public function test_enrichment_degrades_when_token_boundaries_change(): void
     {
         CueEnrichmentAgent::fake([
             [
@@ -538,10 +538,54 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
-            'token_identity_mismatch',
-        );
+        $result = $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra');
+
+        // Word-card metadata is optional: a single bad batch degrades to the
+        // source tokens unchanged rather than failing the job.
+        $this->assertSame(['hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
+    }
+
+    public function test_enrichment_splits_and_degrades_one_bad_cue_in_a_multi_cue_batch(): void
+    {
+        $goodCue = [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'sourceText' => 'hola a todos',
+            'translatedText' => 'hola a todos',
+            'tokens' => [
+                ['index' => 0, 'text' => 'hola'],
+                ['index' => 1, 'text' => 'a todos'],
+            ],
+        ];
+        $badCue = [
+            'cueId' => 'cue-0002',
+            'index' => 1,
+            'sourceText' => 'good morning',
+            'translatedText' => 'good morning',
+            'tokens' => [
+                ['index' => 0, 'text' => 'good'],
+                ['index' => 1, 'text' => 'evening'],
+            ],
+        ];
+
+        // Whole batch returns one bad token identity (cue-0002) — splits; the
+        // cue-0002 half on its own still mismatches and degrades.
+        CueEnrichmentAgent::fake([
+            ['dialect' => 'unknown', 'cues' => [$goodCue, $badCue]],
+            ['dialect' => 'unknown', 'cues' => [$goodCue]],
+            ['dialect' => 'unknown', 'cues' => [$badCue]],
+        ])->preventStrayPrompts();
+
+        $sourceCues = [
+            $this->enrichableCue('cue-0001', 0, 'hola a todos', [['hola', 0], ['a todos', 1]]),
+            $this->enrichableCue('cue-0002', 1, 'good morning', [['good', 0], ['morning', 1]]),
+        ];
+
+        $result = $this->enrichBatch($sourceCues, 'spa', 'fra');
+
+        $this->assertSame(['hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame(['good', 'morning'], array_column($result->cues[1]['tokens'], 'text'));
     }
 
     public function test_translates_cues_without_changing_tokens_or_romanization(): void
@@ -763,7 +807,7 @@ class CueEnrichmentServiceTest extends TestCase
         $this->fail('Expected missing translation model configuration to fail.');
     }
 
-    public function test_full_enrichment_rejects_changed_translated_text(): void
+    public function test_full_enrichment_ignores_model_translated_text_echo(): void
     {
         CueEnrichmentAgent::fake([
             [
@@ -783,13 +827,14 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
-            'translation_identity_mismatch',
-        );
+        $result = $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra');
+
+        // Enrichment cannot change the cue translation; the server copies the
+        // source translation unconditionally and ignores any model echo.
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
     }
 
-    public function test_full_enrichment_rejects_missing_source_translated_text(): void
+    public function test_full_enrichment_falls_back_to_source_text_when_translation_missing(): void
     {
         CueEnrichmentAgent::fake([
             [
@@ -812,10 +857,11 @@ class CueEnrichmentServiceTest extends TestCase
         $cues = $this->tokenizedSourceCues();
         unset($cues[0]['translatedText']);
 
-        $this->assertProviderFailureReason(
-            fn () => $this->enrichBatch($cues, 'spa', 'fra'),
-            'missing_source_translation',
-        );
+        $result = $this->enrichBatch($cues, 'spa', 'fra');
+
+        // A cue missing its translation degrades to the source text instead of
+        // failing the job.
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
     }
 
     public function test_romanizes_transcript_first_non_latin_cues_without_changing_tokens(): void
@@ -1429,5 +1475,25 @@ class CueEnrichmentServiceTest extends TestCase
         }
 
         $this->fail("Expected provider output to fail with {$reason}.");
+    }
+
+    /**
+     * @param  array<int, array{0: string, 1: int}>  $tokens
+     * @return array<string, mixed>
+     */
+    private function enrichableCue(string $cueId, int $index, string $sourceText, array $tokens): array
+    {
+        return [
+            ...$this->sourceCue($cueId, $index, $sourceText),
+            'translatedText' => $sourceText,
+            'tokens' => array_map(
+                fn (array $token): array => [
+                    'index' => $token[1],
+                    'text' => $token[0],
+                    'normalizedText' => $token[0],
+                ],
+                $tokens,
+            ),
+        ];
     }
 }
