@@ -83,6 +83,79 @@ class ScribeTranscriptNormalizerTest extends TestCase
         $this->assertStringContainsString("\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3059}\u{308B}\u{3002}", $transcript->webVtt);
     }
 
+    public function test_it_breaks_per_character_runs_on_pause_or_punctuation_not_word_count(): void
+    {
+        // Japanese with one Scribe "word" per character and a small logical
+        // pause mid-utterance. With the old per-word limit this split mid-word
+        // after ~14 characters; the new segmenter breaks on the pause instead.
+        $jp = "\u{53CB}\u{9054}"; // 友達 (tomodachi)
+        $start = 0.0;
+        $words = [];
+        foreach (mb_str_split($jp.$jp.'。', 1, 'UTF-8') as $i => $char) {
+            // Insert a single 1.0s pause before the second 友 to mark a boundary.
+            $startOffset = $i === 2 ? 1.0 : 0.0;
+            $start = $start + 0.1 + $startOffset;
+            $words[] = ['text' => $char, 'start' => $start, 'end' => $start + 0.1, 'type' => 'word'];
+        }
+
+        $transcript = $this->normalizer()->normalize([
+            'language_code' => 'ja',
+            'words' => $words,
+        ], 'auto', 3.0);
+
+        $this->assertCount(2, $transcript->segments);
+        $this->assertSame($jp, $transcript->segments[0]->text);
+        $this->assertSame($jp."\u{3002}", $transcript->segments[1]->text);
+    }
+
+    public function test_it_prefers_clause_punctuation_when_a_hard_limit_trips(): void
+    {
+        // 20 English words with a comma after the 10th. The char limit is not
+        // reached, so build a >6s duration instead; the break must snap to the
+        // comma, not land on the 11th word.
+        $words = [];
+        $start = 0.0;
+        for ($i = 1; $i <= 20; $i++) {
+            $text = $i === 10 ? 'word,' : 'word';
+            $end = $start + 0.5;
+            $words[] = ['text' => $text, 'start' => $start, 'end' => $end, 'type' => 'word'];
+            $start = $end; // back-to-back => no pause candidates, punctuation only
+        }
+
+        $transcript = $this->normalizer()->normalize([
+            'language_code' => 'en',
+            'words' => $words,
+        ], 'eng', 12.0);
+
+        $this->assertGreaterThan(1, count($transcript->segments));
+        $this->assertSame(9, substr_count($transcript->segments[0]->text, ' '));
+        $this->assertSame('word,', trim(explode(' ', $transcript->segments[0]->text)[9]));
+    }
+
+    public function test_it_counts_characters_on_artifact_stripped_text_for_no_space_scripts(): void
+    {
+        // 90 single CJK characters back-to-back: char limit (84 on stripped
+        // text) should trip, producing >1 cue. Under the old code the count
+        // included artifact spaces and tripped even earlier, but the kept
+        // guarantee is simply that the break is not driven by word count.
+        $chars = implode('', array_fill(0, 90, "\u{65E5}")); // 日 * 90
+        $start = 0.0;
+        $words = [];
+        foreach (mb_str_split($chars, 1, 'UTF-8') as $char) {
+            $end = $start + 0.05;
+            $words[] = ['text' => $char, 'start' => $start, 'end' => $end, 'type' => 'word'];
+            $start = $end;
+        }
+
+        $transcript = $this->normalizer()->normalize([
+            'language_code' => 'ja',
+            'words' => $words,
+        ], 'auto', 6.0);
+
+        $this->assertGreaterThan(1, count($transcript->segments));
+        $this->assertSame(90, mb_strlen(implode('', array_map(fn ($s) => $s->text, $transcript->segments)), 'UTF-8'));
+    }
+
     public function test_it_rejects_missing_word_timings(): void
     {
         try {

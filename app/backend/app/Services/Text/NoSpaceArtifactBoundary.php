@@ -14,11 +14,19 @@ namespace App\Services\Text;
 final class NoSpaceArtifactBoundary
 {
     /**
+     * Unicode ranges for scripts written without inter-word spaces
+     * (CJK, kana, Hangul, halfwidth kana, Thai, Lao, Khmer, Burmese).
+     * Consumed by segmentation, artifact stripping, and validation so they
+     * share one definition of "no-space script".
+     */
+    public const SCRIPT_CLASS = '\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}';
+
+    /**
      * Matches one or more whitespace characters framed by no-space-script
      * characters or punctuation/symbols, so only inter-character artifact
      * spaces are collapsed (a real space between Latin words is preserved).
      */
-    public const PATTERN = '/(?<=[\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}\p{P}\p{S}])\s+(?=[\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}\p{P}\p{S}])/u';
+    public const PATTERN = '/(?<=['.self::SCRIPT_CLASS.'\p{P}\p{S}])\s+(?=['.self::SCRIPT_CLASS.'\p{P}\p{S}])/u';
 
     /**
      * Strip artifact-boundary whitespace from already whitespace-collapsed text.
@@ -26,5 +34,14 @@ final class NoSpaceArtifactBoundary
     public static function strip(string $text): string
     {
         return (string) preg_replace(self::PATTERN, '', $text);
+    }
+
+    /**
+     * True when the character belongs to a no-space script, so callers can
+     * stop treating single Scribe per-character "words" as logical words.
+     */
+    public static function isNoSpaceScriptChar(string $char): bool
+    {
+        return preg_match('/^['.self::SCRIPT_CLASS.']/u', $char) === 1;
     }
 }
