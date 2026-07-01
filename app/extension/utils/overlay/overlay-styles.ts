@@ -244,6 +244,7 @@
           gap: 4px;
           justify-content: center;
           line-height: 1;
+          max-width: 100%;
           min-height: 42px;
           min-width: 0;
           padding: 7px 12px;
@@ -276,7 +277,8 @@
           font-size: 22px;
           font-weight: 600;
           line-height: 1.05;
-          overflow-wrap: anywhere;
+          overflow-wrap: normal;
+          word-break: keep-all;
         }
 
         .token-extra {
