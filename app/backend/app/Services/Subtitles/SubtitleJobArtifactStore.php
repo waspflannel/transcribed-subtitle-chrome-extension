@@ -182,6 +182,7 @@ class SubtitleJobArtifactStore
         $artifacts = SubtitleJobArtifact::query()
             ->where('subtitle_job_id', $job->id)
             ->where('artifact_type', $artifactType)
+            ->where('run_id', $job->run_id)
             ->orderBy('batch_index')
             ->get();
 
@@ -239,6 +240,7 @@ class SubtitleJobArtifactStore
                 'subtitle_job_id' => $job->id,
                 'artifact_type' => $artifactType,
                 'batch_index' => $batchIndex,
+                'run_id' => $job->run_id,
             ],
             ['payload' => $payload],
         );
@@ -260,6 +262,7 @@ class SubtitleJobArtifactStore
             ->where('subtitle_job_id', $job->id)
             ->where('artifact_type', $artifactType)
             ->where('batch_index', $batchIndex)
+            ->where('run_id', $job->run_id)
             ->first();
 
         $payload = $artifact?->payload;
