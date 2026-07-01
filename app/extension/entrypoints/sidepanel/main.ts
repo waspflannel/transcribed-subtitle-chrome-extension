@@ -316,7 +316,22 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
   const seq = ++stateSeq;
 
   try {
-    const response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse;
+    let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
+
+    if (!response) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
+    }
+
+    if (!response) {
+      if (seq < latestAppliedSeq) {
+        return false;
+      }
+      latestAppliedSeq = seq;
+      showRequestError('The extension background did not respond. Try again.', errorTarget);
+
+      return false;
+    }
 
     if ('ok' in response) {
       if (seq < latestAppliedSeq) {

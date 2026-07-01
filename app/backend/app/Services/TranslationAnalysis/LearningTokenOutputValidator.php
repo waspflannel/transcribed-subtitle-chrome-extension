@@ -3,11 +3,10 @@
 namespace App\Services\TranslationAnalysis;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Text\NoSpaceArtifactBoundary;
 
 class LearningTokenOutputValidator
 {
-    private const NO_SPACE_ARTIFACT_BOUNDARY_PATTERN = '/(?<=[\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}\p{P}\p{S}])\s+(?=[\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{AC00}-\x{D7AF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}\p{P}\p{S}])/u';
-
     /**
      * @return array<int, array{index: int, text: string, normalizedText: string}>
      */
@@ -120,7 +119,7 @@ class LearningTokenOutputValidator
     {
         $normalized = trim((string) preg_replace('/\s+/u', ' ', $text));
 
-        return (string) preg_replace(self::NO_SPACE_ARTIFACT_BOUNDARY_PATTERN, '', $normalized);
+        return NoSpaceArtifactBoundary::strip($normalized);
     }
 
     /**

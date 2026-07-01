@@ -525,7 +525,6 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'hola a todos',
                         'translatedText' => 'bonjour a tous',
                     ],
                 ],
@@ -563,19 +562,16 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'the song begins',
                         'translatedText' => 'the song begins',
                     ],
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
-                        'sourceText' => 'ambiguous idiom',
                         'translatedText' => 'contextual meaning',
                     ],
                     [
                         'cueId' => 'cue-0003',
                         'index' => 2,
-                        'sourceText' => 'the crowd answers',
                         'translatedText' => 'the crowd answers',
                     ],
                 ],
@@ -616,28 +612,55 @@ class CueEnrichmentServiceTest extends TestCase
         });
     }
 
-    public function test_translation_rejects_changed_cue_identity(): void
+    public function test_translation_matches_cues_by_id_when_model_reorders_output(): void
     {
+        // The model returned the two cues in reversed order. Matching by cueId
+        // (not array position) keeps each cue's translation correct instead of
+        // failing with a cue identity mismatch.
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    ['cueId' => 'cue-0002', 'index' => 1, 'translatedText' => 'world'],
+                    ['cueId' => 'cue-0001', 'index' => 0, 'translatedText' => 'hello'],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCues = [
+            $this->sourceCue('cue-0001', 0, 'hola'),
+            $this->sourceCue('cue-0002', 1, 'mundo'),
+        ];
+
+        $result = $this->translateBatch($sourceCues, 'spa', 'eng');
+
+        $this->assertSame(['cue-0001', 'cue-0002'], array_column($result->cues, 'cueId'));
+        $this->assertSame('hello', $result->cues[0]['translatedText']);
+        $this->assertSame('world', $result->cues[1]['translatedText']);
+    }
+
+    public function test_translation_degrades_cue_absent_from_model_output(): void
+    {
+        // The model returned an unrelated cueId (dropped/reordered the real cue), so
+        // cue-0001 has no match and must degrade to its source text rather than
+        // failing the whole job.
         CueTranslationAgent::fake([
             [
                 'cues' => [
                     [
-                        'cueId' => 'cue-0001',
+                        'cueId' => 'different-cue',
                         'index' => 0,
-                        'sourceText' => 'changed source',
                         'translatedText' => 'bonjour',
                     ],
                 ],
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
-            'cue_identity_mismatch',
-        );
+        $result = $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra');
+
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
     }
 
-    public function test_translation_rejects_empty_translated_text(): void
+    public function test_translation_degrades_empty_translated_text_to_source_text(): void
     {
         CueTranslationAgent::fake([
             [
@@ -645,17 +668,42 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'hola a todos',
                         'translatedText' => '   ',
                     ],
                 ],
             ],
         ])->preventStrayPrompts();
 
-        $this->assertProviderFailureReason(
-            fn () => $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra'),
-            'missing_translation',
-        );
+        $result = $this->translateBatch($this->tokenizedSourceCues(), 'spa', 'fra');
+
+        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
+    }
+
+    public function test_translation_tolerates_cjk_source_without_echoed_source_text(): void
+    {
+        $sourceText = '我喜欢学习中文';
+
+        CueTranslationAgent::fake([
+            [
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'translatedText' => 'I like studying Chinese',
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCue = [
+            ...$this->sourceCue('cue-0001', 0, $sourceText),
+            'tokens' => [['index' => 0, 'text' => $sourceText, 'normalizedText' => $sourceText]],
+        ];
+
+        $result = $this->translateBatch([$sourceCue], 'cmn', 'eng');
+
+        $this->assertSame('I like studying Chinese', $result->cues[0]['translatedText']);
+        $this->assertSame($sourceText, $result->cues[0]['sourceText']);
     }
 
     public function test_translation_requires_configured_model(): void
@@ -668,7 +716,6 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => 'hola a todos',
                         'translatedText' => 'bonjour',
                     ],
                 ],
@@ -753,15 +800,13 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => '私は日本語を勉強しています',
-                        'translatedText' => '私は日本語を勉強しています',
                         'romanization' => 'watashi wa nihongo o benkyo shite imasu',
                         'tokens' => [
-                            ['index' => 0, 'text' => '私', 'romanization' => 'watashi'],
-                            ['index' => 1, 'text' => 'は', 'romanization' => 'wa'],
-                            ['index' => 2, 'text' => '日本語', 'romanization' => 'nihongo'],
-                            ['index' => 3, 'text' => 'を', 'romanization' => 'o'],
-                            ['index' => 4, 'text' => '勉強しています', 'romanization' => 'benkyo shite imasu'],
+                            ['index' => 0, 'romanization' => 'watashi'],
+                            ['index' => 1, 'romanization' => 'wa'],
+                            ['index' => 2, 'romanization' => 'nihongo'],
+                            ['index' => 3, 'romanization' => 'o'],
+                            ['index' => 4, 'romanization' => 'benkyo shite imasu'],
                         ],
                     ],
                 ],
@@ -806,19 +851,15 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => $tokenlessText,
-                        'translatedText' => $tokenlessText,
                         'romanization' => 'kakiitemita',
                         'tokens' => [],
                     ],
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
-                        'sourceText' => '日本語',
-                        'translatedText' => '日本語',
                         'romanization' => 'nihongo',
                         'tokens' => [
-                            ['index' => 0, 'text' => '日本語', 'romanization' => 'nihongo'],
+                            ['index' => 0, 'romanization' => 'nihongo'],
                         ],
                     ],
                 ],
@@ -844,7 +885,7 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
-    public function test_romanization_rejects_changed_token_boundaries(): void
+    public function test_romanization_attaches_romanization_by_index_preserving_source_tokens(): void
     {
         CueRomanizationAgent::fake([
             [
@@ -853,12 +894,10 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => '日本語勉強',
-                        'translatedText' => '日本語勉強',
                         'romanization' => 'nihongo benkyo',
                         'tokens' => [
-                            ['index' => 0, 'text' => '日', 'romanization' => 'ni'],
-                            ['index' => 1, 'text' => '本語勉強', 'romanization' => 'hongo benkyo'],
+                            ['index' => 0, 'romanization' => 'nihongo'],
+                            ['index' => 1, 'romanization' => 'benkyo'],
                         ],
                     ],
                 ],
@@ -874,13 +913,56 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $this->assertProviderFailureReason(
-            fn () => $this->romanizeBatch([$sourceCue], 'jpn'),
-            'token_identity_mismatch',
-        );
+        $result = $this->romanizeBatch([$sourceCue], 'jpn');
+
+        $this->assertSame(['日本語', '勉強'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame('nihongo', $result->cues[0]['tokens'][0]['romanization']);
+        $this->assertSame('benkyo', $result->cues[0]['tokens'][1]['romanization']);
+        $this->assertSame('nihongo benkyo', $result->cues[0]['romanization']);
     }
 
-    public function test_romanization_rejects_changed_token_count(): void
+    public function test_romanization_attaches_pinyin_to_cjk_tokens_by_index(): void
+    {
+        $sourceText = '我喜欢学习中文';
+
+        CueRomanizationAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'romanization' => 'wo xihuan xuexi zhongwen',
+                        'tokens' => [
+                            ['index' => 0, 'romanization' => 'wo'],
+                            ['index' => 1, 'romanization' => 'xihuan'],
+                            ['index' => 2, 'romanization' => 'xuexi'],
+                            ['index' => 3, 'romanization' => 'zhongwen'],
+                        ],
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCue = [
+            ...$this->sourceCue('cue-0001', 0, $sourceText),
+            'translatedText' => $sourceText,
+            'tokens' => [
+                ['index' => 0, 'text' => '我', 'normalizedText' => '我'],
+                ['index' => 1, 'text' => '喜欢', 'normalizedText' => '喜欢'],
+                ['index' => 2, 'text' => '学习', 'normalizedText' => '学习'],
+                ['index' => 3, 'text' => '中文', 'normalizedText' => '中文'],
+            ],
+        ];
+
+        $result = $this->romanizeBatch([$sourceCue], 'cmn');
+
+        $this->assertSame(['我', '喜欢', '学习', '中文'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame('xihuan', $result->cues[0]['tokens'][1]['romanization']);
+        $this->assertSame('zhongwen', $result->cues[0]['tokens'][3]['romanization']);
+    }
+
+    public function test_romanization_degrades_when_token_count_differs(): void
     {
         CueRomanizationAgent::fake([
             [
@@ -889,11 +971,9 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0001',
                         'index' => 0,
-                        'sourceText' => '日本語勉強',
-                        'translatedText' => '日本語勉強',
                         'romanization' => 'nihongo benkyo',
                         'tokens' => [
-                            ['index' => 0, 'text' => '日本語', 'romanization' => 'nihongo'],
+                            ['index' => 0, 'romanization' => 'nihongo'],
                         ],
                     ],
                 ],
@@ -909,10 +989,131 @@ class CueEnrichmentServiceTest extends TestCase
             ],
         ];
 
-        $this->assertProviderFailureReason(
-            fn () => $this->romanizeBatch([$sourceCue], 'jpn'),
-            'token_count_mismatch',
-        );
+        $result = $this->romanizeBatch([$sourceCue], 'jpn');
+
+        $this->assertSame(['日本語', '勉強'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame('nihongo', $result->cues[0]['tokens'][0]['romanization']);
+        $this->assertArrayNotHasKey('romanization', $result->cues[0]['tokens'][1]);
+    }
+
+    public function test_romanization_degrades_when_token_romanization_is_unparseable(): void
+    {
+        CueRomanizationAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'romanization' => '   ',
+                        'tokens' => [
+                            ['index' => 0, 'romanization' => null],
+                            ['index' => 1, 'romanization' => '  '],
+                        ],
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCue = [
+            ...$this->sourceCue('cue-0001', 0, '日本語勉強'),
+            'translatedText' => '日本語勉強',
+            'tokens' => [
+                ['index' => 0, 'text' => '日本語', 'normalizedText' => '日本語'],
+                ['index' => 1, 'text' => '勉強', 'normalizedText' => '勉強'],
+            ],
+        ];
+
+        $result = $this->romanizeBatch([$sourceCue], 'jpn');
+
+        $this->assertSame(['日本語', '勉強'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertArrayNotHasKey('romanization', $result->cues[0]['tokens'][0]);
+        $this->assertArrayNotHasKey('romanization', $result->cues[0]['tokens'][1]);
+        $this->assertArrayNotHasKey('romanization', $result->cues[0]);
+    }
+
+    public function test_romanization_matches_cues_by_id_when_model_reorders_output(): void
+    {
+        // Reproduces the production cue_identity_mismatch failure: the model returns
+        // the batch's cues in a different order than the input. Matching by cueId
+        // (not array position) keeps each cue's romanization correct.
+        CueRomanizationAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0002',
+                        'index' => 1,
+                        'romanization' => 'benkyo',
+                        'tokens' => [['index' => 0, 'romanization' => 'benkyo']],
+                    ],
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'romanization' => 'nihongo',
+                        'tokens' => [['index' => 0, 'romanization' => 'nihongo']],
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCues = [
+            [
+                ...$this->sourceCue('cue-0001', 0, '日本語'),
+                'translatedText' => '日本語',
+                'tokens' => [['index' => 0, 'text' => '日本語', 'normalizedText' => '日本語']],
+            ],
+            [
+                ...$this->sourceCue('cue-0002', 1, '勉強'),
+                'translatedText' => '勉強',
+                'tokens' => [['index' => 0, 'text' => '勉強', 'normalizedText' => '勉強']],
+            ],
+        ];
+
+        $result = $this->romanizeBatch($sourceCues, 'jpn');
+
+        $this->assertSame(['cue-0001', 'cue-0002'], array_column($result->cues, 'cueId'));
+        $this->assertSame('nihongo', $result->cues[0]['tokens'][0]['romanization']);
+        $this->assertSame('benkyo', $result->cues[1]['tokens'][0]['romanization']);
+    }
+
+    public function test_romanization_degrades_cue_absent_from_model_output(): void
+    {
+        // The model dropped cue-0002 entirely. It must degrade to its source tokens
+        // with no romanization rather than failing the whole job.
+        CueRomanizationAgent::fake([
+            [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'romanization' => 'nihongo',
+                        'tokens' => [['index' => 0, 'romanization' => 'nihongo']],
+                    ],
+                ],
+            ],
+        ])->preventStrayPrompts();
+
+        $sourceCues = [
+            [
+                ...$this->sourceCue('cue-0001', 0, '日本語'),
+                'translatedText' => '日本語',
+                'tokens' => [['index' => 0, 'text' => '日本語', 'normalizedText' => '日本語']],
+            ],
+            [
+                ...$this->sourceCue('cue-0002', 1, '勉強'),
+                'translatedText' => '勉強',
+                'tokens' => [['index' => 0, 'text' => '勉強', 'normalizedText' => '勉強']],
+            ],
+        ];
+
+        $result = $this->romanizeBatch($sourceCues, 'jpn');
+
+        $this->assertSame('nihongo', $result->cues[0]['tokens'][0]['romanization']);
+        $this->assertSame(['勉強'], array_column($result->cues[1]['tokens'], 'text'));
+        $this->assertArrayNotHasKey('romanization', $result->cues[1]['tokens'][0]);
+        $this->assertArrayNotHasKey('romanization', $result->cues[1]);
     }
 
     public function test_enriches_one_requested_token_for_on_demand_word_cards(): void

@@ -507,7 +507,6 @@ class LaravelAiTranslationAnalysisProvider
                     $this->sourceTokens($sourceCue),
                     (int) $sourceCue['index'],
                     $includeRomanization,
-                    false,
                 ),
             ];
 
@@ -530,18 +529,18 @@ class LaravelAiTranslationAnalysisProvider
      */
     private function translatedResult(array $output, array $sourceCues): CueEnrichmentResult
     {
-        $outputCues = $this->validatedOutputCues($output, $sourceCues);
+        $outputByCueId = $this->outputCuesByCueId($output['cues'] ?? null);
         $cues = [];
 
-        foreach ($sourceCues as $position => $sourceCue) {
-            $outputCue = $outputCues[$position];
-            $this->validateCueIdentity($sourceCue, $outputCue, $position);
+        foreach ($sourceCues as $sourceCue) {
+            // Translation is an optional enrichment. Match the model output to the
+            // source cue by its stable cueId (never by array position), and degrade
+            // to the source text when the model dropped, reordered, or returned an
+            // empty translation for a cue, rather than failing the whole job.
+            $outputCue = $outputByCueId[$sourceCue['cueId']] ?? [];
 
-            $translatedText = $this->cleanString($outputCue['translatedText'] ?? null);
-
-            if ($translatedText === null) {
-                $this->failInvalidOutput('missing_translation', ['cue_index' => $sourceCue['index']]);
-            }
+            $translatedText = $this->cleanString($outputCue['translatedText'] ?? null)
+                ?? (string) $sourceCue['sourceText'];
 
             $cues[] = [
                 ...$sourceCue,
@@ -559,37 +558,115 @@ class LaravelAiTranslationAnalysisProvider
     private function romanizedResult(array $output, array $sourceCues): CueEnrichmentResult
     {
         $dialect = $this->cleanString($output['dialect'] ?? null) ?? 'unknown';
-        $outputCues = $this->validatedOutputCues($output, $sourceCues);
+        $outputByCueId = $this->outputCuesByCueId($output['cues'] ?? null);
         $cues = [];
 
-        foreach ($sourceCues as $position => $sourceCue) {
-            $outputCue = $outputCues[$position];
-            $this->validateCueIdentity($sourceCue, $outputCue, $position);
+        foreach ($sourceCues as $sourceCue) {
+            // Romanization is an optional annotation. Match the model output to the
+            // source cue by its stable cueId (never by array position), and degrade
+            // to source tokens with no romanization when the model dropped, reordered,
+            // or mangled a cue. The source tokens are always authoritative.
+            $outputCue = $outputByCueId[$sourceCue['cueId']] ?? [];
 
-            $cueRomanization = $this->cleanString($outputCue['romanization'] ?? null);
+            $sourceTokens = $this->sourceTokens($sourceCue);
+            $romanizationByIndex = $this->romanizationByIndex($outputCue['tokens'] ?? null);
 
-            if ($cueRomanization === null) {
-                $this->failInvalidOutput('missing_romanization', [
-                    'cue_index' => $sourceCue['index'],
-                ]);
+            $tokens = [];
+            foreach ($sourceTokens as $sourceToken) {
+                $token = [
+                    'index' => $sourceToken['index'],
+                    'text' => $sourceToken['text'],
+                    'normalizedText' => $sourceToken['normalizedText'],
+                ];
+
+                $tokenRomanization = $romanizationByIndex[$sourceToken['index']] ?? null;
+
+                if ($tokenRomanization !== null) {
+                    $token['romanization'] = $tokenRomanization;
+                }
+
+                $tokens[] = $token;
             }
 
-            $cues[] = [
+            $cue = [
                 ...$sourceCue,
                 'translatedText' => $this->cleanString($sourceCue['translatedText'] ?? null)
                     ?? (string) $sourceCue['sourceText'],
-                'romanization' => $cueRomanization,
-                'tokens' => $this->tokensPreservingSource(
-                    $outputCue['tokens'] ?? null,
-                    $this->sourceTokens($sourceCue),
-                    (int) $sourceCue['index'],
-                    true,
-                    true,
-                ),
             ];
+
+            $cueRomanization = $this->cleanString($outputCue['romanization'] ?? null);
+
+            if ($cueRomanization !== null) {
+                $cue['romanization'] = $cueRomanization;
+            }
+
+            $cue['tokens'] = $tokens;
+            $cues[] = $cue;
         }
 
         return new CueEnrichmentResult($cues, $dialect);
+    }
+
+    /**
+     * Maps optional-enrichment output cues by cueId so each source cue is matched by
+     * its stable contract id rather than array position. Tolerant: cues without a
+     * usable cueId are skipped and the corresponding source cue degrades.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function outputCuesByCueId(mixed $outputCues): array
+    {
+        if (! is_array($outputCues)) {
+            return [];
+        }
+
+        $byCueId = [];
+
+        foreach ($outputCues as $outputCue) {
+            if (! is_array($outputCue)) {
+                continue;
+            }
+
+            $cueId = $outputCue['cueId'] ?? null;
+
+            if (is_string($cueId) && $cueId !== '') {
+                $byCueId[$cueId] = $outputCue;
+            }
+        }
+
+        return $byCueId;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function romanizationByIndex(mixed $outputTokens): array
+    {
+        if (! is_array($outputTokens)) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach ($outputTokens as $outputToken) {
+            if (! is_array($outputToken)) {
+                continue;
+            }
+
+            $index = $outputToken['index'] ?? null;
+
+            if (! is_int($index)) {
+                continue;
+            }
+
+            $romanization = $this->cleanString($outputToken['romanization'] ?? null);
+
+            if ($romanization !== null) {
+                $map[$index] = $romanization;
+            }
+        }
+
+        return $map;
     }
 
     /**
@@ -674,7 +751,6 @@ class LaravelAiTranslationAnalysisProvider
         array $sourceTokens,
         int $cueIndex,
         bool $includeRomanization,
-        bool $requireRomanization,
     ): array {
         if (! is_array($outputTokens)) {
             $this->failInvalidOutput('invalid_tokens', ['cue_index' => $cueIndex]);
@@ -726,13 +802,6 @@ class LaravelAiTranslationAnalysisProvider
 
             $romanization = $this->cleanString($sourceToken['romanization'] ?? null)
                 ?? $this->cleanString($outputToken['romanization'] ?? null);
-
-            if ($requireRomanization && $romanization === null) {
-                $this->failInvalidOutput('missing_token_romanization', [
-                    'cue_index' => $cueIndex,
-                    'token_position' => $position,
-                ]);
-            }
 
             if ($includeRomanization && $romanization !== null) {
                 $token['romanization'] = $romanization;
