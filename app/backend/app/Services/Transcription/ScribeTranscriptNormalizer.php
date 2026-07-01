@@ -5,6 +5,7 @@ namespace App\Services\Transcription;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\NoSpaceArtifactBoundary;
+use App\Services\Text\SubtitleText;
 
 class ScribeTranscriptNormalizer
 {
@@ -99,7 +100,7 @@ class ScribeTranscriptNormalizer
                 continue;
             }
 
-            $text = $this->normalizeText($token['text']);
+            $text = SubtitleText::collapseWhitespace($token['text']);
 
             if ($text === '') {
                 continue;
@@ -123,7 +124,7 @@ class ScribeTranscriptNormalizer
             }
 
             if ($pendingUntimedText !== []) {
-                $text = $this->normalizeText(implode(' ', [...$pendingUntimedText, $text]));
+                $text = SubtitleText::collapseWhitespace(implode(' ', [...$pendingUntimedText, $text]));
                 $pendingUntimedText = [];
             }
 
@@ -136,7 +137,7 @@ class ScribeTranscriptNormalizer
 
         if ($pendingUntimedText !== [] && $words !== []) {
             $lastWordIndex = array_key_last($words);
-            $words[$lastWordIndex]['text'] = $this->normalizeText(
+            $words[$lastWordIndex]['text'] = SubtitleText::collapseWhitespace(
                 $words[$lastWordIndex]['text'].' '.implode(' ', $pendingUntimedText),
             );
         }
@@ -353,7 +354,7 @@ class ScribeTranscriptNormalizer
         return new TimestampedTranscriptSegment(
             startSeconds: $start,
             endSeconds: $end,
-            text: $this->normalizeTranscriptText(implode(' ', array_column($words, 'text'))),
+            text: SubtitleText::canonicalComparable(implode(' ', array_column($words, 'text'))),
         );
     }
 
@@ -374,7 +375,7 @@ class ScribeTranscriptNormalizer
      */
     private function cueCharacterCount(array $currentWords, array $candidate): int
     {
-        return mb_strlen($this->normalizeTranscriptText(implode(' ', [
+        return mb_strlen(SubtitleText::canonicalComparable(implode(' ', [
             ...array_column($currentWords, 'text'),
             $candidate['text'],
         ])), 'UTF-8');
@@ -391,16 +392,6 @@ class ScribeTranscriptNormalizer
         $milliseconds -= $wholeSeconds * 1000;
 
         return sprintf('%02d:%02d:%02d.%03d', $hours, $minutes, $wholeSeconds, $milliseconds);
-    }
-
-    private function normalizeText(string $text): string
-    {
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
-    }
-
-    private function normalizeTranscriptText(string $text): string
-    {
-        return NoSpaceArtifactBoundary::strip($this->normalizeText($text));
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Ai\Agents\CueTranslationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
+use App\Services\Text\SubtitleText;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
@@ -855,7 +856,7 @@ class LaravelAiTranslationAnalysisProvider
             return null;
         }
 
-        $cleaned = trim((string) preg_replace('/\s+/u', ' ', $value));
+        $cleaned = SubtitleText::collapseWhitespace($value);
 
         return $cleaned === '' ? null : $cleaned;
     }
