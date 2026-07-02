@@ -118,6 +118,32 @@ return [
         'slow_stage_ms' => (int) env('SUBTITLE_TRACE_SLOW_STAGE_MS', 120000),
     ],
 
+    'romanization' => [
+        // Languages whose scripts have a reliable algorithmic transliteration
+        // are romanized deterministically with PHP intl instead of an LLM call,
+        // turning the romanizing stage into a ~0ms transform with zero provider
+        // cost. ICU output is not always the product-preferred scheme (notably
+        // it does NOT apply Korean Revised-Romanization sound changes -- 신라
+        // becomes "sinla", not "silla"), so this list is a per-language quality
+        // gate: add a language only after validating ICU output against the LLM
+        // romanizations on sample jobs. Seeded with the scientifically-safe
+        // Cyrillic and Greek scripts; Japanese/Chinese and unvocalized Arabic
+        // stay on the LLM because their readings are ambiguous.
+        //
+        // Keyed by normalized (ISO 639-3) source language code; values are ICU
+        // Transliterator ids.
+        'deterministic_enabled' => (bool) env('SUBTITLE_DETERMINISTIC_ROMANIZATION_ENABLED', true),
+        'deterministic' => [
+            'rus' => 'Cyrillic-Latin; Latin-ASCII',
+            'ukr' => 'Cyrillic-Latin; Latin-ASCII',
+            'bel' => 'Cyrillic-Latin; Latin-ASCII',
+            'bul' => 'Cyrillic-Latin; Latin-ASCII',
+            'mkd' => 'Cyrillic-Latin; Latin-ASCII',
+            'srp' => 'Cyrillic-Latin; Latin-ASCII',
+            'ell' => 'Greek-Latin; Latin-ASCII',
+        ],
+    ],
+
     'costs' => [
         'elevenlabs_scribe_microusd_per_minute' => (int) env('ELEVENLABS_SCRIBE_MICROUSD_PER_MINUTE', 0),
         'openai_tokenization_microusd_per_cue' => (int) env('OPENAI_TOKENIZATION_MICROUSD_PER_CUE', 0),
