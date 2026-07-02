@@ -231,13 +231,21 @@ return [
         // Buffer added to each stage timeout before a job is considered dead.
         // Comfortably above queue jitter and retry backoff.
         'slack_seconds' => (int) env('SUBTITLE_STALLED_JOB_SLACK_SECONDS', 120),
-        // Per-stage ceilings. The `finalizing` stage touches the DB only; the
-        // others are dominated by the slowest batch or provider call.
+        // Per-stage ceilings. This watcher is a backstop for dead workers and
+        // silently-lost batches, not a competitor to a job's own timeout, so
+        // the ceilings deliberately sit above the work each stage performs.
+        //   - `preparing` is pre-pickup queue wait; keep it generous so a brief
+        //     worker backlog does not fail a job that is merely waiting.
+        //   - `acquiring-audio`/`optimizing-audio`/`transcribing` all execute
+        //     inside one ProcessSubtitleJob (its own timeout is 1200s), so their
+        //     ceilings exceed 1200s and the worker's own failure path wins first.
+        //   - batch stages (`tokenizing`..`enriching`) heartbeat updated_at on
+        //     every progress step, so the ceiling only spans one stalled step.
         'stage_timeout_seconds' => [
-            'preparing' => (int) env('SUBTITLE_STALLED_PREPARING_TIMEOUT_SECONDS', 60),
-            'acquiring-audio' => (int) env('SUBTITLE_STALLED_ACQUIRING_AUDIO_TIMEOUT_SECONDS', 600),
-            'optimizing-audio' => (int) env('SUBTITLE_STALLED_OPTIMIZING_AUDIO_TIMEOUT_SECONDS', 600),
-            'transcribing' => (int) env('SUBTITLE_STALLED_TRANSCRIBING_TIMEOUT_SECONDS', 700),
+            'preparing' => (int) env('SUBTITLE_STALLED_PREPARING_TIMEOUT_SECONDS', 900),
+            'acquiring-audio' => (int) env('SUBTITLE_STALLED_ACQUIRING_AUDIO_TIMEOUT_SECONDS', 1200),
+            'optimizing-audio' => (int) env('SUBTITLE_STALLED_OPTIMIZING_AUDIO_TIMEOUT_SECONDS', 1200),
+            'transcribing' => (int) env('SUBTITLE_STALLED_TRANSCRIBING_TIMEOUT_SECONDS', 1200),
             'tokenizing' => (int) env('SUBTITLE_STALLED_TOKENIZING_TIMEOUT_SECONDS', 600),
             'romanizing' => (int) env('SUBTITLE_STALLED_ROMANIZING_TIMEOUT_SECONDS', 600),
             'translating' => (int) env('SUBTITLE_STALLED_TRANSLATING_TIMEOUT_SECONDS', 600),

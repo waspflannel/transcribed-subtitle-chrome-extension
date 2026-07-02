@@ -26,7 +26,6 @@ class FailStalledSubtitleJobs extends Command
         $defaultTimeout = (int) config('subtitles.stalled_job.default_stage_timeout_seconds', 600);
         $stageTimeouts = (array) config('subtitles.stalled_job.stage_timeout_seconds', []);
 
-        $cutoffs = [];
         $now = now();
 
         $jobs = SubtitleJob::query()
