@@ -8,6 +8,7 @@ import {
 import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
 import { cueForNavigation, cueForPlaybackTime, cueStartPlaybackSeconds } from '../utils/cue-navigation';
+import { CueHoldController } from '../utils/cue-hold';
 import { shortcutActionFromKeyboardEvent, type KeyboardShortcutAction } from '../utils/keyboard-shortcuts';
 import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
 import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
@@ -32,6 +33,20 @@ export default defineContentScript({
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
+    const cueHold = new CueHoldController({
+      holdMs: 1800,
+      view: window,
+      onExpire: () => {
+        activeCue = null;
+        updateOverlay();
+        const clearedPage = parseYoutubePage(window.location.href);
+        if (clearedPage.supported) {
+          void browser.runtime
+            .sendMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: clearedPage.videoId })
+            .catch(() => {});
+        }
+      },
+    });
 
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
@@ -236,6 +251,7 @@ export default defineContentScript({
       stopVideoStateListeners?.();
       stopWebVttTrack = null;
       stopVideoStateListeners = null;
+      cueHold.clear();
       activeCue = null;
       const clearedPage = parseYoutubePage(window.location.href);
       if (clearedPage.supported) {
@@ -322,13 +338,21 @@ export default defineContentScript({
         track,
         timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
         onCueChange(change) {
-          activeCue = change.activeCue;
+          const isPlaying = typeof video.currentTime === 'number' && !video.paused && !video.ended;
+          const next = cueHold.select(change.activeCue, isPlaying, activeCue);
+
+          if (next === activeCue && activeCue !== null) {
+            updateOverlay(); // hold: keep prior cue rendered, no broadcast change
+            return;
+          }
+
+          activeCue = next;
           updateOverlay();
           const page = parseYoutubePage(window.location.href);
           if (page.supported) {
             void browser.runtime.sendMessage({
               type: 'content.activeCueChanged',
-              cueId: change.activeCue?.cueId ?? null,
+              cueId: activeCue?.cueId ?? null,
               youtubeVideoId: page.videoId,
             }).catch(() => {});
           }
@@ -354,11 +378,32 @@ export default defineContentScript({
 
       video.addEventListener('play', clearStudyHoverPause);
       video.addEventListener('playing', clearStudyHoverPause);
+      video.addEventListener('seeked', handleSeeked);
 
       stopVideoStateListeners = () => {
         video.removeEventListener('play', clearStudyHoverPause);
         video.removeEventListener('playing', clearStudyHoverPause);
+        video.removeEventListener('seeked', handleSeeked);
       };
+    }
+
+    function handleSeeked(): void {
+      cueHold.clear();
+      const next =
+        subtitleState.type === 'ready'
+          ? cueForPlaybackTime(subtitleState.track, activeVideo?.currentTime ?? 0, settings.subtitleTimingOffsetSeconds)
+          : null;
+      if (next?.cueId === activeCue?.cueId) {
+        return;
+      }
+      activeCue = next;
+      updateOverlay();
+      const clearedPage = parseYoutubePage(window.location.href);
+      if (clearedPage.supported) {
+        void browser.runtime
+          .sendMessage({ type: 'content.activeCueChanged', cueId: next?.cueId ?? null, youtubeVideoId: clearedPage.videoId })
+          .catch(() => {});
+      }
     }
 
     function pauseVideoForStudy(): void {

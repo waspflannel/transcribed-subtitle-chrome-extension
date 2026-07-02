@@ -69,6 +69,22 @@ describe('cue navigation', () => {
     expect(cueStartPlaybackSeconds(cues[1], 1)).toBe(3.5);
     expect(cueStartPlaybackSeconds(cues[0], -2)).toBe(0);
   });
+
+  it('treats the cue interval as half-open so the next cue wins at the shared millisecond', () => {
+    const cues: SubtitleCue[] = [
+      cue('cue-a', 0, 0, 1500),
+      cue('cue-b', 1, 1500, 3000),
+    ];
+
+    // At exactly 1500ms the cue-a interval is closed and cue-b is open.
+    expect(cueForPlaybackTime({ cues }, 1.5)?.cueId).toBe('cue-b');
+  });
+
+  it('still matches the final cue at its exact end boundary', () => {
+    const cues: SubtitleCue[] = [cue('cue-final', 0, 0, 1500)];
+
+    expect(cueForPlaybackTime({ cues }, 1.5)?.cueId).toBe('cue-final');
+  });
 });
 
 function cueList(): SubtitleCue[] {

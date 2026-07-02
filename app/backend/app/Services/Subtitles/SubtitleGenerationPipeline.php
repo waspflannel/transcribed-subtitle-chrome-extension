@@ -257,7 +257,10 @@ class SubtitleGenerationPipeline
         $this->logger->romanizationStarted($job, $cueCount);
 
         $jobs = [];
-        $batchCount = $this->artifacts->batchArtifactCount($job, SubtitleJobArtifactStore::TOKENIZED_CUES);
+        // Romanization runs one batch per tokenized draft batch. The tokenized
+        // batch indexes mirror the draft batch indexes, so the draft-cue batch
+        // plan is the single source of truth for batch indexing.
+        $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
 
         for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
             $jobs[] = new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);

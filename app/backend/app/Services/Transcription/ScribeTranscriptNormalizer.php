@@ -5,6 +5,7 @@ namespace App\Services\Transcription;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\NoSpaceArtifactBoundary;
+use App\Services\Text\SubtitleText;
 
 class ScribeTranscriptNormalizer
 {
@@ -15,6 +16,23 @@ class ScribeTranscriptNormalizer
     private const MAX_CUE_WORDS = 14;
 
     private const PAUSE_BREAK_SECONDS = 0.9;
+
+    /**
+     * Smallest inter-word gap that is a good cue break candidate. Kept well
+     * under PAUSE_BREAK_SECONDS so a normal pause is a preferred boundary
+     * before a hard limit forces a break elsewhere.
+     */
+    private const SOFT_GAP_BREAK_SECONDS = 0.25;
+
+    private const MAX_GAP_SCORE = 3.0;
+
+    private const CLAUSE_SCORE = 1.0;
+
+    /**
+     * Clause punctuation that is a good but non-forcing break candidate:
+     * comma, semicolon, colon, and CJK equivalents.
+     */
+    private const CLAUSE_PUNCTUATION = '/[,;:、，；：]$/u';
 
     /**
      * @param  array<string, mixed>  $payload
@@ -82,7 +100,7 @@ class ScribeTranscriptNormalizer
                 continue;
             }
 
-            $text = $this->normalizeText($token['text']);
+            $text = SubtitleText::collapseWhitespace($token['text']);
 
             if ($text === '') {
                 continue;
@@ -106,7 +124,7 @@ class ScribeTranscriptNormalizer
             }
 
             if ($pendingUntimedText !== []) {
-                $text = $this->normalizeText(implode(' ', [...$pendingUntimedText, $text]));
+                $text = SubtitleText::collapseWhitespace(implode(' ', [...$pendingUntimedText, $text]));
                 $pendingUntimedText = [];
             }
 
@@ -119,7 +137,7 @@ class ScribeTranscriptNormalizer
 
         if ($pendingUntimedText !== [] && $words !== []) {
             $lastWordIndex = array_key_last($words);
-            $words[$lastWordIndex]['text'] = $this->normalizeText(
+            $words[$lastWordIndex]['text'] = SubtitleText::collapseWhitespace(
                 $words[$lastWordIndex]['text'].' '.implode(' ', $pendingUntimedText),
             );
         }
@@ -159,23 +177,55 @@ class ScribeTranscriptNormalizer
     {
         $segments = [];
         $currentWords = [];
+        /** @var array<int, array{index: int, score: float}>  $candidates */
+        $candidates = [];
         $previousWord = null;
         $previousSegmentEnd = null;
 
+        $flush = function (int $breakAfter) use (
+            &$currentWords, &$candidates, &$segments, &$previousSegmentEnd
+        ): void {
+            $cut = $breakAfter + 1;
+            $segments[] = $this->segmentFromWords(array_slice($currentWords, 0, $cut), $previousSegmentEnd);
+            $previousSegmentEnd = $segments[array_key_last($segments)]->endSeconds;
+            $currentWords = array_slice($currentWords, $cut);
+            $shift = $cut;
+            $remapped = [];
+            foreach ($candidates as $candidate) {
+                $newIndex = $candidate['index'] - $shift;
+                if ($newIndex >= 0) {
+                    $remapped[] = ['index' => $newIndex, 'score' => $candidate['score']];
+                }
+            }
+            $candidates = $remapped;
+        };
+
         foreach ($words as $word) {
-            if ($currentWords !== [] && $this->startsNewCue($currentWords, $word, $previousWord)) {
-                $segments[] = $this->segmentFromWords($currentWords, $previousSegmentEnd);
-                $previousSegmentEnd = $segments[array_key_last($segments)]->endSeconds;
-                $currentWords = [];
+            if ($currentWords !== [] && $previousWord !== null) {
+                $gap = $word['start'] - $previousWord['end'];
+                if ($gap >= self::PAUSE_BREAK_SECONDS) {
+                    // A real pause is always the strongest boundary. Close now
+                    // rather than waiting for a hard limit to fire somewhere else.
+                    $flush(count($currentWords) - 1);
+                } elseif ($gap >= self::SOFT_GAP_BREAK_SECONDS) {
+                    $this->recordCandidate($candidates, count($currentWords) - 1, min($gap, self::MAX_GAP_SCORE));
+                }
+            }
+
+            if ($currentWords !== [] && $this->exceedsHardLimit($currentWords, $word)) {
+                $best = $this->bestCandidate($candidates);
+                $flush($best !== null ? $best['index'] : (count($currentWords) - 1));
             }
 
             $currentWords[] = $word;
             $previousWord = $word;
 
+            if ($this->endsWithClausePunctuation($word['text'])) {
+                $this->recordCandidate($candidates, count($currentWords) - 1, self::CLAUSE_SCORE);
+            }
+
             if ($this->shouldCloseCue($currentWords)) {
-                $segments[] = $this->segmentFromWords($currentWords, $previousSegmentEnd);
-                $previousSegmentEnd = $segments[array_key_last($segments)]->endSeconds;
-                $currentWords = [];
+                $flush(count($currentWords) - 1);
             }
         }
 
@@ -187,18 +237,89 @@ class ScribeTranscriptNormalizer
     }
 
     /**
-     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
-     * @param  array{text: string, start: float, end: float}|null  $previousWord
+     * @param  array<int, array{index: int, score: float}>  $candidates
      */
-    private function startsNewCue(array $currentWords, array $word, ?array $previousWord): bool
+    private function recordCandidate(array &$candidates, int $index, float $score): void
     {
-        if ($previousWord !== null && ($word['start'] - $previousWord['end']) >= self::PAUSE_BREAK_SECONDS) {
-            return true;
+        foreach ($candidates as &$candidate) {
+            if ($candidate['index'] === $index) {
+                if ($score > $candidate['score']) {
+                    $candidate['score'] = $score;
+                }
+
+                return;
+            }
+        }
+        unset($candidate);
+        $candidates[] = ['index' => $index, 'score' => $score];
+    }
+
+    /**
+     * @param  array<int, array{index: int, score: float}>  $candidates
+     * @return array{index: int, score: float}|null
+     */
+    private function bestCandidate(array $candidates): ?array
+    {
+        $best = null;
+        foreach ($candidates as $candidate) {
+            if ($best === null || $candidate['score'] > $best['score']) {
+                $best = $candidate;
+            }
         }
 
-        return $this->cueDuration($currentWords, $word) > self::MAX_CUE_DURATION_SECONDS
-            || $this->cueCharacterCount($currentWords, $word) > self::MAX_CUE_CHARACTERS
-            || count($currentWords) >= self::MAX_CUE_WORDS;
+        return $best;
+    }
+
+    /**
+     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
+     * @param  array{text: string, start: float, end: float}  $candidate
+     */
+    private function exceedsHardLimit(array $currentWords, array $candidate): bool
+    {
+        return $this->cueDuration($currentWords, $candidate) > self::MAX_CUE_DURATION_SECONDS
+            || $this->cueCharacterCount($currentWords, $candidate) > self::MAX_CUE_CHARACTERS
+            || $this->logicalWordCount($currentWords) >= self::MAX_CUE_WORDS;
+    }
+
+    /**
+     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
+     */
+    private function logicalWordCount(array $currentWords): int
+    {
+        $count = 0;
+        foreach ($currentWords as $word) {
+            if ($this->countsAsLogicalWord($word['text'])) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    private function countsAsLogicalWord(string $text): bool
+    {
+        if ($text === '') {
+            return false;
+        }
+
+        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        foreach ($chars as $char) {
+            if (trim($char) === '') {
+                continue;
+            }
+
+            if (! NoSpaceArtifactBoundary::isNoSpaceScriptChar($char) && preg_match('/[\p{L}\p{N}]/u', $char) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function endsWithClausePunctuation(string $text): bool
+    {
+        return preg_match(self::CLAUSE_PUNCTUATION, $text) === 1;
     }
 
     /**
@@ -233,7 +354,7 @@ class ScribeTranscriptNormalizer
         return new TimestampedTranscriptSegment(
             startSeconds: $start,
             endSeconds: $end,
-            text: $this->normalizeTranscriptText(implode(' ', array_column($words, 'text'))),
+            text: SubtitleText::canonicalComparable(implode(' ', array_column($words, 'text'))),
         );
     }
 
@@ -254,10 +375,10 @@ class ScribeTranscriptNormalizer
      */
     private function cueCharacterCount(array $currentWords, array $candidate): int
     {
-        return mb_strlen($this->normalizeText(implode(' ', [
+        return mb_strlen(SubtitleText::canonicalComparable(implode(' ', [
             ...array_column($currentWords, 'text'),
             $candidate['text'],
-        ])));
+        ])), 'UTF-8');
     }
 
     private function formatTimestamp(float $seconds): string
@@ -271,16 +392,6 @@ class ScribeTranscriptNormalizer
         $milliseconds -= $wholeSeconds * 1000;
 
         return sprintf('%02d:%02d:%02d.%03d', $hours, $minutes, $wholeSeconds, $milliseconds);
-    }
-
-    private function normalizeText(string $text): string
-    {
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
-    }
-
-    private function normalizeTranscriptText(string $text): string
-    {
-        return NoSpaceArtifactBoundary::strip($this->normalizeText($text));
     }
 
     /**

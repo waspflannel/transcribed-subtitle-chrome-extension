@@ -5,6 +5,7 @@ namespace App\Services\Subtitles;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Services\Text\SubtitleText;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Str;
@@ -40,7 +41,7 @@ class TimestampedSubtitleTrackGenerator
         $cues = [];
 
         foreach ($transcript->segments as $index => $segment) {
-            $sourceText = $this->normalizeText($segment->text);
+            $sourceText = SubtitleText::collapseWhitespace($segment->text);
             $startMs = (int) round($segment->startSeconds * 1000);
             $endMs = (int) round($segment->endSeconds * 1000);
 
@@ -152,11 +153,6 @@ class TimestampedSubtitleTrackGenerator
                 'previous_end_ms' => $previousEndMs,
             ]);
         }
-    }
-
-    private function normalizeText(string $text): string
-    {
-        return trim((string) preg_replace('/\s+/u', ' ', $text));
     }
 
     /**

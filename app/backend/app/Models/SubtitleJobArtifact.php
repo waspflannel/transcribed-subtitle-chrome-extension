@@ -11,6 +11,7 @@ class SubtitleJobArtifact extends Model
         'subtitle_job_id',
         'artifact_type',
         'batch_index',
+        'run_id',
         'payload',
     ];
 

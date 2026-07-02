@@ -62,7 +62,7 @@ class AiAgentInstructionTest extends TestCase
 
         $this->assertStringContainsString('Return one enriched cue for each input cue in the same order.', $instructions);
         $this->assertStringContainsString('Return exactly one token for each input token in the same order.', $instructions);
-        $this->assertStringContainsString('Preserve each cue translatedText exactly as provided', $instructions);
+        $this->assertStringContainsString('The cue translation is owned by the server and is NOT part of your output', $instructions);
         $this->assertStringContainsString('Obey includeRomanization from the input.', $instructions);
     }
 

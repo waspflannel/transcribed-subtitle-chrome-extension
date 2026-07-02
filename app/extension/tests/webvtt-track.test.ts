@@ -96,6 +96,39 @@ describe('bindWebVttTrackToVideo', () => {
     expect(shifted.cues[0].endMs).toBe(100);
   });
 
+  it('matches the active VTT cue by its stable id, not timestamp proximity', () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const video = new FakeVideoElement();
+    const changes: { cueId: string | null }[] = [];
+
+    bindWebVttTrackToVideo({
+      video: video as unknown as HTMLVideoElement,
+      track: trackWithTwoAdjacentCues(),
+      onCueChange: (change) => changes.push({ cueId: change.activeCue?.cueId ?? null }),
+    });
+
+    // Two cues 20ms apart — within the old ±25ms tolerance. Id mapping must
+    // pick the right one instead of always the first.
+    video.appendedTrack!.track.activeCues = new FakeCueList([new FakeTextCue(0.52, 1.8, 'b', 'cue-0002')]);
+    video.appendedTrack!.track.dispatchEvent(new Event('cuechange'));
+
+    expect(changes).toContainEqual({ cueId: 'cue-0002' });
+  });
+
+  it('drops cues shifted before the timeline and keeps the remainder disjoint and ordered', () => {
+    const shifted = offsetTrackTiming(trackWithEarlyAndLateCue(), -32);
+
+    // First cue (500-2100ms) is dropped entirely; second (60000-62000ms)
+    // shifts to 28000-30000ms and keeps the cue id and positive duration.
+    expect(shifted.cues).toHaveLength(1);
+    expect(shifted.cues[0].cueId).toBe('cue-0002');
+    expect(shifted.cues[0].startMs).toBe(28_000);
+    expect(shifted.cues[0].endMs).toBe(30_000);
+    expect(shifted.webVtt).toContain('00:00:28.000 --> 00:00:30.000');
+    expect(shifted.webVtt).toContain('cue-0002');
+  });
+
   it('notifies the logger when the WebVTT track fails', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
@@ -146,6 +179,60 @@ function trackResponse(): TrackResponse {
             normalizedText: 'first',
           },
         ],
+      },
+    ],
+  };
+}
+
+function trackWithTwoAdjacentCues(): TrackResponse {
+  return {
+    ...trackResponse(),
+    webVtt:
+      'WEBVTT\n\ncue-0001\n00:00:00.500 --> 00:00:01.800\na\n\ncue-0002\n00:00:00.520 --> 00:00:02.000\nb\n',
+    cues: [
+      {
+        cueId: 'cue-0001',
+        index: 0,
+        startMs: 500,
+        endMs: 1800,
+        sourceText: 'a',
+        translatedText: 'a',
+        tokens: [{ index: 0, text: 'a', normalizedText: 'a' }],
+      },
+      {
+        cueId: 'cue-0002',
+        index: 1,
+        startMs: 520,
+        endMs: 2000,
+        sourceText: 'b',
+        translatedText: 'b',
+        tokens: [{ index: 0, text: 'b', normalizedText: 'b' }],
+      },
+    ],
+  };
+}
+
+function trackWithEarlyAndLateCue(): TrackResponse {
+  return {
+    ...trackResponse(),
+    cues: [
+      {
+        cueId: 'cue-0001',
+        index: 0,
+        startMs: 500,
+        endMs: 2100,
+        sourceText: 'early',
+        translatedText: 'early',
+        tokens: [{ index: 0, text: 'early', normalizedText: 'early' }],
+      },
+      {
+        cueId: 'cue-0002',
+        index: 1,
+        startMs: 60000,
+        endMs: 62000,
+        sourceText: 'late',
+        translatedText: 'late',
+        tokens: [{ index: 0, text: 'late', normalizedText: 'late' }],
       },
     ],
   };
@@ -202,6 +289,7 @@ class FakeTextCue {
     public readonly startTime: number,
     public readonly endTime: number,
     public readonly text: string,
+    public readonly id: string = '',
   ) {}
 }
 

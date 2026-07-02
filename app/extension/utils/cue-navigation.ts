@@ -13,7 +13,20 @@ export function cueForPlaybackTime(
 
   const sourceTimeMs = playbackTimeToSourceMilliseconds(currentTimeSeconds, timingOffsetSeconds);
 
-  return track.cues.find((cue) => sourceTimeMs >= cue.startMs && sourceTimeMs <= cue.endMs) ?? null;
+  return (
+    track.cues.find((cue) => sourceTimeMs >= cue.startMs && sourceTimeMs < cue.endMs) ??
+    findLastCueEndingAt(track.cues, sourceTimeMs)
+  );
+}
+
+function findLastCueEndingAt(cues: readonly SubtitleCue[], sourceTimeMs: number): SubtitleCue | null {
+  for (let i = cues.length - 1; i >= 0; i -= 1) {
+    if (cues[i].endMs === sourceTimeMs) {
+      return cues[i];
+    }
+  }
+
+  return null;
 }
 
 export function cueForNavigation(options: {
@@ -70,7 +83,7 @@ function cueForNavigationFromPlaybackTime(
   }
 
   const sourceTimeMs = playbackTimeToSourceMilliseconds(currentTimeSeconds, timingOffsetSeconds);
-  const matchingCueIndex = cues.findIndex((cue) => sourceTimeMs >= cue.startMs && sourceTimeMs <= cue.endMs);
+  const matchingCueIndex = cues.findIndex((cue) => sourceTimeMs >= cue.startMs && sourceTimeMs < cue.endMs);
 
   if (matchingCueIndex >= 0) {
     return direction === 'previous'

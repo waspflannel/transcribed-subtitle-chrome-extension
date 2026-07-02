@@ -3,7 +3,7 @@
 namespace App\Services\TranslationAnalysis;
 
 use App\Exceptions\SubtitleProcessingException;
-use App\Services\Text\NoSpaceArtifactBoundary;
+use App\Services\Text\SubtitleText;
 
 class LearningTokenOutputValidator
 {
@@ -87,7 +87,7 @@ class LearningTokenOutputValidator
 
     public function normalizeTokenText(string $text): string
     {
-        $normalized = $this->normalizeTextForComparison($text);
+        $normalized = SubtitleText::canonicalComparable($text);
 
         return function_exists('mb_strtolower')
             ? mb_strtolower($normalized, 'UTF-8')
@@ -110,16 +110,9 @@ class LearningTokenOutputValidator
             return null;
         }
 
-        $cleaned = $this->normalizeTextForComparison($value);
+        $cleaned = SubtitleText::canonicalComparable($value);
 
         return $cleaned === '' ? null : $cleaned;
-    }
-
-    private function normalizeTextForComparison(string $text): string
-    {
-        $normalized = trim((string) preg_replace('/\s+/u', ' ', $text));
-
-        return NoSpaceArtifactBoundary::strip($normalized);
     }
 
     /**

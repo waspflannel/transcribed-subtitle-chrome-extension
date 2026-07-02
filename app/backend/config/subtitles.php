@@ -149,4 +149,26 @@ return [
         // are enforced separately by LimitSubtitleBatchConcurrency. 0 disables.
         'global_rate_limit_per_minute' => (int) env('SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE', 300),
     ],
+
+    'stalled_job' => [
+        'enabled' => (bool) env('SUBTITLE_STALLED_JOB_WATCHER_ENABLED', true),
+        // Buffer added to each stage timeout before a job is considered dead.
+        // Comfortably above queue jitter and retry backoff.
+        'slack_seconds' => (int) env('SUBTITLE_STALLED_JOB_SLACK_SECONDS', 120),
+        // Per-stage ceilings. The `finalizing` stage touches the DB only; the
+        // others are dominated by the slowest batch or provider call.
+        'stage_timeout_seconds' => [
+            'preparing' => (int) env('SUBTITLE_STALLED_PREPARING_TIMEOUT_SECONDS', 60),
+            'acquiring-audio' => (int) env('SUBTITLE_STALLED_ACQUIRING_AUDIO_TIMEOUT_SECONDS', 600),
+            'optimizing-audio' => (int) env('SUBTITLE_STALLED_OPTIMIZING_AUDIO_TIMEOUT_SECONDS', 600),
+            'transcribing' => (int) env('SUBTITLE_STALLED_TRANSCRIBING_TIMEOUT_SECONDS', 700),
+            'tokenizing' => (int) env('SUBTITLE_STALLED_TOKENIZING_TIMEOUT_SECONDS', 600),
+            'romanizing' => (int) env('SUBTITLE_STALLED_ROMANIZING_TIMEOUT_SECONDS', 600),
+            'translating' => (int) env('SUBTITLE_STALLED_TRANSLATING_TIMEOUT_SECONDS', 600),
+            'enriching' => (int) env('SUBTITLE_STALLED_ENRICHING_TIMEOUT_SECONDS', 600),
+            'finalizing' => (int) env('SUBTITLE_STALLED_FINALIZING_TIMEOUT_SECONDS', 300),
+        ],
+        // Fallback for any stage not listed above.
+        'default_stage_timeout_seconds' => (int) env('SUBTITLE_STALLED_DEFAULT_TIMEOUT_SECONDS', 600),
+    ],
 ];
