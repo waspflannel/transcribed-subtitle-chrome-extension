@@ -299,7 +299,7 @@ class SubtitleJobArtifactStore
      * outliers. An explicit $batchSize forces uniform fixed-size chunks.
      *
      * @param  array<int, array<string, mixed>>  $cues
-     * @return array<int, array{0: int, 1: int}>  inclusive [start, end] index pairs
+     * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
     private function buildBatchPlan(array $cues, ?int $batchSize): array
     {
@@ -357,7 +357,7 @@ class SubtitleJobArtifactStore
 
     /**
      * @param  array<string, mixed>  $payload
-     * @return array<int, array{0: int, 1: int}>  inclusive [start, end] index pairs
+     * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
     private function payloadBatchPlan(array $payload, int $cueCount): array
     {

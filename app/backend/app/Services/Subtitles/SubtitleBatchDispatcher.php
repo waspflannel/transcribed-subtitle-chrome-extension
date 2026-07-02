@@ -14,7 +14,7 @@ class SubtitleBatchDispatcher
 {
     /**
      * @param  array<int, object|array<int, object>>  $jobs  batch members; an
-     *                                                        array member is dispatched as a chain
+     *                                                       array member is dispatched as a chain
      */
     public function dispatchAnalysis(SubtitleJob $job, array $jobs): void
     {
