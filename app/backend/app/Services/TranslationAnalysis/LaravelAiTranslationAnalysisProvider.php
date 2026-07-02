@@ -147,13 +147,19 @@ class LaravelAiTranslationAnalysisProvider
      */
     private function deterministicTokens(string $sourceText): array
     {
-        $pieces = preg_match('/\s/u', $sourceText) === 1
-            ? preg_split('/\s+/u', $sourceText)
-            : preg_split('//u', $sourceText, -1, PREG_SPLIT_NO_EMPTY);
+        if (preg_match('/\s/u', $sourceText) === 1) {
+            $pieces = preg_split('/\s+/u', $sourceText) ?: [];
+        } else {
+            // No-space script: split on grapheme clusters, not code points, so a
+            // combining vowel/tone mark (Thai, Lao, Khmer) stays attached to its
+            // base character instead of stranding as its own token.
+            preg_match_all('/\X/u', $sourceText, $matches);
+            $pieces = $matches[0];
+        }
 
         $tokens = [];
 
-        foreach ($pieces ?: [] as $piece) {
+        foreach ($pieces as $piece) {
             $piece = trim((string) $piece);
 
             if ($piece === '' || preg_match('/[\p{L}\p{N}\p{M}]/u', $piece) !== 1) {
@@ -192,7 +198,7 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        return $this->enrichBatch($batch, $sourceLanguage, $targetLanguage, $includeRomanization, allowReprompt: true);
+        return $this->enrichBatch($batch, $sourceLanguage, $targetLanguage, $includeRomanization);
     }
 
     /**
@@ -203,7 +209,6 @@ class LaravelAiTranslationAnalysisProvider
         string $sourceLanguage,
         string $targetLanguage,
         bool $includeRomanization,
-        bool $allowReprompt,
     ): CueEnrichmentResult {
         $output = $this->promptAgent(
             CueEnrichmentAgent::class,
@@ -229,8 +234,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, allowReprompt: false);
-                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, allowReprompt: false);
+                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization);
+                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
