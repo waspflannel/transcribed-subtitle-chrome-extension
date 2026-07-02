@@ -29,7 +29,16 @@ return [
             'generation-priority' => [
                 'queue_family' => 'generation',
                 'tiers' => ['ultimate', 'pro', 'plus', 'base'],
-                'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 4),
+                // Each ProcessSubtitleJob holds one of these workers for the
+                // whole acquire -> optimize -> transcribe span (~26s avg, ~75s
+                // max), and per-tier generation_concurrency is a *per-user* cap,
+                // so across users this pool is the global throughput ceiling. At
+                // 4 (+1 base guarantee) a burst of >5 jobs serialized and drove
+                // the p95 acquire-queue spike (one job waited 101s before its
+                // download even started). Doubled to give burst headroom; each
+                // added worker is another concurrent yt-dlp + ffmpeg + Scribe
+                // upload, so raise in step with memory and Scribe rate limits.
+                'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 8),
             ],
             'batch-priority' => [
                 'queue_family' => 'batch',
