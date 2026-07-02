@@ -42,6 +42,12 @@ This repository is designed for agentic development. Keep this file short; it is
 - Keep logs structured and useful for future debugging.
 - Preserve agent legibility: future agents should be able to understand what exists, why it exists, and how to validate it.
 
+## Working Style
+
+- Do not add the assistant as a commit co-author. Never write a `Co-Authored-By: Claude` trailer.
+- Pick the best solution on its merits. Do not settle for a weaker option to save time or resources; if the best option is large, say so and recommend it.
+- Write plainly. In replies, answers, and commit messages use simple words and short sentences. Say what changed and why — nothing more. For example, prefer "Split fallback tokens on grapheme clusters (`\X`) so Thai and Lao letters keep their vowel and tone marks" over a dense, multi-clause version of the same point.
+
 ## Standard Commands
 
 ```powershell
