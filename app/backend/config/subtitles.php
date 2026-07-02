@@ -152,7 +152,18 @@ return [
 
     'enrichment' => [
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
+        // Legacy fixed cue-per-batch size. Only used as a fallback for cue
+        // artifacts written before character-based batching (which carry no
+        // batch plan) and when a caller passes an explicit batch size.
         'cue_batch_size' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE', 10),
+        // Character-based batch sizing packs cues greedily up to this many
+        // cumulative sourceText characters, capped at cue_batch_max_cues.
+        // Fewer, size-uniform batches cut per-call overhead and queue
+        // contention at identical token cost, and bound content-length
+        // outliers. Tune the budget against the reprompt/split-retry rate --
+        // larger batches mean more output per call.
+        'cue_batch_char_budget' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_CHAR_BUDGET', 1000),
+        'cue_batch_max_cues' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_MAX_CUES', 20),
         // Org-level guardrail across all users and workers; per-user tier caps
         // are enforced separately by LimitSubtitleBatchConcurrency. 0 disables.
         'global_rate_limit_per_minute' => (int) env('SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE', 300),
