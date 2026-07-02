@@ -208,7 +208,11 @@ class SubtitleRuntimeTracingTest extends TestCase
         );
 
         $this->assertTrue($queuedJob->released);
-        $this->assertSame(7, $queuedJob->releaseDelay);
+        // The release site applies ±1s jitter around the configured delay to
+        // avoid a thundering herd on the cache lock; the traced value below
+        // still records the un-jittered configured base.
+        $this->assertGreaterThanOrEqual(6, $queuedJob->releaseDelay);
+        $this->assertLessThanOrEqual(8, $queuedJob->releaseDelay);
         $this->assertDatabaseHas('subtitle_job_events', [
             'subtitle_job_id' => $job->id,
             'event' => 'queue.concurrency_delayed',

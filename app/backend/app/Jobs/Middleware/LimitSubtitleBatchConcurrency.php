@@ -137,8 +137,17 @@ final class LimitSubtitleBatchConcurrency
     private function releaseQueuedJob(object $job): void
     {
         if (method_exists($job, 'release')) {
-            $job->release(SubtitleTier::concurrencyReleaseDelaySeconds());
+            $job->release($this->releaseDelayWithJitter());
         }
+    }
+
+    /**
+     * Spread re-check attempts by ±1s so a wave of batches rejected at the
+     * cap does not stampede the cache lock in lockstep every release cycle.
+     */
+    private function releaseDelayWithJitter(): int
+    {
+        return max(1, SubtitleTier::concurrencyReleaseDelaySeconds() + random_int(-1, 1));
     }
 
     /**

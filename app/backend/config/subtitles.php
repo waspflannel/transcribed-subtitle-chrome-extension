@@ -52,7 +52,12 @@ return [
     'tiers' => [
         'default' => env('SUBTITLE_DEFAULT_GENERATION_TIER', 'base'),
         'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
-        'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 10),
+        // Batch slots turn over every ~2-4s, so a rejected batch that sleeps
+        // longer than that just pays a quantized wait for a slot that already
+        // freed. Kept short (with ±1s jitter at the release site) so the
+        // re-check tracks real slot turnover; the concurrency cap is unchanged,
+        // so this adds no 429 risk.
+        'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 2),
         'lock_seconds' => (int) env('SUBTITLE_CONCURRENCY_LOCK_SECONDS', 10),
         // ~2x the batch job timeout (300s): a slot leaked by a SIGKILLed worker
         // recovers in minutes instead of wedging the user for half an hour.
@@ -84,7 +89,7 @@ return [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PLUS', 'subtitle-generation-plus'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PLUS', 'subtitle-batch-plus'),
                 'generation_concurrency' => (int) env('SUBTITLE_PLUS_GENERATION_CONCURRENCY', 2),
-                'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 8),
+                'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 12),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PLUS_SHORT_BUDGET_SECONDS', 180),
                     'medium' => (int) env('SUBTITLE_PLUS_MEDIUM_BUDGET_SECONDS', 420),
@@ -95,7 +100,10 @@ return [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PRO', 'subtitle-generation-pro'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PRO', 'subtitle-batch-pro'),
                 'generation_concurrency' => (int) env('SUBTITLE_PRO_GENERATION_CONCURRENCY', 3),
-                'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 14),
+                // Kept at/under SUBTITLE_BATCH_PRIORITY_WORKERS (20): a per-user
+                // cap above the shared worker count buys nothing. Raise workers
+                // in step before pushing this higher.
+                'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 20),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PRO_SHORT_BUDGET_SECONDS', 120),
                     'medium' => (int) env('SUBTITLE_PRO_MEDIUM_BUDGET_SECONDS', 300),
