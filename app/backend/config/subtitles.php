@@ -29,7 +29,16 @@ return [
             'generation-priority' => [
                 'queue_family' => 'generation',
                 'tiers' => ['ultimate', 'pro', 'plus', 'base'],
-                'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 4),
+                // Each ProcessSubtitleJob holds one of these workers for the
+                // whole acquire -> optimize -> transcribe span (~26s avg, ~75s
+                // max), and per-tier generation_concurrency is a *per-user* cap,
+                // so across users this pool is the global throughput ceiling. At
+                // 4 (+1 base guarantee) a burst of >5 jobs serialized and drove
+                // the p95 acquire-queue spike (one job waited 101s before its
+                // download even started). Doubled to give burst headroom; each
+                // added worker is another concurrent yt-dlp + ffmpeg + Scribe
+                // upload, so raise in step with memory and Scribe rate limits.
+                'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 8),
             ],
             'batch-priority' => [
                 'queue_family' => 'batch',
@@ -52,7 +61,12 @@ return [
     'tiers' => [
         'default' => env('SUBTITLE_DEFAULT_GENERATION_TIER', 'base'),
         'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
-        'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 10),
+        // Batch slots turn over every ~2-4s, so a rejected batch that sleeps
+        // longer than that just pays a quantized wait for a slot that already
+        // freed. Kept short (with ±1s jitter at the release site) so the
+        // re-check tracks real slot turnover; the concurrency cap is unchanged,
+        // so this adds no 429 risk.
+        'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 2),
         'lock_seconds' => (int) env('SUBTITLE_CONCURRENCY_LOCK_SECONDS', 10),
         // ~2x the batch job timeout (300s): a slot leaked by a SIGKILLed worker
         // recovers in minutes instead of wedging the user for half an hour.
@@ -84,7 +98,7 @@ return [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PLUS', 'subtitle-generation-plus'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PLUS', 'subtitle-batch-plus'),
                 'generation_concurrency' => (int) env('SUBTITLE_PLUS_GENERATION_CONCURRENCY', 2),
-                'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 8),
+                'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 12),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PLUS_SHORT_BUDGET_SECONDS', 180),
                     'medium' => (int) env('SUBTITLE_PLUS_MEDIUM_BUDGET_SECONDS', 420),
@@ -95,7 +109,10 @@ return [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PRO', 'subtitle-generation-pro'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PRO', 'subtitle-batch-pro'),
                 'generation_concurrency' => (int) env('SUBTITLE_PRO_GENERATION_CONCURRENCY', 3),
-                'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 14),
+                // Kept at/under SUBTITLE_BATCH_PRIORITY_WORKERS (20): a per-user
+                // cap above the shared worker count buys nothing. Raise workers
+                // in step before pushing this higher.
+                'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 20),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PRO_SHORT_BUDGET_SECONDS', 120),
                     'medium' => (int) env('SUBTITLE_PRO_MEDIUM_BUDGET_SECONDS', 300),
@@ -108,6 +125,32 @@ return [
     'tracing' => [
         'slow_queue_wait_ms' => (int) env('SUBTITLE_TRACE_SLOW_QUEUE_WAIT_MS', 30000),
         'slow_stage_ms' => (int) env('SUBTITLE_TRACE_SLOW_STAGE_MS', 120000),
+    ],
+
+    'romanization' => [
+        // Languages whose scripts have a reliable algorithmic transliteration
+        // are romanized deterministically with PHP intl instead of an LLM call,
+        // turning the romanizing stage into a ~0ms transform with zero provider
+        // cost. ICU output is not always the product-preferred scheme (notably
+        // it does NOT apply Korean Revised-Romanization sound changes -- 신라
+        // becomes "sinla", not "silla"), so this list is a per-language quality
+        // gate: add a language only after validating ICU output against the LLM
+        // romanizations on sample jobs. Seeded with the scientifically-safe
+        // Cyrillic and Greek scripts; Japanese/Chinese and unvocalized Arabic
+        // stay on the LLM because their readings are ambiguous.
+        //
+        // Keyed by normalized (ISO 639-3) source language code; values are ICU
+        // Transliterator ids.
+        'deterministic_enabled' => (bool) env('SUBTITLE_DETERMINISTIC_ROMANIZATION_ENABLED', true),
+        'deterministic' => [
+            'rus' => 'Cyrillic-Latin; Latin-ASCII',
+            'ukr' => 'Cyrillic-Latin; Latin-ASCII',
+            'bel' => 'Cyrillic-Latin; Latin-ASCII',
+            'bul' => 'Cyrillic-Latin; Latin-ASCII',
+            'mkd' => 'Cyrillic-Latin; Latin-ASCII',
+            'srp' => 'Cyrillic-Latin; Latin-ASCII',
+            'ell' => 'Greek-Latin; Latin-ASCII',
+        ],
     ],
 
     'costs' => [
@@ -144,7 +187,18 @@ return [
 
     'enrichment' => [
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
+        // Legacy fixed cue-per-batch size. Only used as a fallback for cue
+        // artifacts written before character-based batching (which carry no
+        // batch plan) and when a caller passes an explicit batch size.
         'cue_batch_size' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE', 10),
+        // Character-based batch sizing packs cues greedily up to this many
+        // cumulative sourceText characters, capped at cue_batch_max_cues.
+        // Fewer, size-uniform batches cut per-call overhead and queue
+        // contention at identical token cost, and bound content-length
+        // outliers. Tune the budget against the reprompt/split-retry rate --
+        // larger batches mean more output per call.
+        'cue_batch_char_budget' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_CHAR_BUDGET', 1000),
+        'cue_batch_max_cues' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_MAX_CUES', 20),
         // Org-level guardrail across all users and workers; per-user tier caps
         // are enforced separately by LimitSubtitleBatchConcurrency. 0 disables.
         'global_rate_limit_per_minute' => (int) env('SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE', 300),

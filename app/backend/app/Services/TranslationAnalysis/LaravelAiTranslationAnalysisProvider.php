@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
+use Transliterator;
 
 class LaravelAiTranslationAnalysisProvider
 {
@@ -311,6 +312,16 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_source_cues');
         }
 
+        // Scriptable languages (Cyrillic, Greek, ...) have a reliable algorithmic
+        // transliteration, so romanize them synchronously with ICU -- zero LLM
+        // round trips and zero provider cost -- and reuse the same output
+        // shaping as the model path so downstream stays identical.
+        $transliterator = $this->deterministicTransliterator($sourceLanguage);
+
+        if ($transliterator !== null) {
+            return $this->deterministicallyRomanizedResult($batch, $transliterator);
+        }
+
         return $this->romanizedResult(
             $this->promptAgent(
                 CueRomanizationAgent::class,
@@ -318,6 +329,76 @@ class LaravelAiTranslationAnalysisProvider
             ),
             $batch,
         );
+    }
+
+    private function deterministicTransliterator(string $sourceLanguage): ?Transliterator
+    {
+        if (! (bool) config('subtitles.romanization.deterministic_enabled', true)) {
+            return null;
+        }
+
+        $map = config('subtitles.romanization.deterministic', []);
+        $id = is_array($map) ? ($map[$sourceLanguage] ?? null) : null;
+
+        if (! is_string($id) || $id === '') {
+            return null;
+        }
+
+        $transliterator = Transliterator::create($id);
+
+        // A misconfigured ICU id is a deploy error, not a per-request fault:
+        // fail loudly rather than silently reverting to a billed LLM call.
+        if ($transliterator === null) {
+            $this->failInvalidOutput('invalid_transliterator_id', [
+                'source_language' => $sourceLanguage,
+            ]);
+        }
+
+        return $transliterator;
+    }
+
+    /**
+     * Builds the same output structure the romanization model would return
+     * (cues keyed by cueId, per-token romanization keyed by token index) so the
+     * shared shaping in romanizedResult() produces an identical artifact.
+     *
+     * @param  array<int, array<string, mixed>>  $batch
+     */
+    private function deterministicallyRomanizedResult(array $batch, Transliterator $transliterator): CueEnrichmentResult
+    {
+        $cues = [];
+
+        foreach ($batch as $sourceCue) {
+            $tokens = [];
+
+            foreach ($this->sourceTokens($sourceCue) as $sourceToken) {
+                $tokens[] = [
+                    'index' => $sourceToken['index'] ?? null,
+                    'romanization' => $this->transliterate($transliterator, $sourceToken['text'] ?? null),
+                ];
+            }
+
+            $cues[] = [
+                'cueId' => $sourceCue['cueId'] ?? null,
+                'romanization' => $this->transliterate($transliterator, $sourceCue['sourceText'] ?? null),
+                'tokens' => $tokens,
+            ];
+        }
+
+        return $this->romanizedResult(['dialect' => 'unknown', 'cues' => $cues], $batch);
+    }
+
+    private function transliterate(Transliterator $transliterator, mixed $text): ?string
+    {
+        $text = $this->cleanString($text);
+
+        if ($text === null) {
+            return null;
+        }
+
+        $romanized = $transliterator->transliterate($text);
+
+        return is_string($romanized) ? $this->cleanString($romanized) : null;
     }
 
     /**

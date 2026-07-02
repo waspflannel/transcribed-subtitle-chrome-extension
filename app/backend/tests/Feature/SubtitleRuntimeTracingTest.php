@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
-use App\Jobs\MergeSubtitleCuesAfterRomanizationBatches;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\ProcessSubtitleJob;
@@ -119,8 +118,8 @@ class SubtitleRuntimeTracingTest extends TestCase
             '--sleep' => 0,
         ]);
 
-        // 1 of 2 analysis jobs done -> halfway through the 65-78 band.
-        $this->assertSame(71, $job->refresh()->progress_percent);
+        // 1 of 2 analysis jobs done -> halfway through the 65-90 band.
+        $this->assertSame(77, $job->refresh()->progress_percent);
         $this->assertDatabaseHas('subtitle_job_events', [
             'subtitle_job_id' => $job->id,
             'event' => 'batch.progress',
@@ -208,7 +207,11 @@ class SubtitleRuntimeTracingTest extends TestCase
         );
 
         $this->assertTrue($queuedJob->released);
-        $this->assertSame(7, $queuedJob->releaseDelay);
+        // The release site applies ±1s jitter around the configured delay to
+        // avoid a thundering herd on the cache lock; the traced value below
+        // still records the un-jittered configured base.
+        $this->assertGreaterThanOrEqual(6, $queuedJob->releaseDelay);
+        $this->assertLessThanOrEqual(8, $queuedJob->releaseDelay);
         $this->assertDatabaseHas('subtitle_job_events', [
             'subtitle_job_id' => $job->id,
             'event' => 'queue.concurrency_delayed',
@@ -485,7 +488,6 @@ class SubtitleRuntimeTracingTest extends TestCase
         $serialJobs = [
             new ProcessSubtitleJob(1, $runId),
             new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
-            new MergeSubtitleCuesAfterRomanizationBatches(1, $runId),
             new FinalizeSubtitleJob(1, false, $runId),
         ];
         $cueBatchJobs = [

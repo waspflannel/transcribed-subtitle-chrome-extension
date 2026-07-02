@@ -4,7 +4,6 @@ namespace App\Services\Subtitles;
 
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
-use App\Jobs\MergeSubtitleCuesAfterRomanizationBatches;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
@@ -88,7 +87,6 @@ class SubtitleRuntimeTracer
     private const QUEUED_SUBTITLE_JOB_CLASSES = [
         EnrichSubtitleCueBatch::class,
         FinalizeSubtitleJob::class,
-        MergeSubtitleCuesAfterRomanizationBatches::class,
         PrepareSubtitleCuesAfterAnalysisBatches::class,
         ProcessSubtitleJob::class,
         RomanizeSubtitleCueBatch::class,
