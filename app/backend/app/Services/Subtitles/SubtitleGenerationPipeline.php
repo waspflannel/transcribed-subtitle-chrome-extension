@@ -125,6 +125,17 @@ class SubtitleGenerationPipeline
         $tokenized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TOKENIZED_CUES);
         $this->logger->tokenizationCompleted($job, $tokenized);
 
+        // Romanization now runs chained after each tokenize batch inside the
+        // analysis batch, so its cues are already written by the time this
+        // continuation fires -- no separate romanization batch or queue hop.
+        $base = $tokenized;
+
+        if ($this->shouldRomanize($job)) {
+            $romanized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ROMANIZED_CUES);
+            $this->logger->romanizationCompleted($job, $romanized);
+            $base = $romanized;
+        }
+
         $translated = null;
 
         if ($this->translationRequested($job)) {
@@ -132,38 +143,7 @@ class SubtitleGenerationPipeline
             $this->logger->translationCompleted($job, $translated);
         }
 
-        if ($job->include_romanization && $this->shouldRomanizeTranscript($tokenized->cues)) {
-            $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
-            $this->dispatchRomanizationBatches($job);
-
-            return;
-        }
-
-        $this->storeMergedCuesAndContinue($job, $tokenized, $translated);
-        $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
-    }
-
-    public function mergeCuesAfterCompletedRomanizationBatches(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
-    {
-        $job = $this->loadRunningJob($subtitleJobId, $runId);
-
-        if ($job === null) {
-            return;
-        }
-
-        $stage = 'merging-romanization-results';
-        $this->telemetry->recordQueueWait($job, $stage, null, $queuedAtMs);
-        $this->telemetry->recordStageStarted($job, $stage);
-        $startedAtMs = $this->telemetry->currentTimeMs();
-
-        $romanized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ROMANIZED_CUES);
-        $this->logger->romanizationCompleted($job, $romanized);
-
-        $translated = $this->translationRequested($job)
-            ? $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TRANSLATED_CUES)
-            : null;
-
-        $this->storeMergedCuesAndContinue($job, $romanized, $translated);
+        $this->storeMergedCuesAndContinue($job, $base, $translated);
         $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
     }
 
@@ -229,6 +209,7 @@ class SubtitleGenerationPipeline
         $this->markJobRunning($job, 'tokenizing', 65);
         $cueCount = $this->artifacts->cueCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
         $translationRequested = $this->translationRequested($job);
+        $romanize = $this->shouldRomanize($job);
 
         $this->logger->tokenizationStarted($job, $cueCount);
 
@@ -236,11 +217,25 @@ class SubtitleGenerationPipeline
             $this->logger->translationStarted($job, $cueCount);
         }
 
+        if ($romanize) {
+            $this->logger->romanizationStarted($job, $cueCount);
+        }
+
         $jobs = [];
         $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
 
         for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            $jobs[] = new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
+            // Romanization only needs its own batch's tokenized output, so chain
+            // Romanize(N) directly after Tokenize(N). The batch completes once
+            // every member -- chains included -- finishes, which hides the
+            // romanizing stage behind translating and removes a whole queue hop
+            // (the old analysis -> dispatch-romanization -> merge round trip).
+            $jobs[] = $romanize
+                ? [
+                    new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id),
+                    new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id),
+                ]
+                : new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
 
             if ($translationRequested) {
                 $jobs[] = new TranslateSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
@@ -248,25 +243,6 @@ class SubtitleGenerationPipeline
         }
 
         $this->batchDispatcher->dispatchAnalysis($job, $jobs);
-    }
-
-    private function dispatchRomanizationBatches(SubtitleJob $job): void
-    {
-        $this->markJobRunning($job, 'romanizing', 78);
-        $cueCount = $this->artifacts->cueCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
-        $this->logger->romanizationStarted($job, $cueCount);
-
-        $jobs = [];
-        // Romanization runs one batch per tokenized draft batch. The tokenized
-        // batch indexes mirror the draft batch indexes, so the draft-cue batch
-        // plan is the single source of truth for batch indexing.
-        $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
-
-        for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            $jobs[] = new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
-        }
-
-        $this->batchDispatcher->dispatchRomanization($job, $jobs);
     }
 
     private function dispatchWordCardEnrichmentBatches(SubtitleJob $job): void
@@ -394,6 +370,23 @@ class SubtitleGenerationPipeline
     private function translationRequested(SubtitleJob $job): bool
     {
         return $job->include_translation && ! $this->isSameLanguageGeneration($job);
+    }
+
+    /**
+     * Decide romanization once, at analysis-batch dispatch time, so Romanize(N)
+     * can be chained onto Tokenize(N). The draft cues carry the same sourceText
+     * as the tokenized cues, so the decision is identical whether it reads draft
+     * or tokenized output -- and the draft artifact exists before tokenization.
+     */
+    private function shouldRomanize(SubtitleJob $job): bool
+    {
+        if (! $job->include_romanization) {
+            return false;
+        }
+
+        $draftCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
+
+        return $this->shouldRomanizeTranscript($draftCues);
     }
 
     /**

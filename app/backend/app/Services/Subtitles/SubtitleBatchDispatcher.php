@@ -3,7 +3,6 @@
 namespace App\Services\Subtitles;
 
 use App\Jobs\FinalizeSubtitleJob;
-use App\Jobs\MergeSubtitleCuesAfterRomanizationBatches;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Models\SubtitleJob;
 use Illuminate\Bus\Batch;
@@ -14,7 +13,8 @@ use Throwable;
 class SubtitleBatchDispatcher
 {
     /**
-     * @param  array<int, object>  $jobs
+     * @param  array<int, object|array<int, object>>  $jobs  batch members; an
+     *                                                        array member is dispatched as a chain
      */
     public function dispatchAnalysis(SubtitleJob $job, array $jobs): void
     {
@@ -24,21 +24,6 @@ class SubtitleBatchDispatcher
             batchName: 'subtitle analysis '.$job->public_id,
             stage: 'analysis',
             completionJobClass: PrepareSubtitleCuesAfterAnalysisBatches::class,
-            completionJobArguments: [$job->id, $job->run_id],
-        );
-    }
-
-    /**
-     * @param  array<int, object>  $jobs
-     */
-    public function dispatchRomanization(SubtitleJob $job, array $jobs): void
-    {
-        $this->dispatchBatch(
-            job: $job,
-            jobs: $jobs,
-            batchName: 'subtitle romanization '.$job->public_id,
-            stage: 'romanizing',
-            completionJobClass: MergeSubtitleCuesAfterRomanizationBatches::class,
             completionJobArguments: [$job->id, $job->run_id],
         );
     }
@@ -66,7 +51,7 @@ class SubtitleBatchDispatcher
     }
 
     /**
-     * @param  array<int, object>  $jobs
+     * @param  array<int, object|array<int, object>>  $jobs
      * @param  class-string  $completionJobClass
      * @param  array<int, mixed>  $completionJobArguments
      */

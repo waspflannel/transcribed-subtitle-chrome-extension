@@ -135,8 +135,9 @@ class SubtitlePipelineTelemetry
      * of a frozen hardcoded percentage.
      */
     private const BATCH_PROGRESS_BANDS = [
-        'analysis' => [65, 78],
-        'romanizing' => [78, 90],
+        // Romanization now runs chained inside the analysis batch, so the whole
+        // tokenize/romanize/translate phase reports under the 'analysis' band.
+        'analysis' => [65, 90],
         'enriching' => [90, 95],
     ];
 
