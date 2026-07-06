@@ -284,6 +284,57 @@
         }
       }
     },
+    "/v1/subtitle-jobs/{jobId}/partial-track": {
+      "get": {
+        "operationId": "getSubtitleJobPartialTrack",
+        "summary": "Fetch the cues already available for a running subtitle job.",
+        "description": "Returns 404 until transcription lands or once the job is no longer running; clients keep polling the job and treat 404 as not-yet-available.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cues available so far for the running job.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/partial-track-response.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
     "/v1/learning-tokens": {
       "post": {
         "operationId": "enrichLearningToken",

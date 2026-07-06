@@ -51,6 +51,7 @@ const fixtures = [
   ['job-response.schema.json', 'valid-job-response.json'],
   ['subtitle-job-history-response.schema.json', 'valid-subtitle-job-history-response.json'],
   ['track-response.schema.json', 'valid-track-response.json'],
+  ['partial-track-response.schema.json', 'valid-partial-track-response.json'],
   ['api-error.schema.json', 'valid-api-error.json'],
 ];
 

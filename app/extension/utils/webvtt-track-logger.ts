@@ -1,15 +1,22 @@
-import type { TrackResponse } from './contracts';
+/**
+ * The identity a bound track can log. Finished tracks carry a trackId;
+ * partial tracks from a still-running job do not.
+ */
+export interface WebVttTrackIdentity {
+  trackId?: string;
+  youtubeVideoId: string;
+}
 
 export interface WebVttTrackLoadContext {
   video: HTMLVideoElement;
   textTrack: TextTrack;
-  track: TrackResponse;
+  track: WebVttTrackIdentity;
 }
 
 export interface WebVttTrackLogger {
-  videoMissing: (track: TrackResponse) => void;
+  videoMissing: (track: WebVttTrackIdentity) => void;
   trackLoaded: (context: WebVttTrackLoadContext) => void;
-  trackLoadError: (track: TrackResponse) => void;
+  trackLoadError: (track: WebVttTrackIdentity) => void;
 }
 
 const TRACK_OVERRUN_MIN_SECONDS = 5;

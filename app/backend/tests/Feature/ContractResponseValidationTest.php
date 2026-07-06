@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Services\Subtitles\SubtitleJobArtifactStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
@@ -59,6 +60,18 @@ class ContractResponseValidationTest extends TestCase
                 ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id)
                 ->assertOk(),
             'job-response.schema.json',
+        );
+
+        app(SubtitleJobArtifactStore::class)->putCueCollection($runningJob, SubtitleJobArtifactStore::DRAFT_CUES, [
+            ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first transcript segment', 'translatedText' => '', 'tokens' => []],
+        ]);
+
+        $this->assertResponseMatchesSchema(
+            $this
+                ->withExtensionAuth($installId, $user)
+                ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id.'/partial-track')
+                ->assertOk(),
+            'partial-track-response.schema.json',
         );
 
         $completedTrack = $this->completedTrack($installId, $user, 'complete001');

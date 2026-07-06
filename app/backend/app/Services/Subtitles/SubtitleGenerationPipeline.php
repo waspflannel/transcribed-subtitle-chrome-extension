@@ -116,6 +116,7 @@ class SubtitleGenerationPipeline
 
             $this->artifacts->putTranscript($job, $transcript);
             $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
+            $this->telemetry->recordFirstCueAvailable($job);
 
             $this->dispatchTokenizationAndTranslationBatches($job);
         } catch (Throwable $exception) {
@@ -152,6 +153,7 @@ class SubtitleGenerationPipeline
 
         $this->artifacts->putTranscript($job, $transcript);
         $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
+        $this->telemetry->recordFirstCueAvailable($job);
 
         $this->dispatchTokenizationAndTranslationBatches($job);
     }

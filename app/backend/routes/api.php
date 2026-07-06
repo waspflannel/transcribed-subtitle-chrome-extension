@@ -47,6 +47,10 @@ Route::prefix('v1')
                     ->name('subtitle-jobs.show')
                     ->middleware('throttle:subtitle-status-api');
 
+                Route::get('/subtitle-jobs/{jobId}/partial-track', [SubtitleJobController::class, 'partialTrack'])
+                    ->name('subtitle-jobs.partial-track')
+                    ->middleware('throttle:subtitle-status-api');
+
                 Route::post('/subtitle-jobs', [SubtitleJobController::class, 'store'])
                     ->name('subtitle-jobs.store')
                     ->middleware('throttle:subtitle-api');

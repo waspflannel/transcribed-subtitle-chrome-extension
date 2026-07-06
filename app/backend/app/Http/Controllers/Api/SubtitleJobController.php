@@ -9,6 +9,7 @@ use App\Http\Resources\SubtitleJobHistoryResource;
 use App\Http\Resources\SubtitleJobResource;
 use App\Models\SubtitleJob;
 use App\Services\Subtitles\SubtitleJobService;
+use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -83,5 +84,34 @@ class SubtitleJobController extends Controller
         }
 
         return response()->json(SubtitleJobResource::make($job)->resolve());
+    }
+
+    /**
+     * Cues already available for a still-running job. 404 until transcription
+     * lands and once the job stops running; the extension polls the job and
+     * treats 404 as not-yet-available.
+     */
+    public function partialTrack(
+        Request $request,
+        string $jobId,
+        SubtitlePartialTrackAssembler $assembler,
+    ): JsonResponse {
+        $job = SubtitleJob::query()
+            ->where('public_id', $jobId)
+            ->whereBelongsTo($this->extensionUser($request))
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+            ->first();
+
+        if ($job === null || $job->status !== 'running') {
+            abort(404);
+        }
+
+        $partialTrack = $assembler->assemble($job);
+
+        if ($partialTrack === null) {
+            abort(404);
+        }
+
+        return response()->json($partialTrack);
     }
 }

@@ -1,6 +1,6 @@
 import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
-import type { SubtitleJobHistoryItem, TrackResponse } from './contracts';
+import type { PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
 export interface PageSnapshot {
   videoDurationSeconds?: number;
@@ -29,6 +29,20 @@ export interface AuthenticatedAccountState {
 
 export type AccountState = AnonymousAccountState | AuthenticatedAccountState;
 
+/**
+ * Cues already available for a still-running job, composed from the
+ * partial-track response plus the job's effective source language. The
+ * content script binds these to the video so subtitles render while the
+ * pipeline is still translating and romanizing.
+ */
+export interface PartialSubtitleTrack {
+  jobId: string;
+  youtubeVideoId: string;
+  sourceLanguage: string;
+  revision: number;
+  cues: PartialSubtitleCue[];
+}
+
 export type SubtitleState =
   | {
       type: 'no-track';
@@ -43,6 +57,7 @@ export type SubtitleState =
       progressPercent: number;
       startedAt?: string;
       lastUpdatedAt?: string;
+      partialTrack?: PartialSubtitleTrack;
     }
   | {
       type: 'ready';
@@ -233,7 +248,8 @@ function isSubtitleStateValue(value: unknown): value is SubtitleState {
         && optionalString(value, 'jobId')
         && optionalString(value, 'youtubeUrl')
         && optionalString(value, 'startedAt')
-        && optionalString(value, 'lastUpdatedAt');
+        && optionalString(value, 'lastUpdatedAt')
+        && (!('partialTrack' in value) || value.partialTrack === undefined || isPartialSubtitleTrack(value.partialTrack));
 
     case 'ready':
       return isRecord(value.track);
@@ -244,6 +260,15 @@ function isSubtitleStateValue(value: unknown): value is SubtitleState {
     default:
       return false;
   }
+}
+
+function isPartialSubtitleTrack(value: unknown): value is PartialSubtitleTrack {
+  return isRecord(value)
+    && hasString(value, 'jobId')
+    && hasString(value, 'youtubeVideoId')
+    && hasString(value, 'sourceLanguage')
+    && isNonNegativeInteger(value.revision)
+    && Array.isArray(value.cues);
 }
 
 function isSubtitleStage(value: unknown): value is SubtitleJobHistoryItem['stage'] {

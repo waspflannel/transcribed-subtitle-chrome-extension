@@ -9,6 +9,8 @@ export type {
   LearningToken,
   LearningTokenRequest,
   LearningTokenResponse,
+  PartialSubtitleCue,
+  PartialTrackResponse,
   SubtitleCue,
   SubtitleJobHistoryItem,
   SubtitleJobHistoryResponse,

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/partial-track-response.schema.json",
+  "title": "PartialTrackResponse",
+  "description": "Cues available for a still-running subtitle job. Source text is present as soon as transcription lands; translations and romanization fill in per batch as the pipeline progresses. Tokens are never included: word cards need the finalized track.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jobId",
+    "youtubeVideoId",
+    "revision",
+    "cues"
+  ],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "youtubeVideoId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{11}$"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Count of pipeline artifacts merged into these cues. Monotonically increasing for a given run; re-render when it changes."
+    },
+    "cues": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/PartialSubtitleCue"
+      }
+    }
+  },
+  "$defs": {
+    "PartialSubtitleCue": {
+      "title": "PartialSubtitleCue",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cueId",
+        "index",
+        "startMs",
+        "endMs",
+        "sourceText"
+      ],
+      "properties": {
+        "cueId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "startMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "translatedText": {
+          "type": "string",
+          "minLength": 1
+        },
+        "romanization": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

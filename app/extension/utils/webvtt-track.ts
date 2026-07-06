@@ -1,19 +1,43 @@
-import type { SubtitleCue, TrackResponse } from './contracts';
+import type { SubtitleCue } from './contracts';
 import type { WebVttTrackLogger } from './webvtt-track-logger';
 
-export interface WebVttCueChange {
-  activeCue: SubtitleCue | null;
+/**
+ * Minimum cue shape the video binding needs. Both finished track cues and
+ * partial cues from a still-running job satisfy it.
+ */
+export interface WebVttBindableCue {
+  cueId: string;
+  startMs: number;
+  endMs: number;
+  sourceText: string;
 }
 
-export interface WebVttVideoTrackOptions {
+/**
+ * Minimum track shape the video binding needs. TrackResponse satisfies it;
+ * partial tracks are composed locally from partial-track responses.
+ */
+export interface WebVttBindableTrack<TCue extends WebVttBindableCue = SubtitleCue> {
+  youtubeVideoId: string;
+  sourceLanguage: string;
+  webVtt: string;
+  cues: readonly TCue[];
+}
+
+export interface WebVttCueChange<TCue extends WebVttBindableCue = SubtitleCue> {
+  activeCue: TCue | null;
+}
+
+export interface WebVttVideoTrackOptions<TCue extends WebVttBindableCue> {
   video: HTMLVideoElement;
-  track: TrackResponse;
-  onCueChange: (change: WebVttCueChange) => void;
+  track: WebVttBindableTrack<TCue>;
+  onCueChange: (change: WebVttCueChange<TCue>) => void;
   logger?: Pick<WebVttTrackLogger, 'trackLoaded' | 'trackLoadError'>;
   timingOffsetSeconds?: number;
 }
 
-export function bindWebVttTrackToVideo(options: WebVttVideoTrackOptions): () => void {
+export function bindWebVttTrackToVideo<TCue extends WebVttBindableCue>(
+  options: WebVttVideoTrackOptions<TCue>,
+): () => void {
   const { video, onCueChange, logger } = options;
   const track = offsetTrackTiming(options.track, options.timingOffsetSeconds ?? 0);
   const trackElement = video.ownerDocument.createElement('track');
@@ -65,13 +89,16 @@ export function bindWebVttTrackToVideo(options: WebVttVideoTrackOptions): () => 
   };
 }
 
-export function offsetTrackTiming(track: TrackResponse, offsetSeconds: number): TrackResponse {
+export function offsetTrackTiming<TTrack extends WebVttBindableTrack<WebVttBindableCue>>(
+  track: TTrack,
+  offsetSeconds: number,
+): TTrack {
   if (!Number.isFinite(offsetSeconds) || offsetSeconds === 0) {
     return track;
   }
 
   const offsetMs = Math.round(offsetSeconds * 1000);
-  const shifted: SubtitleCue[] = [];
+  const shifted: WebVttBindableCue[] = [];
   let previousEnd = Number.NEGATIVE_INFINITY;
 
   for (const cue of track.cues) {
@@ -100,12 +127,12 @@ export function offsetTrackTiming(track: TrackResponse, offsetSeconds: number): 
 
   return {
     ...track,
-    cues: shifted as unknown as TrackResponse['cues'],
+    cues: shifted as unknown as TTrack['cues'],
     webVtt: buildWebVttFromCues(shifted),
   };
 }
 
-function buildWebVttFromCues(cues: readonly SubtitleCue[]): string {
+export function buildWebVttFromCues(cues: readonly WebVttBindableCue[]): string {
   const blocks = ['WEBVTT'];
 
   for (const cue of cues) {
@@ -140,7 +167,10 @@ function findActiveTextCue(textTrack: TextTrack): VTTCue | null {
   return text === '' ? null : (cue as VTTCue);
 }
 
-function findTrackCue(track: TrackResponse, textCue: VTTCue): SubtitleCue | null {
+function findTrackCue<TCue extends WebVttBindableCue>(
+  track: WebVttBindableTrack<TCue>,
+  textCue: VTTCue,
+): TCue | null {
   const id = typeof textCue.id === 'string' ? textCue.id : '';
 
   if (id !== '') {
