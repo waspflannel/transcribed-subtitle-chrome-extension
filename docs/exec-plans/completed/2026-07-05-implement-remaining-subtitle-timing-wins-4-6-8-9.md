@@ -1,9 +1,9 @@
 # Plan: Implement remaining subtitle timing wins 4 6 8 9
 
-Status: active
+Status: completed
 Owner: agent
 Created: 2026-07-05
-Last updated: 2026-07-05
+Last updated: 2026-07-06
 
 ## Goal
 
@@ -104,13 +104,18 @@ Evidence to capture:
 | Date | Update | Evidence |
 | --- | --- | --- |
 | 2026-07-05 | Plan created. |  |
-| 2026-07-05 | Wins #4, #6, #8, #9 implemented and committed on `perf/subtitle-timing-wins-2`. | Commits on branch; per-win tests added. |
-| 2026-07-05 | Validation run. | `scripts/agent/check.ps1` output recorded in Completion Notes. |
+| 2026-07-05 | Wins #4, #6, #8 implemented and committed on `perf/subtitle-timing-wins-2`. | Commits 3a8f5b3, 0a4f94d, d11ebc7; per-win tests added. |
+| 2026-07-06 | Win #9 finished on `codex/subtitle-timing-win-9-wip` and merged into `perf/subtitle-timing-wins-2`. | Backend endpoint + assembler + telemetry; extension partial-track polling, binding, and overlay rail; contract schema + regenerated types. |
+| 2026-07-06 | Full validation run. | `scripts/agent/check.ps1`: docs lint passed; contracts validate + build passed (15 schemas incl. partial-track); backend 285 tests / 2353 assertions passed; extension 145 tests passed, `tsc --noEmit` clean, production build succeeded. |
 
 ## Completion Notes
 
-- What changed: see the four win commits on `perf/subtitle-timing-wins-2`.
-- Validation results: recorded after check run.
+- What changed: wins #4/#6/#8 as commits 3a8f5b3/0a4f94d/d11ebc7 on `perf/subtitle-timing-wins-2`;
+  win #9 merged in from `codex/subtitle-timing-win-9-wip`. Also fixed a calendar time bomb in the
+  extension account-session test (fixture token expiry passed on 2026-06-21).
+- Validation results: `scripts/agent/check.ps1` fully green on 2026-07-06 -- contracts validate +
+  build, backend 285 tests (2353 assertions), extension 145 tests + typecheck + production build.
+  End-to-end manual testing is the next step (user).
 - Simplicity/readability review: each win kept to the smallest direct version; no compat flags
   beyond the documented TTL kill-switch semantics for the shared cache.
 - Residual risk: #4 raises per-call output size (watch reprompt/split rates); #6 dedupe tuned via

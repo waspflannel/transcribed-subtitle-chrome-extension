@@ -4,6 +4,17 @@
 **Sample:** 17 completed `pro`-tier jobs, ~62.5 generated minutes
 **Source:** `subtitle_job_events` rows, scoped to each job's completing `run_id`
 
+> **Implementation status (2026-07-06):** every recommended win below is implemented.
+> #1/#2/#3/#5/#7/#11 landed first (PR #16); #4 (merged tokenize+translate),
+> #6 (chunked parallel transcription), #8 (per-video transcript cache), and
+> #9 (progressive partial-cue delivery) followed on `perf/subtitle-timing-wins-2`.
+> #10 was folded into #6: Scribe uploads are single-shot multipart, so pipelined
+> acquire needed the same chunk/merge machinery. Note for re-running this analysis:
+> since #4, translation runs inside the merged call under the `tokenizing` stage,
+> and romanization is chained into the same analysis batch, so the per-stage
+> method here must treat those stages as overlapping. Time-to-first-cue is now a
+> first-class metric via the `delivery.first_cue_available` event.
+
 ## Headline numbers
 
 | metric | value |
