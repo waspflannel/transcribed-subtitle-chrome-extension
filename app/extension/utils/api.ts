@@ -7,6 +7,7 @@ import type {
   JobResponse,
   LearningTokenRequest,
   LearningTokenResponse,
+  PartialTrackResponse,
   SubtitleJobHistoryResponse,
 } from './contracts';
 import { resolveBackendApiBaseUrl } from './api-config';
@@ -16,6 +17,7 @@ import {
   guardJobResponse,
   guardLearningTokenResponse,
   guardOkResponse,
+  guardPartialTrackResponse,
   guardSubtitleJobHistoryResponse,
 } from './api-response-guards';
 
@@ -82,6 +84,23 @@ export class SubtitleApiClient {
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
       authToken,
     }, guardJobResponse);
+  }
+
+  public async getSubtitleJobPartialTrack(
+    installId: string,
+    authToken: string,
+    jobId: string,
+  ): Promise<PartialTrackResponse> {
+    return this.request<PartialTrackResponse>(
+      `subtitle-jobs/${encodeURIComponent(jobId)}/partial-track`,
+      installId,
+      {
+        method: 'GET',
+        timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
+        authToken,
+      },
+      guardPartialTrackResponse,
+    );
   }
 
   public async listSubtitleJobs(installId: string, authToken: string): Promise<SubtitleJobHistoryResponse> {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { bindWebVttTrackToVideo, offsetTrackTiming } from '../utils/webvtt-track';
+import { bindWebVttTrackToVideo, buildWebVttFromCues, offsetTrackTiming } from '../utils/webvtt-track';
 import type { TrackResponse } from '../utils/contracts';
 
 describe('bindWebVttTrackToVideo', () => {
@@ -149,6 +149,39 @@ describe('bindWebVttTrackToVideo', () => {
     video.appendedTrack!.dispatchEvent(new Event('error'));
 
     expect(logger.trackLoadError).toHaveBeenCalledWith(track);
+
+    cleanup();
+  });
+
+  it('binds partial cues from a still-running job and builds their WebVTT locally', () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const video = new FakeVideoElement();
+    const partialCues = [
+      { cueId: 'cue-0001', index: 0, startMs: 500, endMs: 2100, sourceText: 'hola a todos' },
+      { cueId: 'cue-0002', index: 1, startMs: 2400, endMs: 4000, sourceText: 'bienvenidos', translatedText: 'welcome' },
+    ];
+    const webVtt = buildWebVttFromCues(partialCues);
+    const changes: { translatedText?: string }[] = [];
+
+    expect(webVtt).toContain('WEBVTT');
+    expect(webVtt).toContain('cue-0001\n00:00:00.500 --> 00:00:02.100\nhola a todos');
+
+    const cleanup = bindWebVttTrackToVideo({
+      video: video as unknown as HTMLVideoElement,
+      track: {
+        youtubeVideoId: 'dQw4w9WgXcQ',
+        sourceLanguage: 'spa',
+        webVtt,
+        cues: partialCues,
+      },
+      onCueChange: (change) => changes.push({ translatedText: change.activeCue?.translatedText }),
+    });
+
+    video.appendedTrack!.track.activeCues = new FakeCueList([new FakeTextCue(2.4, 4.0, 'bienvenidos', 'cue-0002')]);
+    video.appendedTrack!.track.dispatchEvent(new Event('cuechange'));
+
+    expect(changes).toContainEqual({ translatedText: 'welcome' });
 
     cleanup();
   });

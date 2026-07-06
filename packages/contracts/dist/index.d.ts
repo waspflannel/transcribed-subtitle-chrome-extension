@@ -1684,6 +1684,32 @@ export interface LearningToken {
   usageNote?: string;
 }
 
+// Source: schemas/partial-track-response.schema.json
+/**
+ * Cues available for a still-running subtitle job. Source text is present as soon as transcription lands; translations and romanization fill in per batch as the pipeline progresses. Tokens are never included: word cards need the finalized track.
+ */
+export interface PartialTrackResponse {
+  jobId: string;
+  youtubeVideoId: string;
+  /**
+   * Count of pipeline artifacts merged into these cues. Monotonically increasing for a given run; re-render when it changes.
+   */
+  revision: number;
+  /**
+   * @minItems 1
+   */
+  cues: [PartialSubtitleCue, ...PartialSubtitleCue[]];
+}
+export interface PartialSubtitleCue {
+  cueId: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  sourceText: string;
+  translatedText?: string;
+  romanization?: string;
+}
+
 // Source: schemas/cue.schema.json
 export interface SubtitleCue {
   cueId: string;

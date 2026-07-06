@@ -1264,6 +1264,98 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->audioSource->calls);
     }
 
+    public function test_partial_track_serves_available_cues_while_running(): void
+    {
+        $user = User::factory()->create();
+        $job = SubtitleJob::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'running',
+            'stage' => 'tokenizing',
+            'progress_percent' => 65,
+        ]);
+        $installId = $this->installId();
+
+        // Nothing to serve before transcription lands.
+        $this->withExtensionAuth($installId, $user)
+            ->getJson("/v1/subtitle-jobs/{$job->public_id}/partial-track")
+            ->assertNotFound();
+
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [
+            ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first transcript segment', 'translatedText' => '', 'tokens' => []],
+            ['cueId' => 'cue-0002', 'index' => 1, 'startMs' => 2400, 'endMs' => 4000, 'sourceText' => 'second transcript segment', 'translatedText' => '', 'tokens' => []],
+        ]);
+
+        $this->withExtensionAuth($installId, $user)
+            ->getJson("/v1/subtitle-jobs/{$job->public_id}/partial-track")
+            ->assertOk()
+            ->assertJsonPath('jobId', $job->public_id)
+            ->assertJsonPath('youtubeVideoId', $job->youtube_video_id)
+            ->assertJsonPath('revision', 1)
+            ->assertJsonPath('cues.0.sourceText', 'first transcript segment')
+            ->assertJsonMissingPath('cues.0.translatedText')
+            ->assertJsonMissingPath('cues.0.tokens');
+
+        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::TRANSLATED_CUES, 0, new CueEnrichmentResult([
+            ['cueId' => 'cue-0001', 'index' => 0, 'translatedText' => 'Translated first transcript segment'],
+        ], 'unknown'));
+        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ROMANIZED_CUES, 0, new CueEnrichmentResult([
+            ['cueId' => 'cue-0001', 'index' => 0, 'romanization' => 'ro-man-ized'],
+        ], 'unknown'));
+
+        // Batches that landed patch their cues in; untouched cues stay
+        // source-only. The revision counts consumed artifacts.
+        $this->withExtensionAuth($installId, $user)
+            ->getJson("/v1/subtitle-jobs/{$job->public_id}/partial-track")
+            ->assertOk()
+            ->assertJsonPath('revision', 3)
+            ->assertJsonPath('cues.0.translatedText', 'Translated first transcript segment')
+            ->assertJsonPath('cues.0.romanization', 'ro-man-ized')
+            ->assertJsonMissingPath('cues.1.translatedText');
+    }
+
+    public function test_partial_track_is_not_served_for_completed_jobs_or_other_users(): void
+    {
+        $completedResponse = $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'partdone001']))
+            ->assertOk();
+
+        $this
+            ->withExtensionAuth($this->installId())
+            ->getJson('/v1/subtitle-jobs/'.$completedResponse->json('jobId').'/partial-track')
+            ->assertNotFound();
+
+        $otherUsersJob = SubtitleJob::factory()->create([
+            'user_id' => User::factory()->create()->id,
+            'status' => 'running',
+            'stage' => 'tokenizing',
+            'progress_percent' => 65,
+        ]);
+        $this->artifacts()->putCueCollection($otherUsersJob, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+
+        $this
+            ->withExtensionAuth($this->installId('b'))
+            ->getJson("/v1/subtitle-jobs/{$otherUsersJob->public_id}/partial-track")
+            ->assertNotFound();
+    }
+
+    public function test_generation_records_time_to_first_cue(): void
+    {
+        $response = $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'firstcue001']))
+            ->assertOk();
+
+        $job = SubtitleJob::query()
+            ->where('public_id', $response->json('jobId'))
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('subtitle_job_events', [
+            'subtitle_job_id' => $job->id,
+            'event' => 'delivery.first_cue_available',
+        ]);
+    }
+
     public function test_list_subtitle_jobs_returns_current_install_history(): void
     {
         $installId = $this->installId();

@@ -1,0 +1,23 @@
+{
+  "jobId": "6f9619ff-8b86-4d01-b42d-00cf4fc964ff",
+  "youtubeVideoId": "dQw4w9WgXcQ",
+  "revision": 3,
+  "cues": [
+    {
+      "cueId": "cue-0001",
+      "index": 0,
+      "startMs": 500,
+      "endMs": 2100,
+      "sourceText": "Hola a todos",
+      "translatedText": "Hello everyone",
+      "romanization": "o-la a to-dos"
+    },
+    {
+      "cueId": "cue-0002",
+      "index": 1,
+      "startMs": 2400,
+      "endMs": 4000,
+      "sourceText": "bienvenidos al canal"
+    }
+  ]
+}

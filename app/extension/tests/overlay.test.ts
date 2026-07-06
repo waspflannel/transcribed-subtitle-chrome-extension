@@ -130,6 +130,44 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('class="rail rail--message"');
   });
 
+  it('renders partial cues without token buttons while the job is still running', () => {
+    const html = renderOverlayContent(
+      partialLoadingState({
+        translatedText: 'Bonjour a tous',
+        romanization: 'o-la a to-dos',
+      }),
+    );
+
+    expect(html).toContain('still generating');
+    expect(html).toContain('hola a todos');
+    expect(html).toContain('Bonjour a tous');
+    expect(html).toContain('o-la a to-dos');
+    expect(html).toContain('lang="spa"');
+    expect(html).toContain('00:00 - 00:02');
+    // No interactivity until the finalized track lands.
+    expect(html).not.toContain('class="token-card"');
+    expect(html).not.toContain('data-study-control');
+  });
+
+  it('renders partial cues with source text only before enrichment batches land', () => {
+    const html = renderOverlayContent(partialLoadingState());
+
+    expect(html).toContain('hola a todos');
+    expect(html).not.toContain('class="translation');
+    expect(html).not.toContain('class="cue-romanization');
+  });
+
+  it('hides the partial translation when translation display is disabled', () => {
+    const state = partialLoadingState({ translatedText: 'Bonjour a tous' });
+    const html = renderOverlayContent({
+      ...state,
+      settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: false },
+    });
+
+    expect(html).toContain('hola a todos');
+    expect(html).not.toContain('Bonjour a tous');
+  });
+
   it('renders loading detail for clicked tokens that only have romanization', () => {
     const state = readyState();
     const html = renderOverlayContent(
@@ -214,6 +252,46 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('class="translation"');
   });
 });
+
+function partialLoadingState(
+  cueOverrides: { translatedText?: string; romanization?: string } = {},
+): OverlayRenderState {
+  const cue = {
+    cueId: 'cue-0001',
+    index: 0,
+    startMs: 500,
+    endMs: 2100,
+    sourceText: 'hola a todos',
+    ...cueOverrides,
+  };
+
+  return {
+    page: {
+      supported: true,
+      videoId: 'dQw4w9WgXcQ',
+      url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      mediaKind: 'video',
+    },
+    subtitleState: {
+      type: 'loading',
+      jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+      youtubeVideoId: 'dQw4w9WgXcQ',
+      message: 'Tokenizing subtitles...',
+      stage: 'tokenizing',
+      progressPercent: 65,
+      partialTrack: {
+        jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+        youtubeVideoId: 'dQw4w9WgXcQ',
+        sourceLanguage: 'spa',
+        revision: 2,
+        cues: [cue],
+      },
+    },
+    settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true },
+    activeCue: null,
+    activePartialCue: cue,
+  };
+}
 
 function readyState(track = trackResponse()): OverlayRenderState {
   return {

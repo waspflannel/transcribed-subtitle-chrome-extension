@@ -1,4 +1,4 @@
-import type { LearningToken, SubtitleCue } from '../contracts';
+import type { LearningToken, PartialSubtitleCue, SubtitleCue } from '../contracts';
 import type { SubtitleState } from '../messages';
 import type { ExtensionSettings } from '../settings-model';
 import type { YoutubePageInfo } from '../youtube';
@@ -8,6 +8,8 @@ export interface OverlayRenderState {
   subtitleState: SubtitleState;
   settings: ExtensionSettings;
   activeCue?: SubtitleCue | null;
+  /** Active cue from a partial track while the job is still running. */
+  activePartialCue?: PartialSubtitleCue | null;
   pendingTokenKeys?: ReadonlySet<string>;
   failedTokenKeys?: ReadonlySet<string>;
 }

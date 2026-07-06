@@ -18,6 +18,7 @@ const schemaFiles = [
   'job-response.schema.json',
   'subtitle-job-history-response.schema.json',
   'track-response.schema.json',
+  'partial-track-response.schema.json',
   'cue.schema.json',
   'token.schema.json',
   'api-error.schema.json',

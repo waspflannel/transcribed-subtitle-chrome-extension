@@ -69,6 +69,20 @@ class SubtitlePipelineTelemetry
         $this->recordSlowStage($job, $stage, $durationMs, $batchIndex);
     }
 
+    /**
+     * Time-to-first-cue: the moment draft cues are written they become
+     * servable through the partial-track endpoint, so this duration is the
+     * backend's first-cue availability metric.
+     */
+    public function recordFirstCueAvailable(SubtitleJob $job): void
+    {
+        $this->tracer->jobEvent($job, 'delivery.first_cue_available', [
+            'stage' => 'transcribing',
+            'status' => $job->status,
+            'duration_ms' => (int) abs(now()->diffInMilliseconds($job->created_at)),
+        ]);
+    }
+
     public function recordTranscriptCacheHit(SubtitleJob $job): void
     {
         $this->tracer->jobEvent($job, 'transcript.cache_hit', [

@@ -60,6 +60,44 @@ describe('runtime message validation', () => {
       }),
     ).toBe(false);
   });
+
+  it('accepts loading states carrying a partial track and rejects malformed ones', () => {
+    const loadingState = {
+      type: 'loading',
+      youtubeVideoId: 'dQw4w9WgXcQ',
+      message: 'Tokenizing subtitles...',
+      stage: 'tokenizing',
+      progressPercent: 65,
+    };
+    const partialTrack = {
+      jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+      youtubeVideoId: 'dQw4w9WgXcQ',
+      sourceLanguage: 'spa',
+      revision: 2,
+      cues: [
+        { cueId: 'cue-0001', index: 0, startMs: 500, endMs: 2100, sourceText: 'hola a todos' },
+      ],
+    };
+
+    expect(
+      isRuntimeMessage({
+        type: 'background.subtitleStateChanged',
+        subtitleState: { ...loadingState, partialTrack },
+      }),
+    ).toBe(true);
+    expect(
+      isRuntimeMessage({
+        type: 'background.subtitleStateChanged',
+        subtitleState: { ...loadingState, partialTrack: { ...partialTrack, revision: 'two' } },
+      }),
+    ).toBe(false);
+    expect(
+      isRuntimeMessage({
+        type: 'background.subtitleStateChanged',
+        subtitleState: { ...loadingState, partialTrack: { ...partialTrack, cues: 'nope' } },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('isRuntimeMessage — phase 2 transcript relay', () => {

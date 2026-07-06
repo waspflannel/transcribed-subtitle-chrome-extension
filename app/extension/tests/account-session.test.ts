@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storageState = vi.hoisted(() => ({
   values: new Map<string, unknown>(),
@@ -27,6 +27,14 @@ import type { ExtensionAuthResponse } from '../utils/contracts';
 describe('extension account session storage', () => {
   beforeEach(() => {
     storageState.values.clear();
+    // The fixture token expires 2026-06-21; pin the clock before that so
+    // internal "now" reads (updateStoredAccount) never hit the expiry as
+    // real time advances.
+    vi.useFakeTimers({ now: new Date('2026-05-30T00:00:00Z') });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('stores only the scoped token and safe account summary', async () => {
