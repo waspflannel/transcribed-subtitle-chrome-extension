@@ -25,11 +25,13 @@ return [
                 'tokenization' => [
                     'default' => env('OPENAI_TOKENIZATION_MODEL'),
                 ],
+                // Merged tokenize+translate call; falls back to the
+                // tokenization model when no dedicated model is configured.
+                'analysis' => [
+                    'default' => env('OPENAI_ANALYSIS_MODEL', env('OPENAI_TOKENIZATION_MODEL')),
+                ],
                 'romanization' => [
                     'default' => env('OPENAI_ROMANIZATION_MODEL'),
-                ],
-                'translation' => [
-                    'default' => env('OPENAI_TRANSLATION_MODEL'),
                 ],
                 'enrichment' => [
                     'default' => env('OPENAI_ENRICHMENT_MODEL'),

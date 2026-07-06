@@ -2,10 +2,10 @@
 
 namespace Tests\Unit;
 
+use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
-use App\Ai\Agents\CueTranslationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use Tests\TestCase;
 
@@ -44,16 +44,22 @@ class AiAgentInstructionTest extends TestCase
         $this->assertStringContainsString('Hepburn for Japanese and pinyin for Mandarin', $instructions);
     }
 
-    public function test_translation_agent_owns_stable_translation_rules(): void
+    public function test_analysis_agent_owns_stable_tokenization_and_translation_rules(): void
     {
-        $instructions = (new CueTranslationAgent)->instructions();
+        $instructions = (new CueAnalysisAgent)->instructions();
 
-        $this->assertStringContainsString('Return one translated cue for each input cue in the same order.', $instructions);
-        $this->assertStringContainsString('Do not romanize, retokenize', $instructions);
+        $this->assertStringContainsString('Return one analyzed cue for each input cue in the same order.', $instructions);
+        $this->assertStringContainsString('Do not return punctuation-only tokens.', $instructions);
+        $this->assertStringContainsString('Do not censor profanity', $instructions);
+        $this->assertStringContainsString('transcription artifacts', $instructions);
+        $this->assertStringContainsString('Every token must begin and end on a word boundary of the source language.', $instructions);
+        $this->assertStringContainsString('Orphan fragment', $instructions);
+        $this->assertStringContainsString('Sokuon', $instructions);
+        $this->assertStringContainsString('Mandarin examples:', $instructions);
+        $this->assertStringContainsString('Thai examples:', $instructions);
         $this->assertStringContainsString('Translate the intended subtitle meaning', $instructions);
         $this->assertStringContainsString('colloquial, dialectal, romanized, poetic, musical, slang, or idiomatic text', $instructions);
         $this->assertStringContainsString('Use previousCueText and nextCueText', $instructions);
-        $this->assertStringContainsString('translatedText exactly equal to sourceText', $instructions);
     }
 
     public function test_enrichment_agent_owns_stable_learning_metadata_rules(): void

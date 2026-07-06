@@ -3,10 +3,10 @@
 namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
-use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
@@ -225,21 +225,18 @@ class SubtitleGenerationPipeline
         $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
 
         for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            // Romanization only needs its own batch's tokenized output, so chain
-            // Romanize(N) directly after Tokenize(N). The batch completes once
-            // every member -- chains included -- finishes, which hides the
-            // romanizing stage behind translating and removes a whole queue hop
-            // (the old analysis -> dispatch-romanization -> merge round trip).
-            $jobs[] = $romanize
-                ? [
-                    new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id),
-                    new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id),
-                ]
+            // One merged tokenize+translate call per batch when translation is
+            // requested; tokenize-only otherwise. Romanization only needs its
+            // own batch's tokenized output, so chain Romanize(N) directly after
+            // the analysis job. The batch completes once every member -- chains
+            // included -- finishes.
+            $analysisJob = $translationRequested
+                ? new AnalyzeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)
                 : new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
 
-            if ($translationRequested) {
-                $jobs[] = new TranslateSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
-            }
+            $jobs[] = $romanize
+                ? [$analysisJob, new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)]
+                : $analysisJob;
         }
 
         $this->batchDispatcher->dispatchAnalysis($job, $jobs);

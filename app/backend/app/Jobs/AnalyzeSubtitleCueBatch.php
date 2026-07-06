@@ -4,20 +4,20 @@ namespace App\Jobs;
 
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 
-class TranslateSubtitleCueBatch extends SubtitleCueBatchJob
+class AnalyzeSubtitleCueBatch extends SubtitleCueBatchJob
 {
     protected function process(SubtitleCueBatchProcessor $processor): void
     {
-        $processor->translateCueBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
+        $processor->analyzeCueBatch($this->subtitleJobId, $this->batchIndex, $this->runId, $this->queuedAtMs);
     }
 
     protected function stage(): string
     {
-        return 'translating';
+        return 'tokenizing';
     }
 
     protected function failureMessage(): string
     {
-        return 'Subtitle translation batch failed.';
+        return 'Subtitle analysis batch failed.';
     }
 }

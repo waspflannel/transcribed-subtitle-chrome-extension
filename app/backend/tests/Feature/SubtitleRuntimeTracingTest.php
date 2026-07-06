@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
@@ -10,7 +11,6 @@ use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
-use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
@@ -492,7 +492,7 @@ class SubtitleRuntimeTracingTest extends TestCase
         ];
         $cueBatchJobs = [
             new TokenizeSubtitleCueBatch(1, 0, $runId),
-            new TranslateSubtitleCueBatch(1, 0, $runId),
+            new AnalyzeSubtitleCueBatch(1, 0, $runId),
             new RomanizeSubtitleCueBatch(1, 0, $runId),
             new EnrichSubtitleCueBatch(1, 0, $runId),
         ];

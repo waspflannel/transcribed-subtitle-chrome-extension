@@ -37,26 +37,50 @@ class SubtitleCueBatchProcessor
         );
     }
 
-    public function translateCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
+    /**
+     * One merged tokenize+translate call per batch. Runs under the tokenizing
+     * stage and writes both batch artifacts, so downstream assembly is
+     * identical to the former two-call path.
+     */
+    public function analyzeCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
     {
-        $this->runCueBatch(
-            subtitleJobId: $subtitleJobId,
-            batchIndex: $batchIndex,
-            runId: $runId,
-            queuedAtMs: $queuedAtMs,
-            stage: 'translating',
-            artifactType: SubtitleJobArtifactStore::TRANSLATED_CUES,
-            process: function (SubtitleJob $job, int $batchIndex): CueEnrichmentResult {
-                $draftCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
+        $job = $this->loadRunningJob($subtitleJobId, $runId);
 
-                return $this->translationAnalysis->translateCueBatch(
-                    batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
-                    sourceLanguage: $job->effectiveSourceLanguage(),
-                    targetLanguage: $job->target_language,
-                    allCues: $draftCues,
-                );
-            },
-        );
+        if ($job === null) {
+            return;
+        }
+
+        $this->telemetry->recordQueueWait($job, 'tokenizing', $batchIndex, $queuedAtMs);
+        $this->telemetry->recordStageStarted($job, 'tokenizing', $batchIndex);
+
+        try {
+            $startedAtMs = $this->telemetry->currentTimeMs();
+            $result = $this->translationAnalysis->analyzeCueBatch(
+                batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
+                allCues: $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues,
+                sourceLanguage: $job->effectiveSourceLanguage(),
+                targetLanguage: $job->target_language,
+            );
+
+            $job = $this->loadRunningJob($subtitleJobId, $runId);
+
+            if ($job === null) {
+                return;
+            }
+
+            $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, $batchIndex, $result->tokenized);
+            $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TRANSLATED_CUES, $batchIndex, $result->translated);
+            $this->costs->recordAnalyzedCueBatch($job, count($result->tokenized->cues));
+            $this->telemetry->recordStageCompleted($job, 'tokenizing', $startedAtMs, $batchIndex);
+        } catch (Throwable $exception) {
+            if (! ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {
+                $this->failureHandler->failJob($subtitleJobId, 'tokenizing', $exception, $runId, [
+                    'batch_index' => $batchIndex,
+                ]);
+            }
+
+            throw $exception;
+        }
     }
 
     public function romanizeCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
@@ -190,5 +214,4 @@ class SubtitleCueBatchProcessor
 
         return $job;
     }
-
 }

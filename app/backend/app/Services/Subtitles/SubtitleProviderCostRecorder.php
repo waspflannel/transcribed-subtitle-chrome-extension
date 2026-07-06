@@ -27,11 +27,32 @@ final class SubtitleProviderCostRecorder
         );
     }
 
+    /**
+     * One merged analysis call does both the tokenization and translation
+     * work, so record both per-stage cost rows against the analysis model to
+     * keep per-stage cost telemetry comparable with the former two-call path.
+     */
+    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount): void
+    {
+        $model = (string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default');
+
+        foreach (['tokenizing' => 'tokenization', 'translating' => 'translation'] as $stage => $purpose) {
+            $this->record(
+                job: $job,
+                stage: $stage,
+                provider: Lab::OpenAI->value,
+                model: $model,
+                billingUnit: 'cue',
+                billedUnits: max(0, $cueCount),
+                unitPriceMicrousd: max(0, (int) config("subtitles.costs.openai_{$purpose}_microusd_per_cue", 0)),
+            );
+        }
+    }
+
     public function recordCueBatch(SubtitleJob $job, string $stage, int $cueCount): void
     {
         $purpose = match ($stage) {
             'tokenizing' => 'tokenization',
-            'translating' => 'translation',
             'romanizing' => 'romanization',
             'enriching' => 'enrichment',
             default => null,

@@ -2,13 +2,13 @@
 
 namespace App\Services\Subtitles;
 
+use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
-use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use Illuminate\Queue\Events\JobFailed;
@@ -89,9 +89,9 @@ class SubtitleRuntimeTracer
         FinalizeSubtitleJob::class,
         PrepareSubtitleCuesAfterAnalysisBatches::class,
         ProcessSubtitleJob::class,
+        AnalyzeSubtitleCueBatch::class,
         RomanizeSubtitleCueBatch::class,
         TokenizeSubtitleCueBatch::class,
-        TranslateSubtitleCueBatch::class,
     ];
 
     /**

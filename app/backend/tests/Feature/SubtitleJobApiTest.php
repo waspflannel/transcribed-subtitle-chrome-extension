@@ -3,11 +3,11 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
-use App\Jobs\TranslateSubtitleCueBatch;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
@@ -26,6 +26,7 @@ use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
+use App\Services\TranslationAnalysis\CueAnalysisBatchResult;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -279,7 +280,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::assertPushed(ProcessSubtitleJob::class, 1);
     }
 
-    public function test_tokenization_and_translation_batches_are_dispatched_together_when_translation_is_enabled(): void
+    public function test_translation_enabled_jobs_dispatch_one_merged_analysis_batch_job(): void
     {
         config([
             'queue.default' => 'database',
@@ -303,9 +304,11 @@ class SubtitleJobApiTest extends TestCase
 
         $payloads = DB::table('jobs')->pluck('payload')->implode("\n");
 
-        $this->assertStringContainsString(addslashes(TokenizeSubtitleCueBatch::class), $payloads);
-        $this->assertStringContainsString(addslashes(TranslateSubtitleCueBatch::class), $payloads);
-        $this->assertSame(2, DB::table('jobs')->where('queue', SubtitleQueue::batchName())->count());
+        // One merged tokenize+translate job per batch replaces the former
+        // separate tokenize and translate jobs.
+        $this->assertStringContainsString(addslashes(AnalyzeSubtitleCueBatch::class), $payloads);
+        $this->assertStringNotContainsString(addslashes(TokenizeSubtitleCueBatch::class), $payloads);
+        $this->assertSame(1, DB::table('jobs')->where('queue', SubtitleQueue::batchName())->count());
     }
 
     public function test_cancelled_tokenization_batch_skips_provider_calls(): void
@@ -318,14 +321,15 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
     }
 
-    public function test_cancelled_translation_batch_skips_provider_calls(): void
+    public function test_cancelled_analysis_batch_skips_provider_calls(): void
     {
-        $job = $this->runningSubtitleJob('translating');
+        $job = $this->runningSubtitleJob('tokenizing');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
 
-        $this->dispatchCancelledBatch(new TranslateSubtitleCueBatch($job->id, 0, $job->run_id));
+        $this->dispatchCancelledBatch(new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->translationCalls);
+        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
     }
 
     public function test_cancelled_romanization_batch_skips_provider_calls(): void
@@ -471,7 +475,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
         $this->assertSame(0, $this->translationAnalysis->calls);
-        $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['spa'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
     }
 
@@ -683,10 +687,12 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
+        // Translation now fails inside the merged analysis call, which runs
+        // under the tokenizing stage.
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'trnfail0001',
             'status' => 'failed',
-            'stage' => 'translating',
+            'stage' => 'tokenizing',
         ]);
     }
 
@@ -819,7 +825,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->calls);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
-        $this->assertSame(['spa', 'spa', 'spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng', 'eng'], $this->translationAnalysis->targetLanguages);
     }
 
@@ -1940,31 +1946,52 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     /**
      * @param  array<int, array<string, mixed>>  $batch
+     * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function translateCueBatch(
+    public function analyzeCueBatch(
         array $batch,
+        array $allCues,
         string $sourceLanguage,
         string $targetLanguage,
-        array $allCues,
-    ): CueEnrichmentResult {
+    ): CueAnalysisBatchResult {
+        $this->tokenizationCalls++;
         $this->translationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
 
-        if ($this->translationShouldFail) {
+        if ($this->tokenizationShouldFail || $this->translationShouldFail) {
             throw SubtitleProcessingException::enrichmentFailed();
         }
 
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => [
-                    ...$cue,
-                    'translatedText' => 'Translated '.$cue['sourceText'],
-                ],
-                $batch,
+        $result = new CueAnalysisBatchResult(
+            new CueEnrichmentResult(
+                array_map(
+                    fn (array $cue): array => [
+                        ...$cue,
+                        'translatedText' => (string) $cue['sourceText'],
+                        'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
+                    ],
+                    $batch,
+                ),
+                'unknown',
             ),
-            'unknown',
+            new CueEnrichmentResult(
+                array_map(
+                    fn (array $cue): array => [
+                        ...$cue,
+                        'translatedText' => 'Translated '.$cue['sourceText'],
+                    ],
+                    $batch,
+                ),
+                'unknown',
+            ),
         );
+
+        if ($this->beforeTokenizationResult !== null) {
+            ($this->beforeTokenizationResult)();
+        }
+
+        return $result;
     }
 
     /**
