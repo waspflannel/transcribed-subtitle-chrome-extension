@@ -4,8 +4,10 @@ namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
+use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use Illuminate\Http\Client\Request;
 use Illuminate\Process\PendingProcess;
@@ -175,6 +177,77 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertTrue($requestMatched);
     }
 
+    public function test_it_chunks_long_audio_and_merges_parallel_transcriptions(): void
+    {
+        // 300s audio, 120s target, 2s overlap -> 3 chunks of 100s nominal.
+        $longAudio = new TemporaryAudioFile(
+            path: $this->audio->path,
+            directory: $this->audio->directory,
+            durationSeconds: 300,
+            sizeBytes: $this->audio->sizeBytes,
+            mimeType: 'audio/mp4',
+        );
+
+        $chunkResponses = [
+            // Chunk 0: audio [0, 102], nominal [0, 100). Hears the boundary
+            // word in its trailing overlap; midpoint 99.4s keeps it here.
+            [
+                'language_code' => 'es',
+                'words' => [
+                    ['text' => 'Hola.', 'start' => 0.5, 'end' => 0.9, 'type' => 'word'],
+                    ['text' => 'frontera.', 'start' => 99.0, 'end' => 99.8, 'type' => 'word'],
+                ],
+            ],
+            // Chunk 1: audio [98, 202], nominal [100, 200). Hears the same
+            // boundary word at its start; it must be dropped as a duplicate.
+            // Detection disagrees ('en'); the first chunk stays canonical.
+            [
+                'language_code' => 'en',
+                'words' => [
+                    ['text' => 'frontera.', 'start' => 1.0, 'end' => 1.8, 'type' => 'word'],
+                    ['text' => 'Cien', 'start' => 2.5, 'end' => 2.9, 'type' => 'word'],
+                    ['text' => 'palabras.', 'start' => 3.0, 'end' => 3.6, 'type' => 'word'],
+                ],
+            ],
+            // Chunk 2: audio [198, 300], nominal [200, end].
+            [
+                'language_code' => 'es',
+                'words' => [
+                    ['text' => 'Fin.', 'start' => 2.5, 'end' => 2.9, 'type' => 'word'],
+                ],
+            ],
+        ];
+
+        $requestCount = 0;
+
+        Http::fake(function () use (&$requestCount, $chunkResponses) {
+            return Http::response($chunkResponses[$requestCount++], 200);
+        });
+
+        $transcript = $this->service()->transcribe($longAudio, 'auto');
+
+        Http::assertSentCount(3);
+        $this->assertSame('spa', $transcript->language);
+        $this->assertSame(
+            ['Hola.', 'frontera.', 'Cien palabras.', 'Fin.'],
+            array_map(fn ($segment): string => $segment->text, $transcript->segments),
+        );
+        // Chunk-local timestamps are offset to absolute time.
+        $this->assertSame(200.5, $transcript->segments[3]->startSeconds);
+        $this->assertSame(1, substr_count($transcript->webVtt, 'frontera.'));
+
+        // The middle chunk is extracted with its leading overlap.
+        Process::assertRan(function (PendingProcess $process): bool {
+            $command = $process->command;
+
+            return is_array($command)
+                && in_array('-ss', $command, true)
+                && in_array('98.000', $command, true)
+                && in_array('-t', $command, true)
+                && in_array('104.000', $command, true);
+        });
+    }
+
     public function test_it_maps_provider_http_failures_to_stable_errors(): void
     {
         Http::fake([
@@ -268,6 +341,8 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         return new ElevenLabsScribeTranscriptionService(
             new ScribeTranscriptNormalizer,
             new ElevenLabsScribeAudioPreparer,
+            new ScribeAudioChunker,
+            new ScribeChunkPayloadMerger,
         );
     }
 

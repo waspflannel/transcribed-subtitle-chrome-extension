@@ -183,6 +183,19 @@ return [
 
     'transcription' => [
         'timeout_seconds' => (int) env('ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
+        // Long audio is split into overlapping chunks transcribed in
+        // parallel, dropping the transcribing ceiling from the full audio
+        // length to the longest chunk. Chunks extend overlap_seconds past
+        // each boundary on both sides so boundary words are heard whole by a
+        // neighbouring chunk; the merger keeps each word once by timestamp
+        // midpoint. max_chunks bounds concurrent Scribe uploads -- chunks
+        // grow beyond target_seconds for very long videos instead.
+        'chunking' => [
+            'min_audio_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MIN_AUDIO_SECONDS', 240),
+            'target_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS', 120),
+            'overlap_seconds' => (float) env('SUBTITLE_TRANSCRIPTION_CHUNK_OVERLAP_SECONDS', 2.0),
+            'max_chunks' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MAX_CHUNKS', 8),
+        ],
     ],
 
     'enrichment' => [

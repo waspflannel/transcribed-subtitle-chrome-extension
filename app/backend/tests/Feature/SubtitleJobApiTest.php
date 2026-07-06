@@ -13,6 +13,7 @@ use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
+use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -23,6 +24,7 @@ use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Services\Subtitles\SubtitleTier;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
@@ -1775,7 +1777,12 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 {
     public function __construct()
     {
-        parent::__construct(new ScribeTranscriptNormalizer, new ElevenLabsScribeAudioPreparer);
+        parent::__construct(
+            new ScribeTranscriptNormalizer,
+            new ElevenLabsScribeAudioPreparer,
+            new ScribeAudioChunker,
+            new ScribeChunkPayloadMerger,
+        );
     }
 
     public bool $shouldFail = false;

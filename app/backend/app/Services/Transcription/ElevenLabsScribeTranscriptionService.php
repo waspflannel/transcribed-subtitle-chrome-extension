@@ -4,9 +4,12 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
+use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
@@ -15,6 +18,8 @@ class ElevenLabsScribeTranscriptionService
     public function __construct(
         private readonly ScribeTranscriptNormalizer $normalizer,
         private readonly ElevenLabsScribeAudioPreparer $audioPreparer,
+        private readonly ScribeAudioChunker $chunker,
+        private readonly ScribeChunkPayloadMerger $chunkMerger,
     ) {}
 
     public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
@@ -41,27 +46,11 @@ class ElevenLabsScribeTranscriptionService
         $this->assertSupportedAudioMime($audio);
 
         try {
-            $response = $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model);
+            $chunkPlan = $this->chunker->plan($audio->durationSeconds);
 
-            if ($response->failed()) {
-                throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
-                    'provider' => $provider->value,
-                    'adapter' => 'elevenlabs-http',
-                    'model' => $model,
-                    'status' => $response->status(),
-                ]);
-            }
-
-            $payload = $response->json();
-
-            if (! is_array($payload)) {
-                throw SubtitleProcessingException::transcriptionFailed('Transcription provider returned invalid JSON.', [
-                    'provider' => $provider->value,
-                    'adapter' => 'elevenlabs-http',
-                    'model' => $model,
-                    'reason' => 'invalid_json',
-                ]);
-            }
+            $payload = $chunkPlan === []
+                ? $this->transcribeWholeAudio($audio, $sourceLanguage, $provider, $apiKey, $model)
+                : $this->transcribeChunkedAudio($audio, $chunkPlan, $sourceLanguage, $provider, $apiKey, $model);
 
             return $this->normalizer->normalize(
                 payload: $payload,
@@ -81,6 +70,140 @@ class ElevenLabsScribeTranscriptionService
                 previous: $exception,
             );
         }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function transcribeWholeAudio(
+        TemporaryAudioFile $audio,
+        string $sourceLanguage,
+        Lab $provider,
+        string $apiKey,
+        string $model,
+    ): array {
+        return $this->validatedTranscriptionPayload(
+            $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model),
+            $provider,
+            $model,
+        );
+    }
+
+    /**
+     * Splits long audio into overlapping chunks, transcribes them with
+     * parallel Scribe requests, and merges the word payloads back into one
+     * transcript. Drops the transcribing ceiling from the full audio length
+     * to the longest chunk.
+     *
+     * @param  array<int, array{nominalStart: float, nominalEnd: float, audioStart: float, audioEnd: float}>  $chunkPlan
+     * @return array<string, mixed>
+     */
+    private function transcribeChunkedAudio(
+        TemporaryAudioFile $audio,
+        array $chunkPlan,
+        string $sourceLanguage,
+        Lab $provider,
+        string $apiKey,
+        string $model,
+    ): array {
+        $chunkFiles = $this->chunker->split($audio, $chunkPlan);
+
+        Log::info('backend.transcription_chunked', [
+            'provider' => $provider->value,
+            'adapter' => 'elevenlabs-http',
+            'model' => $model,
+            'audio_duration_seconds' => $audio->durationSeconds,
+            'chunk_count' => count($chunkFiles),
+        ]);
+
+        $streams = array_map(fn (TemporaryAudioFile $chunk) => $this->openAudioStream($chunk), $chunkFiles);
+        $requestPayload = $this->transcriptionRequestPayload($sourceLanguage, $model);
+        $url = $this->transcriptionUrl($provider);
+        $timeoutSeconds = (int) config('subtitles.transcription.timeout_seconds');
+
+        try {
+            $responses = Http::pool(fn (Pool $pool) => array_map(
+                fn (int $index) => $pool->as((string) $index)
+                    ->withHeaders(['xi-api-key' => $apiKey])
+                    ->timeout($timeoutSeconds)
+                    ->attach(
+                        'file',
+                        $streams[$index],
+                        $this->audioFilename($chunkFiles[$index]),
+                        ['Content-Type' => $chunkFiles[$index]->mimeType],
+                    )
+                    ->post($url, $requestPayload),
+                array_keys($chunkFiles),
+            ));
+        } finally {
+            foreach ($streams as $stream) {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+        }
+
+        $chunks = [];
+        $lastChunkIndex = array_key_last($chunkPlan);
+
+        foreach ($chunkPlan as $index => $bounds) {
+            $response = $responses[(string) $index] ?? null;
+
+            if (! $response instanceof Response) {
+                throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
+                    'provider' => $provider->value,
+                    'adapter' => 'elevenlabs-http',
+                    'model' => $model,
+                    'chunk_index' => $index,
+                    ...($response instanceof Throwable ? ['exception' => $response::class] : []),
+                ], $response instanceof Throwable ? $response : null);
+            }
+
+            $chunks[] = [
+                'payload' => $this->validatedTranscriptionPayload($response, $provider, $model, ['chunk_index' => $index]),
+                'audioStartSeconds' => $bounds['audioStart'],
+                'nominalStartSeconds' => $bounds['nominalStart'],
+                // The last chunk keeps everything past its nominal start.
+                'nominalEndSeconds' => $index === $lastChunkIndex ? null : $bounds['nominalEnd'],
+            ];
+        }
+
+        return $this->chunkMerger->merge($chunks);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function validatedTranscriptionPayload(
+        Response $response,
+        Lab $provider,
+        string $model,
+        array $context = [],
+    ): array {
+        if ($response->failed()) {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
+                'provider' => $provider->value,
+                'adapter' => 'elevenlabs-http',
+                'model' => $model,
+                'status' => $response->status(),
+                ...$context,
+            ]);
+        }
+
+        $payload = $response->json();
+
+        if (! is_array($payload)) {
+            throw SubtitleProcessingException::transcriptionFailed('Transcription provider returned invalid JSON.', [
+                'provider' => $provider->value,
+                'adapter' => 'elevenlabs-http',
+                'model' => $model,
+                'reason' => 'invalid_json',
+                ...$context,
+            ]);
+        }
+
+        return $payload;
     }
 
     /**
@@ -118,20 +241,7 @@ class ElevenLabsScribeTranscriptionService
         string $apiKey,
         string $model,
     ): Response {
-        $payload = [
-            'model_id' => $model,
-            'timestamps_granularity' => 'word',
-            'tag_audio_events' => 'false',
-            'diarize' => 'false',
-            'no_verbatim' => 'false',
-        ];
-
-        $languageCode = $this->languageCode($sourceLanguage);
-
-        if ($languageCode !== null) {
-            $payload['language_code'] = $languageCode;
-        }
-
+        $payload = $this->transcriptionRequestPayload($sourceLanguage, $model);
         $stream = $this->openAudioStream($audio);
 
         try {
@@ -147,6 +257,28 @@ class ElevenLabsScribeTranscriptionService
         } finally {
             fclose($stream);
         }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function transcriptionRequestPayload(string $sourceLanguage, string $model): array
+    {
+        $payload = [
+            'model_id' => $model,
+            'timestamps_granularity' => 'word',
+            'tag_audio_events' => 'false',
+            'diarize' => 'false',
+            'no_verbatim' => 'false',
+        ];
+
+        $languageCode = $this->languageCode($sourceLanguage);
+
+        if ($languageCode !== null) {
+            $payload['language_code'] = $languageCode;
+        }
+
+        return $payload;
     }
 
     private function languageCode(string $sourceLanguage): ?string
