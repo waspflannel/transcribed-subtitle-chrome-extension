@@ -26,6 +26,7 @@ import {
   type ContentRequest,
   type PageSnapshot,
   type PanelState,
+  type PartialSubtitleTrack,
   type SubtitleState,
 } from '../utils/messages';
 import { anonymousAccountState, accountStateFromSummary } from '../utils/account-state';
@@ -328,6 +329,16 @@ async function generateSubtitlesForTab(
   }
 }
 
+// Stages at which the backend can already serve partial cues: draft cues
+// exist once transcription lands, right before the tokenizing stage starts.
+const PARTIAL_TRACK_STAGES = new Set<JobResponse['stage']>([
+  'tokenizing',
+  'romanizing',
+  'translating',
+  'enriching',
+  'finalizing',
+]);
+
 async function waitForCompletedSubtitleJob(
   tabId: number,
   pageStatus: SupportedYoutubePageInfo,
@@ -336,10 +347,15 @@ async function waitForCompletedSubtitleJob(
   initialJob: JobResponse,
 ): Promise<JobResponse | null> {
   let job = initialJob;
+  let partialTrack: PartialSubtitleTrack | undefined;
 
   while (isCurrentLoadingState(tabId, pageStatus.videoId)) {
     if (job.status === 'completed' || job.status === 'failed') {
       return job;
+    }
+
+    if (PARTIAL_TRACK_STAGES.has(job.stage)) {
+      partialTrack = (await fetchPartialTrack(installId, authToken, job)) ?? partialTrack;
     }
 
     await publishSubtitleState(tabId, {
@@ -352,6 +368,7 @@ async function waitForCompletedSubtitleJob(
       progressPercent: job.progressPercent,
       startedAt: job.createdAt,
       lastUpdatedAt: job.updatedAt,
+      ...(partialTrack ? { partialTrack } : {}),
     });
 
     await delay(JOB_POLL_INTERVAL_MS);
@@ -359,6 +376,30 @@ async function waitForCompletedSubtitleJob(
   }
 
   return null;
+}
+
+async function fetchPartialTrack(
+  installId: string,
+  authToken: string,
+  job: JobResponse,
+): Promise<PartialSubtitleTrack | undefined> {
+  try {
+    const response = await subtitleApi.getSubtitleJobPartialTrack(installId, authToken, job.jobId);
+
+    return {
+      jobId: response.jobId,
+      youtubeVideoId: response.youtubeVideoId,
+      // The overlay needs the effective language for srclang/lang; the job
+      // poll already carries it, so the partial contract does not.
+      sourceLanguage: job.detectedSourceLanguage ?? job.sourceLanguage,
+      revision: response.revision,
+      cues: response.cues,
+    };
+  } catch {
+    // 404 until transcription lands; any fetch error just means no partial
+    // update this poll. The last fetched partial track stays bound.
+    return undefined;
+  }
 }
 
 function delay(milliseconds: number): Promise<void> {

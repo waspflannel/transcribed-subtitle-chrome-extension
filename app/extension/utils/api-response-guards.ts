@@ -5,6 +5,7 @@ import type {
   JobResponse,
   LearningToken,
   LearningTokenResponse,
+  PartialTrackResponse,
   SubtitleCue,
   SubtitleJobHistoryItem,
   SubtitleJobHistoryResponse,
@@ -88,6 +89,18 @@ export function guardTrackResponse(value: unknown): TrackResponse {
   return response as unknown as TrackResponse;
 }
 
+export function guardPartialTrackResponse(value: unknown): PartialTrackResponse {
+  const response = record(value, 'partial track response');
+  const cues = nonEmptyArray(response.cues, 'partial track cues');
+
+  requiredString(response, 'jobId');
+  requiredString(response, 'youtubeVideoId');
+  requiredNumber(response, 'revision');
+  cues.forEach(guardPartialSubtitleCue);
+
+  return response as unknown as PartialTrackResponse;
+}
+
 export function guardLearningTokenResponse(value: unknown): LearningTokenResponse {
   const response = record(value, 'learning token response');
 
@@ -158,6 +171,18 @@ function guardJobCore(value: Record<string, unknown>): void {
     'finalizing',
   ]);
   requiredNumber(value, 'progressPercent');
+}
+
+function guardPartialSubtitleCue(value: unknown): void {
+  const cue = record(value, 'partial subtitle cue');
+
+  requiredString(cue, 'cueId');
+  requiredNumber(cue, 'index');
+  requiredNumber(cue, 'startMs');
+  requiredNumber(cue, 'endMs');
+  requiredString(cue, 'sourceText');
+  optionalString(cue, 'translatedText');
+  optionalString(cue, 'romanization');
 }
 
 function guardSubtitleCue(value: unknown): SubtitleCue {

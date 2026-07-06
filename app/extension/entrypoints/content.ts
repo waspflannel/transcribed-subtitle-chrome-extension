@@ -5,15 +5,20 @@ import {
   createExtensionSettingsFromPartial,
   type ExtensionSettings,
 } from '../utils/settings-model';
-import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, type SubtitleState } from '../utils/messages';
+import {
+  DEFAULT_SUBTITLE_STATE,
+  isRuntimeMessage,
+  type PartialSubtitleTrack,
+  type SubtitleState,
+} from '../utils/messages';
 import { OverlayShell } from '../utils/overlay';
 import { cueForNavigation, cueForPlaybackTime, cueStartPlaybackSeconds } from '../utils/cue-navigation';
 import { CueHoldController } from '../utils/cue-hold';
 import { shortcutActionFromKeyboardEvent, type KeyboardShortcutAction } from '../utils/keyboard-shortcuts';
 import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
-import { bindWebVttTrackToVideo } from '../utils/webvtt-track';
+import { bindWebVttTrackToVideo, buildWebVttFromCues } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
-import type { LearningToken, SubtitleCue, TrackResponse } from '../utils/contracts';
+import type { LearningToken, PartialSubtitleCue, SubtitleCue, TrackResponse } from '../utils/contracts';
 import { parseYoutubePage } from '../utils/youtube';
 import { findActiveYoutubeVideo } from '../utils/youtube-video';
 
@@ -26,6 +31,8 @@ export default defineContentScript({
     let settings = DEFAULT_EXTENSION_SETTINGS;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
     let activeCue: SubtitleCue | null = null;
+    let activePartialCue: PartialSubtitleCue | null = null;
+    let boundPartialTrackKey: string | null = null;
     let activeVideo: HTMLVideoElement | null = null;
     let stopWebVttTrack: (() => void) | null = null;
     let stopVideoStateListeners: (() => void) | null = null;
@@ -101,6 +108,10 @@ export default defineContentScript({
         if (timingOffsetChanged && subtitleState.type === 'ready') {
           clearBoundWebVttTrack();
           bindGeneratedSubtitles(subtitleState.track);
+        } else if (timingOffsetChanged && subtitleState.type === 'loading' && subtitleState.partialTrack) {
+          const partialKey = partialTrackKey(subtitleState);
+          clearBoundWebVttTrack();
+          bindPartialSubtitles(subtitleState.partialTrack, partialKey);
         } else {
           updateOverlay();
         }
@@ -241,6 +252,7 @@ export default defineContentScript({
         subtitleState,
         settings,
         activeCue,
+        activePartialCue,
         pendingTokenKeys,
         failedTokenKeys,
       });
@@ -253,6 +265,8 @@ export default defineContentScript({
       stopVideoStateListeners = null;
       cueHold.clear();
       activeCue = null;
+      activePartialCue = null;
+      boundPartialTrackKey = null;
       const clearedPage = parseYoutubePage(window.location.href);
       if (clearedPage.supported) {
         void browser.runtime
@@ -272,6 +286,22 @@ export default defineContentScript({
     }
 
     function applySubtitleState(nextSubtitleState: SubtitleState): void {
+      // Loading updates for an already-bound partial track (progress text,
+      // unchanged revision) must not rebind: rebinding resets the text track
+      // and drops the currently displayed cue every 2s poll.
+      const nextPartialKey = partialTrackKey(nextSubtitleState);
+
+      if (
+        nextPartialKey !== null
+        && nextPartialKey === boundPartialTrackKey
+        && subtitleStateMatchesCurrentPage(nextSubtitleState)
+      ) {
+        subtitleState = nextSubtitleState;
+        updateOverlay();
+
+        return;
+      }
+
       clearBoundWebVttTrack();
 
       if (!subtitleStateMatchesCurrentPage(nextSubtitleState)) {
@@ -285,6 +315,12 @@ export default defineContentScript({
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
 
+      if (nextSubtitleState.type === 'loading' && nextSubtitleState.partialTrack) {
+        bindPartialSubtitles(nextSubtitleState.partialTrack, nextPartialKey);
+
+        return;
+      }
+
       if (nextSubtitleState.type !== 'ready') {
         updateOverlay();
 
@@ -292,6 +328,14 @@ export default defineContentScript({
       }
 
       bindGeneratedSubtitles(nextSubtitleState.track);
+    }
+
+    function partialTrackKey(state: SubtitleState): string | null {
+      if (state.type !== 'loading' || !state.partialTrack) {
+        return null;
+      }
+
+      return `${state.partialTrack.jobId}:${state.partialTrack.revision}`;
     }
 
     function subtitleStateMatchesCurrentPage(nextSubtitleState: SubtitleState): boolean {
@@ -310,6 +354,50 @@ export default defineContentScript({
       }
 
       return nextSubtitleState.youtubeVideoId === page.videoId;
+    }
+
+    /**
+     * Binds the cues of a still-running job to the video so subtitles render
+     * while the pipeline finishes. Passive display only: no cue hold, token
+     * cards, or study controls until the finalized track arrives.
+     */
+    function bindPartialSubtitles(partialTrack: PartialSubtitleTrack, partialKey: string | null): void {
+      const page = parseYoutubePage(window.location.href);
+
+      if (!page.supported || page.videoId !== partialTrack.youtubeVideoId) {
+        updateOverlay();
+
+        return;
+      }
+
+      const video = findActiveYoutubeVideo(document);
+
+      if (!video) {
+        updateOverlay();
+
+        return;
+      }
+
+      activeVideo = video;
+      boundPartialTrackKey = partialKey;
+
+      stopWebVttTrack = bindWebVttTrackToVideo({
+        video,
+        track: {
+          youtubeVideoId: partialTrack.youtubeVideoId,
+          sourceLanguage: partialTrack.sourceLanguage,
+          webVtt: buildWebVttFromCues(partialTrack.cues),
+          cues: partialTrack.cues,
+        },
+        timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
+        onCueChange(change) {
+          activePartialCue = change.activeCue;
+          updateOverlay();
+        },
+        logger: webVttTrackLogger,
+      });
+
+      updateOverlay();
     }
 
     function bindGeneratedSubtitles(track: TrackResponse): void {

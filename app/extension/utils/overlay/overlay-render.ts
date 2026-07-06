@@ -1,6 +1,6 @@
 ﻿import type { ExtensionSettings } from '../settings-model';
 import { escapeHtml } from '../html';
-import type { LearningToken, SubtitleCue } from '../contracts';
+import type { LearningToken, PartialSubtitleCue, SubtitleCue } from '../contracts';
 import { hasLearningMetadata, tokenKey } from '../track-tokens';
 import { EMPTY_INTERACTION, type OverlayInteractionState, type OverlayRenderState } from './types';
 
@@ -71,6 +71,12 @@ export function renderOverlayContent(
   }
 
   if (state.subtitleState.type === 'loading') {
+    const partialCue = state.activePartialCue;
+
+    if (partialCue && state.subtitleState.partialTrack) {
+      return renderFrame(renderPartialRail(partialCue, state.subtitleState.partialTrack.sourceLanguage, state.settings));
+    }
+
     return renderFrame(renderShell({
       eyebrow: 'AI subtitles',
       title: 'Generating subtitles',
@@ -85,6 +91,54 @@ export function renderOverlayContent(
     detail: 'This video does not have a generated subtitle track yet.',
     meta: [`Video ${state.page.videoId}`],
   }));
+}
+
+/**
+ * Passive rail for a cue from a still-running job: source text immediately,
+ * romanization and translation as their batches land. No token buttons or
+ * study controls -- word cards need the finalized track.
+ */
+function renderPartialRail(
+  cue: PartialSubtitleCue,
+  sourceLanguage: string,
+  settings: ExtensionSettings,
+): string {
+  const cueRomanization =
+    settings.showRomanization && cue.romanization
+      ? `<div class="cue-romanization study-cue-romanization${studyBlurClass(
+          settings.blurRomanization,
+          'romanization',
+        )}"${
+          settings.blurRomanization
+            ? ' tabindex="0" aria-label="Cue romanization, focus to reveal blurred text"'
+            : ''
+        }>${escapeHtml(cue.romanization)}</div>`
+      : '';
+  const translatedText = cue.translatedText?.trim() ?? '';
+  const translation =
+    settings.showTranslation && translatedText !== '' && translatedText !== cue.sourceText.trim()
+      ? `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${
+          settings.blurTranslation ? ' tabindex="0" aria-label="Cue translation, focus to reveal blurred text"' : ''
+        } dir="auto">${escapeHtml(translatedText)}</div>`
+      : '';
+
+  return `
+    <section class="rail" role="status">
+      <div class="rail-meta">
+        <span class="eyebrow">AI subtitles &middot; still generating</span>
+        <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
+      </div>
+      <div class="rail-main">
+        <div class="token-area" dir="auto" lang="${
+          sourceLanguage === 'auto' ? 'und' : escapeHtml(sourceLanguage)
+        }"><span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
+          cue.sourceText,
+        )}</span></div>
+        ${cueRomanization}
+        ${translation}
+      </div>
+    </section>
+  `;
 }
 
 function renderSourceLine(
@@ -220,7 +274,7 @@ function renderStudyControls(
   `;
 }
 
-function formatCueTimeRange(cue: SubtitleCue): string {
+function formatCueTimeRange(cue: Pick<SubtitleCue, 'startMs' | 'endMs'>): string {
   return `${formatCueTimestamp(cue.startMs)} - ${formatCueTimestamp(cue.endMs)}`;
 }
 
