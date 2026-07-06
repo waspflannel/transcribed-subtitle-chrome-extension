@@ -7,6 +7,7 @@ use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
@@ -14,6 +15,7 @@ use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -23,6 +25,7 @@ class SubtitleGenerationPipeline
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
         private readonly ElevenLabsScribeTranscriptionService $transcriptionService,
+        private readonly VideoTranscriptCache $transcriptCache,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleJobArtifactStore $artifacts,
@@ -45,12 +48,23 @@ class SubtitleGenerationPipeline
         }
 
         $this->telemetry->recordQueueWait($job, 'acquiring-audio', null, $queuedAtMs);
-        $this->telemetry->recordStageStarted($job, 'acquiring-audio');
 
         $audio = null;
         $stage = 'acquiring-audio';
 
         try {
+            // A cached transcript for this video makes acquire, optimize, and
+            // transcribe unnecessary -- roughly 45% of a job's wall time.
+            $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language);
+
+            if ($cached !== null) {
+                $stage = 'transcribing';
+                $this->continueWithCachedTranscript($job, $cached);
+
+                return;
+            }
+
+            $this->telemetry->recordStageStarted($job, 'acquiring-audio');
             $this->logger->audioAcquisitionStarted($job);
 
             $audioStartedAtMs = $this->telemetry->currentTimeMs();
@@ -90,6 +104,12 @@ class SubtitleGenerationPipeline
 
             $this->logger->transcriptionCompleted($job, $transcript, $audio);
             $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
+            $this->transcriptCache->store(
+                youtubeVideoId: $job->youtube_video_id,
+                requestedSourceLanguage: $job->source_language,
+                transcript: $transcript,
+                audioDurationSeconds: $audio->durationSeconds,
+            );
 
             $job = $job->refresh();
             $draftCues = $this->tracks->draftCues($transcript);
@@ -107,6 +127,33 @@ class SubtitleGenerationPipeline
                 $audio->delete();
             }
         }
+    }
+
+    /**
+     * Cache-hit continuation: the transcript already exists for this video,
+     * so the job goes straight from claiming to analysis dispatch. Billing
+     * still syncs the reservation to the cached duration, but no provider
+     * transcription cost is recorded -- no provider call happened.
+     */
+    private function continueWithCachedTranscript(SubtitleJob $job, CachedVideoTranscript $cached): void
+    {
+        $transcript = $this->transcriptCache->transcript($cached);
+
+        $this->telemetry->recordTranscriptCacheHit($job);
+
+        $job->update(['video_duration_seconds' => $cached->audio_duration_seconds]);
+        $job = $job->refresh()->load('user');
+        $this->billing->syncJobReservationToActualDuration($job);
+
+        $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
+
+        $job = $job->refresh();
+        $draftCues = $this->tracks->draftCues($transcript);
+
+        $this->artifacts->putTranscript($job, $transcript);
+        $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
+
+        $this->dispatchTokenizationAndTranslationBatches($job);
     }
 
     public function prepareCuesAfterCompletedAnalysisBatches(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void

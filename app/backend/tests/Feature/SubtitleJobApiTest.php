@@ -8,6 +8,7 @@ use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
@@ -935,6 +936,107 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(2, SubtitleTrack::count());
     }
 
+    public function test_repeat_generation_for_the_same_video_reuses_the_cached_transcript(): void
+    {
+        config(['ai.providers.eleven.models.transcription.default' => 'scribe-test']);
+
+        $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cachehit001']))
+            ->assertOk();
+
+        $this->assertDatabaseHas('cached_video_transcripts', [
+            'youtube_video_id' => 'cachehit001',
+            'requested_source_language' => 'auto',
+            'transcription_model' => 'scribe-test',
+            'audio_duration_seconds' => 42,
+        ]);
+
+        // A different target language forces a new job while the transcript
+        // cache key (video + requested source language + model) is unchanged.
+        $secondResponse = $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'cachehit001',
+                'targetLanguage' => 'fra',
+            ]));
+
+        $secondResponse
+            ->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('detectedSourceLanguage', 'spa')
+            ->assertJsonPath('videoDurationSeconds', 42);
+
+        // Acquire, optimize, and transcribe ran only for the first job.
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertSame(1, $this->transcriptionService->prepareCalls);
+        $this->assertCount(1, $this->transcriptionService->sourceLanguages);
+
+        $secondJob = SubtitleJob::query()
+            ->where('public_id', $secondResponse->json('jobId'))
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('subtitle_job_events', [
+            'subtitle_job_id' => $secondJob->id,
+            'event' => 'transcript.cache_hit',
+        ]);
+        // The cache hit skips the provider call, so no transcription cost.
+        $this->assertSame(0, SubtitleJobEvent::query()
+            ->where('subtitle_job_id', $secondJob->id)
+            ->where('event', 'provider.cost_estimated')
+            ->where('stage', 'transcribing')
+            ->count());
+    }
+
+    public function test_transcript_cache_is_disabled_when_ttl_is_zero(): void
+    {
+        config(['subtitles.transcript_cache.ttl_days' => 0]);
+
+        $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cacheoff001']))
+            ->assertOk();
+
+        $this->assertSame(0, CachedVideoTranscript::count());
+
+        $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => 'cacheoff001',
+                'targetLanguage' => 'fra',
+            ]))
+            ->assertOk();
+
+        $this->assertSame(2, $this->audioSource->calls);
+    }
+
+    public function test_expired_cached_transcript_is_not_reused(): void
+    {
+        config(['ai.providers.eleven.models.transcription.default' => 'scribe-test']);
+
+        CachedVideoTranscript::create([
+            'youtube_video_id' => 'cacheexp001',
+            'requested_source_language' => 'auto',
+            'transcription_model' => 'scribe-test',
+            'audio_duration_seconds' => 999,
+            'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
+            'expires_at' => now()->subDay(),
+        ]);
+
+        $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cacheexp001']))
+            ->assertOk();
+
+        // The expired row was ignored, the video re-transcribed, and the row
+        // replaced with a fresh transcript and expiry.
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertSame(1, CachedVideoTranscript::count());
+        $entry = CachedVideoTranscript::query()->firstOrFail();
+        $this->assertSame(42, $entry->audio_duration_seconds);
+        $this->assertTrue($entry->expires_at->isFuture());
+    }
+
     public function test_romanized_and_non_romanized_tracks_are_cached_separately(): void
     {
         $sourceText = $this->arabicGreeting();
@@ -1157,7 +1259,9 @@ class SubtitleJobApiTest extends TestCase
         $this->assertNotSame($firstResponse->json('track.trackId'), $secondResponse->json('track.trackId'));
         $this->assertSame(2, SubtitleJob::count());
         $this->assertSame(2, SubtitleTrack::count());
-        $this->assertSame(2, $this->audioSource->calls);
+        // Each install gets its own job and track, but the transcript is
+        // shared per video, so the second install skips audio acquisition.
+        $this->assertSame(1, $this->audioSource->calls);
     }
 
     public function test_list_subtitle_jobs_returns_current_install_history(): void

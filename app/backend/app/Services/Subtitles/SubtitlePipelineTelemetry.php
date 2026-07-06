@@ -69,6 +69,14 @@ class SubtitlePipelineTelemetry
         $this->recordSlowStage($job, $stage, $durationMs, $batchIndex);
     }
 
+    public function recordTranscriptCacheHit(SubtitleJob $job): void
+    {
+        $this->tracer->jobEvent($job, 'transcript.cache_hit', [
+            'stage' => 'transcribing',
+            'status' => $job->status,
+        ]);
+    }
+
     public function recordJobCompleted(SubtitleJob $job): void
     {
         $durationMs = (int) abs(now()->diffInMilliseconds($job->created_at));

@@ -181,6 +181,15 @@ return [
         ],
     ],
 
+    // Transcripts are cached per video and shared across users: they derive
+    // only from public YouTube audio plus the requested source language, and
+    // the cache row carries no user data. The key includes the transcription
+    // model id, so model upgrades invalidate old rows. ttl_days <= 0 disables
+    // the cache entirely (reads and writes) -- the rollback switch.
+    'transcript_cache' => [
+        'ttl_days' => (int) env('SUBTITLE_TRANSCRIPT_CACHE_TTL_DAYS', 30),
+    ],
+
     'transcription' => [
         'timeout_seconds' => (int) env('ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
         // Long audio is split into overlapping chunks transcribed in
