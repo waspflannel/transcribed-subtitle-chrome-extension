@@ -85,6 +85,31 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame($sourceText, $result->cues[0]['translatedText']);
     }
 
+    public function test_deterministic_fallback_keeps_no_space_grapheme_clusters_whole(): void
+    {
+        // Thai: each base consonant carries combining vowel/tone marks.
+        $sourceText = 'ที่รัก';
+        $invalidCue = [
+            'cueId' => 'cue-0001',
+            'index' => 0,
+            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+        ];
+
+        // First attempt and one re-prompt both return invalid output.
+        CueTokenizationAgent::fake([
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
+            ['dialect' => 'unknown', 'cues' => [$invalidCue]],
+        ]);
+
+        $result = $this->tokenizeBatch([
+            $this->sourceCue('cue-0001', 0, $sourceText),
+        ], 'tha');
+
+        // Grapheme-cluster split: a base character keeps its vowel and tone
+        // marks instead of stranding each combining mark as its own token.
+        $this->assertSame(['ที่', 'รั', 'ก'], array_column($result->cues[0]['tokens'], 'text'));
+    }
+
     public function test_tokenization_validation_failure_recovers_when_reprompt_succeeds(): void
     {
         $sourceText = 'Hola a todos';
