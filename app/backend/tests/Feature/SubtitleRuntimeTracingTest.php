@@ -29,6 +29,7 @@ use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -128,6 +129,75 @@ class SubtitleRuntimeTracingTest extends TestCase
             'subtitle_job_id' => $job->id,
             'event' => 'batch.progress',
         ]);
+    }
+
+    public function test_analysis_members_over_the_tier_cap_are_windowed_into_chains(): void
+    {
+        config(['subtitles.tiers.plans.base.batch_concurrency' => 2]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        Bus::fake();
+
+        app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
+            new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id),
+            [
+                new TokenizeSubtitleCueBatch($job->id, 1, $job->run_id),
+                new RomanizeSubtitleCueBatch($job->id, 1, $job->run_id),
+            ],
+            new TokenizeSubtitleCueBatch($job->id, 2, $job->run_id),
+        ]);
+
+        Bus::assertBatched(function ($batch): bool {
+            $members = $batch->jobs->all();
+
+            if (count($members) !== 2) {
+                return false;
+            }
+
+            [$firstChain, $secondChain] = $members;
+
+            // Round-robin partition: [T0, T2] and [T1 -> R1] with the
+            // existing analyze -> romanize chain flattened in order.
+            return is_array($firstChain)
+                && array_map('get_class', $firstChain) === [
+                    TokenizeSubtitleCueBatch::class,
+                    TokenizeSubtitleCueBatch::class,
+                ]
+                && $firstChain[0]->batchIndex === 0
+                && $firstChain[1]->batchIndex === 2
+                && is_array($secondChain)
+                && array_map('get_class', $secondChain) === [
+                    TokenizeSubtitleCueBatch::class,
+                    RomanizeSubtitleCueBatch::class,
+                ]
+                && $secondChain[0]->batchIndex === 1
+                && $secondChain[1]->batchIndex === 1;
+        });
+    }
+
+    public function test_analysis_members_at_or_under_the_tier_cap_dispatch_unchanged(): void
+    {
+        config(['subtitles.tiers.plans.base.batch_concurrency' => 2]);
+        $job = SubtitleJob::factory()->create([
+            'generation_tier' => 'base',
+            'stage' => 'tokenizing',
+        ]);
+        Bus::fake();
+
+        app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
+            new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id),
+            new TokenizeSubtitleCueBatch($job->id, 1, $job->run_id),
+        ]);
+
+        Bus::assertBatched(function ($batch): bool {
+            $members = $batch->jobs->all();
+
+            return count($members) === 2
+                && $members[0] instanceof TokenizeSubtitleCueBatch
+                && $members[1] instanceof TokenizeSubtitleCueBatch;
+        });
     }
 
     public function test_pipeline_records_queue_wait_stage_timing_and_slow_warning(): void

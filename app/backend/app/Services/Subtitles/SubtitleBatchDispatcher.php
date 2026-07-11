@@ -21,7 +21,7 @@ class SubtitleBatchDispatcher
     {
         $this->dispatchBatch(
             job: $job,
-            jobs: $jobs,
+            jobs: $this->windowedBatchMembers($job, $jobs),
             batchName: 'subtitle analysis '.$job->public_id,
             stage: 'analysis',
             completionJobClass: PrepareSubtitleCuesAfterAnalysisBatches::class,
@@ -56,11 +56,49 @@ class SubtitleBatchDispatcher
     {
         $this->dispatchBatch(
             job: $job,
-            jobs: $jobs,
+            jobs: $this->windowedBatchMembers($job, $jobs),
             batchName: 'subtitle enrichment '.$job->public_id,
             stage: 'enriching',
             completionJobClass: FinalizeSubtitleJob::class,
             completionJobArguments: [$job->id, true, $job->run_id],
+        );
+    }
+
+    /**
+     * Partition AI batch members into at most batch_concurrency chains so the
+     * queue only ever holds work this job is allowed to run: a chain link is
+     * enqueued when its predecessor finishes, instead of enqueueing every
+     * member up front and rejecting the over-cap ones at pop time. Members
+     * that are already chains (analyze -> romanize) are flattened into the
+     * partition chain, preserving their relative order.
+     *
+     * @param  array<int, object|array<int, object>>  $jobs
+     * @return array<int, object|array<int, object>>
+     */
+    private function windowedBatchMembers(SubtitleJob $job, array $jobs): array
+    {
+        $window = SubtitleTier::batchConcurrency($job->generation_tier);
+        $jobs = array_values($jobs);
+
+        if (count($jobs) <= $window) {
+            return $jobs;
+        }
+
+        $chains = array_fill(0, $window, []);
+
+        foreach ($jobs as $index => $member) {
+            $slot = $index % $window;
+
+            if (is_array($member)) {
+                array_push($chains[$slot], ...array_values($member));
+            } else {
+                $chains[$slot][] = $member;
+            }
+        }
+
+        return array_map(
+            fn (array $chain): object|array => count($chain) === 1 ? $chain[0] : $chain,
+            $chains,
         );
     }
 

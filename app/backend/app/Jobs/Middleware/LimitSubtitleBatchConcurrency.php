@@ -55,6 +55,11 @@ final class LimitSubtitleBatchConcurrency
     }
 
     /**
+     * Claim attempts never wait on the lock: a busy lock means another worker
+     * for the same user is mid-claim, and the caller's release-with-jitter
+     * retry is cheaper than serializing every worker in the pool behind one
+     * user's lock key.
+     *
      * @return array{claimed: bool, token: string|null, delay_reason: string|null, observed_active_count: int|null}
      */
     private function claimSlot(string $counterKey, int $limit): array
@@ -64,29 +69,29 @@ final class LimitSubtitleBatchConcurrency
         $token = null;
         $activeCount = null;
 
-        try {
-            $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
-                ->block(1, function () use ($cache, $counterKey, $limit, &$claimed, &$token, &$activeCount): void {
-                    $slots = $this->evictExpired($this->readSlots($cache, $counterKey));
-                    $activeCount = count($slots);
+        $lockAcquired = $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
+            ->get(function () use ($cache, $counterKey, $limit, &$claimed, &$token, &$activeCount): void {
+                $slots = $this->evictExpired($this->readSlots($cache, $counterKey));
+                $activeCount = count($slots);
 
-                    if ($activeCount >= $limit) {
-                        return;
-                    }
+                if ($activeCount >= $limit) {
+                    return;
+                }
 
-                    $token = (string) Str::uuid();
-                    $slots[] = [
-                        'token' => $token,
-                        'expiresAt' => time() + SubtitleTier::concurrencyCounterSeconds(),
-                    ];
-                    $this->writeSlots($cache, $counterKey, $slots);
-                    $claimed = true;
-                });
-        } catch (LockTimeoutException) {
+                $token = (string) Str::uuid();
+                $slots[] = [
+                    'token' => $token,
+                    'expiresAt' => time() + SubtitleTier::concurrencyCounterSeconds(),
+                ];
+                $this->writeSlots($cache, $counterKey, $slots);
+                $claimed = true;
+            });
+
+        if ($lockAcquired === false) {
             return [
                 'claimed' => false,
                 'token' => null,
-                'delay_reason' => 'lock_timeout',
+                'delay_reason' => 'lock_busy',
                 'observed_active_count' => $activeCount,
             ];
         }
