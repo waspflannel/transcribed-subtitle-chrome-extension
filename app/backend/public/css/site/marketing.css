@@ -1,0 +1,669 @@
+/* ---------- Night hero band ---------- */
+.hero-band {
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 35px,
+            var(--night-line) 35px,
+            var(--night-line) 36px
+        ),
+        var(--night);
+    color: var(--night-text);
+    display: grid;
+    gap: 24px;
+    justify-items: center;
+    padding-bottom: 260px;
+    padding-top: 158px;
+    text-align: center;
+}
+
+.hero-band .eyebrow {
+    color: var(--accent-bright);
+}
+
+.hero-band h1 {
+    color: var(--night-text);
+    font-size: clamp(2.6rem, 5.6vw, 4.4rem);
+    max-width: 16ch;
+    text-wrap: balance;
+}
+
+.hero-band h1 rt {
+    color: var(--accent-bright);
+}
+
+/* On the night band the half-height swipe would leave ink text on a dark
+   background, so the marker covers the full line height here. */
+.hero-band h1 .hl {
+    -webkit-box-decoration-break: clone;
+    background-image: linear-gradient(var(--accent), var(--accent));
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    box-decoration-break: clone;
+    color: var(--paper-high);
+    padding: 0 10px 4px;
+}
+
+.hero-lede {
+    color: var(--night-muted);
+    font-size: 1.14rem;
+    max-width: 54ch;
+    text-wrap: balance;
+}
+
+.hero-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+}
+
+.hero-band .button {
+    border-color: var(--paper-high);
+    box-shadow: 4px 4px 0 rgba(245, 243, 234, 0.35);
+}
+
+.hero-band .button:hover {
+    box-shadow: 6px 6px 0 rgba(245, 243, 234, 0.35);
+}
+
+.hero-band .button-accent {
+    border-color: var(--accent-bright);
+}
+
+.hero-band .button-secondary {
+    box-shadow: none;
+    color: var(--night-text);
+}
+
+.hero-band .button-secondary:hover {
+    background: var(--night-high);
+    box-shadow: 4px 4px 0 rgba(245, 243, 234, 0.35);
+    color: var(--night-text);
+}
+
+.hero-meta {
+    color: var(--night-muted);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* ---------- Product mock (overlaps hero into the page) ---------- */
+.mk-wrap {
+    margin-top: -210px;
+    padding-bottom: 30px;
+    position: relative;
+    z-index: 2;
+}
+
+.mk {
+    background: var(--paper-high);
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    box-shadow: 10px 10px 0 rgba(20, 20, 20, 0.16);
+    margin: 0 auto;
+    max-width: 920px;
+    overflow: hidden;
+}
+
+.mk-bar {
+    align-items: center;
+    border-bottom: 2px solid var(--ink);
+    display: flex;
+    gap: 14px;
+    padding: 10px 16px;
+}
+
+.mk-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.mk-dots span {
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    border-radius: 50%;
+    height: 10px;
+    width: 10px;
+}
+
+.mk-url {
+    background: var(--paper);
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink-faint);
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    overflow: hidden;
+    padding: 5px 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mk-ext {
+    align-items: center;
+    background: var(--accent);
+    border: 2px solid var(--ink);
+    color: var(--paper-high);
+    display: inline-flex;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 700;
+    height: 26px;
+    justify-content: center;
+    width: 32px;
+}
+
+.mk-player {
+    background:
+        radial-gradient(130% 100% at 82% 0%, rgba(216, 59, 59, 0.42), transparent 55%),
+        radial-gradient(110% 90% at 8% 100%, rgba(216, 59, 59, 0.1), transparent 55%),
+        var(--night);
+    display: grid;
+    grid-template-rows: 1fr auto auto;
+    min-height: 440px;
+}
+
+/* flashcard word card */
+.mk-card {
+    align-self: end;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 26px,
+            rgba(20, 20, 20, 0.08) 26px,
+            rgba(20, 20, 20, 0.08) 27px
+        ),
+        var(--paper-high);
+    border: 2px solid var(--ink);
+    border-radius: 5px;
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.45);
+    display: grid;
+    gap: 7px;
+    justify-self: center;
+    margin-bottom: 20px;
+    max-width: 330px;
+    padding: 16px 20px 18px;
+    position: relative;
+    transform: rotate(-1.2deg);
+    width: calc(100% - 48px);
+}
+
+.mk-card-tag {
+    background: var(--accent);
+    border-radius: 2px;
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    padding: 3px 8px;
+    position: absolute;
+    right: 12px;
+    text-transform: uppercase;
+    top: -11px;
+    transform: rotate(2deg);
+}
+
+.mk-card-word {
+    align-items: baseline;
+    display: flex;
+    gap: 12px;
+}
+
+.mk-card-word strong {
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 1.7rem;
+    font-weight: 700;
+}
+
+.mk-card-word span {
+    color: var(--accent-deep);
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+}
+
+.mk-card p {
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+}
+
+/* subtitles with furigana-token rows */
+.mk-subs {
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+    padding: 0 24px 20px;
+    text-align: center;
+}
+
+.mk-line {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+}
+
+.mk-tok {
+    color: var(--night-text);
+    cursor: pointer;
+    display: inline-grid;
+    font-size: 1.4rem;
+    font-weight: 600;
+    justify-items: center;
+    line-height: 1.2;
+    padding: 2px 4px 0;
+    text-decoration: underline dotted rgba(242, 240, 228, 0.45) 2px;
+    text-underline-offset: 6px;
+    transition: background 130ms ease, color 130ms ease;
+}
+
+.mk-tok small {
+    color: var(--night-muted);
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+}
+
+.mk-tok:hover {
+    background: rgba(216, 59, 59, 0.26);
+}
+
+.mk-tok-hot {
+    background: var(--accent);
+    color: var(--paper-high);
+    text-decoration-color: var(--paper-high);
+}
+
+.mk-tok-hot small {
+    color: rgba(255, 253, 244, 0.82);
+}
+
+.mk-trans {
+    color: var(--night-muted);
+    font-size: 1.02rem;
+}
+
+.mk-controls {
+    align-items: center;
+    background: rgba(10, 10, 10, 0.8);
+    border-top: 1.5px solid var(--night-line);
+    display: flex;
+    gap: 14px;
+    padding: 10px 16px;
+}
+
+.mk-play {
+    border-color: transparent;
+    border-left-color: var(--night-text);
+    border-style: solid;
+    border-width: 7px 0 7px 12px;
+    height: 0;
+    width: 0;
+}
+
+.mk-track {
+    background: rgba(242, 240, 228, 0.22);
+    flex: 1;
+    height: 5px;
+}
+
+.mk-track span {
+    background: var(--accent);
+    display: block;
+    height: 100%;
+    width: 42%;
+}
+
+.mk-time {
+    color: var(--night-muted);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+}
+
+.mk-caption {
+    color: var(--ink-faint);
+    font-size: 0.92rem;
+    margin: 16px auto 0;
+    max-width: 680px;
+    text-align: center;
+}
+
+/* ---------- Flashcard feature grid ---------- */
+.fc-grid {
+    display: grid;
+    gap: 26px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fc {
+    background: var(--paper-high);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    box-shadow: var(--shadow-card);
+    display: grid;
+    gap: 10px;
+    padding: 28px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.fc:nth-child(odd) {
+    transform: rotate(-0.5deg);
+}
+
+.fc:nth-child(even) {
+    transform: rotate(0.5deg);
+}
+
+.fc:hover {
+    box-shadow: 9px 9px 0 rgba(20, 20, 20, 0.14);
+    transform: rotate(0deg) translateY(-3px);
+}
+
+.fc-ruby {
+    color: var(--accent-deep);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: lowercase;
+}
+
+.fc h3 {
+    font-size: 1.2rem;
+}
+
+.fc p {
+    font-size: 0.97rem;
+}
+
+/* ---------- Numbered steps ---------- */
+.step-list {
+    counter-reset: step;
+    display: grid;
+    gap: 26px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.step {
+    display: grid;
+    gap: 10px;
+    padding-top: 10px;
+    position: relative;
+}
+
+.step::before {
+    -webkit-text-stroke: 2px var(--accent);
+    color: transparent;
+    content: "0" counter(step);
+    counter-increment: step;
+    font-family: var(--font-display);
+    font-size: 4.4rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.step h3 {
+    font-size: 1.15rem;
+}
+
+.step p {
+    font-size: 0.97rem;
+}
+
+/* ---------- Language coverage ---------- */
+.lang-group {
+    border-top: 2px solid var(--ink);
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(0, 0.34fr) minmax(0, 1fr);
+    padding: 26px 0;
+}
+
+.lang-group:last-child {
+    border-bottom: 2px solid var(--ink);
+}
+
+.lang-tier {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.lang-tier h2 {
+    font-size: 1.2rem;
+}
+
+.lang-tier + p {
+    font-size: 0.94rem;
+    margin-top: 8px;
+}
+
+.lang-badge {
+    background: var(--accent);
+    border: 1.5px solid var(--ink);
+    color: var(--paper-high);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    padding: 2px 7px;
+    text-transform: uppercase;
+}
+
+.lang-cloud {
+    align-content: flex-start;
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.lang-cloud li {
+    background: var(--paper-high);
+    border: 1.5px solid var(--line);
+    color: var(--ink-soft);
+    font-size: 0.88rem;
+    padding: 4px 12px;
+}
+
+/* ---------- Pricing flashcards ---------- */
+.plan-row {
+    display: grid;
+    gap: 30px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-top: 14px;
+}
+
+.plan-card {
+    background: var(--paper-high);
+    border: 2px solid var(--ink);
+    border-radius: 5px;
+    box-shadow: var(--shadow-card);
+    display: grid;
+    gap: 20px;
+    grid-template-rows: auto 1fr auto;
+    padding: 30px;
+    position: relative;
+}
+
+.plan-card h3 {
+    font-size: 1.15rem;
+}
+
+.plan-card-featured {
+    box-shadow: 9px 9px 0 rgba(216, 59, 59, 0.32);
+    transform: rotate(-0.7deg);
+}
+
+.plan-sticker {
+    background: var(--accent);
+    border: 2px solid var(--ink);
+    border-radius: 2px;
+    color: var(--paper-high);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    padding: 5px 11px;
+    position: absolute;
+    right: 18px;
+    text-transform: uppercase;
+    top: -14px;
+    transform: rotate(2.5deg);
+}
+
+.price {
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 2.7rem;
+    font-weight: 750;
+    margin-top: 4px;
+}
+
+.price span {
+    color: var(--ink-faint);
+    font-family: var(--font-body);
+    font-size: 1rem;
+    font-weight: 450;
+}
+
+.check-list {
+    display: grid;
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.check-list li {
+    font-size: 0.95rem;
+    padding-left: 26px;
+    position: relative;
+}
+
+.check-list li::before {
+    color: var(--accent);
+    content: "✓";
+    font-weight: 700;
+    left: 2px;
+    position: absolute;
+}
+
+.plan-note {
+    color: var(--ink-faint);
+    font-size: 0.92rem;
+    margin-top: 26px;
+    max-width: 84ch;
+}
+
+/* ---------- FAQ ruled list ---------- */
+.faq-list {
+    display: grid;
+    margin: 0 auto;
+    max-width: 780px;
+    width: 100%;
+}
+
+.faq-list details {
+    border-bottom: 2px solid var(--ink);
+}
+
+.faq-list details:first-child {
+    border-top: 2px solid var(--ink);
+}
+
+.faq-list summary {
+    align-items: baseline;
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    font-family: var(--font-display);
+    font-size: 1.08rem;
+    font-weight: 650;
+    gap: 14px;
+    list-style: none;
+    padding: 20px 40px 20px 0;
+    position: relative;
+}
+
+.faq-list summary::-webkit-details-marker {
+    display: none;
+}
+
+.faq-list summary .faq-q {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+}
+
+.faq-list summary::after {
+    color: var(--accent);
+    content: "+";
+    font-family: var(--font-mono);
+    font-size: 1.3rem;
+    position: absolute;
+    right: 6px;
+    top: 18px;
+    transition: transform 150ms ease;
+}
+
+.faq-list details[open] summary::after {
+    transform: rotate(45deg);
+}
+
+.faq-list details p {
+    max-width: 66ch;
+    padding: 0 0 22px 44px;
+}
+
+/* ---------- Final night band ---------- */
+.cta-band {
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 35px,
+            var(--night-line) 35px,
+            var(--night-line) 36px
+        ),
+        var(--night);
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+    text-align: center;
+}
+
+.cta-band .eyebrow {
+    color: var(--accent-bright);
+}
+
+.cta-band h2 {
+    color: var(--night-text);
+    font-size: clamp(2rem, 3.8vw, 2.8rem);
+    max-width: 20ch;
+    text-wrap: balance;
+}
+
+.cta-band p {
+    color: var(--night-muted);
+    font-size: 1.06rem;
+    max-width: 52ch;
+}
+
+.cta-band .button-accent {
+    border-color: var(--accent-bright);
+    box-shadow: 4px 4px 0 rgba(245, 243, 234, 0.35);
+}

@@ -5,6 +5,7 @@
     $canonical = $canonicalUrl ?? url()->current();
     $robotsValue = $robots ?? 'index,follow';
     $bodyClassValue = $bodyClass ?? 'marketing-body';
+    $headerClass = $headerClass ?? '';
     $socialImage = $socialImageUrl ?? null;
     $siteCssPaths = [
         public_path('css/site.css'),
@@ -37,7 +38,7 @@
         @endif
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Spline+Sans+Mono:wght@400;500;700&display=swap" rel="stylesheet">
         <script>document.documentElement.classList.add('has-js');</script>
         <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ $siteCssVersion }}">
         @stack('styles')
@@ -47,30 +48,24 @@
     <body class="@yield('body_class', $bodyClassValue)">
         <x-layout.skip-link />
         @stack('body_start')
-        <header class="site-header" id="navbar">
+        <header class="site-header @yield('header_class', $headerClass)" id="navbar">
             <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
-                <span class="brand-mark" aria-hidden="true">TS</span>
+                <span class="brand-mark" aria-hidden="true">Aa</span>
                 <span>{{ $productName }}</span>
             </a>
             <nav class="site-nav" aria-label="Primary">
-                <a href="{{ route('marketing.how-it-works') }}">How it works</a>
-                <a href="{{ route('marketing.languages') }}">Languages</a>
-                <a href="{{ route('marketing.pricing') }}">Pricing</a>
-                <a href="{{ route('marketing.faq') }}">FAQ</a>
-                <a href="{{ route('marketing.support') }}">Support</a>
-                @auth
-                    <a class="site-nav-action" href="{{ route('dashboard') }}">Dashboard</a>
-                @else
-                    <a class="site-nav-action" href="{{ route('login') }}">Sign in</a>
-                    <a class="site-nav-action nav-cta" href="{{ route('marketing.home') }}#download">Download</a>
-                @endauth
+                <a href="{{ route('marketing.home') }}#features">Features</a>
+                <a href="{{ route('marketing.home') }}#how">How it works</a>
+                <a href="{{ route('marketing.home') }}#languages">Languages</a>
+                <a href="{{ route('marketing.home') }}#pricing">Pricing</a>
+                <a href="{{ route('marketing.home') }}#faq">FAQ</a>
             </nav>
             <div class="site-actions">
                 @auth
                     <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
-                    <a class="text-link nav-cta" href="{{ route('marketing.home') }}#download">Download extension</a>
+                    <a class="button button-accent button-small" href="{{ route('marketing.home') }}#pricing">Start learning</a>
                 @endauth
             </div>
         </header>
@@ -85,11 +80,10 @@
                 <p>Generated subtitles, translations, romanization, and word cards for public YouTube videos.</p>
             </div>
             <nav aria-label="Footer">
+                <a href="{{ route('marketing.pricing') }}">Pricing</a>
+                <a href="{{ route('marketing.support') }}">Support</a>
                 <a href="{{ route('marketing.privacy') }}">Privacy</a>
                 <a href="{{ route('marketing.terms') }}">Terms</a>
-                <a href="{{ route('marketing.support') }}">Support</a>
-                <a href="{{ route('robots') }}">Robots</a>
-                <a href="{{ route('sitemap') }}">Sitemap</a>
             </nav>
         </footer>
     </body>

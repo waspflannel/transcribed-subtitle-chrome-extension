@@ -15,14 +15,14 @@
         <meta name="robots" content="noindex,nofollow">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Spline+Sans+Mono:wght@400;500;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ $siteCssVersion }}">
-        </head>
+    </head>
     <body class="auth-body">
         <x-layout.skip-link />
         <header class="auth-header">
             <a class="brand" href="{{ route('marketing.home') }}">
-                <span class="brand-mark" aria-hidden="true">TS</span>
+                <span class="brand-mark" aria-hidden="true">Aa</span>
                 <span>{{ $productName }}</span>
             </a>
         </header>

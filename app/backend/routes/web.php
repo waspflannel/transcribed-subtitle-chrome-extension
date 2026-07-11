@@ -11,17 +11,17 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [MarketingPageController::class, 'home'])
     ->name('marketing.home');
-Route::redirect('/desktop', '/extension', 301)
+Route::redirect('/desktop', '/#install', 301)
     ->name('marketing.desktop');
-Route::get('/extension', [MarketingPageController::class, 'extension'])
+Route::redirect('/extension', '/#install', 301)
     ->name('marketing.extension');
 Route::get('/pricing', [MarketingPageController::class, 'pricing'])
     ->name('marketing.pricing');
-Route::get('/languages', [MarketingPageController::class, 'languages'])
+Route::redirect('/languages', '/#languages', 301)
     ->name('marketing.languages');
-Route::get('/how-it-works', [MarketingPageController::class, 'howItWorks'])
+Route::redirect('/how-it-works', '/#how', 301)
     ->name('marketing.how-it-works');
-Route::get('/faq', [MarketingPageController::class, 'faq'])
+Route::redirect('/faq', '/#faq', 301)
     ->name('marketing.faq');
 Route::get('/privacy', [MarketingPageController::class, 'privacy'])
     ->name('marketing.privacy');

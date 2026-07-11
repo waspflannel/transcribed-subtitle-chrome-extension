@@ -1,0 +1,120 @@
+* {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--paper);
+    scroll-behavior: smooth;
+    scroll-padding-top: 92px;
+}
+
+body {
+    background: var(--paper);
+    margin: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* Faint ruled-notebook baseline on marketing pages */
+.marketing-body {
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent 35px,
+            rgba(20, 20, 20, 0.045) 35px,
+            rgba(20, 20, 20, 0.045) 36px
+        ),
+        var(--paper);
+}
+
+a {
+    color: inherit;
+}
+
+img,
+video {
+    display: block;
+    max-width: 100%;
+}
+
+p,
+dd,
+li {
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+}
+
+p,
+h1,
+h2,
+h3,
+dl,
+dd,
+ul {
+    margin: 0;
+}
+
+h1,
+h2,
+h3 {
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.05;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+h1 {
+    font-size: 3.8rem;
+}
+
+h2 {
+    font-size: 2.3rem;
+}
+
+h3 {
+    font-size: 1.15rem;
+}
+
+/* Highlighter swipe */
+.hl {
+    background: linear-gradient(transparent 52%, rgba(216, 59, 59, 0.38) 52%, rgba(216, 59, 59, 0.38) 94%, transparent 94%);
+    padding: 0 3px;
+}
+
+/* Furigana-style ruby annotations */
+ruby {
+    ruby-align: center;
+}
+
+rt {
+    color: var(--accent-deep);
+    font-family: var(--font-mono);
+    font-size: 0.32em;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    padding-bottom: 0.35em;
+    text-transform: lowercase;
+}
+
+button,
+input,
+select {
+    font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+}
+
+::selection {
+    background: var(--accent-tint);
+}

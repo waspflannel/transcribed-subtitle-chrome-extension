@@ -20,12 +20,8 @@ class SaasWebsiteAndSeoTest extends TestCase
     public function test_public_pages_render_seo_metadata_and_beta_copy(): void
     {
         $pages = [
-            ['marketing.home', 'TRANSCRIBED', 'learn languages using youtube'],
-            ['marketing.extension', 'Transcribed Subtitle Extension for YouTube study', 'side panel Account tab'],
-            ['marketing.pricing', 'Generated-video-minute plans', 'Stripe'],
-            ['marketing.languages', 'Supported subtitle and translation languages', 'Auto detect'],
-            ['marketing.how-it-works', 'public YouTube audio', 'Install the Chrome extension'],
-            ['marketing.faq', 'Beta answers', 'Only public YouTube watch pages and Shorts'],
+            ['marketing.home', 'actually watch', 'Only public YouTube watch pages and Shorts'],
+            ['marketing.pricing', 'Simple monthly plans', 'Stripe'],
             ['marketing.privacy', 'Video-derived data', 'raw audio is deleted'],
             ['marketing.terms', 'Paid beta terms', 'Refund requests'],
             ['marketing.support', 'Help for beta access', 'failure code'],
@@ -58,32 +54,121 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/xml; charset=UTF-8')
             ->assertSee(route('marketing.home'), false)
-            ->assertSee(route('marketing.extension'), false)
             ->assertSee(route('marketing.pricing'), false)
             ->assertSee(route('marketing.privacy'), false)
+            ->assertDontSee(url('/extension'), false)
+            ->assertDontSee(url('/languages'), false)
+            ->assertDontSee(url('/how-it-works'), false)
+            ->assertDontSee(url('/faq'), false)
             ->assertDontSee('/desktop', false)
             ->assertDontSee('/dashboard');
     }
 
-    public function test_hermes_landing_page_and_extension_route_match_product_routes()
+    public function test_landing_page_shows_product_mock_pricing_and_plan_signup_links(): void
     {
         $this
             ->get(route('marketing.home', absolute: false))
             ->assertOk()
-            ->assertSeeText('TRANSCRIBED')
-            ->assertSeeText('SUBTITLE')
-            ->assertSeeText('EXTENSION')
-            ->assertSeeText('Download Extension [Beta]');
+            ->assertSeeText('Learn a language from the videos you')
+            ->assertSeeText('Click any word for an instant flashcard')
+            ->assertSeeText('Supported subtitle and translation languages')
+            ->assertSeeText('generated-video minutes')
+            ->assertSee(route('register', ['plan' => 'base']), false)
+            ->assertSee(route('register', ['plan' => 'plus']), false)
+            ->assertSee(route('register', ['plan' => 'pro']), false);
+    }
+
+    public function test_retired_marketing_pages_redirect_to_landing_anchors(): void
+    {
+        foreach ([
+            '/desktop' => '/#install',
+            '/extension' => '/#install',
+            '/languages' => '/#languages',
+            '/how-it-works' => '/#how',
+            '/faq' => '/#faq',
+        ] as $from => $to) {
+            $this
+                ->get($from)
+                ->assertMovedPermanently()
+                ->assertRedirect($to);
+        }
+    }
+
+    public function test_plan_choice_carries_through_registration_to_dashboard_checkout(): void
+    {
+        Notification::fake();
 
         $this
-            ->get('/desktop')
-            ->assertRedirect(route('marketing.extension', absolute: false));
-
-        $this
-            ->get(route('marketing.extension', absolute: false))
+            ->get(route('register', ['plan' => 'plus'], absolute: false))
             ->assertOk()
-            ->assertSeeText('Transcribed Subtitle Extension for YouTube study')
-            ->assertSee('<link rel="canonical" href="'.route('marketing.extension').'">', false);
+            ->assertSeeText('Plus plan selected');
+
+        $this
+            ->post('/register', [
+                'name' => 'Plan Carrier',
+                'email' => 'plan-carrier@example.com',
+                'password' => 'correct12345',
+                'password_confirmation' => 'correct12345',
+                'plan' => 'plus',
+            ])
+            ->assertRedirect(route('verification.notice', absolute: false))
+            ->assertSessionHas('checkout_plan', 'plus');
+
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user)
+            ->withSession(['checkout_plan' => 'plus'])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSeeText('Finish setting up your Plus plan')
+            ->assertSeeText('Continue to checkout');
+
+        config([
+            'billing.stripe.secret' => 'sk_test_123',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.stripe.com/v1/customers' => Http::response(['id' => 'cus_123']),
+            'https://api.stripe.com/v1/checkout/sessions' => Http::response([
+                'id' => 'cs_test_123',
+                'url' => 'https://checkout.stripe.test/session',
+            ]),
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->withSession(['checkout_plan' => 'plus'])
+            ->post(route('billing.checkout', ['planCode' => 'plus']))
+            ->assertRedirect('https://checkout.stripe.test/session')
+            ->assertSessionMissing('checkout_plan');
+    }
+
+    public function test_invalid_or_subscribed_plan_carry_shows_no_checkout_banner(): void
+    {
+        $this
+            ->post('/register', [
+                'name' => 'No Plan',
+                'email' => 'no-plan@example.com',
+                'password' => 'correct12345',
+                'password_confirmation' => 'correct12345',
+                'plan' => 'bogus',
+            ])
+            ->assertRedirect(route('verification.notice', absolute: false))
+            ->assertSessionMissing('checkout_plan');
+
+        $subscribed = User::factory()->create([
+            'billing_subscription_status' => 'active',
+        ]);
+
+        $this
+            ->actingAs($subscribed)
+            ->withSession(['checkout_plan' => 'plus'])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSeeText('Finish setting up your Plus plan')
+            ->assertSessionMissing('checkout_plan');
     }
 
     public function test_dashboard_is_protected_and_guides_extension_billing_usage_and_jobs(): void

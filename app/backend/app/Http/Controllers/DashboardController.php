@@ -32,6 +32,7 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'user' => $user,
+            'checkoutPlan' => $this->pendingCheckoutPlan($request, $user, $plans),
             'account' => $billing->accountSummary($user),
             'plans' => $plans->publicPlans(),
             'testingPlanSwitcherEnabled' => $testingPlanSwitcher->enabled(),
@@ -43,6 +44,22 @@ class DashboardController extends Controller
             'robots' => 'noindex,nofollow',
             'bodyClass' => 'app-body',
         ]);
+    }
+
+    /**
+     * Plan chosen on the marketing site before registration, pending Stripe checkout.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function pendingCheckoutPlan(Request $request, User $user, BillingPlanCatalog $plans): ?array
+    {
+        if ($user->billing_subscription_status !== null) {
+            $request->session()->forget('checkout_plan');
+
+            return null;
+        }
+
+        return $plans->plan($request->session()->get('checkout_plan'));
     }
 
     /**

@@ -35,6 +35,8 @@ class BillingController extends Controller
 
         $analytics->checkoutStarted($user, $plan);
 
+        $request->session()->forget('checkout_plan');
+
         try {
             $session = $stripe->createCheckoutSession(
                 user: $user,

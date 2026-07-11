@@ -1,0 +1,31 @@
+:root {
+    --paper: #f5f3ea;
+    --paper-high: #fffdf4;
+    --ink: #141414;
+    --ink-soft: #4c4a45;
+    --ink-faint: #7f7c74;
+    --line: #dcd9c9;
+    --night: #0e0e0e;
+    --night-high: #1e1e1e;
+    --night-line: rgba(245, 243, 234, 0.12);
+    --night-text: #f2f0e4;
+    --night-muted: rgba(242, 240, 228, 0.66);
+    --accent: #d83b3b;
+    --accent-deep: #a92c2c;
+    --accent-bright: #f1685c;
+    --accent-soft: #fbe8e5;
+    --accent-tint: rgba(216, 59, 59, 0.16);
+    --green: #2c7a4b;
+    --green-soft: #e2f0e7;
+    --red: #c03428;
+    --red-soft: #f9e7e4;
+    --content: 1140px;
+    --font-display: "Bricolage Grotesque", "Arial Black", ui-sans-serif, sans-serif;
+    --font-body: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+    --shadow-card: 6px 6px 0 rgba(20, 20, 20, 0.1);
+    --shadow-pop: 4px 4px 0 var(--ink);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.55;
+}

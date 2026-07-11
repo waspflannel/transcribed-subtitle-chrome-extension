@@ -8,8 +8,18 @@
 
     <x-form.error-list :errors="$errors" />
 
+    @if ($selectedPlan ?? null)
+        <p class="plan-pick-note">
+            {{ $selectedPlan['name'] }} plan selected — ${{ number_format(((int) $selectedPlan['price_cents']) / 100, 0) }}/month.
+            After you verify your email, checkout continues from your dashboard.
+        </p>
+    @endif
+
     <form method="post" action="{{ route('register.store') }}">
         @csrf
+        @if ($selectedPlan ?? null)
+            <input type="hidden" name="plan" value="{{ $selectedPlan['code'] }}">
+        @endif
         <x-form.field label="Name">
             <input name="name" value="{{ old('name') }}" autocomplete="name" required>
         </x-form.field>

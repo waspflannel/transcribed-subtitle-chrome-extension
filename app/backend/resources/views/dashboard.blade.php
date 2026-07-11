@@ -15,10 +15,23 @@
                 <p>Manage billing, usage, extension connection, and recent subtitle jobs.</p>
             </div>
             <div class="action-stack horizontal-actions">
-                <a class="button" href="{{ route('marketing.how-it-works') }}#install">Install extension</a>
+                <a class="button" href="{{ config('marketing.chrome_extension_url') ?: route('marketing.home').'#install' }}">Install extension</a>
                 <a class="button button-secondary" href="https://www.youtube.com" rel="noopener noreferrer">Open YouTube</a>
             </div>
         </div>
+
+        @if ($checkoutPlan !== null)
+            <div class="checkout-banner">
+                <p>
+                    Finish setting up your {{ $checkoutPlan['name'] }} plan — ${{ number_format(((int) $checkoutPlan['price_cents']) / 100, 0) }}/month.
+                    <small>Checkout opens in Stripe. You can pick a different plan from the list on the right.</small>
+                </p>
+                <form method="post" action="{{ route('billing.checkout', ['planCode' => $checkoutPlan['code']]) }}">
+                    @csrf
+                    <button type="submit" class="button button-primary">Continue to checkout</button>
+                </form>
+            </div>
+        @endif
 
         @if (session('billing_error'))
             <p class="error-copy">{{ session('billing_error') }}</p>

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Services\Billing\BillingPlanCatalog;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\Request;
@@ -26,6 +27,12 @@ class FortifyServiceProvider extends ServiceProvider
         {
             public function toResponse($request)
             {
+                $plan = app(BillingPlanCatalog::class)->plan((string) $request->input('plan'));
+
+                if ($plan !== null) {
+                    $request->session()->put('checkout_plan', $plan['code']);
+                }
+
                 return redirect()->route('verification.notice');
             }
         });
@@ -57,7 +64,9 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Fortify::loginView(fn () => view('auth.login'));
-        Fortify::registerView(fn () => view('auth.register'));
+        Fortify::registerView(fn (Request $request) => view('auth.register', [
+            'selectedPlan' => app(BillingPlanCatalog::class)->plan((string) $request->query('plan')),
+        ]));
         Fortify::requestPasswordResetLinkView(fn () => view('auth.forgot-password'));
         Fortify::resetPasswordView(fn (Request $request) => view('auth.reset-password', [
             'email' => $request->query('email'),

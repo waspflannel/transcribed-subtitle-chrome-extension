@@ -1,0 +1,76 @@
+/* Scroll reveal (site-interactions.js toggles .is-visible) */
+.has-js [data-reveal] {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+        opacity 460ms ease,
+        transform 460ms ease;
+}
+
+.has-js [data-reveal].is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Flashcards keep their resting tilt when revealed */
+.has-js .fc[data-reveal].is-visible:nth-child(odd) {
+    transform: rotate(-0.5deg);
+}
+
+.has-js .fc[data-reveal].is-visible:nth-child(even) {
+    transform: rotate(0.5deg);
+}
+
+.has-js .fc[data-reveal]:hover {
+    transform: rotate(0deg) translateY(-3px);
+}
+
+/* Hero load-in */
+@keyframes ink-rise {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.hero-band > * {
+    animation: ink-rise 540ms ease-out both;
+}
+
+.hero-band > *:nth-child(2) {
+    animation-delay: 70ms;
+}
+
+.hero-band > *:nth-child(3) {
+    animation-delay: 140ms;
+}
+
+.hero-band > *:nth-child(4) {
+    animation-delay: 210ms;
+}
+
+.hero-band > *:nth-child(5) {
+    animation-delay: 280ms;
+}
+
+.mk {
+    animation: ink-rise 620ms 240ms ease-out both;
+}
+
+/* Marker swipe on the hero highlight. The resting style is fully
+   highlighted; the animation only draws the swipe in, so the phrase
+   stays legible even if animations never run. */
+@keyframes marker-swipe {
+    from {
+        background-size: 0% 100%;
+    }
+}
+
+.hero-band .hl {
+    animation: marker-swipe 700ms 400ms ease-out backwards;
+}

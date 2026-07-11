@@ -1,0 +1,225 @@
+/* Buttons — flashcard-hard edges, offset shadow, tactile press */
+.button,
+button {
+    align-items: center;
+    background: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 3px;
+    box-shadow: var(--shadow-pop);
+    color: var(--paper-high);
+    cursor: pointer;
+    display: inline-flex;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 650;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 20px;
+    text-decoration: none;
+    transition:
+        transform 120ms ease,
+        box-shadow 120ms ease,
+        background 120ms ease,
+        color 120ms ease;
+}
+
+.button:hover,
+button:hover {
+    box-shadow: 6px 6px 0 var(--ink);
+    transform: translate(-2px, -2px);
+}
+
+.button:active,
+button:active {
+    box-shadow: 0 0 0 var(--ink);
+    transform: translate(4px, 4px);
+}
+
+.button-accent {
+    background: var(--accent);
+    color: var(--paper-high);
+}
+
+.button-accent:hover {
+    background: var(--accent-deep);
+    border-color: var(--ink);
+    color: var(--paper-high);
+}
+
+.button-secondary {
+    background: transparent;
+    box-shadow: none;
+    color: var(--ink);
+}
+
+.button-secondary:hover {
+    background: var(--paper-high);
+    box-shadow: var(--shadow-pop);
+    color: var(--ink);
+}
+
+.button-small {
+    box-shadow: 3px 3px 0 var(--ink);
+    font-size: 0.88rem;
+    min-height: 38px;
+    padding: 0 14px;
+}
+
+.full-width {
+    width: 100%;
+}
+
+.text-button {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--ink-faint);
+}
+
+.text-button:hover {
+    background: transparent;
+    box-shadow: none;
+    color: var(--red);
+    transform: none;
+}
+
+/* Mono micro-labels */
+.eyebrow,
+.status-pill,
+dt,
+th {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+.eyebrow {
+    color: var(--accent-deep);
+}
+
+.eyebrow::before {
+    content: "// ";
+}
+
+/* Section scaffolding */
+.section,
+.page-hero {
+    padding-bottom: 88px;
+    padding-top: 88px;
+}
+
+.page-hero {
+    display: grid;
+    gap: 16px;
+    padding-bottom: 36px;
+    padding-top: 156px;
+}
+
+.page-hero h1 {
+    font-size: 2.8rem;
+    max-width: 22ch;
+    text-wrap: balance;
+}
+
+.page-hero p:not(.eyebrow) {
+    font-size: 1.08rem;
+    max-width: 62ch;
+}
+
+.section-heading {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 44px;
+    max-width: 780px;
+}
+
+.section-heading p:not(.eyebrow) {
+    font-size: 1.05rem;
+}
+
+.split-section {
+    display: grid;
+    gap: 44px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.split-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+}
+
+.action-stack,
+.horizontal-actions {
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+/* Feedback blocks */
+.status,
+.error-copy {
+    border-radius: 3px;
+    border-style: solid;
+    border-width: 2px;
+    font-weight: 550;
+    padding: 12px 14px;
+}
+
+.status {
+    background: var(--green-soft);
+    border-color: var(--green);
+    color: var(--green);
+}
+
+.error-copy {
+    background: var(--red-soft);
+    border-color: var(--red);
+    color: var(--red);
+}
+
+.error-list {
+    background: var(--red-soft);
+    border: 2px solid var(--red);
+    border-radius: 3px;
+    color: var(--red);
+    display: grid;
+    gap: 6px;
+    list-style-position: inside;
+    padding: 12px;
+}
+
+/* Legal pages */
+.legal-copy {
+    display: grid;
+    gap: 14px;
+    max-width: 720px;
+    padding-top: 20px;
+}
+
+.legal-copy h2 {
+    font-size: 1.3rem;
+    margin-top: 18px;
+}
+
+/* Support */
+.support-grid {
+    display: grid;
+    gap: 22px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-top: 0;
+}
+
+.support-grid article {
+    background: var(--paper-high);
+    border: 2px solid var(--ink);
+    border-radius: 4px;
+    box-shadow: var(--shadow-card);
+    display: grid;
+    gap: 10px;
+    padding: 26px;
+}
+
+.support-grid h2 {
+    font-size: 1.1rem;
+}
