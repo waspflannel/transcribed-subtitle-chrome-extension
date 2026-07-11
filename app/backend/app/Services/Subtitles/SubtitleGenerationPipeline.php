@@ -22,6 +22,7 @@ use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class SubtitleGenerationPipeline
@@ -142,6 +143,14 @@ class SubtitleGenerationPipeline
                     'nominalEndSeconds' => null,
                 ]]
                 : $this->chunkFiles($preparedAudio, $chunkPlan);
+
+            if ($chunkPlan !== []) {
+                Log::info('backend.transcription_chunked', [
+                    'job_id' => $job->public_id,
+                    'audio_duration_seconds' => $preparedAudio->durationSeconds,
+                    'chunk_count' => count($chunks),
+                ]);
+            }
 
             $this->markJobRunning($job, 'transcribing', 50);
             $job = $job->refresh();

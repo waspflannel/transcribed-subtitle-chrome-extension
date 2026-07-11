@@ -92,7 +92,7 @@
   - `backend.subtitle_trace_event`
   - `provider.cost_estimated`
   - `queue.concurrency_delayed`
-  - `backend.generation_concurrency_rejected`
+  - `backend.generation_queue_full_rejected`
   - `performance.budget_checked`
   - `performance.budget_exceeded`
   - `backend.queue_job_processing`
