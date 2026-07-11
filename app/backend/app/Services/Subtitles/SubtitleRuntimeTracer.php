@@ -2,13 +2,16 @@
 
 namespace App\Services\Subtitles;
 
+use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
+use App\Jobs\MergeSubtitleTranscript;
+use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
-use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use Illuminate\Queue\Events\JobFailed;
@@ -85,10 +88,13 @@ class SubtitleRuntimeTracer
      * @var array<int, class-string>
      */
     private const QUEUED_SUBTITLE_JOB_CLASSES = [
+        AcquireSubtitleAudio::class,
+        OptimizeSubtitleAudio::class,
+        TranscribeSubtitleAudioChunk::class,
+        MergeSubtitleTranscript::class,
         EnrichSubtitleCueBatch::class,
         FinalizeSubtitleJob::class,
         PrepareSubtitleCuesAfterAnalysisBatches::class,
-        ProcessSubtitleJob::class,
         AnalyzeSubtitleCueBatch::class,
         RomanizeSubtitleCueBatch::class,
         TokenizeSubtitleCueBatch::class,

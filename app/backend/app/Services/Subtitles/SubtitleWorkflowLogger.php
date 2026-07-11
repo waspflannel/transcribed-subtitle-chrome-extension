@@ -92,13 +92,13 @@ class SubtitleWorkflowLogger
         ]);
     }
 
-    public function transcriptionCompleted(SubtitleJob $job, TimestampedTranscript $transcript, TemporaryAudioFile $audio): void
+    public function transcriptionCompleted(SubtitleJob $job, TimestampedTranscript $transcript, ?int $audioDurationSeconds): void
     {
         Log::info('backend.transcription_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'segment_count' => count($transcript->segments),
-            'duration_seconds' => $transcript->durationSeconds ?? $audio->durationSeconds,
+            'duration_seconds' => $transcript->durationSeconds ?? $audioDurationSeconds,
             'detected_source_language' => $transcript->language,
         ]);
     }

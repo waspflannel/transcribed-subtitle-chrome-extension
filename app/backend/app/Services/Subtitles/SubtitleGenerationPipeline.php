@@ -7,8 +7,12 @@ use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\OptimizeSubtitleAudio;
+use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
+use App\Services\Audio\ScribeAudioChunker;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Billing\BillingEntitlementService;
@@ -25,6 +29,7 @@ class SubtitleGenerationPipeline
     public function __construct(
         private readonly YouTubeAudioSource $audioSource,
         private readonly ElevenLabsScribeTranscriptionService $transcriptionService,
+        private readonly ScribeAudioChunker $chunker,
         private readonly VideoTranscriptCache $transcriptCache,
         private readonly TimestampedSubtitleTrackGenerator $tracks,
         private readonly SubtitleWorkflowLogger $logger,
@@ -37,7 +42,12 @@ class SubtitleGenerationPipeline
         private readonly UsageLedger $usageLedger,
     ) {}
 
-    public function transcribeSourceAudioAndDispatchAnalysis(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
+    /**
+     * Generation stage 1: claim the preparing job and download the source
+     * audio, then hand off to OptimizeSubtitleAudio. A cached transcript
+     * skips the audio stages entirely and dispatches analysis directly.
+     */
+    public function acquireAudioAndContinue(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
         $this->extendProcessingTimeLimit();
 
@@ -49,7 +59,6 @@ class SubtitleGenerationPipeline
 
         $this->telemetry->recordQueueWait($job, 'acquiring-audio', null, $queuedAtMs);
 
-        $audio = null;
         $stage = 'acquiring-audio';
 
         try {
@@ -71,6 +80,7 @@ class SubtitleGenerationPipeline
             $audio = $this->audioSource->acquire(
                 youtubeUrl: $job->youtube_url,
                 requestDurationSeconds: $job->video_duration_seconds,
+                workDirectory: SubtitleAudioWorkspace::directory($runId),
             );
 
             $job->update(['video_duration_seconds' => $audio->durationSeconds]);
@@ -79,9 +89,42 @@ class SubtitleGenerationPipeline
             $this->logger->audioAcquisitionCompleted($job, $audio);
             $this->telemetry->recordStageCompleted($job, 'acquiring-audio', $audioStartedAtMs);
 
-            $stage = 'optimizing-audio';
             $this->markJobRunning($job, 'optimizing-audio', 35);
-            $job = $job->refresh();
+            OptimizeSubtitleAudio::dispatch($job->id, $runId, $audio)
+                ->onQueue(SubtitleQueue::generationNameForJob($job));
+        } catch (Throwable $exception) {
+            SubtitleAudioWorkspace::delete($runId);
+            $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId);
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Generation stage 2: normalize the audio for Scribe, split it into
+     * chunks, and fan the chunks out as a generation-family batch whose
+     * completion merges the transcript. Audio too short to chunk rides the
+     * same path as a single whole-file chunk.
+     */
+    public function optimizeAudioAndDispatchTranscription(
+        int $subtitleJobId,
+        string $runId,
+        TemporaryAudioFile $audio,
+        ?int $queuedAtMs = null,
+    ): void {
+        $job = $this->loadRunningJob($subtitleJobId, $runId);
+
+        if ($job === null) {
+            SubtitleAudioWorkspace::delete($runId);
+
+            return;
+        }
+
+        $this->telemetry->recordQueueWait($job, 'optimizing-audio', null, $queuedAtMs);
+
+        $stage = 'optimizing-audio';
+
+        try {
             $this->telemetry->recordStageStarted($job, 'optimizing-audio');
 
             $audioOptimizationStartedAtMs = $this->telemetry->currentTimeMs();
@@ -89,26 +132,122 @@ class SubtitleGenerationPipeline
             $this->telemetry->recordStageCompleted($job, 'optimizing-audio', $audioOptimizationStartedAtMs);
 
             $stage = 'transcribing';
+            $chunkPlan = $this->chunker->plan($preparedAudio->durationSeconds);
+            $chunks = $chunkPlan === []
+                ? [[
+                    'file' => $preparedAudio,
+                    'audioStartSeconds' => 0.0,
+                    'nominalStartSeconds' => 0.0,
+                    'nominalEndSeconds' => null,
+                ]]
+                : $this->chunkFiles($preparedAudio, $chunkPlan);
+
             $this->markJobRunning($job, 'transcribing', 50);
             $job = $job->refresh();
             $this->logger->transcriptionStarted($job);
             $this->telemetry->recordStageStarted($job, 'transcribing');
 
-            $transcriptionStartedAtMs = $this->telemetry->currentTimeMs();
-            $transcript = $this->transcriptionService->transcribePreparedAudio(
-                audio: $preparedAudio,
-                sourceLanguage: $job->source_language,
-            );
-            $this->telemetry->recordStageCompleted($job, 'transcribing', $transcriptionStartedAtMs);
-            $this->costs->recordTranscription($job, $audio->durationSeconds);
+            $chunkCount = count($chunks);
+            $chunkJobs = [];
 
-            $this->logger->transcriptionCompleted($job, $transcript, $audio);
+            foreach ($chunks as $chunkIndex => $chunk) {
+                $chunkJobs[] = new TranscribeSubtitleAudioChunk(
+                    subtitleJobId: $job->id,
+                    chunkIndex: $chunkIndex,
+                    chunkCount: $chunkCount,
+                    runId: $runId,
+                    chunkAudio: $chunk['file'],
+                    audioStartSeconds: $chunk['audioStartSeconds'],
+                    nominalStartSeconds: $chunk['nominalStartSeconds'],
+                    nominalEndSeconds: $chunk['nominalEndSeconds'],
+                );
+            }
+
+            $this->batchDispatcher->dispatchTranscription($job, $chunkJobs, $this->telemetry->currentTimeMs());
+        } catch (Throwable $exception) {
+            SubtitleAudioWorkspace::delete($runId);
+            $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId);
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * Generation stage 3, one queue job per chunk: upload the chunk to
+     * Scribe and store the raw payload for the merge stage.
+     */
+    public function transcribeAudioChunk(
+        int $subtitleJobId,
+        string $runId,
+        int $chunkIndex,
+        int $chunkCount,
+        TemporaryAudioFile $chunkAudio,
+        float $audioStartSeconds,
+        float $nominalStartSeconds,
+        ?float $nominalEndSeconds,
+        ?int $queuedAtMs = null,
+    ): void {
+        $job = $this->loadRunningJob($subtitleJobId, $runId);
+
+        if ($job === null) {
+            return;
+        }
+
+        $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
+
+        $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
+
+        $this->artifacts->putTranscriptChunk(
+            job: $job,
+            chunkIndex: $chunkIndex,
+            chunkCount: $chunkCount,
+            payload: $payload,
+            audioStartSeconds: $audioStartSeconds,
+            nominalStartSeconds: $nominalStartSeconds,
+            nominalEndSeconds: $nominalEndSeconds,
+        );
+    }
+
+    /**
+     * Generation stage 4 (transcription batch completion): merge the chunk
+     * payloads into one normalized transcript, store the draft cues, and
+     * dispatch the analysis batches. The audio workspace is finished after
+     * this point and is removed on success and failure alike.
+     */
+    public function mergeTranscriptAndDispatchAnalysis(
+        int $subtitleJobId,
+        string $runId,
+        int $transcribingStartedAtMs,
+        ?int $queuedAtMs = null,
+    ): void {
+        $job = $this->loadRunningJob($subtitleJobId, $runId);
+
+        if ($job === null) {
+            SubtitleAudioWorkspace::delete($runId);
+
+            return;
+        }
+
+        $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
+
+        try {
+            $durationSeconds = (int) $job->video_duration_seconds;
+            $transcript = $this->transcriptionService->transcriptFromChunkPayloads(
+                chunks: $this->artifacts->transcriptChunks($job),
+                sourceLanguage: $job->source_language,
+                durationSeconds: $durationSeconds,
+            );
+
+            $this->telemetry->recordStageCompleted($job, 'transcribing', $transcribingStartedAtMs);
+            $this->costs->recordTranscription($job, $durationSeconds);
+
+            $this->logger->transcriptionCompleted($job, $transcript, $durationSeconds);
             $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
             $this->transcriptCache->store(
                 youtubeVideoId: $job->youtube_video_id,
                 requestedSourceLanguage: $job->source_language,
                 transcript: $transcript,
-                audioDurationSeconds: $audio->durationSeconds,
+                audioDurationSeconds: $durationSeconds,
             );
 
             $job = $job->refresh();
@@ -120,14 +259,35 @@ class SubtitleGenerationPipeline
 
             $this->dispatchTokenizationAndTranslationBatches($job);
         } catch (Throwable $exception) {
-            $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId);
+            $this->failureHandler->failJob($subtitleJobId, 'transcribing', $exception, $runId);
 
             throw $exception;
         } finally {
-            if ($audio instanceof TemporaryAudioFile) {
-                $audio->delete();
-            }
+            SubtitleAudioWorkspace::delete($runId);
         }
+    }
+
+    /**
+     * @param  array<int, array{nominalStart: float, nominalEnd: float, audioStart: float, audioEnd: float}>  $chunkPlan
+     * @return array<int, array{file: TemporaryAudioFile, audioStartSeconds: float, nominalStartSeconds: float, nominalEndSeconds: float|null}>
+     */
+    private function chunkFiles(TemporaryAudioFile $preparedAudio, array $chunkPlan): array
+    {
+        $chunkAudioFiles = $this->chunker->split($preparedAudio, $chunkPlan);
+        $lastChunkIndex = array_key_last($chunkPlan);
+        $chunks = [];
+
+        foreach ($chunkPlan as $index => $bounds) {
+            $chunks[] = [
+                'file' => $chunkAudioFiles[$index],
+                'audioStartSeconds' => $bounds['audioStart'],
+                'nominalStartSeconds' => $bounds['nominalStart'],
+                // The last chunk keeps everything past its nominal start.
+                'nominalEndSeconds' => $index === $lastChunkIndex ? null : $bounds['nominalEnd'],
+            ];
+        }
+
+        return $chunks;
     }
 
     /**

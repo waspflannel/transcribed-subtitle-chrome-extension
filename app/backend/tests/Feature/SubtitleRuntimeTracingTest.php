@@ -7,10 +7,14 @@ use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
+use App\Jobs\AcquireSubtitleAudio;
+use App\Jobs\MergeSubtitleTranscript;
+use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
-use App\Jobs\ProcessSubtitleJob;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\TranscribeSubtitleAudioChunk;
+use App\Services\Audio\TemporaryAudioFile;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
@@ -485,8 +489,12 @@ class SubtitleRuntimeTracingTest extends TestCase
     public function test_concurrency_limited_jobs_allow_release_retries_but_cap_exceptions(): void
     {
         $runId = (string) Str::uuid();
+        $stageAudio = new TemporaryAudioFile('unused-path', 'unused-directory', 1, 1, 'audio/flac');
         $serialJobs = [
-            new ProcessSubtitleJob(1, $runId),
+            new AcquireSubtitleAudio(1, $runId),
+            new OptimizeSubtitleAudio(1, $runId, $stageAudio),
+            new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $stageAudio, 0.0, 0.0, null),
+            new MergeSubtitleTranscript(1, $runId, 0),
             new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
             new FinalizeSubtitleJob(1, false, $runId),
         ];

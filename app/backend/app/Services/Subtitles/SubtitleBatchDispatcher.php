@@ -3,6 +3,7 @@
 namespace App\Services\Subtitles;
 
 use App\Jobs\FinalizeSubtitleJob;
+use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Models\SubtitleJob;
 use Illuminate\Bus\Batch;
@@ -25,6 +26,26 @@ class SubtitleBatchDispatcher
             stage: 'analysis',
             completionJobClass: PrepareSubtitleCuesAfterAnalysisBatches::class,
             completionJobArguments: [$job->id, $job->run_id],
+        );
+    }
+
+    /**
+     * Transcription chunks ride the tier's generation queue, not the AI
+     * batch queue: they are provider uploads bounded per job by the chunk
+     * plan, so the per-user AI batch concurrency cap does not apply.
+     *
+     * @param  array<int, object>  $jobs
+     */
+    public function dispatchTranscription(SubtitleJob $job, array $jobs, int $transcribingStartedAtMs): void
+    {
+        $this->dispatchBatch(
+            job: $job,
+            jobs: $jobs,
+            batchName: 'subtitle transcription '.$job->public_id,
+            stage: 'transcribing',
+            completionJobClass: MergeSubtitleTranscript::class,
+            completionJobArguments: [$job->id, $job->run_id, $transcribingStartedAtMs],
+            batchQueueName: SubtitleQueue::generationNameForJob($job),
         );
     }
 
@@ -62,6 +83,7 @@ class SubtitleBatchDispatcher
         string $stage,
         string $completionJobClass,
         array $completionJobArguments,
+        ?string $batchQueueName = null,
     ): void {
         if ($jobs === []) {
             throw new LogicException('Cannot dispatch an empty subtitle batch.');
@@ -69,7 +91,7 @@ class SubtitleBatchDispatcher
 
         $subtitleJobId = $job->id;
         $runId = $job->run_id;
-        $batchQueueName = SubtitleQueue::batchNameForJob($job);
+        $batchQueueName ??= SubtitleQueue::batchNameForJob($job);
         $completionQueueName = SubtitleQueue::generationNameForJob($job);
 
         Bus::batch($jobs)

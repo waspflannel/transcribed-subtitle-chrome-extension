@@ -11,7 +11,7 @@ use Throwable;
 
 class YouTubeAudioSource
 {
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory): TemporaryAudioFile
     {
         $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
 
@@ -19,7 +19,7 @@ class YouTubeAudioSource
             throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
         }
 
-        $workDirectory = $this->createWorkDirectory();
+        File::ensureDirectoryExists($workDirectory, 0700);
 
         try {
             $metadata = $this->metadata($youtubeUrl);
@@ -52,16 +52,6 @@ class YouTubeAudioSource
                 previous: $exception,
             );
         }
-    }
-
-    private function createWorkDirectory(): string
-    {
-        $directory = rtrim((string) config('subtitles.youtube.temp_directory'), DIRECTORY_SEPARATOR)
-            .DIRECTORY_SEPARATOR.(string) Str::uuid();
-
-        File::ensureDirectoryExists($directory, 0700);
-
-        return $directory;
     }
 
     /**

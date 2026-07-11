@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
@@ -13,7 +14,12 @@ use Illuminate\Queue\SerializesModels;
 use RuntimeException;
 use Throwable;
 
-class ProcessSubtitleJob implements ShouldQueue
+/**
+ * Second generation stage: normalizes the downloaded audio for Scribe
+ * (ffmpeg, optionally voice isolation), splits it into transcription chunks,
+ * and fans the chunks out as their own queue jobs.
+ */
+class OptimizeSubtitleAudio implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
@@ -24,6 +30,11 @@ class ProcessSubtitleJob implements ShouldQueue
 
     public int $maxExceptions = 1;
 
+    /**
+     * Voice isolation adds a provider round-trip and two extra ffmpeg passes
+     * (600s process timeout each), so this stage keeps the old whole-span
+     * ceiling instead of a tighter one.
+     */
     public int $timeout = 1200;
 
     public readonly int $queuedAtMs;
@@ -31,30 +42,30 @@ class ProcessSubtitleJob implements ShouldQueue
     public function __construct(
         public readonly int $subtitleJobId,
         public readonly string $runId,
+        public readonly TemporaryAudioFile $audio,
         ?int $queuedAtMs = null,
     ) {
         $this->onConnection(SubtitleQueue::connection());
-        $this->onQueue(SubtitleQueue::generationName());
-        $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
+        $this->queuedAtMs = $queuedAtMs ?? (int) floor(microtime(true) * 1000);
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->transcribeSourceAudioAndDispatchAnalysis($this->subtitleJobId, $this->runId, $this->queuedAtMs);
+        $pipeline->optimizeAudioAndDispatchTranscription(
+            $this->subtitleJobId,
+            $this->runId,
+            $this->audio,
+            $this->queuedAtMs,
+        );
     }
 
     public function failed(?Throwable $exception): void
     {
         app(SubtitleJobFailureHandler::class)->failJob(
             $this->subtitleJobId,
-            'preparing',
-            $exception ?? new RuntimeException('Subtitle processing job failed.'),
+            'optimizing-audio',
+            $exception ?? new RuntimeException('Subtitle audio optimization job failed.'),
             $this->runId,
         );
-    }
-
-    private function currentTimeMs(): int
-    {
-        return (int) floor(microtime(true) * 1000);
     }
 }

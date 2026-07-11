@@ -5,6 +5,7 @@ namespace App\Services\Subtitles;
 use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\UsageLedger;
 use Throwable;
 
@@ -107,5 +108,6 @@ class SubtitleJobFailureHandler
     {
         $this->usageLedger->releaseReservation($job->load('user'), 'failure');
         $this->artifacts->deleteForJob($job);
+        SubtitleAudioWorkspace::delete((string) $job->run_id);
     }
 }

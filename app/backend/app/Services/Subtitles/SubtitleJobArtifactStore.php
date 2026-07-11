@@ -13,6 +13,8 @@ class SubtitleJobArtifactStore
 {
     public const TRANSCRIPT = 'transcript';
 
+    public const TRANSCRIPT_CHUNK = 'transcript_chunk';
+
     public const DRAFT_CUES = 'draft_cues';
 
     public const TOKENIZED_CUES = 'tokenized_cues';
@@ -70,6 +72,80 @@ class SubtitleJobArtifactStore
             ),
             webVtt: $this->stringPayloadValue($payload, 'webVtt', self::TRANSCRIPT),
         );
+    }
+
+    /**
+     * Raw per-chunk Scribe payload plus the merge bounds the chunk was cut
+     * with. chunkCount is stored on every row so the merge stage can detect
+     * a silently missing chunk instead of producing a shorter transcript.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function putTranscriptChunk(
+        SubtitleJob $job,
+        int $chunkIndex,
+        int $chunkCount,
+        array $payload,
+        float $audioStartSeconds,
+        float $nominalStartSeconds,
+        ?float $nominalEndSeconds,
+    ): void {
+        $this->put($job, self::TRANSCRIPT_CHUNK, [
+            'chunkCount' => $chunkCount,
+            'payload' => $payload,
+            'audioStartSeconds' => $audioStartSeconds,
+            'nominalStartSeconds' => $nominalStartSeconds,
+            'nominalEndSeconds' => $nominalEndSeconds,
+        ], $chunkIndex);
+    }
+
+    /**
+     * Every stored transcript chunk in chunk order, shaped for the chunk
+     * merger. Fails loudly when any chunk is missing or malformed.
+     *
+     * @return array<int, array{payload: array<string, mixed>, audioStartSeconds: float, nominalStartSeconds: float, nominalEndSeconds: float|null}>
+     */
+    public function transcriptChunks(SubtitleJob $job): array
+    {
+        $artifacts = SubtitleJobArtifact::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where('artifact_type', self::TRANSCRIPT_CHUNK)
+            ->where('run_id', $job->run_id)
+            ->orderBy('batch_index')
+            ->get();
+
+        if ($artifacts->isEmpty()) {
+            $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
+        }
+
+        $chunks = [];
+        $expectedCount = null;
+
+        foreach ($artifacts as $artifact) {
+            $payload = $artifact->payload;
+            $chunkPayload = $payload['payload'] ?? null;
+            $chunkCount = $payload['chunkCount'] ?? null;
+
+            if (! is_array($chunkPayload) || ! is_int($chunkCount)) {
+                $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
+            }
+
+            $expectedCount ??= $chunkCount;
+            $nominalEnd = $payload['nominalEndSeconds'] ?? null;
+
+            $chunks[] = [
+                'payload' => $chunkPayload,
+                'audioStartSeconds' => (float) ($payload['audioStartSeconds'] ?? 0.0),
+                'nominalStartSeconds' => (float) ($payload['nominalStartSeconds'] ?? 0.0),
+                'nominalEndSeconds' => is_numeric($nominalEnd) ? (float) $nominalEnd : null,
+            ];
+        }
+
+        if (count($chunks) !== $expectedCount) {
+            $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
+        }
+
+        return $chunks;
     }
 
     /**

@@ -3,18 +3,19 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
-use App\Jobs\ProcessSubtitleJob;
+use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
+use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
-use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -97,7 +98,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonMissingPath('track')
             ->assertJsonStructure(['jobId', 'status', 'stage', 'progressPercent', 'createdAt', 'updatedAt']);
 
-        Queue::assertPushedOn(SubtitleQueue::generationName(), ProcessSubtitleJob::class);
+        Queue::assertPushedOn(SubtitleQueue::generationName(), AcquireSubtitleAudio::class);
     }
 
     public function test_duplicate_running_request_reuses_job_without_dispatching_duplicate_work(): void
@@ -119,7 +120,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertAccepted();
 
         $this->assertSame($first->json('jobId'), $second->json('jobId'));
-        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+        Queue::assertPushed(AcquireSubtitleAudio::class, 1);
     }
 
     public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
@@ -135,7 +136,7 @@ class SubtitleJobApiTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'bgqueue0001']))
             ->assertAccepted();
 
-        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+        Queue::assertPushed(AcquireSubtitleAudio::class, function (AcquireSubtitleAudio $job): bool {
             return $job->connection === 'background'
                 && $job->queue === SubtitleQueue::generationName();
         });
@@ -161,7 +162,7 @@ class SubtitleJobApiTest extends TestCase
             'public_id' => $response->json('jobId'),
             'generation_tier' => 'pro',
         ]);
-        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+        Queue::assertPushed(AcquireSubtitleAudio::class, function (AcquireSubtitleAudio $job): bool {
             return $job->connection === 'database'
                 && $job->queue === 'subtitle-generation-pro';
         });
@@ -196,7 +197,7 @@ class SubtitleJobApiTest extends TestCase
             'public_id' => $response->json('jobId'),
             'generation_tier' => 'ultimate',
         ]);
-        Queue::assertPushed(ProcessSubtitleJob::class, function (ProcessSubtitleJob $job): bool {
+        Queue::assertPushed(AcquireSubtitleAudio::class, function (AcquireSubtitleAudio $job): bool {
             return $job->connection === 'database'
                 && $job->queue === 'subtitle-generation-ultimate';
         });
@@ -217,10 +218,16 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
     {
-        $processJobTimeout = (new ProcessSubtitleJob(1, (string) Str::uuid()))->timeout;
+        $runId = (string) Str::uuid();
+        $audio = new TemporaryAudioFile('unused-path', 'unused-directory', 1, 1, 'audio/flac');
+        $maxStageTimeout = max(
+            (new AcquireSubtitleAudio(1, $runId))->timeout,
+            (new OptimizeSubtitleAudio(1, $runId, $audio))->timeout,
+            (new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $audio, 0.0, 0.0, null))->timeout,
+        );
 
-        $this->assertGreaterThan($processJobTimeout, config('queue.connections.database.retry_after'));
-        $this->assertGreaterThan($processJobTimeout, config('queue.connections.redis.retry_after'));
+        $this->assertGreaterThan($maxStageTimeout, config('queue.connections.database.retry_after'));
+        $this->assertGreaterThan($maxStageTimeout, config('queue.connections.redis.retry_after'));
     }
 
     public function test_dev_worker_command_starts_configured_subtitle_workers(): void
@@ -280,7 +287,7 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame($staleJob->public_id, $response->json('jobId'));
         $this->assertTrue($staleJob->fresh()->created_at->greaterThan($staleJob->created_at));
-        Queue::assertPushed(ProcessSubtitleJob::class, 1);
+        Queue::assertPushed(AcquireSubtitleAudio::class, 1);
     }
 
     public function test_translation_enabled_jobs_dispatch_one_merged_analysis_batch_job(): void
@@ -298,14 +305,25 @@ class SubtitleJobApiTest extends TestCase
             ]))
             ->assertAccepted();
 
-        Artisan::call('queue:work', [
-            '--queue' => SubtitleQueue::workerQueueList().',default',
-            '--once' => true,
-            '--tries' => 1,
-            '--sleep' => 0,
-        ]);
+        // Generation now runs as chained stage jobs (acquire -> optimize ->
+        // chunk transcribe -> merge), so work the queue until the merge stage
+        // has dispatched the analysis batch.
+        $payloads = '';
 
-        $payloads = DB::table('jobs')->pluck('payload')->implode("\n");
+        for ($iteration = 0; $iteration < 10; $iteration++) {
+            Artisan::call('queue:work', [
+                '--queue' => SubtitleQueue::workerQueueList().',default',
+                '--once' => true,
+                '--tries' => 1,
+                '--sleep' => 0,
+            ]);
+
+            $payloads = DB::table('jobs')->pluck('payload')->implode("\n");
+
+            if (str_contains($payloads, addslashes(AnalyzeSubtitleCueBatch::class))) {
+                break;
+            }
+        }
 
         // One merged tokenize+translate job per batch replaces the former
         // separate tokenize and translate jobs.
@@ -367,7 +385,7 @@ class SubtitleJobApiTest extends TestCase
             'progress_percent' => 20,
         ]);
 
-        app(SubtitleGenerationPipeline::class)->transcribeSourceAudioAndDispatchAnalysis($job->id, $job->run_id);
+        app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
 
         $this->assertSame(0, $this->audioSource->calls);
     }
@@ -1946,22 +1964,21 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
     public ?string $lastAudioPath = null;
 
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory): TemporaryAudioFile
     {
         $this->calls++;
         parse_str((string) parse_url($youtubeUrl, PHP_URL_QUERY), $query);
         $videoId = (string) $query['v'];
 
-        $directory = storage_path('framework/testing/audio-api/'.(string) Str::uuid());
-        File::ensureDirectoryExists($directory);
+        File::ensureDirectoryExists($workDirectory);
 
-        $path = $directory.DIRECTORY_SEPARATOR.$videoId.'.m4a';
+        $path = $workDirectory.DIRECTORY_SEPARATOR.$videoId.'.m4a';
         File::put($path, 'fake-audio');
         $this->lastAudioPath = $path;
 
         return new TemporaryAudioFile(
             path: $path,
-            directory: $directory,
+            directory: $workDirectory,
             durationSeconds: 42,
             sizeBytes: File::size($path),
             mimeType: 'audio/mp4',
@@ -1976,7 +1993,6 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
         parent::__construct(
             new ScribeTranscriptNormalizer,
             new ElevenLabsScribeAudioPreparer,
-            new ScribeAudioChunker,
             new ScribeChunkPayloadMerger,
         );
     }
@@ -1986,6 +2002,8 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
     public ?TimestampedTranscript $transcript = null;
 
     public int $prepareCalls = 0;
+
+    public int $chunkCalls = 0;
 
     public ?\Closure $beforePrepareResult = null;
 
@@ -2004,8 +2022,9 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
         return $audio;
     }
 
-    public function transcribePreparedAudio(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
     {
+        $this->chunkCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->beforeTranscriptionResult?->__invoke($audio);
 
@@ -2013,6 +2032,14 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
             throw SubtitleProcessingException::transcriptionFailed();
         }
 
+        return ['words' => [], 'language_code' => $sourceLanguage === 'auto' ? 'spa' : $sourceLanguage];
+    }
+
+    public function transcriptFromChunkPayloads(
+        array $chunks,
+        string $sourceLanguage,
+        ?int $durationSeconds,
+    ): TimestampedTranscript {
         if ($this->transcript !== null) {
             return $this->transcript;
         }

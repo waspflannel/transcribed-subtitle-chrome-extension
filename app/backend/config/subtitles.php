@@ -29,15 +29,13 @@ return [
             'generation-priority' => [
                 'queue_family' => 'generation',
                 'tiers' => ['ultimate', 'pro', 'plus', 'base'],
-                // Each ProcessSubtitleJob holds one of these workers for the
-                // whole acquire -> optimize -> transcribe span (~26s avg, ~75s
-                // max), and per-tier generation_concurrency is a *per-user* cap,
-                // so across users this pool is the global throughput ceiling. At
-                // 4 (+1 base guarantee) a burst of >5 jobs serialized and drove
-                // the p95 acquire-queue spike (one job waited 101s before its
-                // download even started). Doubled to give burst headroom; each
-                // added worker is another concurrent yt-dlp + ffmpeg + Scribe
-                // upload, so raise in step with memory and Scribe rate limits.
+                // Generation work runs as chained stage jobs (acquire ->
+                // optimize -> per-chunk transcribe -> merge), so a worker is
+                // held only for one stage at a time and tier priority applies
+                // at every stage boundary. Each concurrent acquire/optimize/
+                // transcribe stage is still a yt-dlp, ffmpeg, or Scribe-upload
+                // process, so raise this in step with memory and Scribe rate
+                // limits.
                 'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 8),
             ],
             'batch-priority' => [
@@ -236,9 +234,10 @@ return [
         // the ceilings deliberately sit above the work each stage performs.
         //   - `preparing` is pre-pickup queue wait; keep it generous so a brief
         //     worker backlog does not fail a job that is merely waiting.
-        //   - `acquiring-audio`/`optimizing-audio`/`transcribing` all execute
-        //     inside one ProcessSubtitleJob (its own timeout is 1200s), so their
-        //     ceilings exceed 1200s and the worker's own failure path wins first.
+        //   - `acquiring-audio`/`optimizing-audio`/`transcribing` each run as
+        //     their own stage job with its own timeout (900/1200/660s), and the
+        //     job stage is stamped when the next stage is dispatched, so each
+        //     ceiling spans one stage's queue wait plus its work.
         //   - batch stages (`tokenizing`..`enriching`) heartbeat updated_at on
         //     every progress step, so the ceiling only spans one stalled step.
         'stage_timeout_seconds' => [

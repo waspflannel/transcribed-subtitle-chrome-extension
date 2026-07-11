@@ -9,6 +9,7 @@ use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
+use App\Services\Transcription\TimestampedTranscript;
 use Illuminate\Http\Client\Request;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
@@ -94,7 +95,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             return Http::response($this->sampleScribePayload(), 200);
         });
 
-        $transcript = $this->service()->transcribe($this->audio, 'spa');
+        $transcript = $this->transcribeWholeAudio($this->audio, 'spa');
 
         $this->assertSame('spa', $transcript->language);
         $this->assertSame(12.0, $transcript->durationSeconds);
@@ -134,7 +135,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             return Http::response($this->sampleScribePayload(), 200);
         });
 
-        $transcript = $this->service()->transcribe($this->audio, 'spa');
+        $transcript = $this->transcribeWholeAudio($this->audio, 'spa');
 
         $this->assertSame('spa', $transcript->language);
         $this->assertTrue($scribeRequestMatched);
@@ -155,7 +156,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             ], 200);
         });
 
-        $transcript = $this->service()->transcribe($this->audio, 'jpn');
+        $transcript = $this->transcribeWholeAudio($this->audio, 'jpn');
 
         $this->assertSame('jpn', $transcript->language);
         $this->assertTrue($requestMatched);
@@ -171,62 +172,63 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             return Http::response($this->sampleScribePayload());
         });
 
-        $transcript = $this->service()->transcribe($this->audio, 'auto');
+        $transcript = $this->transcribeWholeAudio($this->audio, 'auto');
 
         $this->assertSame('spa', $transcript->language);
         $this->assertTrue($requestMatched);
     }
 
-    public function test_it_chunks_long_audio_and_merges_parallel_transcriptions(): void
+    public function test_it_merges_chunk_payloads_dropping_overlap_duplicates(): void
     {
-        // 300s audio, 120s target, 2s overlap -> 3 chunks of 100s nominal.
-        $longAudio = new TemporaryAudioFile(
-            path: $this->audio->path,
-            directory: $this->audio->directory,
-            durationSeconds: 300,
-            sizeBytes: $this->audio->sizeBytes,
-            mimeType: 'audio/mp4',
-        );
-
-        $chunkResponses = [
+        // Mirrors the pipeline's chunk plan for 300s audio (120s target, 2s
+        // overlap): 3 chunks of 100s nominal, each cut with symmetric overlap.
+        $chunks = [
             // Chunk 0: audio [0, 102], nominal [0, 100). Hears the boundary
             // word in its trailing overlap; midpoint 99.4s keeps it here.
             [
-                'language_code' => 'es',
-                'words' => [
-                    ['text' => 'Hola.', 'start' => 0.5, 'end' => 0.9, 'type' => 'word'],
-                    ['text' => 'frontera.', 'start' => 99.0, 'end' => 99.8, 'type' => 'word'],
+                'payload' => [
+                    'language_code' => 'es',
+                    'words' => [
+                        ['text' => 'Hola.', 'start' => 0.5, 'end' => 0.9, 'type' => 'word'],
+                        ['text' => 'frontera.', 'start' => 99.0, 'end' => 99.8, 'type' => 'word'],
+                    ],
                 ],
+                'audioStartSeconds' => 0.0,
+                'nominalStartSeconds' => 0.0,
+                'nominalEndSeconds' => 100.0,
             ],
             // Chunk 1: audio [98, 202], nominal [100, 200). Hears the same
             // boundary word at its start; it must be dropped as a duplicate.
             // Detection disagrees ('en'); the first chunk stays canonical.
             [
-                'language_code' => 'en',
-                'words' => [
-                    ['text' => 'frontera.', 'start' => 1.0, 'end' => 1.8, 'type' => 'word'],
-                    ['text' => 'Cien', 'start' => 2.5, 'end' => 2.9, 'type' => 'word'],
-                    ['text' => 'palabras.', 'start' => 3.0, 'end' => 3.6, 'type' => 'word'],
+                'payload' => [
+                    'language_code' => 'en',
+                    'words' => [
+                        ['text' => 'frontera.', 'start' => 1.0, 'end' => 1.8, 'type' => 'word'],
+                        ['text' => 'Cien', 'start' => 2.5, 'end' => 2.9, 'type' => 'word'],
+                        ['text' => 'palabras.', 'start' => 3.0, 'end' => 3.6, 'type' => 'word'],
+                    ],
                 ],
+                'audioStartSeconds' => 98.0,
+                'nominalStartSeconds' => 100.0,
+                'nominalEndSeconds' => 200.0,
             ],
             // Chunk 2: audio [198, 300], nominal [200, end].
             [
-                'language_code' => 'es',
-                'words' => [
-                    ['text' => 'Fin.', 'start' => 2.5, 'end' => 2.9, 'type' => 'word'],
+                'payload' => [
+                    'language_code' => 'es',
+                    'words' => [
+                        ['text' => 'Fin.', 'start' => 2.5, 'end' => 2.9, 'type' => 'word'],
+                    ],
                 ],
+                'audioStartSeconds' => 198.0,
+                'nominalStartSeconds' => 200.0,
+                'nominalEndSeconds' => null,
             ],
         ];
 
-        $requestCount = 0;
+        $transcript = $this->service()->transcriptFromChunkPayloads($chunks, 'auto', 300);
 
-        Http::fake(function () use (&$requestCount, $chunkResponses) {
-            return Http::response($chunkResponses[$requestCount++], 200);
-        });
-
-        $transcript = $this->service()->transcribe($longAudio, 'auto');
-
-        Http::assertSentCount(3);
         $this->assertSame('spa', $transcript->language);
         $this->assertSame(
             ['Hola.', 'frontera.', 'Cien palabras.', 'Fin.'],
@@ -235,6 +237,30 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         // Chunk-local timestamps are offset to absolute time.
         $this->assertSame(200.5, $transcript->segments[3]->startSeconds);
         $this->assertSame(1, substr_count($transcript->webVtt, 'frontera.'));
+    }
+
+    public function test_chunker_extracts_chunks_with_symmetric_overlap(): void
+    {
+        config([
+            'subtitles.transcription.chunking.min_audio_seconds' => 240,
+            'subtitles.transcription.chunking.target_seconds' => 120,
+            'subtitles.transcription.chunking.overlap_seconds' => 2.0,
+            'subtitles.transcription.chunking.max_chunks' => 8,
+        ]);
+
+        $longAudio = new TemporaryAudioFile(
+            path: $this->audio->path,
+            directory: $this->audio->directory,
+            durationSeconds: 300,
+            sizeBytes: $this->audio->sizeBytes,
+            mimeType: 'audio/mp4',
+        );
+
+        $chunker = new ScribeAudioChunker;
+        $plan = $chunker->plan($longAudio->durationSeconds);
+        $chunkFiles = $chunker->split($longAudio, $plan);
+
+        $this->assertCount(3, $chunkFiles);
 
         // The middle chunk is extracted with its leading overlap.
         Process::assertRan(function (PendingProcess $process): bool {
@@ -255,7 +281,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         ]);
 
         try {
-            $this->service()->transcribe($this->audio, 'spa');
+            $this->service()->transcribeChunk($this->audio, 'spa');
             $this->fail('Expected provider failure to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -271,7 +297,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         config(['ai.providers.eleven.key' => null]);
 
         try {
-            $this->service()->transcribe($this->audio, 'spa');
+            $this->service()->transcribeChunk($this->audio, 'spa');
             $this->fail('Expected missing provider configuration to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -287,7 +313,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         config(['ai.providers.eleven.models.transcription.default' => null]);
 
         try {
-            $this->service()->transcribe($this->audio, 'spa');
+            $this->service()->transcribeChunk($this->audio, 'spa');
             $this->fail('Expected missing model configuration to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -303,7 +329,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         config(['ai.providers.eleven.url' => null]);
 
         try {
-            $this->service()->transcribe($this->audio, 'spa');
+            $this->service()->transcribeChunk($this->audio, 'spa');
             $this->fail('Expected missing provider URL to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -325,7 +351,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         );
 
         try {
-            $this->service()->transcribe($audio, 'spa');
+            $this->service()->transcribeChunk($audio, 'spa');
             $this->fail('Expected unsupported audio MIME type to fail before provider request.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('transcription_failed', $exception->publicCode);
@@ -336,12 +362,33 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /**
+     * The short-audio flow the pipeline runs when no chunking applies:
+     * prepare, transcribe as one whole-file chunk, merge-normalize.
+     */
+    private function transcribeWholeAudio(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
+    {
+        $service = $this->service();
+        $prepared = $service->prepareAudio($audio);
+        $payload = $service->transcribeChunk($prepared, $sourceLanguage);
+
+        return $service->transcriptFromChunkPayloads(
+            chunks: [[
+                'payload' => $payload,
+                'audioStartSeconds' => 0.0,
+                'nominalStartSeconds' => 0.0,
+                'nominalEndSeconds' => null,
+            ]],
+            sourceLanguage: $sourceLanguage,
+            durationSeconds: $audio->durationSeconds,
+        );
+    }
+
     private function service(): ElevenLabsScribeTranscriptionService
     {
         return new ElevenLabsScribeTranscriptionService(
             new ScribeTranscriptNormalizer,
             new ElevenLabsScribeAudioPreparer,
-            new ScribeAudioChunker,
             new ScribeChunkPayloadMerger,
         );
     }

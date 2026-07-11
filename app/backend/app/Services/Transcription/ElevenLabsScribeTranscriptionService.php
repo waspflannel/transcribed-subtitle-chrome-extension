@@ -4,12 +4,9 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
-use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
-use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
@@ -18,17 +15,8 @@ class ElevenLabsScribeTranscriptionService
     public function __construct(
         private readonly ScribeTranscriptNormalizer $normalizer,
         private readonly ElevenLabsScribeAudioPreparer $audioPreparer,
-        private readonly ScribeAudioChunker $chunker,
         private readonly ScribeChunkPayloadMerger $chunkMerger,
     ) {}
-
-    public function transcribe(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
-    {
-        return $this->transcribePreparedAudio(
-            $this->prepareAudio($audio),
-            $sourceLanguage,
-        );
-    }
 
     public function prepareAudio(TemporaryAudioFile $audio): TemporaryAudioFile
     {
@@ -38,7 +26,14 @@ class ElevenLabsScribeTranscriptionService
         return $this->audioPreparer->prepare($audio);
     }
 
-    public function transcribePreparedAudio(TemporaryAudioFile $audio, string $sourceLanguage): TimestampedTranscript
+    /**
+     * Transcribes one audio chunk and returns the validated raw provider
+     * payload. Chunks are transcribed by independent queue jobs, so this
+     * sends exactly one request; merging happens in transcriptFromChunkPayloads.
+     *
+     * @return array<string, mixed>
+     */
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
     {
         $provider = Lab::ElevenLabs;
         ['apiKey' => $apiKey, 'model' => $model] = $this->transcriptionConfig($provider);
@@ -46,16 +41,10 @@ class ElevenLabsScribeTranscriptionService
         $this->assertSupportedAudioMime($audio);
 
         try {
-            $chunkPlan = $this->chunker->plan($audio->durationSeconds);
-
-            $payload = $chunkPlan === []
-                ? $this->transcribeWholeAudio($audio, $sourceLanguage, $provider, $apiKey, $model)
-                : $this->transcribeChunkedAudio($audio, $chunkPlan, $sourceLanguage, $provider, $apiKey, $model);
-
-            return $this->normalizer->normalize(
-                payload: $payload,
-                requestedSourceLanguage: $sourceLanguage,
-                durationSeconds: $audio->durationSeconds,
+            return $this->validatedTranscriptionPayload(
+                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model),
+                $provider,
+                $model,
             );
         } catch (SubtitleProcessingException $exception) {
             throw $exception;
@@ -73,102 +62,39 @@ class ElevenLabsScribeTranscriptionService
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    private function transcribeWholeAudio(
-        TemporaryAudioFile $audio,
-        string $sourceLanguage,
-        Lab $provider,
-        string $apiKey,
-        string $model,
-    ): array {
-        return $this->validatedTranscriptionPayload(
-            $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model),
-            $provider,
-            $model,
-        );
-    }
-
-    /**
-     * Splits long audio into overlapping chunks, transcribes them with
-     * parallel Scribe requests, and merges the word payloads back into one
-     * transcript. Drops the transcribing ceiling from the full audio length
-     * to the longest chunk.
+     * Merges per-chunk payloads (in chunk order) into one normalized
+     * transcript. A single whole-audio chunk goes through the same merge
+     * path with zero offset and an unbounded nominal window.
      *
-     * @param  array<int, array{nominalStart: float, nominalEnd: float, audioStart: float, audioEnd: float}>  $chunkPlan
-     * @return array<string, mixed>
+     * @param  array<int, array{payload: array<string, mixed>, audioStartSeconds: float, nominalStartSeconds: float, nominalEndSeconds: float|null}>  $chunks
      */
-    private function transcribeChunkedAudio(
-        TemporaryAudioFile $audio,
-        array $chunkPlan,
+    public function transcriptFromChunkPayloads(
+        array $chunks,
         string $sourceLanguage,
-        Lab $provider,
-        string $apiKey,
-        string $model,
-    ): array {
-        $chunkFiles = $this->chunker->split($audio, $chunkPlan);
-
-        Log::info('backend.transcription_chunked', [
-            'provider' => $provider->value,
-            'adapter' => 'elevenlabs-http',
-            'model' => $model,
-            'audio_duration_seconds' => $audio->durationSeconds,
-            'chunk_count' => count($chunkFiles),
-        ]);
-
-        $streams = array_map(fn (TemporaryAudioFile $chunk) => $this->openAudioStream($chunk), $chunkFiles);
-        $requestPayload = $this->transcriptionRequestPayload($sourceLanguage, $model);
-        $url = $this->transcriptionUrl($provider);
-        $timeoutSeconds = (int) config('subtitles.transcription.timeout_seconds');
+        ?int $durationSeconds,
+    ): TimestampedTranscript {
+        $provider = Lab::ElevenLabs;
+        ['model' => $model] = $this->transcriptionConfig($provider);
 
         try {
-            $responses = Http::pool(fn (Pool $pool) => array_map(
-                fn (int $index) => $pool->as((string) $index)
-                    ->withHeaders(['xi-api-key' => $apiKey])
-                    ->timeout($timeoutSeconds)
-                    ->attach(
-                        'file',
-                        $streams[$index],
-                        $this->audioFilename($chunkFiles[$index]),
-                        ['Content-Type' => $chunkFiles[$index]->mimeType],
-                    )
-                    ->post($url, $requestPayload),
-                array_keys($chunkFiles),
-            ));
-        } finally {
-            foreach ($streams as $stream) {
-                if (is_resource($stream)) {
-                    fclose($stream);
-                }
-            }
-        }
-
-        $chunks = [];
-        $lastChunkIndex = array_key_last($chunkPlan);
-
-        foreach ($chunkPlan as $index => $bounds) {
-            $response = $responses[(string) $index] ?? null;
-
-            if (! $response instanceof Response) {
-                throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
+            return $this->normalizer->normalize(
+                payload: $this->chunkMerger->merge($chunks),
+                requestedSourceLanguage: $sourceLanguage,
+                durationSeconds: $durationSeconds,
+            );
+        } catch (SubtitleProcessingException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            throw SubtitleProcessingException::transcriptionFailed(
+                context: [
                     'provider' => $provider->value,
                     'adapter' => 'elevenlabs-http',
                     'model' => $model,
-                    'chunk_index' => $index,
-                    ...($response instanceof Throwable ? ['exception' => $response::class] : []),
-                ], $response instanceof Throwable ? $response : null);
-            }
-
-            $chunks[] = [
-                'payload' => $this->validatedTranscriptionPayload($response, $provider, $model, ['chunk_index' => $index]),
-                'audioStartSeconds' => $bounds['audioStart'],
-                'nominalStartSeconds' => $bounds['nominalStart'],
-                // The last chunk keeps everything past its nominal start.
-                'nominalEndSeconds' => $index === $lastChunkIndex ? null : $bounds['nominalEnd'],
-            ];
+                    'exception' => $exception::class,
+                ],
+                previous: $exception,
+            );
         }
-
-        return $this->chunkMerger->merge($chunks);
     }
 
     /**

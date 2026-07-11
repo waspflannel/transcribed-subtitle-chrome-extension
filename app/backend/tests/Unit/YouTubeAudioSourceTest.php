@@ -32,6 +32,11 @@ class YouTubeAudioSourceTest extends TestCase
         parent::tearDown();
     }
 
+    private function workDirectory(): string
+    {
+        return $this->tempDirectory.DIRECTORY_SEPARATOR.'run-'.(string) Str::uuid();
+    }
+
     public function test_it_acquires_audio_from_public_video_metadata(): void
     {
         $processEnvironments = [];
@@ -58,6 +63,7 @@ class YouTubeAudioSourceTest extends TestCase
         $audio = (new YouTubeAudioSource)->acquire(
             youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             requestDurationSeconds: 42,
+            workDirectory: $this->workDirectory(),
         );
 
         $this->assertFileExists($audio->path);
@@ -86,7 +92,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
             $this->fail('Expected audio acquisition to reject private video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_unavailable', $exception->publicCode);
@@ -104,7 +110,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
             $this->fail('Expected audio acquisition to report missing downloader configuration.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_acquisition_failed', $exception->publicCode);
@@ -135,7 +141,7 @@ class YouTubeAudioSourceTest extends TestCase
         });
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
             $this->fail('Expected non-audio download output to fail.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_acquisition_failed', $exception->publicCode);
@@ -155,7 +161,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', null);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', null, $this->workDirectory());
             $this->fail('Expected audio acquisition to reject long video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('video_too_long', $exception->publicCode);

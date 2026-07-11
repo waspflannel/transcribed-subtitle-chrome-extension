@@ -2,8 +2,9 @@
 
 namespace App\Services\Subtitles;
 
-use App\Jobs\ProcessSubtitleJob;
+use App\Jobs\AcquireSubtitleAudio;
 use App\Models\SubtitleJob;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Billing\BillingEntitlementService;
@@ -191,7 +192,7 @@ class SubtitleJobService
         }
 
         if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
-            ProcessSubtitleJob::dispatch($job->id, $job->run_id)
+            AcquireSubtitleAudio::dispatch($job->id, $job->run_id)
                 ->onConnection(SubtitleQueue::connection())
                 ->onQueue(SubtitleQueue::generationNameForJob($job));
 
@@ -281,6 +282,9 @@ class SubtitleJobService
         $job->track()->delete();
         $job->artifacts()->delete();
         $job->unsetRelation('track');
+        // Stage jobs of the superseded run no-op on the run-id guard, so the
+        // old run's audio workspace is reclaimed here.
+        SubtitleAudioWorkspace::delete((string) $job->run_id);
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
