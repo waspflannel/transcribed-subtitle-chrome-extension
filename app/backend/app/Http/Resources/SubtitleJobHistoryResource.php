@@ -27,7 +27,7 @@ class SubtitleJobHistoryResource extends JsonResource
         $includeRomanization = $this->requiredBoolean($this->include_romanization, 'include_romanization');
         $includeTranslation = $this->requiredBoolean($this->include_translation, 'include_translation');
 
-        if (! in_array($status, ['running', 'completed', 'failed'], true)) {
+        if (! in_array($status, ['queued', 'running', 'completed', 'failed'], true)) {
             throw new LogicException('Subtitle job has an invalid status.');
         }
 

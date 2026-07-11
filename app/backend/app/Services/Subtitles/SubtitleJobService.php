@@ -116,7 +116,7 @@ class SubtitleJobService
                         return $job;
                     }
 
-                    if ($job->status === 'running' && ! $this->isStalePreparingJob($job)) {
+                    if (in_array($job->status, ['running', 'queued'], true) && ! $this->isStalePreparingJob($job)) {
                         $dispatchState = self::DISPATCH_STATE_REUSED;
 
                         return $job;
@@ -135,6 +135,7 @@ class SubtitleJobService
                         enrichmentMode: $enrichmentMode,
                         includeRomanization: $includeRomanization,
                         includeTranslation: $includeTranslation,
+                        startImmediately: $entitlement->startImmediately,
                     );
                     $this->billing->reserveForJob($job->refresh()->load('user'), $entitlement);
                     $dispatchState = self::DISPATCH_STATE_RESET;
@@ -156,6 +157,7 @@ class SubtitleJobService
                     enrichmentMode: $enrichmentMode,
                     includeRomanization: $includeRomanization,
                     includeTranslation: $includeTranslation,
+                    startImmediately: $entitlement->startImmediately,
                 );
                 $this->billing->reserveForJob($job->load('user'), $entitlement);
                 $this->logger->jobCreated($job);
@@ -191,7 +193,10 @@ class SubtitleJobService
             return $job;
         }
 
-        if (in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
+        // Queued jobs are dispatched later by SubtitleJobAdmission when a
+        // running slot frees up.
+        if ($job->status === 'running'
+            && in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
             AcquireSubtitleAudio::dispatch($job->id, $job->run_id)
                 ->onConnection(SubtitleQueue::connection())
                 ->onQueue(SubtitleQueue::generationNameForJob($job));
@@ -229,6 +234,7 @@ class SubtitleJobService
         string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
+        bool $startImmediately,
     ): SubtitleJob {
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
@@ -245,9 +251,9 @@ class SubtitleJobService
             'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
-            'status' => 'running',
+            'status' => $startImmediately ? 'running' : 'queued',
             'stage' => 'preparing',
-            'progress_percent' => 5,
+            'progress_percent' => $startImmediately ? 5 : 0,
             'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
             'request_ip' => $requestIp,
@@ -255,7 +261,7 @@ class SubtitleJobService
 
         $this->tracer->jobEvent($job, 'job.created', [
             'stage' => 'preparing',
-            'status' => 'running',
+            'status' => $job->status,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
             'generation_tier' => $job->generation_tier,
@@ -278,6 +284,7 @@ class SubtitleJobService
         string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
+        bool $startImmediately,
     ): void {
         $job->track()->delete();
         $job->artifacts()->delete();
@@ -296,9 +303,9 @@ class SubtitleJobService
             'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
-            'status' => 'running',
+            'status' => $startImmediately ? 'running' : 'queued',
             'stage' => 'preparing',
-            'progress_percent' => 5,
+            'progress_percent' => $startImmediately ? 5 : 0,
             'estimated_provider_cost_microusd' => 0,
             'error_code' => null,
             'error_message' => null,
@@ -310,7 +317,7 @@ class SubtitleJobService
 
         $this->tracer->jobEvent($job->refresh(), 'job.reset', [
             'stage' => 'preparing',
-            'status' => 'running',
+            'status' => $job->status,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
             'generation_tier' => $job->generation_tier,
@@ -325,7 +332,9 @@ class SubtitleJobService
 
     private function isStalePreparingJob(SubtitleJob $job): bool
     {
-        if ($job->stage !== 'preparing') {
+        // Queued jobs also sit at stage "preparing", but they wait for a
+        // running slot by design and are never stale.
+        if ($job->status !== 'running' || $job->stage !== 'preparing') {
             return false;
         }
 

@@ -94,7 +94,8 @@ export function formatJobTiming(job: Pick<SubtitleJobHistoryItem, 'startedAt' | 
     throw new Error('Job timing contains invalid timestamps.');
   }
 
-  const label = job.status === 'running' ? 'elapsed' : job.status === 'failed' ? 'until failure' : 'total';
+  const label =
+    job.status === 'running' || job.status === 'queued' ? 'elapsed' : job.status === 'failed' ? 'until failure' : 'total';
 
   return `${formatDurationSeconds(Math.max(1, Math.round((endedAt - startedAt) / 1000)))} ${label}`;
 }

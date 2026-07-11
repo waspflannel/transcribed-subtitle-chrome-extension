@@ -85,6 +85,19 @@ describe('backend subtitle state helpers', () => {
     expect(resolver).not.toHaveBeenCalled();
   });
 
+  it('shows queued backend jobs as waiting for a generation slot', async () => {
+    await expect(
+      stateWithBackendProgress({ type: 'no-track' }, pageStatus, [
+        jobHistory({ status: 'queued', stage: 'preparing', progressPercent: 0 }),
+      ]),
+    ).resolves.toMatchObject({
+      type: 'loading',
+      message: 'Queued - waiting for a generation slot...',
+      stage: 'preparing',
+      progressPercent: 0,
+    });
+  });
+
   it('shows failed backend jobs as public extension errors', async () => {
     await expect(
       stateWithBackendProgress({ type: 'no-track' }, pageStatus, [

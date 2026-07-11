@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AcquireSubtitleAudio;
 use App\Models\BillingUsageEvent;
 use App\Models\StripeWebhookEvent;
 use App\Models\SubtitleJob;
@@ -493,7 +494,7 @@ class BillingAndUsageTest extends TestCase
         $this->assertSame(-4, (int) BillingUsageEvent::query()->where('event_type', 'refund')->sum('reserved_minutes_delta'));
     }
 
-    public function test_generation_denies_unavailable_feature_concurrency_and_exhausted_minutes(): void
+    public function test_generation_denies_unavailable_feature_full_queue_and_exhausted_minutes(): void
     {
         Queue::fake();
 
@@ -503,7 +504,10 @@ class BillingAndUsageTest extends TestCase
             ->assertForbidden()
             ->assertJsonPath('error.code', 'feature_unavailable');
 
-        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 1,
+        ]);
         $user = User::factory()->create();
         $this->withExtensionAuth($this->installId('c'), $user);
         SubtitleJob::factory()->for($user)->create(['status' => 'running']);
@@ -512,7 +516,7 @@ class BillingAndUsageTest extends TestCase
             ->withExtensionAuth($this->installId('c'), $user)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'concur00001']))
             ->assertStatus(429)
-            ->assertJsonPath('error.code', 'concurrency_exceeded');
+            ->assertJsonPath('error.code', 'queue_full');
 
         config(['billing.plans.base.monthly_minutes' => 2]);
         $exhaustedUser = User::factory()->create();
@@ -522,6 +526,71 @@ class BillingAndUsageTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'usage000001']))
             ->assertStatus(402)
             ->assertJsonPath('error.code', 'usage_exhausted');
+    }
+
+    public function test_submission_over_processing_concurrency_is_queued_not_rejected(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 3,
+        ]);
+        Queue::fake();
+        $user = User::factory()->create();
+        SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+
+        $response = $this
+            ->withExtensionAuth($this->installId('q'), $user)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'queuedjob01']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued')
+            ->assertJsonPath('stage', 'preparing')
+            ->assertJsonPath('progressPercent', 0);
+
+        Queue::assertNothingPushed();
+
+        // The queued job holds its minute reservation from submission time.
+        $job = SubtitleJob::query()->where('public_id', $response->json('jobId'))->firstOrFail();
+        $this->assertGreaterThan(0, app(UsageLedger::class)->reservedMinutesForJob($job));
+    }
+
+    public function test_finished_job_promotes_the_oldest_queued_job_fifo(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 5,
+        ]);
+        Queue::fake();
+        $user = User::factory()->create();
+        $running = SubtitleJob::factory()->for($user)->create([
+            'status' => 'running',
+            'stage' => 'transcribing',
+        ]);
+        $firstQueued = SubtitleJob::factory()->for($user)->create([
+            'status' => 'queued',
+            'stage' => 'preparing',
+            'progress_percent' => 0,
+        ]);
+        $secondQueued = SubtitleJob::factory()->for($user)->create([
+            'status' => 'queued',
+            'stage' => 'preparing',
+            'progress_percent' => 0,
+        ]);
+
+        app(SubtitleJobFailureHandler::class)->failJob(
+            $running->id,
+            'transcribing',
+            SubtitleProcessingException::transcriptionFailed(),
+            $running->run_id,
+        );
+
+        $this->assertSame('running', $firstQueued->fresh()->status);
+        $this->assertSame(5, $firstQueued->fresh()->progress_percent);
+        $this->assertSame('queued', $secondQueued->fresh()->status);
+        Queue::assertPushed(
+            AcquireSubtitleAudio::class,
+            fn (AcquireSubtitleAudio $job): bool => $job->subtitleJobId === $firstQueued->id
+                && $job->runId === $firstQueued->run_id,
+        );
     }
 
     public function test_compatible_running_generation_reuse_does_not_consume_another_generation_slot(): void
@@ -579,9 +648,12 @@ class BillingAndUsageTest extends TestCase
             ->assertJsonPath('status', 'running');
     }
 
-    public function test_generation_concurrency_rejection_log_is_sanitized(): void
+    public function test_generation_queue_full_rejection_log_is_sanitized(): void
     {
-        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 1,
+        ]);
         Queue::fake();
         Log::spy();
         $installId = $this->installId('l');
@@ -592,15 +664,15 @@ class BillingAndUsageTest extends TestCase
             ->withExtensionAuth($installId, $user)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'loglimit001']))
             ->assertStatus(429)
-            ->assertJsonPath('error.code', 'concurrency_exceeded');
+            ->assertJsonPath('error.code', 'queue_full');
 
         Log::shouldHaveReceived('warning')
-            ->with('backend.generation_concurrency_rejected', \Mockery::on(
+            ->with('backend.generation_queue_full_rejected', \Mockery::on(
                 fn (array $context): bool => isset($context['user_hash'])
                     && $context['queue_family'] === 'generation'
                     && $context['limiter_type'] === 'generation_admission'
                     && $context['generation_tier'] === 'base'
-                    && $context['concurrency_limit'] === 1
+                    && $context['submission_limit'] === 1
                     && $context['observed_active_count'] === 1
                     && ! array_key_exists('user_id', $context)
                     && ! array_key_exists('install_id', $context),

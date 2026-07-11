@@ -130,6 +130,17 @@ final class SubtitleTier
         return max(1, (int) $value);
     }
 
+    /**
+     * Total jobs a user may have waiting (running + queued). Never below the
+     * processing concurrency, so a plan can always fill its running slots.
+     */
+    public static function submissionLimit(string $tier): int
+    {
+        $value = self::plans()[self::normalize($tier)]['submission_limit'] ?? 1;
+
+        return max(self::generationConcurrency($tier), (int) $value);
+    }
+
     public static function concurrencyReleaseDelaySeconds(): int
     {
         return max(1, (int) config('subtitles.tiers.release_delay_seconds', 10));

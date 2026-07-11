@@ -231,8 +231,8 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
     case 'feature_unavailable':
       return 'Your current plan does not include that generation option.';
 
-    case 'concurrency_exceeded':
-      return 'Your current plan already has the maximum number of running generations.';
+    case 'queue_full':
+      return 'Your generation queue is full. Wait for a queued video to finish before adding more.';
 
     case 'unsupported_video':
     case 'audio_unavailable':

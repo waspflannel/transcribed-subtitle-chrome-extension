@@ -21,7 +21,7 @@
         "payment_required",
         "usage_exhausted",
         "feature_unavailable",
-        "concurrency_exceeded",
+        "queue_full",
         "unsupported_video",
         "audio_unavailable",
         "video_too_long",

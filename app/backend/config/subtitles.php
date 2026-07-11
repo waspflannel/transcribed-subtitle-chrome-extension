@@ -69,12 +69,17 @@ return [
         // ~2x the batch job timeout (300s): a slot leaked by a SIGKILLed worker
         // recovers in minutes instead of wedging the user for half an hour.
         'counter_seconds' => (int) env('SUBTITLE_CONCURRENCY_COUNTER_SECONDS', 600),
+        // generation_concurrency caps how many of a user's jobs *process* at
+        // once; submission_limit caps how many they can have waiting overall
+        // (running + queued). Submissions between the two caps are accepted
+        // as queued jobs and promoted FIFO as running slots free up.
         'plans' => [
             'ultimate' => [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_ULTIMATE', 'subtitle-generation-ultimate'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_ULTIMATE', 'subtitle-batch-ultimate'),
                 'generation_concurrency' => (int) env('SUBTITLE_ULTIMATE_GENERATION_CONCURRENCY', 5),
                 'batch_concurrency' => (int) env('SUBTITLE_ULTIMATE_BATCH_CONCURRENCY', 20),
+                'submission_limit' => (int) env('SUBTITLE_ULTIMATE_SUBMISSION_LIMIT', 15),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_ULTIMATE_SHORT_BUDGET_SECONDS', 90),
                     'medium' => (int) env('SUBTITLE_ULTIMATE_MEDIUM_BUDGET_SECONDS', 240),
@@ -86,6 +91,7 @@ return [
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_BASE', 'subtitle-batch-base'),
                 'generation_concurrency' => (int) env('SUBTITLE_BASE_GENERATION_CONCURRENCY', 1),
                 'batch_concurrency' => (int) env('SUBTITLE_BASE_BATCH_CONCURRENCY', 3),
+                'submission_limit' => (int) env('SUBTITLE_BASE_SUBMISSION_LIMIT', 3),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_BASE_SHORT_BUDGET_SECONDS', 240),
                     'medium' => (int) env('SUBTITLE_BASE_MEDIUM_BUDGET_SECONDS', 600),
@@ -97,6 +103,7 @@ return [
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PLUS', 'subtitle-batch-plus'),
                 'generation_concurrency' => (int) env('SUBTITLE_PLUS_GENERATION_CONCURRENCY', 2),
                 'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 12),
+                'submission_limit' => (int) env('SUBTITLE_PLUS_SUBMISSION_LIMIT', 6),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PLUS_SHORT_BUDGET_SECONDS', 180),
                     'medium' => (int) env('SUBTITLE_PLUS_MEDIUM_BUDGET_SECONDS', 420),
@@ -111,6 +118,7 @@ return [
                 // cap above the shared worker count buys nothing. Raise workers
                 // in step before pushing this higher.
                 'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 20),
+                'submission_limit' => (int) env('SUBTITLE_PRO_SUBMISSION_LIMIT', 10),
                 'budgets_seconds' => [
                     'short' => (int) env('SUBTITLE_PRO_SHORT_BUDGET_SECONDS', 120),
                     'medium' => (int) env('SUBTITLE_PRO_MEDIUM_BUDGET_SECONDS', 300),

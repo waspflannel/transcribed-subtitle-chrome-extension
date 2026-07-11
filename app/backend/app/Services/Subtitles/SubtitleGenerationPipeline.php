@@ -40,6 +40,7 @@ class SubtitleGenerationPipeline
         private readonly SubtitleJobFailureHandler $failureHandler,
         private readonly BillingEntitlementService $billing,
         private readonly UsageLedger $usageLedger,
+        private readonly SubtitleJobAdmission $admission,
     ) {}
 
     /**
@@ -411,6 +412,7 @@ class SubtitleGenerationPipeline
         $this->telemetry->recordStageCompleted($job, 'finalizing', $startedAtMs);
         $this->logger->completedTrackTiming($job, (int) abs(now()->diffInMilliseconds($job->created_at)));
         $this->telemetry->recordJobCompleted($job);
+        $this->admission->promoteQueuedJobs($job->user_id);
     }
 
     private function dispatchTokenizationAndTranslationBatches(SubtitleJob $job): void

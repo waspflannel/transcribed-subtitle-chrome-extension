@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
+use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -44,8 +45,12 @@ class WebSubtitleJobController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, string $jobId, BillingEntitlementService $billing): RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        string $jobId,
+        BillingEntitlementService $billing,
+        SubtitleJobAdmission $admission,
+    ): RedirectResponse {
         $user = $request->user();
 
         if (! $user instanceof User) {
@@ -61,6 +66,9 @@ class WebSubtitleJobController extends Controller
             $this->releaseReservationSafely($job, $billing);
             $job->delete();
         });
+
+        // Deleting a running job frees a processing slot for a queued one.
+        $admission->promoteQueuedJobs($user->id);
 
         return redirect()
             ->route('dashboard')
@@ -108,7 +116,7 @@ class WebSubtitleJobController extends Controller
 
     private function releaseReservationSafely(SubtitleJob $job, BillingEntitlementService $billing): void
     {
-        if ($job->status !== 'running') {
+        if (! in_array($job->status, ['running', 'queued'], true)) {
             return;
         }
 

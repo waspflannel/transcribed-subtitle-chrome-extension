@@ -42,7 +42,7 @@ class SubtitleJobController extends Controller
                         $query
                             ->whereNull('expires_at')
                             ->whereDoesntHave('track')
-                            ->whereIn('status', ['running', 'failed'])
+                            ->whereIn('status', ['queued', 'running', 'failed'])
                             ->where('created_at', '>=', $recentIncompleteCutoff);
                     });
             })

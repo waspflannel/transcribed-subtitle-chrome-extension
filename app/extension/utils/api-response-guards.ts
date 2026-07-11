@@ -158,7 +158,7 @@ function guardJobCore(value: Record<string, unknown>): void {
   oneOf(value, 'enrichmentMode', ['on_demand', 'full']);
   requiredBoolean(value, 'includeRomanization');
   requiredBoolean(value, 'includeTranslation');
-  oneOf(value, 'status', ['running', 'completed', 'failed']);
+  oneOf(value, 'status', ['queued', 'running', 'completed', 'failed']);
   oneOf(value, 'stage', [
     'preparing',
     'acquiring-audio',

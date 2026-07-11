@@ -57,7 +57,7 @@ export async function stateWithBackendProgress(
     jobId: job.jobId,
     youtubeVideoId: job.youtubeVideoId,
     youtubeUrl: job.youtubeUrl,
-    message: loadingMessageForStage(job.stage),
+    message: job.status === 'queued' ? 'Queued - waiting for a generation slot...' : loadingMessageForStage(job.stage),
     stage: job.stage,
     progressPercent: job.progressPercent,
     startedAt: job.startedAt,

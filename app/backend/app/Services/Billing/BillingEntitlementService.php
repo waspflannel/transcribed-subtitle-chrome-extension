@@ -48,17 +48,22 @@ final class BillingEntitlementService
         $this->ledger->ensureMonthlyGrant($lockedUser, $plan, $period['start'], $period['end']);
         $generationTier = SubtitleTier::normalize($this->plans->generationTier($plan));
         $generationLimit = SubtitleTier::generationConcurrency($generationTier);
+        $submissionLimit = SubtitleTier::submissionLimit($generationTier);
 
-        $runningJobs = SubtitleJob::query()
+        $activeJobCounts = SubtitleJob::query()
             ->whereBelongsTo($lockedUser)
-            ->where('status', 'running')
+            ->whereIn('status', ['running', 'queued'])
             ->when($excludeJobId !== null, fn ($query) => $query->whereKeyNot($excludeJobId))
-            ->count();
+            ->selectRaw("sum(case when status = 'running' then 1 else 0 end) as running_count")
+            ->selectRaw('count(*) as active_count')
+            ->first();
+        $runningJobs = (int) ($activeJobCounts->running_count ?? 0);
+        $activeJobs = (int) ($activeJobCounts->active_count ?? 0);
 
-        if ($runningJobs >= $generationLimit) {
-            $this->logGenerationConcurrencyRejected($lockedUser, $generationTier, $generationLimit, $runningJobs);
+        if ($activeJobs >= $submissionLimit) {
+            $this->logQueueFullRejected($lockedUser, $generationTier, $submissionLimit, $activeJobs);
 
-            throw BillingEntitlementException::concurrencyExceeded();
+            throw BillingEntitlementException::queueFull();
         }
 
         $reservationMinutes = $this->ledger->billableMinutes($payload['videoDurationSeconds'] ?? null);
@@ -71,6 +76,7 @@ final class BillingEntitlementService
             planCode: (string) $plan['code'],
             generationTier: $generationTier,
             reservationMinutes: $reservationMinutes,
+            startImmediately: $runningJobs < $generationLimit,
         );
     }
 
@@ -193,14 +199,14 @@ final class BillingEntitlementService
         return $this->plans->plan($user->billing_plan_code);
     }
 
-    private function logGenerationConcurrencyRejected(User $user, string $tier, int $limit, int $activeCount): void
+    private function logQueueFullRejected(User $user, string $tier, int $submissionLimit, int $activeCount): void
     {
-        Log::warning('backend.generation_concurrency_rejected', [
+        Log::warning('backend.generation_queue_full_rejected', [
             'user_hash' => substr(hash('sha256', (string) $user->id), 0, 16),
             'queue_family' => SubtitleQueue::FAMILY_GENERATION,
             'limiter_type' => 'generation_admission',
             'generation_tier' => $tier,
-            'concurrency_limit' => $limit,
+            'submission_limit' => $submissionLimit,
             'observed_active_count' => $activeCount,
             'delay_reason' => 'limit_reached',
         ]);

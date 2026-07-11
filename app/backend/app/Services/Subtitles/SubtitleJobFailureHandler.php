@@ -16,6 +16,7 @@ class SubtitleJobFailureHandler
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitlePipelineTelemetry $telemetry,
         private readonly UsageLedger $usageLedger,
+        private readonly SubtitleJobAdmission $admission,
     ) {}
 
     /**
@@ -58,6 +59,7 @@ class SubtitleJobFailureHandler
         $job->refresh();
 
         $this->cleanupReservedWork($job);
+        $this->admission->promoteQueuedJobs($job->user_id);
 
         if ($exception instanceof BillingEntitlementException) {
             $this->recordExpectedFailure($job, $stage, $exception, $context);

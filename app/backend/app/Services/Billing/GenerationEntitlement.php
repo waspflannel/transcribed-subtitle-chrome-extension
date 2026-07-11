@@ -8,5 +8,6 @@ final readonly class GenerationEntitlement
         public string $planCode,
         public string $generationTier,
         public int $reservationMinutes,
+        public bool $startImmediately,
     ) {}
 }

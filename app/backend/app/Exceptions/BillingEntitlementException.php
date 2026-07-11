@@ -29,8 +29,8 @@ class BillingEntitlementException extends RuntimeException
         return new self('feature_unavailable', 'The selected billing plan does not include this generation option.', 403);
     }
 
-    public static function concurrencyExceeded(): self
+    public static function queueFull(): self
     {
-        return new self('concurrency_exceeded', 'This billing plan already has the maximum number of running subtitle jobs.', 429);
+        return new self('queue_full', 'This billing plan\'s subtitle queue is full. Wait for a queued video to finish before adding more.', 429);
     }
 }

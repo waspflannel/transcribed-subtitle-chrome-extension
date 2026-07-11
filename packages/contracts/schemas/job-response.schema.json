@@ -249,6 +249,7 @@
     "status": {
       "type": "string",
       "enum": [
+        "queued",
         "running",
         "completed",
         "failed"
@@ -420,6 +421,25 @@
         "properties": {
           "status": {
             "const": "running"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "track": {}
+          },
+          "required": [
+            "track"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "queued"
           }
         }
       },

@@ -539,7 +539,7 @@ export type JobResponse = {
    * Whether the request asked the backend to translate cue text.
    */
   includeTranslation: boolean;
-  status: 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed';
   stage:
     | 'preparing'
     | 'acquiring-audio'
@@ -663,7 +663,7 @@ export type JobResponse = {
     | 'payment_required'
     | 'usage_exhausted'
     | 'feature_unavailable'
-    | 'concurrency_exceeded'
+    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
@@ -1011,7 +1011,7 @@ export type SubtitleJobHistoryItem = {
    */
   videoDurationSeconds?: number;
   youtubeUrl: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed';
   startedAt: string;
   lastUpdatedAt: string;
   completedAt?: string;
@@ -1147,7 +1147,7 @@ export type SubtitleJobHistoryItem = {
     | 'payment_required'
     | 'usage_exhausted'
     | 'feature_unavailable'
-    | 'concurrency_exceeded'
+    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
@@ -1770,7 +1770,7 @@ export interface ErrorObject {
     | 'payment_required'
     | 'usage_exhausted'
     | 'feature_unavailable'
-    | 'concurrency_exceeded'
+    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
@@ -1800,7 +1800,7 @@ export interface ErrorObject {
     | 'payment_required'
     | 'usage_exhausted'
     | 'feature_unavailable'
-    | 'concurrency_exceeded'
+    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
     | 'video_too_long'
