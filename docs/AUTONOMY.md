@@ -4,7 +4,14 @@ Use this file to track how much of the development loop agents can safely comple
 
 ## Current Level
 
-Level 1: scaffolded harness. Agents can inspect docs and run baseline checks.
+Level 7: agents make focused changes, validate locally, reproduce bugs, prove fixes with
+screenshots/logs/traces, open reviewable PRs with the evidence template, and handle review
+feedback (see the R1-R6 review/follow-up cycle in
+`docs/exec-plans/completed/2026-06-21-extension-and-backend-hardening.md` for a worked example).
+
+Blocked from Level 8 (recover from CI failures) because no CI is configured yet — see TD-002 in
+`docs/exec-plans/tech-debt-tracker.md` and the "CI not configured" gap in `docs/QUALITY_SCORE.md`.
+Level 9 (merge with minimal supervision) is not attempted; merges still go through human review.
 
 ## Levels
 

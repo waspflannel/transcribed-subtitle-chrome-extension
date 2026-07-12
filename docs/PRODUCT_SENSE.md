@@ -6,10 +6,10 @@ Define the user, the problem, and the product promise before implementation expa
 
 ## User Outcomes
 
-- Primary user:
-- Primary job:
-- Core workflow:
-- Success criteria:
+- Primary user: language learners watching public YouTube videos.
+- Primary job: get accurate, timed subtitles (with optional translation and word-level study data) when YouTube captions are missing, inaccurate, or poorly segmented.
+- Core workflow: trigger AI subtitle generation from the extension side panel, watch the synchronized in-page overlay, and drill into words/cues for pronunciation and translation on demand.
+- Success criteria: see `docs/product-specs/index.md` (First Release Scope / Explicit Non-Goals) and `docs/product-specs/release-readiness.md` for the concrete acceptance bar.
 
 ## Scope Discipline
 
