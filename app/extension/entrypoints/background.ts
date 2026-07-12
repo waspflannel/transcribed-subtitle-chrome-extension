@@ -149,12 +149,60 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
 }> {
   const tabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
   const pageStatus = parseYoutubePage(sender.tab?.url ?? '');
+  const installId = await getOrCreateInstallId();
+  const settings = await getExtensionSettings();
+  let subtitleState = tabId === null ? DEFAULT_SUBTITLE_STATE : await getSubtitleStateForPage(tabId, pageStatus);
 
-  return {
-    installId: await getOrCreateInstallId(),
-    settings: await getExtensionSettings(),
-    subtitleState: tabId === null ? DEFAULT_SUBTITLE_STATE : await getSubtitleStateForPage(tabId, pageStatus),
-  };
+  if (tabId !== null && subtitleState.type === 'no-track' && pageStatus.supported) {
+    subtitleState = await recoverSubtitleStateFromBackend(tabId, pageStatus, subtitleState, installId);
+  }
+
+  return { installId, settings, subtitleState };
+}
+
+/**
+ * The content pull path only sees the per-tab map and the small remembered-
+ * track cache, so a track generated in an earlier session (or evicted from
+ * that cache) looked missing until the user pressed generate again. Recover
+ * ready and in-flight jobs from backend history the way the panel does.
+ * Old failed jobs are left alone: the overlay should not surface a stale
+ * failure just because the user opened the video again.
+ */
+async function recoverSubtitleStateFromBackend(
+  tabId: number,
+  pageStatus: YoutubePageInfo,
+  localState: SubtitleState,
+  installId: string,
+): Promise<SubtitleState> {
+  const session = await getStoredExtensionSession();
+
+  if (!session) {
+    return localState;
+  }
+
+  const history = await getPanelJobHistory(installId, session, true);
+
+  if (history.sessionInvalid) {
+    return localState;
+  }
+
+  const resolved = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
+    resolveCompletedSubtitleJob(installId, session.plainTextToken, job),
+  );
+
+  if (resolved.type === 'ready') {
+    await storeReadySubtitleState(tabId, resolved);
+
+    return resolved;
+  }
+
+  if (resolved.type === 'loading') {
+    tabSubtitleStates.set(tabId, resolved);
+
+    return resolved;
+  }
+
+  return localState;
 }
 
 async function updateSettingsFromPanel(patch: Partial<ExtensionSettings>, windowId?: number): Promise<PanelState> {

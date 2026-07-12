@@ -23,6 +23,9 @@ import { parseYoutubePage } from '../utils/youtube';
 import { findActiveYoutubeVideo } from '../utils/youtube-video';
 
 const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'popstate', 'hashchange'];
+const ROUTE_REHYDRATE_DELAY_MS = 150;
+const VIDEO_BIND_RETRY_LIMIT = 10;
+const VIDEO_BIND_RETRY_DELAY_MS = 300;
 
 export default defineContentScript({
   matches: ['*://*.youtube.com/watch*', '*://*.youtube.com/shorts/*'],
@@ -33,9 +36,13 @@ export default defineContentScript({
     let activeCue: SubtitleCue | null = null;
     let activePartialCue: PartialSubtitleCue | null = null;
     let boundPartialTrackKey: string | null = null;
+    let boundReadyTrackId: string | null = null;
     let activeVideo: HTMLVideoElement | null = null;
     let stopWebVttTrack: (() => void) | null = null;
     let stopVideoStateListeners: (() => void) | null = null;
+    let routeHydrateTimer: number | undefined;
+    let videoBindRetryTimer: number | undefined;
+    let videoBindRetriesLeft = 0;
     let studyHoverPaused = false;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
@@ -66,7 +73,22 @@ export default defineContentScript({
         void enrichLearningToken(cue, token);
       },
     });
-    const handleYoutubeRouteChange = (): void => clearSubtitles();
+    // YouTube swaps videos without reloading the page, so this content script
+    // never restarts on SPA navigation. Clearing alone left the overlay empty
+    // until a manual refresh, because the background only pushes state on
+    // panel activity — re-pull once the navigation settles.
+    const handleYoutubeRouteChange = (): void => {
+      clearSubtitles();
+
+      if (routeHydrateTimer !== undefined) {
+        window.clearTimeout(routeHydrateTimer);
+      }
+
+      routeHydrateTimer = window.setTimeout(() => {
+        routeHydrateTimer = undefined;
+        void hydrateContentState();
+      }, ROUTE_REHYDRATE_DELAY_MS);
+    };
 
     for (const eventName of YOUTUBE_ROUTE_EVENTS) {
       window.addEventListener(eventName, handleYoutubeRouteChange);
@@ -80,6 +102,10 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       disposed = true;
+      if (routeHydrateTimer !== undefined) {
+        window.clearTimeout(routeHydrateTimer);
+        routeHydrateTimer = undefined;
+      }
       for (const eventName of YOUTUBE_ROUTE_EVENTS) {
         window.removeEventListener(eventName, handleYoutubeRouteChange);
       }
@@ -107,10 +133,12 @@ export default defineContentScript({
 
         if (timingOffsetChanged && subtitleState.type === 'ready') {
           clearBoundWebVttTrack();
+          videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
           bindGeneratedSubtitles(subtitleState.track);
         } else if (timingOffsetChanged && subtitleState.type === 'loading' && subtitleState.partialTrack) {
           const partialKey = partialTrackKey(subtitleState);
           clearBoundWebVttTrack();
+          videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
           bindPartialSubtitles(subtitleState.partialTrack, partialKey);
         } else {
           updateOverlay();
@@ -258,15 +286,49 @@ export default defineContentScript({
       });
     }
 
+    /**
+     * Right after navigation the target `<video>` element is often not
+     * mounted yet, so the first bind attempt can find nothing. Instead of
+     * giving up (which used to leave the overlay empty until a refresh),
+     * retry briefly while the current subtitle state stays unchanged.
+     */
+    function scheduleVideoBindRetry(bind: () => void): void {
+      if (disposed || videoBindRetriesLeft <= 0) {
+        return;
+      }
+
+      videoBindRetriesLeft -= 1;
+      const stateAtSchedule = subtitleState;
+
+      if (videoBindRetryTimer !== undefined) {
+        window.clearTimeout(videoBindRetryTimer);
+      }
+
+      videoBindRetryTimer = window.setTimeout(() => {
+        videoBindRetryTimer = undefined;
+
+        if (disposed || subtitleState !== stateAtSchedule) {
+          return;
+        }
+
+        bind();
+      }, VIDEO_BIND_RETRY_DELAY_MS);
+    }
+
     function clearBoundWebVttTrack(): void {
       stopWebVttTrack?.();
       stopVideoStateListeners?.();
       stopWebVttTrack = null;
       stopVideoStateListeners = null;
+      if (videoBindRetryTimer !== undefined) {
+        window.clearTimeout(videoBindRetryTimer);
+        videoBindRetryTimer = undefined;
+      }
       cueHold.clear();
       activeCue = null;
       activePartialCue = null;
       boundPartialTrackKey = null;
+      boundReadyTrackId = null;
       const clearedPage = parseYoutubePage(window.location.href);
       if (clearedPage.supported) {
         void browser.runtime
@@ -302,7 +364,20 @@ export default defineContentScript({
         return;
       }
 
+      // The same finalized track can be re-delivered (background publish plus
+      // a hydrate pull). Rebinding would reset the text track and drop the
+      // active cue, and the local copy may carry newer on-click enrichment —
+      // keep it.
+      if (
+        nextSubtitleState.type === 'ready'
+        && boundReadyTrackId === nextSubtitleState.track.trackId
+        && subtitleStateMatchesCurrentPage(nextSubtitleState)
+      ) {
+        return;
+      }
+
       clearBoundWebVttTrack();
+      videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
 
       if (!subtitleStateMatchesCurrentPage(nextSubtitleState)) {
         subtitleState = DEFAULT_SUBTITLE_STATE;
@@ -373,6 +448,7 @@ export default defineContentScript({
       const video = findActiveYoutubeVideo(document);
 
       if (!video) {
+        scheduleVideoBindRetry(() => bindPartialSubtitles(partialTrack, partialKey));
         updateOverlay();
 
         return;
@@ -414,12 +490,14 @@ export default defineContentScript({
 
       if (!video) {
         webVttTrackLogger.videoMissing(track);
+        scheduleVideoBindRetry(() => bindGeneratedSubtitles(track));
         updateOverlay();
 
         return;
       }
 
       bindVideoStateListeners(video);
+      boundReadyTrackId = track.trackId;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
