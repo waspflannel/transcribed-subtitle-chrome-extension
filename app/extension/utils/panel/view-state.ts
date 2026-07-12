@@ -1,15 +1,12 @@
 import type { PanelState } from '../messages';
 
-export type PanelView = 'generate' | 'study' | 'transcript' | 'jobs' | 'account';
+export type PanelView = 'watch' | 'study' | 'history' | 'account';
 
-export function selectDefaultView(state: PanelState): PanelView {
-  if (state.accountState.status !== 'authenticated') {
-    return 'account';
-  }
-
-  if (state.subtitleState.type === 'ready') {
-    return 'study';
-  }
-
-  return 'generate';
+/**
+ * The panel always opens on Watch: it is state-driven and morphs through
+ * sign-in prompt, setup, progress, and transcript, so users keep one stable
+ * mental map instead of being teleported between tabs.
+ */
+export function selectDefaultView(_state: PanelState): PanelView {
+  return 'watch';
 }

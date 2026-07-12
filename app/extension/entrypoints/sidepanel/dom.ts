@@ -1,5 +1,5 @@
 export interface PanelDom {
-  railButtons: HTMLButtonElement[];
+  tabButtons: HTMLButtonElement[];
   panels: HTMLElement[];
   transcriptSearch: HTMLInputElement;
   transcriptList: HTMLElement;
@@ -8,8 +8,21 @@ export interface PanelDom {
   nowPlayingEyebrow: HTMLElement;
   nowPlayingTitle: HTMLElement;
   nowPlayingMeta: HTMLElement;
-  statusText: HTMLElement;
+  statusBanner: HTMLElement;
+  watchUnsupported: HTMLElement;
+  watchSignin: HTMLElement;
+  watchSetup: HTMLElement;
+  watchReady: HTMLElement;
+  openAccountButton: HTMLButtonElement;
+  toggleLanguagesButton: HTMLButtonElement;
+  languageExpand: HTMLElement;
+  toggleSetupButton: HTMLButtonElement;
+  pairSourceCode: HTMLElement;
+  pairSourceName: HTMLElement;
+  pairTargetCode: HTMLElement;
+  pairTargetName: HTMLElement;
   generateButton: HTMLButtonElement;
+  generateNote: HTMLElement;
   clearStateButton: HTMLButtonElement;
   resetTimingButton: HTMLButtonElement;
   sourceLanguageSearchInput: HTMLInputElement;
@@ -23,7 +36,7 @@ export interface PanelDom {
   captionDensitySelect: HTMLSelectElement;
   captionContrastThemeSelect: HTMLSelectElement;
   overlayVisibleInput: HTMLInputElement;
-  showRomanizationInputs: HTMLInputElement[];
+  showRomanizationInput: HTMLInputElement;
   showTranslationInput: HTMLInputElement;
   showGlossInput: HTMLInputElement;
   blurSourceWordsInput: HTMLInputElement;
@@ -36,9 +49,10 @@ export interface PanelDom {
   timingOffsetNumberInput: HTMLInputElement;
   timingOffsetOutput: HTMLOutputElement;
   progressContainer: HTMLElement;
-  progressLabel: HTMLElement;
   progressPercent: HTMLElement;
+  progressActivity: HTMLElement;
   progressBar: HTMLElement;
+  progressStages: HTMLElement;
   jobsList: HTMLElement;
   jobsError: HTMLElement;
   usageSummary: HTMLElement;
@@ -63,7 +77,7 @@ export interface PanelDom {
 
 export function getPanelDom(root: ParentNode = document): PanelDom {
   return {
-    railButtons: queryAll<HTMLButtonElement>(root, '[data-tab]'),
+    tabButtons: queryAll<HTMLButtonElement>(root, '[data-tab]'),
     panels: queryAll<HTMLElement>(root, '[data-panel]'),
     transcriptSearch: query<HTMLInputElement>(root, '[data-transcript-search]', HTMLInputElement),
     transcriptList: query<HTMLElement>(root, '[data-transcript-list]', HTMLElement),
@@ -72,8 +86,21 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     nowPlayingEyebrow: query(root, '[data-now-playing-eyebrow]', HTMLElement),
     nowPlayingTitle: query(root, '[data-now-playing-title]', HTMLElement),
     nowPlayingMeta: query(root, '[data-now-playing-meta]', HTMLElement),
-    statusText: query(root, '[data-status]', HTMLElement),
+    statusBanner: query(root, '[data-status]', HTMLElement),
+    watchUnsupported: query(root, '[data-watch-unsupported]', HTMLElement),
+    watchSignin: query(root, '[data-watch-signin]', HTMLElement),
+    watchSetup: query(root, '[data-watch-setup]', HTMLElement),
+    watchReady: query(root, '[data-watch-ready]', HTMLElement),
+    openAccountButton: query(root, '[data-action="open-account"]', HTMLButtonElement),
+    toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),
+    languageExpand: query(root, '[data-language-expand]', HTMLElement),
+    toggleSetupButton: query(root, '[data-action="toggle-setup"]', HTMLButtonElement),
+    pairSourceCode: query(root, '[data-pair-source-code]', HTMLElement),
+    pairSourceName: query(root, '[data-pair-source-name]', HTMLElement),
+    pairTargetCode: query(root, '[data-pair-target-code]', HTMLElement),
+    pairTargetName: query(root, '[data-pair-target-name]', HTMLElement),
     generateButton: query(root, '[data-action="generate"]', HTMLButtonElement),
+    generateNote: query(root, '[data-generate-note]', HTMLElement),
     clearStateButton: query(root, '[data-action="clear-state"]', HTMLButtonElement),
     resetTimingButton: query(root, '[data-action="reset-timing"]', HTMLButtonElement),
     sourceLanguageSearchInput: query(root, 'input[name="sourceLanguageSearch"]', HTMLInputElement),
@@ -87,7 +114,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     captionDensitySelect: query(root, 'select[name="captionDensity"]', HTMLSelectElement),
     captionContrastThemeSelect: query(root, 'select[name="captionContrastTheme"]', HTMLSelectElement),
     overlayVisibleInput: query(root, 'input[name="overlayVisible"]', HTMLInputElement),
-    showRomanizationInputs: queryAll<HTMLInputElement>(root, 'input[name="showRomanization"]'),
+    showRomanizationInput: query(root, 'input[name="showRomanization"]', HTMLInputElement),
     showTranslationInput: query(root, 'input[name="showTranslation"]', HTMLInputElement),
     showGlossInput: query(root, 'input[name="showGloss"]', HTMLInputElement),
     blurSourceWordsInput: query(root, 'input[name="blurSourceWords"]', HTMLInputElement),
@@ -100,9 +127,10 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     timingOffsetNumberInput: query(root, 'input[name="subtitleTimingOffsetNumber"]', HTMLInputElement),
     timingOffsetOutput: query(root, '[data-timing-offset]', HTMLOutputElement),
     progressContainer: query(root, '[data-progress]', HTMLElement),
-    progressLabel: query(root, '[data-progress-label]', HTMLElement),
     progressPercent: query(root, '[data-progress-percent]', HTMLElement),
+    progressActivity: query(root, '[data-progress-activity]', HTMLElement),
     progressBar: query(root, '[data-progress-bar]', HTMLElement),
+    progressStages: query(root, '[data-progress-stages]', HTMLElement),
     jobsList: query(root, '[data-jobs-list]', HTMLElement),
     jobsError: query(root, '[data-jobs-error]', HTMLElement),
     usageSummary: query(root, '[data-usage-summary]', HTMLElement),

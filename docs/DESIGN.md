@@ -11,7 +11,7 @@
 
 - Current state: Stitch-led frontend revamp active across the Laravel website and extension.
 - Marketing/account direction: Dark Academia Website for existing public/account support pages, with a user-directed Hermes-inspired black-theme landing-page override on `/` and a product-specific `/extension` install page. The homepage override follows `C:/Users/jaden/Desktop/hermes_design_doc.docx` for structure and rhythm while keeping product-specific copy and assets.
-- Extension direction: Cinematic Study Console. The extension side panel and YouTube overlay stay compact, dark, video-native, and operational.
+- Extension direction: Ink & Marker, night shift. The side panel runs the marketing site's design system (bone-paper text, hard borders, offset-shadow primary button, `//` mono micro-labels, single crimson accent) on the site's night palette, staying compact, video-native, and operational. The YouTube overlay keeps its dark video-native glass rail.
 - Stitch sources: dark academia website `projects/11285798713880801131`, design system `assets/5ee04fe765404b7fb7e1d34e23d44d50`, manifest `docs/design-assets/stitch-dark-academia/README.md`; earlier marketing refresh `projects/17285330433703510860`, design system `assets/64644ce61714457b96a97064b15560fc`, manifest `docs/design-assets/stitch-clean-marketing/README.md`; cinematic extension/account revamp `projects/2987099361838226750`, design system `assets/871d344e6dab43e185c4573dfa4b95ce`, manifest `docs/design-assets/stitch-cinematic/README.md`.
 - Source of truth: `app/backend/public/css/site.css` imports the split website styles under `app/backend/public/css/site/`, `app/extension/entrypoints/sidepanel/style.css` owns the side-panel styles, and `app/extension/utils/overlay.ts` re-exports the isolated YouTube overlay modules under `app/extension/utils/overlay/`.
 - References: place long framework or design-system notes in `docs/references/`.
@@ -33,15 +33,15 @@
 - Keep legal, support, auth, dashboard, and job-detail surfaces readable and operational. Do not put account workflows in decorative hero layouts.
 - Use 0-8px radii, thin borders, and tonal layers. Avoid SaaS gradients, pill clusters, nested cards, and decorative image overlays behind long text.
 
-## Cinematic Study Console Rules
+## Extension Side Panel Rules (Ink & Marker, Night)
 
-- Keep the extension mark tied to captions/timecode instead of a generic AI badge.
-- Do not use the old dark subtitle-overlay image in the marketing hero. Use neutral placeholder frames until real product screenshots are supplied.
-- Keep operational screens dense and calm: usage, billing, job history, extension connection, and support-safe metadata should be scannable without marketing ornament.
-- Use teal for primary actions and active system state. Use amber only for subtitle progress, token focus, and learning emphasis. Use red only for failures.
-- Keep the extension side panel compact and stable at small widths; controls, tabs, language lists, and generated job rows must not overflow.
+- Keep the panel's tokens mirrored from the site (`app/backend/public/css/site/tokens.css`): `#0e0e0e` night ground with faint ruled-notebook lines, bone-paper text, single `#d83b3b` crimson accent (crimson is state + emphasis; green only for success pills).
+- Type: Bricolage Grotesque for display moments (progress percent), Schibsted Grotesk for body/controls, Spline Sans Mono for `//`-prefixed micro-labels, timecodes, badges, and microcopy.
+- Keep the Watch tab state-driven: unsupported page, inline sign-in prompt, setup, named-stage progress, and transcript are mutually exclusive states of one tab — never split this loop back across tabs.
+- Keep operational screens dense and calm: usage, job history, and support-safe metadata should be scannable without marketing ornament.
+- Keep the extension side panel compact and stable at small widths (320px floor); controls, tabs, language lists, and history cards must not overflow.
 - Keep the overlay as a video-native glass rail with source tokens, optional translation, cue timing, romanization/gloss, and click-to-expand token detail.
-- Use 8px radii for panels and controls unless a status chip needs a pill shape. Avoid generic SaaS card mosaics and decorative gradients that do not communicate the workflow.
+- Use 3-6px radii, hard 1.5-2px borders, and the offset-shadow press interaction only on the primary action. Avoid generic SaaS card mosaics and decorative gradients that do not communicate the workflow.
 
 ## Agent Expectations
 

@@ -13,7 +13,8 @@ import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
 import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/panel-progress';
-import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
+import { anonymousAccountState, formatResetDate, stageTimeline } from '../../utils/account-state';
+import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
 import { PanelPortConnector } from '../../utils/panel-port-registry';
@@ -26,8 +27,8 @@ import { bindTimingOffsetControl } from './timing-control';
 import { bindTranscriptView } from './transcript-view';
 import {
   generateButtonLabel,
-  statusClass,
-  statusLabel,
+  nowPlayingTitleLabel,
+  videoDurationForState,
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
@@ -38,7 +39,7 @@ type RequestErrorTarget = 'global' | 'account';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
 const {
-  railButtons,
+  tabButtons,
   panels,
   transcriptSearch,
   transcriptList,
@@ -47,8 +48,21 @@ const {
   nowPlayingEyebrow,
   nowPlayingTitle,
   nowPlayingMeta,
-  statusText,
+  statusBanner,
+  watchUnsupported,
+  watchSignin,
+  watchSetup,
+  watchReady,
+  openAccountButton,
+  toggleLanguagesButton,
+  languageExpand,
+  toggleSetupButton,
+  pairSourceCode,
+  pairSourceName,
+  pairTargetCode,
+  pairTargetName,
   generateButton,
+  generateNote,
   clearStateButton,
   resetTimingButton,
   sourceLanguageSearchInput,
@@ -62,7 +76,7 @@ const {
   captionDensitySelect,
   captionContrastThemeSelect,
   overlayVisibleInput,
-  showRomanizationInputs,
+  showRomanizationInput,
   showTranslationInput,
   showGlossInput,
   blurSourceWordsInput,
@@ -75,9 +89,10 @@ const {
   timingOffsetNumberInput,
   timingOffsetOutput,
   progressContainer,
-  progressLabel,
   progressPercent,
+  progressActivity,
   progressBar,
+  progressStages,
   jobsList,
   jobsError,
   usageSummary,
@@ -111,11 +126,29 @@ let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
 
+/* Watch-tab UI state: the language pickers and the ready-state setup card
+   are collapsed by default and expand on request. */
+let languagesExpanded = false;
+let setupExpandedWhileReady = false;
+let lastWatchVideoId: string | null = null;
+
 collapseButton.addEventListener('click', () => {
   window.close();
 });
 generateButton.addEventListener('click', () => void generateSubtitles());
 clearStateButton.addEventListener('click', () => void clearLocalState());
+openAccountButton.addEventListener('click', () => {
+  showTab(tabButtons, panels, 'account');
+  accountEmailInput.focus();
+});
+toggleLanguagesButton.addEventListener('click', () => {
+  setLanguagesExpanded(!languagesExpanded);
+});
+toggleSetupButton.addEventListener('click', () => {
+  setupExpandedWhileReady = !setupExpandedWhileReady;
+  toggleSetupButton.setAttribute('aria-expanded', setupExpandedWhileReady ? 'true' : 'false');
+  if (latestState) showPanelState(latestState);
+});
 accountLoginForm.addEventListener('submit', (event) => void loginFromAccountForm(event));
 logoutButton.addEventListener('click', () => void logoutAccount());
 accountEmailInput.addEventListener('input', clearAccountFeedback);
@@ -130,9 +163,9 @@ captionFontSizeSelect.addEventListener('change', handleCaptionFontSizeChange);
 captionDensitySelect.addEventListener('change', handleCaptionDensityChange);
 captionContrastThemeSelect.addEventListener('change', handleCaptionContrastThemeChange);
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
-for (const input of showRomanizationInputs) {
-  input.addEventListener('change', () => void updateSettings({ showRomanization: input.checked }));
-}
+showRomanizationInput.addEventListener('change', () =>
+  void updateSettings({ showRomanization: showRomanizationInput.checked }),
+);
 showTranslationInput.addEventListener('change', () =>
   void updateSettings({ showTranslation: showTranslationInput.checked }),
 );
@@ -163,7 +196,7 @@ const timingControl = bindTimingOffsetControl({
   onCommit: (subtitleTimingOffsetSeconds) => updateSettings({ subtitleTimingOffsetSeconds }),
 });
 
-setupTabs(railButtons, panels);
+setupTabs(tabButtons, panels);
 const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
 renderShortcutHelp();
 void loadPanelState();
@@ -186,7 +219,7 @@ browser.runtime.onMessage.addListener((message) => {
   if (message.type === 'background.activeCueChanged') {
     transcriptView.setActiveCue(message.cueId);
   } else if (message.type === 'background.focusTranscript') {
-    showTab(railButtons, panels, 'transcript');
+    showTab(tabButtons, panels, 'watch');
     transcriptView.focus();
   }
 });
@@ -455,6 +488,13 @@ function handleJobsListClick(event: MouseEvent): void {
   void browser.tabs.create({ url: videoUrl });
 }
 
+function setLanguagesExpanded(expanded: boolean): void {
+  languagesExpanded = expanded;
+  languageExpand.hidden = !expanded;
+  toggleLanguagesButton.textContent = expanded ? 'Done' : 'Change';
+  toggleLanguagesButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+}
+
 function showPanelState(state: PanelState): void {
   const previousStateType = latestState?.subtitleState.type;
   latestState = state;
@@ -464,12 +504,20 @@ function showPanelState(state: PanelState): void {
   const settings = state.settings;
   const supported = Boolean(pageStatus?.supported);
   const { accountState } = state;
+  const authenticated = accountState.status === 'authenticated';
 
   currentSettings = settings;
-  statusText.className = `status ${statusClass(subtitleState.type, supported)}`;
-  statusText.textContent = statusLabel(subtitleState.type, supported);
 
-  showTrackState(state);
+  /* Collapse transient watch-tab state when the video changes. */
+  const watchVideoId = pageStatus?.supported ? pageStatus.videoId : null;
+  if (watchVideoId !== lastWatchVideoId) {
+    lastWatchVideoId = watchVideoId;
+    setupExpandedWhileReady = false;
+    setLanguagesExpanded(false);
+  }
+
+  showStatusBanner(state);
+  showWatchState(state, supported, authenticated);
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
   } else {
@@ -480,16 +528,18 @@ function showPanelState(state: PanelState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = accountState.status !== 'authenticated' || !supported || subtitleState.type === 'loading';
+  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading';
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
+  renderGenerateNote(state, supported);
 
+  renderLanguagePair(settings);
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayPositionSelect.value = settings.overlayPosition;
   captionFontSizeSelect.value = settings.captionFontSize;
   captionDensitySelect.value = settings.captionDensity;
   captionContrastThemeSelect.value = settings.captionContrastTheme;
-  setChecked(showRomanizationInputs, settings.showRomanization);
+  showRomanizationInput.checked = settings.showRomanization;
   showTranslationInput.checked = settings.showTranslation;
   showGlossInput.checked = settings.showGloss;
   blurSourceWordsInput.checked = settings.blurSourceWords;
@@ -502,14 +552,14 @@ function showPanelState(state: PanelState): void {
   setSettingsDisabled(false);
 
   nowPlayingEyebrow.textContent = supported ? 'Now playing' : 'No video';
-  nowPlayingTitle.textContent = supported && pageStatus?.supported ? pageStatus.videoId : 'Open a YouTube video';
+  nowPlayingTitle.textContent = nowPlayingTitleLabel(state);
   nowPlayingMeta.textContent = supported
     ? `${videoDurationLabel(state)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)}`
     : '';
 
   if (!hasAppliedDefaultView) {
     hasAppliedDefaultView = true;
-    showTab(railButtons, panels, selectDefaultView(state));
+    showTab(tabButtons, panels, selectDefaultView(state));
   }
 
   if (previousStateType !== state.subtitleState.type) {
@@ -517,27 +567,72 @@ function showPanelState(state: PanelState): void {
   }
 }
 
-function showTrackState(state: PanelState): void {
-  const subtitleState = state.subtitleState;
-
-  if (subtitleState.type === 'ready') {
-    progressContainer.hidden = true;
+function showStatusBanner(state: PanelState): void {
+  if (state.subtitleState.type === 'error') {
+    statusBanner.hidden = false;
+    statusBanner.textContent = state.subtitleState.message || 'Generation failed.';
 
     return;
   }
 
-  if (subtitleState.type === 'loading') {
+  statusBanner.hidden = true;
+  statusBanner.textContent = '';
+}
+
+/** Toggle the Watch tab's mutually exclusive states: unsupported page, sign-in prompt, setup, progress, transcript. */
+function showWatchState(state: PanelState, supported: boolean, authenticated: boolean): void {
+  const subtitleState = state.subtitleState;
+  const loading = subtitleState.type === 'loading';
+  const ready = subtitleState.type === 'ready';
+
+  watchUnsupported.hidden = supported;
+  watchSignin.hidden = !supported || authenticated;
+  watchSetup.hidden = !supported || !authenticated || loading || (ready && !setupExpandedWhileReady);
+  progressContainer.hidden = !loading;
+  watchReady.hidden = !ready;
+  toggleSetupButton.setAttribute('aria-expanded', setupExpandedWhileReady ? 'true' : 'false');
+
+  if (loading) {
     const progress = generationProgress(subtitleState);
 
-    progressContainer.hidden = false;
-    progressLabel.textContent = progress.stageLabel;
     progressPercent.textContent = `${progress.percent}%`;
+    progressActivity.textContent = progress.activityLabel;
     progressBar.style.width = `${progress.percent}%`;
+    progressStages.innerHTML = stageChecklistHtml(subtitleState.stage);
+  }
+}
+
+function stageChecklistHtml(stage: PanelState['jobHistory'][number]['stage']): string {
+  return stageTimeline({ stage, status: 'running' })
+    .map(
+      (item) => `
+        <li class="stage ${item.state}">
+          <span class="stage-dot" aria-hidden="true"></span>
+          <span>${escapeHtml(item.label)}</span>
+        </li>
+      `,
+    )
+    .join('');
+}
+
+function renderGenerateNote(state: PanelState, supported: boolean): void {
+  if (!supported) {
+    generateNote.textContent = '';
 
     return;
   }
 
-  progressContainer.hidden = true;
+  const duration = videoDurationForState(state);
+  generateNote.textContent = typeof duration === 'number'
+    ? `≈ ${Math.max(1, Math.ceil(duration / 60))} min of video · counts toward your plan minutes`
+    : 'Generation time counts toward your plan minutes.';
+}
+
+function renderLanguagePair(settings: ExtensionSettings | null): void {
+  pairSourceCode.textContent = settings?.sourceLanguage ?? '';
+  pairSourceName.textContent = settings ? languageLabel(settings.sourceLanguage) : '—';
+  pairTargetCode.textContent = settings?.targetLanguage ?? '';
+  pairTargetName.textContent = settings ? languageLabel(settings.targetLanguage) : '—';
 }
 
 function renderLanguagePickers(settings: ExtensionSettings | null): void {
@@ -596,6 +691,7 @@ function renderAccount(accountState: AccountState, settings: ExtensionSettings):
   accountLoginButton.disabled = accountRequestBusy || authenticated;
   accountLoginButton.textContent = accountRequestBusy ? 'Signing in...' : 'Sign in';
   logoutButton.disabled = accountRequestBusy || !authenticated;
+  logoutButton.hidden = !authenticated;
   featureList.innerHTML = accountFeatureListHtml(accountState, settings);
 }
 
@@ -612,20 +708,26 @@ function showError(error: unknown): void {
 
   latestState = null;
   currentSettings = null;
-  statusText.className = 'status error';
-  statusText.textContent =
+  statusBanner.hidden = false;
+  statusBanner.textContent =
     typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unable to load extension state';
   nowPlayingEyebrow.textContent = 'No video';
   nowPlayingTitle.textContent = 'Open a YouTube video';
   nowPlayingMeta.textContent = '';
-  jobsList.innerHTML = '<p class="muted empty-state">Unable to load jobs.</p>';
+  watchUnsupported.hidden = false;
+  watchSignin.hidden = true;
+  watchSetup.hidden = true;
   progressContainer.hidden = true;
+  watchReady.hidden = true;
+  jobsList.innerHTML = '<p class="empty-state">Unable to load jobs.</p>';
+  renderLanguagePair(null);
   renderLanguagePickers(null);
   renderUsage(emptyAccountState);
   renderAccount(emptyAccountState, DEFAULT_EXTENSION_SETTINGS);
   settingsLanguageSummary.textContent = 'Unavailable';
   generateButton.disabled = true;
   generateButton.textContent = 'Generate subtitles';
+  generateNote.textContent = '';
   overlayVisibleInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayVisible;
   overlayPositionSelect.value = DEFAULT_EXTENSION_SETTINGS.overlayPosition;
   captionFontSizeSelect.value = DEFAULT_EXTENSION_SETTINGS.captionFontSize;
@@ -691,7 +793,7 @@ function setSettingsDisabled(disabled: boolean): void {
   captionFontSizeSelect.disabled = disabled;
   captionDensitySelect.disabled = disabled;
   captionContrastThemeSelect.disabled = disabled;
-  setDisabled(showRomanizationInputs, disabled);
+  showRomanizationInput.disabled = disabled;
   showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;
   blurSourceWordsInput.disabled = disabled;
@@ -708,16 +810,4 @@ function setSettingsDisabled(disabled: boolean): void {
   resetTimingButton.disabled = disabled;
   timingOffsetRangeInput.disabled = disabled;
   timingOffsetNumberInput.disabled = disabled;
-}
-
-function setChecked(inputs: readonly HTMLInputElement[], checked: boolean): void {
-  for (const input of inputs) {
-    input.checked = checked;
-  }
-}
-
-function setDisabled(inputs: readonly HTMLInputElement[], disabled: boolean): void {
-  for (const input of inputs) {
-    input.disabled = disabled;
-  }
 }

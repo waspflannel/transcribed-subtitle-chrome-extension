@@ -36,16 +36,13 @@ export function panelTranscriptListHtml(input: {
 }
 
 function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings): string {
-  const rom = settings.showRomanization && cue.romanization
-    ? `<div class="cr">${escapeHtml(cue.romanization)}</div>` : '';
   const tr = settings.showTranslation && cue.translatedText.trim() !== cue.sourceText.trim()
     ? `<div class="cg">${escapeHtml(cue.translatedText)}</div>` : '';
   return `
     <article class="cue${active ? ' on' : ''}" role="listitem" aria-current="${active ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
       <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>
       <div class="cbody">
-        <div class="ct">${escapeHtml(cue.sourceText)}</div>
-        ${rom}
+        ${sourceLineHtml(cue, settings)}
         ${tr}
         <div class="cue-actions">
           <button type="button" class="cue-action" data-transcript-action="jump" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Jump to cue ${cue.index + 1}">Jump</button>
@@ -54,4 +51,31 @@ function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSet
         </div>
       </div>
     </article>`;
+}
+
+/**
+ * Source line for a cue. When romanization is enabled and the cue's tokens
+ * carry per-word readings, each word gets its romaji riding above it (the
+ * marketing site's player-mock motif); otherwise fall back to the plain
+ * source line with an optional whole-line romanization underneath.
+ */
+function sourceLineHtml(cue: SubtitleCue, settings: ExtensionSettings): string {
+  const useTokens = settings.showRomanization && cue.tokens.some((token) => typeof token.romanization === 'string' && token.romanization !== '');
+
+  if (!useTokens) {
+    const rom = settings.showRomanization && cue.romanization
+      ? `<div class="cr">${escapeHtml(cue.romanization)}</div>` : '';
+
+    return `<div class="ct">${escapeHtml(cue.sourceText)}</div>${rom}`;
+  }
+
+  const tokens = cue.tokens
+    .map((token) => {
+      const reading = token.romanization ? `<small>${escapeHtml(token.romanization)}</small>` : '';
+
+      return `<span class="tok">${escapeHtml(token.text)}${reading}</span>`;
+    })
+    .join('');
+
+  return `<div class="toks">${tokens}</div>`;
 }

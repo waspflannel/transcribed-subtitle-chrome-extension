@@ -24,7 +24,8 @@
     "wxt": "^0.20.25"
   },
   "dependencies": {
-    "@fontsource/geist-sans": "^5.2.5",
-    "@fontsource/ibm-plex-mono": "^5.2.7"
+    "@fontsource/bricolage-grotesque": "^5.2.10",
+    "@fontsource/schibsted-grotesk": "^5.2.8",
+    "@fontsource/spline-sans-mono": "^5.2.8"
   }
 }
