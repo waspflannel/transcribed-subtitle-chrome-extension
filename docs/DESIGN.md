@@ -9,29 +9,23 @@
 
 ## Design System Status
 
-- Current state: Stitch-led frontend revamp active across the Laravel website and extension.
-- Marketing/account direction: Dark Academia Website for existing public/account support pages, with a user-directed Hermes-inspired black-theme landing-page override on `/` and a product-specific `/extension` install page. The homepage override follows `C:/Users/jaden/Desktop/hermes_design_doc.docx` for structure and rhythm while keeping product-specific copy and assets.
-- Extension direction: Ink & Marker, night shift. The side panel runs the marketing site's design system (bone-paper text, hard borders, offset-shadow primary button, `//` mono micro-labels, single crimson accent) on the site's night palette, staying compact, video-native, and operational. The YouTube overlay keeps its dark video-native glass rail.
-- Stitch sources: dark academia website `projects/11285798713880801131`, design system `assets/5ee04fe765404b7fb7e1d34e23d44d50`, manifest `docs/design-assets/stitch-dark-academia/README.md`; earlier marketing refresh `projects/17285330433703510860`, design system `assets/64644ce61714457b96a97064b15560fc`, manifest `docs/design-assets/stitch-clean-marketing/README.md`; cinematic extension/account revamp `projects/2987099361838226750`, design system `assets/871d344e6dab43e185c4573dfa4b95ce`, manifest `docs/design-assets/stitch-cinematic/README.md`.
-- Source of truth: `app/backend/public/css/site.css` imports the split website styles under `app/backend/public/css/site/`, `app/extension/entrypoints/sidepanel/style.css` owns the side-panel styles, and `app/extension/utils/overlay.ts` re-exports the isolated YouTube overlay modules under `app/extension/utils/overlay/`.
+- Current state: one "Ink & Marker" design system across the product. The marketing site runs it on bone paper; the extension side panel runs it on the night palette. Both share the single crimson accent and the same type stack.
+- Website direction: red/black "ink & marker" study desk — bone paper (`--paper`), black ink (`--ink`), single crimson accent (`--accent #d83b3b`), faint ruled-notebook background, hard 2px borders with offset block shadows, marker-swipe highlights (`.hl`), `//`-prefixed mono eyebrows, and a multilingual (es/ru/ja/fr) annotation motif. Auth and dashboard surfaces are re-skinned to match.
+- Extension direction: Ink & Marker, night shift. The side panel runs the same system (bone-paper text, hard borders, offset-shadow primary button, `//` mono micro-labels, single crimson accent) on the site's night tokens, staying compact, video-native, and operational. The YouTube overlay keeps its dark video-native glass rail.
+- Type stack (site and panel): Bricolage Grotesque for display, Schibsted Grotesk for body, Spline Sans Mono for eyebrows, labels, and data.
+- Source of truth: tokens in `app/backend/public/css/site/tokens.css`; `app/backend/public/css/site.css` imports the split website styles under `app/backend/public/css/site/`; `app/extension/entrypoints/sidepanel/style.css` owns the side-panel styles (tokens mirrored from the site); `app/extension/utils/overlay.ts` re-exports the isolated YouTube overlay modules under `app/extension/utils/overlay/`.
+- Retired directions (Stitch dark academia, clean marketing, cinematic console, Hermes landing) are historical; their assets stay under `docs/design-assets/` for reference only. Do not revive their palettes or rules.
 - References: place long framework or design-system notes in `docs/references/`.
 
-## Hermes Landing Override
+## Ink & Marker Website Rules
 
-- The Laravel homepage intentionally renders the Hermes-inspired black-theme landing page from `C:/Users/jaden/Desktop/hermes_design_doc.docx`; `/desktop` redirects to the product-specific `/extension` install page.
-- Keep this override scoped to the landing page unless a future plan explicitly changes pricing, legal, auth, dashboard, or extension UI surfaces.
-- Source of truth for implementation: `app/backend/resources/views/marketing/home.blade.php`, shared Blade components under `app/backend/resources/views/components/`, split CSS under `app/backend/public/css/site/`, `app/backend/public/js/site-interactions.js`, and local image copies in `app/backend/public/img/desktop/`.
-- The MP4 demo and installer downloads remain remote links to the Hermes asset host; do not commit those large binaries into the repository without a separate asset policy decision.
-
-## Dark Academia Website Rules
-
-- Keep `Transcribed Subtitle Extension` prominent in the first viewport of the public homepage.
-- Keep historical generated-image references under `docs/design-assets/`; only active, optimized public assets should live under `app/backend/public/img/`.
-- Keep the homepage sequence disciplined: editorial hero, large product video/poster section, parchment "why use it" section, and final atmospheric CTA.
-- Keep the product video slot wired for future local MP4/WebM files while showing the generated poster fallback before a real demo exists.
-- Use brass for primary actions and active focus, oxblood only for emphasis, library green for success/healthy states, and red only for failures.
+- The marketing site is one landing page: night hero band, overlapping CSS product mock, then features, how-it-works, languages, pricing, and FAQ as anchored sections, plus a thin `/pricing` page. Retired pages (`/extension`, `/desktop`, `/languages`, `/how-it-works`, `/faq`) 301-redirect to home anchors; keep the sitemap listing live pages only.
+- Keep the product mock hand-built in CSS (player frame, per-word romaji subtitle tokens, translation line, open flashcard). No screenshots of stale UI.
+- Use crimson as the only accent: marker highlights, primary CTA, active states. Green only for success/positive pills, red tones only for failures.
+- Keep buttons flashcard-hard: 2px ink borders, offset block shadow, translate-on-hover/press interaction (`ui.css` `.button`).
+- Keep the purchase path intact: plan cards link `register?plan=code`, registration stashes the plan in the session, and the dashboard shows a continue-to-checkout banner after email verification until checkout starts.
 - Keep legal, support, auth, dashboard, and job-detail surfaces readable and operational. Do not put account workflows in decorative hero layouts.
-- Use 0-8px radii, thin borders, and tonal layers. Avoid SaaS gradients, pill clusters, nested cards, and decorative image overlays behind long text.
+- Keep historical generated-image references under `docs/design-assets/`; only active, optimized public assets should live under `app/backend/public/img/`.
 
 ## Extension Side Panel Rules (Ink & Marker, Night)
 
