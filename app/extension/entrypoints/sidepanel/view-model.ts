@@ -1,30 +1,6 @@
 import type { AccountState, PanelState } from '../../utils/messages';
 import { formatDurationSeconds } from '../../utils/account-state';
 
-export function statusClass(subtitleStateType: PanelState['subtitleState']['type'], supported: boolean): string {
-  if (subtitleStateType === 'error') {
-    return 'error';
-  }
-
-  if (subtitleStateType === 'loading') {
-    return 'loading';
-  }
-
-  return supported ? 'ok' : 'idle';
-}
-
-export function statusLabel(subtitleStateType: PanelState['subtitleState']['type'], supported: boolean): string {
-  if (subtitleStateType === 'error') {
-    return 'Generation failed';
-  }
-
-  if (subtitleStateType === 'loading') {
-    return 'Generating subtitles';
-  }
-
-  return supported ? 'Ready to generate' : 'Unsupported page';
-}
-
 export function videoDurationLabel(state: PanelState): string {
   const duration = videoDurationForState(state);
 
@@ -42,6 +18,20 @@ export function videoDurationForState(state: PanelState): number | undefined {
     : undefined;
 
   return matchingJob?.videoDurationSeconds;
+}
+
+/** Human title for the now-playing header: tab title minus YouTube chrome, falling back to the video id. */
+export function nowPlayingTitleLabel(state: PanelState): string {
+  if (state.pageStatus?.supported !== true) {
+    return 'Open a YouTube video';
+  }
+
+  const cleaned = (state.pageTitle ?? '')
+    .replace(/\s*-\s*YouTube\s*$/i, '')
+    .replace(/^\(\d+\)\s*/, '')
+    .trim();
+
+  return cleaned !== '' ? cleaned : state.pageStatus.videoId;
 }
 
 export function generateButtonLabel(

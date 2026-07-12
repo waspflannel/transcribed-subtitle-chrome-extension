@@ -589,6 +589,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
     settings,
     activeTabId: activeTabId ?? undefined,
     pageStatus,
+    pageTitle: activeTab?.title,
     pageVideoDurationSeconds: pageSnapshot.videoDurationSeconds,
     accountState: effectiveSession ? accountStateFromSummary(effectiveSession.account) : anonymousAccountState(),
     subtitleState,

@@ -77,6 +77,7 @@ export interface PanelState {
   settings: ExtensionSettings;
   activeTabId?: number;
   pageStatus?: YoutubePageInfo;
+  pageTitle?: string;
   pageVideoDurationSeconds?: number;
   accountState: AccountState;
   subtitleState: SubtitleState;

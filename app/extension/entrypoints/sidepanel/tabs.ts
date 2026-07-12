@@ -1,12 +1,12 @@
 export function setupTabs(tabButtons: readonly HTMLButtonElement[], panels: readonly HTMLElement[]): void {
   const activeTab = tabButtons.find((button) => button.classList.contains('active'))?.dataset.tab
     ?? tabButtons[0]?.dataset.tab
-    ?? 'generate';
+    ?? 'watch';
 
   showTab(tabButtons, panels, activeTab);
 
   for (const button of tabButtons) {
-    button.addEventListener('click', () => showTab(tabButtons, panels, button.dataset.tab ?? 'generate'));
+    button.addEventListener('click', () => showTab(tabButtons, panels, button.dataset.tab ?? 'watch'));
     button.addEventListener('keydown', (event) => handleTabKeydown(event, tabButtons, panels));
   }
 }
@@ -53,7 +53,7 @@ function handleTabKeydown(
   const nextButton = tabButtons[nextIndex];
 
   nextButton.focus();
-  showTab(tabButtons, panels, nextButton.dataset.tab ?? 'generate');
+  showTab(tabButtons, panels, nextButton.dataset.tab ?? 'watch');
 }
 
 function nextTabIndex(key: string, currentIndex: number, tabCount: number): number | null {

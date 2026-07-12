@@ -16,12 +16,15 @@ function baseState(overrides: Partial<PanelState> = {}): PanelState {
   };
 }
 
+/* The Watch tab is state-driven (sign-in prompt, setup, progress, and
+   transcript all render inside it), so the panel always opens there —
+   users keep one stable mental map instead of being teleported. */
 describe('selectDefaultView', () => {
-  it('opens Account when the user is anonymous', () => {
-    expect(selectDefaultView(baseState())).toBe('account');
+  it('opens Watch when the user is anonymous', () => {
+    expect(selectDefaultView(baseState())).toBe('watch');
   });
 
-  it('opens Study when signed in and a track is ready', () => {
+  it('opens Watch when signed in and a track is ready', () => {
     const state = baseState({
       accountState: authenticatedAccountState(),
       subtitleState: {
@@ -49,15 +52,15 @@ describe('selectDefaultView', () => {
         },
       },
     });
-    expect(selectDefaultView(state)).toBe('study');
+    expect(selectDefaultView(state)).toBe('watch');
   });
 
-  it('opens Generate when signed in without a ready track', () => {
+  it('opens Watch when signed in without a ready track', () => {
     const state = baseState({
       accountState: authenticatedAccountState(),
       subtitleState: { type: 'no-track' },
     });
-    expect(selectDefaultView(state)).toBe('generate');
+    expect(selectDefaultView(state)).toBe('watch');
   });
 });
 
