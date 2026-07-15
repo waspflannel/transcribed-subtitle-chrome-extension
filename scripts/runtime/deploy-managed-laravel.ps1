@@ -43,6 +43,8 @@ if (-not $SkipComposerInstall) {
     Invoke-Checked -FilePath "composer" -Arguments @("install", "--no-dev", "--prefer-dist", "--optimize-autoloader", "--no-interaction") -WorkingDirectory $Backend
 }
 
+Invoke-Checked -FilePath "composer" -Arguments @("audit", "--locked", "--no-dev", "--no-interaction") -WorkingDirectory $Backend
+
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "config:clear") -WorkingDirectory $Backend
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "ops:production-check", "--target=$Target", "--no-ansi") -WorkingDirectory $Backend
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "subtitles:runtime-check", "--strict", "--no-ansi") -WorkingDirectory $Backend
