@@ -966,7 +966,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('cached_video_transcripts', [
             'youtube_video_id' => 'cachehit001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test',
+            'transcription_model' => 'scribe-test:transcript-chunks-v2',
             'audio_duration_seconds' => 42,
         ]);
 
@@ -1035,7 +1035,7 @@ class SubtitleJobApiTest extends TestCase
         CachedVideoTranscript::create([
             'youtube_video_id' => 'cacheexp001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test',
+            'transcription_model' => 'scribe-test:transcript-chunks-v2',
             'audio_duration_seconds' => 999,
             'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
             'expires_at' => now()->subDay(),
@@ -1535,6 +1535,42 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame('first gloss', $track->cues[0]['tokens'][0]['gloss']);
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
+    }
+
+    public function test_learning_token_enrichment_requires_an_active_plan_on_a_cache_miss(): void
+    {
+        $installId = $this->installId('p');
+        $user = User::factory()->create();
+        $this->withExtensionAuth($installId, $user);
+        $job = SubtitleJob::factory()->for($user)->create([
+            'install_id' => $installId,
+            'youtube_video_id' => 'learnplan01',
+            'youtube_url' => 'https://www.youtube.com/watch?v=learnplan01',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+            'expires_at' => now()->addDays(30),
+        ]);
+        $track = SubtitleTrack::factory()->for($job, 'job')->create([
+            'youtube_video_id' => 'learnplan01',
+            'cues' => [$this->sampleCue()],
+        ]);
+        $user->forceFill([
+            'billing_subscription_status' => 'canceled',
+            'billing_current_period_end' => now()->subSecond(),
+        ])->save();
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/learning-tokens', [
+                'trackId' => $track->public_id,
+                'cueId' => 'cue-0001',
+                'tokenIndex' => 0,
+            ])
+            ->assertStatus(402)
+            ->assertJsonPath('error.code', 'payment_required');
+
+        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
 
     public function test_learning_token_enrichment_preserves_concurrent_token_updates(): void

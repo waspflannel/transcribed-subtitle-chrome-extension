@@ -5,9 +5,9 @@ namespace App\Services\Subtitles;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
+use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
-use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
@@ -206,6 +206,12 @@ class SubtitleGenerationPipeline
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
         $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
+
+        $job = $this->loadRunningJob($subtitleJobId, $runId);
+
+        if ($job === null) {
+            return;
+        }
 
         $this->artifacts->putTranscriptChunk(
             job: $job,

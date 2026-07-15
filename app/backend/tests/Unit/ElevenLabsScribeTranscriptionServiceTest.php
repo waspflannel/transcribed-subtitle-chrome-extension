@@ -178,6 +178,40 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertTrue($requestMatched);
     }
 
+    public function test_it_whitelists_the_scribe_payload_stored_for_chunk_merging(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload()),
+        ]);
+
+        $payload = $this->service()->transcribeChunk($this->audio, 'spa');
+
+        $this->assertSame(['words', 'language_code'], array_keys($payload));
+        $this->assertSame(['text', 'type', 'start', 'end'], array_keys($payload['words'][0]));
+        $this->assertArrayNotHasKey('speaker_id', $payload['words'][0]);
+        $this->assertArrayNotHasKey('language_probability', $payload);
+        $this->assertArrayNotHasKey('text', $payload);
+    }
+
+    public function test_it_rejects_malformed_scribe_payloads_before_artifact_storage(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                'language_code' => 'spa',
+                'words' => [['text' => 'Hola', 'type' => 'word', 'start' => 'not-a-number', 'end' => 1.0]],
+            ]),
+        ]);
+
+        try {
+            $this->service()->transcribeChunk($this->audio, 'spa');
+            $this->fail('Expected a malformed Scribe payload to be rejected.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('invalid_word_timing', $exception->context['reason']);
+            $this->assertArrayNotHasKey('payload', $exception->context);
+        }
+    }
+
     public function test_it_merges_chunk_payloads_dropping_overlap_duplicates(): void
     {
         // Mirrors the pipeline's chunk plan for 300s audio (120s target, 2s

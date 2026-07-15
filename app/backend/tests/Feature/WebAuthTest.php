@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\Auth\ExtensionTokenIssuer;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -106,7 +107,9 @@ class WebAuthTest extends TestCase
         $user = User::factory()->create([
             'email' => 'learner@example.com',
             'password' => Hash::make('old-password1'),
+            'remember_token' => 'remember-before-reset',
         ]);
+        $issuedToken = app(ExtensionTokenIssuer::class)->issue($user, 'install_'.str_repeat('a', 32));
 
         $this
             ->post('/forgot-password', ['email' => 'learner@example.com'])
@@ -127,5 +130,7 @@ class WebAuthTest extends TestCase
             ->assertRedirect(route('login', absolute: false));
 
         $this->assertTrue(Hash::check('new-password1', $user->fresh()->password));
+        $this->assertNotSame('remember-before-reset', $user->fresh()->remember_token);
+        $this->assertDatabaseMissing('personal_access_tokens', ['id' => $issuedToken->accessToken->id]);
     }
 }
