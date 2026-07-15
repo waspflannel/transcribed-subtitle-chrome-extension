@@ -11,6 +11,7 @@ use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Auth\ExtensionTokenIssuer;
 use App\Services\Billing\BillingEntitlementService;
+use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -63,6 +64,86 @@ class BillingAndUsageTest extends TestCase
             ->actingAs($user->fresh())
             ->post(route('billing.portal'))
             ->assertRedirect('https://billing.stripe.test/session');
+    }
+
+    public function test_checkout_requests_use_stable_idempotency_keys(): void
+    {
+        config([
+            'billing.stripe.secret' => 'sk_test_123',
+            'billing.plans.base.stripe_price_id' => 'price_base',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.stripe.com/v1/customers' => Http::response(['id' => 'cus_123']),
+            'https://api.stripe.com/v1/checkout/sessions' => Http::response([
+                'id' => 'cs_test_123',
+                'url' => 'https://checkout.stripe.test/session',
+            ]),
+        ]);
+        $user = User::factory()->create();
+
+        $this
+            ->actingAs($user)
+            ->post(route('billing.checkout', ['planCode' => 'base']))
+            ->assertRedirect('https://checkout.stripe.test/session');
+
+        $this
+            ->actingAs($user->fresh())
+            ->post(route('billing.checkout', ['planCode' => 'base']))
+            ->assertRedirect('https://checkout.stripe.test/session');
+
+        Http::assertSentCount(3);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/customers'
+            && str_starts_with((string) $request->header('Idempotency-Key')[0], 'tse-v1-'));
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/checkout/sessions'
+            && str_starts_with((string) $request->header('Idempotency-Key')[0], 'tse-v1-'));
+    }
+
+    public function test_checkout_is_blocked_for_a_non_terminal_subscription(): void
+    {
+        Http::preventStrayRequests();
+        $user = User::factory()->create([
+            'stripe_subscription_id' => 'sub_existing',
+            'billing_subscription_status' => 'past_due',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->post(route('billing.checkout', ['planCode' => 'base']))
+            ->assertRedirectToRoute('dashboard')
+            ->assertSessionHas('billing_status', 'Your existing subscription is managed in Stripe. Use Manage billing to change it.');
+
+        $this
+            ->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('Change an existing subscription in Stripe.')
+            ->assertDontSee('Checkout opens in Stripe.');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_checkout_is_only_available_after_a_terminal_subscription_status(): void
+    {
+        $billing = app(BillingEntitlementService::class);
+
+        foreach (['active', 'trialing', 'past_due', 'unpaid', 'incomplete'] as $status) {
+            $user = User::factory()->make([
+                'stripe_subscription_id' => 'sub_'.$status,
+                'billing_subscription_status' => $status,
+            ]);
+
+            $this->assertTrue($billing->subscriptionRequiresPortal($user), "Expected {$status} to use the billing portal.");
+        }
+
+        foreach (['canceled', 'incomplete_expired'] as $status) {
+            $user = User::factory()->make([
+                'stripe_subscription_id' => 'sub_'.$status,
+                'billing_subscription_status' => $status,
+            ]);
+
+            $this->assertFalse($billing->subscriptionRequiresPortal($user), "Expected {$status} to allow a new checkout.");
+        }
     }
 
     public function test_testing_plan_switcher_changes_plans_without_stripe_and_rebalances_minutes(): void
@@ -353,6 +434,87 @@ class BillingAndUsageTest extends TestCase
         $this->assertSame($secondEnd, $user->billing_current_period_end->timestamp);
     }
 
+    public function test_same_second_subscription_events_apply_by_event_type_precedence(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+            'billing.plans.pro.stripe_price_id' => 'price_pro',
+        ]);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_456']);
+        $periodStart = now()->startOfMonth()->timestamp;
+        $periodEnd = now()->addMonthNoOverflow()->startOfMonth()->timestamp;
+        $createdAt = now()->timestamp;
+
+        $this->postStripeEventWithCreated('evt_created', 'customer.subscription.created', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_plus',
+            status: 'active',
+            periodStart: $periodStart,
+            periodEnd: $periodEnd,
+        ), $createdAt);
+        $this->postStripeEventWithCreated('evt_updated', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_pro',
+            status: 'active',
+            periodStart: $periodStart,
+            periodEnd: $periodEnd,
+        ), $createdAt);
+
+        $user = $user->fresh();
+        $this->assertSame('pro', $user->billing_plan_code);
+        $this->assertSame('customer.subscription.updated', $user->billing_subscription_event_type);
+
+        $this->postStripeEventWithCreated('evt_late_created', 'customer.subscription.created', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_plus',
+            status: 'active',
+            periodStart: $periodStart,
+            periodEnd: $periodEnd,
+        ), $createdAt);
+
+        $this->assertSame('pro', $user->fresh()->billing_plan_code);
+    }
+
+    public function test_old_subscription_webhooks_do_not_replace_the_current_subscription(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test',
+            'billing.plans.pro.stripe_price_id' => 'price_pro',
+        ]);
+        $user = User::factory()->create([
+            'stripe_customer_id' => 'cus_current',
+            'stripe_subscription_id' => 'sub_current',
+            'billing_plan_code' => 'pro',
+            'billing_subscription_status' => 'active',
+        ]);
+
+        $this->postStripeEvent('evt_old_checkout', 'checkout.session.completed', [
+            'id' => 'cs_old',
+            'customer' => 'cus_old',
+            'subscription' => 'sub_old',
+            'client_reference_id' => (string) $user->id,
+            'metadata' => ['plan_code' => 'base', 'user_id' => (string) $user->id],
+        ]);
+        $this->postStripeEvent('evt_old_invoice', 'invoice.payment_failed', [
+            'customer' => 'cus_current',
+            'subscription' => 'sub_old',
+        ]);
+        $this->postStripeEvent('evt_old_subscription', 'customer.subscription.updated', $this->subscriptionObject(
+            user: $user,
+            priceId: 'price_pro',
+            status: 'past_due',
+            periodStart: now()->startOfMonth()->timestamp,
+            periodEnd: now()->addMonthNoOverflow()->startOfMonth()->timestamp,
+            subscriptionId: 'sub_old',
+        ));
+
+        $user = $user->fresh();
+        $this->assertSame('sub_current', $user->stripe_subscription_id);
+        $this->assertSame('active', $user->billing_subscription_status);
+        $this->assertSame('pro', $user->billing_plan_code);
+    }
+
     public function test_webhooks_cover_checkout_failed_payment_cancellation_and_plan_change(): void
     {
         config([
@@ -494,6 +656,54 @@ class BillingAndUsageTest extends TestCase
         $this->assertSame(-4, (int) BillingUsageEvent::query()->where('event_type', 'refund')->sum('reserved_minutes_delta'));
     }
 
+    public function test_job_settlement_uses_its_original_reservation_period_after_a_subscription_renewal(): void
+    {
+        $originalStart = now()->subMonthNoOverflow()->startOfMonth()->toImmutable();
+        $originalEnd = now()->startOfMonth()->toImmutable();
+        $renewedStart = now()->startOfMonth()->toImmutable();
+        $renewedEnd = now()->addMonthNoOverflow()->startOfMonth()->toImmutable();
+        $user = User::factory()->create([
+            'stripe_subscription_id' => 'sub_original',
+            'billing_plan_code' => 'base',
+            'billing_subscription_status' => 'active',
+            'billing_current_period_start' => $originalStart,
+            'billing_current_period_end' => $originalEnd,
+        ]);
+        $job = SubtitleJob::factory()->for($user)->create([
+            'run_id' => '4b32e0fb-5dde-4ff6-b800-1e5d043d65a9',
+            'video_duration_seconds' => 60,
+        ]);
+        $ledger = app(UsageLedger::class);
+        $plan = app(BillingPlanCatalog::class)->requirePlan('base');
+        $ledger->ensureMonthlyGrant($user, $plan, $originalStart, $originalEnd);
+        $ledger->reserveForJob($job, $user, $plan, 1);
+
+        $user->forceFill([
+            'stripe_subscription_id' => 'sub_renewed',
+            'billing_plan_code' => 'pro',
+            'billing_current_period_start' => $renewedStart,
+            'billing_current_period_end' => $renewedEnd,
+        ])->save();
+        $job->forceFill(['video_duration_seconds' => 125])->save();
+
+        app(BillingEntitlementService::class)->syncJobReservationToActualDuration($job->fresh());
+        $track = SubtitleTrack::factory()->for($job, 'job')->create();
+        $ledger->debitCompletedJob($job->fresh()->load('user'), $track);
+
+        $events = BillingUsageEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->get();
+
+        $this->assertCount(3, $events);
+        $this->assertTrue($events->every(fn (BillingUsageEvent $event): bool => $event->billing_period_start->equalTo($originalStart)));
+        $this->assertTrue($events->every(fn (BillingUsageEvent $event): bool => $event->billing_period_end->equalTo($originalEnd)));
+        $this->assertTrue($events->every(fn (BillingUsageEvent $event): bool => $event->stripe_subscription_id === 'sub_original'));
+        $this->assertSame(0, (int) BillingUsageEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where('billing_period_start', $renewedStart)
+            ->count());
+    }
+
     public function test_generation_denies_unavailable_feature_full_queue_and_exhausted_minutes(): void
     {
         Queue::fake();
@@ -606,7 +816,7 @@ class BillingAndUsageTest extends TestCase
             'youtube_url' => $payload['youtubeUrl'],
             'source_language' => $payload['sourceLanguage'],
             'target_language' => $payload['targetLanguage'],
-            'processing_version' => 'scribe-v2-tokenizer-v8-async-on-demand-romanized',
+            'processing_version' => 'scribe-v2-tokenizer-v9-async-on-demand-romanized',
             'enrichment_mode' => 'on_demand',
             'include_romanization' => true,
             'include_translation' => false,
@@ -746,9 +956,10 @@ class BillingAndUsageTest extends TestCase
         string $status,
         int $periodStart,
         int $periodEnd,
+        string $subscriptionId = 'sub_456',
     ): array {
         return [
-            'id' => 'sub_456',
+            'id' => $subscriptionId,
             'customer' => 'cus_456',
             'status' => $status,
             'current_period_start' => $periodStart,

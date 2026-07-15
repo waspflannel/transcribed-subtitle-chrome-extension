@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
+use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\StripeClient;
 use App\Services\Billing\TestingPlanSwitcher;
@@ -18,6 +19,7 @@ class BillingController extends Controller
         Request $request,
         string $planCode,
         BillingPlanCatalog $plans,
+        BillingEntitlementService $billing,
         StripeClient $stripe,
         FunnelAnalytics $analytics,
     ): RedirectResponse {
@@ -31,6 +33,12 @@ class BillingController extends Controller
 
         if ($plan === null) {
             abort(404);
+        }
+
+        if ($billing->subscriptionRequiresPortal($user)) {
+            return redirect()
+                ->route('dashboard')
+                ->with('billing_status', 'Your existing subscription is managed in Stripe. Use Manage billing to change it.');
         }
 
         $analytics->checkoutStarted($user, $plan);

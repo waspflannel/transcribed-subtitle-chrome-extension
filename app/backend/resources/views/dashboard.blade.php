@@ -137,18 +137,22 @@
                     </form>
                 </x-ui.panel>
 
-                <x-ui.panel title="Plans" description="Checkout opens in Stripe.">
-                    <div class="mini-plan-list">
-                        @foreach ($plans as $plan)
-                            <form method="post" action="{{ route('billing.checkout', ['planCode' => $plan['code']]) }}">
-                                @csrf
-                                <button type="submit" class="plan-button">
-                                    <span>{{ $plan['name'] }}</span>
-                                    <strong>${{ number_format(((int) $plan['price_cents']) / 100, 0) }}/mo</strong>
-                                </button>
-                            </form>
-                        @endforeach
-                    </div>
+                <x-ui.panel title="Plans" description="{{ $checkoutBlocked ? 'Change an existing subscription in Stripe.' : 'Checkout opens in Stripe.' }}">
+                    @if ($checkoutBlocked)
+                        <p>Use Manage billing to change or cancel your existing subscription.</p>
+                    @else
+                        <div class="mini-plan-list">
+                            @foreach ($plans as $plan)
+                                <form method="post" action="{{ route('billing.checkout', ['planCode' => $plan['code']]) }}">
+                                    @csrf
+                                    <button type="submit" class="plan-button">
+                                        <span>{{ $plan['name'] }}</span>
+                                        <strong>${{ number_format(((int) $plan['price_cents']) / 100, 0) }}/mo</strong>
+                                    </button>
+                                </form>
+                            @endforeach
+                        </div>
+                    @endif
                 </x-ui.panel>
 
                 <x-ui.panel title="Extension" description="{{ $extensionTokens->isEmpty() ? 'No connected extension installs.' : $extensionTokens->count().' recent connection(s).' }}">

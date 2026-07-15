@@ -4,6 +4,7 @@ namespace App\Services\Billing;
 
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -12,6 +13,7 @@ final class StripeClient
     public function createCustomer(User $user): string
     {
         $response = $this->request()
+            ->withHeaders(['Idempotency-Key' => $this->idempotencyKey('customer', $user)])
             ->asForm()
             ->post('/customers', [
                 'email' => $user->email,
@@ -49,6 +51,7 @@ final class StripeClient
 
         $customerId = $this->customerIdFor($user);
         $response = $this->request()
+            ->withHeaders(['Idempotency-Key' => $this->idempotencyKey('checkout', $user, (string) $plan['code'])])
             ->asForm()
             ->post('/checkout/sessions', [
                 'mode' => 'subscription',
@@ -97,14 +100,21 @@ final class StripeClient
 
     private function customerIdFor(User $user): string
     {
-        if (is_string($user->stripe_customer_id) && $user->stripe_customer_id !== '') {
-            return $user->stripe_customer_id;
-        }
+        return DB::transaction(function () use ($user): string {
+            $lockedUser = User::query()
+                ->whereKey($user->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $customerId = $this->createCustomer($user);
-        $user->forceFill(['stripe_customer_id' => $customerId])->save();
+            if (is_string($lockedUser->stripe_customer_id) && $lockedUser->stripe_customer_id !== '') {
+                return $lockedUser->stripe_customer_id;
+            }
 
-        return $customerId;
+            $customerId = $this->createCustomer($lockedUser);
+            $lockedUser->forceFill(['stripe_customer_id' => $customerId])->save();
+
+            return $customerId;
+        }, attempts: 5);
     }
 
     private function request(): PendingRequest
@@ -135,5 +145,12 @@ final class StripeClient
             'id' => $payload['id'],
             'url' => $payload['url'],
         ];
+    }
+
+    private function idempotencyKey(string $operation, User $user, ?string $planCode = null): string
+    {
+        $scope = implode(':', array_filter([$operation, (string) $user->id, $planCode]));
+
+        return 'tse-v1-'.hash('sha256', $scope);
     }
 }

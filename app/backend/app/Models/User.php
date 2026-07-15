@@ -31,6 +31,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'billing_trial_ends_at',
         'billing_ends_at',
         'billing_subscription_event_at',
+        'billing_subscription_event_type',
     ];
 
     protected $hidden = [

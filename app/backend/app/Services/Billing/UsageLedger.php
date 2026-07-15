@@ -97,32 +97,32 @@ final class UsageLedger
             throw new RuntimeException('Subtitle job is missing its measured duration.');
         }
 
-        $period = $this->periodForUser($user);
-        $planCode = is_string($user->billing_plan_code) ? $user->billing_plan_code : (string) $job->generation_tier;
         $actualMinutes = $this->billableMinutes($job->video_duration_seconds);
         $reservedMinutes = $this->reservedMinutesForJob($job);
         $delta = $actualMinutes - $reservedMinutes;
 
-        if ($period === null) {
-            throw BillingEntitlementException::paymentRequired();
+        if ($delta === 0) {
+            return;
         }
 
-        if ($delta === 0) {
+        $reservation = $this->reservationIdentityForJob($job);
+
+        if ($reservation === null) {
             return;
         }
 
         if ($delta > 0) {
             $this->recordEvent(
                 user: $user,
-                planCode: $planCode,
+                planCode: $reservation['planCode'],
                 eventType: 'reservation',
-                periodStart: $period['start'],
-                periodEnd: $period['end'],
+                periodStart: $reservation['periodStart'],
+                periodEnd: $reservation['periodEnd'],
                 minutes: $delta,
                 reservedMinutesDelta: $delta,
                 idempotencyKey: 'reservation:'.$job->id.':'.$job->run_id.':duration:'.$actualMinutes,
                 subtitleJob: $job,
-                stripeSubscriptionId: $user->stripe_subscription_id,
+                stripeSubscriptionId: $reservation['stripeSubscriptionId'],
                 note: 'Reserved additional minutes after audio duration was measured.',
             );
 
@@ -132,11 +132,12 @@ final class UsageLedger
         $this->releaseMinutes(
             job: $job,
             user: $user,
-            planCode: $planCode,
-            periodStart: $period['start'],
-            periodEnd: $period['end'],
+            planCode: $reservation['planCode'],
+            periodStart: $reservation['periodStart'],
+            periodEnd: $reservation['periodEnd'],
             minutes: abs($delta),
             idempotencyKey: 'refund:'.$job->id.':'.$job->run_id.':duration:'.$actualMinutes,
+            stripeSubscriptionId: $reservation['stripeSubscriptionId'],
             note: 'Released excess reserved minutes after audio duration was measured.',
         );
     }
@@ -149,19 +150,24 @@ final class UsageLedger
             return;
         }
 
-        $period = $this->periodForUser($user);
         $reservedMinutes = $this->reservedMinutesForJob($job);
 
-        if ($period === null || $reservedMinutes <= 0) {
+        if ($reservedMinutes <= 0) {
+            return;
+        }
+
+        $reservation = $this->reservationIdentityForJob($job);
+
+        if ($reservation === null) {
             return;
         }
 
         $this->recordEvent(
             user: $user,
-            planCode: is_string($user->billing_plan_code) ? $user->billing_plan_code : (string) $job->generation_tier,
+            planCode: $reservation['planCode'],
             eventType: 'debit',
-            periodStart: $period['start'],
-            periodEnd: $period['end'],
+            periodStart: $reservation['periodStart'],
+            periodEnd: $reservation['periodEnd'],
             minutes: $reservedMinutes,
             availableMinutesDelta: -$reservedMinutes,
             reservedMinutesDelta: -$reservedMinutes,
@@ -170,7 +176,7 @@ final class UsageLedger
             idempotencyKey: 'debit:'.$job->id.':'.$job->run_id,
             subtitleJob: $job,
             subtitleTrack: $track,
-            stripeSubscriptionId: $user->stripe_subscription_id,
+            stripeSubscriptionId: $reservation['stripeSubscriptionId'],
             note: 'Debited reserved minutes after a completed subtitle track was produced.',
         );
     }
@@ -183,21 +189,27 @@ final class UsageLedger
             return;
         }
 
-        $period = $this->periodForUser($user);
         $reservedMinutes = $this->reservedMinutesForJob($job);
 
-        if ($period === null || $reservedMinutes <= 0) {
+        if ($reservedMinutes <= 0) {
+            return;
+        }
+
+        $reservation = $this->reservationIdentityForJob($job);
+
+        if ($reservation === null) {
             return;
         }
 
         $this->releaseMinutes(
             job: $job,
             user: $user,
-            planCode: is_string($user->billing_plan_code) ? $user->billing_plan_code : (string) $job->generation_tier,
-            periodStart: $period['start'],
-            periodEnd: $period['end'],
+            planCode: $reservation['planCode'],
+            periodStart: $reservation['periodStart'],
+            periodEnd: $reservation['periodEnd'],
             minutes: $reservedMinutes,
             idempotencyKey: 'refund:'.$job->id.':'.$job->run_id.':'.$reason,
+            stripeSubscriptionId: $reservation['stripeSubscriptionId'],
             note: 'Released reserved minutes because no completed track was produced.',
         );
     }
@@ -260,7 +272,36 @@ final class UsageLedger
     {
         return max(0, (int) BillingUsageEvent::query()
             ->where('subtitle_job_id', $job->id)
+            ->where('idempotency_key', 'like', '%:'.$job->id.':'.$job->run_id.':%')
             ->sum('reserved_minutes_delta'));
+    }
+
+    /**
+     * @return array{planCode: string, periodStart: CarbonInterface, periodEnd: CarbonInterface, stripeSubscriptionId: ?string}|null
+     */
+    public function reservationIdentityForJob(SubtitleJob $job): ?array
+    {
+        $reservation = BillingUsageEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where('event_type', 'reservation')
+            ->where('idempotency_key', 'like', 'reservation:'.$job->id.':'.$job->run_id.':%')
+            ->oldest('id')
+            ->first();
+
+        if (
+            ! $reservation instanceof BillingUsageEvent
+            || $reservation->billing_period_start === null
+            || $reservation->billing_period_end === null
+        ) {
+            return null;
+        }
+
+        return [
+            'planCode' => $reservation->plan_code,
+            'periodStart' => $reservation->billing_period_start,
+            'periodEnd' => $reservation->billing_period_end,
+            'stripeSubscriptionId' => $reservation->stripe_subscription_id,
+        ];
     }
 
     public function billableMinutes(?int $durationSeconds): int
@@ -293,6 +334,7 @@ final class UsageLedger
         CarbonInterface $periodEnd,
         int $minutes,
         string $idempotencyKey,
+        ?string $stripeSubscriptionId,
         string $note,
     ): void {
         $this->recordEvent(
@@ -305,7 +347,7 @@ final class UsageLedger
             reservedMinutesDelta: -$minutes,
             idempotencyKey: $idempotencyKey,
             subtitleJob: $job,
-            stripeSubscriptionId: $user->stripe_subscription_id,
+            stripeSubscriptionId: $stripeSubscriptionId,
             note: $note,
         );
     }
@@ -361,5 +403,4 @@ final class UsageLedger
                 ->firstOrFail();
         }
     }
-
 }

@@ -19,6 +19,12 @@ final class StripeWebhookService
         'invoice.payment_failed',
     ];
 
+    private const SUBSCRIPTION_EVENT_PRECEDENCE = [
+        'customer.subscription.created' => 1,
+        'customer.subscription.updated' => 2,
+        'customer.subscription.deleted' => 3,
+    ];
+
     public function __construct(
         private readonly BillingPlanCatalog $plans,
         private readonly UsageLedger $ledger,
@@ -54,7 +60,7 @@ final class StripeWebhookService
                     'payload_hash' => hash('sha256', $payload),
                 ]);
 
-                $this->apply($event, $this->eventCreatedAt($event));
+                $this->apply($event, $this->eventCreatedAt($event), $type);
                 $record->forceFill([
                     'processed_at' => now(),
                     'processing_error' => null,
@@ -78,11 +84,9 @@ final class StripeWebhookService
     /**
      * @param  array<string, mixed>  $event
      */
-    private function apply(array $event, ?CarbonImmutable $eventCreatedAt): void
+    private function apply(array $event, ?CarbonImmutable $eventCreatedAt, string $type): void
     {
-        $type = data_get($event, 'type');
-
-        if (! is_string($type) || ! in_array($type, self::HANDLED_EVENTS, true)) {
+        if (! in_array($type, self::HANDLED_EVENTS, true)) {
             return;
         }
 
@@ -96,7 +100,7 @@ final class StripeWebhookService
             'checkout.session.completed' => $this->handleCheckoutCompleted($object),
             'customer.subscription.created',
             'customer.subscription.updated',
-            'customer.subscription.deleted' => $this->handleSubscriptionChanged($object, $eventCreatedAt),
+            'customer.subscription.deleted' => $this->handleSubscriptionChanged($object, $eventCreatedAt, $type),
             'invoice.payment_failed' => $this->handleInvoicePaymentFailed($object),
             default => null,
         };
@@ -112,6 +116,17 @@ final class StripeWebhookService
         $subscriptionId = data_get($session, 'subscription');
         $customerId = data_get($session, 'customer');
 
+        if (
+            is_string($subscriptionId)
+            && $subscriptionId !== ''
+            && is_string($user->stripe_subscription_id)
+            && $user->stripe_subscription_id !== ''
+            && $user->stripe_subscription_id !== $subscriptionId
+            && ! $this->subscriptionIsTerminal($user)
+        ) {
+            return;
+        }
+
         $user->forceFill([
             'stripe_customer_id' => is_string($customerId) ? $customerId : $user->stripe_customer_id,
             'stripe_subscription_id' => is_string($subscriptionId) ? $subscriptionId : $user->stripe_subscription_id,
@@ -122,8 +137,11 @@ final class StripeWebhookService
     /**
      * @param  array<string, mixed>  $subscription
      */
-    private function handleSubscriptionChanged(array $subscription, ?CarbonImmutable $eventCreatedAt): void
-    {
+    private function handleSubscriptionChanged(
+        array $subscription,
+        ?CarbonImmutable $eventCreatedAt,
+        string $eventType,
+    ): void {
         $user = $this->requireUserForObject($subscription);
 
         $user = User::query()
@@ -131,9 +149,21 @@ final class StripeWebhookService
             ->lockForUpdate()
             ->first() ?? $user;
 
-        $lastAppliedAt = $user->billing_subscription_event_at;
+        $subscriptionId = data_get($subscription, 'id');
 
-        if ($lastAppliedAt !== null && $eventCreatedAt !== null && $eventCreatedAt <= $lastAppliedAt) {
+        if (! is_string($subscriptionId) || $subscriptionId === '') {
+            throw new RuntimeException('Stripe subscription webhook did not include a subscription id.');
+        }
+
+        if (
+            is_string($user->stripe_subscription_id)
+            && $user->stripe_subscription_id !== ''
+            && $user->stripe_subscription_id !== $subscriptionId
+        ) {
+            return;
+        }
+
+        if (! $this->subscriptionEventShouldApply($user, $eventCreatedAt, $eventType)) {
             return;
         }
 
@@ -141,7 +171,6 @@ final class StripeWebhookService
         $periodStart = $this->timestamp(data_get($subscription, 'current_period_start'));
         $periodEnd = $this->timestamp(data_get($subscription, 'current_period_end'));
         $status = data_get($subscription, 'status');
-        $subscriptionId = data_get($subscription, 'id');
         $subscriptionItemId = data_get($subscription, 'items.data.0.id');
         $customerId = data_get($subscription, 'customer');
         $endedAt = $this->timestamp(data_get($subscription, 'ended_at'))
@@ -150,7 +179,7 @@ final class StripeWebhookService
 
         $user->forceFill([
             'stripe_customer_id' => is_string($customerId) ? $customerId : $user->stripe_customer_id,
-            'stripe_subscription_id' => is_string($subscriptionId) ? $subscriptionId : $user->stripe_subscription_id,
+            'stripe_subscription_id' => $subscriptionId,
             'stripe_subscription_item_id' => is_string($subscriptionItemId) ? $subscriptionItemId : $user->stripe_subscription_item_id,
             'billing_plan_code' => (string) $plan['code'],
             'billing_subscription_status' => is_string($status) ? $status : $user->billing_subscription_status,
@@ -160,6 +189,9 @@ final class StripeWebhookService
             'billing_trial_ends_at' => $trialEndsAt,
             'billing_ends_at' => $endedAt,
             'billing_subscription_event_at' => $eventCreatedAt ?? $user->billing_subscription_event_at,
+            'billing_subscription_event_type' => $eventCreatedAt === null
+                ? $user->billing_subscription_event_type
+                : $eventType,
         ])->save();
 
         if (in_array($user->billing_subscription_status, ['active', 'trialing'], true) && $periodStart !== null && $periodEnd !== null) {
@@ -175,8 +207,15 @@ final class StripeWebhookService
         $user = $this->requireUserForObject($invoice);
         $subscriptionId = data_get($invoice, 'subscription');
 
+        if (
+            ! is_string($subscriptionId)
+            || $subscriptionId === ''
+            || $subscriptionId !== $user->stripe_subscription_id
+        ) {
+            return;
+        }
+
         $user->forceFill([
-            'stripe_subscription_id' => is_string($subscriptionId) ? $subscriptionId : $user->stripe_subscription_id,
             'billing_subscription_status' => 'past_due',
         ])->save();
     }
@@ -248,5 +287,36 @@ final class StripeWebhookService
     private function eventCreatedAt(array $event): ?CarbonImmutable
     {
         return $this->timestamp(data_get($event, 'created'));
+    }
+
+    private function subscriptionEventShouldApply(
+        User $user,
+        ?CarbonImmutable $eventCreatedAt,
+        string $eventType,
+    ): bool {
+        if ($eventCreatedAt === null || $user->billing_subscription_event_at === null) {
+            return true;
+        }
+
+        if ($eventCreatedAt->gt($user->billing_subscription_event_at)) {
+            return true;
+        }
+
+        if ($eventCreatedAt->lt($user->billing_subscription_event_at)) {
+            return false;
+        }
+
+        return $this->subscriptionEventPrecedence($eventType)
+            > $this->subscriptionEventPrecedence($user->billing_subscription_event_type);
+    }
+
+    private function subscriptionEventPrecedence(?string $eventType): int
+    {
+        return self::SUBSCRIPTION_EVENT_PRECEDENCE[$eventType] ?? 0;
+    }
+
+    private function subscriptionIsTerminal(User $user): bool
+    {
+        return in_array($user->billing_subscription_status, ['canceled', 'incomplete_expired'], true);
     }
 }
