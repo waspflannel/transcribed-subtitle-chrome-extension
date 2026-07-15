@@ -3,6 +3,7 @@
 use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Http\Middleware\RequireExtensionInstallId;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -28,6 +29,8 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(SecurityHeaders::class);
+
         $middleware->preventRequestForgery(except: [
             'stripe/*',
         ]);

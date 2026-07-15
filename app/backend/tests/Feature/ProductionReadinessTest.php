@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
+use Mockery;
 use Tests\TestCase;
 
 class ProductionReadinessTest extends TestCase
@@ -10,6 +13,7 @@ class ProductionReadinessTest extends TestCase
     public function test_production_readiness_check_passes_for_safe_beta_configuration(): void
     {
         $this->configureSafeProductionRuntime();
+        $this->fakeHealthyConnectivity();
 
         $this->assertSame(0, Artisan::call('ops:production-check', ['--json' => true]));
 
@@ -21,6 +25,9 @@ class ProductionReadinessTest extends TestCase
         $this->assertTrue($payload['summary']['openaiKeyConfigured']);
         $this->assertFalse($payload['summary']['audioIsolationEnabled']);
         $this->assertTrue($payload['summary']['audioIsolationFailOpen']);
+        $this->assertTrue($payload['summary']['databaseReachable']);
+        $this->assertTrue($payload['summary']['redisReachable']);
+        $this->assertSame('smtp', $payload['summary']['mailTransport']);
         $this->assertStringNotContainsString('sk-test-openai', $output);
         $this->assertStringNotContainsString('whsec_test', $output);
     }
@@ -37,7 +44,10 @@ class ProductionReadinessTest extends TestCase
             'subtitles.audio_preparation.ffmpeg_binary' => '',
             'subtitles.audio_preparation.voice_isolation.enabled' => true,
             'subtitles.audio_preparation.voice_isolation.fail_open' => false,
+            'mail.default' => 'log',
+            'mail.from.address' => 'hello@example.test',
         ]);
+        $this->fakeHealthyConnectivity();
 
         $this->assertSame(1, Artisan::call('ops:production-check', ['--json' => true]));
 
@@ -51,7 +61,31 @@ class ProductionReadinessTest extends TestCase
         $this->assertContains('Queue retry_after must be greater than the subtitle worker timeout.', $payload['problems']);
         $this->assertContains('FFMPEG_BINARY must be configured.', $payload['problems']);
         $this->assertContains('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.', $payload['problems']);
+        $this->assertContains('MAIL_MAILER must use a configured production transport, not log or array.', $payload['problems']);
+        $this->assertContains('MAIL_FROM_ADDRESS must be a non-placeholder production sender address.', $payload['problems']);
         $this->assertStringNotContainsString('sk-test-stripe', $output);
+    }
+
+    public function test_production_readiness_check_flags_unreachable_postgres_and_redis(): void
+    {
+        $this->configureSafeProductionRuntime();
+        DB::shouldReceive('connection')
+            ->once()
+            ->with('pgsql')
+            ->andThrow(new \RuntimeException('unavailable'));
+        Redis::shouldReceive('connection')
+            ->once()
+            ->with('cache')
+            ->andThrow(new \RuntimeException('unavailable'));
+
+        $this->assertSame(1, Artisan::call('ops:production-check', ['--json' => true]));
+
+        $payload = json_decode(Artisan::output(), true);
+
+        $this->assertFalse($payload['summary']['databaseReachable']);
+        $this->assertFalse($payload['summary']['redisReachable']);
+        $this->assertContains('Postgres connectivity probe failed.', $payload['problems']);
+        $this->assertContains('Redis connectivity probe failed.', $payload['problems']);
     }
 
     private function configureSafeProductionRuntime(): void
@@ -85,6 +119,23 @@ class ProductionReadinessTest extends TestCase
             'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg',
             'subtitles.audio_preparation.voice_isolation.enabled' => false,
             'subtitles.audio_preparation.voice_isolation.fail_open' => true,
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.transport' => 'smtp',
+            'mail.mailers.smtp.host' => 'smtp.beta.example',
+            'mail.mailers.smtp.username' => 'beta-user',
+            'mail.mailers.smtp.password' => 'beta-password',
+            'mail.from.address' => 'support@beta.example',
         ]);
+    }
+
+    private function fakeHealthyConnectivity(): void
+    {
+        $database = Mockery::mock();
+        $database->shouldReceive('select')->once()->with('select 1')->andReturn([]);
+        $redis = Mockery::mock();
+        $redis->shouldReceive('ping')->once()->andReturn('PONG');
+
+        DB::shouldReceive('connection')->once()->with('pgsql')->andReturn($database);
+        Redis::shouldReceive('connection')->once()->with('cache')->andReturn($redis);
     }
 }

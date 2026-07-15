@@ -7,7 +7,10 @@ use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
+use Throwable;
 
 #[Signature('ops:production-check {--target=production : Expected APP_ENV value} {--json : Output machine-readable JSON}')]
 #[Description('Check production/staging safety settings for paid beta operations.')]
@@ -75,6 +78,7 @@ class CheckProductionReadiness extends Command
         $queueConnection = SubtitleQueue::connection();
         $queueDriver = (string) config("queue.connections.{$queueConnection}.driver", $queueConnection);
         $concurrencyCacheStore = SubtitleTier::concurrencyCacheStore();
+        $redisConnection = (string) config("cache.stores.{$concurrencyCacheStore}.connection", 'cache');
         $workerTimeoutSeconds = (int) config('subtitles.queue.worker_timeout_seconds', 0);
         $retryAfterSeconds = (int) config("queue.connections.{$queueConnection}.retry_after", 0);
 
@@ -86,6 +90,7 @@ class CheckProductionReadiness extends Command
             'appUrlIsHttps' => Str::startsWith((string) config('app.url'), 'https://'),
             'databaseConnection' => $databaseConnection,
             'databaseDriver' => (string) config("database.connections.{$databaseConnection}.driver", $databaseConnection),
+            'databaseReachable' => $this->databaseReachable($databaseConnection),
             'queueConnection' => $queueConnection,
             'queueDriver' => $queueDriver,
             'queueRetryAfterSeconds' => $retryAfterSeconds,
@@ -104,6 +109,8 @@ class CheckProductionReadiness extends Command
                 ->all(),
             'concurrencyCacheStore' => $concurrencyCacheStore,
             'concurrencyCacheDriver' => (string) config("cache.stores.{$concurrencyCacheStore}.driver", 'unconfigured'),
+            'redisConnection' => $redisConnection,
+            'redisReachable' => $this->redisReachable($redisConnection),
             'cacheStore' => (string) config('cache.default'),
             'logChannel' => (string) config('logging.default'),
             'singleLogLevel' => (string) config('logging.channels.single.level', ''),
@@ -119,6 +126,11 @@ class CheckProductionReadiness extends Command
             'ffmpegBinaryConfigured' => $this->configured(config('subtitles.audio_preparation.ffmpeg_binary')),
             'audioIsolationEnabled' => (bool) config('subtitles.audio_preparation.voice_isolation.enabled'),
             'audioIsolationFailOpen' => (bool) config('subtitles.audio_preparation.voice_isolation.fail_open'),
+            'mailMailer' => (string) config('mail.default'),
+            'mailTransport' => $this->mailTransport(),
+            'mailTransportConfigured' => $this->mailTransportConfigured(),
+            'mailFromAddress' => $this->safeEmail((string) config('mail.from.address')),
+            'mailFromAddressIsPlaceholder' => $this->mailFromAddressIsPlaceholder(),
         ];
     }
 
@@ -134,11 +146,13 @@ class CheckProductionReadiness extends Command
             $this->check('app.key', $summary['appKeyConfigured'] === true, 'APP_KEY must be configured.'),
             $this->check('app.url', $summary['appUrlIsHttps'] === true, 'APP_URL must use HTTPS.'),
             $this->check('database.pgsql', $summary['databaseDriver'] === 'pgsql', "Database driver is {$summary['databaseDriver']}; expected pgsql."),
+            $this->check('database.connectivity', $summary['databaseReachable'] === true, 'Postgres connectivity probe failed.'),
             $this->check('queue.redis', $summary['queueDriver'] === 'redis', "Subtitle queue driver is {$summary['queueDriver']}; expected redis."),
             $this->check('queue.retry_after', $summary['workerRetryAfterExceedsTimeout'] === true, 'Queue retry_after must be greater than the subtitle worker timeout.'),
             $this->check('workers.supervised', $summary['subtitleAutoStartWorkers'] === false, 'SUBTITLE_AUTO_START_WORKERS must be false so production uses supervised workers.'),
             $this->check('workers.configured', (int) $summary['configuredWorkerCount'] > 0, 'At least one subtitle worker must be configured.'),
             $this->check('concurrency.redis', $summary['concurrencyCacheDriver'] === 'redis', "Subtitle concurrency cache driver is {$summary['concurrencyCacheDriver']}; expected redis."),
+            $this->check('redis.connectivity', $summary['redisReachable'] === true, 'Redis connectivity probe failed.'),
             $this->check('logging.enabled', $summary['logChannel'] !== 'null', 'LOG_CHANNEL must not be null.'),
             $this->check('logging.level', $this->logLevelsAreProductionSafe($summary), 'Production log levels should not be debug.'),
             $this->check('providers.openai', $summary['openaiKeyConfigured'] === true, 'OPENAI_API_KEY must be configured in the environment.'),
@@ -152,7 +166,73 @@ class CheckProductionReadiness extends Command
             // Voice isolation is optional (off by default until A/B evidence
             // proves its cost; TD-014), but when enabled it must fail open.
             $this->check('audio_preparation.voice_isolation_fail_open', $summary['audioIsolationEnabled'] === false || $summary['audioIsolationFailOpen'] === true, 'ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.'),
+            $this->check('mail.transport', $summary['mailTransportConfigured'] === true, 'MAIL_MAILER must use a configured production transport, not log or array.'),
+            $this->check('mail.sender', $summary['mailFromAddress'] !== '' && $summary['mailFromAddressIsPlaceholder'] === false, 'MAIL_FROM_ADDRESS must be a non-placeholder production sender address.'),
         ];
+    }
+
+    private function databaseReachable(string $connection): bool
+    {
+        try {
+            DB::connection($connection)->select('select 1');
+
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function redisReachable(string $connection): bool
+    {
+        try {
+            Redis::connection($connection)->ping();
+
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function mailTransport(): string
+    {
+        $transport = config('mail.mailers.'.config('mail.default').'.transport');
+
+        return is_string($transport) ? $transport : '';
+    }
+
+    private function mailTransportConfigured(): bool
+    {
+        $mailer = (string) config('mail.default');
+        $transport = $this->mailTransport();
+
+        if ($mailer === '' || $transport === '' || in_array($transport, ['array', 'log'], true)) {
+            return false;
+        }
+
+        if ($transport !== 'smtp') {
+            return true;
+        }
+
+        $host = strtolower(trim((string) config("mail.mailers.{$mailer}.host")));
+
+        return ! in_array($host, ['', '127.0.0.1', 'localhost'], true)
+            && $this->configured(config("mail.mailers.{$mailer}.username"))
+            && $this->configured(config("mail.mailers.{$mailer}.password"));
+    }
+
+    private function safeEmail(string $email): string
+    {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
+    }
+
+    private function mailFromAddressIsPlaceholder(): bool
+    {
+        $email = strtolower($this->safeEmail((string) config('mail.from.address')));
+
+        return $email === ''
+            || str_ends_with($email, '@example.com')
+            || str_ends_with($email, '.test')
+            || str_contains($email, '@example.');
     }
 
     /**

@@ -32,6 +32,9 @@ return [
             'prefix_indexes' => true,
             'search_path' => env('DB_SCHEMA', 'public'),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            'options' => extension_loaded('pdo_pgsql')
+                ? [PDO::ATTR_TIMEOUT => (int) env('DB_CONNECT_TIMEOUT_SECONDS', 5)]
+                : [],
         ],
     ],
 
@@ -55,6 +58,8 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_DB', '0'),
+            'timeout' => (float) env('REDIS_CONNECT_TIMEOUT_SECONDS', 5),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT_SECONDS', 5),
         ],
 
         'cache' => [
@@ -64,6 +69,8 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_CACHE_DB', '1'),
+            'timeout' => (float) env('REDIS_CONNECT_TIMEOUT_SECONDS', 5),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT_SECONDS', 5),
         ],
 
         'queue' => [
@@ -73,6 +80,8 @@ return [
             'password' => env('REDIS_QUEUE_PASSWORD', env('REDIS_PASSWORD')),
             'port' => env('REDIS_QUEUE_PORT', env('REDIS_PORT', '6379')),
             'database' => env('REDIS_QUEUE_DB', '2'),
+            'timeout' => (float) env('REDIS_CONNECT_TIMEOUT_SECONDS', 5),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT_SECONDS', 5),
         ],
     ],
 
