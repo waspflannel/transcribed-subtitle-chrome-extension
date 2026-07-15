@@ -13,7 +13,7 @@ This runbook is provider-neutral. Fill in the hosting provider, region, managed 
 - Web/API host: managed VPS or Laravel-oriented host running PHP 8.4, Composer, Nginx or equivalent, HTTPS, and Supervisor.
 - Database: managed Postgres with private networking or IP restrictions where the provider supports it.
 - Cache/queue: managed Redis with separate logical DBs or equivalent isolation for default/cache/queue/concurrency use.
-- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `SUBTITLE_AUTO_START_WORKERS=false`, configured `yt-dlp`, configured `ffmpeg`, and enabled ElevenLabs Audio Isolation.
+- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `SUBTITLE_AUTO_START_WORKERS=false`, configured `yt-dlp`, configured `ffmpeg`, and bounded database/Redis connection timeouts. ElevenLabs Audio Isolation stays disabled until TD-014 evidence supports enabling it.
 - Secrets: keep `APP_KEY`, provider keys, Stripe keys, database credentials, and Redis credentials in host/provider environment settings only. Do not put them in extension builds.
 - Extension: build with `WXT_BACKEND_API_BASE_URL=https://<api-host>/v1`; the built manifest should contain only the production API origin plus YouTube host permission.
 
@@ -193,7 +193,7 @@ Build Chrome release artifacts with an HTTPS production API base URL:
 .\scripts\runtime\build-extension-release.ps1 -ApiBaseUrl "https://api.example.com/v1"
 ```
 
-The script runs extension tests and TypeScript compile unless `-SkipTests` is provided, builds with WXT, verifies the manifest contains the configured production API host permission, rejects localhost backend permission, and creates the Chrome ZIP through `wxt zip`.
+The script requires a real extension version, audits shipped production dependencies, runs extension tests and TypeScript compile unless `-SkipTests` is provided, builds with WXT, verifies the manifest contains the configured production API host permission, rejects localhost backend permission, and creates the Chrome ZIP through `wxt zip`.
 
 Chrome Web Store checklist:
 

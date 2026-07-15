@@ -40,8 +40,8 @@ The original extension proof phases are completed. The next product direction is
 - `../completed/2026-05-21-saas-roadmap-phase-02-extension-frontend-upgrade.md`
 - `../completed/2026-05-22-saas-roadmap-phase-03-accounts-and-extension-auth.md`
 - `../completed/2026-05-22-fortify-sanctum-auth-migration.md`
-- `saas-roadmap/04-billing-tiers-and-usage.md`
-- `saas-roadmap/04a-tiered-worker-queues-and-concurrency.md`
+- `../completed/2026-05-22-saas-roadmap-phase-04-billing-tiers-and-usage.md`
+- `../completed/04a-tiered-worker-queues-and-concurrency.md`
 - `../completed/2026-05-22-saas-roadmap-phase-05-saas-website-and-seo.md`
 - `saas-roadmap/06-production-hosting-and-ops.md`
 - `saas-roadmap/07-beta-launch-and-support.md`
