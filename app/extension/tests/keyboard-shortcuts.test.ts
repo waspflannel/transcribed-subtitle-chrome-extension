@@ -16,6 +16,10 @@ describe('keyboard shortcuts', () => {
     }
   });
 
+  it('does not expose the removed save-cue action', () => {
+    expect(DEFAULT_KEYBOARD_SHORTCUTS.map((shortcut) => shortcut.action)).not.toContain('save-current-cue');
+  });
+
   it('does not dispatch when shortcuts are disabled', () => {
     expect(shortcutActionFromKeyboardEvent(keyboardEvent('r'), { enabled: false })).toBeNull();
   });

@@ -8,11 +8,19 @@ import {
   publicJobTelemetry,
   stageTimeline,
 } from '../utils/account-state';
+import { accountFeatureListHtml } from '../entrypoints/sidepanel/render/account';
+import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { AccountSummary, SubtitleJobHistoryItem } from '../utils/contracts';
 
 describe('account and job-history state helpers', () => {
   it('uses an honest anonymous account state without fabricated usage', () => {
     expect(anonymousAccountState()).toEqual({ status: 'anonymous' });
+  });
+
+  it('shows a signed-out account state without implying that a plan is active', () => {
+    expect(accountFeatureListHtml(anonymousAccountState(), DEFAULT_EXTENSION_SETTINGS)).toContain('Account');
+    expect(accountFeatureListHtml(anonymousAccountState(), DEFAULT_EXTENSION_SETTINGS)).toContain('Available after sign-in');
+    expect(accountFeatureListHtml(anonymousAccountState(), DEFAULT_EXTENSION_SETTINGS)).not.toContain('Free tier');
   });
 
   it('uses authenticated account summaries from the backend without local install identity', () => {

@@ -244,9 +244,6 @@ export default defineContentScript({
           await copyCueFromShortcut();
           return;
 
-        case 'save-current-cue':
-          showSaveCuePlaceholder(activeCueFromState());
-          return;
       }
     }
 
@@ -703,16 +700,6 @@ export default defineContentScript({
       } else {
         overlay.showActionStatus('Copy failed.', 'error');
       }
-    }
-
-    function showSaveCuePlaceholder(cue: SubtitleCue | null): void {
-      if (!cue) {
-        overlay.showActionStatus('No active cue to save.', 'error');
-
-        return;
-      }
-
-      overlay.showActionStatus('Save cue is reserved for Phase 02.', 'info');
     }
 
     async function copyCueToClipboard(cue: SubtitleCue): Promise<boolean> {
