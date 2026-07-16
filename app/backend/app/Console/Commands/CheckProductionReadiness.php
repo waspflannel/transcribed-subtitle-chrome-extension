@@ -77,8 +77,9 @@ class CheckProductionReadiness extends Command
         $databaseConnection = (string) config('database.default');
         $queueConnection = SubtitleQueue::connection();
         $queueDriver = (string) config("queue.connections.{$queueConnection}.driver", $queueConnection);
+        $queueRedisConnection = (string) config("queue.connections.{$queueConnection}.connection", 'default');
         $concurrencyCacheStore = SubtitleTier::concurrencyCacheStore();
-        $redisConnection = (string) config("cache.stores.{$concurrencyCacheStore}.connection", 'cache');
+        $concurrencyRedisConnection = (string) config("cache.stores.{$concurrencyCacheStore}.connection", 'cache');
         $workerTimeoutSeconds = (int) config('subtitles.queue.worker_timeout_seconds', 0);
         $retryAfterSeconds = (int) config("queue.connections.{$queueConnection}.retry_after", 0);
 
@@ -93,6 +94,8 @@ class CheckProductionReadiness extends Command
             'databaseReachable' => $this->databaseReachable($databaseConnection),
             'queueConnection' => $queueConnection,
             'queueDriver' => $queueDriver,
+            'queueRedisConnection' => $queueRedisConnection,
+            'queueRedisReachable' => $queueDriver === 'redis' && $this->redisReachable($queueRedisConnection),
             'queueRetryAfterSeconds' => $retryAfterSeconds,
             'workerTimeoutSeconds' => $workerTimeoutSeconds,
             'workerRetryAfterExceedsTimeout' => $retryAfterSeconds > $workerTimeoutSeconds,
@@ -109,8 +112,8 @@ class CheckProductionReadiness extends Command
                 ->all(),
             'concurrencyCacheStore' => $concurrencyCacheStore,
             'concurrencyCacheDriver' => (string) config("cache.stores.{$concurrencyCacheStore}.driver", 'unconfigured'),
-            'redisConnection' => $redisConnection,
-            'redisReachable' => $this->redisReachable($redisConnection),
+            'concurrencyRedisConnection' => $concurrencyRedisConnection,
+            'concurrencyRedisReachable' => $this->redisReachable($concurrencyRedisConnection),
             'cacheStore' => (string) config('cache.default'),
             'logChannel' => (string) config('logging.default'),
             'singleLogLevel' => (string) config('logging.channels.single.level', ''),
@@ -131,6 +134,15 @@ class CheckProductionReadiness extends Command
             'mailTransportConfigured' => $this->mailTransportConfigured(),
             'mailFromAddress' => $this->safeEmail((string) config('mail.from.address')),
             'mailFromAddressIsPlaceholder' => $this->mailFromAddressIsPlaceholder(),
+            'supportEmail' => $this->safeEmail((string) config('marketing.support_email')),
+            'supportEmailIsPlaceholder' => $this->emailIsPlaceholder((string) config('marketing.support_email')),
+            'chromeExtensionUrl' => $this->safeUrl((string) config('marketing.chrome_extension_url')),
+            'chromeExtensionUrlConfigured' => $this->validPublicHttpsUrl((string) config('marketing.chrome_extension_url')),
+            'chromeExtensionReleaseVersion' => (string) config('marketing.chrome_extension_release_version'),
+            'chromeExtensionReleaseVersionConfigured' => $this->validExtensionReleaseVersion((string) config('marketing.chrome_extension_release_version')),
+            'chromeExtensionApiHostPermission' => (string) config('marketing.chrome_extension_api_host_permission'),
+            'expectedExtensionApiHostPermission' => $this->expectedExtensionApiHostPermission(),
+            'chromeExtensionApiHostPermissionMatches' => $this->extensionApiHostPermissionMatches(),
         ];
     }
 
@@ -148,11 +160,12 @@ class CheckProductionReadiness extends Command
             $this->check('database.pgsql', $summary['databaseDriver'] === 'pgsql', "Database driver is {$summary['databaseDriver']}; expected pgsql."),
             $this->check('database.connectivity', $summary['databaseReachable'] === true, 'Postgres connectivity probe failed.'),
             $this->check('queue.redis', $summary['queueDriver'] === 'redis', "Subtitle queue driver is {$summary['queueDriver']}; expected redis."),
+            $this->check('queue.connectivity', $summary['queueRedisReachable'] === true, 'Subtitle queue Redis connectivity probe failed.'),
             $this->check('queue.retry_after', $summary['workerRetryAfterExceedsTimeout'] === true, 'Queue retry_after must be greater than the subtitle worker timeout.'),
             $this->check('workers.supervised', $summary['subtitleAutoStartWorkers'] === false, 'SUBTITLE_AUTO_START_WORKERS must be false so production uses supervised workers.'),
             $this->check('workers.configured', (int) $summary['configuredWorkerCount'] > 0, 'At least one subtitle worker must be configured.'),
             $this->check('concurrency.redis', $summary['concurrencyCacheDriver'] === 'redis', "Subtitle concurrency cache driver is {$summary['concurrencyCacheDriver']}; expected redis."),
-            $this->check('redis.connectivity', $summary['redisReachable'] === true, 'Redis connectivity probe failed.'),
+            $this->check('concurrency.connectivity', $summary['concurrencyRedisReachable'] === true, 'Subtitle concurrency Redis connectivity probe failed.'),
             $this->check('logging.enabled', $summary['logChannel'] !== 'null', 'LOG_CHANNEL must not be null.'),
             $this->check('logging.level', $this->logLevelsAreProductionSafe($summary), 'Production log levels should not be debug.'),
             $this->check('providers.openai', $summary['openaiKeyConfigured'] === true, 'OPENAI_API_KEY must be configured in the environment.'),
@@ -168,6 +181,10 @@ class CheckProductionReadiness extends Command
             $this->check('audio_preparation.voice_isolation_fail_open', $summary['audioIsolationEnabled'] === false || $summary['audioIsolationFailOpen'] === true, 'ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.'),
             $this->check('mail.transport', $summary['mailTransportConfigured'] === true, 'MAIL_MAILER must use a configured production transport, not log or array.'),
             $this->check('mail.sender', $summary['mailFromAddress'] !== '' && $summary['mailFromAddressIsPlaceholder'] === false, 'MAIL_FROM_ADDRESS must be a non-placeholder production sender address.'),
+            $this->check('release.support_email', $summary['supportEmail'] !== '' && $summary['supportEmailIsPlaceholder'] === false, 'SUPPORT_EMAIL must be a non-placeholder public support address.'),
+            $this->check('release.chrome_extension_url', $summary['chromeExtensionUrlConfigured'] === true, 'CHROME_EXTENSION_URL must be a public HTTPS URL.'),
+            $this->check('release.chrome_extension_version', $summary['chromeExtensionReleaseVersionConfigured'] === true, 'CHROME_EXTENSION_RELEASE_VERSION must be a real non-placeholder release version.'),
+            $this->check('release.chrome_extension_host_permission', $summary['chromeExtensionApiHostPermissionMatches'] === true, 'CHROME_EXTENSION_API_HOST_PERMISSION must exactly match the HTTPS APP_URL origin and must not use localhost.'),
         ];
     }
 
@@ -202,11 +219,31 @@ class CheckProductionReadiness extends Command
 
     private function mailTransportConfigured(): bool
     {
-        $mailer = (string) config('mail.default');
-        $transport = $this->mailTransport();
+        return $this->mailerConfigured((string) config('mail.default'));
+    }
 
-        if ($mailer === '' || $transport === '' || in_array($transport, ['array', 'log'], true)) {
+    /**
+     * @param  array<int, string>  $visited
+     */
+    private function mailerConfigured(string $mailer, array $visited = []): bool
+    {
+        if ($mailer === '' || in_array($mailer, $visited, true)) {
             return false;
+        }
+
+        $transport = config("mail.mailers.{$mailer}.transport");
+
+        if (! is_string($transport) || $transport === '' || in_array($transport, ['array', 'log'], true)) {
+            return false;
+        }
+
+        if (in_array($transport, ['failover', 'roundrobin'], true)) {
+            $mailers = config("mail.mailers.{$mailer}.mailers");
+
+            return is_array($mailers)
+                && $mailers !== []
+                && collect($mailers)->every(fn (mixed $child): bool => is_string($child)
+                    && $this->mailerConfigured($child, [...$visited, $mailer]));
         }
 
         if ($transport !== 'smtp') {
@@ -227,12 +264,59 @@ class CheckProductionReadiness extends Command
 
     private function mailFromAddressIsPlaceholder(): bool
     {
-        $email = strtolower($this->safeEmail((string) config('mail.from.address')));
+        return $this->emailIsPlaceholder((string) config('mail.from.address'));
+    }
+
+    private function emailIsPlaceholder(string $value): bool
+    {
+        $email = strtolower($this->safeEmail($value));
 
         return $email === ''
             || str_ends_with($email, '@example.com')
             || str_ends_with($email, '.test')
             || str_contains($email, '@example.');
+    }
+
+    private function validPublicHttpsUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+
+        return is_array($parts)
+            && strtolower((string) ($parts['scheme'] ?? '')) === 'https'
+            && isset($parts['host'])
+            && ! in_array(strtolower((string) $parts['host']), ['127.0.0.1', 'localhost'], true);
+    }
+
+    private function validExtensionReleaseVersion(string $version): bool
+    {
+        return $version !== '0.0.0'
+            && preg_match('/^\d+\.\d+\.\d+(?:\.\d+)?$/', $version) === 1;
+    }
+
+    private function expectedExtensionApiHostPermission(): string
+    {
+        $parts = parse_url((string) config('app.url'));
+
+        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
+            return '';
+        }
+
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+        return strtolower((string) $parts['scheme']).'://'.strtolower((string) $parts['host']).$port.'/*';
+    }
+
+    private function extensionApiHostPermissionMatches(): bool
+    {
+        $permission = strtolower(trim((string) config('marketing.chrome_extension_api_host_permission')));
+        $expected = $this->expectedExtensionApiHostPermission();
+
+        return $permission !== ''
+            && $expected !== ''
+            && str_starts_with($expected, 'https://')
+            && ! str_contains($expected, '://localhost')
+            && ! str_contains($expected, '://127.0.0.1')
+            && $permission === $expected;
     }
 
     /**

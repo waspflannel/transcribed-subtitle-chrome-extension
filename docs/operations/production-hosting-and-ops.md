@@ -93,7 +93,7 @@ php artisan subtitles:prune-expired --no-ansi
 
 ## Deploy Flow
 
-The deploy script encodes the release order confirmed by Laravel 13 deployment docs: clear stale config, check production posture, check runtime profile, migrate with `--force`, optimize caches, restart queue workers gracefully, and smoke `/up`.
+The deploy script encodes the release order confirmed by Laravel 13 deployment docs: run the repository checks, audit the locked Composer runtime and shared contracts package, clear stale config, check production posture, check the runtime profile, migrate with `--force`, optimize caches, restart queue workers gracefully, and smoke `/up`.
 
 ```powershell
 .\scripts\runtime\deploy-managed-laravel.ps1 `
@@ -106,6 +106,8 @@ Use `-SkipRepositoryChecks` only when CI has already run the full harness for th
 The deploy process must complete these checks before a paid-beta production release:
 
 - `.\scripts\agent\check.ps1`
+- `composer audit --locked --no-dev --no-interaction`
+- `npm audit --audit-level=high` in `packages/contracts`
 - `php artisan ops:production-check --target=<staging|production>`
 - `php artisan subtitles:runtime-check --strict`
 - `php artisan migrate --force`
