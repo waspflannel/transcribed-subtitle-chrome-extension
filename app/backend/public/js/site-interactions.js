@@ -1,4 +1,6 @@
 (() => {
+    document.documentElement.classList.add('has-js');
+
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const navbar = document.getElementById('navbar');

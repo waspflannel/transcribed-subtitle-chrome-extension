@@ -178,6 +178,96 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertTrue($requestMatched);
     }
 
+    public function test_it_whitelists_the_scribe_payload_stored_for_chunk_merging(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload()),
+        ]);
+
+        $payload = $this->service()->transcribeChunk($this->audio, 'spa');
+
+        $this->assertSame(['words', 'language_code'], array_keys($payload));
+        $this->assertSame(['text', 'type', 'start', 'end'], array_keys($payload['words'][0]));
+        $this->assertArrayNotHasKey('speaker_id', $payload['words'][0]);
+        $this->assertArrayNotHasKey('language_probability', $payload);
+        $this->assertArrayNotHasKey('text', $payload);
+    }
+
+    public function test_it_rejects_malformed_scribe_payloads_before_artifact_storage(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                'language_code' => 'spa',
+                'words' => [['text' => 'Hola', 'type' => 'word', 'start' => 'not-a-number', 'end' => 1.0]],
+            ]),
+        ]);
+
+        try {
+            $this->service()->transcribeChunk($this->audio, 'spa');
+            $this->fail('Expected a malformed Scribe payload to be rejected.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('transcription_failed', $exception->publicCode);
+            $this->assertSame('invalid_word_timing', $exception->context['reason']);
+            $this->assertArrayNotHasKey('payload', $exception->context);
+        }
+    }
+
+    public function test_it_rejects_negative_and_reversed_word_timings(): void
+    {
+        foreach ([[-0.1, 0.5], [1.0, 0.5]] as [$start, $end]) {
+            Http::fake([
+                'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                    'language_code' => 'spa',
+                    'words' => [['text' => 'Hola', 'type' => 'word', 'start' => $start, 'end' => $end]],
+                ]),
+            ]);
+
+            try {
+                $this->service()->transcribeChunk($this->audio, 'spa');
+                $this->fail("Expected timing {$start} to {$end} to be rejected.");
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertSame('invalid_word_timing', $exception->context['reason']);
+            }
+        }
+    }
+
+    public function test_it_normalizes_zero_duration_tokens_as_untimed(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                'language_code' => 'por',
+                'words' => [
+                    ['text' => 'Ei', 'type' => 'word', 'start' => 0.5, 'end' => 0.5],
+                    ['text' => ' ', 'type' => 'spacing', 'start' => 0.5, 'end' => 0.5],
+                    ['text' => 'mundo', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+                ],
+            ]),
+        ]);
+
+        $payload = $this->service()->transcribeChunk($this->audio, 'por');
+
+        $this->assertSame(['text' => 'Ei', 'type' => 'word'], $payload['words'][0]);
+        $this->assertSame(['text' => ' ', 'type' => 'spacing'], $payload['words'][1]);
+        $this->assertSame(
+            ['text' => 'mundo', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+            $payload['words'][2],
+        );
+    }
+
+    public function test_it_allows_words_with_both_timing_fields_absent(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                'language_code' => 'spa',
+                'words' => [['text' => 'Hola', 'type' => 'word']],
+            ]),
+        ]);
+
+        $payload = $this->service()->transcribeChunk($this->audio, 'spa');
+
+        $this->assertSame(['text' => 'Hola', 'type' => 'word'], $payload['words'][0]);
+    }
+
     public function test_it_merges_chunk_payloads_dropping_overlap_duplicates(): void
     {
         // Mirrors the pipeline's chunk plan for 300s audio (120s target, 2s

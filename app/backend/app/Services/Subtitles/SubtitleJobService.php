@@ -4,20 +4,21 @@ namespace App\Services\Subtitles;
 
 use App\Jobs\AcquireSubtitleAudio;
 use App\Models\SubtitleJob;
-use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
 use App\Support\PostgresErrors;
+use App\Support\SubtitleProcessingVersion;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
-use InvalidArgumentException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class SubtitleJobService
 {
-    private const VERSION_PREFIX = 'scribe-v2-tokenizer-v8-async-';
+    private const VERSION_PREFIX = SubtitleProcessingVersion::JOB;
 
     private const PROCESSING_MODES = ['on_demand', 'full'];
 
@@ -342,5 +343,4 @@ class SubtitleJobService
 
         return $job->updated_at->lte(now()->subSeconds($seconds));
     }
-
 }

@@ -32,8 +32,9 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'user' => $user,
-            'checkoutPlan' => $this->pendingCheckoutPlan($request, $user, $plans),
+            'checkoutPlan' => $this->pendingCheckoutPlan($request, $user, $plans, $billing),
             'account' => $billing->accountSummary($user),
+            'checkoutBlocked' => $billing->subscriptionRequiresPortal($user),
             'plans' => $plans->publicPlans(),
             'testingPlanSwitcherEnabled' => $testingPlanSwitcher->enabled(),
             'recentJobs' => $this->recentJobs($user, $usage),
@@ -51,9 +52,13 @@ class DashboardController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private function pendingCheckoutPlan(Request $request, User $user, BillingPlanCatalog $plans): ?array
-    {
-        if ($user->billing_subscription_status !== null) {
+    private function pendingCheckoutPlan(
+        Request $request,
+        User $user,
+        BillingPlanCatalog $plans,
+        BillingEntitlementService $billing,
+    ): ?array {
+        if ($billing->subscriptionRequiresPortal($user)) {
             $request->session()->forget('checkout_plan');
 
             return null;

@@ -39,7 +39,6 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Spline+Sans+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-        <script>document.documentElement.classList.add('has-js');</script>
         <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ $siteCssVersion }}">
         @stack('styles')
         <script defer src="{{ asset('js/site-interactions.js') }}?v={{ filemtime(public_path('js/site-interactions.js')) }}"></script>

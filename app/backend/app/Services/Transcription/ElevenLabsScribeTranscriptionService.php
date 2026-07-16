@@ -27,9 +27,10 @@ class ElevenLabsScribeTranscriptionService
     }
 
     /**
-     * Transcribes one audio chunk and returns the validated raw provider
-     * payload. Chunks are transcribed by independent queue jobs, so this
-     * sends exactly one request; merging happens in transcriptFromChunkPayloads.
+     * Transcribes one audio chunk and returns only the provider fields the
+     * chunk merger consumes. Chunks are transcribed by independent queue jobs,
+     * so this sends exactly one request; merging happens in
+     * transcriptFromChunkPayloads.
      *
      * @return array<string, mixed>
      */
@@ -129,7 +130,93 @@ class ElevenLabsScribeTranscriptionService
             ]);
         }
 
-        return $payload;
+        return $this->normalizedTranscriptionPayload($payload, $provider, $model, $context);
+    }
+
+    /**
+     * Store only the fields required by ScribeChunkPayloadMerger. Keeping the
+     * provider response at this boundary would persist unbounded provider
+     * metadata in job artifacts.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $context
+     * @return array{language_code?: string, words: array<int, array{text: string, type: string, start?: float, end?: float}>}
+     */
+    private function normalizedTranscriptionPayload(
+        array $payload,
+        Lab $provider,
+        string $model,
+        array $context,
+    ): array {
+        $words = $payload['words'] ?? null;
+
+        if (! is_array($words) || $words === []) {
+            $this->failInvalidProviderPayload($provider, $model, 'missing_words', $context);
+        }
+
+        $normalizedWords = [];
+
+        foreach ($words as $index => $word) {
+            if (! is_array($word) || ! is_string($word['text'] ?? null) || ! is_string($word['type'] ?? null)) {
+                $this->failInvalidProviderPayload($provider, $model, 'invalid_word', $context, $index);
+            }
+
+            $normalized = [
+                'text' => $word['text'],
+                'type' => $word['type'],
+            ];
+            $hasStart = array_key_exists('start', $word);
+            $hasEnd = array_key_exists('end', $word);
+
+            if ($hasStart !== $hasEnd || ($hasStart && (! is_numeric($word['start']) || ! is_numeric($word['end'])))) {
+                $this->failInvalidProviderPayload($provider, $model, 'invalid_word_timing', $context, $index);
+            }
+
+            if ($hasStart) {
+                $start = (float) $word['start'];
+                $end = (float) $word['end'];
+
+                if (! is_finite($start) || ! is_finite($end) || $start < 0 || $end < $start) {
+                    $this->failInvalidProviderPayload($provider, $model, 'invalid_word_timing', $context, $index);
+                }
+
+                if ($end > $start) {
+                    $normalized['start'] = $start;
+                    $normalized['end'] = $end;
+                }
+            }
+
+            $normalizedWords[] = $normalized;
+        }
+
+        $normalizedPayload = ['words' => $normalizedWords];
+        $language = $payload['language_code'] ?? null;
+
+        if (is_string($language) && trim($language) !== '') {
+            $normalizedPayload['language_code'] = trim($language);
+        }
+
+        return $normalizedPayload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    private function failInvalidProviderPayload(
+        Lab $provider,
+        string $model,
+        string $reason,
+        array $context,
+        ?int $wordIndex = null,
+    ): never {
+        throw SubtitleProcessingException::transcriptionFailed('Transcription provider returned an invalid response.', [
+            'provider' => $provider->value,
+            'adapter' => 'elevenlabs-http',
+            'model' => $model,
+            'reason' => $reason,
+            ...($wordIndex === null ? [] : ['word_index' => $wordIndex]),
+            ...$context,
+        ]);
     }
 
     /**

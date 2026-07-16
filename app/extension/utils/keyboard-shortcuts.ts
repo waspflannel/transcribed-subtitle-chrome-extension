@@ -6,8 +6,7 @@ export type KeyboardShortcutAction =
   | 'toggle-source-blur'
   | 'toggle-auto-pause'
   | 'toggle-transcript'
-  | 'copy-current-cue'
-  | 'save-current-cue';
+  | 'copy-current-cue';
 
 export interface KeyboardShortcutDefinition {
   action: KeyboardShortcutAction;
@@ -105,17 +104,6 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     description: 'Copy the active cue text.',
     display: 'Alt+Shift+C',
     key: 'c',
-    altKey: true,
-    shiftKey: true,
-    ctrlKey: false,
-    metaKey: false,
-  },
-  {
-    action: 'save-current-cue',
-    label: 'Save cue',
-    description: 'Reserve the current cue for the saved-items workflow.',
-    display: 'Alt+Shift+S',
-    key: 's',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,

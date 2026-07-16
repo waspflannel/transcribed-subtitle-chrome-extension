@@ -4,13 +4,15 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\CachedVideoTranscript;
+use App\Support\SubtitleProcessingVersion;
 use Laravel\Ai\Enums\Lab;
 
 /**
  * Caches transcripts per video so re-generating the same YouTube video skips
  * acquire, optimize, and transcribe entirely. Keyed by
- * (youtube_video_id, requested_source_language, transcription model) --
- * transcripts are user-independent and derive only from public YouTube audio.
+ * (youtube_video_id, requested_source_language, transcription model, and
+ * processing version) -- transcripts are user-independent and derive only
+ * from public YouTube audio.
  *
  * `subtitles.transcript_cache.ttl_days` <= 0 disables both reads and writes.
  */
@@ -99,7 +101,9 @@ class VideoTranscriptCache
 
     private function transcriptionModel(): string
     {
-        return trim((string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default'));
+        return SubtitleProcessingVersion::transcriptCacheModel(
+            trim((string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default')),
+        );
     }
 
     private function ttlDays(): int

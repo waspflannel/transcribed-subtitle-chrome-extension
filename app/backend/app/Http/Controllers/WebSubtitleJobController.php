@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\SubtitleJob;
 use App\Models\User;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
@@ -62,6 +63,8 @@ class WebSubtitleJobController extends Controller
             ->where('public_id', $jobId)
             ->firstOrFail();
 
+        SubtitleAudioWorkspace::delete($job->run_id);
+
         DB::transaction(function () use ($job, $billing): void {
             $this->releaseReservationSafely($job, $billing);
             $job->delete();
@@ -100,6 +103,7 @@ class WebSubtitleJobController extends Controller
                     $count = 0;
 
                     foreach ($jobs as $job) {
+                        SubtitleAudioWorkspace::delete($job->run_id);
                         $this->releaseReservationSafely($job, $billing);
                         $job->delete();
                         $count++;

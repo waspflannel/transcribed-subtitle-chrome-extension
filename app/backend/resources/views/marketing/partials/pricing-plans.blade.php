@@ -17,10 +17,14 @@
                 <li>{{ data_get($plan, 'features.full_word_cards') ? 'Full word cards included' : 'On-demand word cards included' }}</li>
             </ul>
             @auth
-                <form method="post" action="{{ route('billing.checkout', ['planCode' => $plan['code']]) }}">
-                    @csrf
-                    <button type="submit" @class(['button', 'full-width', 'button-accent' => $featured])>Choose {{ $plan['name'] }}</button>
-                </form>
+                @if ($checkoutBlocked ?? false)
+                    <a @class(['button', 'full-width', 'button-accent' => $featured]) href="{{ route('dashboard') }}">Manage billing</a>
+                @else
+                    <form method="post" action="{{ route('billing.checkout', ['planCode' => $plan['code']]) }}">
+                        @csrf
+                        <button type="submit" @class(['button', 'full-width', 'button-accent' => $featured])>Choose {{ $plan['name'] }}</button>
+                    </form>
+                @endif
             @else
                 <a @class(['button', 'full-width', 'button-accent' => $featured]) href="{{ route('register', ['plan' => $plan['code']]) }}">Choose {{ $plan['name'] }}</a>
             @endauth

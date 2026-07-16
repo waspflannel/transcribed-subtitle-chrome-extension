@@ -14,6 +14,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Resolve-Path (Join-Path $ScriptDir "..\..")
 $Backend = if ($BackendPath) { Resolve-Path $BackendPath } else { Resolve-Path (Join-Path $Root "app\backend") }
+$Contracts = Resolve-Path (Join-Path $Root "packages\contracts")
 $AgentCheck = Join-Path $Root "scripts\agent\check.ps1"
 
 function Invoke-Checked {
@@ -42,6 +43,9 @@ if (-not $SkipRepositoryChecks) {
 if (-not $SkipComposerInstall) {
     Invoke-Checked -FilePath "composer" -Arguments @("install", "--no-dev", "--prefer-dist", "--optimize-autoloader", "--no-interaction") -WorkingDirectory $Backend
 }
+
+Invoke-Checked -FilePath "composer" -Arguments @("audit", "--locked", "--no-dev", "--no-interaction") -WorkingDirectory $Backend
+Invoke-Checked -FilePath "npm" -Arguments @("audit", "--audit-level=high") -WorkingDirectory $Contracts
 
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "config:clear") -WorkingDirectory $Backend
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "ops:production-check", "--target=$Target", "--no-ansi") -WorkingDirectory $Backend

@@ -21,9 +21,10 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 
 - Use ElevenLabs Scribe v2 for speech-to-text and word timestamps.
 - Use `Laravel\Ai\Enums\Lab::ElevenLabs` for Scribe provider identity in transcription logs/config.
-- Use `Laravel\Ai\Enums\Lab::OpenAI` only for romanization and word-card generation.
+- Use `Laravel\Ai\Enums\Lab::OpenAI` for structured cue tokenization, the merged tokenize-and-translate batch when translation is requested, optional romanization, full-track word-card enrichment, and clicked-token word-card generation.
 - Use narrow Laravel HTTP requests for Scribe while keeping the provider boundary behind `TranscriptionService`.
 - Use `config/ai.php` for provider keys, custom base URLs, and model defaults.
+- Normalize Scribe responses to the stored field allowlist before chunk artifacts are written, and recheck the job/run state after a provider call before persisting its result.
 - Prefer job-level stage logs for current transcription observability.
 
 ## Deferred SDK Features

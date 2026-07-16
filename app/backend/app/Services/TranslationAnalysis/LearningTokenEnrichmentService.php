@@ -2,9 +2,12 @@
 
 namespace App\Services\TranslationAnalysis;
 
+use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Services\Billing\BillingEntitlementService;
+use App\Support\SubtitleProcessingVersion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,6 +17,7 @@ class LearningTokenEnrichmentService
 {
     public function __construct(
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
+        private readonly BillingEntitlementService $billing,
     ) {}
 
     /**
@@ -29,6 +33,10 @@ class LearningTokenEnrichmentService
 
         if ($this->hasLearningMetadata($token)) {
             return $this->response($track, $cue, $token);
+        }
+
+        if ($this->billing->activePlan($user) === null) {
+            throw BillingEntitlementException::paymentRequired();
         }
 
         Log::info('backend.learning_token_enrichment_started', [
@@ -163,7 +171,7 @@ class LearningTokenEnrichmentService
             'token' => $token['normalizedText'],
             'context' => $cue['sourceText'],
             'model' => $this->enrichmentModel(),
-            'version' => 'v7-agent-tokenizer-boundaries',
+            'version' => SubtitleProcessingVersion::LEARNING_TOKEN_CACHE,
         ], JSON_THROW_ON_ERROR));
     }
 

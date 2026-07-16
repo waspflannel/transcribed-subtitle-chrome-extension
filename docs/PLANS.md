@@ -21,7 +21,7 @@ Use `docs/exec-plans/templates/exec-plan-template.md`.
 
 ## Current Phase Backlog
 
-The implementation split is tracked in `docs/exec-plans/active/00-phase-index.md`.
+The completed original implementation split is tracked in `docs/exec-plans/completed/00-phase-index.md`.
 
 Phase status:
 
