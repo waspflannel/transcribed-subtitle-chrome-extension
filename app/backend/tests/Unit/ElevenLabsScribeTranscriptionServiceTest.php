@@ -212,9 +212,9 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         }
     }
 
-    public function test_it_rejects_negative_reversed_and_zero_duration_word_timings(): void
+    public function test_it_rejects_negative_and_reversed_word_timings(): void
     {
-        foreach ([[-0.1, 0.5], [1.0, 0.5], [1.0, 1.0]] as [$start, $end]) {
+        foreach ([[-0.1, 0.5], [1.0, 0.5]] as [$start, $end]) {
             Http::fake([
                 'api.elevenlabs.test/v1/speech-to-text' => Http::response([
                     'language_code' => 'spa',
@@ -229,6 +229,29 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
                 $this->assertSame('invalid_word_timing', $exception->context['reason']);
             }
         }
+    }
+
+    public function test_it_normalizes_zero_duration_tokens_as_untimed(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                'language_code' => 'por',
+                'words' => [
+                    ['text' => 'Ei', 'type' => 'word', 'start' => 0.5, 'end' => 0.5],
+                    ['text' => ' ', 'type' => 'spacing', 'start' => 0.5, 'end' => 0.5],
+                    ['text' => 'mundo', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+                ],
+            ]),
+        ]);
+
+        $payload = $this->service()->transcribeChunk($this->audio, 'por');
+
+        $this->assertSame(['text' => 'Ei', 'type' => 'word'], $payload['words'][0]);
+        $this->assertSame(['text' => ' ', 'type' => 'spacing'], $payload['words'][1]);
+        $this->assertSame(
+            ['text' => 'mundo', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+            $payload['words'][2],
+        );
     }
 
     public function test_it_allows_words_with_both_timing_fields_absent(): void
