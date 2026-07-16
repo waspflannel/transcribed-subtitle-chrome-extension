@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\PostgresErrors;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -87,6 +88,23 @@ final class UsageLedger
 
     public function adjustReservationToActualDuration(SubtitleJob $job): void
     {
+        DB::transaction(function () use ($job): void {
+            $lockedJob = SubtitleJob::query()
+                ->whereKey($job->id)
+                ->where('run_id', $job->run_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedJob instanceof SubtitleJob || $this->hasTerminalSettlement($lockedJob)) {
+                return;
+            }
+
+            $this->adjustLockedReservationToActualDuration($lockedJob->load('user'));
+        }, attempts: 5);
+    }
+
+    private function adjustLockedReservationToActualDuration(SubtitleJob $job): void
+    {
         $user = $job->user;
 
         if (! $user instanceof User) {
@@ -144,74 +162,12 @@ final class UsageLedger
 
     public function debitCompletedJob(SubtitleJob $job, SubtitleTrack $track): void
     {
-        $user = $job->user;
-
-        if (! $user instanceof User) {
-            return;
-        }
-
-        $reservedMinutes = $this->reservedMinutesForJob($job);
-
-        if ($reservedMinutes <= 0) {
-            return;
-        }
-
-        $reservation = $this->reservationIdentityForJob($job);
-
-        if ($reservation === null) {
-            return;
-        }
-
-        $this->recordEvent(
-            user: $user,
-            planCode: $reservation['planCode'],
-            eventType: 'debit',
-            periodStart: $reservation['periodStart'],
-            periodEnd: $reservation['periodEnd'],
-            minutes: $reservedMinutes,
-            availableMinutesDelta: -$reservedMinutes,
-            reservedMinutesDelta: -$reservedMinutes,
-            usedMinutesDelta: $reservedMinutes,
-            providerCostMicrousdDelta: (int) $job->estimated_provider_cost_microusd,
-            idempotencyKey: 'debit:'.$job->id.':'.$job->run_id,
-            subtitleJob: $job,
-            subtitleTrack: $track,
-            stripeSubscriptionId: $reservation['stripeSubscriptionId'],
-            note: 'Debited reserved minutes after a completed subtitle track was produced.',
-        );
+        $this->settleReservation($job, $track, null);
     }
 
     public function releaseReservation(SubtitleJob $job, string $reason): void
     {
-        $user = $job->user;
-
-        if (! $user instanceof User) {
-            return;
-        }
-
-        $reservedMinutes = $this->reservedMinutesForJob($job);
-
-        if ($reservedMinutes <= 0) {
-            return;
-        }
-
-        $reservation = $this->reservationIdentityForJob($job);
-
-        if ($reservation === null) {
-            return;
-        }
-
-        $this->releaseMinutes(
-            job: $job,
-            user: $user,
-            planCode: $reservation['planCode'],
-            periodStart: $reservation['periodStart'],
-            periodEnd: $reservation['periodEnd'],
-            minutes: $reservedMinutes,
-            idempotencyKey: 'refund:'.$job->id.':'.$job->run_id.':'.$reason,
-            stripeSubscriptionId: $reservation['stripeSubscriptionId'],
-            note: 'Released reserved minutes because no completed track was produced.',
-        );
+        $this->settleReservation($job, null, $reason);
     }
 
     public function adjust(User $user, int $minutesDelta, string $note, string $createdBy): BillingUsageEvent
@@ -270,9 +226,18 @@ final class UsageLedger
 
     public function reservedMinutesForJob(SubtitleJob $job): int
     {
+        $runScope = $job->id.':'.$job->run_id;
+
         return max(0, (int) BillingUsageEvent::query()
             ->where('subtitle_job_id', $job->id)
-            ->where('idempotency_key', 'like', '%:'.$job->id.':'.$job->run_id.':%')
+            ->where(function ($query) use ($runScope): void {
+                $query
+                    ->where('idempotency_key', 'like', '%:'.$runScope.':%')
+                    ->orWhereIn('idempotency_key', [
+                        'debit:'.$runScope,
+                        'settlement:'.$runScope,
+                    ]);
+            })
             ->sum('reserved_minutes_delta'));
     }
 
@@ -350,6 +315,94 @@ final class UsageLedger
             stripeSubscriptionId: $stripeSubscriptionId,
             note: $note,
         );
+    }
+
+    private function settleReservation(SubtitleJob $job, ?SubtitleTrack $track, ?string $reason): void
+    {
+        DB::transaction(function () use ($job, $track, $reason): void {
+            $lockedJob = SubtitleJob::query()
+                ->whereKey($job->id)
+                ->where('run_id', $job->run_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedJob instanceof SubtitleJob) {
+                return;
+            }
+
+            $settlementKey = 'settlement:'.$lockedJob->id.':'.$lockedJob->run_id;
+
+            if (BillingUsageEvent::query()->where('idempotency_key', $settlementKey)->exists()) {
+                return;
+            }
+
+            $lockedJob->load('user');
+            $user = $lockedJob->user;
+
+            if (! $user instanceof User) {
+                return;
+            }
+
+            $reservedMinutes = $this->reservedMinutesForJob($lockedJob);
+            $reservation = $this->reservationIdentityForJob($lockedJob);
+
+            if ($reservedMinutes <= 0 || $reservation === null) {
+                return;
+            }
+
+            if ($track instanceof SubtitleTrack) {
+                $this->recordEvent(
+                    user: $user,
+                    planCode: $reservation['planCode'],
+                    eventType: 'debit',
+                    periodStart: $reservation['periodStart'],
+                    periodEnd: $reservation['periodEnd'],
+                    minutes: $reservedMinutes,
+                    availableMinutesDelta: -$reservedMinutes,
+                    reservedMinutesDelta: -$reservedMinutes,
+                    usedMinutesDelta: $reservedMinutes,
+                    providerCostMicrousdDelta: (int) $lockedJob->estimated_provider_cost_microusd,
+                    idempotencyKey: $settlementKey,
+                    subtitleJob: $lockedJob,
+                    subtitleTrack: $track,
+                    stripeSubscriptionId: $reservation['stripeSubscriptionId'],
+                    note: 'Debited reserved minutes after a completed subtitle track was produced.',
+                );
+
+                return;
+            }
+
+            $this->releaseMinutes(
+                job: $lockedJob,
+                user: $user,
+                planCode: $reservation['planCode'],
+                periodStart: $reservation['periodStart'],
+                periodEnd: $reservation['periodEnd'],
+                minutes: $reservedMinutes,
+                idempotencyKey: $settlementKey,
+                stripeSubscriptionId: $reservation['stripeSubscriptionId'],
+                note: 'Released reserved minutes because no completed track was produced ('.$reason.').',
+            );
+        }, attempts: 5);
+    }
+
+    private function hasTerminalSettlement(SubtitleJob $job): bool
+    {
+        $runScope = $job->id.':'.$job->run_id;
+
+        return BillingUsageEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where(function ($query) use ($runScope): void {
+                $query
+                    ->where('idempotency_key', 'settlement:'.$runScope)
+                    ->orWhere('idempotency_key', 'debit:'.$runScope)
+                    ->orWhere(function ($query) use ($runScope): void {
+                        $query
+                            ->where('idempotency_key', 'like', 'refund:'.$runScope.':%')
+                            ->where('idempotency_key', 'not like', 'refund:'.$runScope.':duration:%');
+                    });
+            })
+            ->exists();
     }
 
     private function recordEvent(

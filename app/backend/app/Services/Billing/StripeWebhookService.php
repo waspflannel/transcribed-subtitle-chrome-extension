@@ -19,15 +19,10 @@ final class StripeWebhookService
         'invoice.payment_failed',
     ];
 
-    private const SUBSCRIPTION_EVENT_PRECEDENCE = [
-        'customer.subscription.created' => 1,
-        'customer.subscription.updated' => 2,
-        'customer.subscription.deleted' => 3,
-    ];
-
     public function __construct(
         private readonly BillingPlanCatalog $plans,
         private readonly UsageLedger $ledger,
+        private readonly StripeClient $stripe,
     ) {}
 
     /**
@@ -97,7 +92,7 @@ final class StripeWebhookService
         }
 
         match ($type) {
-            'checkout.session.completed' => $this->handleCheckoutCompleted($object),
+            'checkout.session.completed' => $this->handleCheckoutCompleted($object, $eventCreatedAt),
             'customer.subscription.created',
             'customer.subscription.updated',
             'customer.subscription.deleted' => $this->handleSubscriptionChanged($object, $eventCreatedAt, $type),
@@ -109,12 +104,13 @@ final class StripeWebhookService
     /**
      * @param  array<string, mixed>  $session
      */
-    private function handleCheckoutCompleted(array $session): void
+    private function handleCheckoutCompleted(array $session, ?CarbonImmutable $eventCreatedAt): void
     {
-        $user = $this->requireUserForObject($session);
+        $user = $this->lockedUserForObject($session);
         $plan = $this->requirePlanForObject($session);
         $subscriptionId = data_get($session, 'subscription');
         $customerId = data_get($session, 'customer');
+        $matchesCheckoutIntent = $this->matchesCurrentCheckoutIntent($user, $session);
 
         if (
             is_string($subscriptionId)
@@ -122,7 +118,7 @@ final class StripeWebhookService
             && is_string($user->stripe_subscription_id)
             && $user->stripe_subscription_id !== ''
             && $user->stripe_subscription_id !== $subscriptionId
-            && ! $this->subscriptionIsTerminal($user)
+            && ! $matchesCheckoutIntent
         ) {
             return;
         }
@@ -132,6 +128,17 @@ final class StripeWebhookService
             'stripe_subscription_id' => is_string($subscriptionId) ? $subscriptionId : $user->stripe_subscription_id,
             'billing_plan_code' => is_array($plan) ? (string) $plan['code'] : $user->billing_plan_code,
         ])->save();
+
+        $this->clearCheckoutIntentIfMatched($user, $session);
+
+        if (is_string($subscriptionId) && $subscriptionId !== '') {
+            $this->applySubscriptionState(
+                $user,
+                $this->stripe->retrieveSubscription($subscriptionId),
+                $eventCreatedAt,
+                'checkout.session.completed',
+            );
+        }
     }
 
     /**
@@ -142,12 +149,7 @@ final class StripeWebhookService
         ?CarbonImmutable $eventCreatedAt,
         string $eventType,
     ): void {
-        $user = $this->requireUserForObject($subscription);
-
-        $user = User::query()
-            ->whereKey($user->id)
-            ->lockForUpdate()
-            ->first() ?? $user;
+        $user = $this->lockedUserForObject($subscription);
 
         $subscriptionId = data_get($subscription, 'id');
 
@@ -155,16 +157,48 @@ final class StripeWebhookService
             throw new RuntimeException('Stripe subscription webhook did not include a subscription id.');
         }
 
-        if (
-            is_string($user->stripe_subscription_id)
-            && $user->stripe_subscription_id !== ''
-            && $user->stripe_subscription_id !== $subscriptionId
-        ) {
+        $currentSubscriptionId = $user->stripe_subscription_id;
+        $sameSubscription = ! is_string($currentSubscriptionId)
+            || $currentSubscriptionId === ''
+            || $currentSubscriptionId === $subscriptionId;
+        $matchesCheckoutIntent = $this->matchesCurrentCheckoutIntent($user, $subscription);
+
+        if (! $sameSubscription && ! $matchesCheckoutIntent) {
             return;
         }
 
-        if (! $this->subscriptionEventShouldApply($user, $eventCreatedAt, $eventType)) {
+        $ordering = $sameSubscription
+            ? $this->subscriptionEventOrdering($user, $eventCreatedAt)
+            : 'authoritative';
+
+        if ($ordering === 'ignore') {
             return;
+        }
+
+        $state = $ordering === 'authoritative'
+            ? $this->stripe->retrieveSubscription($subscriptionId)
+            : $subscription;
+
+        $this->applySubscriptionState($user, $state, $eventCreatedAt, $eventType);
+
+        if ($matchesCheckoutIntent) {
+            $this->clearCheckoutIntent($user);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $subscription
+     */
+    private function applySubscriptionState(
+        User $user,
+        array $subscription,
+        ?CarbonImmutable $eventCreatedAt,
+        ?string $eventType,
+    ): void {
+        $subscriptionId = data_get($subscription, 'id');
+
+        if (! is_string($subscriptionId) || $subscriptionId === '') {
+            throw new RuntimeException('Stripe subscription response did not include a subscription id.');
         }
 
         $plan = $this->requirePlanForObject($subscription);
@@ -189,7 +223,7 @@ final class StripeWebhookService
             'billing_trial_ends_at' => $trialEndsAt,
             'billing_ends_at' => $endedAt,
             'billing_subscription_event_at' => $eventCreatedAt ?? $user->billing_subscription_event_at,
-            'billing_subscription_event_type' => $eventCreatedAt === null
+            'billing_subscription_event_type' => $eventCreatedAt === null || $eventType === null
                 ? $user->billing_subscription_event_type
                 : $eventType,
         ])->save();
@@ -204,7 +238,7 @@ final class StripeWebhookService
      */
     private function handleInvoicePaymentFailed(array $invoice): void
     {
-        $user = $this->requireUserForObject($invoice);
+        $user = $this->lockedUserForObject($invoice);
         $subscriptionId = data_get($invoice, 'subscription');
 
         if (
@@ -215,9 +249,12 @@ final class StripeWebhookService
             return;
         }
 
-        $user->forceFill([
-            'billing_subscription_status' => 'past_due',
-        ])->save();
+        $this->applySubscriptionState(
+            $user,
+            $this->stripe->retrieveSubscription($subscriptionId),
+            null,
+            null,
+        );
     }
 
     /**
@@ -248,6 +285,19 @@ final class StripeWebhookService
         }
 
         throw new RuntimeException('Stripe webhook did not match a local user.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $object
+     */
+    private function lockedUserForObject(array $object): User
+    {
+        $user = $this->requireUserForObject($object);
+
+        return User::query()
+            ->whereKey($user->id)
+            ->lockForUpdate()
+            ->firstOrFail();
     }
 
     /**
@@ -289,34 +339,58 @@ final class StripeWebhookService
         return $this->timestamp(data_get($event, 'created'));
     }
 
-    private function subscriptionEventShouldApply(
-        User $user,
-        ?CarbonImmutable $eventCreatedAt,
-        string $eventType,
-    ): bool {
+    private function subscriptionEventOrdering(User $user, ?CarbonImmutable $eventCreatedAt): string
+    {
         if ($eventCreatedAt === null || $user->billing_subscription_event_at === null) {
-            return true;
+            return 'payload';
         }
 
         if ($eventCreatedAt->gt($user->billing_subscription_event_at)) {
-            return true;
+            return 'payload';
         }
 
         if ($eventCreatedAt->lt($user->billing_subscription_event_at)) {
-            return false;
+            return 'ignore';
         }
 
-        return $this->subscriptionEventPrecedence($eventType)
-            > $this->subscriptionEventPrecedence($user->billing_subscription_event_type);
+        return 'authoritative';
     }
 
-    private function subscriptionEventPrecedence(?string $eventType): int
+    /**
+     * @param  array<string, mixed>  $object
+     */
+    private function matchesCurrentCheckoutIntent(User $user, array $object): bool
     {
-        return self::SUBSCRIPTION_EVENT_PRECEDENCE[$eventType] ?? 0;
+        $intentId = data_get($object, 'metadata.checkout_intent_id');
+
+        return is_string($intentId)
+            && $intentId !== ''
+            && $intentId === $user->stripe_checkout_intent_id;
     }
 
-    private function subscriptionIsTerminal(User $user): bool
+    /**
+     * @param  array<string, mixed>  $session
+     */
+    private function clearCheckoutIntentIfMatched(User $user, array $session): void
     {
-        return in_array($user->billing_subscription_status, ['canceled', 'incomplete_expired'], true);
+        $sessionId = data_get($session, 'id');
+
+        if (
+            $this->matchesCurrentCheckoutIntent($user, $session)
+            || (is_string($sessionId) && $sessionId !== '' && $sessionId === $user->stripe_checkout_session_id)
+        ) {
+            $this->clearCheckoutIntent($user);
+        }
+    }
+
+    private function clearCheckoutIntent(User $user): void
+    {
+        $user->forceFill([
+            'stripe_checkout_intent_id' => null,
+            'stripe_checkout_plan_code' => null,
+            'stripe_checkout_session_id' => null,
+            'stripe_checkout_session_url' => null,
+            'stripe_checkout_expires_at' => null,
+        ])->save();
     }
 }
