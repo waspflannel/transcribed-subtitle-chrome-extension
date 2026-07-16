@@ -3,7 +3,7 @@
 Status: active
 Owner: agent
 Created: 2026-07-15
-Last updated: 2026-07-15
+Last updated: 2026-07-16
 
 ## Goal
 
@@ -138,6 +138,7 @@ Primary finding locations:
 - [x] A job reserved before renewal and failed or deleted after renewal cannot increase the new period above its grant.
 - [x] Subscription or plan changes during a running job have a documented and tested settlement rule.
 - [x] Existing same-period behavior, idempotency, completed-track reuse, reservation release, and manual adjustment behavior remain correct.
+- [x] Completion, failure, and deletion compete for one terminal settlement identity, so only one terminal minute event can win for a job run.
 
 ### D. Entitlement and account-session security
 
@@ -156,6 +157,7 @@ Primary finding locations:
 - [x] Tests cover deletion during transcription, failure while a chunk is in flight, another chunk winning failure cleanup, clear-all with running jobs, stale-run callbacks, and no workspace/artifact residue.
 - [x] Normalize and whitelist Scribe chunk data at the provider boundary. Persist only the language and word/timing fields required by the current merger, plus the existing safe chunk bounds.
 - [x] Malformed or drifted provider payloads fail with the existing stable public transcription error and sanitized context.
+- [x] Present Scribe word timings are finite, non-negative, and strictly increasing; both timings may be absent for intentionally untimed words.
 
 ### F. Production readiness and HTTP security
 
@@ -177,7 +179,7 @@ Primary finding locations:
 - [ ] Set a real extension release version and make release packaging fail for `0.0.0`, localhost host permissions, or a non-HTTPS production API. Extend the existing `scripts/runtime/build-extension-release.ps1`, which already enforces the HTTPS and host-permission rules, with the version check; do not build a parallel gate.
 - [x] Remove all visible Save cue controls, shortcut labels, handlers, and “Soon/Phase 02” copy while sentence mining is deferred. Remove related dead tests/state rather than hiding the control with CSS.
 - [x] Signed-out extension account UI says sign-in/plan confirmation is required; it does not claim cue translation, romanization, or Full word cards are available before entitlement is known.
-- [ ] The web header keeps the product name, sign-in, and signup actions readable with no overlap or horizontal overflow at 360 x 800 and 375 x 812, plus the project’s desktop viewport.
+- [x] The web header keeps the product name, sign-in, and signup actions readable with no overlap or horizontal overflow at 360 x 800 and 375 x 812, plus the project’s desktop viewport.
 - [ ] Capture before/after screenshots for the mobile header, support, terms/privacy, signed-out Account tab, and core signed-in account state.
 - [ ] Production extension smoke verifies the exact backend host permission and one overlay host on the public-video test page.
 - [ ] Record an account-deletion decision that matches the approved Terms/Privacy copy: either a self-serve deletion flow, or an explicitly documented support-mediated runbook for the beta. Either path must cancel the Stripe subscription before removing local data and must state what happens to ledger history. The agent must not choose this product/legal posture alone; stop and ask if the user has not decided.
@@ -195,8 +197,8 @@ Primary finding locations:
 - [x] Move `docs/exec-plans/active/00-phase-index.md` to completed or replace it with a current index, and repair stale SaaS roadmap links for completed billing and tiered-worker plans.
 - [x] Keep learning plans 02–04, SaaS marketing Phase 08, public-launch Phase 09, and the Track B tokenization-quality work deferred; do not mark them complete as part of this branch.
 - [x] Update security, reliability, observability, operations, product release-readiness, quality score, and technical debt only where behavior/evidence changed.
-- [ ] Final diff contains no unrelated generated output, build artifacts, provider payloads, credentials, or user-owned changes accidentally overwritten.
-- [ ] `scripts/agent/check.ps1`, `scripts/agent/verify-pr.ps1`, audits, focused tests, and browser smoke all pass with evidence recorded below.
+- [x] Final diff contains no unrelated generated output, build artifacts, provider payloads, credentials, or user-owned changes accidentally overwritten.
+- [x] `scripts/agent/check.ps1`, `scripts/agent/verify-pr.ps1`, audits, focused tests, and browser smoke all pass with evidence recorded below.
 
 ## Implementation Sequence
 
@@ -381,6 +383,10 @@ These items require operator values, credentials, a product decision, or an irre
 | 2026-07-15 | First pass runs on `codex/pre-production-release-hardening`; all operator credentials, legal copy, release identifiers, and external proof are recorded under Defered instead of being invented. | The user requested a reviewable branch and a separate pass for supplied inputs. |
 | 2026-07-15 | Cached learning-token metadata remains available to the owning user, but an un-cached enrichment must have an active or trialing subscription before its provider call. | It preserves already-paid track data while preventing inactive accounts from creating a new provider charge. |
 | 2026-07-15 | Checkout defaults to the conservative status model: `active`, `trialing`, `past_due`, `unpaid`, and `incomplete` subscriptions use the billing portal; only `canceled` and `incomplete_expired` allow a new checkout. | This avoids duplicate subscriptions and does not discard an existing payment-recovery path. The user may revise this policy during the second pass. |
+| 2026-07-16 | Persist one expiring checkout intent per user and plan, include its opaque ID in Stripe metadata, and rotate it after completion, expiry, or a different plan intent. | Stripe idempotency keys represent one logical operation and may be retained for at least 24 hours; a permanent user/plan key can reuse an obsolete Checkout Session. |
+| 2026-07-16 | Refresh the authoritative Stripe subscription for equal-second, intended cross-subscription, checkout-completed, and invoice-failure events while holding the local user mutation lock. | Stripe does not guarantee webhook delivery order, and event timestamps have only second resolution. |
+| 2026-07-16 | Use one `settlement:{job}:{run}` idempotency key under a subtitle-job row lock for debit or release. | Completion, deletion, and failure are competing terminal outcomes of the same reservation and must not append opposite terminal events. |
+| 2026-07-16 | Validate artifact eligibility inside the same transaction that writes the artifact, and recheck long audio/provider stages under the subtitle-job row lock before dispatch. | A separate pre-write status check leaves a window where deletion or failure can win and a stale callback can recreate state afterward. |
 
 ## Progress Log
 
@@ -395,15 +401,18 @@ These items require operator values, credentials, a product decision, or an irre
 | 2026-07-15 | Completed the local implementation pass: dependency remediation, billing and usage safeguards, entitlement/lifecycle fixes, provider normalization, readiness/security headers, release-surface cleanup, and unified version invalidation. | New and updated PHPUnit/Vitest coverage covers the local behavior matrix. User-provided values, credentials, legal copy, proxy contract, and external proof remain listed under `Defered`. |
 | 2026-07-15 | Re-ran the full repository and release validation after the final dashboard compatibility fix. | `scripts/agent/doctor.ps1`, `scripts/agent/check.ps1`, `scripts/agent/verify-pr.ps1`, and `scripts/agent/doc-gardening.ps1` exited 0. Final suites: Laravel 308 tests / 2,467 assertions; extension 26 files / 148 tests; contracts validation and type generation passed. |
 | 2026-07-15 | Audited the locked production dependency graph. | Composer runtime audit, contracts audit, and extension production-only audit (`--omit=dev --audit-level=high`) found 0 vulnerabilities. Full extension audit reports 8 development-only advisories through WXT/web-ext tooling; TD-002 records the exact chain and upstream major-version limitation. The release script rejects the present `0.0.0` version before it can build a package. |
+| 2026-07-16 | Reopened locally checked criteria after the branch review found nine correctness/evidence gaps. Loaded the phased implementation workflow plus Laravel security, patterns, specialist, best-practice, AI SDK, subtitle-pipeline, Eloquent, queue, and testing guidance. | The remediation scope is limited to checkout/webhook identity, terminal usage settlement, provider/artifact races, Scribe timing validation, password-reset atomicity, readiness probes/release settings, mobile header behavior, deterministic contracts audit, and the missing regression evidence. Existing operator-owned external gates remain open. |
+| 2026-07-16 | Implemented the nine review remediations and ran the focused regression matrix. | Pint passed. Billing, auth, subtitle lifecycle/artifact, readiness, and Scribe timing suites passed: 125 tests / 834 assertions. Composer runtime, contracts, and extension production-only audits each reported 0 vulnerabilities. Browser QA at 360 x 800, 375 x 812, and 1440 x 900 showed the product name and account actions with no overlap or horizontal overflow; the browser console and page-error checks were clean. |
+| 2026-07-16 | Completed the full harness and final scope review. | `scripts/agent/doctor.ps1`, `scripts/agent/check.ps1`, `scripts/agent/verify-pr.ps1`, and `scripts/agent/doc-gardening.ps1` exited 0. Laravel: 321 tests / 2,553 assertions. Extension: 26 files / 148 tests plus TypeScript compile and production build. Contracts validation/type generation and `git diff --check` passed. The staged scope excludes the two pre-existing user-owned plan edits and `how_to_build - Copy.txt`. |
 
 ## Completion Notes
 
-- What changed: Applied the local hardening items in Slices 1–6, including package locks and audit gates; Stripe idempotency, subscription ordering, and original-reservation settlement; entitlement, reset-token, workspace, provider-payload, readiness, header, retention, version/cache, documentation, and extension UI fixes.
-- Validation results: `doctor`, `check`, `verify-pr`, and `doc-gardening` passed. Laravel: 308 tests / 2,467 assertions. Extension: 26 test files / 148 tests, compile, and production build. Contracts validation/type generation passed. `git diff --check` passed.
+- What changed: Applied the local hardening items in Slices 1–6, including package locks and audit gates; expiring Stripe checkout intents, authoritative webhook ordering, one terminal usage settlement, atomic password-reset token revocation, provider/artifact race closure, strict Scribe timing validation, separate readiness probes, release metadata checks, and mobile header behavior.
+- Validation results: `doctor`, `check`, `verify-pr`, and `doc-gardening` passed. Laravel: 321 tests / 2,553 assertions. Extension: 26 test files / 148 tests, compile, and production build. Contracts validation/type generation passed. `git diff --check` passed.
 - Dependency audit results: Composer runtime, contracts, and extension production-only audits report 0 vulnerabilities. The full extension development graph still has 8 WXT/web-ext tooling advisories, documented in TD-002; the shipped dependency graph is clean.
-- Billing/Stripe evidence: Local tests cover stable idempotency, portal routing for all non-terminal statuses, same-second event precedence, cross-subscription rejection, replay safety, and rollover settlement. Stripe test-mode events are deferred pending user credentials and authorization.
-- Security/lifecycle evidence: Local tests cover entitlement before cache misses, token removal and remember-token rotation on password reset, workspace cleanup, provider recheck, normalized Scribe data, production readiness probes, security headers, and processed-webhook pruning.
-- Browser and extension evidence: Automated extension test, compile, and build checks passed. Manual viewport screenshots, public-video overlay smoke, and Chrome Web Store host-permission evidence remain deferred because the production host/version and browser test setup are not yet supplied.
+- Billing/Stripe evidence: Local tests cover expiring checkout intent reuse, concurrent customer identity, portal routing for all non-terminal statuses, authoritative same-second state, cross-subscription rejection, replay safety, and competing terminal settlements. Stripe test-mode events are deferred pending user credentials and authorization.
+- Security/lifecycle evidence: Local tests cover entitlement before cache misses, atomic password/remember-token/token revocation rollback, workspace cleanup, provider rechecks, artifact write eligibility, strict Scribe data normalization, separate production readiness probes, security headers, and processed-webhook pruning.
+- Browser and extension evidence: Automated extension test, compile, and build checks passed. Local screenshots at 360 x 800, 375 x 812, and 1440 x 900 verify the repaired marketing header without overlap or horizontal overflow. Public-video overlay smoke and Chrome Web Store host-permission evidence remain deferred until the production host/version are supplied.
 - Processing-version and cache-invalidation evidence: `SubtitleProcessingVersion` centrally versions jobs/tracks, transcript cache keys, and learning-token cache keys; regression tests cover changed job and transcript cache identity.
 - Simplicity/readability review: Reviewed the final diff for narrow scope, deterministic state transitions, no user-owned file overwrite, no artifacts, and no sensitive values. The active plan remains active because external gates are intentionally open.
 - External production gates still open: All unchecked items under `Defered`: support address, approved legal copy, production domain and mail/provider values, extension version and Store URL, Stripe test-mode proof, production secret rotation, deletion posture, and proxy/TLS contract.
