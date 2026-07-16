@@ -173,8 +173,15 @@ class ElevenLabsScribeTranscriptionService
             }
 
             if ($hasStart) {
-                $normalized['start'] = (float) $word['start'];
-                $normalized['end'] = (float) $word['end'];
+                $start = (float) $word['start'];
+                $end = (float) $word['end'];
+
+                if (! is_finite($start) || ! is_finite($end) || $start < 0 || $end <= $start) {
+                    $this->failInvalidProviderPayload($provider, $model, 'invalid_word_timing', $context, $index);
+                }
+
+                $normalized['start'] = $start;
+                $normalized['end'] = $end;
             }
 
             $normalizedWords[] = $normalized;

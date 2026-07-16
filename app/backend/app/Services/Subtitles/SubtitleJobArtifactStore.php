@@ -8,6 +8,7 @@ use App\Models\SubtitleJobArtifact;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
+use Illuminate\Support\Facades\DB;
 
 class SubtitleJobArtifactStore
 {
@@ -323,21 +324,38 @@ class SubtitleJobArtifactStore
     {
         $startedAtMs = $this->currentTimeMs();
 
-        SubtitleJobArtifact::query()->updateOrCreate(
-            [
-                'subtitle_job_id' => $job->id,
+        DB::transaction(function () use ($job, $artifactType, $payload, $batchIndex, $startedAtMs): void {
+            $currentJob = SubtitleJob::query()
+                ->with('track')
+                ->whereKey($job->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (
+                ! $currentJob instanceof SubtitleJob
+                || $currentJob->run_id !== $job->run_id
+                || $currentJob->status !== 'running'
+                || $currentJob->hasReadyTrack()
+            ) {
+                return;
+            }
+
+            SubtitleJobArtifact::query()->updateOrCreate(
+                [
+                    'subtitle_job_id' => $currentJob->id,
+                    'artifact_type' => $artifactType,
+                    'batch_index' => $batchIndex,
+                    'run_id' => $currentJob->run_id,
+                ],
+                ['payload' => $payload],
+            );
+
+            $this->tracer->jobEvent($currentJob, 'artifact.written', [
                 'artifact_type' => $artifactType,
                 'batch_index' => $batchIndex,
-                'run_id' => $job->run_id,
-            ],
-            ['payload' => $payload],
-        );
-
-        $this->tracer->jobEvent($job, 'artifact.written', [
-            'artifact_type' => $artifactType,
-            'batch_index' => $batchIndex,
-            'duration_ms' => $this->durationMs($startedAtMs),
-        ]);
+                'duration_ms' => $this->durationMs($startedAtMs),
+            ]);
+        }, attempts: 5);
     }
 
     /**

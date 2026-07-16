@@ -212,6 +212,39 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         }
     }
 
+    public function test_it_rejects_negative_reversed_and_zero_duration_word_timings(): void
+    {
+        foreach ([[-0.1, 0.5], [1.0, 0.5], [1.0, 1.0]] as [$start, $end]) {
+            Http::fake([
+                'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                    'language_code' => 'spa',
+                    'words' => [['text' => 'Hola', 'type' => 'word', 'start' => $start, 'end' => $end]],
+                ]),
+            ]);
+
+            try {
+                $this->service()->transcribeChunk($this->audio, 'spa');
+                $this->fail("Expected timing {$start} to {$end} to be rejected.");
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertSame('invalid_word_timing', $exception->context['reason']);
+            }
+        }
+    }
+
+    public function test_it_allows_words_with_both_timing_fields_absent(): void
+    {
+        Http::fake([
+            'api.elevenlabs.test/v1/speech-to-text' => Http::response([
+                'language_code' => 'spa',
+                'words' => [['text' => 'Hola', 'type' => 'word']],
+            ]),
+        ]);
+
+        $payload = $this->service()->transcribeChunk($this->audio, 'spa');
+
+        $this->assertSame(['text' => 'Hola', 'type' => 'word'], $payload['words'][0]);
+    }
+
     public function test_it_merges_chunk_payloads_dropping_overlap_duplicates(): void
     {
         // Mirrors the pipeline's chunk plan for 300s audio (120s target, 2s
