@@ -3,7 +3,7 @@
 @section('content')
     <div>
         <h1>Sign in</h1>
-        <p>Use your verified account to connect the extension.</p>
+        <p>Use your account email to connect the extension.</p>
     </div>
 
     @if (session('status'))
@@ -27,6 +27,7 @@
             </span>
         </label>
         <div class="actions">
+            <a class="button-link" href="{{ route('register') }}">Create account</a>
             <a class="button-link" href="{{ route('password.request') }}">Reset password</a>
             <button type="submit">Sign in</button>
         </div>

@@ -36,28 +36,28 @@ Route::get('/sitemap.xml', SitemapController::class)
     ->name('sitemap');
 
 Route::get('/dashboard', DashboardController::class)
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('dashboard');
 Route::get('/dashboard/jobs/{jobId}', [WebSubtitleJobController::class, 'show'])
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('dashboard.jobs.show');
 Route::delete('/dashboard/jobs/{jobId}', [WebSubtitleJobController::class, 'destroy'])
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('dashboard.jobs.destroy');
 Route::delete('/dashboard/jobs', [WebSubtitleJobController::class, 'clearAll'])
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('dashboard.jobs.clear');
 
 Route::post('/billing/checkout/{planCode}', [BillingController::class, 'checkout'])
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('billing.checkout');
 
 Route::post('/billing/portal', [BillingController::class, 'portal'])
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('billing.portal');
 
 Route::post('/billing/testing-plan', [BillingController::class, 'testingPlan'])
-    ->middleware(['auth', 'verified'])
+    ->middleware('auth')
     ->name('billing.testing-plan');
 
 Route::post('/stripe/webhook', StripeWebhookController::class)

@@ -122,6 +122,11 @@ input[type="checkbox"] {
     margin-top: 8px;
 }
 
+.workspace > .status,
+.workspace > .error-copy {
+    margin-bottom: 22px;
+}
+
 .workspace-grid {
     align-items: start;
     display: grid;

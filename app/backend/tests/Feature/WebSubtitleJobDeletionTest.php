@@ -29,17 +29,6 @@ class WebSubtitleJobDeletionTest extends TestCase
             ->assertRedirect(route('login', absolute: false));
     }
 
-    public function test_destroy_requires_verified_email(): void
-    {
-        $user = User::factory()->unverified()->create();
-        $job = SubtitleJob::factory()->for($user)->create();
-
-        $this
-            ->actingAs($user)
-            ->delete(route('dashboard.jobs.destroy', ['jobId' => $job->public_id], absolute: false))
-            ->assertRedirect(route('verification.notice', absolute: false));
-    }
-
     public function test_owner_can_delete_their_job_and_relations_cascade(): void
     {
         $user = User::factory()->create();

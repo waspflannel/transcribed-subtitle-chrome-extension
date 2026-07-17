@@ -165,7 +165,7 @@
                         @empty
                             <div>
                                 <dt>Next step</dt>
-                                <dd>Install the extension, open its Account tab, and sign in with this verified email.</dd>
+                                <dd>Install the extension, open its Account tab, and sign in with this email.</dd>
                             </div>
                         @endforelse
                     </dl>

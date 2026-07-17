@@ -48,15 +48,6 @@ class ExtensionAuthController extends Controller
             );
         }
 
-        if (! $user->hasVerifiedEmail()) {
-            return ApiErrorResponse::make(
-                'email_not_verified',
-                'Verify your email address before using the extension.',
-                403,
-                request: $request,
-            );
-        }
-
         $issuedToken = $tokens->issue($user, $request->extensionInstallId());
         $account = $billing->accountSummary($user);
         $analytics->extensionConnected($user, $request->extensionInstallId(), $account);

@@ -20,7 +20,7 @@
         <p>Beta analytics are first-party Laravel structured logs. They capture page views and funnel events such as signup, checkout, extension connection, first generation, and repeat generation without transcripts, prompts, generated subtitles, YouTube URLs, provider payloads, tokens, raw install IDs, or raw audio paths.</p>
 
         <h2>Billing and account data</h2>
-        <p>Account email, password hash, email verification state, Stripe customer and subscription identifiers, plan state, and minute-ledger rows are stored to run authentication, billing, and entitlement checks.</p>
+        <p>Account email, password hash, Stripe customer and subscription identifiers, plan state, and minute-ledger rows are stored to run authentication, billing, and entitlement checks.</p>
 
         <h2>Support</h2>
         <p>Support may ask for a public-safe job ID, status, language pair, timing, and failure code. Do not send provider secrets, passwords, or private videos.</p>
