@@ -17,6 +17,7 @@
             <div class="action-stack horizontal-actions">
                 <a class="button" href="{{ config('marketing.chrome_extension_url') ?: route('marketing.home').'#install' }}">Install extension</a>
                 <a class="button button-secondary" href="https://www.youtube.com" rel="noopener noreferrer">Open YouTube</a>
+                <a class="button button-secondary" href="{{ route('marketing.support') }}">Open support</a>
             </div>
         </div>
 
@@ -169,14 +170,6 @@
                             </div>
                         @endforelse
                     </dl>
-                </x-ui.panel>
-
-                <x-ui.panel title="Support" description="Use job details for public-safe troubleshooting.">
-                    <a class="button button-secondary full-width" href="{{ route('marketing.support') }}">Open support</a>
-                    <form method="post" action="{{ route('logout') }}">
-                        @csrf
-                        <button type="submit" class="text-button full-width">Log out</button>
-                    </form>
                 </x-ui.panel>
 
                 <x-ui.panel class="danger-panel" title="Delete account" description="Permanent, immediate, and irreversible.">

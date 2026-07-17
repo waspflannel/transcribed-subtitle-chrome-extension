@@ -61,7 +61,14 @@
             </nav>
             <div class="site-actions">
                 @auth
-                    <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
+                    @if (request()->routeIs('dashboard'))
+                        <form method="post" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" class="text-link">Log out</button>
+                        </form>
+                    @else
+                        <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
+                    @endif
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
                     <a class="button button-accent button-small" href="{{ route('marketing.home') }}#pricing">Start learning</a>
