@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MarketingPageController;
@@ -56,9 +57,9 @@ Route::post('/billing/portal', [BillingController::class, 'portal'])
     ->middleware('auth')
     ->name('billing.portal');
 
-Route::post('/billing/testing-plan', [BillingController::class, 'testingPlan'])
-    ->middleware('auth')
-    ->name('billing.testing-plan');
+Route::delete('/account', [AccountController::class, 'destroy'])
+    ->middleware(['auth', 'throttle:6,1'])
+    ->name('account.destroy');
 
 Route::post('/stripe/webhook', StripeWebhookController::class)
     ->name('stripe.webhook');

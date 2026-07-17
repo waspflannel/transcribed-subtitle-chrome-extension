@@ -6,6 +6,7 @@ use App\Models\StripeWebhookEvent;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -149,6 +150,16 @@ final class StripeWebhookService
         ?CarbonImmutable $eventCreatedAt,
         string $eventType,
     ): void {
+        // Account deletion cancels the subscription in Stripe and then removes the
+        // user, so the trailing deleted event has no local user left to update.
+        if ($eventType === 'customer.subscription.deleted' && $this->userForObject($subscription) === null) {
+            Log::info('backend.stripe_subscription_deleted_without_local_user', [
+                'stripe_customer_id' => data_get($subscription, 'customer'),
+            ]);
+
+            return;
+        }
+
         $user = $this->lockedUserForObject($subscription);
 
         $subscriptionId = data_get($subscription, 'id');
@@ -262,6 +273,20 @@ final class StripeWebhookService
      */
     private function requireUserForObject(array $object): User
     {
+        $user = $this->userForObject($object);
+
+        if (! $user instanceof User) {
+            throw new RuntimeException('Stripe webhook did not match a local user.');
+        }
+
+        return $user;
+    }
+
+    /**
+     * @param  array<string, mixed>  $object
+     */
+    private function userForObject(array $object): ?User
+    {
         $userId = data_get($object, 'metadata.user_id') ?? data_get($object, 'client_reference_id');
 
         if (is_numeric($userId)) {
@@ -284,7 +309,7 @@ final class StripeWebhookService
             }
         }
 
-        throw new RuntimeException('Stripe webhook did not match a local user.');
+        return null;
     }
 
     /**

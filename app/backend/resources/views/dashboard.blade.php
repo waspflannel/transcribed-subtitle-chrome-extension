@@ -130,16 +130,16 @@
             </section>
 
             <aside class="workspace-side">
-                <x-ui.panel title="Billing" description="{{ $user->billing_subscription_status ?? 'No active subscription' }}">
+                <x-ui.panel title="Billing" description="{{ $checkoutBlocked ? 'Opens Stripe — update payment, switch plans, or cancel anytime.' : 'No active subscription.' }}">
                     <form method="post" action="{{ route('billing.portal') }}">
                         @csrf
-                        <button type="submit" class="button full-width">Manage billing</button>
+                        <button type="submit" class="button full-width">{{ $checkoutBlocked ? 'Manage or cancel subscription' : 'Manage billing' }}</button>
                     </form>
                 </x-ui.panel>
 
                 <x-ui.panel title="Plans" description="{{ $checkoutBlocked ? 'Change an existing subscription in Stripe.' : 'Checkout opens in Stripe.' }}">
                     @if ($checkoutBlocked)
-                        <p>Use Manage billing to change or cancel your existing subscription.</p>
+                        <p>Use Manage or cancel subscription above to change plans or cancel.</p>
                     @else
                         <div class="mini-plan-list">
                             @foreach ($plans as $plan)
@@ -171,35 +171,27 @@
                     </dl>
                 </x-ui.panel>
 
-                @if ($testingPlanSwitcherEnabled)
-                    <x-ui.panel title="Test billing" description="Switch plans without Stripe.">
-                        <form method="post" action="{{ route('billing.testing-plan') }}" class="stack-form">
-                            @csrf
-                            <label>
-                                Plan
-                                <select name="plan_code">
-                                    @foreach ($plans as $plan)
-                                        <option value="{{ $plan['code'] }}" @selected($user->billing_plan_code === $plan['code'])>
-                                            {{ $plan['name'] }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </label>
-                            <button type="submit" class="button full-width">Set test plan</button>
-                        </form>
-                        <form method="post" action="{{ route('billing.testing-plan') }}">
-                            @csrf
-                            <input type="hidden" name="plan_code" value="none">
-                            <button type="submit" class="button button-secondary full-width">Clear test plan</button>
-                        </form>
-                    </x-ui.panel>
-                @endif
-
                 <x-ui.panel title="Support" description="Use job details for public-safe troubleshooting.">
                     <a class="button button-secondary full-width" href="{{ route('marketing.support') }}">Open support</a>
                     <form method="post" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" class="text-button full-width">Log out</button>
+                    </form>
+                </x-ui.panel>
+
+                <x-ui.panel class="danger-panel" title="Delete account" description="Permanent, immediate, and irreversible.">
+                    <p class="danger-note">Deleting your account cancels any active subscription right away and erases your subtitle jobs, usage history, and extension connections.</p>
+                    <form method="post" action="{{ route('account.destroy') }}" class="stack-form" data-confirm="Permanently delete your account and all of its data? This cannot be undone.">
+                        @csrf
+                        @method('DELETE')
+                        <label>
+                            Confirm your password
+                            <input type="password" name="password" autocomplete="current-password" required>
+                        </label>
+                        @error('password', 'deleteAccount')
+                            <p class="error-copy">{{ $message }}</p>
+                        @enderror
+                        <button type="submit" class="button button-danger full-width">Delete account</button>
                     </form>
                 </x-ui.panel>
             </aside>

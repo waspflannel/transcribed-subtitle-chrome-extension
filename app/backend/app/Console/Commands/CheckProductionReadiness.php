@@ -124,7 +124,6 @@ class CheckProductionReadiness extends Command
             'stripeWebhookSecretConfigured' => $this->configured(config('billing.stripe.webhook_secret')),
             'stripePriceIdsConfigured' => collect((array) config('billing.plans'))
                 ->every(fn (array $plan): bool => $this->configured($plan['stripe_price_id'] ?? null)),
-            'billingTestPlanSwitcherEnabled' => (bool) config('billing.testing_plan_switcher.enabled'),
             'youtubeAudioBinaryConfigured' => $this->configured(config('subtitles.youtube.binary')),
             'ffmpegBinaryConfigured' => $this->configured(config('subtitles.audio_preparation.ffmpeg_binary')),
             'audioIsolationEnabled' => (bool) config('subtitles.audio_preparation.voice_isolation.enabled'),
@@ -173,7 +172,6 @@ class CheckProductionReadiness extends Command
             $this->check('billing.stripe_secret', $summary['stripeSecretConfigured'] === true, 'STRIPE_SECRET must be configured in the environment.'),
             $this->check('billing.webhook_secret', $summary['stripeWebhookSecretConfigured'] === true, 'STRIPE_WEBHOOK_SECRET must be configured in the environment.'),
             $this->check('billing.price_ids', $summary['stripePriceIdsConfigured'] === true, 'All Stripe plan price IDs must be configured.'),
-            $this->check('billing.test_switcher', $summary['billingTestPlanSwitcherEnabled'] === false, 'BILLING_TEST_PLAN_SWITCHER must be false.'),
             $this->check('youtube.binary', $summary['youtubeAudioBinaryConfigured'] === true, 'YOUTUBE_AUDIO_BINARY must be configured.'),
             $this->check('audio_preparation.ffmpeg_binary', $summary['ffmpegBinaryConfigured'] === true, 'FFMPEG_BINARY must be configured.'),
             // Voice isolation is optional (off by default until A/B evidence
