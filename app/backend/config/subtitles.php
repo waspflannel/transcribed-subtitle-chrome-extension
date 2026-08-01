@@ -15,16 +15,6 @@ return [
         'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'redis'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
-        'auto_start' => [
-            'enabled' => (bool) env('SUBTITLE_AUTO_START_WORKERS', env('APP_ENV', 'production') !== 'production'),
-            'enabled_in_tests' => (bool) env('SUBTITLE_AUTO_START_WORKERS_IN_TESTS', false),
-            'worker_count' => (int) env('SUBTITLE_AUTO_WORKER_COUNT', 0),
-            'max_time_seconds' => (int) env('SUBTITLE_AUTO_WORKER_MAX_TIME_SECONDS', 3600),
-            'memory_mb' => (int) env('SUBTITLE_AUTO_WORKER_MEMORY_MB', 256),
-            'sleep_seconds' => (int) env('SUBTITLE_AUTO_WORKER_SLEEP_SECONDS', 1),
-            'tries' => (int) env('SUBTITLE_AUTO_WORKER_TRIES', 0),
-            'lock_seconds' => (int) env('SUBTITLE_AUTO_WORKER_LOCK_SECONDS', 10),
-        ],
         'worker_groups' => [
             'generation-priority' => [
                 'queue_family' => 'generation',

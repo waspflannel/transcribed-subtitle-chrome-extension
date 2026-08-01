@@ -99,7 +99,6 @@ class CheckProductionReadiness extends Command
             'queueRetryAfterSeconds' => $retryAfterSeconds,
             'workerTimeoutSeconds' => $workerTimeoutSeconds,
             'workerRetryAfterExceedsTimeout' => $retryAfterSeconds > $workerTimeoutSeconds,
-            'subtitleAutoStartWorkers' => (bool) config('subtitles.queue.auto_start.enabled'),
             'configuredWorkerCount' => SubtitleTier::workerCount(),
             'workerGroups' => collect(SubtitleQueue::workerGroups())
                 ->map(fn (array $group): array => [
@@ -159,7 +158,6 @@ class CheckProductionReadiness extends Command
             $this->check('queue.redis', $summary['queueDriver'] === 'redis', "Subtitle queue driver is {$summary['queueDriver']}; expected redis."),
             $this->check('queue.connectivity', $summary['queueRedisReachable'] === true, 'Subtitle queue Redis connectivity probe failed.'),
             $this->check('queue.retry_after', $summary['workerRetryAfterExceedsTimeout'] === true, 'Queue retry_after must be greater than the subtitle worker timeout.'),
-            $this->check('workers.supervised', $summary['subtitleAutoStartWorkers'] === false, 'SUBTITLE_AUTO_START_WORKERS must be false so production uses supervised workers.'),
             $this->check('workers.configured', (int) $summary['configuredWorkerCount'] > 0, 'At least one subtitle worker must be configured.'),
             $this->check('concurrency.redis', $summary['concurrencyCacheDriver'] === 'redis', "Subtitle concurrency cache driver is {$summary['concurrencyCacheDriver']}; expected redis."),
             $this->check('concurrency.connectivity', $summary['concurrencyRedisReachable'] === true, 'Subtitle concurrency Redis connectivity probe failed.'),

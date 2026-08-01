@@ -65,7 +65,7 @@ The first production posture should be a managed Laravel VPS-style setup with ma
 ## Refined Implementation Slices
 
 1. Production safety checks:
-   - Add a backend production readiness command that verifies app debug posture, HTTPS URL, key presence, Postgres/Redis queue profile, worker timeout/retry-after relationship, disabled production auto-start workers, billing test switcher posture, provider/Stripe config presence, and logging posture without printing secret values.
+   - Add a backend production readiness command that verifies app debug posture, HTTPS URL, key presence, Postgres/Redis queue profile, worker timeout/retry-after relationship, billing test switcher posture, provider/Stripe config presence, and logging posture without printing secret values.
    - Defer live host connectivity and secret manager verification until the staging environment exists.
    - Validation: PHPUnit command tests and harness check.
 2. Extension production packaging:
@@ -155,4 +155,3 @@ The first production posture should be a managed Laravel VPS-style setup with ma
 - Provider-backed staging runs need real credentials and can cost money.
 - Extension production host permissions must be exact enough for Chrome review but broad enough for the production API.
 - Backups without restore proof are not sufficient for paid beta.
-

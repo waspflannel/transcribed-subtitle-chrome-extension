@@ -148,7 +148,6 @@ class ProductionReadinessTest extends TestCase
             'queue.connections.redis.retry_after' => 1260,
             'subtitles.queue.connection' => 'redis',
             'subtitles.queue.worker_timeout_seconds' => 1200,
-            'subtitles.queue.auto_start.enabled' => false,
             'subtitles.tiers.concurrency_cache_store' => 'subtitle_concurrency',
             'cache.stores.subtitle_concurrency.driver' => 'redis',
             'cache.stores.subtitle_concurrency.connection' => 'cache',
