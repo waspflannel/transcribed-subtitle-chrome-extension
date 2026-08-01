@@ -1,7 +1,5 @@
 import { browser, type Browser } from 'wxt/browser';
 
-import { activeTabQuery } from '../utils/active-tab';
-
 import {
   clearExtensionSession,
   getStoredExtensionSession,
@@ -833,7 +831,9 @@ async function publishSubtitleState(tabId: number, subtitleState: SubtitleState)
 }
 
 async function getActiveTab(windowId?: number): Promise<Browser.tabs.Tab | undefined> {
-  const [activeTab] = await browser.tabs.query(activeTabQuery(windowId));
+  const [activeTab] = await browser.tabs.query(
+    typeof windowId === 'number' ? { active: true, windowId } : { active: true, currentWindow: true },
+  );
 
   return activeTab;
 }
