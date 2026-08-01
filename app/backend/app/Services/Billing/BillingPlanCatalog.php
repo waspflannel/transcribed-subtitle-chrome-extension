@@ -154,20 +154,6 @@ final class BillingPlanCatalog
     /**
      * @param  array<string, mixed>  $plan
      */
-    public function hasFeature(array $plan, string $feature): bool
-    {
-        $features = $plan['features'] ?? null;
-
-        if (! is_array($features) || ! array_key_exists($feature, $features)) {
-            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define feature [{$feature}].");
-        }
-
-        return (bool) $features[$feature];
-    }
-
-    /**
-     * @param  array<string, mixed>  $plan
-     */
     private function planCode(array $plan): string
     {
         $code = $plan['code'] ?? null;
