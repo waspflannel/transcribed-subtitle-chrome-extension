@@ -25,7 +25,6 @@ use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitleQueue;
-use App\Services\Subtitles\SubtitleTier;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
@@ -166,47 +165,11 @@ class SubtitleJobApiTest extends TestCase
         });
     }
 
-    public function test_ultimate_generation_tier_uses_highest_priority_queue_and_concurrency_config(): void
-    {
-        config([
-            'queue.default' => 'database',
-            'subtitles.queue.connection' => 'database',
-            'subtitles.tiers.default' => 'ultimate',
-            'subtitles.tiers.plans.ultimate.generation_queue' => 'subtitle-generation-ultimate',
-            'subtitles.tiers.plans.ultimate.batch_queue' => 'subtitle-batch-ultimate',
-            'subtitles.tiers.plans.ultimate.generation_concurrency' => 5,
-            'subtitles.tiers.plans.ultimate.batch_concurrency' => 20,
-            'billing.plans.base.generation_tier' => 'ultimate',
-        ]);
-        Queue::fake();
-
-        $response = $this
-            ->withExtensionAuth($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ultimate001']))
-            ->assertAccepted();
-
-        $this->assertSame(
-            'subtitle-generation-ultimate,subtitle-generation-pro,subtitle-generation-plus,subtitle-generation-base,subtitle-batch-ultimate,subtitle-batch-pro,subtitle-batch-plus,subtitle-batch-base',
-            SubtitleQueue::workerQueueList(),
-        );
-        $this->assertSame(5, SubtitleTier::generationConcurrency('ultimate'));
-        $this->assertSame(20, SubtitleTier::batchConcurrency('ultimate'));
-        $this->assertDatabaseHas('subtitle_jobs', [
-            'public_id' => $response->json('jobId'),
-            'generation_tier' => 'ultimate',
-        ]);
-        Queue::assertPushed(AcquireSubtitleAudio::class, function (AcquireSubtitleAudio $job): bool {
-            return $job->connection === 'database'
-                && $job->queue === 'subtitle-generation-ultimate';
-        });
-    }
-
     public function test_queue_name_uses_job_generation_tier_not_current_default(): void
     {
         config([
-            'subtitles.tiers.default' => 'ultimate',
+            'subtitles.tiers.default' => 'base',
             'subtitles.tiers.plans.pro.generation_queue' => 'subtitle-generation-pro',
-            'subtitles.tiers.plans.ultimate.generation_queue' => 'subtitle-generation-ultimate',
         ]);
 
         $job = SubtitleJob::factory()->make(['generation_tier' => 'pro']);

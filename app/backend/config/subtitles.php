@@ -18,7 +18,7 @@ return [
         'worker_groups' => [
             'generation-priority' => [
                 'queue_family' => 'generation',
-                'tiers' => ['ultimate', 'pro', 'plus', 'base'],
+                'tiers' => ['pro', 'plus', 'base'],
                 // Generation work runs as chained stage jobs (acquire ->
                 // optimize -> per-chunk transcribe -> merge), so a worker is
                 // held only for one stage at a time and tier priority applies
@@ -30,7 +30,7 @@ return [
             ],
             'batch-priority' => [
                 'queue_family' => 'batch',
-                'tiers' => ['ultimate', 'pro', 'plus', 'base'],
+                'tiers' => ['pro', 'plus', 'base'],
                 'worker_count' => (int) env('SUBTITLE_BATCH_PRIORITY_WORKERS', 20),
             ],
             'base-generation-guarantee' => [
@@ -64,18 +64,6 @@ return [
         // (running + queued). Submissions between the two caps are accepted
         // as queued jobs and promoted FIFO as running slots free up.
         'plans' => [
-            'ultimate' => [
-                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_ULTIMATE', 'subtitle-generation-ultimate'),
-                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_ULTIMATE', 'subtitle-batch-ultimate'),
-                'generation_concurrency' => (int) env('SUBTITLE_ULTIMATE_GENERATION_CONCURRENCY', 5),
-                'batch_concurrency' => (int) env('SUBTITLE_ULTIMATE_BATCH_CONCURRENCY', 20),
-                'submission_limit' => (int) env('SUBTITLE_ULTIMATE_SUBMISSION_LIMIT', 15),
-                'budgets_seconds' => [
-                    'short' => (int) env('SUBTITLE_ULTIMATE_SHORT_BUDGET_SECONDS', 90),
-                    'medium' => (int) env('SUBTITLE_ULTIMATE_MEDIUM_BUDGET_SECONDS', 240),
-                    'near_limit' => (int) env('SUBTITLE_ULTIMATE_NEAR_LIMIT_BUDGET_SECONDS', 720),
-                ],
-            ],
             'base' => [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_BASE', 'subtitle-generation-base'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_BASE', 'subtitle-batch-base'),

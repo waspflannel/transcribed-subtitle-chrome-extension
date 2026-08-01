@@ -4,11 +4,9 @@ namespace App\Services\Subtitles;
 
 final class SubtitleTier
 {
-    public const ULTIMATE = 'ultimate';
-
     public const BASE = 'base';
 
-    private const PRIORITY_TIERS = [self::ULTIMATE, 'pro', 'plus', self::BASE];
+    private const PRIORITY_TIERS = ['pro', 'plus', self::BASE];
 
     public static function default(): string
     {
