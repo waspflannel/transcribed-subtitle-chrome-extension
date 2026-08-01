@@ -11,7 +11,6 @@ import {
 } from '../../utils/languages';
 import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
-import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/panel-progress';
 import { anonymousAccountState, formatResetDate, stageTimeline } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
@@ -567,7 +566,7 @@ function showPanelState(state: PanelState): void {
 
   if (!hasAppliedDefaultView) {
     hasAppliedDefaultView = true;
-    showTab(tabButtons, panels, selectDefaultView(state));
+    showTab(tabButtons, panels, 'watch');
   }
 
   if (previousStateType !== state.subtitleState.type) {
