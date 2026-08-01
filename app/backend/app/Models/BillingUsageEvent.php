@@ -32,16 +32,6 @@ class BillingUsageEvent extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function subtitleJob(): BelongsTo
-    {
-        return $this->belongsTo(SubtitleJob::class);
-    }
-
-    public function subtitleTrack(): BelongsTo
-    {
-        return $this->belongsTo(SubtitleTrack::class);
-    }
-
     protected function casts(): array
     {
         return [
