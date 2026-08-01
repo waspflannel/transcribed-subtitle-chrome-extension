@@ -16,10 +16,6 @@ return new class extends Migration
             $table->dropColumn('source_dialect');
         });
 
-        Schema::table('users', function (Blueprint $table): void {
-            $table->dropColumn(['billing_trial_ends_at', 'billing_ends_at']);
-        });
-
         Schema::table('billing_usage_events', function (Blueprint $table): void {
             $table->dropColumn('minutes');
         });
@@ -35,13 +31,8 @@ return new class extends Migration
             $table->string('source_dialect', 64)->default('unknown');
         });
 
-        Schema::table('users', function (Blueprint $table): void {
-            $table->timestamp('billing_trial_ends_at')->nullable();
-            $table->timestamp('billing_ends_at')->nullable();
-        });
-
         Schema::table('billing_usage_events', function (Blueprint $table): void {
-            $table->unsignedInteger('minutes');
+            $table->unsignedInteger('minutes')->default(0);
         });
     }
 };

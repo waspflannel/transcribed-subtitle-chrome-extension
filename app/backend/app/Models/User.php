@@ -31,6 +31,8 @@ class User extends Authenticatable
         'billing_current_period_start',
         'billing_current_period_end',
         'billing_cancel_at_period_end',
+        'billing_trial_ends_at',
+        'billing_ends_at',
         'billing_subscription_event_at',
         'billing_subscription_event_type',
     ];
@@ -53,7 +55,9 @@ class User extends Authenticatable
             'billing_cancel_at_period_end' => 'boolean',
             'billing_current_period_end' => 'immutable_datetime',
             'billing_current_period_start' => 'immutable_datetime',
+            'billing_ends_at' => 'immutable_datetime',
             'billing_subscription_event_at' => 'immutable_datetime',
+            'billing_trial_ends_at' => 'immutable_datetime',
             'password' => 'hashed',
             'stripe_checkout_expires_at' => 'immutable_datetime',
         ];

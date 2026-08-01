@@ -62,6 +62,8 @@ The product migrations currently define:
   - `billing_current_period_start`
   - `billing_current_period_end`
   - `billing_cancel_at_period_end`
+  - `billing_trial_ends_at`
+  - `billing_ends_at`
   - timestamps
 - `stripe_webhook_events`
   - `stripe_event_id`
@@ -80,7 +82,6 @@ The product migrations currently define:
   - `event_type`
   - `billing_period_start`
   - `billing_period_end`
-  - `minutes`
   - `available_minutes_delta`
   - `reserved_minutes_delta`
   - `used_minutes_delta`

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 class BillingAndUsageTest extends TestCase
@@ -895,6 +896,17 @@ class BillingAndUsageTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'usage000001']))
             ->assertStatus(402)
             ->assertJsonPath('error.code', 'usage_exhausted');
+    }
+
+    public function test_full_word_cards_feature_must_be_explicitly_configured(): void
+    {
+        config(['billing.plans.base.features' => []]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Billing plan [base] must define feature [full_word_cards].');
+
+        $plans = app(BillingPlanCatalog::class);
+        $plans->supportsFullWordCards($plans->requirePlan('base'));
     }
 
     public function test_submission_over_processing_concurrency_is_queued_not_rejected(): void
