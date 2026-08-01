@@ -15,20 +15,10 @@ return [
         'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'redis'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
-        'auto_start' => [
-            'enabled' => (bool) env('SUBTITLE_AUTO_START_WORKERS', env('APP_ENV', 'production') !== 'production'),
-            'enabled_in_tests' => (bool) env('SUBTITLE_AUTO_START_WORKERS_IN_TESTS', false),
-            'worker_count' => (int) env('SUBTITLE_AUTO_WORKER_COUNT', 0),
-            'max_time_seconds' => (int) env('SUBTITLE_AUTO_WORKER_MAX_TIME_SECONDS', 3600),
-            'memory_mb' => (int) env('SUBTITLE_AUTO_WORKER_MEMORY_MB', 256),
-            'sleep_seconds' => (int) env('SUBTITLE_AUTO_WORKER_SLEEP_SECONDS', 1),
-            'tries' => (int) env('SUBTITLE_AUTO_WORKER_TRIES', 0),
-            'lock_seconds' => (int) env('SUBTITLE_AUTO_WORKER_LOCK_SECONDS', 10),
-        ],
         'worker_groups' => [
             'generation-priority' => [
                 'queue_family' => 'generation',
-                'tiers' => ['ultimate', 'pro', 'plus', 'base'],
+                'tiers' => ['pro', 'plus', 'base'],
                 // Generation work runs as chained stage jobs (acquire ->
                 // optimize -> per-chunk transcribe -> merge), so a worker is
                 // held only for one stage at a time and tier priority applies
@@ -40,7 +30,7 @@ return [
             ],
             'batch-priority' => [
                 'queue_family' => 'batch',
-                'tiers' => ['ultimate', 'pro', 'plus', 'base'],
+                'tiers' => ['pro', 'plus', 'base'],
                 'worker_count' => (int) env('SUBTITLE_BATCH_PRIORITY_WORKERS', 20),
             ],
             'base-generation-guarantee' => [
@@ -74,18 +64,6 @@ return [
         // (running + queued). Submissions between the two caps are accepted
         // as queued jobs and promoted FIFO as running slots free up.
         'plans' => [
-            'ultimate' => [
-                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_ULTIMATE', 'subtitle-generation-ultimate'),
-                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_ULTIMATE', 'subtitle-batch-ultimate'),
-                'generation_concurrency' => (int) env('SUBTITLE_ULTIMATE_GENERATION_CONCURRENCY', 5),
-                'batch_concurrency' => (int) env('SUBTITLE_ULTIMATE_BATCH_CONCURRENCY', 20),
-                'submission_limit' => (int) env('SUBTITLE_ULTIMATE_SUBMISSION_LIMIT', 15),
-                'budgets_seconds' => [
-                    'short' => (int) env('SUBTITLE_ULTIMATE_SHORT_BUDGET_SECONDS', 90),
-                    'medium' => (int) env('SUBTITLE_ULTIMATE_MEDIUM_BUDGET_SECONDS', 240),
-                    'near_limit' => (int) env('SUBTITLE_ULTIMATE_NEAR_LIMIT_BUDGET_SECONDS', 720),
-                ],
-            ],
             'base' => [
                 'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_BASE', 'subtitle-generation-base'),
                 'batch_queue' => env('SUBTITLE_BATCH_QUEUE_BASE', 'subtitle-batch-base'),
@@ -177,14 +155,6 @@ return [
     'audio_preparation' => [
         'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
         'ffmpeg_timeout_seconds' => (int) env('SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS', 600),
-        'voice_isolation' => [
-            // Off by default: isolation adds a billed provider round-trip and
-            // two ffmpeg passes per job with no captured evidence of WER gains
-            // yet (TD-014). Enable once the A/B comparison proves its cost.
-            'enabled' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_ENABLED', false),
-            'timeout_seconds' => (int) env('ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS', 600),
-            'fail_open' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN', true),
-        ],
     ],
 
     // Transcripts are cached per video and shared across users: they derive
@@ -215,10 +185,6 @@ return [
 
     'enrichment' => [
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
-        // Legacy fixed cue-per-batch size. Only used as a fallback for cue
-        // artifacts written before character-based batching (which carry no
-        // batch plan) and when a caller passes an explicit batch size.
-        'cue_batch_size' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE', 10),
         // Character-based batch sizing packs cues greedily up to this many
         // cumulative sourceText characters, capped at cue_batch_max_cues.
         // Fewer, size-uniform batches cut per-call overhead and queue

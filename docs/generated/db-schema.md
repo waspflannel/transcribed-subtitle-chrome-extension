@@ -45,7 +45,6 @@ The product migrations currently define:
   - `error_code`
   - `error_message`
   - `install_id`
-  - `request_ip`
   - `expires_at`
   - timestamps
   - unique compatibility key: `user_id`, `youtube_video_id`, `source_language`, `target_language`, `processing_version`
@@ -83,7 +82,6 @@ The product migrations currently define:
   - `event_type`
   - `billing_period_start`
   - `billing_period_end`
-  - `minutes`
   - `available_minutes_delta`
   - `reserved_minutes_delta`
   - `used_minutes_delta`
@@ -127,7 +125,6 @@ The product migrations currently define:
   - `source_language`
   - `detected_source_language`
   - `target_language`
-  - `source_dialect`
   - `processing_version`
   - `generated_at`
   - `expires_at`

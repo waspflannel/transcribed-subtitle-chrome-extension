@@ -11,13 +11,10 @@ import {
 } from '../../utils/languages';
 import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
-import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/panel-progress';
 import { anonymousAccountState, formatResetDate, stageTimeline } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
-import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
-import { PanelPortConnector } from '../../utils/panel-port-registry';
 import { accountFeatureListHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -211,8 +208,17 @@ document.addEventListener('visibilitychange', () => {
 
 void resolvePanelWindowId().then(attachTabListeners);
 
-const panelPortConnector = new PanelPortConnector((name) => browser.runtime.connect({ name }));
-panelPortConnector.connect();
+function connectPanel(): void {
+  try {
+    browser.runtime.connect({ name: 'panel' }).onDisconnect.addListener(() => {
+      setTimeout(connectPanel, 1000);
+    });
+  } catch {
+    setTimeout(connectPanel, 1000);
+  }
+}
+
+connectPanel();
 
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;
@@ -226,13 +232,15 @@ browser.runtime.onMessage.addListener((message) => {
 
 let backendRefreshInFlight = false;
 let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
+const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const IDLE_POLL_INTERVAL_MS = 30_000;
 
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);
   const hasInFlightJob = latestState?.subtitleState.type === 'loading';
-  const interval = pollIntervalMs(hasInFlightJob);
+  const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
   backendPollTimer = setTimeout(() => {
-    if (shouldPollNow({ visibilityState: document.visibilityState })) {
+    if (document.visibilityState === 'visible') {
       void refreshBackendState();
     }
     scheduleNextBackendPoll();
@@ -559,7 +567,7 @@ function showPanelState(state: PanelState): void {
 
   if (!hasAppliedDefaultView) {
     hasAppliedDefaultView = true;
-    showTab(tabButtons, panels, selectDefaultView(state));
+    showTab(tabButtons, panels, 'watch');
   }
 
   if (previousStateType !== state.subtitleState.type) {

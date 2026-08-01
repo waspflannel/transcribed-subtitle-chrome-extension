@@ -1,17 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { activeTabQuery } from '../utils/active-tab';
 import { isRuntimeMessage } from '../utils/messages';
-
-describe('activeTabQuery', () => {
-  it('scopes to a specific window when a windowId is provided', () => {
-    expect(activeTabQuery(42)).toEqual({ active: true, windowId: 42 });
-  });
-
-  it('falls back to currentWindow when no windowId is given', () => {
-    expect(activeTabQuery(undefined)).toEqual({ active: true, currentWindow: true });
-  });
-});
 
 describe('windowId validation on panel requests', () => {
   it('accepts panel.getState with a numeric windowId', () => {

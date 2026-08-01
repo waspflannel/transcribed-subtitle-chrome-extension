@@ -327,9 +327,6 @@ describe('SubtitleApiClient', () => {
       publicSubtitleErrorMessage(new SubtitleApiError('rate_limited', 'Too many requests.', 429)),
     ).toBe('Subtitle generation is temporarily rate limited. Wait a minute and try again.');
     expect(
-      publicSubtitleErrorMessage(new SubtitleApiError('queue_unavailable', 'Queue busy.', 503)),
-    ).toBe('The subtitle queue is temporarily unavailable. Wait a moment, then try again.');
-    expect(
       publicSubtitleErrorMessage(new SubtitleApiError('audio_unavailable', 'Private video.', 422)),
     ).toBe('This video is not available for subtitle generation. Use a public non-live YouTube video.');
     expect(

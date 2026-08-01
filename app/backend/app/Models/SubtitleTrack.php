@@ -19,7 +19,6 @@ class SubtitleTrack extends Model
         'source_language',
         'detected_source_language',
         'target_language',
-        'source_dialect',
         'processing_version',
         'generated_at',
         'expires_at',

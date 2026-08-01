@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\SubtitleJob;
-use App\Models\SubtitleJobArtifact;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -72,32 +71,6 @@ class SubtitleJobArtifactBatchPlanTest extends TestCase
         $this->assertSame(['cue-0'], $this->batchIds($store, $job, 0));
         $this->assertSame(['cue-1'], $this->batchIds($store, $job, 1));
         $this->assertSame(['cue-2'], $this->batchIds($store, $job, 2));
-    }
-
-    public function test_legacy_artifacts_without_a_batch_plan_fall_back_to_fixed_size_chunks(): void
-    {
-        config(['subtitles.enrichment.cue_batch_size' => 2]);
-
-        $store = app(SubtitleJobArtifactStore::class);
-        $job = $this->runningJob();
-
-        // Simulate an artifact written before character-based batching: it
-        // carries a batchSize but no batchPlan.
-        SubtitleJobArtifact::create([
-            'subtitle_job_id' => $job->id,
-            'artifact_type' => SubtitleJobArtifactStore::DRAFT_CUES,
-            'batch_index' => 0,
-            'run_id' => $job->run_id,
-            'payload' => [
-                'cues' => $this->cues(5, 10),
-                'sourceDialect' => 'unknown',
-                'batchSize' => 2,
-            ],
-        ]);
-
-        $this->assertSame(3, $store->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES));
-        $this->assertSame(['cue-0', 'cue-1'], $this->batchIds($store, $job, 0));
-        $this->assertSame(['cue-4'], $this->batchIds($store, $job, 2));
     }
 
     private function runningJob(): SubtitleJob

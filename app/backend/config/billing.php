@@ -19,8 +19,6 @@ return [
             'generation_tier' => 'base',
             'speed_label' => 'Standard queue',
             'features' => [
-                'cue_translation' => true,
-                'romanization' => true,
                 'full_word_cards' => false,
             ],
         ],
@@ -32,8 +30,6 @@ return [
             'generation_tier' => 'plus',
             'speed_label' => 'Priority queue',
             'features' => [
-                'cue_translation' => true,
-                'romanization' => true,
                 'full_word_cards' => true,
             ],
         ],
@@ -45,8 +41,6 @@ return [
             'generation_tier' => 'pro',
             'speed_label' => 'Fast queue',
             'features' => [
-                'cue_translation' => true,
-                'romanization' => true,
                 'full_word_cards' => true,
             ],
         ],

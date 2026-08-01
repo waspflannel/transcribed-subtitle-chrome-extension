@@ -7,7 +7,7 @@ Last updated: 2026-07-16
 
 ## Goal
 
-Prepare the existing product for a controlled paid-beta deployment without adding a new product feature. Fix the concrete dependency, billing, lifecycle, security, release-content, and UI defects found in the 2026-07-14 release review, including the stale processing/cache versions left behind by already-landed prompt changes. This plan is a cleanup pass, not a quality-research program: the CJK tokenization experiments, Audio Isolation A/B, and related evidence gathering stay deferred in the Track B plan and the tech-debt tracker.
+Prepare the existing product for a controlled paid-beta deployment without adding a new product feature. Fix the concrete dependency, billing, lifecycle, security, release-content, and UI defects found in the 2026-07-14 release review, including the stale processing/cache versions left behind by already-landed prompt changes. This plan is a cleanup pass, not a quality-research program: the CJK tokenization experiments and related evidence gathering stay deferred in the Track B plan and the tech-debt tracker.
 
 This plan produces a review-ready branch. It does not authorize merging, deploying, changing live Stripe data, contacting users, publishing the extension, or turning on production traffic. External staging and production operations remain gated on user approval after branch review.
 
@@ -16,7 +16,7 @@ This plan produces a review-ready branch. It does not authorize merging, deployi
 - Work only on the branch provided by the user. Do not create, switch, merge, or push branches unless the user asks.
 - Read `AGENTS.md` and the smallest relevant linked docs before editing. For Laravel work, follow `docs/references/boost-skill-routing.md`.
 - Treat this file as the coordinating plan. Keep implementation decisions, progress, validation, and residual risk here while the work is active.
-- The existing CJK plan (Track B) remains the home for tokenization-quality experiments, and that work is deferred — this plan does not run fixture reviews, prompt/model A/Bs, or Audio Isolation experiments. Only the processing/cache-version defect those landed changes left behind is fixed here.
+- The existing CJK plan (Track B) remains the home for tokenization-quality experiments, and that work is deferred — this plan does not run fixture reviews or prompt/model A/Bs. Only the processing/cache-version defect those landed changes left behind is fixed here.
 - Preserve pre-existing worktree changes. At plan creation, these files were already modified and are user-owned:
   - `docs/exec-plans/active/2026-06-18-track-b-cjk-tokenization-quality.md`
   - `docs/exec-plans/active/saas-roadmap/06-production-hosting-and-ops.md`
@@ -44,7 +44,7 @@ This plan produces a review-ready branch. It does not authorize merging, deployi
   - Sentence mining, saved vocabulary, Anki export, speaking/shadowing, AI coaching, teams/schools, subtitle editing, or other new learning features.
   - New transcription providers, payment providers, platforms, or a second frontend.
   - Marketing/growth Phase 08 and public-launch Phase 09 implementation.
-  - Subtitle-quality evidence gathering: CJK/Thai gold-fixture expansion and native review, prompt/model A/B runs, token-cost capture, quality thresholds, Audio Isolation A/B, and the public-video quality matrix. This work stays deferred in the Track B plan and TD-007–TD-010/TD-014; do not run provider-backed experiments as part of this plan.
+  - Subtitle-quality evidence gathering: CJK/Thai gold-fixture expansion and native review, prompt/model A/B runs, token-cost capture, quality thresholds, and the public-video quality matrix. This work stays deferred in the Track B plan and TD-007–TD-010; do not run provider-backed experiments as part of this plan.
   - A deterministic CJK segmenter, morphology service, or NLP sidecar.
   - A broad split of `LaravelAiTranslationAnalysisProvider` or large entrypoint files unless a narrow extraction is required to make an accepted fix testable.
   - Live production deployment, Chrome Web Store submission, live customer communication, or irreversible external changes.
@@ -75,7 +75,7 @@ A second code review on 2026-07-15 reproduced every finding above statically. Co
 - E: `WebSubtitleJobController::destroy()`/`clearAll()` release the reservation and delete the row but never delete the run's audio workspace. `SubtitleGenerationPipeline::transcribeAudioChunk()` persists the chunk artifact without rechecking job existence/run/status after the provider call. `ElevenLabsScribeTranscriptionService::transcribeChunk()` stores the raw provider payload validated only as "is an array".
 - F: `ops:production-check` reads config only — no live Postgres/Redis probe — and does not check the support email, extension URL, release version, host permissions, or mail. No security-header middleware exists anywhere in `app/`. Both layouts load Google Fonts from external origins and `site.blade.php` has the inline `has-js` script.
 - G: extension version is `0.0.0`; `SUPPORT_EMAIL` defaults to `support@example.test`; `/terms` self-identifies as review copy; Save cue controls exist in four files; the signed-out Account tab labels cue translation, romanization, and Full word cards as "Available".
-- H/I: `SubtitleJobService::VERSION_PREFIX` (`scribe-v2-tokenizer-v8-async-`) last changed in `2f75b0e`, before prompt changes `3a8f5b3` (merged tokenize+translate) and `4050b54` (grapheme-cluster fallback). CJK gold fixtures are a 12-cue-per-language starter set with no token-usage capture, matching the Track B plan's own residual-risk notes. `docs/RELIABILITY.md` says Audio Isolation is enabled by default while `config/subtitles.php` defaults it off. `00-phase-index.md` says `Status: completed` while sitting in `active/`, and its `saas-roadmap/04*` links point at plans that now live in `completed/`.
+- H/I: `SubtitleJobService::VERSION_PREFIX` (`scribe-v2-tokenizer-v8-async-`) last changed in `2f75b0e`, before prompt changes `3a8f5b3` (merged tokenize+translate) and `4050b54` (grapheme-cluster fallback). CJK gold fixtures are a 12-cue-per-language starter set with no token-usage capture, matching the Track B plan's own residual-risk notes. `00-phase-index.md` says `Status: completed` while sitting in `active/`, and its `saas-roadmap/04*` links point at plans that now live in `completed/`.
 
 The same review added these findings that the plan had missed:
 
@@ -188,11 +188,10 @@ Primary finding locations:
 
 - [x] Bump the processing/cache version for the already-landed material tokenization prompt change so pre-change tracks cannot be reused as if they contain current segmentation behavior.
 - [x] Add a test or single documented mechanism that makes future material transcription, normalization, tokenization prompt, schema, or model changes consider processing-version invalidation. It must cover all three version surfaces, which drift independently today: `SubtitleJobService::VERSION_PREFIX` (job/track reuse), the `VideoTranscriptCache` key (currently keyed by transcription model only, so a normalizer change silently reuses stale cached transcripts), and the learning-token enrichment cache-key version string in `LearningTokenEnrichmentService`.
-- [x] Leave `TD-007`, `TD-008`, `TD-009`, `TD-010`, and `TD-014` open. The fixture expansion, native review, prompt/model A/B, token-cost capture, Audio Isolation A/B, and public-video quality matrix are deferred with the Track B plan; do not claim evidence that was not produced.
+- [x] Leave `TD-007`, `TD-008`, `TD-009`, and `TD-010` open. The fixture expansion, native review, prompt/model A/B, token-cost capture, and public-video quality matrix are deferred with the Track B plan; do not claim evidence that was not produced.
 
 ### I. Documentation and review readiness
 
-- [x] Align `docs/RELIABILITY.md`, the production runbook, `.env.example`, `config/subtitles.php`, readiness checks, tests, and `docs/QUALITY_SCORE.md` on the actual Audio Isolation default (disabled). The rollout decision itself stays open in `TD-014`; the cleanup here is only that no doc claims a default or evidence that does not exist.
 - [x] Update the project subtitle-pipeline skill so it accurately describes OpenAI’s current tokenization, translation, romanization, full-card, and on-demand roles.
 - [x] Move `docs/exec-plans/active/00-phase-index.md` to completed or replace it with a current index, and repair stale SaaS roadmap links for completed billing and tiered-worker plans.
 - [x] Keep learning plans 02–04, SaaS marketing Phase 08, public-launch Phase 09, and the Track B tokenization-quality work deferred; do not mark them complete as part of this branch.
@@ -379,7 +378,7 @@ These items require operator values, credentials, a product decision, or an irre
 | 2026-07-15 | Finish the evidence-driven part of Track B before adding deterministic segmentation. | The existing harness can distinguish prompt/model/transcription problems at lower complexity and cost. |
 | 2026-07-15 | Treat the branch as review-ready output, not deployment authorization. | The user requested implementation on a branch followed by review before production. |
 | 2026-07-15 | Allow cached on-demand learning metadata for an eligible owned track but require entitlement before any new provider call, unless the user chooses otherwise. | This preserves already-paid output while preventing canceled/past-due accounts from creating new provider cost. |
-| 2026-07-15 | User decision: drop all subtitle-quality evidence work from this plan — fixture expansion, native review, prompt/model A/B, token-cost capture, quality thresholds, Audio Isolation A/B, and the public-video quality matrix. This supersedes the earlier "finish the evidence-driven part of Track B" decision for this branch. | The user scoped this plan to cleaning up leftover defects and release surface before production. Track B and TD-007–TD-010/TD-014 remain the deferred home for the evidence work. Only the processing/cache-version defect stays in scope because stale cache reuse is a live defect, not research. |
+| 2026-07-15 | User decision: drop all subtitle-quality evidence work from this plan — fixture expansion, native review, prompt/model A/B, token-cost capture, quality thresholds, and the public-video quality matrix. This supersedes the earlier "finish the evidence-driven part of Track B" decision for this branch. | The user scoped this plan to cleaning up leftover defects and release surface before production. Track B and TD-007–TD-010 remain the deferred home for the evidence work. Only the processing/cache-version defect stays in scope because stale cache reuse is a live defect, not research. |
 | 2026-07-15 | First pass runs on `codex/pre-production-release-hardening`; all operator credentials, legal copy, release identifiers, and external proof are recorded under Defered instead of being invented. | The user requested a reviewable branch and a separate pass for supplied inputs. |
 | 2026-07-15 | Cached learning-token metadata remains available to the owning user, but an un-cached enrichment must have an active or trialing subscription before its provider call. | It preserves already-paid track data while preventing inactive accounts from creating a new provider charge. |
 | 2026-07-15 | Checkout defaults to the conservative status model: `active`, `trialing`, `past_due`, `unpaid`, and `incomplete` subscriptions use the billing portal; only `canceled` and `incomplete_expired` allow a new checkout. | This avoids duplicate subscriptions and does not discard an existing payment-recovery path. The user may revise this policy during the second pass. |
@@ -418,4 +417,4 @@ These items require operator values, credentials, a product decision, or an irre
 - Simplicity/readability review: Reviewed the final diff for narrow scope, deterministic state transitions, no user-owned file overwrite, no artifacts, and no sensitive values. The active plan remains active because external gates are intentionally open.
 - External production gates still open: All unchecked items under `Defered`: support address, approved legal copy, production domain and mail/provider values, extension version and Store URL, Stripe test-mode proof, production secret rotation, deletion posture, and proxy/TLS contract.
 - Residual risk: The extension development toolchain has the documented WXT/web-ext advisory chain; browser/Stripe/production proof has not been fabricated.
-- Follow-up debt: TD-002 and TD-014 remain open, together with the existing Track B evidence work and user-gated production-ops plan.
+- Follow-up debt: TD-002 remains open, together with the existing Track B evidence work and user-gated production-ops plan.

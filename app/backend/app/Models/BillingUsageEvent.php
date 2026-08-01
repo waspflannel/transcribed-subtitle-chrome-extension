@@ -16,7 +16,6 @@ class BillingUsageEvent extends Model
         'event_type',
         'billing_period_start',
         'billing_period_end',
-        'minutes',
         'available_minutes_delta',
         'reserved_minutes_delta',
         'used_minutes_delta',
@@ -32,16 +31,6 @@ class BillingUsageEvent extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function subtitleJob(): BelongsTo
-    {
-        return $this->belongsTo(SubtitleJob::class);
-    }
-
-    public function subtitleTrack(): BelongsTo
-    {
-        return $this->belongsTo(SubtitleTrack::class);
-    }
-
     protected function casts(): array
     {
         return [
@@ -49,7 +38,6 @@ class BillingUsageEvent extends Model
             'billing_period_end' => 'immutable_datetime',
             'billing_period_start' => 'immutable_datetime',
             'metadata' => 'array',
-            'minutes' => 'integer',
             'provider_cost_microusd_delta' => 'integer',
             'reserved_minutes_delta' => 'integer',
             'used_minutes_delta' => 'integer',

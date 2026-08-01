@@ -25,7 +25,6 @@ use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitleQueue;
-use App\Services\Subtitles\SubtitleTier;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
@@ -36,14 +35,11 @@ use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Process\FakeProcessResult;
-use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -169,47 +165,11 @@ class SubtitleJobApiTest extends TestCase
         });
     }
 
-    public function test_ultimate_generation_tier_uses_highest_priority_queue_and_concurrency_config(): void
-    {
-        config([
-            'queue.default' => 'database',
-            'subtitles.queue.connection' => 'database',
-            'subtitles.tiers.default' => 'ultimate',
-            'subtitles.tiers.plans.ultimate.generation_queue' => 'subtitle-generation-ultimate',
-            'subtitles.tiers.plans.ultimate.batch_queue' => 'subtitle-batch-ultimate',
-            'subtitles.tiers.plans.ultimate.generation_concurrency' => 5,
-            'subtitles.tiers.plans.ultimate.batch_concurrency' => 20,
-            'billing.plans.base.generation_tier' => 'ultimate',
-        ]);
-        Queue::fake();
-
-        $response = $this
-            ->withExtensionAuth($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ultimate001']))
-            ->assertAccepted();
-
-        $this->assertSame(
-            'subtitle-generation-ultimate,subtitle-generation-pro,subtitle-generation-plus,subtitle-generation-base,subtitle-batch-ultimate,subtitle-batch-pro,subtitle-batch-plus,subtitle-batch-base',
-            SubtitleQueue::workerQueueList(),
-        );
-        $this->assertSame(5, SubtitleTier::generationConcurrency('ultimate'));
-        $this->assertSame(20, SubtitleTier::batchConcurrency('ultimate'));
-        $this->assertDatabaseHas('subtitle_jobs', [
-            'public_id' => $response->json('jobId'),
-            'generation_tier' => 'ultimate',
-        ]);
-        Queue::assertPushed(AcquireSubtitleAudio::class, function (AcquireSubtitleAudio $job): bool {
-            return $job->connection === 'database'
-                && $job->queue === 'subtitle-generation-ultimate';
-        });
-    }
-
     public function test_queue_name_uses_job_generation_tier_not_current_default(): void
     {
         config([
-            'subtitles.tiers.default' => 'ultimate',
+            'subtitles.tiers.default' => 'base',
             'subtitles.tiers.plans.pro.generation_queue' => 'subtitle-generation-pro',
-            'subtitles.tiers.plans.ultimate.generation_queue' => 'subtitle-generation-ultimate',
         ]);
 
         $job = SubtitleJob::factory()->make(['generation_tier' => 'pro']);
@@ -229,30 +189,6 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertGreaterThan($maxStageTimeout, config('queue.connections.database.retry_after'));
         $this->assertGreaterThan($maxStageTimeout, config('queue.connections.redis.retry_after'));
-    }
-
-    public function test_dev_worker_command_starts_configured_subtitle_workers(): void
-    {
-        config([
-            'subtitles.queue.connection' => 'redis',
-            'subtitles.queue.auto_start.enabled' => true,
-            'subtitles.queue.auto_start.enabled_in_tests' => true,
-            'subtitles.queue.auto_start.worker_count' => 2,
-        ]);
-        Process::preventStrayProcesses();
-        Process::fake(fn (): FakeProcessResult => Process::result("43210\n"));
-
-        $exitCode = Artisan::call('subtitles:dev-workers');
-
-        $this->assertSame(0, $exitCode);
-
-        Process::assertRanTimes(
-            fn (PendingProcess $process): bool => $this->processCommandContains($process, 'queue:work')
-                && $this->processCommandContains($process, '--name=subtitle-auto-worker-priority-override')
-                && $this->processCommandContains($process, '--queue='.SubtitleQueue::workerQueueList())
-                && $this->processCommandContains($process, '--tries=0'),
-            2,
-        );
     }
 
     public function test_stale_preparing_request_reuses_job_and_dispatches_processing_again(): void
@@ -2066,15 +2002,6 @@ class SubtitleJobApiTest extends TestCase
         }
 
         $this->assertSame(0, DB::table('jobs')->count(), Artisan::output());
-    }
-
-    private function processCommandContains(PendingProcess $process, string $needle): bool
-    {
-        $command = is_array($process->command)
-            ? implode(' ', $process->command)
-            : (string) $process->command;
-
-        return str_contains($command, $needle);
     }
 }
 class RecordingYouTubeAudioSource extends YouTubeAudioSource

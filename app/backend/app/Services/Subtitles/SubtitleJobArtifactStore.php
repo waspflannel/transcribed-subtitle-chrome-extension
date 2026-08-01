@@ -157,17 +157,13 @@ class SubtitleJobArtifactStore
         string $artifactType,
         array $cues,
         string $sourceDialect = 'unknown',
-        ?int $batchSize = null,
     ): void {
         $cues = array_values($cues);
 
         $this->put($job, $artifactType, [
             'cues' => $cues,
             'sourceDialect' => $sourceDialect,
-            // Retained for backward-compatible reads of artifacts written
-            // before batchPlan existed; batchPlan is authoritative when set.
-            'batchSize' => $batchSize ?? $this->batchSize(),
-            'batchPlan' => $this->buildBatchPlan($cues, $batchSize),
+            'batchPlan' => $this->buildBatchPlan($cues),
         ]);
     }
 
@@ -199,7 +195,7 @@ class SubtitleJobArtifactStore
         }
 
         $cues = array_values($cues);
-        $bounds = $this->payloadBatchPlan($payload, count($cues))[$batchIndex] ?? null;
+        $bounds = $this->payloadBatchPlan($payload, $artifactType)[$batchIndex] ?? null;
 
         if ($bounds === null) {
             $this->failMissingArtifact($artifactType);
@@ -239,7 +235,7 @@ class SubtitleJobArtifactStore
             $this->failMissingArtifact($artifactType);
         }
 
-        return max(1, count($this->payloadBatchPlan($payload, count($cues))));
+        return max(1, count($this->payloadBatchPlan($payload, $artifactType)));
     }
 
     public function cueCount(SubtitleJob $job, string $artifactType): int
@@ -390,21 +386,17 @@ class SubtitleJobArtifactStore
      * Group cues into batches by cumulative sourceText length rather than a
      * fixed cue count. Fewer, size-uniform batches cut per-call overhead and
      * queue contention at identical token cost, and bound content-length
-     * outliers. An explicit $batchSize forces uniform fixed-size chunks.
+     * outliers.
      *
      * @param  array<int, array<string, mixed>>  $cues
      * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
-    private function buildBatchPlan(array $cues, ?int $batchSize): array
+    private function buildBatchPlan(array $cues): array
     {
         $count = count($cues);
 
         if ($count === 0) {
             return [];
-        }
-
-        if ($batchSize !== null) {
-            return $this->fixedSizeBatchPlan($count, max(1, $batchSize));
         }
 
         $charBudget = $this->batchCharBudget();
@@ -436,24 +428,10 @@ class SubtitleJobArtifactStore
     }
 
     /**
-     * @return array<int, array{0: int, 1: int}>
-     */
-    private function fixedSizeBatchPlan(int $count, int $batchSize): array
-    {
-        $plan = [];
-
-        for ($start = 0; $start < $count; $start += $batchSize) {
-            $plan[] = [$start, min($count, $start + $batchSize) - 1];
-        }
-
-        return $plan;
-    }
-
-    /**
      * @param  array<string, mixed>  $payload
      * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
-    private function payloadBatchPlan(array $payload, int $cueCount): array
+    private function payloadBatchPlan(array $payload, string $artifactType): array
     {
         $plan = $payload['batchPlan'] ?? null;
 
@@ -471,24 +449,7 @@ class SubtitleJobArtifactStore
             }
         }
 
-        // Legacy artifacts written before character-based batching carry only a
-        // fixed batch size.
-        return $this->fixedSizeBatchPlan($cueCount, $this->payloadBatchSize($payload));
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function payloadBatchSize(array $payload): int
-    {
-        $batchSize = $payload['batchSize'] ?? null;
-
-        return is_int($batchSize) && $batchSize > 0 ? $batchSize : $this->batchSize();
-    }
-
-    private function batchSize(): int
-    {
-        return max(1, (int) config('subtitles.enrichment.cue_batch_size', 10));
+        $this->failMissingArtifact($artifactType);
     }
 
     private function batchCharBudget(): int

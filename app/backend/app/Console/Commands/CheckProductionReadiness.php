@@ -99,7 +99,6 @@ class CheckProductionReadiness extends Command
             'queueRetryAfterSeconds' => $retryAfterSeconds,
             'workerTimeoutSeconds' => $workerTimeoutSeconds,
             'workerRetryAfterExceedsTimeout' => $retryAfterSeconds > $workerTimeoutSeconds,
-            'subtitleAutoStartWorkers' => (bool) config('subtitles.queue.auto_start.enabled'),
             'configuredWorkerCount' => SubtitleTier::workerCount(),
             'workerGroups' => collect(SubtitleQueue::workerGroups())
                 ->map(fn (array $group): array => [
@@ -126,8 +125,6 @@ class CheckProductionReadiness extends Command
                 ->every(fn (array $plan): bool => $this->configured($plan['stripe_price_id'] ?? null)),
             'youtubeAudioBinaryConfigured' => $this->configured(config('subtitles.youtube.binary')),
             'ffmpegBinaryConfigured' => $this->configured(config('subtitles.audio_preparation.ffmpeg_binary')),
-            'audioIsolationEnabled' => (bool) config('subtitles.audio_preparation.voice_isolation.enabled'),
-            'audioIsolationFailOpen' => (bool) config('subtitles.audio_preparation.voice_isolation.fail_open'),
             'mailMailer' => (string) config('mail.default'),
             'mailTransport' => $this->mailTransport(),
             'mailTransportConfigured' => $this->mailTransportConfigured(),
@@ -161,7 +158,6 @@ class CheckProductionReadiness extends Command
             $this->check('queue.redis', $summary['queueDriver'] === 'redis', "Subtitle queue driver is {$summary['queueDriver']}; expected redis."),
             $this->check('queue.connectivity', $summary['queueRedisReachable'] === true, 'Subtitle queue Redis connectivity probe failed.'),
             $this->check('queue.retry_after', $summary['workerRetryAfterExceedsTimeout'] === true, 'Queue retry_after must be greater than the subtitle worker timeout.'),
-            $this->check('workers.supervised', $summary['subtitleAutoStartWorkers'] === false, 'SUBTITLE_AUTO_START_WORKERS must be false so production uses supervised workers.'),
             $this->check('workers.configured', (int) $summary['configuredWorkerCount'] > 0, 'At least one subtitle worker must be configured.'),
             $this->check('concurrency.redis', $summary['concurrencyCacheDriver'] === 'redis', "Subtitle concurrency cache driver is {$summary['concurrencyCacheDriver']}; expected redis."),
             $this->check('concurrency.connectivity', $summary['concurrencyRedisReachable'] === true, 'Subtitle concurrency Redis connectivity probe failed.'),
@@ -174,9 +170,6 @@ class CheckProductionReadiness extends Command
             $this->check('billing.price_ids', $summary['stripePriceIdsConfigured'] === true, 'All Stripe plan price IDs must be configured.'),
             $this->check('youtube.binary', $summary['youtubeAudioBinaryConfigured'] === true, 'YOUTUBE_AUDIO_BINARY must be configured.'),
             $this->check('audio_preparation.ffmpeg_binary', $summary['ffmpegBinaryConfigured'] === true, 'FFMPEG_BINARY must be configured.'),
-            // Voice isolation is optional (off by default until A/B evidence
-            // proves its cost; TD-014), but when enabled it must fail open.
-            $this->check('audio_preparation.voice_isolation_fail_open', $summary['audioIsolationEnabled'] === false || $summary['audioIsolationFailOpen'] === true, 'ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.'),
             $this->check('mail.transport', $summary['mailTransportConfigured'] === true, 'MAIL_MAILER must use a configured production transport, not log or array.'),
             $this->check('mail.sender', $summary['mailFromAddress'] !== '' && $summary['mailFromAddressIsPlaceholder'] === false, 'MAIL_FROM_ADDRESS must be a non-placeholder production sender address.'),
             $this->check('release.support_email', $summary['supportEmail'] !== '' && $summary['supportEmailIsPlaceholder'] === false, 'SUPPORT_EMAIL must be a non-placeholder public support address.'),

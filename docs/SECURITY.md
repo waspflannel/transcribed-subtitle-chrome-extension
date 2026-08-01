@@ -70,8 +70,6 @@
   - `backend.audio_acquisition_failed`
   - `backend.audio_preparation_started`
   - `backend.audio_preparation_completed`
-  - `backend.audio_preparation_fallback_used`
-  - `backend.audio_isolation_request_completed`
   - `backend.transcription_started`
   - `backend.transcription_completed`
   - `backend.transcription_failed`

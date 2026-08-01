@@ -4,11 +4,9 @@ namespace App\Services\Subtitles;
 
 final class SubtitleTier
 {
-    public const ULTIMATE = 'ultimate';
-
     public const BASE = 'base';
 
-    private const PRIORITY_TIERS = [self::ULTIMATE, 'pro', 'plus', self::BASE];
+    private const PRIORITY_TIERS = ['pro', 'plus', self::BASE];
 
     public static function default(): string
     {
@@ -234,13 +232,6 @@ final class SubtitleTier
     {
         $configuredQueues = $configuredGroup['queues'] ?? null;
 
-        if (is_string($configuredQueues)) {
-            return array_values(array_filter(
-                array_map('trim', explode(',', $configuredQueues)),
-                fn (string $queue): bool => $queue !== '',
-            ));
-        }
-
         if (is_array($configuredQueues)) {
             return array_values(array_filter(
                 $configuredQueues,
@@ -265,10 +256,6 @@ final class SubtitleTier
     private static function workerGroupTiers(array $configuredGroup): array
     {
         $configuredTiers = $configuredGroup['tiers'] ?? self::priorityTiers();
-
-        if (is_string($configuredTiers)) {
-            $configuredTiers = array_map('trim', explode(',', $configuredTiers));
-        }
 
         if (! is_array($configuredTiers)) {
             return self::priorityTiers();

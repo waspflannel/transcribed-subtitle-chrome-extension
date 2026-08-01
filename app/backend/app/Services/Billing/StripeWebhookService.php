@@ -218,9 +218,6 @@ final class StripeWebhookService
         $status = data_get($subscription, 'status');
         $subscriptionItemId = data_get($subscription, 'items.data.0.id');
         $customerId = data_get($subscription, 'customer');
-        $endedAt = $this->timestamp(data_get($subscription, 'ended_at'))
-            ?? $this->timestamp(data_get($subscription, 'canceled_at'));
-        $trialEndsAt = $this->timestamp(data_get($subscription, 'trial_end'));
 
         $user->forceFill([
             'stripe_customer_id' => is_string($customerId) ? $customerId : $user->stripe_customer_id,
@@ -231,8 +228,6 @@ final class StripeWebhookService
             'billing_current_period_start' => $periodStart ?? $user->billing_current_period_start,
             'billing_current_period_end' => $periodEnd ?? $user->billing_current_period_end,
             'billing_cancel_at_period_end' => (bool) data_get($subscription, 'cancel_at_period_end', false),
-            'billing_trial_ends_at' => $trialEndsAt,
-            'billing_ends_at' => $endedAt,
             'billing_subscription_event_at' => $eventCreatedAt ?? $user->billing_subscription_event_at,
             'billing_subscription_event_type' => $eventCreatedAt === null || $eventType === null
                 ? $user->billing_subscription_event_type

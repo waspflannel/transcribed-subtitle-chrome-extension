@@ -61,7 +61,6 @@ class SubtitleJobController extends Controller
             payload: $request->subtitlePayload(),
             user: $this->extensionUser($request),
             installId: $request->extensionInstallId(),
-            requestIp: $request->ip(),
         );
 
         return response()->json(

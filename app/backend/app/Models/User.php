@@ -49,11 +49,6 @@ class User extends Authenticatable
         return $this->hasMany(SubtitleJob::class);
     }
 
-    public function billingUsageEvents(): HasMany
-    {
-        return $this->hasMany(BillingUsageEvent::class);
-    }
-
     protected function casts(): array
     {
         return [

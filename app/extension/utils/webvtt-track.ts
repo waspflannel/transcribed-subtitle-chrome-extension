@@ -174,18 +174,8 @@ function findTrackCue<TCue extends WebVttBindableCue>(
   const id = typeof textCue.id === 'string' ? textCue.id : '';
 
   if (id !== '') {
-    const byId = track.cues.find((cue) => cue.cueId === id);
-
-    if (byId) {
-      return byId;
-    }
+    return track.cues.find((cue) => cue.cueId === id) ?? null;
   }
 
-  // Fallback for tracks whose VTT cues carry no stable ids.
-  const startMs = Math.round(textCue.startTime * 1000);
-  const endMs = Math.round(textCue.endTime * 1000);
-
-  return track.cues.find(
-    (cue) => Math.abs(cue.startMs - startMs) <= 25 && Math.abs(cue.endMs - endMs) <= 25,
-  ) ?? null;
+  return null;
 }

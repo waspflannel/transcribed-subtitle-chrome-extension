@@ -37,7 +37,7 @@ final class BillingEntitlementService
             throw BillingEntitlementException::paymentRequired();
         }
 
-        if (($payload['enrichmentMode'] ?? null) === 'full' && ! $this->plans->hasFeature($plan, 'full_word_cards')) {
+        if (($payload['enrichmentMode'] ?? null) === 'full' && ! $this->plans->supportsFullWordCards($plan)) {
             throw BillingEntitlementException::featureUnavailable();
         }
 

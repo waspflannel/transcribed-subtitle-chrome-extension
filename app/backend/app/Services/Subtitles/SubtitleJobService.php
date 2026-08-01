@@ -82,7 +82,6 @@ class SubtitleJobService
         array $payload,
         User $user,
         string $installId,
-        ?string $requestIp,
         ?string $generationTier = null,
     ): SubtitleJob {
         $enrichmentMode = $payload['enrichmentMode'];
@@ -97,7 +96,6 @@ class SubtitleJobService
                 $payload,
                 $user,
                 $installId,
-                $requestIp,
                 $processingVersion,
                 $enrichmentMode,
                 $includeRomanization,
@@ -131,7 +129,6 @@ class SubtitleJobService
                         payload: $payload,
                         user: $user,
                         installId: $installId,
-                        requestIp: $requestIp,
                         generationTier: $entitlement->generationTier,
                         enrichmentMode: $enrichmentMode,
                         includeRomanization: $includeRomanization,
@@ -152,7 +149,6 @@ class SubtitleJobService
                     payload: $payload,
                     user: $user,
                     installId: $installId,
-                    requestIp: $requestIp,
                     processingVersion: $processingVersion,
                     generationTier: $entitlement->generationTier,
                     enrichmentMode: $enrichmentMode,
@@ -229,7 +225,6 @@ class SubtitleJobService
         array $payload,
         User $user,
         string $installId,
-        ?string $requestIp,
         string $processingVersion,
         string $generationTier,
         string $enrichmentMode,
@@ -257,7 +252,6 @@ class SubtitleJobService
             'progress_percent' => $startImmediately ? 5 : 0,
             'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
-            'request_ip' => $requestIp,
         ]);
 
         $this->tracer->jobEvent($job, 'job.created', [
@@ -280,7 +274,6 @@ class SubtitleJobService
         array $payload,
         User $user,
         string $installId,
-        ?string $requestIp,
         string $generationTier,
         string $enrichmentMode,
         bool $includeRomanization,
@@ -311,7 +304,6 @@ class SubtitleJobService
             'error_code' => null,
             'error_message' => null,
             'install_id' => $installId,
-            'request_ip' => $requestIp,
             'expires_at' => null,
             'created_at' => now(),
         ])->save();

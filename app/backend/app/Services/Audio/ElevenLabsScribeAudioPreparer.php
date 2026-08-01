@@ -4,13 +4,9 @@ namespace App\Services\Audio;
 
 use App\Exceptions\SubtitleProcessingException;
 use Illuminate\Contracts\Process\ProcessResult;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
-use Laravel\Ai\Enums\Lab;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Throwable;
 
@@ -20,60 +16,26 @@ class ElevenLabsScribeAudioPreparer
 
     public function prepare(TemporaryAudioFile $audio): TemporaryAudioFile
     {
-        $voiceIsolationEnabled = $this->voiceIsolationEnabled();
-
         Log::info('backend.audio_preparation_started', [
             'input_mime_type' => $audio->mimeType,
             'source_duration_seconds' => $audio->durationSeconds,
             'source_audio_bytes' => $audio->sizeBytes,
-            'voice_isolation_enabled' => $voiceIsolationEnabled,
         ]);
 
-        if (! $voiceIsolationEnabled) {
-            $preparedAudio = $this->normalizeSourceToFlac($audio);
-            $this->logPreparedAudioReady($preparedAudio, false, false);
+        $preparedAudio = $this->normalizeSourceToFlac($audio);
 
-            return $preparedAudio;
-        }
+        Log::info('backend.audio_preparation_completed', [
+            'prepared_audio_bytes' => $preparedAudio->sizeBytes,
+            'prepared_mime_type' => $preparedAudio->mimeType,
+        ]);
 
-        try {
-            $preparedAudio = $this->prepareWithVoiceIsolation($audio);
-            $this->logPreparedAudioReady($preparedAudio, true, false);
-
-            return $preparedAudio;
-        } catch (SubtitleProcessingException $exception) {
-            if (! $this->voiceIsolationFailOpen()) {
-                throw $exception;
-            }
-
-            $this->logVoiceIsolationFallback($exception);
-
-            $preparedAudio = $this->normalizeSourceToFlac($audio);
-            $this->logPreparedAudioReady($preparedAudio, false, true);
-
-            return $preparedAudio;
-        }
-    }
-
-    private function prepareWithVoiceIsolation(TemporaryAudioFile $audio): TemporaryAudioFile
-    {
-        $rawPcmPath = $audio->directory.DIRECTORY_SEPARATOR.'isolation-input.pcm';
-        $isolatedOutputPath = $audio->directory.DIRECTORY_SEPARATOR.'isolated-output.bin';
-        $preparedFlacPath = $audio->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac';
-
-        $this->convertSourceToRawPcm($audio->path, $rawPcmPath, $audio->directory);
-        $this->isolateSpeech($rawPcmPath, $isolatedOutputPath);
-        $this->convertIsolatedOutputToFlac($isolatedOutputPath, $preparedFlacPath, $audio->directory);
-
-        return $this->preparedAudioFile($preparedFlacPath, $audio, 'audio_isolation_output_to_flac');
+        return $preparedAudio;
     }
 
     private function normalizeSourceToFlac(TemporaryAudioFile $audio): TemporaryAudioFile
     {
         $preparedFlacPath = $audio->directory.DIRECTORY_SEPARATOR.'scribe-ready.flac';
 
-        // FLAC is bit-exact lossless at Scribe's native 16 kHz mono resolution
-        // and roughly halves the upload size compared to PCM WAV.
         $this->runFfmpeg([
             $this->ffmpegBinary(),
             '-hide_banner',
@@ -89,175 +51,23 @@ class ElevenLabsScribeAudioPreparer
             '-c:a',
             'flac',
             $preparedFlacPath,
-        ], 'source_to_flac', $audio->directory);
+        ], $audio->directory);
 
-        return $this->preparedAudioFile($preparedFlacPath, $audio, 'source_to_flac');
+        $this->assertUsableFile($preparedFlacPath);
+
+        return new TemporaryAudioFile(
+            path: $preparedFlacPath,
+            directory: $audio->directory,
+            durationSeconds: $audio->durationSeconds,
+            sizeBytes: File::size($preparedFlacPath),
+            mimeType: 'audio/flac',
+        );
     }
 
-    private function convertSourceToRawPcm(string $sourcePath, string $rawPcmPath, string $workDirectory): void
-    {
-        $this->runFfmpeg([
-            $this->ffmpegBinary(),
-            '-hide_banner',
-            '-nostdin',
-            '-y',
-            '-i',
-            $sourcePath,
-            '-vn',
-            '-ac',
-            '1',
-            '-ar',
-            '16000',
-            '-c:a',
-            'pcm_s16le',
-            '-f',
-            's16le',
-            $rawPcmPath,
-        ], 'audio_isolation_source_pcm', $workDirectory);
-    }
-
-    private function isolateSpeech(string $rawPcmPath, string $isolatedOutputPath): void
-    {
-        $provider = Lab::ElevenLabs;
-        $apiKey = config('ai.providers.'.$provider->value.'.key');
-
-        if (! is_string($apiKey) || trim($apiKey) === '') {
-            throw $this->failure('Audio isolation provider is not configured.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => 'provider_not_configured',
-            ]);
-        }
-
-        $stream = $this->openReadStream($rawPcmPath, 'audio_isolation');
-        $startedAt = microtime(true);
-
-        try {
-            $response = Http::withHeaders(['xi-api-key' => trim($apiKey)])
-                ->timeout($this->voiceIsolationTimeoutSeconds())
-                ->attach(
-                    'audio',
-                    $stream,
-                    'isolation-input.pcm',
-                    ['Content-Type' => 'application/octet-stream'],
-                )
-                ->post($this->audioIsolationUrl($provider), [
-                    'file_format' => 'pcm_s16le_16',
-                ]);
-        } catch (ConnectionException $exception) {
-            throw $this->failure('Audio isolation provider request failed.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => 'connection_failure',
-                'exception' => $exception::class,
-            ], $exception);
-        } catch (Throwable $exception) {
-            throw $this->failure('Audio isolation provider request failed.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => $this->isTimeoutException($exception) ? 'timeout' : 'request_exception',
-                'exception' => $exception::class,
-            ], $exception);
-        } finally {
-            fclose($stream);
-        }
-
-        Log::info('backend.audio_isolation_request_completed', [
-            'provider' => $provider->value,
-            'adapter' => self::ADAPTER,
-            'status' => $response->status(),
-            ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
-            'elapsed_ms' => $this->elapsedMs($startedAt),
-        ]);
-
-        if ($response->failed()) {
-            throw $this->failure('Audio isolation provider request failed.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => 'http_failure',
-                'status' => $response->status(),
-            ]);
-        }
-
-        $this->storeIsolationResponse($response, $isolatedOutputPath, $provider);
-    }
-
-    private function convertIsolatedOutputToFlac(string $isolatedOutputPath, string $preparedFlacPath, string $workDirectory): void
-    {
-        try {
-            $this->runFfmpeg([
-                $this->ffmpegBinary(),
-                '-hide_banner',
-                '-nostdin',
-                '-y',
-                '-i',
-                $isolatedOutputPath,
-                '-vn',
-                '-ac',
-                '1',
-                '-ar',
-                '16000',
-                '-c:a',
-                'flac',
-                $preparedFlacPath,
-            ], 'isolated_output_to_flac', $workDirectory);
-
-            return;
-        } catch (SubtitleProcessingException $containerDecodeFailure) {
-            try {
-                $this->runFfmpeg([
-                    $this->ffmpegBinary(),
-                    '-hide_banner',
-                    '-nostdin',
-                    '-y',
-                    '-f',
-                    's16le',
-                    '-ar',
-                    '16000',
-                    '-ac',
-                    '1',
-                    '-i',
-                    $isolatedOutputPath,
-                    '-c:a',
-                    'flac',
-                    $preparedFlacPath,
-                ], 'isolated_raw_pcm_to_flac', $workDirectory);
-            } catch (SubtitleProcessingException $rawDecodeFailure) {
-                $reason = ($rawDecodeFailure->context['reason'] ?? null) === 'ffmpeg_missing'
-                    ? 'ffmpeg_missing'
-                    : 'decode_failure';
-
-                throw $this->failure('Audio isolation output could not be decoded.', [
-                    'stage' => 'audio_isolation_decode',
-                    'provider' => Lab::ElevenLabs->value,
-                    'reason' => $reason,
-                    'container_decode_reason' => $containerDecodeFailure->context['reason'] ?? 'ffmpeg_failure',
-                    'raw_decode_reason' => $rawDecodeFailure->context['reason'] ?? 'ffmpeg_failure',
-                ], $rawDecodeFailure);
-            }
-        }
-    }
-
-    private function storeIsolationResponse(Response $response, string $isolatedOutputPath, Lab $provider): void
-    {
-        $body = $response->body();
-
-        if ($body === '') {
-            throw $this->failure('Audio isolation provider returned empty output.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => 'empty_output',
-                'status' => $response->status(),
-                ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
-            ]);
-        }
-
-        File::put($isolatedOutputPath, $this->isolationAudioBytes($body, $response, $provider));
-
-        $this->assertUsableFile($isolatedOutputPath, 'audio_isolation', 'empty_output');
-    }
-
-    private function runFfmpeg(array $command, string $stage, string $workDirectory): void
+    /**
+     * @param  list<string>  $command
+     */
+    private function runFfmpeg(array $command, string $workDirectory): void
     {
         $startedAt = microtime(true);
 
@@ -267,146 +77,39 @@ class ElevenLabsScribeAudioPreparer
                 ->run($command);
         } catch (Throwable $exception) {
             throw $this->failure('Audio preparation command could not run.', [
-                'stage' => $stage,
+                'stage' => 'source_to_flac',
                 'reason' => $this->isTimeoutException($exception) ? 'timeout' : 'process_exception',
                 'exception' => $exception::class,
             ], $exception);
         }
 
         if ($result->failed()) {
-            $this->throwFfmpegFailure($result, $stage);
+            $this->throwFfmpegFailure($result);
         }
 
         Log::info('backend.audio_preparation_ffmpeg_completed', [
-            'stage' => $stage,
-            'elapsed_ms' => $this->elapsedMs($startedAt),
+            'stage' => 'source_to_flac',
+            'elapsed_ms' => (int) round((microtime(true) - $startedAt) * 1000),
         ]);
     }
 
-    private function throwFfmpegFailure(ProcessResult $result, string $stage): never
+    private function throwFfmpegFailure(ProcessResult $result): never
     {
-        $reason = $this->isMissingFfmpegFailure($result) ? 'ffmpeg_missing' : 'ffmpeg_failure';
-
         throw $this->failure('Audio preparation command failed.', [
-            'stage' => $stage,
-            'reason' => $reason,
+            'stage' => 'source_to_flac',
+            'reason' => $this->isMissingFfmpegFailure($result) ? 'ffmpeg_missing' : 'ffmpeg_failure',
             'exit_code' => $result->exitCode(),
         ]);
     }
 
-    private function isolationAudioBytes(string $body, Response $response, Lab $provider): string
-    {
-        if (! $this->looksLikeJsonResponse($body, $response)) {
-            return $body;
-        }
-
-        $payload = json_decode($body, true);
-
-        if (! is_array($payload)) {
-            throw $this->failure('Audio isolation provider returned invalid JSON.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => 'invalid_json',
-                'status' => $response->status(),
-                ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
-            ]);
-        }
-
-        foreach (['audio', 'isolated_audio', 'file'] as $key) {
-            if (is_string($payload[$key] ?? null) && trim($payload[$key]) !== '') {
-                return $this->decodeJsonAudioPayload(trim($payload[$key]), $response, $provider);
-            }
-        }
-
-        throw $this->failure('Audio isolation provider returned JSON without audio output.', [
-            'stage' => 'audio_isolation',
-            'provider' => $provider->value,
-            'reason' => 'json_without_audio',
-            'status' => $response->status(),
-            ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
-        ]);
-    }
-
-    private function looksLikeJsonResponse(string $body, Response $response): bool
-    {
-        $contentType = strtolower((string) $response->header('Content-Type', ''));
-        $trimmedBody = ltrim($body);
-
-        return str_contains($contentType, 'application/json')
-            || str_starts_with($trimmedBody, '{')
-            || str_starts_with($trimmedBody, '[');
-    }
-
-    private function decodeJsonAudioPayload(string $payload, Response $response, Lab $provider): string
-    {
-        if (str_contains($payload, ',')) {
-            [$prefix, $payload] = explode(',', $payload, 2);
-
-            if (! str_starts_with(strtolower($prefix), 'data:audio/')) {
-                throw $this->unsupportedJsonAudioPayload($response, $provider);
-            }
-        }
-
-        $decoded = base64_decode($payload, true);
-
-        if (! is_string($decoded) || $decoded === '') {
-            throw $this->unsupportedJsonAudioPayload($response, $provider);
-        }
-
-        return $decoded;
-    }
-
-    private function unsupportedJsonAudioPayload(Response $response, Lab $provider): never
-    {
-        throw $this->failure('Audio isolation provider returned unsupported JSON audio output.', [
-            'stage' => 'audio_isolation',
-            'provider' => $provider->value,
-            'reason' => 'unsupported_json_audio',
-            'status' => $response->status(),
-            ...$this->optionalSafeScalar('content_type', $response->header('Content-Type')),
-        ]);
-    }
-
-    private function preparedAudioFile(string $preparedFlacPath, TemporaryAudioFile $sourceAudio, string $stage): TemporaryAudioFile
-    {
-        $this->assertUsableFile($preparedFlacPath, $stage, 'empty_output');
-
-        return new TemporaryAudioFile(
-            path: $preparedFlacPath,
-            directory: $sourceAudio->directory,
-            durationSeconds: $sourceAudio->durationSeconds,
-            sizeBytes: File::size($preparedFlacPath),
-            mimeType: 'audio/flac',
-        );
-    }
-
-    private function assertUsableFile(string $path, string $stage, string $reason): void
+    private function assertUsableFile(string $path): void
     {
         if (! File::isFile($path) || File::size($path) < 1) {
             throw $this->failure('Audio preparation produced an empty file.', [
-                'stage' => $stage,
-                'provider' => Lab::ElevenLabs->value,
-                'reason' => $reason,
+                'stage' => 'source_to_flac',
+                'reason' => 'empty_output',
             ]);
         }
-    }
-
-    /**
-     * @return resource
-     */
-    private function openReadStream(string $path, string $stage)
-    {
-        $stream = fopen($path, 'rb');
-
-        if ($stream === false) {
-            throw $this->failure('Audio preparation file could not be opened.', [
-                'stage' => $stage,
-                'provider' => Lab::ElevenLabs->value,
-                'reason' => 'file_open_failed',
-            ]);
-        }
-
-        return $stream;
     }
 
     /**
@@ -420,76 +123,16 @@ class ElevenLabsScribeAudioPreparer
         ], $previous);
     }
 
-    private function logVoiceIsolationFallback(SubtitleProcessingException $exception): void
-    {
-        Log::warning('backend.audio_preparation_fallback_used', [
-            'stage' => 'audio_isolation',
-            'provider' => Lab::ElevenLabs->value,
-            'adapter' => self::ADAPTER,
-            'reason' => $this->safeContextString($exception->context['reason'] ?? null, 'unknown'),
-            ...$this->optionalSafeScalar('status', $exception->context['status'] ?? null),
-            ...$this->optionalSafeScalar('failure_stage', $exception->context['stage'] ?? null),
-        ]);
-    }
-
-    private function logPreparedAudioReady(
-        TemporaryAudioFile $preparedAudio,
-        bool $voiceIsolationUsed,
-        bool $voiceIsolationFallbackUsed,
-    ): void {
-        Log::info('backend.audio_preparation_completed', [
-            'prepared_audio_bytes' => $preparedAudio->sizeBytes,
-            'prepared_mime_type' => $preparedAudio->mimeType,
-            'voice_isolation_enabled' => $this->voiceIsolationEnabled(),
-            'voice_isolation_used' => $voiceIsolationUsed,
-            'voice_isolation_fallback_used' => $voiceIsolationFallbackUsed,
-        ]);
-    }
-
-    private function audioIsolationUrl(Lab $provider): string
-    {
-        $url = config('ai.providers.'.$provider->value.'.url');
-
-        if (! is_string($url) || trim($url) === '') {
-            throw $this->failure('Audio isolation provider URL is not configured.', [
-                'stage' => 'audio_isolation',
-                'provider' => $provider->value,
-                'reason' => 'provider_url_not_configured',
-            ]);
-        }
-
-        return rtrim(trim($url), '/').'/audio-isolation';
-    }
-
     private function ffmpegBinary(): string
     {
         $binary = config('subtitles.audio_preparation.ffmpeg_binary', 'ffmpeg');
 
-        if (! is_string($binary) || trim($binary) === '') {
-            return 'ffmpeg';
-        }
-
-        return trim($binary);
+        return is_string($binary) && trim($binary) !== '' ? trim($binary) : 'ffmpeg';
     }
 
     private function ffmpegTimeoutSeconds(): int
     {
         return max(1, (int) config('subtitles.audio_preparation.ffmpeg_timeout_seconds', 600));
-    }
-
-    private function voiceIsolationEnabled(): bool
-    {
-        return (bool) config('subtitles.audio_preparation.voice_isolation.enabled', false);
-    }
-
-    private function voiceIsolationFailOpen(): bool
-    {
-        return (bool) config('subtitles.audio_preparation.voice_isolation.fail_open', true);
-    }
-
-    private function voiceIsolationTimeoutSeconds(): int
-    {
-        return max(1, (int) config('subtitles.audio_preparation.voice_isolation.timeout_seconds', 600));
     }
 
     /**
@@ -534,35 +177,5 @@ class ElevenLabsScribeAudioPreparer
         return $exception instanceof ProcessTimedOutException
             || str_contains($exception::class, 'Timeout')
             || str_contains($exception::class, 'TimedOut');
-    }
-
-    private function elapsedMs(float $startedAt): int
-    {
-        return (int) round((microtime(true) - $startedAt) * 1000);
-    }
-
-    /**
-     * @return array<string, int|float|bool|string>
-     */
-    private function optionalSafeScalar(string $key, mixed $value): array
-    {
-        if (is_int($value) || is_float($value) || is_bool($value)) {
-            return [$key => $value];
-        }
-
-        if (is_string($value) && trim($value) !== '') {
-            return [$key => $this->safeContextString($value, 'unknown')];
-        }
-
-        return [];
-    }
-
-    private function safeContextString(mixed $value, string $default): string
-    {
-        if (! is_string($value) || trim($value) === '') {
-            return $default;
-        }
-
-        return mb_substr(trim($value), 0, 120);
     }
 }

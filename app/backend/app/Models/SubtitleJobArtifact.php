@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SubtitleJobArtifact extends Model
 {
@@ -14,11 +13,6 @@ class SubtitleJobArtifact extends Model
         'run_id',
         'payload',
     ];
-
-    public function job(): BelongsTo
-    {
-        return $this->belongsTo(SubtitleJob::class, 'subtitle_job_id');
-    }
 
     protected function casts(): array
     {

@@ -184,7 +184,7 @@ problem statement is essentially the predicted consequence of that 2026-05-13 re
 
 ### Cost / batch context (for Option a sizing)
 
-- Cues are tokenized in batches of `SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE` (default **10**),
+- Cues are packed into batches using `SUBTITLE_ENRICHMENT_CUE_BATCH_CHAR_BUDGET` and `SUBTITLE_ENRICHMENT_CUE_BATCH_MAX_CUES`,
   `config/subtitles.php:147`; batching is applied in
   `SubtitleJobArtifactStore.php:120, 306` and dispatched via `TokenizeSubtitleCueBatch` ->
   `SubtitleCueBatchProcessor::tokenizeCueBatch()`.
@@ -310,10 +310,8 @@ sidecar must be deployed to every batch-queue worker host (`subtitle-batch-{tier
 ### (d) Upstream transcription quality (flagged, lightly scoped)
 
 Tokenization cannot repair a wrong source (the `うて`/lost-っ example). This is the Scribe stage's
-domain (`ScribeTranscriptNormalizer`, audio prep, optional voice isolation). Notes:
+domain (`ScribeTranscriptNormalizer` and audio preparation). Notes:
 
-- Voice isolation is **off by default** (`config/subtitles.php:131-138`, `ELEVENLABS_AUDIO_ISOLATION_ENABLED=false`,
-  TD-014) — a known untested lever for WER and therefore for small-kana fidelity.
 - The no-space artifact-space collapse (`ScribeTranscriptNormalizer.php:282-287`) is a candidate
   contributor to small-っ loss when Scribe emits character-level tokens; worth a targeted look but
   **out of scope for Track B** beyond flagging it. Recommend a separate Track for Scribe WER on CJK.

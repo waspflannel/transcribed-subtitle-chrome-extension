@@ -15,9 +15,8 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Second generation stage: normalizes the downloaded audio for Scribe
- * (ffmpeg, optionally voice isolation), splits it into transcription chunks,
- * and fans the chunks out as their own queue jobs.
+ * Second generation stage: normalizes the downloaded audio for Scribe,
+ * splits it into transcription chunks, and fans the chunks out as queue jobs.
  */
 class OptimizeSubtitleAudio implements ShouldQueue
 {
@@ -30,11 +29,6 @@ class OptimizeSubtitleAudio implements ShouldQueue
 
     public int $maxExceptions = 1;
 
-    /**
-     * Voice isolation adds a provider round-trip and two extra ffmpeg passes
-     * (600s process timeout each), so this stage keeps the old whole-span
-     * ceiling instead of a tighter one.
-     */
     public int $timeout = 1200;
 
     public readonly int $queuedAtMs;
