@@ -45,7 +45,6 @@ The product migrations currently define:
   - `error_code`
   - `error_message`
   - `install_id`
-  - `request_ip`
   - `expires_at`
   - timestamps
   - unique compatibility key: `user_id`, `youtube_video_id`, `source_language`, `target_language`, `processing_version`
@@ -63,8 +62,6 @@ The product migrations currently define:
   - `billing_current_period_start`
   - `billing_current_period_end`
   - `billing_cancel_at_period_end`
-  - `billing_trial_ends_at`
-  - `billing_ends_at`
   - timestamps
 - `stripe_webhook_events`
   - `stripe_event_id`
@@ -127,7 +124,6 @@ The product migrations currently define:
   - `source_language`
   - `detected_source_language`
   - `target_language`
-  - `source_dialect`
   - `processing_version`
   - `generated_at`
   - `expires_at`

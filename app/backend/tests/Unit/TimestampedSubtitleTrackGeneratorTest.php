@@ -32,7 +32,6 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         }
 
         $this->assertSame($this->sampleWebVtt(), $track->web_vtt);
-        $this->assertSame('unknown', $track->source_dialect);
         $this->assertCount(3, $track->cues);
         $this->assertSame([
             'cueId' => 'cue-0001',

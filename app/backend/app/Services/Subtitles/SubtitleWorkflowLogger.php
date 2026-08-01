@@ -139,7 +139,6 @@ class SubtitleWorkflowLogger
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
             'source_language' => $job->source_language,
-            'source_dialect' => $enrichment->sourceDialect,
             'cue_count' => count($enrichment->cues),
             'token_count' => $this->tokenCount($enrichment),
         ]);
@@ -155,7 +154,6 @@ class SubtitleWorkflowLogger
             'model' => $this->openAiModel('enrichment'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
-            'source_dialect' => $enrichment->sourceDialect,
             'cue_count' => count($enrichment->cues),
             'token_count' => $this->tokenCount($enrichment),
         ]);
