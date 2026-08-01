@@ -185,10 +185,6 @@ return [
 
     'enrichment' => [
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
-        // Legacy fixed cue-per-batch size. Only used as a fallback for cue
-        // artifacts written before character-based batching (which carry no
-        // batch plan) and when a caller passes an explicit batch size.
-        'cue_batch_size' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE', 10),
         // Character-based batch sizing packs cues greedily up to this many
         // cumulative sourceText characters, capped at cue_batch_max_cues.
         // Fewer, size-uniform batches cut per-call overhead and queue

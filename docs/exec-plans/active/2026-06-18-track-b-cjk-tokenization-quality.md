@@ -184,7 +184,7 @@ problem statement is essentially the predicted consequence of that 2026-05-13 re
 
 ### Cost / batch context (for Option a sizing)
 
-- Cues are tokenized in batches of `SUBTITLE_ENRICHMENT_CUE_BATCH_SIZE` (default **10**),
+- Cues are packed into batches using `SUBTITLE_ENRICHMENT_CUE_BATCH_CHAR_BUDGET` and `SUBTITLE_ENRICHMENT_CUE_BATCH_MAX_CUES`,
   `config/subtitles.php:147`; batching is applied in
   `SubtitleJobArtifactStore.php:120, 306` and dispatched via `TokenizeSubtitleCueBatch` ->
   `SubtitleCueBatchProcessor::tokenizeCueBatch()`.
