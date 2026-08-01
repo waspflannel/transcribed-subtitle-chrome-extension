@@ -19,36 +19,26 @@ final class SubtitleQueue
 
     public static function generationName(): string
     {
-        return self::generationNameForTier(SubtitleTier::default());
+        return SubtitleTier::generationQueue(SubtitleTier::default());
     }
 
     public static function batchName(): string
     {
-        return self::batchNameForTier(SubtitleTier::default());
-    }
-
-    public static function generationNameForTier(string $tier): string
-    {
-        return SubtitleTier::generationQueue($tier);
-    }
-
-    public static function batchNameForTier(string $tier): string
-    {
-        return SubtitleTier::batchQueue($tier);
+        return SubtitleTier::batchQueue(SubtitleTier::default());
     }
 
     public static function generationNameForJob(object $job): string
     {
         $tier = data_get($job, 'generation_tier');
 
-        return self::generationNameForTier(is_string($tier) ? $tier : SubtitleTier::default());
+        return SubtitleTier::generationQueue(is_string($tier) ? $tier : SubtitleTier::default());
     }
 
     public static function batchNameForJob(object $job): string
     {
         $tier = data_get($job, 'generation_tier');
 
-        return self::batchNameForTier(is_string($tier) ? $tier : SubtitleTier::default());
+        return SubtitleTier::batchQueue(is_string($tier) ? $tier : SubtitleTier::default());
     }
 
     /**
