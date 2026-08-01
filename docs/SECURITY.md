@@ -135,12 +135,16 @@ Project-specific security defaults:
 - Generation tier is server-side configuration until account auth exists; do not accept tier or entitlement from anonymous extension payloads.
 - Cost telemetry stores configured unit-price estimates and safe billing units only. It must not store raw usage payloads, provider responses, prompts, transcripts, translations, or token text.
 - Stripe webhook handlers must verify `Stripe-Signature`, record event IDs idempotently, and store only subscription/customer identifiers plus safe scalar billing metadata.
+- Stripe customer and checkout creation use stable idempotency keys. Webhook mutations must match the current subscription identity and handle equal-second events by documented event-type precedence.
 - Usage ledger rows store public generated-video minute units and provider cost estimates separately; they must not store transcripts, prompts, raw provider payloads, card data, or Stripe secrets.
 - Extension-facing requests must be validated against canonical contracts before product endpoints are exposed.
 - The original anonymous API hardening required `X-Extension-Install-Id`, install/IP throttles, and stable public error objects.
 - SaaS Phase 03 `/v1/*` subtitle and learning-token routes require both `X-Extension-Install-Id` and a scoped Sanctum bearer token. Install ID remains a device/abuse signal; authenticated `user_id` is the ownership boundary.
 - Tiered generation admission and AI batch concurrency use authenticated `user_id` as the owner and may log only hashed user IDs. Runtime trace rows must not store raw user IDs or install IDs.
 - Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
+- Password reset rotates the remember token and revokes all scoped Sanctum tokens. A cache miss for clicked-token enrichment requires active billing before the provider call; already-stored metadata remains readable to its owner.
+- Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
+- Laravel responses set CSP, frame, MIME, referrer, permissions, and cross-origin isolation headers. HSTS is sent only for secure production requests; trusted-proxy and session-cookie configuration remain an operator-owned hosting decision.
 - SaaS website analytics are first-party structured logs only for beta. Analytics events must not include transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, raw audio paths, or account emails.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
 - Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.

@@ -15,6 +15,8 @@ final class BillingEntitlementService
 {
     private const ACTIVE_STATUSES = ['active', 'trialing'];
 
+    private const TERMINAL_SUBSCRIPTION_STATUSES = ['canceled', 'incomplete_expired'];
+
     public function __construct(
         private readonly BillingPlanCatalog $plans,
         private readonly UsageLedger $ledger,
@@ -109,25 +111,17 @@ final class BillingEntitlementService
                 return;
             }
 
-            $plan = $this->activePlan($lockedUser);
+            $reservation = $this->ledger->reservationIdentityForJob($job);
 
-            if ($plan === null) {
-                throw BillingEntitlementException::paymentRequired();
-            }
-
-            $period = $this->ledger->periodForUser($lockedUser);
-
-            if ($period === null) {
-                throw BillingEntitlementException::paymentRequired();
+            if ($reservation === null) {
+                return;
             }
 
             $actualMinutes = $this->ledger->billableMinutes($job->video_duration_seconds);
             $reservedMinutes = $this->ledger->reservedMinutesForJob($job);
             $additionalMinutes = max(0, $actualMinutes - $reservedMinutes);
 
-            $this->ledger->ensureMonthlyGrant($lockedUser, $plan, $period['start'], $period['end']);
-
-            if ($additionalMinutes > 0 && $this->ledger->availableMinutes($lockedUser, $period['start'], $period['end']) < $additionalMinutes) {
+            if ($additionalMinutes > 0 && $this->ledger->availableMinutes($lockedUser, $reservation['periodStart'], $reservation['periodEnd']) < $additionalMinutes) {
                 throw BillingEntitlementException::usageExhausted();
             }
 
@@ -149,7 +143,7 @@ final class BillingEntitlementService
                 'id' => (string) $user->id,
                 'email' => $user->email,
                 'name' => $user->name,
-                'emailVerified' => $user->hasVerifiedEmail(),
+                'emailVerified' => true,
                 'planName' => 'No active plan',
                 'tierName' => 'Inactive',
                 'tierSpeedLabel' => 'Generation paused',
@@ -170,7 +164,7 @@ final class BillingEntitlementService
             'id' => (string) $user->id,
             'email' => $user->email,
             'name' => $user->name,
-            'emailVerified' => $user->hasVerifiedEmail(),
+            'emailVerified' => true,
             'planName' => $this->plans->name($plan),
             'tierName' => $this->plans->name($plan),
             'tierSpeedLabel' => $this->plans->speedLabel($plan),
@@ -197,6 +191,15 @@ final class BillingEntitlementService
         }
 
         return $this->plans->plan($user->billing_plan_code);
+    }
+
+    public function subscriptionRequiresPortal(User $user): bool
+    {
+        if (! is_string($user->billing_subscription_status) || $user->billing_subscription_status === '') {
+            return false;
+        }
+
+        return ! in_array($user->billing_subscription_status, self::TERMINAL_SUBSCRIPTION_STATUSES, true);
     }
 
     private function logQueueFullRejected(User $user, string $tier, int $submissionLimit, int $activeCount): void

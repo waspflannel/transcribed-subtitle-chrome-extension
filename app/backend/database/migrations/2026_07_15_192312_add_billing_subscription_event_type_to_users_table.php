@@ -11,13 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table): void {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->string('password');
-            $table->rememberToken();
-            $table->timestamps();
+        Schema::table('users', function (Blueprint $table): void {
+            $table->string('billing_subscription_event_type', 64)
+                ->nullable()
+                ->after('billing_subscription_event_at');
         });
     }
 
@@ -26,6 +23,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('users');
+        Schema::table('users', function (Blueprint $table): void {
+            $table->dropColumn('billing_subscription_event_type');
+        });
     }
 };

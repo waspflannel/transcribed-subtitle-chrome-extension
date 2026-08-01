@@ -3,7 +3,6 @@
 use App\Http\Controllers\Api\ExtensionAuthController;
 use App\Http\Controllers\Api\LearningTokenController;
 use App\Http\Controllers\Api\SubtitleJobController;
-use App\Http\Middleware\EnsureApiUserEmailIsVerified;
 use App\Http\Middleware\RequireExtensionInstallId;
 use App\Support\ExtensionTokenAbility;
 use Illuminate\Support\Facades\Route;
@@ -22,7 +21,6 @@ Route::prefix('v1')
             ->name('extension-auth.account')
             ->middleware([
                 'auth:sanctum',
-                EnsureApiUserEmailIsVerified::class,
                 CheckAbilities::class.':'.ExtensionTokenAbility::ACCOUNT_READ,
             ]);
 
@@ -35,7 +33,6 @@ Route::prefix('v1')
 
         Route::middleware([
             'auth:sanctum',
-            EnsureApiUserEmailIsVerified::class,
             CheckAbilities::class.':'.ExtensionTokenAbility::SUBTITLES_WRITE,
         ])
             ->group(function (): void {

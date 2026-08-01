@@ -39,7 +39,6 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Spline+Sans+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-        <script>document.documentElement.classList.add('has-js');</script>
         <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ $siteCssVersion }}">
         @stack('styles')
         <script defer src="{{ asset('js/site-interactions.js') }}?v={{ filemtime(public_path('js/site-interactions.js')) }}"></script>
@@ -62,7 +61,14 @@
             </nav>
             <div class="site-actions">
                 @auth
-                    <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
+                    @if (request()->routeIs('dashboard'))
+                        <form method="post" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" class="text-link">Log out</button>
+                        </form>
+                    @else
+                        <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
+                    @endif
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
                     <a class="button button-accent button-small" href="{{ route('marketing.home') }}#pricing">Start learning</a>

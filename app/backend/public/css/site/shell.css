@@ -134,6 +134,23 @@
     color: var(--accent);
 }
 
+/* Text-styled form buttons (e.g. the header logout) must shed the solid button chrome. */
+button.text-link {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    font-size: inherit;
+    min-height: auto;
+    padding: 0;
+}
+
+button.text-link:hover,
+button.text-link:active {
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+}
+
 .strong-link {
     color: var(--accent-deep);
     text-decoration: underline;

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrack;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,48 +20,67 @@ class SubtitleJobArtifactRunScopingTest extends TestCase
         $store = app(SubtitleJobArtifactStore::class);
         $oldRun = (string) Str::uuid();
         $newRun = (string) Str::uuid();
-
         $job = SubtitleJob::factory()->create(['run_id' => $oldRun, 'status' => 'running']);
 
         $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
-
-        // Simulate a reset that hands the job a new run_id (the normal flow
-        // also deletes artifacts, but the audit's concern is the check-then-write
-        // race when a stale batch survives the reset).
         $job->forceFill(['run_id' => $newRun])->save();
 
         $this->expectException(SubtitleProcessingException::class);
         $store->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES);
     }
 
-    public function test_batch_writes_carry_the_current_run_id_and_reads_stay_scoped(): void
+    public function test_stale_run_batch_writes_are_rejected(): void
     {
         $store = app(SubtitleJobArtifactStore::class);
         $run = (string) Str::uuid();
-
         $job = SubtitleJob::factory()->create(['run_id' => $run, 'status' => 'running']);
 
         $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
-
         $this->assertSame(1, $store->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES));
 
-        // A stale batch job that survived the reset writes under its old run_id;
-        // the unique key prevents it overwriting the current run's row, and reads
-        // scoped to the new run_id ignore it entirely.
-        $staleRun = (string) Str::uuid();
-        $job->forceFill(['run_id' => $staleRun])->save();
+        $staleJob = clone $job;
+        $job->forceFill(['run_id' => (string) Str::uuid()])->save();
+        $store->putCueBatchResult(
+            $staleJob,
+            SubtitleJobArtifactStore::TOKENIZED_CUES,
+            0,
+            new CueEnrichmentResult($this->draftCues(), 'unknown'),
+        );
 
-        $store->putCueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, 0, new CueEnrichmentResult($this->draftCues(), 'unknown'));
+        $this->assertDatabaseMissing('subtitle_job_artifacts', [
+            'subtitle_job_id' => $job->id,
+            'artifact_type' => SubtitleJobArtifactStore::TOKENIZED_CUES,
+        ]);
+    }
 
-        // Back on the current run, the tokenized artifact is not visible.
-        $job->forceFill(['run_id' => $run])->save();
+    public function test_artifact_writes_are_rejected_after_terminal_state_track_completion_or_deletion(): void
+    {
+        $store = app(SubtitleJobArtifactStore::class);
 
-        try {
-            $store->cueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, 0);
-            $this->fail('Expected the new run to exclude the stale tokenized artifact.');
-        } catch (SubtitleProcessingException) {
-            // expected — the stale-run write is invisible to the new run
+        foreach (['failed', 'completed'] as $status) {
+            $job = SubtitleJob::factory()->create(['status' => $status]);
+            $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
+
+            $this->assertDatabaseMissing('subtitle_job_artifacts', [
+                'subtitle_job_id' => $job->id,
+            ]);
         }
+
+        $jobWithTrack = SubtitleJob::factory()->create(['status' => 'running']);
+        SubtitleTrack::factory()->for($jobWithTrack, 'job')->create(['expires_at' => now()->addDay()]);
+        $store->putCueCollection($jobWithTrack, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
+
+        $this->assertDatabaseMissing('subtitle_job_artifacts', [
+            'subtitle_job_id' => $jobWithTrack->id,
+        ]);
+
+        $deletedJob = SubtitleJob::factory()->create(['status' => 'running']);
+        $deletedJob->delete();
+        $store->putCueCollection($deletedJob, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
+
+        $this->assertDatabaseMissing('subtitle_job_artifacts', [
+            'subtitle_job_id' => $deletedJob->id,
+        ]);
     }
 
     /**

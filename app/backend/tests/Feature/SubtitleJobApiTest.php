@@ -16,6 +16,7 @@ use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -419,6 +420,88 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(1, $this->transcriptionService->prepareCalls);
         $this->assertSame(['auto'], $this->transcriptionService->sourceLanguages);
+    }
+
+    public function test_audio_acquisition_return_does_not_resurrect_a_deleted_job_or_dispatch_optimization(): void
+    {
+        config([
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+        Queue::fake();
+        $response = $this
+            ->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'deleted0001']))
+            ->assertAccepted();
+        $job = SubtitleJob::query()->where('public_id', $response->json('jobId'))->firstOrFail();
+        $this->audioSource->beforeAcquireResult = function () use ($job): void {
+            $job->delete();
+        };
+
+        app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
+
+        $this->assertModelMissing($job);
+        $this->assertFalse(File::exists((string) $this->audioSource->lastAudioPath));
+        Queue::assertNotPushed(OptimizeSubtitleAudio::class);
+    }
+
+    public function test_audio_preparation_return_does_not_resurrect_a_failed_job_or_dispatch_chunks(): void
+    {
+        Bus::fake();
+        $job = $this->runningSubtitleJob('optimizing-audio');
+        $directory = SubtitleAudioWorkspace::directory($job->run_id);
+        File::ensureDirectoryExists($directory);
+        $path = $directory.DIRECTORY_SEPARATOR.'prepared.m4a';
+        File::put($path, 'fake-audio');
+        $audio = new TemporaryAudioFile($path, $directory, 42, File::size($path), 'audio/mp4');
+        $this->transcriptionService->beforePrepareResult = function () use ($job): void {
+            $job->forceFill(['status' => 'failed'])->save();
+        };
+
+        app(SubtitleGenerationPipeline::class)->optimizeAudioAndDispatchTranscription(
+            $job->id,
+            $job->run_id,
+            $audio,
+        );
+
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertSame('optimizing-audio', $job->fresh()->stage);
+        $this->assertFalse(File::exists($directory));
+        Bus::assertNothingBatched();
+    }
+
+    public function test_transcription_return_cannot_write_an_artifact_after_failure_wins(): void
+    {
+        $job = $this->runningSubtitleJob('transcribing');
+        $directory = SubtitleAudioWorkspace::directory($job->run_id);
+        File::ensureDirectoryExists($directory);
+        $path = $directory.DIRECTORY_SEPARATOR.'chunk.m4a';
+        File::put($path, 'fake-audio');
+        $audio = new TemporaryAudioFile($path, $directory, 42, File::size($path), 'audio/mp4');
+        $this->transcriptionService->beforeTranscriptionResult = function () use ($job): void {
+            app(SubtitleJobFailureHandler::class)->failJob(
+                $job->id,
+                'transcribing',
+                SubtitleProcessingException::transcriptionFailed(),
+                $job->run_id,
+            );
+        };
+
+        app(SubtitleGenerationPipeline::class)->transcribeAudioChunk(
+            subtitleJobId: $job->id,
+            runId: $job->run_id,
+            chunkIndex: 0,
+            chunkCount: 1,
+            chunkAudio: $audio,
+            audioStartSeconds: 0,
+            nominalStartSeconds: 0,
+            nominalEndSeconds: null,
+        );
+
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertDatabaseMissing('subtitle_job_artifacts', [
+            'subtitle_job_id' => $job->id,
+        ]);
     }
 
     public function test_late_batch_result_does_not_recreate_artifacts_after_job_failure(): void
@@ -966,7 +1049,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('cached_video_transcripts', [
             'youtube_video_id' => 'cachehit001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test',
+            'transcription_model' => 'scribe-test:transcript-chunks-v2',
             'audio_duration_seconds' => 42,
         ]);
 
@@ -1035,7 +1118,7 @@ class SubtitleJobApiTest extends TestCase
         CachedVideoTranscript::create([
             'youtube_video_id' => 'cacheexp001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test',
+            'transcription_model' => 'scribe-test:transcript-chunks-v2',
             'audio_duration_seconds' => 999,
             'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
             'expires_at' => now()->subDay(),
@@ -1537,6 +1620,42 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
     }
 
+    public function test_learning_token_enrichment_requires_an_active_plan_on_a_cache_miss(): void
+    {
+        $installId = $this->installId('p');
+        $user = User::factory()->create();
+        $this->withExtensionAuth($installId, $user);
+        $job = SubtitleJob::factory()->for($user)->create([
+            'install_id' => $installId,
+            'youtube_video_id' => 'learnplan01',
+            'youtube_url' => 'https://www.youtube.com/watch?v=learnplan01',
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+            'expires_at' => now()->addDays(30),
+        ]);
+        $track = SubtitleTrack::factory()->for($job, 'job')->create([
+            'youtube_video_id' => 'learnplan01',
+            'cues' => [$this->sampleCue()],
+        ]);
+        $user->forceFill([
+            'billing_subscription_status' => 'canceled',
+            'billing_current_period_end' => now()->subSecond(),
+        ])->save();
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/learning-tokens', [
+                'trackId' => $track->public_id,
+                'cueId' => 'cue-0001',
+                'tokenIndex' => 0,
+            ])
+            ->assertStatus(402)
+            ->assertJsonPath('error.code', 'payment_required');
+
+        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
+    }
+
     public function test_learning_token_enrichment_preserves_concurrent_token_updates(): void
     {
         $job = SubtitleJob::factory()->create([
@@ -1964,6 +2083,8 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
     public ?string $lastAudioPath = null;
 
+    public ?\Closure $beforeAcquireResult = null;
+
     public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory): TemporaryAudioFile
     {
         $this->calls++;
@@ -1976,13 +2097,17 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
         File::put($path, 'fake-audio');
         $this->lastAudioPath = $path;
 
-        return new TemporaryAudioFile(
+        $audio = new TemporaryAudioFile(
             path: $path,
             directory: $workDirectory,
             durationSeconds: 42,
             sizeBytes: File::size($path),
             mimeType: 'audio/mp4',
         );
+
+        $this->beforeAcquireResult?->__invoke($audio);
+
+        return $audio;
     }
 }
 

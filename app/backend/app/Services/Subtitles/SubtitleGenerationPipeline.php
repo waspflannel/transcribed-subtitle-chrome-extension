@@ -5,9 +5,9 @@ namespace App\Services\Subtitles;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
+use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
-use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
@@ -85,15 +85,30 @@ class SubtitleGenerationPipeline
                 workDirectory: SubtitleAudioWorkspace::directory($runId),
             );
 
-            $job->update(['video_duration_seconds' => $audio->durationSeconds]);
-            $job = $job->refresh()->load('user');
-            $this->billing->syncJobReservationToActualDuration($job);
-            $this->logger->audioAcquisitionCompleted($job, $audio);
-            $this->telemetry->recordStageCompleted($job, 'acquiring-audio', $audioStartedAtMs);
+            $continued = DB::transaction(function () use ($subtitleJobId, $runId, $audio, $audioStartedAtMs): bool {
+                $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
 
-            $this->markJobRunning($job, 'optimizing-audio', 35);
-            OptimizeSubtitleAudio::dispatch($job->id, $runId, $audio)
-                ->onQueue(SubtitleQueue::generationNameForJob($job));
+                if (! $currentJob instanceof SubtitleJob) {
+                    return false;
+                }
+
+                $currentJob->update(['video_duration_seconds' => $audio->durationSeconds]);
+                $currentJob->load('user');
+                $this->billing->syncJobReservationToActualDuration($currentJob);
+                $this->logger->audioAcquisitionCompleted($currentJob, $audio);
+                $this->telemetry->recordStageCompleted($currentJob, 'acquiring-audio', $audioStartedAtMs);
+                $this->markJobRunning($currentJob, 'optimizing-audio', 35);
+
+                OptimizeSubtitleAudio::dispatch($currentJob->id, $runId, $audio)
+                    ->onQueue(SubtitleQueue::generationNameForJob($currentJob))
+                    ->afterCommit();
+
+                return true;
+            }, attempts: 5);
+
+            if (! $continued) {
+                SubtitleAudioWorkspace::delete($runId);
+            }
         } catch (Throwable $exception) {
             SubtitleAudioWorkspace::delete($runId);
             $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId);
@@ -131,8 +146,6 @@ class SubtitleGenerationPipeline
 
             $audioOptimizationStartedAtMs = $this->telemetry->currentTimeMs();
             $preparedAudio = $this->transcriptionService->prepareAudio($audio);
-            $this->telemetry->recordStageCompleted($job, 'optimizing-audio', $audioOptimizationStartedAtMs);
-
             $stage = 'transcribing';
             $chunkPlan = $this->chunker->plan($preparedAudio->durationSeconds);
             $chunks = $chunkPlan === []
@@ -144,25 +157,12 @@ class SubtitleGenerationPipeline
                 ]]
                 : $this->chunkFiles($preparedAudio, $chunkPlan);
 
-            if ($chunkPlan !== []) {
-                Log::info('backend.transcription_chunked', [
-                    'job_id' => $job->public_id,
-                    'audio_duration_seconds' => $preparedAudio->durationSeconds,
-                    'chunk_count' => count($chunks),
-                ]);
-            }
-
-            $this->markJobRunning($job, 'transcribing', 50);
-            $job = $job->refresh();
-            $this->logger->transcriptionStarted($job);
-            $this->telemetry->recordStageStarted($job, 'transcribing');
-
             $chunkCount = count($chunks);
             $chunkJobs = [];
 
             foreach ($chunks as $chunkIndex => $chunk) {
                 $chunkJobs[] = new TranscribeSubtitleAudioChunk(
-                    subtitleJobId: $job->id,
+                    subtitleJobId: $subtitleJobId,
                     chunkIndex: $chunkIndex,
                     chunkCount: $chunkCount,
                     runId: $runId,
@@ -173,7 +173,46 @@ class SubtitleGenerationPipeline
                 );
             }
 
-            $this->batchDispatcher->dispatchTranscription($job, $chunkJobs, $this->telemetry->currentTimeMs());
+            $continued = DB::transaction(function () use (
+                $subtitleJobId,
+                $runId,
+                $preparedAudio,
+                $chunkPlan,
+                $chunks,
+                $chunkJobs,
+                $audioOptimizationStartedAtMs,
+            ): bool {
+                $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
+
+                if (! $currentJob instanceof SubtitleJob) {
+                    return false;
+                }
+
+                $this->telemetry->recordStageCompleted($currentJob, 'optimizing-audio', $audioOptimizationStartedAtMs);
+
+                if ($chunkPlan !== []) {
+                    Log::info('backend.transcription_chunked', [
+                        'job_id' => $currentJob->public_id,
+                        'audio_duration_seconds' => $preparedAudio->durationSeconds,
+                        'chunk_count' => count($chunks),
+                    ]);
+                }
+
+                $this->markJobRunning($currentJob, 'transcribing', 50);
+                $this->logger->transcriptionStarted($currentJob);
+                $this->telemetry->recordStageStarted($currentJob, 'transcribing');
+                $transcribingStartedAtMs = $this->telemetry->currentTimeMs();
+
+                DB::afterCommit(function () use ($currentJob, $chunkJobs, $transcribingStartedAtMs): void {
+                    $this->batchDispatcher->dispatchTranscription($currentJob, $chunkJobs, $transcribingStartedAtMs);
+                });
+
+                return true;
+            }, attempts: 5);
+
+            if (! $continued) {
+                SubtitleAudioWorkspace::delete($runId);
+            }
         } catch (Throwable $exception) {
             SubtitleAudioWorkspace::delete($runId);
             $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId);
@@ -206,6 +245,12 @@ class SubtitleGenerationPipeline
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
         $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
+
+        $job = $this->loadRunningJob($subtitleJobId, $runId);
+
+        if ($job === null) {
+            return;
+        }
 
         $this->artifacts->putTranscriptChunk(
             job: $job,
@@ -391,13 +436,17 @@ class SubtitleGenerationPipeline
             $this->logger->enrichmentCompleted($job, $enrichment);
         }
 
-        $this->markJobRunning($job, 'finalizing', 95);
-        $job = $job->refresh();
+        $track = DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $enrichment) {
+            $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
 
-        $track = DB::transaction(function () use ($job, $transcript, $enrichment) {
-            $job->track()->delete();
-            $track = $this->tracks->generate($job, $transcript, $enrichment);
-            $job->update([
+            if (! $currentJob instanceof SubtitleJob) {
+                return null;
+            }
+
+            $this->markJobRunning($currentJob, 'finalizing', 95);
+            $currentJob->track()->delete();
+            $track = $this->tracks->generate($currentJob, $transcript, $enrichment);
+            $currentJob->update([
                 'status' => 'completed',
                 'stage' => 'finalizing',
                 'progress_percent' => 100,
@@ -405,12 +454,16 @@ class SubtitleGenerationPipeline
                 'error_message' => null,
                 'expires_at' => $track->expires_at,
             ]);
-            $completedJob = $job->refresh()->load('user');
+            $completedJob = $currentJob->refresh()->load('user');
             $this->usageLedger->debitCompletedJob($completedJob, $track);
             $this->artifacts->deleteForJob($completedJob);
 
             return $track;
-        });
+        }, attempts: 5);
+
+        if ($track === null) {
+            return;
+        }
 
         $job = $job->refresh()->load('track');
         $this->logger->trackGenerated(
@@ -551,6 +604,26 @@ class SubtitleGenerationPipeline
         }
 
         if ($job->status !== 'running' || $job->hasReadyTrack()) {
+            return null;
+        }
+
+        return $job;
+    }
+
+    private function lockRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob
+    {
+        $job = SubtitleJob::query()
+            ->with('track')
+            ->whereKey($subtitleJobId)
+            ->lockForUpdate()
+            ->first();
+
+        if (
+            ! $job instanceof SubtitleJob
+            || $job->run_id !== $runId
+            || $job->status !== 'running'
+            || $job->hasReadyTrack()
+        ) {
             return null;
         }
 

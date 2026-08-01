@@ -80,9 +80,6 @@ export function bindTranscriptView(dom: {
       } else {
         ackButton(button, 'Failed');
       }
-    } else if (action === 'save') {
-      // Save is the existing Phase-02 placeholder — acknowledge the click only.
-      ackButton(button, 'Soon');
     }
   });
 

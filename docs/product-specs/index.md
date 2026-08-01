@@ -26,7 +26,7 @@ Recommended format:
 
 - Current architecture: `../../ARCHITECTURE.md`
 - Many-to-many language refactor record: `../exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`
-- Phase index: `../exec-plans/active/00-phase-index.md`
+- Phase index: `../exec-plans/completed/00-phase-index.md`
 
 The `docs/history/revamped-design-document.md` and `docs/history/detailed-design-document.md` files are historical pre-refactor notes. They do not override the current source-language plus target-language workflow.
 

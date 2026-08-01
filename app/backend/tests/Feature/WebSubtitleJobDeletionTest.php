@@ -8,10 +8,12 @@ use App\Models\SubtitleJobArtifact;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
 class WebSubtitleJobDeletionTest extends TestCase
@@ -25,17 +27,6 @@ class WebSubtitleJobDeletionTest extends TestCase
         $this
             ->delete(route('dashboard.jobs.destroy', ['jobId' => $job->public_id], absolute: false))
             ->assertRedirect(route('login', absolute: false));
-    }
-
-    public function test_destroy_requires_verified_email(): void
-    {
-        $user = User::factory()->unverified()->create();
-        $job = SubtitleJob::factory()->for($user)->create();
-
-        $this
-            ->actingAs($user)
-            ->delete(route('dashboard.jobs.destroy', ['jobId' => $job->public_id], absolute: false))
-            ->assertRedirect(route('verification.notice', absolute: false));
     }
 
     public function test_owner_can_delete_their_job_and_relations_cascade(): void
@@ -73,6 +64,22 @@ class WebSubtitleJobDeletionTest extends TestCase
         $this->assertDatabaseMissing('subtitle_tracks', ['id' => $track->id]);
         $this->assertDatabaseMissing('subtitle_job_artifacts', ['id' => $artifact->id]);
         $this->assertDatabaseMissing('subtitle_job_events', ['id' => $event->id]);
+    }
+
+    public function test_deleting_jobs_removes_their_audio_workspaces(): void
+    {
+        $user = User::factory()->create();
+        $job = SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+        $directory = SubtitleAudioWorkspace::directory($job->run_id);
+        File::ensureDirectoryExists($directory);
+        File::put($directory.DIRECTORY_SEPARATOR.'chunk.flac', 'temporary audio');
+
+        $this
+            ->actingAs($user)
+            ->delete(route('dashboard.jobs.destroy', ['jobId' => $job->public_id], absolute: false))
+            ->assertRedirect(route('dashboard', absolute: false));
+
+        $this->assertDirectoryDoesNotExist($directory);
     }
 
     public function test_destroy_releases_reservation_for_running_job_but_preserves_billing_audit_trail(): void

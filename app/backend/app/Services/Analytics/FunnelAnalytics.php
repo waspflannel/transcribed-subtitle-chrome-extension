@@ -26,7 +26,6 @@ final class FunnelAnalytics
     {
         Log::info('analytics.signup_completed', [
             'user_hash' => $this->userHash($user),
-            'email_verified' => $user->hasVerifiedEmail(),
         ]);
     }
 

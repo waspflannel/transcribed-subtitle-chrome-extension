@@ -682,9 +682,9 @@ function renderUsage(accountState: AccountState): void {
 function renderAccount(accountState: AccountState, settings: ExtensionSettings): void {
   const authenticated = accountState.status === 'authenticated';
 
-  accountStatus.textContent = authenticated ? accountState.email : 'Not signed in';
-  accountPlan.textContent = authenticated ? accountState.planName : 'Sign in required';
-  accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Unavailable';
+  accountStatus.textContent = authenticated ? accountState.email : 'Account';
+  accountPlan.textContent = authenticated ? accountState.planName : 'Available after sign-in';
+  accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Available after sign-in';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;

@@ -6,7 +6,6 @@ use App\Models\SubtitleJob;
 use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
-use App\Services\Billing\TestingPlanSwitcher;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\SubtitleJobService;
@@ -21,7 +20,6 @@ class DashboardController extends Controller
         Request $request,
         BillingEntitlementService $billing,
         BillingPlanCatalog $plans,
-        TestingPlanSwitcher $testingPlanSwitcher,
         UsageLedger $usage,
     ): View {
         $user = $request->user();
@@ -32,10 +30,10 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'user' => $user,
-            'checkoutPlan' => $this->pendingCheckoutPlan($request, $user, $plans),
+            'checkoutPlan' => $this->pendingCheckoutPlan($request, $user, $plans, $billing),
             'account' => $billing->accountSummary($user),
+            'checkoutBlocked' => $billing->subscriptionRequiresPortal($user),
             'plans' => $plans->publicPlans(),
-            'testingPlanSwitcherEnabled' => $testingPlanSwitcher->enabled(),
             'recentJobs' => $this->recentJobs($user, $usage),
             'extensionTokens' => $this->extensionTokens($user),
             'pageTitle' => 'Dashboard | '.config('marketing.product_name'),
@@ -51,9 +49,13 @@ class DashboardController extends Controller
      *
      * @return array<string, mixed>|null
      */
-    private function pendingCheckoutPlan(Request $request, User $user, BillingPlanCatalog $plans): ?array
-    {
-        if ($user->billing_subscription_status !== null) {
+    private function pendingCheckoutPlan(
+        Request $request,
+        User $user,
+        BillingPlanCatalog $plans,
+        BillingEntitlementService $billing,
+    ): ?array {
+        if ($billing->subscriptionRequiresPortal($user)) {
             $request->session()->forget('checkout_plan');
 
             return null;

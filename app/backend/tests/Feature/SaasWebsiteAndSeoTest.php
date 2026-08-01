@@ -111,7 +111,7 @@ class SaasWebsiteAndSeoTest extends TestCase
                 'password_confirmation' => 'correct12345',
                 'plan' => 'plus',
             ])
-            ->assertRedirect(route('verification.notice', absolute: false))
+            ->assertRedirect(route('dashboard', absolute: false))
             ->assertSessionHas('checkout_plan', 'plus');
 
         $user = User::factory()->create();
@@ -155,7 +155,7 @@ class SaasWebsiteAndSeoTest extends TestCase
                 'password_confirmation' => 'correct12345',
                 'plan' => 'bogus',
             ])
-            ->assertRedirect(route('verification.notice', absolute: false))
+            ->assertRedirect(route('dashboard', absolute: false))
             ->assertSessionMissing('checkout_plan');
 
         $subscribed = User::factory()->create([
@@ -292,7 +292,7 @@ class SaasWebsiteAndSeoTest extends TestCase
                 'password' => 'correct12345',
                 'password_confirmation' => 'correct12345',
             ])
-            ->assertRedirect(route('verification.notice', absolute: false));
+            ->assertRedirect(route('dashboard', absolute: false));
 
         Log::shouldHaveReceived('info')
             ->with('analytics.signup_completed', Mockery::on(

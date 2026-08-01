@@ -27,6 +27,18 @@ $env:WXT_BACKEND_API_BASE_URL = $ApiBaseUrl
 try {
     Push-Location $Extension
 
+    $package = Get-Content -Raw -LiteralPath (Join-Path $Extension "package.json") | ConvertFrom-Json
+
+    if (-not $package.version -or $package.version -eq "0.0.0") {
+        throw "Set a real Chrome Web Store release version in app/extension/package.json before building a release."
+    }
+
+    npm audit --omit=dev --audit-level=high
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Production extension dependency audit failed."
+    }
+
     if (-not $SkipTests) {
         npm test
 

@@ -65,4 +65,6 @@ The harness must pass before release handoff:
 .\scripts\agent\doc-gardening.ps1
 ```
 
+For a release candidate, also require clean runtime/production dependency audits, a non-placeholder extension version, and `php artisan ops:production-check --target=production` with real Postgres, queue Redis, concurrency Redis, mail, release metadata, and provider configuration. The managed Laravel deploy audits both the locked Composer runtime and shared contracts package. The extension release script rejects a placeholder version and audits the dependency set shipped to browser users before packaging.
+
 When provider credentials and YouTube tooling are available, also run the candidate videos above through the local backend and capture structured logs.

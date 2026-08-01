@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
+use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Languages\LanguageCatalog;
 use Illuminate\Http\Request;
@@ -11,18 +13,28 @@ use Illuminate\View\View;
 
 class MarketingPageController extends Controller
 {
-    public function home(Request $request, FunnelAnalytics $analytics, BillingPlanCatalog $plans): View
-    {
+    public function home(
+        Request $request,
+        FunnelAnalytics $analytics,
+        BillingPlanCatalog $plans,
+        BillingEntitlementService $billing,
+    ): View {
         return $this->marketingView($request, $analytics, 'home', 'marketing.home', [
             'plans' => $plans->publicPlans(),
             'languageGroups' => $this->languageGroups(),
+            'checkoutBlocked' => $this->checkoutBlocked($request, $billing),
         ]);
     }
 
-    public function pricing(Request $request, FunnelAnalytics $analytics, BillingPlanCatalog $plans): View
-    {
+    public function pricing(
+        Request $request,
+        FunnelAnalytics $analytics,
+        BillingPlanCatalog $plans,
+        BillingEntitlementService $billing,
+    ): View {
         return $this->marketingView($request, $analytics, 'pricing', 'marketing.pricing', [
             'plans' => $plans->publicPlans(),
+            'checkoutBlocked' => $this->checkoutBlocked($request, $billing),
         ]);
     }
 
@@ -101,6 +113,13 @@ class MarketingPageController extends Controller
             'metaDescription' => $metadata['description'],
             'canonicalUrl' => route($metadata['route']),
         ];
+    }
+
+    private function checkoutBlocked(Request $request, BillingEntitlementService $billing): bool
+    {
+        $user = $request->user();
+
+        return $user instanceof User && $billing->subscriptionRequiresPortal($user);
     }
 
     /**

@@ -3,14 +3,13 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
@@ -19,10 +18,14 @@ class User extends Authenticatable implements MustVerifyEmail
         'name',
         'email',
         'password',
-        'email_verified_at',
         'stripe_customer_id',
         'stripe_subscription_id',
         'stripe_subscription_item_id',
+        'stripe_checkout_intent_id',
+        'stripe_checkout_plan_code',
+        'stripe_checkout_session_id',
+        'stripe_checkout_session_url',
+        'stripe_checkout_expires_at',
         'billing_plan_code',
         'billing_subscription_status',
         'billing_current_period_start',
@@ -31,11 +34,14 @@ class User extends Authenticatable implements MustVerifyEmail
         'billing_trial_ends_at',
         'billing_ends_at',
         'billing_subscription_event_at',
+        'billing_subscription_event_type',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        'stripe_checkout_intent_id',
+        'stripe_checkout_session_url',
     ];
 
     public function subtitleJobs(): HasMany
@@ -57,8 +63,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'billing_ends_at' => 'immutable_datetime',
             'billing_subscription_event_at' => 'immutable_datetime',
             'billing_trial_ends_at' => 'immutable_datetime',
-            'email_verified_at' => 'immutable_datetime',
             'password' => 'hashed',
+            'stripe_checkout_expires_at' => 'immutable_datetime',
         ];
     }
 }
