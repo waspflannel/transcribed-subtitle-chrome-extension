@@ -17,7 +17,6 @@ import { anonymousAccountState, formatResetDate, stageTimeline } from '../../uti
 import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
-import { PanelPortConnector } from '../../utils/panel-port-registry';
 import { accountFeatureListHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -211,8 +210,17 @@ document.addEventListener('visibilitychange', () => {
 
 void resolvePanelWindowId().then(attachTabListeners);
 
-const panelPortConnector = new PanelPortConnector((name) => browser.runtime.connect({ name }));
-panelPortConnector.connect();
+function connectPanel(): void {
+  try {
+    browser.runtime.connect({ name: 'panel' }).onDisconnect.addListener(() => {
+      setTimeout(connectPanel, 1000);
+    });
+  } catch {
+    setTimeout(connectPanel, 1000);
+  }
+}
+
+connectPanel();
 
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;

@@ -1,7 +1,6 @@
 import { browser, type Browser } from 'wxt/browser';
 
 import { activeTabQuery } from '../utils/active-tab';
-import { PanelPortRegistry } from '../utils/panel-port-registry';
 
 import {
   clearExtensionSession,
@@ -42,7 +41,7 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
-const panelPorts = new PanelPortRegistry();
+const panelPorts = new Set<Browser.runtime.Port>();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
 let cachedPanelJobHistoryError: string | undefined;
 const JOB_POLL_INTERVAL_MS = 2000;
@@ -60,7 +59,7 @@ export default defineBackground(() => {
   browser.runtime.onConnect.addListener((port) => {
     if (port.name === 'panel') {
       panelPorts.add(port);
-      port.onDisconnect.addListener(() => panelPorts.remove(port));
+      port.onDisconnect.addListener(() => panelPorts.delete(port));
     }
   });
 
@@ -116,7 +115,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return clearLocalStateFromPanel(message.windowId);
 
     case 'content.activeCueChanged':
-      if (panelPorts.hasOpenPanel()) {
+      if (panelPorts.size > 0) {
         void browser.runtime.sendMessage({
           type: 'background.activeCueChanged',
           cueId: message.cueId,
