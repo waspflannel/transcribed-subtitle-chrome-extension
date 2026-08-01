@@ -15,7 +15,6 @@ import { generationProgress } from '../../utils/panel-progress';
 import { anonymousAccountState, formatResetDate, stageTimeline } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
-import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
 import { accountFeatureListHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -233,13 +232,15 @@ browser.runtime.onMessage.addListener((message) => {
 
 let backendRefreshInFlight = false;
 let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
+const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const IDLE_POLL_INTERVAL_MS = 30_000;
 
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);
   const hasInFlightJob = latestState?.subtitleState.type === 'loading';
-  const interval = pollIntervalMs(hasInFlightJob);
+  const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
   backendPollTimer = setTimeout(() => {
-    if (shouldPollNow({ visibilityState: document.visibilityState })) {
+    if (document.visibilityState === 'visible') {
       void refreshBackendState();
     }
     scheduleNextBackendPoll();
