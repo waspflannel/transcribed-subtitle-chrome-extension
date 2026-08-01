@@ -23,8 +23,6 @@ class ProductionReadinessTest extends TestCase
         $this->assertTrue($payload['ok']);
         $this->assertSame('https://api.example.test', $payload['summary']['appUrl']);
         $this->assertTrue($payload['summary']['openaiKeyConfigured']);
-        $this->assertFalse($payload['summary']['audioIsolationEnabled']);
-        $this->assertTrue($payload['summary']['audioIsolationFailOpen']);
         $this->assertTrue($payload['summary']['databaseReachable']);
         $this->assertTrue($payload['summary']['queueRedisReachable']);
         $this->assertTrue($payload['summary']['concurrencyRedisReachable']);
@@ -42,8 +40,6 @@ class ProductionReadinessTest extends TestCase
             'ai.providers.openai.key' => '',
             'queue.connections.redis.retry_after' => 60,
             'subtitles.audio_preparation.ffmpeg_binary' => '',
-            'subtitles.audio_preparation.voice_isolation.enabled' => true,
-            'subtitles.audio_preparation.voice_isolation.fail_open' => false,
             'mail.default' => 'log',
             'mail.from.address' => 'hello@example.test',
             'marketing.support_email' => 'support@example.test',
@@ -64,7 +60,6 @@ class ProductionReadinessTest extends TestCase
         $this->assertContains('OPENAI_API_KEY must be configured in the environment.', $payload['problems']);
         $this->assertContains('Queue retry_after must be greater than the subtitle worker timeout.', $payload['problems']);
         $this->assertContains('FFMPEG_BINARY must be configured.', $payload['problems']);
-        $this->assertContains('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.', $payload['problems']);
         $this->assertContains('MAIL_MAILER must use a configured production transport, not log or array.', $payload['problems']);
         $this->assertContains('MAIL_FROM_ADDRESS must be a non-placeholder production sender address.', $payload['problems']);
         $this->assertContains('SUPPORT_EMAIL must be a non-placeholder public support address.', $payload['problems']);
@@ -169,8 +164,6 @@ class ProductionReadinessTest extends TestCase
             'billing.plans.pro.stripe_price_id' => 'price_pro',
             'subtitles.youtube.binary' => 'yt-dlp',
             'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg',
-            'subtitles.audio_preparation.voice_isolation.enabled' => false,
-            'subtitles.audio_preparation.voice_isolation.fail_open' => true,
             'mail.default' => 'smtp',
             'mail.mailers.smtp.transport' => 'smtp',
             'mail.mailers.smtp.host' => 'smtp.beta.example',

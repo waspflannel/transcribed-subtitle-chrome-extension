@@ -126,8 +126,6 @@ class CheckProductionReadiness extends Command
                 ->every(fn (array $plan): bool => $this->configured($plan['stripe_price_id'] ?? null)),
             'youtubeAudioBinaryConfigured' => $this->configured(config('subtitles.youtube.binary')),
             'ffmpegBinaryConfigured' => $this->configured(config('subtitles.audio_preparation.ffmpeg_binary')),
-            'audioIsolationEnabled' => (bool) config('subtitles.audio_preparation.voice_isolation.enabled'),
-            'audioIsolationFailOpen' => (bool) config('subtitles.audio_preparation.voice_isolation.fail_open'),
             'mailMailer' => (string) config('mail.default'),
             'mailTransport' => $this->mailTransport(),
             'mailTransportConfigured' => $this->mailTransportConfigured(),
@@ -174,9 +172,6 @@ class CheckProductionReadiness extends Command
             $this->check('billing.price_ids', $summary['stripePriceIdsConfigured'] === true, 'All Stripe plan price IDs must be configured.'),
             $this->check('youtube.binary', $summary['youtubeAudioBinaryConfigured'] === true, 'YOUTUBE_AUDIO_BINARY must be configured.'),
             $this->check('audio_preparation.ffmpeg_binary', $summary['ffmpegBinaryConfigured'] === true, 'FFMPEG_BINARY must be configured.'),
-            // Voice isolation is optional (off by default until A/B evidence
-            // proves its cost; TD-014), but when enabled it must fail open.
-            $this->check('audio_preparation.voice_isolation_fail_open', $summary['audioIsolationEnabled'] === false || $summary['audioIsolationFailOpen'] === true, 'ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN must be true until staging evidence supports fail-closed behavior.'),
             $this->check('mail.transport', $summary['mailTransportConfigured'] === true, 'MAIL_MAILER must use a configured production transport, not log or array.'),
             $this->check('mail.sender', $summary['mailFromAddress'] !== '' && $summary['mailFromAddressIsPlaceholder'] === false, 'MAIL_FROM_ADDRESS must be a non-placeholder production sender address.'),
             $this->check('release.support_email', $summary['supportEmail'] !== '' && $summary['supportEmailIsPlaceholder'] === false, 'SUPPORT_EMAIL must be a non-placeholder public support address.'),

@@ -310,10 +310,8 @@ sidecar must be deployed to every batch-queue worker host (`subtitle-batch-{tier
 ### (d) Upstream transcription quality (flagged, lightly scoped)
 
 Tokenization cannot repair a wrong source (the `うて`/lost-っ example). This is the Scribe stage's
-domain (`ScribeTranscriptNormalizer`, audio prep, optional voice isolation). Notes:
+domain (`ScribeTranscriptNormalizer` and audio preparation). Notes:
 
-- Voice isolation is **off by default** (`config/subtitles.php:131-138`, `ELEVENLABS_AUDIO_ISOLATION_ENABLED=false`,
-  TD-014) — a known untested lever for WER and therefore for small-kana fidelity.
 - The no-space artifact-space collapse (`ScribeTranscriptNormalizer.php:282-287`) is a candidate
   contributor to small-っ loss when Scribe emits character-level tokens; worth a targeted look but
   **out of scope for Track B** beyond flagging it. Recommend a separate Track for Scribe WER on CJK.

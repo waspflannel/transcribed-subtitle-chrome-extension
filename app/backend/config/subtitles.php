@@ -177,14 +177,6 @@ return [
     'audio_preparation' => [
         'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
         'ffmpeg_timeout_seconds' => (int) env('SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS', 600),
-        'voice_isolation' => [
-            // Off by default: isolation adds a billed provider round-trip and
-            // two ffmpeg passes per job with no captured evidence of WER gains
-            // yet (TD-014). Enable once the A/B comparison proves its cost.
-            'enabled' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_ENABLED', false),
-            'timeout_seconds' => (int) env('ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS', 600),
-            'fail_open' => (bool) env('ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN', true),
-        ],
     ],
 
     // Transcripts are cached per video and shared across users: they derive
