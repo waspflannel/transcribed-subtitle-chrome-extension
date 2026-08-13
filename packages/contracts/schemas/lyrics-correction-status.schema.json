@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/lyrics-correction-status.schema.json",
+  "title": "LyricsCorrectionStatus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["attemptId", "status", "updatedAt"],
+  "properties": {
+    "attemptId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "running", "completed", "failed"]
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "track": {
+      "$ref": "track-response.schema.json"
+    },
+    "errorCode": {
+      "type": "string",
+      "enum": ["lyrics_do_not_match", "lyrics_correction_failed"]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "completed"}}
+      },
+      "then": {
+        "required": ["track"],
+        "properties": {"track": {"$ref": "track-response.schema.json"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "failed"}}
+      },
+      "then": {
+        "required": ["errorCode", "message"],
+        "properties": {
+          "errorCode": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      }
+    }
+  ]
+}

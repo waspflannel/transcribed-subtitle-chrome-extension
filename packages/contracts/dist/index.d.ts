@@ -328,6 +328,350 @@ export interface LearningToken {
   usageNote?: string;
 }
 
+// Source: schemas/lyrics-correction-request.schema.json
+export interface LyricsCorrectionRequest {
+  /**
+   * Complete pasted plain-text lyrics. The backend applies a Unicode character limit after validation.
+   */
+  lyrics: string;
+}
+
+// Source: schemas/lyrics-correction-status.schema.json
+export type LyricsCorrectionStatus = {
+  [k: string]: unknown;
+} & {
+  attemptId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  updatedAt: string;
+  track?: TrackResponse;
+  errorCode?: 'lyrics_do_not_match' | 'lyrics_correction_failed';
+  message?: string;
+};
+
+export interface TrackResponse {
+  trackId: string;
+  jobId: string;
+  youtubeVideoId: string;
+  sourceLanguage:
+    | 'auto'
+    | 'bel'
+    | 'bos'
+    | 'bul'
+    | 'cat'
+    | 'hrv'
+    | 'ces'
+    | 'dan'
+    | 'nld'
+    | 'eng'
+    | 'est'
+    | 'fin'
+    | 'fra'
+    | 'glg'
+    | 'deu'
+    | 'ell'
+    | 'hun'
+    | 'isl'
+    | 'ind'
+    | 'ita'
+    | 'jpn'
+    | 'kan'
+    | 'lav'
+    | 'mkd'
+    | 'msa'
+    | 'mal'
+    | 'nor'
+    | 'pol'
+    | 'por'
+    | 'ron'
+    | 'rus'
+    | 'slk'
+    | 'spa'
+    | 'swe'
+    | 'tur'
+    | 'ukr'
+    | 'vie'
+    | 'hye'
+    | 'aze'
+    | 'ben'
+    | 'yue'
+    | 'fil'
+    | 'kat'
+    | 'guj'
+    | 'hin'
+    | 'kaz'
+    | 'lit'
+    | 'mlt'
+    | 'cmn'
+    | 'mar'
+    | 'nep'
+    | 'ori'
+    | 'fas'
+    | 'srp'
+    | 'slv'
+    | 'swa'
+    | 'tam'
+    | 'tel'
+    | 'afr'
+    | 'ara'
+    | 'asm'
+    | 'ast'
+    | 'mya'
+    | 'hau'
+    | 'heb'
+    | 'jav'
+    | 'kor'
+    | 'kir'
+    | 'ltz'
+    | 'mri'
+    | 'oci'
+    | 'pan'
+    | 'tgk'
+    | 'tha'
+    | 'uzb'
+    | 'cym'
+    | 'amh'
+    | 'lug'
+    | 'ibo'
+    | 'gle'
+    | 'khm'
+    | 'kur'
+    | 'lao'
+    | 'mon'
+    | 'nso'
+    | 'pus'
+    | 'sna'
+    | 'snd'
+    | 'som'
+    | 'urd'
+    | 'wol'
+    | 'xho'
+    | 'yor'
+    | 'zul';
+  targetLanguage:
+    | 'bel'
+    | 'bos'
+    | 'bul'
+    | 'cat'
+    | 'hrv'
+    | 'ces'
+    | 'dan'
+    | 'nld'
+    | 'eng'
+    | 'est'
+    | 'fin'
+    | 'fra'
+    | 'glg'
+    | 'deu'
+    | 'ell'
+    | 'hun'
+    | 'isl'
+    | 'ind'
+    | 'ita'
+    | 'jpn'
+    | 'kan'
+    | 'lav'
+    | 'mkd'
+    | 'msa'
+    | 'mal'
+    | 'nor'
+    | 'pol'
+    | 'por'
+    | 'ron'
+    | 'rus'
+    | 'slk'
+    | 'spa'
+    | 'swe'
+    | 'tur'
+    | 'ukr'
+    | 'vie'
+    | 'hye'
+    | 'aze'
+    | 'ben'
+    | 'yue'
+    | 'fil'
+    | 'kat'
+    | 'guj'
+    | 'hin'
+    | 'kaz'
+    | 'lit'
+    | 'mlt'
+    | 'cmn'
+    | 'mar'
+    | 'nep'
+    | 'ori'
+    | 'fas'
+    | 'srp'
+    | 'slv'
+    | 'swa'
+    | 'tam'
+    | 'tel'
+    | 'afr'
+    | 'ara'
+    | 'asm'
+    | 'ast'
+    | 'mya'
+    | 'hau'
+    | 'heb'
+    | 'jav'
+    | 'kor'
+    | 'kir'
+    | 'ltz'
+    | 'mri'
+    | 'oci'
+    | 'pan'
+    | 'tgk'
+    | 'tha'
+    | 'uzb'
+    | 'cym'
+    | 'amh'
+    | 'lug'
+    | 'ibo'
+    | 'gle'
+    | 'khm'
+    | 'kur'
+    | 'lao'
+    | 'mon'
+    | 'nso'
+    | 'pus'
+    | 'sna'
+    | 'snd'
+    | 'som'
+    | 'urd'
+    | 'wol'
+    | 'xho'
+    | 'yor'
+    | 'zul';
+  generatedAt: string;
+  expiresAt: string;
+  webVtt: string;
+  /**
+   * @minItems 1
+   */
+  cues: [SubtitleCue, ...SubtitleCue[]];
+  /**
+   * Provider-detected source language when sourceLanguage was auto and detection produced a catalog language.
+   */
+  detectedSourceLanguage?:
+    | 'bel'
+    | 'bos'
+    | 'bul'
+    | 'cat'
+    | 'hrv'
+    | 'ces'
+    | 'dan'
+    | 'nld'
+    | 'eng'
+    | 'est'
+    | 'fin'
+    | 'fra'
+    | 'glg'
+    | 'deu'
+    | 'ell'
+    | 'hun'
+    | 'isl'
+    | 'ind'
+    | 'ita'
+    | 'jpn'
+    | 'kan'
+    | 'lav'
+    | 'mkd'
+    | 'msa'
+    | 'mal'
+    | 'nor'
+    | 'pol'
+    | 'por'
+    | 'ron'
+    | 'rus'
+    | 'slk'
+    | 'spa'
+    | 'swe'
+    | 'tur'
+    | 'ukr'
+    | 'vie'
+    | 'hye'
+    | 'aze'
+    | 'ben'
+    | 'yue'
+    | 'fil'
+    | 'kat'
+    | 'guj'
+    | 'hin'
+    | 'kaz'
+    | 'lit'
+    | 'mlt'
+    | 'cmn'
+    | 'mar'
+    | 'nep'
+    | 'ori'
+    | 'fas'
+    | 'srp'
+    | 'slv'
+    | 'swa'
+    | 'tam'
+    | 'tel'
+    | 'afr'
+    | 'ara'
+    | 'asm'
+    | 'ast'
+    | 'mya'
+    | 'hau'
+    | 'heb'
+    | 'jav'
+    | 'kor'
+    | 'kir'
+    | 'ltz'
+    | 'mri'
+    | 'oci'
+    | 'pan'
+    | 'tgk'
+    | 'tha'
+    | 'uzb'
+    | 'cym'
+    | 'amh'
+    | 'lug'
+    | 'ibo'
+    | 'gle'
+    | 'khm'
+    | 'kur'
+    | 'lao'
+    | 'mon'
+    | 'nso'
+    | 'pus'
+    | 'sna'
+    | 'snd'
+    | 'som'
+    | 'urd'
+    | 'wol'
+    | 'xho'
+    | 'yor'
+    | 'zul';
+}
+export interface SubtitleCue {
+  cueId: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  sourceText: string;
+  translatedText: string;
+  romanization?: string;
+  /**
+   * @minItems 1
+   */
+  tokens: [LearningToken, ...LearningToken[]];
+}
+export interface LearningToken {
+  index: number;
+  text: string;
+  normalizedText: string;
+  lemma?: string;
+  root?: string;
+  partOfSpeech?: string;
+  translation?: string;
+  gloss?: string;
+  romanization?: string;
+  usageNote?: string;
+}
+
 // Source: schemas/job-response.schema.json
 export type JobResponse = {
   [k: string]: unknown;
@@ -673,6 +1017,9 @@ export type JobResponse = {
     | 'rate_limited'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
 };
 
@@ -1156,6 +1503,9 @@ export type SubtitleJobHistoryItem = {
     | 'rate_limited'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
   targetLanguage:
     | 'bel'
@@ -1778,6 +2128,9 @@ export interface ErrorObject {
     | 'rate_limited'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
   message: string;
   details?: {
@@ -1807,6 +2160,9 @@ export interface ErrorObject {
     | 'rate_limited'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
   message: string;
   details?: {

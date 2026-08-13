@@ -31,6 +31,9 @@
         "rate_limited",
         "not_found",
         "expired",
+        "lyrics_correction_in_progress",
+        "lyrics_do_not_match",
+        "lyrics_correction_failed",
         "internal_error"
       ]
     },

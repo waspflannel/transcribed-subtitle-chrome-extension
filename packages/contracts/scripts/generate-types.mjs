@@ -15,6 +15,8 @@ const schemaFiles = [
   'extension-account-response.schema.json',
   'learning-token-request.schema.json',
   'learning-token-response.schema.json',
+  'lyrics-correction-request.schema.json',
+  'lyrics-correction-status.schema.json',
   'job-response.schema.json',
   'subtitle-job-history-response.schema.json',
   'track-response.schema.json',
