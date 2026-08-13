@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CorrectSubtitleLyricsRequest;
 use App\Http\Requests\CreateSubtitleJobRequest;
 use App\Http\Resources\SubtitleJobHistoryResource;
 use App\Http\Resources\SubtitleJobResource;
+use App\Http\Resources\SubtitleTrackLyricsCorrectionResource;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use Illuminate\Http\JsonResponse;
@@ -112,5 +116,38 @@ class SubtitleJobController extends Controller
         }
 
         return response()->json($partialTrack);
+    }
+
+    public function correctLyrics(
+        CorrectSubtitleLyricsRequest $request,
+        string $jobId,
+        LyricsCorrectionService $corrections,
+    ): JsonResponse {
+        $job = SubtitleJob::query()
+            ->with('track')
+            ->where('public_id', $jobId)
+            ->whereBelongsTo($this->extensionUser($request))
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+            ->firstOrFail();
+
+        $correction = $corrections->submit($job, $this->extensionUser($request), $request->lyrics());
+
+        return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve(), 202);
+    }
+
+    public function lyricsCorrectionStatus(Request $request, string $jobId): JsonResponse
+    {
+        $correction = SubtitleTrackLyricsCorrection::query()
+            ->with(['track.job'])
+            ->whereHas('track', fn ($query) => $query->where('expires_at', '>', now()))
+            ->whereHas('track.job', function ($query) use ($request, $jobId): void {
+                $query
+                    ->where('public_id', $jobId)
+                    ->whereBelongsTo($this->extensionUser($request));
+            })
+            ->latest('updated_at')
+            ->firstOrFail();
+
+        return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());
     }
 }

@@ -82,6 +82,30 @@ class SubtitleProcessingException extends Exception
     }
 
     /**
+     * @param  array<string, mixed>  $context
+     */
+    public static function lyricsCorrectionInProgress(array $context = []): self
+    {
+        return new self('lyrics_correction_in_progress', 'A pasted-lyrics correction is already in progress.', 409, $context);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public static function lyricsDoNotMatch(array $context = []): self
+    {
+        return new self('lyrics_do_not_match', 'These lyrics do not seem to match this song.', 422, $context);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
+    public static function lyricsCorrectionFailed(array $context = [], ?Throwable $previous = null): self
+    {
+        return new self('lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', 422, $context, $previous);
+    }
+
+    /**
      * Transient transport-level provider failures (rate limits, 5xx, timeouts)
      * are weather, not programming errors — they are safe to retry.
      */

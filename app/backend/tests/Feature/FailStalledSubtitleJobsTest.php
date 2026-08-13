@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrack;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -70,5 +71,23 @@ class FailStalledSubtitleJobsTest extends TestCase
 
         $stalled->refresh();
         $this->assertSame('running', $stalled->status);
+    }
+
+    public function test_it_fails_and_clears_stalled_lyrics_corrections(): void
+    {
+        $job = SubtitleJob::factory()->create(['status' => 'completed']);
+        $track = SubtitleTrack::factory()->create(['subtitle_job_id' => $job->id]);
+        $correction = $track->lyricsCorrection()->create([
+            'attempt_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3030',
+            'status' => 'running',
+            'lyrics' => 'stalled private lyrics',
+        ]);
+        $correction->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
+
+        $correction->refresh();
+        $this->assertSame('failed', $correction->status);
+        $this->assertNull($correction->lyrics);
     }
 }

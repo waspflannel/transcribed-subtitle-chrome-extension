@@ -48,6 +48,14 @@ Route::prefix('v1')
                     ->name('subtitle-jobs.partial-track')
                     ->middleware('throttle:subtitle-status-api');
 
+                Route::post('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'correctLyrics'])
+                    ->name('subtitle-jobs.lyrics.store')
+                    ->middleware('throttle:subtitle-api');
+
+                Route::get('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'lyricsCorrectionStatus'])
+                    ->name('subtitle-jobs.lyrics.show')
+                    ->middleware('throttle:subtitle-status-api');
+
                 Route::post('/subtitle-jobs', [SubtitleJobController::class, 'store'])
                     ->name('subtitle-jobs.store')
                     ->middleware('throttle:subtitle-api');

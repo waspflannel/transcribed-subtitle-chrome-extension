@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Console\Attributes\Description;
@@ -15,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 #[Description('Fail running subtitle jobs whose stage has exceeded its timeout plus slack.')]
 class FailStalledSubtitleJobs extends Command
 {
-    public function handle(SubtitleJobFailureHandler $failureHandler, SubtitleJobAdmission $admission): int
+    public function handle(SubtitleJobFailureHandler $failureHandler, SubtitleJobAdmission $admission, LyricsCorrectionService $corrections): int
     {
         if (! (bool) config('subtitles.stalled_job.enabled', true)) {
             $this->components->info('Stalled-job watcher is disabled.');
@@ -71,6 +73,25 @@ class FailStalledSubtitleJobs extends Command
                 context: ['reason' => 'stalled_timeout'],
             );
 
+            $failed++;
+        }
+
+        $correctionCutoff = $now->copy()->subSeconds(
+            (int) config('subtitles.queue.worker_timeout_seconds', 1200) + $slackSeconds,
+        );
+
+        $stalledCorrections = SubtitleTrackLyricsCorrection::query()
+            ->whereIn('status', ['queued', 'running'])
+            ->where('updated_at', '<=', $correctionCutoff)
+            ->get(['subtitle_track_id', 'attempt_id']);
+
+        foreach ($stalledCorrections as $correction) {
+            $corrections->failAttempt(
+                (int) $correction->subtitle_track_id,
+                (string) $correction->attempt_id,
+                'lyrics_correction_failed',
+                'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.',
+            );
             $failed++;
         }
 
