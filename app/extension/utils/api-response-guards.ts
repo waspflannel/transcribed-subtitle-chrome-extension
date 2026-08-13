@@ -5,6 +5,7 @@ import type {
   JobResponse,
   LearningToken,
   LearningTokenResponse,
+  LyricsCorrectionStatus,
   PartialTrackResponse,
   SubtitleCue,
   SubtitleJobHistoryItem,
@@ -109,6 +110,25 @@ export function guardLearningTokenResponse(value: unknown): LearningTokenRespons
   guardLearningToken(response.token);
 
   return response as unknown as LearningTokenResponse;
+}
+
+export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionStatus {
+  const response = record(value, 'lyrics correction status');
+
+  requiredString(response, 'attemptId');
+  oneOf(response, 'status', ['queued', 'running', 'completed', 'failed']);
+  requiredString(response, 'updatedAt');
+
+  if (response.status === 'completed') {
+    guardTrackResponse(response.track);
+  }
+
+  if (response.status === 'failed') {
+    oneOf(response, 'errorCode', ['lyrics_do_not_match', 'lyrics_correction_failed']);
+    requiredString(response, 'message');
+  }
+
+  return response as LyricsCorrectionStatus;
 }
 
 function guardAccountSummary(value: unknown): AccountSummary {

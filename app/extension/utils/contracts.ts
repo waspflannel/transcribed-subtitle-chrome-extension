@@ -9,6 +9,8 @@ export type {
   LearningToken,
   LearningTokenRequest,
   LearningTokenResponse,
+  LyricsCorrectionRequest,
+  LyricsCorrectionStatus,
   PartialSubtitleCue,
   PartialTrackResponse,
   SubtitleCue,

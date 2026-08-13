@@ -827,6 +827,53 @@ select option {
   gap: 10px;
 }
 
+.lyrics-correction {
+  background: var(--night-high);
+  border: 1.5px solid var(--line);
+  border-radius: 5px;
+  gap: 8px;
+  padding: 13px 14px;
+}
+
+.lyrics-correction summary {
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lyrics-correction-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lyrics-correction textarea {
+  background: var(--night);
+  border: 1.5px solid var(--line);
+  color: var(--text);
+  min-height: 116px;
+  padding: 9px;
+  resize: vertical;
+  width: 100%;
+}
+
+.lyrics-correction-footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.lyrics-correction-footer span {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
 .search-field {
   display: block;
   flex: 1;
@@ -1496,6 +1543,15 @@ output {
 
   .np {
     padding: 12px;
+  }
+
+  .lyrics-correction-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lyrics-correction-footer .btn-primary {
+    width: 100%;
   }
 
   .row select {

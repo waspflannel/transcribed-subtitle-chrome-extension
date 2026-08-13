@@ -29,10 +29,11 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
+import { canApplyLyricsCorrection, lyricsCharacterCount } from '../../utils/lyrics-correction';
 
 type PanelErrorResponse = { ok: false; error: string };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account';
+type RequestErrorTarget = 'global' | 'account' | 'correction';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
 const {
@@ -50,6 +51,12 @@ const {
   watchSignin,
   watchSetup,
   watchReady,
+  lyricsCorrectionPanel,
+  lyricsCorrectionForm,
+  lyricsCorrectionTextarea,
+  lyricsCorrectionCount,
+  lyricsCorrectionStatus,
+  lyricsCorrectionButton,
   openAccountButton,
   toggleLanguagesButton,
   languageExpand,
@@ -117,6 +124,7 @@ let latestState: PanelState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
+let lyricsCorrectionRequestBusy = false;
 let hasAppliedDefaultView = false;
 let panelWindowId: number | undefined;
 let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -133,6 +141,8 @@ collapseButton.addEventListener('click', () => {
   window.close();
 });
 generateButton.addEventListener('click', () => void generateSubtitles());
+lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
+lyricsCorrectionTextarea.addEventListener('input', renderLyricsCorrectionInput);
 clearStateButton.addEventListener('click', () => void clearLocalState());
 openAccountButton.addEventListener('click', () => {
   showTab(tabButtons, panels, 'account');
@@ -237,7 +247,9 @@ const IDLE_POLL_INTERVAL_MS = 30_000;
 
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);
-  const hasInFlightJob = latestState?.subtitleState.type === 'loading';
+  const hasInFlightJob = latestState?.subtitleState.type === 'loading'
+    || latestState?.lyricsCorrection?.status === 'queued'
+    || latestState?.lyricsCorrection?.status === 'running';
   const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
   backendPollTimer = setTimeout(() => {
     if (document.visibilityState === 'visible') {
@@ -301,6 +313,37 @@ async function refreshBackendState(): Promise<void> {
 
 async function generateSubtitles(): Promise<void> {
   await sendPanelRequest({ type: 'panel.generateSubtitles' });
+}
+
+async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const state = latestState;
+  const subtitleState = state?.subtitleState;
+  const page = state?.pageStatus;
+
+  if (lyricsCorrectionRequestBusy || !state || subtitleState?.type !== 'ready' || !page?.supported || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, state.lyricsCorrection)) return;
+
+  lyricsCorrectionRequestBusy = true;
+  renderLyricsCorrectionInput();
+
+  try {
+    await sendPanelRequest({
+      type: 'panel.submitLyricsCorrection',
+      jobId: subtitleState.track.jobId,
+      trackId: subtitleState.track.trackId,
+      youtubeVideoId: page.videoId,
+      lyrics: lyricsCorrectionTextarea.value,
+    }, 'correction');
+  } finally {
+    lyricsCorrectionRequestBusy = false;
+    renderLyricsCorrectionInput();
+  }
+}
+
+function renderLyricsCorrectionInput(): void {
+  const count = lyricsCharacterCount(lyricsCorrectionTextarea.value);
+  lyricsCorrectionCount.textContent = `${count.toLocaleString()} / 25,000 characters`;
+  lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
@@ -505,14 +548,26 @@ function setLanguagesExpanded(expanded: boolean): void {
 
 function showPanelState(state: PanelState): void {
   const previousStateType = latestState?.subtitleState.type;
+  const previousCorrectionStatus = latestState?.lyricsCorrection?.status;
   latestState = state;
 
   const pageStatus = state.pageStatus;
-  const subtitleState = state.subtitleState;
+  let effectiveState = state;
   const settings = state.settings;
   const supported = Boolean(pageStatus?.supported);
   const { accountState } = state;
   const authenticated = accountState.status === 'authenticated';
+  const currentSubtitleState = state.subtitleState;
+
+  if (state.lyricsCorrection?.status === 'completed' && state.lyricsCorrection.track && currentSubtitleState.type === 'ready' && currentSubtitleState.track.trackId !== state.lyricsCorrection.track.trackId) {
+    latestState = {
+      ...state,
+      subtitleState: { type: 'ready', track: state.lyricsCorrection.track },
+    };
+    effectiveState = latestState;
+  }
+
+  const subtitleState = effectiveState.subtitleState;
 
   currentSettings = settings;
 
@@ -524,8 +579,8 @@ function showPanelState(state: PanelState): void {
     setLanguagesExpanded(false);
   }
 
-  showStatusBanner(state);
-  showWatchState(state, supported, authenticated);
+  showStatusBanner(effectiveState);
+  showWatchState(effectiveState, supported, authenticated);
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
   } else {
@@ -537,8 +592,10 @@ function showPanelState(state: PanelState): void {
   renderSettingsSummary(settings);
 
   generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading';
+  renderLyricsCorrectionInput();
+  renderLyricsCorrectionState(effectiveState);
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
-  renderGenerateNote(state, supported);
+  renderGenerateNote(effectiveState, supported);
 
   renderLanguagePair(settings);
   renderLanguagePickers(settings);
@@ -570,8 +627,29 @@ function showPanelState(state: PanelState): void {
     showTab(tabButtons, panels, 'watch');
   }
 
-  if (previousStateType !== state.subtitleState.type) {
+  if (previousStateType !== state.subtitleState.type || previousCorrectionStatus !== state.lyricsCorrection?.status) {
     scheduleNextBackendPoll();
+  }
+}
+
+function renderLyricsCorrectionState(state: PanelState): void {
+  const ready = state.subtitleState.type === 'ready' && Date.parse(state.subtitleState.track.expiresAt) > Date.now();
+  const correction = state.lyricsCorrection;
+  lyricsCorrectionPanel.hidden = !ready;
+
+  if (!correction) {
+    lyricsCorrectionStatus.textContent = '';
+    return;
+  }
+
+  if (correction.status === 'queued' || correction.status === 'running') {
+    lyricsCorrectionStatus.textContent = 'Formatting lyrics... Your current subtitles will keep playing.';
+  } else if (correction.status === 'completed') {
+    lyricsCorrectionStatus.textContent = 'Pasted lyrics applied';
+  } else if (correction.errorCode === 'lyrics_do_not_match') {
+    lyricsCorrectionStatus.textContent = 'These lyrics do not seem to match this song. Check the paste and try again.';
+  } else {
+    lyricsCorrectionStatus.textContent = 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
   }
 }
 
@@ -755,6 +833,12 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget): void
 
   if (errorTarget === 'account') {
     showAccountFeedback('error', message);
+
+    return;
+  }
+
+  if (errorTarget === 'correction') {
+    lyricsCorrectionStatus.textContent = message;
 
     return;
   }

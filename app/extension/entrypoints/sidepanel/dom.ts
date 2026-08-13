@@ -13,6 +13,12 @@ export interface PanelDom {
   watchSignin: HTMLElement;
   watchSetup: HTMLElement;
   watchReady: HTMLElement;
+  lyricsCorrectionPanel: HTMLElement;
+  lyricsCorrectionForm: HTMLFormElement;
+  lyricsCorrectionTextarea: HTMLTextAreaElement;
+  lyricsCorrectionCount: HTMLElement;
+  lyricsCorrectionStatus: HTMLElement;
+  lyricsCorrectionButton: HTMLButtonElement;
   openAccountButton: HTMLButtonElement;
   toggleLanguagesButton: HTMLButtonElement;
   languageExpand: HTMLElement;
@@ -91,6 +97,12 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     watchSignin: query(root, '[data-watch-signin]', HTMLElement),
     watchSetup: query(root, '[data-watch-setup]', HTMLElement),
     watchReady: query(root, '[data-watch-ready]', HTMLElement),
+    lyricsCorrectionPanel: query(root, '[data-lyrics-correction-panel]', HTMLElement),
+    lyricsCorrectionForm: query(root, '[data-lyrics-correction-form]', HTMLFormElement),
+    lyricsCorrectionTextarea: query(root, '[data-lyrics-correction-textarea]', HTMLTextAreaElement),
+    lyricsCorrectionCount: query(root, '[data-lyrics-correction-count]', HTMLElement),
+    lyricsCorrectionStatus: query(root, '[data-lyrics-correction-status]', HTMLElement),
+    lyricsCorrectionButton: query(root, '[data-action="apply-lyrics-correction"]', HTMLButtonElement),
     openAccountButton: query(root, '[data-action="open-account"]', HTMLButtonElement),
     toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),
     languageExpand: query(root, '[data-language-expand]', HTMLElement),

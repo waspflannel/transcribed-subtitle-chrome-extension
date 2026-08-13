@@ -797,9 +797,15 @@ export default defineContentScript({
           trackId: subtitleState.track.trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,
-        })) as { ok?: boolean; track?: TrackResponse; error?: string };
+        })) as { ok?: boolean; stale?: boolean; track?: TrackResponse; error?: string };
 
         if (response?.ok === false || !response?.track) {
+          if (response?.stale) {
+            pendingTokenKeys.delete(key);
+            updateOverlay();
+            return;
+          }
+
           throw new Error(response?.error ?? 'Unable to generate word card.');
         }
 

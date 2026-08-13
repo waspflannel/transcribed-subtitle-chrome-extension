@@ -7,6 +7,8 @@ import type {
   JobResponse,
   LearningTokenRequest,
   LearningTokenResponse,
+  LyricsCorrectionRequest,
+  LyricsCorrectionStatus,
   PartialTrackResponse,
   SubtitleJobHistoryResponse,
 } from './contracts';
@@ -16,6 +18,7 @@ import {
   guardExtensionAuthResponse,
   guardJobResponse,
   guardLearningTokenResponse,
+  guardLyricsCorrectionStatus,
   guardOkResponse,
   guardPartialTrackResponse,
   guardSubtitleJobHistoryResponse,
@@ -122,6 +125,32 @@ export class SubtitleApiClient {
       timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
       authToken,
     }, guardLearningTokenResponse);
+  }
+
+  public async startLyricsCorrection(
+    installId: string,
+    authToken: string,
+    jobId: string,
+    payload: LyricsCorrectionRequest,
+  ): Promise<LyricsCorrectionStatus> {
+    return this.request<LyricsCorrectionStatus>(`subtitle-jobs/${encodeURIComponent(jobId)}/lyrics`, installId, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
+      authToken,
+    }, guardLyricsCorrectionStatus);
+  }
+
+  public async getLyricsCorrectionStatus(
+    installId: string,
+    authToken: string,
+    jobId: string,
+  ): Promise<LyricsCorrectionStatus> {
+    return this.request<LyricsCorrectionStatus>(`subtitle-jobs/${encodeURIComponent(jobId)}/lyrics`, installId, {
+      method: 'GET',
+      timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
+      authToken,
+    }, guardLyricsCorrectionStatus);
   }
 
   private async request<TResponse>(
@@ -259,5 +288,14 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
 
     case 'internal_error':
       return 'The backend hit an unexpected error. Try again later.';
+
+    case 'lyrics_correction_in_progress':
+      return 'A pasted-lyrics correction is already in progress.';
+
+    case 'lyrics_do_not_match':
+      return 'These lyrics do not seem to match this song. Check the paste and try again.';
+
+    case 'lyrics_correction_failed':
+      return 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
   }
 }

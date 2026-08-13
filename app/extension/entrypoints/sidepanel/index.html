@@ -113,6 +113,18 @@
               </label>
               <button type="button" class="link-button" data-action="toggle-setup" aria-expanded="false">Regenerate</button>
             </div>
+            <details class="lyrics-correction" data-lyrics-correction-panel>
+              <summary>Use pasted lyrics</summary>
+              <form class="lyrics-correction-form" data-lyrics-correction-form>
+                <p class="card-copy">Paste the complete lyrics. We will keep the wording and fit it to the generated timing.</p>
+                <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
+                <div class="lyrics-correction-footer">
+                  <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>
+                  <button type="submit" class="btn-primary" data-action="apply-lyrics-correction">Format and apply</button>
+                </div>
+                <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status role="status" aria-live="polite"></p>
+              </form>
+            </details>
             <div class="transcript-list" data-transcript-list role="list" aria-label="Generated cues"></div>
             <p class="transcript-status" data-transcript-status role="status" aria-live="polite"></p>
           </div>
