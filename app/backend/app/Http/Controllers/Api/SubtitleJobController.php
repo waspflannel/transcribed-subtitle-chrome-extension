@@ -145,7 +145,6 @@ class SubtitleJobController extends Controller
                     ->where('public_id', $jobId)
                     ->whereBelongsTo($this->extensionUser($request));
             })
-            ->latest('updated_at')
             ->firstOrFail();
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());

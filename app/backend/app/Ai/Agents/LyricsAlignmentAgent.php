@@ -31,9 +31,10 @@ timestamps, translations, tokens, romanization, or explanations.
 
 Preserve the pasted wording, case, punctuation, and source order exactly. Line
 breaks are hints, not fixed cue boundaries. Split at natural phrase boundaries
-and keep every sourceText at or below 84 characters. Skip obvious non-sung
-labels, section headings, and credits. Return isMatch false when the paste is
-for a different song or the alignment is unreliable.
+and keep every sourceText at or below 84 characters. A standalone section
+heading or credit line may be omitted, but never omit a line that contains lyric
+words. Return isMatch false when the paste is for a different song or the
+alignment is unreliable.
 INSTRUCTIONS;
     }
 

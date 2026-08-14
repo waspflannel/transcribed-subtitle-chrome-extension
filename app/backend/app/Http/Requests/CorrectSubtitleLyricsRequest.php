@@ -32,15 +32,7 @@ class CorrectSubtitleLyricsRequest extends FormRequest
             function (Validator $validator): void {
                 $lyrics = $this->input('lyrics');
 
-                if (! is_string($lyrics)) {
-                    return;
-                }
-
-                if (mb_strlen($lyrics, 'UTF-8') > 25000) {
-                    $validator->errors()->add('lyrics', 'Lyrics may not exceed 25,000 characters.');
-                }
-
-                if (preg_match('/[\p{L}\p{N}]/u', $lyrics) !== 1) {
+                if (is_string($lyrics) && preg_match('/[\p{L}\p{N}]/u', $lyrics) !== 1) {
                     $validator->errors()->add('lyrics', 'Lyrics must contain at least one letter or number.');
                 }
             },

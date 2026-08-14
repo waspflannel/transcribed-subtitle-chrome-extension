@@ -14,6 +14,8 @@ return new class extends Migration
             $table->uuid('attempt_id')->unique();
             $table->string('status', 16)->index();
             $table->text('lyrics')->nullable();
+            $table->unsignedInteger('work_revision')->default(0);
+            $table->longText('work_state')->nullable();
             $table->string('error_code', 64)->nullable();
             $table->text('error_message')->nullable();
             $table->timestamps();

@@ -80,6 +80,8 @@ class FailStalledSubtitleJobsTest extends TestCase
         $correction = $track->lyricsCorrection()->create([
             'attempt_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3030',
             'status' => 'running',
+            'work_revision' => 3,
+            'work_state' => ['stage' => 'tokenizing', 'batchIndex' => 1, 'cues' => [['cueId' => 'cue-0001', 'sourceText' => 'private draft cue']]],
             'lyrics' => 'stalled private lyrics',
         ]);
         $correction->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
@@ -89,5 +91,26 @@ class FailStalledSubtitleJobsTest extends TestCase
         $correction->refresh();
         $this->assertSame('failed', $correction->status);
         $this->assertNull($correction->lyrics);
+        $this->assertNull($correction->work_state);
+    }
+
+    public function test_it_does_not_fail_queued_lyrics_corrections_waiting_in_the_queue(): void
+    {
+        $job = SubtitleJob::factory()->create(['status' => 'completed']);
+        $track = SubtitleTrack::factory()->create(['subtitle_job_id' => $job->id]);
+        $correction = $track->lyricsCorrection()->create([
+            'attempt_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3031',
+            'status' => 'queued',
+            'work_revision' => 0,
+            'work_state' => ['stage' => 'aligning'],
+            'lyrics' => 'waiting private lyrics',
+        ]);
+        $correction->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
+
+        $correction->refresh();
+        $this->assertSame('queued', $correction->status);
+        $this->assertSame('waiting private lyrics', $correction->lyrics);
     }
 }

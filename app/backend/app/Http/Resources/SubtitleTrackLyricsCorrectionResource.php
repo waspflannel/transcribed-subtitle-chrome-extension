@@ -14,7 +14,6 @@ class SubtitleTrackLyricsCorrectionResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $track = $this->resource->track()->with('job')->first();
         $resource = [
             'attemptId' => $this->attempt_id,
             'status' => $this->status,
@@ -22,7 +21,7 @@ class SubtitleTrackLyricsCorrectionResource extends JsonResource
         ];
 
         if ($this->status === 'completed') {
-            $resource['track'] = SubtitleTrackResource::make($track)->resolve();
+            $resource['track'] = SubtitleTrackResource::make($this->resource->track)->resolve();
         }
 
         if ($this->status === 'failed') {

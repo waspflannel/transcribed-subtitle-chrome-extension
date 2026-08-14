@@ -12,6 +12,8 @@ class SubtitleTrackLyricsCorrection extends Model
         'attempt_id',
         'status',
         'lyrics',
+        'work_revision',
+        'work_state',
         'error_code',
         'error_message',
     ];
@@ -25,6 +27,8 @@ class SubtitleTrackLyricsCorrection extends Model
     {
         return [
             'lyrics' => 'encrypted',
+            'work_revision' => 'integer',
+            'work_state' => 'encrypted:array',
         ];
     }
 }

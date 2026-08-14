@@ -16,6 +16,7 @@ use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
+use App\Models\SubtitleTrackLyricsCorrection;
 use App\Models\User;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\SubtitleAudioWorkspace;
@@ -33,10 +34,8 @@ use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
-use App\Services\TranslationAnalysis\CueAnalysisBatchResult;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
-use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
@@ -45,6 +44,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
@@ -515,7 +515,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $response->assertAccepted()->assertJsonPath('status', 'queued')->assertJsonStructure(['attemptId', 'status', 'updatedAt']);
-        Queue::assertPushed(LyricsCorrectionJob::class, fn (LyricsCorrectionJob $queued): bool => $queued->trackId === $job->track->id && $queued->subtitleJobId === $job->id && $queued->attemptId === $response->json('attemptId'));
+        Queue::assertPushed(LyricsCorrectionJob::class, fn (LyricsCorrectionJob $queued): bool => $queued->trackId === $job->track->id && $queued->subtitleJobId === $job->id && $queued->attemptId === $response->json('attemptId') && $queued->expectedRevision === 0);
         $this->assertDatabaseMissing('subtitle_track_lyrics_corrections', ['lyrics' => 'first transcript segment second transcript segment']);
     }
 
@@ -534,7 +534,7 @@ class SubtitleJobApiTest extends TestCase
             'lyrics' => "First lyric line\nSecond lyric line",
         ])->assertAccepted();
 
-        (new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId')))->handle(app(LyricsCorrectionService::class));
+        $this->runCorrectionToCompletion($job, $correction->json('attemptId'));
 
         $job->refresh()->load('track');
         $this->assertNotSame($oldTrackId, $job->track->public_id);
@@ -545,10 +545,119 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
     }
 
+    public function test_transient_correction_provider_failure_requeues_and_retry_completes(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $calls = 0;
+        Queue::fake();
+
+        LyricsAlignmentAgent::fake(function () use (&$calls): array {
+            $calls++;
+
+            if ($calls === 1) {
+                throw RateLimitedException::forProvider('openai', 429);
+            }
+
+            return ['isMatch' => true, 'cues' => [
+                ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'First lyric line'],
+                ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Second lyric line'],
+            ]];
+        })->preventStrayPrompts();
+
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+            'lyrics' => "First lyric line\nSecond lyric line",
+        ])->assertAccepted();
+        $queuedJob = new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0);
+
+        try {
+            $queuedJob->handle(app(LyricsCorrectionService::class));
+            $this->fail('Expected the first provider attempt to be transient.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertTrue($exception->isTransient());
+        }
+
+        $this->assertDatabaseHas('subtitle_track_lyrics_corrections', [
+            'attempt_id' => $correction->json('attemptId'),
+            'status' => 'running',
+            'work_revision' => 0,
+        ]);
+
+        $queuedJob->handle(app(LyricsCorrectionService::class));
+        $this->runCorrectionToCompletion($job, $correction->json('attemptId'), startRevision: 1);
+
+        $this->assertSame(2, $calls);
+        $this->assertDatabaseHas('subtitle_track_lyrics_corrections', [
+            'attempt_id' => $correction->json('attemptId'),
+            'status' => 'completed',
+        ]);
+    }
+
+    public function test_section_heading_filter_does_not_drop_sung_words(): void
+    {
+        LyricsAlignmentAgent::fake([
+            ['isMatch' => true, 'cues' => [
+                ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'First lyric line'],
+                ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Second lyric line'],
+            ]],
+        ]);
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $oldTrackId = $job->track->public_id;
+        Queue::fake();
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+            'lyrics' => "Chorus we sing the whole next section\nFirst lyric line\nSecond lyric line",
+        ])->assertAccepted();
+
+        (new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0))->handle(app(LyricsCorrectionService::class));
+
+        $job->refresh()->load('track');
+        $this->assertSame($oldTrackId, $job->track->public_id);
+        $this->assertSame('failed', $job->track->lyricsCorrection->status);
+    }
+
+    public function test_correction_worker_rechecks_entitlement_before_provider_work(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        Queue::fake();
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+            'lyrics' => 'first transcript segment second transcript segment',
+        ])->assertAccepted();
+
+        $job->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
+        LyricsAlignmentAgent::fake([])->preventStrayPrompts();
+
+        (new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0))->handle(app(LyricsCorrectionService::class));
+
+        LyricsAlignmentAgent::assertNeverPrompted();
+        $this->assertDatabaseHas('subtitle_track_lyrics_corrections', [
+            'attempt_id' => $correction->json('attemptId'),
+            'status' => 'failed',
+        ]);
+    }
+
+    public function test_correction_timeout_is_bounded_below_real_queue_retry_after(): void
+    {
+        config([
+            'subtitles.queue.connection' => 'database',
+            'subtitles.enrichment.timeout_seconds' => 120,
+            'subtitles.queue.worker_timeout_seconds' => 1200,
+            'queue.connections.database.retry_after' => 1260,
+        ]);
+
+        $job = new LyricsCorrectionJob(1, 1, (string) Str::uuid(), 0);
+
+        $this->assertSame(300, $job->timeout);
+        $this->assertLessThan(config('subtitles.queue.worker_timeout_seconds'), $job->timeout);
+        $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
+    }
+
     public function test_correction_status_is_owner_scoped_and_does_not_expose_lyrics(): void
     {
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        Queue::fake();
         $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
@@ -1970,6 +2079,26 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('error.code', 'not_found');
     }
 
+    private function runCorrectionToCompletion(SubtitleJob $job, string $attemptId, int $startRevision = 0, int $maxRevisions = 60): void
+    {
+        $service = app(LyricsCorrectionService::class);
+
+        for ($revision = $startRevision; $revision < $maxRevisions; $revision++) {
+            $row = SubtitleTrackLyricsCorrection::query()
+                ->where('subtitle_track_id', $job->track->id)
+                ->where('attempt_id', $attemptId)
+                ->firstOrFail();
+
+            if (in_array($row->status, ['completed', 'failed'], true)) {
+                return;
+            }
+
+            (new LyricsCorrectionJob($job->track->id, $job->id, $attemptId, $revision))->handle($service);
+        }
+
+        $this->fail('Lyrics correction did not reach a terminal state within the expected revisions.');
+    }
+
     private function arabicGreeting(): string
     {
         return "\u{0645}\u{0631}\u{062D}\u{0628}\u{0627} \u{0628}\u{0643}\u{0645}";
@@ -2211,325 +2340,5 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
             ],
             webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n",
         );
-    }
-}
-
-class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisProvider
-{
-    public function __construct()
-    {
-        parent::__construct(new LearningTokenOutputValidator);
-    }
-
-    public int $calls = 0;
-
-    public int $tokenizationCalls = 0;
-
-    public int $romanizationCalls = 0;
-
-    public int $translationCalls = 0;
-
-    public int $tokenCalls = 0;
-
-    public bool $shouldFail = false;
-
-    public bool $tokenizationShouldFail = false;
-
-    public bool $romanizationShouldFail = false;
-
-    public bool $translationShouldFail = false;
-
-    public ?\Closure $beforeTokenizationResult = null;
-
-    public ?\Closure $beforeTokenResult = null;
-
-    /**
-     * @var array<int, string>
-     */
-    public array $sourceLanguages = [];
-
-    /**
-     * @var array<int, string>
-     */
-    public array $targetLanguages = [];
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     * @param  array<int, array<string, mixed>>  $allCues
-     */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
-    {
-        $this->tokenizationCalls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-
-        if ($this->tokenizationShouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        $result = new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => [
-                    ...$cue,
-                    'translatedText' => (string) $cue['sourceText'],
-                    'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
-                ],
-                $batch,
-            ),
-            'unknown',
-        );
-
-        if ($this->beforeTokenizationResult !== null) {
-            ($this->beforeTokenizationResult)();
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
-    public function enrichCueBatch(
-        array $batch,
-        string $sourceLanguage,
-        string $targetLanguage,
-        bool $includeRomanization = true,
-    ): CueEnrichmentResult {
-        $this->calls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-        $this->targetLanguages[] = $targetLanguage;
-
-        if ($this->shouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                function (array $cue) use ($includeRomanization): array {
-                    $enrichedCue = [
-                        ...$cue,
-                        'translatedText' => (string) ($cue['translatedText'] ?? $cue['sourceText']),
-                        'tokens' => array_map(
-                            fn (array $token): array => [
-                                ...$token,
-                                'gloss' => $this->glossForToken((string) $token['text']),
-                                ...($includeRomanization && is_string($token['romanization'] ?? null)
-                                    ? ['romanization' => $token['romanization']]
-                                    : []),
-                            ],
-                            $cue['tokens'],
-                        ),
-                    ];
-
-                    if ($includeRomanization && is_string($cue['romanization'] ?? null)) {
-                        $enrichedCue['romanization'] = $cue['romanization'];
-                    }
-
-                    return $enrichedCue;
-                },
-                $batch,
-            ),
-            'unknown',
-        );
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     * @param  array<int, array<string, mixed>>  $allCues
-     */
-    public function analyzeCueBatch(
-        array $batch,
-        array $allCues,
-        string $sourceLanguage,
-        string $targetLanguage,
-    ): CueAnalysisBatchResult {
-        $this->tokenizationCalls++;
-        $this->translationCalls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-        $this->targetLanguages[] = $targetLanguage;
-
-        if ($this->tokenizationShouldFail || $this->translationShouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        $result = new CueAnalysisBatchResult(
-            new CueEnrichmentResult(
-                array_map(
-                    fn (array $cue): array => [
-                        ...$cue,
-                        'translatedText' => (string) $cue['sourceText'],
-                        'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
-                    ],
-                    $batch,
-                ),
-                'unknown',
-            ),
-            new CueEnrichmentResult(
-                array_map(
-                    fn (array $cue): array => [
-                        ...$cue,
-                        'translatedText' => 'Translated '.$cue['sourceText'],
-                    ],
-                    $batch,
-                ),
-                'unknown',
-            ),
-        );
-
-        if ($this->beforeTokenizationResult !== null) {
-            ($this->beforeTokenizationResult)();
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
-    public function romanizeCueBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
-    {
-        $this->romanizationCalls++;
-
-        if ($this->romanizationShouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => [
-                    ...$cue,
-                    'translatedText' => (string) $cue['sourceText'],
-                    'romanization' => $this->romanizationForCue((string) $cue['sourceText'], $sourceLanguage),
-                    'tokens' => array_map(
-                        fn (array $token): array => [
-                            ...$token,
-                            'romanization' => $this->romanizationForToken((string) $token['text']),
-                        ],
-                        $cue['tokens'],
-                    ),
-                ],
-                $batch,
-            ),
-            'unknown',
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $cue
-     * @param  array<string, mixed>  $token
-     * @return array<string, mixed>
-     */
-    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage): array
-    {
-        $this->tokenCalls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-        $this->targetLanguages[] = $targetLanguage;
-
-        if ($this->shouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        $text = (string) $token['text'];
-
-        if ($this->beforeTokenResult !== null) {
-            ($this->beforeTokenResult)();
-        }
-
-        return [
-            'index' => $token['index'],
-            'text' => $text,
-            'normalizedText' => $token['normalizedText'],
-            'gloss' => $text.' gloss',
-            'romanization' => $text.' romanized',
-            'usageNote' => 'Clicked token from cue '.$cue['cueId'].'.',
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function tokenizeCue(string $sourceText, string $sourceLanguage): array
-    {
-        if ($sourceLanguage === 'jpn') {
-            $comparableText = $this->comparableText($sourceText);
-
-            if ($comparableText === "\u{79C1}\u{306F}\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}") {
-                return $this->japaneseLearningTokens();
-            }
-
-            if ($comparableText === "\u{306D}\u{3048}\u{4ECA}\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}") {
-                return [
-                    ['index' => 0, 'text' => "\u{306D}\u{3048}", 'normalizedText' => "\u{306D}\u{3048}"],
-                    ['index' => 1, 'text' => "\u{4ECA}", 'normalizedText' => "\u{4ECA}"],
-                    ['index' => 2, 'text' => "\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}", 'normalizedText' => "\u{601D}\u{3063}\u{3066}\u{3044}\u{3066}"],
-                    ['index' => 3, 'text' => "\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}", 'normalizedText' => "\u{3042}\u{305D}\u{3046}\u{3058}\u{3083}\u{306A}"],
-                ];
-            }
-        }
-
-        $words = array_values(array_filter(
-            preg_split('/\s+/u', trim($sourceText)) ?: [],
-            fn (string $word): bool => $word !== '',
-        ));
-
-        if ($words === []) {
-            $words = [$sourceText];
-        }
-
-        return array_map(
-            fn (string $word, int $index): array => [
-                'index' => $index,
-                'text' => $word,
-                'normalizedText' => strtolower($word),
-            ],
-            $words,
-            array_keys($words),
-        );
-    }
-
-    private function glossForToken(string $token): string
-    {
-        return match ($token) {
-            "\u{65E5}\u{672C}\u{8A9E}" => 'Japanese language',
-            "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}" => 'am studying',
-            default => $token,
-        };
-    }
-
-    private function romanizationForCue(string $sourceText, string $sourceLanguage): string
-    {
-        return $sourceLanguage === 'jpn' && $this->comparableText($sourceText) === "\u{79C1}\u{306F}\u{65E5}\u{672C}\u{8A9E}\u{3092}\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}"
-            ? 'watashi wa nihongo o benkyo shite imasu'
-            : 'romanized '.$sourceText;
-    }
-
-    private function romanizationForToken(string $token): string
-    {
-        return match ($token) {
-            "\u{79C1}" => 'watashi',
-            "\u{306F}" => 'wa',
-            "\u{65E5}\u{672C}\u{8A9E}" => 'nihongo',
-            "\u{3092}" => 'o',
-            "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}" => 'benkyo shite imasu',
-            default => 'romanized '.$token,
-        };
-    }
-
-    private function comparableText(string $text): string
-    {
-        return (string) preg_replace('/\s+/u', '', $text);
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function japaneseLearningTokens(): array
-    {
-        return [
-            ['index' => 0, 'text' => "\u{79C1}", 'normalizedText' => "\u{79C1}"],
-            ['index' => 1, 'text' => "\u{306F}", 'normalizedText' => "\u{306F}"],
-            ['index' => 2, 'text' => "\u{65E5}\u{672C}\u{8A9E}", 'normalizedText' => "\u{65E5}\u{672C}\u{8A9E}"],
-            ['index' => 3, 'text' => "\u{3092}", 'normalizedText' => "\u{3092}"],
-            ['index' => 4, 'text' => "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}", 'normalizedText' => "\u{52C9}\u{5F37}\u{3057}\u{3066}\u{3044}\u{307E}\u{3059}"],
-        ];
     }
 }

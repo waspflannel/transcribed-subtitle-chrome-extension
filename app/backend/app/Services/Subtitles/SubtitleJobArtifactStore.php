@@ -163,7 +163,7 @@ class SubtitleJobArtifactStore
         $this->put($job, $artifactType, [
             'cues' => $cues,
             'sourceDialect' => $sourceDialect,
-            'batchPlan' => $this->buildBatchPlan($cues),
+            'batchPlan' => $this->batchPlan($cues),
         ]);
     }
 
@@ -391,7 +391,7 @@ class SubtitleJobArtifactStore
      * @param  array<int, array<string, mixed>>  $cues
      * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
-    private function buildBatchPlan(array $cues): array
+    public function batchPlan(array $cues): array
     {
         $count = count($cues);
 

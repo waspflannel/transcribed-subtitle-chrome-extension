@@ -7,10 +7,24 @@ use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Tests\TestCase;
 
 class AiAgentInstructionTest extends TestCase
 {
+    public function test_subtitle_agents_leave_temperature_unset_for_model_compatibility(): void
+    {
+        foreach ([
+            CueAnalysisAgent::class,
+            CueEnrichmentAgent::class,
+            CueRomanizationAgent::class,
+            CueTokenizationAgent::class,
+            LearningTokenCardAgent::class,
+        ] as $agentClass) {
+            $this->assertNull(TextGenerationOptions::forAgent(new $agentClass)->temperature);
+        }
+    }
+
     public function test_tokenization_agent_owns_stable_token_boundary_rules(): void
     {
         $instructions = (new CueTokenizationAgent)->instructions();

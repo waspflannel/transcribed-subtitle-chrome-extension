@@ -3,11 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -76,12 +78,18 @@ class FailStalledSubtitleJobs extends Command
             $failed++;
         }
 
+        // Corrections are abandoned only once their running unit could not
+        // have been retried: the queue retry_after, the job's maximum backoff,
+        // and the stalled-job slack all sit inside this cutoff. Queued work
+        // waits indefinitely for a worker slot and is never failed here.
         $correctionCutoff = $now->copy()->subSeconds(
-            (int) config('subtitles.queue.worker_timeout_seconds', 1200) + $slackSeconds,
+            (int) config('queue.connections.'.SubtitleQueue::connection().'.retry_after', 0)
+                + LyricsCorrectionJob::MAX_BACKOFF_SECONDS
+                + $slackSeconds,
         );
 
         $stalledCorrections = SubtitleTrackLyricsCorrection::query()
-            ->whereIn('status', ['queued', 'running'])
+            ->where('status', 'running')
             ->where('updated_at', '<=', $correctionCutoff)
             ->get(['subtitle_track_id', 'attempt_id']);
 
