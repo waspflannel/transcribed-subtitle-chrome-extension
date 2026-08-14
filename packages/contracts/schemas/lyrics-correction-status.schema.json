@@ -33,6 +33,7 @@
   "allOf": [
     {
       "if": {
+        "required": ["status"],
         "properties": {"status": {"const": "completed"}}
       },
       "then": {
@@ -42,6 +43,7 @@
     },
     {
       "if": {
+        "required": ["status"],
         "properties": {"status": {"const": "failed"}}
       },
       "then": {
@@ -50,6 +52,24 @@
           "errorCode": {"type": "string"},
           "message": {"type": "string"}
         }
+      }
+    },
+    {
+      "if": {
+        "required": ["status"],
+        "properties": {"status": {"enum": ["queued", "running", "failed"]}}
+      },
+      "then": {
+        "not": {"required": ["track"]}
+      }
+    },
+    {
+      "if": {
+        "required": ["status"],
+        "properties": {"status": {"enum": ["queued", "running", "completed"]}}
+      },
+      "then": {
+        "not": {"anyOf": [{"required": ["errorCode"]}, {"required": ["message"]}]}
       }
     }
   ]

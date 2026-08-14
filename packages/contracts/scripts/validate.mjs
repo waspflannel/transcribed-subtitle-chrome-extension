@@ -85,6 +85,21 @@ assertInvalid(createSubtitleJobRequest, {
   targetLanguage: 'not-a-language',
 }, 'invalid target language');
 
+const lyricsCorrectionStatus = ajv.getSchema('lyrics-correction-status.schema.json');
+assertInvalid(lyricsCorrectionStatus, {
+  attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
+  status: 'queued',
+  updatedAt: '2026-08-13T00:00:00Z',
+  track: {},
+}, 'queued correction with track');
+assertInvalid(lyricsCorrectionStatus, {
+  attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
+  status: 'completed',
+  updatedAt: '2026-08-13T00:00:00Z',
+  errorCode: 'lyrics_correction_failed',
+  message: 'failed',
+}, 'completed correction with error');
+
 await SwaggerParser.validate(path.join(root, 'openapi.json'));
 console.log('validated openapi.json');
 

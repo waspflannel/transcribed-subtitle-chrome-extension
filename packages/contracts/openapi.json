@@ -359,7 +359,7 @@
         },
         "responses": {
           "202": {
-            "description": "Lyrics correction queued or already in progress.",
+            "description": "Lyrics correction accepted for asynchronous processing.",
             "content": {
               "application/json": {
                 "schema": {"$ref": "./schemas/lyrics-correction-status.schema.json"}
@@ -367,6 +367,8 @@
             }
           },
           "404": {"$ref": "#/components/responses/NotFound"},
+          "402": {"$ref": "#/components/responses/PaymentRequired"},
+          "409": {"$ref": "#/components/responses/Conflict"},
           "401": {"$ref": "#/components/responses/Unauthenticated"},
           "403": {"$ref": "#/components/responses/Forbidden"},
           "422": {"$ref": "#/components/responses/ValidationError"},
@@ -568,6 +570,26 @@
       },
       "NotFound": {
         "description": "Resource not found.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "PaymentRequired": {
+        "description": "An active billing plan is required.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./schemas/api-error.schema.json"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "A correction is already in progress.",
         "content": {
           "application/json": {
             "schema": {
