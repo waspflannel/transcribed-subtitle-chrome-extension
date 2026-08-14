@@ -9,7 +9,7 @@ import {
 describe('backend API config', () => {
   it('defaults to the local Laravel API for development builds', () => {
     expect(resolveBackendApiBaseUrl()).toBe(LOCAL_BACKEND_API_BASE_URL);
-    expect(backendApiHostPermission(resolveBackendApiBaseUrl())).toBe('http://localhost:8000/*');
+    expect(backendApiHostPermission(resolveBackendApiBaseUrl())).toBe('http://127.0.0.1:8001/*');
   });
 
   it('normalizes production API base URLs and derives exact host permissions', () => {

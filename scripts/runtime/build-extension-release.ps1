@@ -66,8 +66,8 @@ try {
         throw "Built manifest does not include expected host permission: $expectedHostPermission"
     }
 
-    if ($manifest.host_permissions -contains "http://localhost:8000/*") {
-        throw "Built manifest still contains localhost backend host permission."
+    if ($manifest.host_permissions | Where-Object { $_ -match '^http://(localhost|127\.0\.0\.1)(:\d+)?/\*$' }) {
+        throw "Built manifest still contains a local backend host permission."
     }
 
     npm run zip

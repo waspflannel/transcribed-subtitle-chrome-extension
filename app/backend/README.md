@@ -9,7 +9,7 @@ composer install
 php artisan migrate
 php artisan test --compact
 vendor/bin/pint --dirty --format agent
-php artisan serve
+php artisan serve --host=127.0.0.1 --port=8001
 ```
 
 ## Runtime Profiles
@@ -20,13 +20,13 @@ Prerequisites: Docker, official PHP 8.4 from winget or another normal PHP build 
 
 ```powershell
 .\scripts\runtime\use-postgres-redis.ps1
-.\scripts\runtime\artisan.ps1 serve
+.\scripts\runtime\artisan.ps1 serve --host=127.0.0.1 --port=8001
 ```
 
 The script starts Postgres and Redis through Docker Compose, writes the ignored local `.env` to the Postgres + Redis profile, clears Laravel config, verifies `pdo_pgsql`, and runs migrations. Start the API server:
 
 ```powershell
-.\scripts\runtime\artisan.ps1 serve
+.\scripts\runtime\artisan.ps1 serve --host=127.0.0.1 --port=8001
 ```
 
 For local subtitle generation, prefer the runtime launcher from the repository root. It replaces any existing local backend server and subtitle queue workers for this project, then starts a fresh backend plus the configured worker groups:
@@ -34,6 +34,8 @@ For local subtitle generation, prefer the runtime launcher from the repository r
 ```powershell
 .\scripts\runtime\start-local-backend-workers.ps1
 ```
+
+The local launcher and development extension both use `http://127.0.0.1:8001` by default.
 
 Script-managed workers run without a max-time limit by default; rerun the launcher when you want to replace the local backend and worker pool.
 

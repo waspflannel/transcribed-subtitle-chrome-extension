@@ -2,7 +2,7 @@
 param(
     [string]$Php,
     [string]$HostName = "127.0.0.1",
-    [int]$Port = 8000,
+    [int]$Port = 8001,
     [int]$WorkerTimeoutSeconds = 1200,
     [int]$WorkerMaxTimeSeconds = 0,
     [int]$WorkerMemoryMb = 256,
@@ -366,7 +366,7 @@ function Test-StartedProcesses {
                 ""
             }
 
-            Write-Warning "$($process.kind) '$($process.name)' exited immediately. stderr: $stderr"
+            throw "$($process.kind) '$($process.name)' exited immediately. stderr: $stderr"
         }
     }
 }
