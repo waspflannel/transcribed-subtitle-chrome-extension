@@ -54,7 +54,7 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 - Netflix or other platforms.
 - Real-time live captioning.
 - Cloud sync beyond the account, billing, extension-token, usage, and job-history records required for the paid beta.
-- Subtitle editing.
+- General subtitle editing. The first release includes the narrow **Use pasted lyrics** correction flow for a completed generated track; it preserves the pasted words, reuses existing timing, and rebuilds derived learning data before atomic replacement.
 - Direct provider calls from the extension.
 
 ## Deferred Learning Upgrades

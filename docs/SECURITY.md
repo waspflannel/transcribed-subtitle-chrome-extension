@@ -19,6 +19,7 @@
   - Temporary raw audio files during processing.
   - Provider request/response data, including language detection output, transcripts, translations, and token metadata.
   - Persisted generated subtitle tracks retained for 30 days.
+  - Pasted lyrics and intermediate correction work state, both encrypted at rest and cleared on completed, failed, expired, or deleted attempts.
 - Actors:
   - Language learner using the extension.
   - Malicious or buggy extension/client sending API requests.
@@ -141,8 +142,9 @@ Project-specific security defaults:
 - Tiered generation admission and AI batch concurrency use authenticated `user_id` as the owner and may log only hashed user IDs. Runtime trace rows must not store raw user IDs or install IDs.
 - Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
 - Password reset rotates the remember token and revokes all scoped Sanctum tokens. A cache miss for clicked-token enrichment requires active billing before the provider call; already-stored metadata remains readable to its owner.
-- Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
-- Laravel responses set CSP, frame, MIME, referrer, permissions, and cross-origin isolation headers. HSTS is sent only for secure production requests; trusted-proxy and session-cookie configuration remain an operator-owned hosting decision.
+  - Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
+  - Pasted lyrics and the encrypted correction work state never leave the backend database: they are excluded from logs, traces, API resources, and extension payloads, and both fields are cleared when an attempt completes, fails, expires, or is deleted.
+  - Laravel responses set CSP, frame, MIME, referrer, permissions, and cross-origin isolation headers. HSTS is sent only for secure production requests; trusted-proxy and session-cookie configuration remain an operator-owned hosting decision.
 - SaaS website analytics are first-party structured logs only for beta. Analytics events must not include transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, raw audio paths, or account emails.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
 - Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.
