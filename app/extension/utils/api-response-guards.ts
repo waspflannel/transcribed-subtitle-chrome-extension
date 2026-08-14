@@ -119,13 +119,22 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   oneOf(response, 'status', ['queued', 'running', 'completed', 'failed']);
   requiredString(response, 'updatedAt');
 
+  if (response.status === 'queued' || response.status === 'running') {
+    forbidden(response, 'track', response.status);
+    forbidden(response, 'errorCode', response.status);
+    forbidden(response, 'message', response.status);
+  }
+
   if (response.status === 'completed') {
     guardTrackResponse(response.track);
+    forbidden(response, 'errorCode', response.status);
+    forbidden(response, 'message', response.status);
   }
 
   if (response.status === 'failed') {
     oneOf(response, 'errorCode', ['lyrics_do_not_match', 'lyrics_correction_failed']);
     requiredString(response, 'message');
+    forbidden(response, 'track', response.status);
   }
 
   return response as LyricsCorrectionStatus;
@@ -297,6 +306,12 @@ function requiredBoolean(value: Record<string, unknown>, key: string): void {
 function literal<TValue extends string | boolean>(value: Record<string, unknown>, key: string, expected: TValue): void {
   if (value[key] !== expected) {
     throw invalid(`Backend response field ${key} must be ${String(expected)}.`);
+  }
+}
+
+function forbidden(value: Record<string, unknown>, key: string, status: string): void {
+  if (key in value) {
+    throw invalid(`Backend response field ${key} must be absent when status is ${status}.`);
   }
 }
 

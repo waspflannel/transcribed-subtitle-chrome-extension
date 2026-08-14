@@ -35,12 +35,17 @@ import {
 } from '../utils/settings';
 import type { ExtensionSettings } from '../utils/settings-model';
 import { trackWithLearningToken } from '../utils/track-tokens';
-import { acceptLyricsCorrectionTrack } from '../utils/lyrics-correction';
 import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
+import {
+  lyricsCorrectionTabState,
+  nextLyricsCorrectionSync,
+  syncLyricsCorrectionStatus,
+  type LyricsCorrectionTabState,
+} from '../utils/lyrics-correction';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
-const tabLyricsCorrections = new Map<number, { jobId: string; status: LyricsCorrectionStatus }>();
+const tabLyricsCorrectionStates = new Map<number, LyricsCorrectionTabState>();
 const panelPorts = new Set<Browser.runtime.Port>();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
 let cachedPanelJobHistoryError: string | undefined;
@@ -82,7 +87,7 @@ export default defineBackground(() => {
 
   browser.tabs.onRemoved.addListener((tabId) => {
     tabSubtitleStates.delete(tabId);
-    tabLyricsCorrections.delete(tabId);
+    tabLyricsCorrectionStates.delete(tabId);
   });
 });
 
@@ -542,7 +547,10 @@ async function submitLyricsCorrectionFromPanel(
     message.jobId,
     { lyrics: message.lyrics },
   );
-  tabLyricsCorrections.set(tabId, { jobId: message.jobId, status: correction });
+  tabLyricsCorrectionStates.set(tabId, nextLyricsCorrectionSync(
+    tabLyricsCorrectionStates.get(tabId) ?? lyricsCorrectionTabState(),
+    { type: 'submit', jobId: message.jobId, status: correction },
+  ));
 
   if (correction.status === 'completed' && correction.track) {
     await publishSubtitleState(tabId, { type: 'ready', track: correction.track });
@@ -587,7 +595,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
   await clearLocalExtensionState();
   await clearRememberedTracks();
   tabSubtitleStates.clear();
-  tabLyricsCorrections.clear();
+  tabLyricsCorrectionStates.clear();
 
   const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
@@ -635,7 +643,7 @@ async function logoutFromPanel(): Promise<PanelState> {
   }
 
   await clearExtensionSession();
-  tabLyricsCorrections.clear();
+  tabLyricsCorrectionStates.clear();
 
   console.info('extension.account_logout_completed');
 
@@ -670,10 +678,18 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
       ? DEFAULT_SUBTITLE_STATE
       : await getSubtitleStateForPage(activeTabId, pageStatus);
 
-  const subtitleState = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
+  let subtitleState = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
     effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job) : Promise.resolve(null),
   );
   const lyricsCorrection = await syncLyricsCorrection(activeTabId, pageStatus, effectiveSession, installId, options.syncBackend);
+
+  if (activeTabId !== null && pageStatus?.supported) {
+    const currentSubtitleState = tabSubtitleStates.get(activeTabId);
+
+    if (currentSubtitleState && isSubtitleStateForVideo(currentSubtitleState, pageStatus.videoId)) {
+      subtitleState = currentSubtitleState;
+    }
+  }
 
   if (activeTabId !== null && subtitleState.type === 'ready' && localState.type !== 'ready') {
     await publishSubtitleState(activeTabId, subtitleState);
@@ -702,7 +718,9 @@ async function syncLyricsCorrection(
   syncBackend: boolean,
 ): Promise<LyricsCorrectionStatus | null> {
   if (tabId === null || !pageStatus?.supported || !session) {
-    if (tabId !== null) tabLyricsCorrections.delete(tabId);
+    if (tabId !== null) {
+      tabLyricsCorrectionStates.delete(tabId);
+    }
 
     return null;
   }
@@ -711,57 +729,39 @@ async function syncLyricsCorrection(
     (candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status === 'completed',
   );
   if (!job) {
-    tabLyricsCorrections.delete(tabId);
+    tabLyricsCorrectionStates.delete(tabId);
 
     return null;
   }
 
-  const stored = tabLyricsCorrections.get(tabId);
-  const current = stored?.jobId === job.jobId ? stored.status : null;
-
-  if (!syncBackend && current) return current;
-
   try {
-    const correction = await subtitleApi.getLyricsCorrectionStatus(installId, session.plainTextToken, job.jobId);
+    const status = await syncLyricsCorrectionStatus({
+      tabId,
+      jobId: job.jobId,
+      syncBackend,
+      states: tabLyricsCorrectionStates,
+      fetchStatus: () => subtitleApi.getLyricsCorrectionStatus(installId, session.plainTextToken, job.jobId),
+    });
 
-    if (current && correction.attemptId !== current.attemptId && isLyricsCorrectionActive(current)) {
-      return current;
+    if (status?.status === 'completed' && status.track) {
+      const currentSubtitleState = tabSubtitleStates.get(tabId);
+      const currentTrack = currentSubtitleState?.type === 'ready' ? currentSubtitleState.track : null;
+
+      if (!currentTrack || currentTrack.trackId !== status.track.trackId) {
+        await publishSubtitleState(tabId, { type: 'ready', track: status.track });
+      }
     }
 
-    tabLyricsCorrections.set(tabId, { jobId: job.jobId, status: correction });
-
-    const acceptedTrack = correction.status === 'completed' && correction.track && current
-      ? acceptLyricsCorrectionTrack(
-        tabSubtitleStates.get(tabId)?.type === 'ready' ? tabSubtitleStates.get(tabId).track : correction.track,
-        correction,
-        correction.attemptId,
-      )
-      : correction.track;
-
-    if (acceptedTrack && subtitleStateTrackId(tabId) !== acceptedTrack.trackId) {
-      await publishSubtitleState(tabId, { type: 'ready', track: acceptedTrack });
-    }
-
-    return correction;
+    return status;
   } catch (error) {
     if (error instanceof SubtitleApiError && error.code === 'not_found') {
-      tabLyricsCorrections.delete(tabId);
+      tabLyricsCorrectionStates.delete(tabId);
 
       return null;
     }
 
-    return current;
+    return tabLyricsCorrectionStates.get(tabId)?.status ?? null;
   }
-}
-
-function subtitleStateTrackId(tabId: number): string | null {
-  const state = tabSubtitleStates.get(tabId);
-
-  return state?.type === 'ready' ? state.track.trackId : null;
-}
-
-function isLyricsCorrectionActive(status: LyricsCorrectionStatus): boolean {
-  return status.status === 'queued' || status.status === 'running';
 }
 
 async function getPanelJobHistory(
@@ -986,7 +986,7 @@ async function clearSessionIfInvalid(error: unknown): Promise<boolean> {
   }
 
   await clearExtensionSession();
-  tabLyricsCorrections.clear();
+  tabLyricsCorrectionStates.clear();
 
   return true;
 }

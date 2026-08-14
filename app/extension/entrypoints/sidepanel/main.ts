@@ -29,7 +29,13 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
-import { canApplyLyricsCorrection, lyricsCharacterCount } from '../../utils/lyrics-correction';
+import {
+  canApplyLyricsCorrection,
+  EMPTY_LYRICS_PASTE,
+  lyricsCharacterCount,
+  lyricsPasteForVideo,
+  type LyricsPasteBuffer,
+} from '../../utils/lyrics-correction';
 
 type PanelErrorResponse = { ok: false; error: string };
 type PanelResponse = PanelState | PanelErrorResponse;
@@ -136,13 +142,17 @@ let latestAppliedSeq = 0;
 let languagesExpanded = false;
 let setupExpandedWhileReady = false;
 let lastWatchVideoId: string | null = null;
+let lyricsPaste: LyricsPasteBuffer = EMPTY_LYRICS_PASTE;
 
 collapseButton.addEventListener('click', () => {
   window.close();
 });
 generateButton.addEventListener('click', () => void generateSubtitles());
 lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
-lyricsCorrectionTextarea.addEventListener('input', renderLyricsCorrectionInput);
+lyricsCorrectionTextarea.addEventListener('input', () => {
+  lyricsPaste = { ...lyricsPaste, value: lyricsCorrectionTextarea.value };
+  renderLyricsCorrectionInput();
+});
 clearStateButton.addEventListener('click', () => void clearLocalState());
 openAccountButton.addEventListener('click', () => {
   showTab(tabButtons, panels, 'account');
@@ -552,22 +562,11 @@ function showPanelState(state: PanelState): void {
   latestState = state;
 
   const pageStatus = state.pageStatus;
-  let effectiveState = state;
   const settings = state.settings;
   const supported = Boolean(pageStatus?.supported);
   const { accountState } = state;
   const authenticated = accountState.status === 'authenticated';
-  const currentSubtitleState = state.subtitleState;
-
-  if (state.lyricsCorrection?.status === 'completed' && state.lyricsCorrection.track && currentSubtitleState.type === 'ready' && currentSubtitleState.track.trackId !== state.lyricsCorrection.track.trackId) {
-    latestState = {
-      ...state,
-      subtitleState: { type: 'ready', track: state.lyricsCorrection.track },
-    };
-    effectiveState = latestState;
-  }
-
-  const subtitleState = effectiveState.subtitleState;
+  const subtitleState = state.subtitleState;
 
   currentSettings = settings;
 
@@ -577,10 +576,12 @@ function showPanelState(state: PanelState): void {
     lastWatchVideoId = watchVideoId;
     setupExpandedWhileReady = false;
     setLanguagesExpanded(false);
+    lyricsPaste = lyricsPasteForVideo(lyricsPaste, watchVideoId);
+    lyricsCorrectionTextarea.value = lyricsPaste.value;
   }
 
-  showStatusBanner(effectiveState);
-  showWatchState(effectiveState, supported, authenticated);
+  showStatusBanner(state);
+  showWatchState(state, supported, authenticated);
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
   } else {
@@ -593,9 +594,9 @@ function showPanelState(state: PanelState): void {
 
   generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading';
   renderLyricsCorrectionInput();
-  renderLyricsCorrectionState(effectiveState);
+  renderLyricsCorrectionState(state);
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
-  renderGenerateNote(effectiveState, supported);
+  renderGenerateNote(state, supported);
 
   renderLanguagePair(settings);
   renderLanguagePickers(settings);
