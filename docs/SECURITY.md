@@ -142,8 +142,11 @@ Project-specific security defaults:
 - Tiered generation admission and AI batch concurrency use authenticated `user_id` as the owner and may log only hashed user IDs. Runtime trace rows must not store raw user IDs or install IDs.
 - Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
 - Password reset rotates the remember token and revokes all scoped Sanctum tokens. A cache miss for clicked-token enrichment requires active billing before the provider call; already-stored metadata remains readable to its owner.
-  - Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
-  - Pasted lyrics and the encrypted correction work state never leave the backend database: they are excluded from logs, traces, API resources, and extension payloads, and both fields are cleared when an attempt completes, fails, expires, or is deleted.
+- Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
+- Pasted lyrics are sent to configured OpenAI only for alignment.
+- Corrected cue text is sent through the same derived OpenAI stages used by generation.
+- Lyrics and work state are excluded from logs, traces, analytics, API responses, extension storage, URLs, and runtime error payloads.
+- Encrypted database columns are the only persisted private copies, and they are cleared on completion, failure, expiry, or deletion.
   - Laravel responses set CSP, frame, MIME, referrer, permissions, and cross-origin isolation headers. HSTS is sent only for secure production requests; trusted-proxy and session-cookie configuration remain an operator-owned hosting decision.
 - SaaS website analytics are first-party structured logs only for beta. Analytics events must not include transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, raw audio paths, or account emails.
 - Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.

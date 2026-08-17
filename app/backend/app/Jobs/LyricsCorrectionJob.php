@@ -27,6 +27,8 @@ class LyricsCorrectionJob implements ShouldQueue
 
     public int $maxExceptions = 3;
 
+    public bool $failOnTimeout = true;
+
     public int $timeout;
 
     public function __construct(
@@ -69,6 +71,7 @@ class LyricsCorrectionJob implements ShouldQueue
             $this->attemptId,
             'lyrics_correction_failed',
             'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.',
+            expectedRevision: $this->expectedRevision,
         );
     }
 

@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { guardLyricsCorrectionStatus } from '../utils/api-response-guards';
+import { SubtitleApiError } from '../utils/api';
 import type { LyricsCorrectionStatus, TrackResponse } from '../utils/contracts';
 import {
   canApplyLyricsCorrection,
-  EMPTY_LYRICS_PASTE,
   lyricsCharacterCount,
   lyricsCorrectionTabState,
-  lyricsPasteForVideo,
   nextLyricsCorrectionSync,
   syncLyricsCorrectionStatus,
 } from '../utils/lyrics-correction';
@@ -48,6 +47,23 @@ describe('lyrics correction per-tab synchronization state', () => {
 
     expect(next.status).toBeNull();
     expect(next.latestRequestId).toBe(2);
+  });
+
+  it('requires the response request revision to equal the current revision', () => {
+    const state = nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
+      type: 'sync-started',
+      jobId: 'job-1',
+      requestId: 2,
+    });
+
+    const next = nextLyricsCorrectionSync(state, {
+      type: 'response',
+      jobId: 'job-1',
+      requestId: 3,
+      status: status('attempt-future', 'completed'),
+    });
+
+    expect(next).toBe(state);
   });
 
   it('accepts the latest response even when the server attempt changed', () => {
@@ -97,10 +113,41 @@ describe('lyrics correction per-tab synchronization state', () => {
     expect(afterSubmit.status?.attemptId).toBe('attempt-new');
     expect(afterLateResponse.status?.attemptId).toBe('attempt-new');
   });
+
+  it('rejects an in-flight response after the state was cleared', () => {
+    let state = lyricsCorrectionTabState();
+    state = nextLyricsCorrectionSync(state, { type: 'sync-started', jobId: 'job-1', requestId: 1 });
+    const cleared = nextLyricsCorrectionSync(state, { type: 'cleared' });
+
+    const next = nextLyricsCorrectionSync(cleared, {
+      type: 'response',
+      jobId: 'job-1',
+      requestId: 1,
+      status: status('attempt-1', 'completed'),
+    });
+
+    expect(cleared.jobId).toBeNull();
+    expect(next.status).toBeNull();
+    expect(next.latestRequestId).toBe(2);
+  });
+
+  it('rejects a response for a job that is no longer active', () => {
+    let state = lyricsCorrectionTabState();
+    state = nextLyricsCorrectionSync(state, { type: 'sync-started', jobId: 'job-1', requestId: 1 });
+
+    const next = nextLyricsCorrectionSync(state, {
+      type: 'response',
+      jobId: 'job-other',
+      requestId: 1,
+      status: status('attempt-1', 'queued'),
+    });
+
+    expect(next.status).toBeNull();
+  });
 });
 
 describe('syncLyricsCorrectionStatus', () => {
-  it('makes zero status API calls when backend sync is disabled and no correction is cached', async () => {
+  it('makes zero status API calls and mutates no state when backend sync is disabled', async () => {
     const fetchStatus = vi.fn(async () => status('attempt-1', 'running'));
     const states = new Map();
 
@@ -114,11 +161,10 @@ describe('syncLyricsCorrectionStatus', () => {
 
     expect(result).toBeNull();
     expect(fetchStatus).not.toHaveBeenCalled();
-    expect(states.get(1)?.status).toBeNull();
-    expect(states.get(1)?.latestRequestId).toBe(1);
+    expect(states.has(1)).toBe(false);
   });
 
-  it('returns the cached value for a non-sync call when one exists', async () => {
+  it('returns the job-scoped cached value for a non-sync call without touching the revision', async () => {
     const states = new Map();
     const cached = status('attempt-1', 'running');
     states.set(1, nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
@@ -137,6 +183,28 @@ describe('syncLyricsCorrectionStatus', () => {
     });
 
     expect(result?.attemptId).toBe('attempt-1');
+    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(states.get(1)?.latestRequestId).toBe(1);
+  });
+
+  it('returns null for a non-sync call when the cached value belongs to another job', async () => {
+    const states = new Map();
+    states.set(1, nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
+      type: 'submit',
+      jobId: 'job-1',
+      status: status('attempt-1', 'running'),
+    }));
+    const fetchStatus = vi.fn(async () => status('attempt-2', 'queued'));
+
+    const result = await syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-2',
+      syncBackend: false,
+      states,
+      fetchStatus,
+    });
+
+    expect(result).toBeNull();
     expect(fetchStatus).not.toHaveBeenCalled();
   });
 
@@ -167,24 +235,136 @@ describe('syncLyricsCorrectionStatus', () => {
     expect(result?.attemptId).toBe('attempt-new');
     expect(states.get(1)?.status?.attemptId).toBe('attempt-new');
   });
-});
 
-describe('panel-only lyrics paste memory', () => {
-  it('clears the paste when the active video changes', () => {
-    const buffered = lyricsPasteForVideo({ videoId: 'video-a', value: 'pasted lyrics' }, 'video-b');
+  it('does not resurrect an old in-flight response after the state was cleared', async () => {
+    const states = new Map();
+    let resolveFetch: (value: LyricsCorrectionStatus) => void;
+    const fetchStatus = vi.fn(() => new Promise<LyricsCorrectionStatus>((resolve) => {
+      resolveFetch = resolve;
+    }));
 
-    expect(buffered.value).toBe('');
-    expect(buffered.videoId).toBe('video-b');
+    const pending = syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-1',
+      syncBackend: true,
+      states,
+      fetchStatus,
+    });
+
+    states.set(1, nextLyricsCorrectionSync(states.get(1) ?? lyricsCorrectionTabState(), { type: 'cleared' }));
+
+    resolveFetch!(status('attempt-stale', 'completed'));
+    const result = await pending;
+
+    expect(result).toBeNull();
+    expect(states.get(1)?.status).toBeNull();
+    expect(states.get(1)?.latestRequestId).toBe(2);
   });
 
-  it('preserves the paste when the video is unchanged', () => {
-    const buffered = lyricsPasteForVideo({ videoId: 'video-a', value: 'pasted lyrics' }, 'video-a');
+  it('does not recreate state when the tab map entry was deleted while a request was in flight', async () => {
+    const states = new Map();
+    let resolveFetch: (value: LyricsCorrectionStatus) => void;
+    const fetchStatus = vi.fn(() => new Promise<LyricsCorrectionStatus>((resolve) => {
+      resolveFetch = resolve;
+    }));
 
-    expect(buffered.value).toBe('pasted lyrics');
+    const pending = syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-1',
+      syncBackend: true,
+      states,
+      fetchStatus,
+    });
+
+    states.delete(1);
+    resolveFetch!(status('attempt-stale', 'completed'));
+
+    expect(await pending).toBeNull();
+    expect(states.has(1)).toBe(false);
   });
 
-  it('starts empty and never stores lyrics before a video exists', () => {
-    expect(lyricsPasteForVideo(EMPTY_LYRICS_PASTE, null)).toBe(EMPTY_LYRICS_PASTE);
+  it('keeps replacement map state when an old request resolves', async () => {
+    const states = new Map();
+    let resolveFetch: (value: LyricsCorrectionStatus) => void;
+    const fetchStatus = vi.fn(() => new Promise<LyricsCorrectionStatus>((resolve) => {
+      resolveFetch = resolve;
+    }));
+
+    const pending = syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-a',
+      syncBackend: true,
+      states,
+      fetchStatus,
+    });
+
+    const currentJobB = nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
+      type: 'submit',
+      jobId: 'job-b',
+      status: status('attempt-b', 'queued'),
+    });
+    states.set(1, currentJobB);
+    resolveFetch!(status('attempt-a', 'completed'));
+
+    const result = await pending;
+
+    expect(result?.attemptId).toBe('attempt-b');
+    expect(result?.status).toBe('queued');
+    expect(states.get(1)).toBe(currentJobB);
+  });
+
+  it('does not apply a stale job-A 404 after job B replaces the state', async () => {
+    const states = new Map();
+    let rejectFetch: (reason?: unknown) => void;
+    const onCurrentRequestError = vi.fn();
+    const fetchStatus = vi.fn(() => new Promise<LyricsCorrectionStatus>((_resolve, reject) => {
+      rejectFetch = reject;
+    }));
+
+    const pending = syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-a',
+      syncBackend: true,
+      states,
+      fetchStatus,
+      onCurrentRequestError,
+    });
+
+    const currentJobB = nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
+      type: 'submit',
+      jobId: 'job-b',
+      status: status('attempt-b', 'queued'),
+    });
+    states.set(1, currentJobB);
+    rejectFetch!(new SubtitleApiError('not_found', 'Correction not found.', 404));
+
+    await expect(pending).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    expect(onCurrentRequestError).not.toHaveBeenCalled();
+    expect(states.get(1)).toBe(currentJobB);
+  });
+
+  it('notifies the caller when the current request fails', async () => {
+    const states = new Map();
+    let rejectFetch: (reason?: unknown) => void;
+    const onCurrentRequestError = vi.fn();
+    const fetchStatus = vi.fn(() => new Promise<LyricsCorrectionStatus>((_resolve, reject) => {
+      rejectFetch = reject;
+    }));
+
+    const pending = syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-a',
+      syncBackend: true,
+      states,
+      fetchStatus,
+      onCurrentRequestError,
+    });
+
+    const error = new SubtitleApiError('not_found', 'Correction not found.', 404);
+    rejectFetch!(error);
+
+    await expect(pending).rejects.toBe(error);
+    expect(onCurrentRequestError).toHaveBeenCalledWith(error);
   });
 });
 

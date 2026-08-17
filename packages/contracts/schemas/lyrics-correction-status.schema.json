@@ -37,8 +37,7 @@
         "properties": {"status": {"const": "completed"}}
       },
       "then": {
-        "required": ["track"],
-        "properties": {"track": {"$ref": "track-response.schema.json"}}
+        "required": ["track"]
       }
     },
     {
@@ -47,11 +46,7 @@
         "properties": {"status": {"const": "failed"}}
       },
       "then": {
-        "required": ["errorCode", "message"],
-        "properties": {
-          "errorCode": {"type": "string"},
-          "message": {"type": "string"}
-        }
+        "required": ["errorCode", "message"]
       }
     },
     {

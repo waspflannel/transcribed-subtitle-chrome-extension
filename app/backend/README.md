@@ -18,6 +18,14 @@ Default `.env.example` uses the Postgres + Redis runtime profile. SQLite is no l
 
 Prerequisites: Docker, official PHP 8.4 from winget or another normal PHP build with `pdo_pgsql`, and either `phpredis` or the Composer-managed `predis/predis` client. The helper scripts use PATH PHP or the official winget PHP path; no PHP environment manager is required.
 
+From the repository root, one command starts Postgres, Redis, Laravel, subtitle workers, and the WXT extension dev server:
+
+```powershell
+.\scripts\runtime\start-local-dev.ps1
+```
+
+The WXT dev server stays in the terminal for live reload. Press `Ctrl+C` to stop it; the containers, backend, and workers remain available. Rerun the command to reuse the containers and replace the local backend and worker processes.
+
 ```powershell
 .\scripts\runtime\use-postgres-redis.ps1
 .\scripts\runtime\artisan.ps1 serve --host=127.0.0.1 --port=8001
@@ -29,7 +37,7 @@ The script starts Postgres and Redis through Docker Compose, writes the ignored 
 .\scripts\runtime\artisan.ps1 serve --host=127.0.0.1 --port=8001
 ```
 
-For local subtitle generation, prefer the runtime launcher from the repository root. It replaces any existing local backend server and subtitle queue workers for this project, then starts a fresh backend plus the configured worker groups:
+For local subtitle generation, prefer the runtime launcher from the repository root. It starts and waits for Postgres and Redis, selects the local runtime profile, runs migrations, replaces any existing local backend server and subtitle queue workers for this project, then starts a fresh backend plus the configured worker groups:
 
 ```powershell
 .\scripts\runtime\start-local-backend-workers.ps1

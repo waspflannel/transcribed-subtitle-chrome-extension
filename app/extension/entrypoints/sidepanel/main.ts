@@ -29,13 +29,7 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
-import {
-  canApplyLyricsCorrection,
-  EMPTY_LYRICS_PASTE,
-  lyricsCharacterCount,
-  lyricsPasteForVideo,
-  type LyricsPasteBuffer,
-} from '../../utils/lyrics-correction';
+import { canApplyLyricsCorrection, lyricsCharacterCount } from '../../utils/lyrics-correction';
 
 type PanelErrorResponse = { ok: false; error: string };
 type PanelResponse = PanelState | PanelErrorResponse;
@@ -142,17 +136,13 @@ let latestAppliedSeq = 0;
 let languagesExpanded = false;
 let setupExpandedWhileReady = false;
 let lastWatchVideoId: string | null = null;
-let lyricsPaste: LyricsPasteBuffer = EMPTY_LYRICS_PASTE;
 
 collapseButton.addEventListener('click', () => {
   window.close();
 });
 generateButton.addEventListener('click', () => void generateSubtitles());
 lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
-lyricsCorrectionTextarea.addEventListener('input', () => {
-  lyricsPaste = { ...lyricsPaste, value: lyricsCorrectionTextarea.value };
-  renderLyricsCorrectionInput();
-});
+lyricsCorrectionTextarea.addEventListener('input', renderLyricsCorrectionInput);
 clearStateButton.addEventListener('click', () => void clearLocalState());
 openAccountButton.addEventListener('click', () => {
   showTab(tabButtons, panels, 'account');
@@ -576,8 +566,7 @@ function showPanelState(state: PanelState): void {
     lastWatchVideoId = watchVideoId;
     setupExpandedWhileReady = false;
     setLanguagesExpanded(false);
-    lyricsPaste = lyricsPasteForVideo(lyricsPaste, watchVideoId);
-    lyricsCorrectionTextarea.value = lyricsPaste.value;
+    lyricsCorrectionTextarea.value = '';
   }
 
   showStatusBanner(state);

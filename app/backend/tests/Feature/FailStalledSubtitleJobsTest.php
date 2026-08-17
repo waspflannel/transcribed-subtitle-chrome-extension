@@ -4,7 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Models\SubtitleTrackLyricsCorrection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class FailStalledSubtitleJobsTest extends TestCase
@@ -76,7 +79,7 @@ class FailStalledSubtitleJobsTest extends TestCase
     public function test_it_fails_and_clears_stalled_lyrics_corrections(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
-        $track = SubtitleTrack::factory()->create(['subtitle_job_id' => $job->id]);
+        $track = SubtitleTrack::factory()->for($job, 'job')->create();
         $correction = $track->lyricsCorrection()->create([
             'attempt_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3030',
             'status' => 'running',
@@ -97,7 +100,7 @@ class FailStalledSubtitleJobsTest extends TestCase
     public function test_it_does_not_fail_queued_lyrics_corrections_waiting_in_the_queue(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
-        $track = SubtitleTrack::factory()->create(['subtitle_job_id' => $job->id]);
+        $track = SubtitleTrack::factory()->for($job, 'job')->create();
         $correction = $track->lyricsCorrection()->create([
             'attempt_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3031',
             'status' => 'queued',
@@ -112,5 +115,71 @@ class FailStalledSubtitleJobsTest extends TestCase
         $correction->refresh();
         $this->assertSame('queued', $correction->status);
         $this->assertSame('waiting private lyrics', $correction->lyrics);
+    }
+
+    public function test_it_fails_only_the_rows_that_pass_the_atomic_cleanup_recheck(): void
+    {
+        $stalledJob = SubtitleJob::factory()->create(['status' => 'completed']);
+        $stalledTrack = SubtitleTrack::factory()->for($stalledJob, 'job')->create();
+        $stalled = $stalledTrack->lyricsCorrection()->create([
+            'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000032',
+            'status' => 'running',
+            'work_revision' => 3,
+            'work_state' => ['stage' => 'tokenizing'],
+            'lyrics' => 'stalled private lyrics',
+        ]);
+        $stalled->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        $revisionJob = SubtitleJob::factory()->create(['status' => 'completed']);
+        $revisionTrack = SubtitleTrack::factory()->for($revisionJob, 'job')->create();
+        $revisionAdvanced = $revisionTrack->lyricsCorrection()->create([
+            'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000033',
+            'status' => 'running',
+            'work_revision' => 4,
+            'work_state' => ['stage' => 'tokenizing'],
+            'lyrics' => 'revision private lyrics',
+        ]);
+        $revisionAdvanced->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        $heartbeatJob = SubtitleJob::factory()->create(['status' => 'completed']);
+        $heartbeatTrack = SubtitleTrack::factory()->for($heartbeatJob, 'job')->create();
+        $heartbeatAdvanced = $heartbeatTrack->lyricsCorrection()->create([
+            'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000034',
+            'status' => 'running',
+            'work_revision' => 6,
+            'work_state' => ['stage' => 'tokenizing'],
+            'lyrics' => 'heartbeat private lyrics',
+        ]);
+        $heartbeatAdvanced->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        SubtitleTrackLyricsCorrection::retrieved(function (SubtitleTrackLyricsCorrection $observed) use ($revisionAdvanced, $heartbeatAdvanced): void {
+            if ($observed->subtitle_track_id === $revisionAdvanced->subtitle_track_id && $observed->attempt_id === $revisionAdvanced->attempt_id) {
+                DB::table('subtitle_track_lyrics_corrections')
+                    ->where('subtitle_track_id', $revisionAdvanced->subtitle_track_id)
+                    ->where('attempt_id', $revisionAdvanced->attempt_id)
+                    ->update(['work_revision' => 5]);
+
+                return;
+            }
+
+            if ($observed->subtitle_track_id === $heartbeatAdvanced->subtitle_track_id && $observed->attempt_id === $heartbeatAdvanced->attempt_id) {
+                DB::table('subtitle_track_lyrics_corrections')
+                    ->where('subtitle_track_id', $heartbeatAdvanced->subtitle_track_id)
+                    ->where('attempt_id', $heartbeatAdvanced->attempt_id)
+                    ->update(['updated_at' => now()]);
+            }
+        });
+
+        $this->assertSame(0, Artisan::call('subtitles:fail-stalled-jobs'));
+        $this->assertStringContainsString('Failed 1 stalled subtitle job(s).', Artisan::output());
+
+        $this->assertSame('failed', $stalled->fresh()->status);
+        $this->assertNull($stalled->fresh()->lyrics);
+        $this->assertSame('running', $revisionAdvanced->fresh()->status);
+        $this->assertSame(5, $revisionAdvanced->fresh()->work_revision);
+        $this->assertSame('revision private lyrics', $revisionAdvanced->fresh()->lyrics);
+        $this->assertSame('running', $heartbeatAdvanced->fresh()->status);
+        $this->assertSame(6, $heartbeatAdvanced->fresh()->work_revision);
+        $this->assertSame('heartbeat private lyrics', $heartbeatAdvanced->fresh()->lyrics);
     }
 }

@@ -1,9 +1,9 @@
 # Plan: Pasted Lyrics Transcript Correction
 
-Status: active (second automated review found implementation blockers; product QA remains)
+Status: active (automated implementation complete; product QA remains)
 Owner: agent
 Created: 2026-08-13
-Last updated: 2026-08-14
+Last updated: 2026-08-16
 
 ## Goal
 
@@ -70,7 +70,7 @@ Out of scope:
 - [ ] Normalize line endings, trim lines, collapse repeated spaces and blank lines, and reject text with no Unicode letters or numbers.
 - [ ] Preserve the pasted words, case, punctuation, and source order. Line breaks are hints, not fixed cue boundaries.
 - [ ] The AI returns cue identity and corrected `sourceText` only. It never returns timestamps or derived learning data.
-- [ ] The AI returns one corrected text span for each existing timing slot, in the same order.
+- [ ] The AI returns corrected text spans against an ordered subset of existing timing slots; unused slots may be omitted.
 - [ ] The server verifies that every returned span occurs in forward order in the normalized paste, so invented or reordered text cannot be published.
 - [ ] Common non-sung labels such as `[Verse 1]` may be skipped.
 - [ ] The server copies timing from the existing cues, creates fresh cue IDs, and enforces non-empty text, monotonic timing, and the 84-character limit.
@@ -146,21 +146,27 @@ subtitle_track_id   unique foreign key, cascade delete
 attempt_id          UUID
 status              queued | running | completed | failed
 lyrics              nullable encrypted text
+work_revision       unsigned integer, default 0
+work_state          nullable encrypted JSON (stage, batchIndex, batchPlan, assembled cues)
 error_code          nullable stable code
 error_message       nullable public-safe message
 created_at / updated_at
 ```
 
+A new attempt row starts as `status = queued`, `attempt_id = new UUID`, `work_revision = 0`, `work_state.stage = aligning`. Retrying after a completed or failed attempt replaces the attempt ID, resets status to `queued`, resets the revision to `0`, replaces the encrypted lyrics, resets work state to the initial `aligning` state, and clears prior errors.
+
 Submission uses one transaction:
 
 1. Resolve the owned, completed, unexpired track and lock the owning account row.
 2. Reject another queued/running correction for the track or account.
-3. Normalize and store the paste with a new attempt ID.
-4. Dispatch one correction job after commit on the existing account-tier batch queue.
+3. Normalize and store the paste with a new attempt ID and initial revision-0 state.
+4. Return from the transaction, then dispatch one revision-0 correction job on the existing account-tier batch queue.
 
-The account lock serializes concurrent submissions before the active-attempt query. The queued payload contains database IDs and the attempt ID, never the lyrics. Every worker status write, including `failed()`, is scoped to the same attempt ID. Reuse the existing batch concurrency middleware and provider cost recorder. Do not add a new queue, pipeline abstraction, or feature flag.
+The account lock serializes concurrent submissions before the active-attempt query. The queued payload contains database IDs, the attempt ID, and the expected revision, never the lyrics. If the post-commit dispatch fails, the fresh revision-0 attempt is failed and its private state cleared so the account is not stranded behind a 409.
 
-Clear the encrypted paste in `handle()` and `failed()`. Extend the existing scheduled subtitle cleanup path to fail and clear attempts that remain queued/running beyond the worker timeout.
+Every worker status write, including `failed()`, is scoped to the same attempt ID and the expected revision. Reuse the existing batch concurrency middleware and provider cost recorder. Do not add a new queue, pipeline abstraction, or feature flag.
+
+The scheduled `subtitles:fail-stalled-jobs` sweep never fails `queued` corrections (a long queue wait must not destroy the paste). A `running` correction is failed only when its `updated_at` is older than the queue connection's `retry_after` plus the job's maximum backoff plus the stalled-job slack; the update rechecks the revision and the same cutoff so cleanup cannot beat a legitimate continuation.
 
 ### 3. Alignment and formatting
 
@@ -185,7 +191,7 @@ Prompt rules:
 
 - Pasted lyrics are the only text source.
 - Existing cue text is alignment evidence only.
-- Return one entry for every timing slot, in the same order.
+- Return entries against existing timing slots in the same order; unused slots may be omitted, but slots may not be duplicated or reordered.
 - Split on natural phrase boundaries and keep each cue at or below 84 characters.
 - Preserve pasted wording, case, punctuation, and order.
 - Skip obvious non-sung labels and credits.
@@ -193,26 +199,25 @@ Prompt rules:
 
 Server validation:
 
-- Require `isMatch: true` and exactly one result for each input cue.
+- Require `isMatch: true`, at least one result, no more results than input cues, and existing cue identities in strict source order.
 - Require the original cue identities and order.
 - Find each collapsed `sourceText` as an exact, forward-only span of the normalized paste.
 - Reject empty, duplicated, reordered, invented, or overlong cue text.
-- Retry once on invalid structured output, then fail the attempt.
+- Retry once on invalid structured output, then fail the attempt; a definitive `isMatch: false` is terminal after the first prompt.
 
-Keep normalization as a small private function in the correction service or reuse an existing text helper. Do not add a standalone normalization subsystem.
+Entitlement is rechecked immediately before every alignment prompt (and before every derived batch), and each successfully completed provider unit records provider cost exactly once, including a definitive mismatch. Keep normalization as a small private function in the correction service or reuse an existing text helper. Do not add a standalone normalization subsystem.
 
-### 4. Rebuild and publish
+### 4. Rebuild and publish (continuation workflow)
 
-The server builds draft corrected cues by copying the original timing, reindexing, and assigning IDs such as `lyrics-{attempt-prefix}-0001`. It then reuses the existing analysis methods:
+Correction runs as one attempt row driven by narrow continuation executions of one `LyricsCorrectionJob` class. Each execution performs alignment, one derived batch, or finalization. Alignment makes at most two provider calls for its one permitted invalid-output retry; every other execution makes one bounded provider call or no provider call. Each execution persists the next encrypted work state plus an incremented attempt-local revision before the transaction commits, then dispatches exactly one next revision after the transaction returns. Stages in order:
 
-1. Tokenize, or tokenize and translate when translation is enabled.
-2. Romanize when the original job settings require it.
-3. Run full enrichment only when the original job used full word cards.
-4. Generate WebVTT with the existing formatter.
+1. `aligning`: run alignment with one invalid-output retry, validate exact text consumption, store draft cues and the real shared batch plan.
+2. `analyzing` (translation requested) or `tokenizing` (otherwise): process exactly one actual batch from the stored plan.
+3. `romanizing`: process exactly one actual batch when romanization is enabled and corrected cues contain non-Latin letters.
+4. `enriching`: process exactly one actual batch for full enrichment only. If a multi-cue derived response fails structural validation, persist that batch split in half and retry each half in later revisions rather than recursively calling the provider or failing the whole correction.
+5. `finalizing`: validate the assembled cues and WebVTT, then atomically replace `cues` and `web_vtt`, mark the attempt completed, and clear `lyrics` and `work_state`.
 
-Run these steps inside one queued job. Extract shared batch planning from the existing generator only if direct reuse is not possible; do not create a general correction pipeline.
-
-After every step succeeds, lock the attempt and track rows in one transaction. Confirm the attempt ID is still current, replace `cues` and `web_vtt`, mark the attempt completed, and clear `lyrics`. Any earlier failure updates only the attempt and leaves the track untouched.
+Correction calls pass `splitInvalidBatches: false` so the reused derived-data providers never recursively split an invalid batch inside one continuation; generation callers keep the default split retry. Progress is committed before the next revision is dispatched. If dispatch fails, the exact persisted next revision is failed and its encrypted lyrics and work state are cleared. The per-unit timeout is `(provider timeout * 2) + 60` seconds and timeout failure is terminal, clearing encrypted private state. Before provider work and again before persisting progress, the worker rechecks attempt ID, nonterminal status, stage, and revision; a stale or duplicate delivery no-ops without clearing state, failing the attempt, or recording cost. Any failure updates only the matching nonterminal attempt and leaves the track untouched.
 
 ### 5. Extension
 
@@ -221,8 +226,9 @@ Keep the feature in the completed Watch view:
 - Add one collapsible paste form beside the transcript controls.
 - Add typed submit/status messages and API guards from the canonical contracts.
 - Poll the correction status at the existing active interval while queued/running.
-- Keep the textarea only in panel memory; never put lyrics in extension storage.
-- Accept a completed response only when its `attemptId` matches the active attempt.
+- Keep the textarea only in panel memory; never put lyrics in extension storage. Clear it when the active video changes; preserve it after a failure on the same video.
+- Track per-tab sync state with a monotonically increasing request revision. A response from an older request revision is ignored, clearing the state is a revision-bumping tombstone, and the server attempt returned by the latest request is accepted even when another extension instance created it.
+- `syncBackend: false` returns the job-scoped cached value (including `null`) without calling the status endpoint.
 - Publish and remember the returned track so the existing transcript and content-script update paths replace the display.
 - Escape all displayed text through the existing helpers.
 
@@ -233,7 +239,7 @@ Keep the feature in the completed Watch view:
 - [x] Add validation, owner/plan checks, the structured alignment agent, one queued correction job, atomic publication, stale cleanup, and focused backend tests.
 - [x] Add the inline panel form, submit/status polling, attempt-ID guard, clicked-token race guard, and focused extension tests.
 - [x] Update product, guardrail, and contract docs where the shipped behavior changed.
-- [ ] Run the full harness and visual QA at normal and 320px widths; automated focused checks and the final simplicity review are complete.
+- [ ] Complete manual browser and visual QA at normal and 320px widths; the full automated harness and final simplicity review are complete.
 
 ## Likely Touchpoints
 
@@ -297,6 +303,9 @@ Minimum behavior checks:
 | 2026-08-13 | Plan simplified with Ponytail full mode. | Removed restore storage, track revisions, a restore endpoint, speculative thresholds, and a multi-slice framework while keeping validation, privacy, accessibility, and atomic publication. |
 | 2026-08-13 | Baseline completed before feature edits. | `doctor.ps1` passed; contracts passed; backend 318 tests passed; extension 127 tests passed; TypeScript compile and WXT build passed. Existing unrelated worktree edits were preserved. Loaded `laravel-best-practices`, `laravel-security`, `subtitle-pipeline`, and `ai-sdk-development`; local skill guidance materially affected queue, encrypted persistence, provider, and logging decisions. |
 | 2026-08-14 | Implemented the continuation design prescribed by the second-review remediation. | `subtitle_track_lyrics_corrections` now persists `work_revision` and encrypted `work_state`; `LyricsCorrectionService` processes one unit per `process()` call with the prescribed stages; `LyricsCorrectionJob` carries `expectedRevision`, uses an attempt-keyed `WithoutOverlapping` lock, a `(provider timeout * 2) + 60` second timeout, and clears private state on terminal failure; the two-batch/22-cue admission cap, `maxBatchCountForCueCount()`, and correction-only timeout config were removed; stalled cleanup no longer fails `queued` corrections; the extension adopts newer server attempts at the latest request revision, keeps `syncBackend: false` local, and clears panel paste state on video change; the runtime guard enforces status-state exclusivity. Regressions cover full-song tracks, batch-plan division, split-retry opt-out, one-stage-per-revision, stale/duplicate deliveries, transient resumption, wrong-song termination, entitlement loss, queued/running stalled cleanup, rebuilt settings variants, atomic publication, encrypted-at-rest state, and per-unit timeout bounds. Contracts, backend (350 tests), extension (143 tests), compile, build, and Pint pass. Manual browser and visual QA remain outstanding for the product owner. |
+| 2026-08-14 | Closed the final automated review findings. | Cleanup regressions now isolate revision and heartbeat races; correction sync handles stale 404s without clearing newer state, keeps non-sync reads side-effect free, and uses one shared validation path; the alignment cost knob is documented. `scripts/agent/check.ps1` passed with 358 backend tests (2,621 assertions) and 149 extension tests; contracts, TypeScript, production build, docs lint, Pint, and `git diff --check main` passed. Manual browser and visual QA remain assigned to the product owner. |
+| 2026-08-16 | Fixed the real Arabic-song manual-QA failure for `Y_vB-3R_BYc`. | The alignment model used 68 of 69 timing slots, but the validator required every slot. Validation now accepts a non-empty ordered subset of original cue identities only when it consumes the normalized pasted lyrics exactly. A fresh provider reproduction used 64 of 69 slots and passed the repaired validator. `scripts/agent/check.ps1` passed with 359 backend tests (2,626 assertions) and 149 extension tests. The failed attempt left the original track unchanged. |
+| 2026-08-16 | Fixed the next `Y_vB-3R_BYc` smoke-test failure after alignment. | Alignment completed, then the first 20-cue derived analysis response failed validation. Correction now persists a narrower batch plan and retries invalid multi-cue derived output across bounded continuation revisions. The active track remains unchanged until all narrowed batches pass. The focused continuation suite passed with 25 tests (123 assertions), the full backend suite passed with 360 tests (2,633 assertions), documentation lint passed, and `git diff --check` passed. |
 
 ## Review Findings
 
@@ -400,3 +409,12 @@ Review verdict: **needs refactor before merge**. The compilation, transient retr
 - Validation results: Contracts validation and generated types passed; extension tests (131), TypeScript compile, and production build passed; backend suite passed with 330 tests and 2,486 assertions; Pint and `scripts/agent/check.ps1` passed. Visual QA remains a product-owner follow-up.
 - Simplicity review: Removed the tautological track-acceptance helper, side-panel shadow-state repair, duplicate lyric normalization, duplicate batch planning, duplicate WebVTT formatting, duplicate queue connection assignment, and redundant relation query/sort.
 - Residual risk: Manual browser/visual QA at normal and 320px widths remains outstanding. Corrections larger than two shared analysis batches are rejected before provider work so the single job stays below queue `retry_after`.
+
+## Final Remediation Completion — 2026-08-14
+
+The earlier review sections above are retained as historical snapshots. Their implementation blockers are resolved by the continuation workflow and final remediation.
+
+- What changed: Removed the two-batch admission cap, bounded each continuation revision, made failure and cleanup writes revision-safe, handled initial and continuation dispatch failures, made timeout cleanup terminal, accounted for every returned alignment call, made extension synchronization request-aware, and kept pasted text only in the live textarea.
+- Validation results: `scripts/agent/check.ps1` and `scripts/agent/verify-pr.ps1` passed with 358 backend tests (2,621 assertions) and 149 extension tests. Contract validation and generation, TypeScript compilation, the extension production build, documentation lint, Pint, and `git diff --check main` passed. `scripts/agent/doc-gardening.ps1` completed and reported only three pre-existing placeholder signals outside this feature.
+- Simplicity review: Reused the existing queue, job, service, batch plan, WebVTT formatter, provider services, and per-tab state map. The final sync path validates context once and tombstones only backend-synchronized invalidations.
+- Residual risk: Manual browser and visual QA at normal and 320px widths remains assigned to the product owner. No automated implementation blocker remains.

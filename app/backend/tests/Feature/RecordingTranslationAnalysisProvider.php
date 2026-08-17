@@ -33,6 +33,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public bool $translationShouldFail = false;
 
+    public int $invalidBatchAboveCueCount = 0;
+
     public ?\Closure $beforeTokenizationResult = null;
 
     public ?\Closure $beforeTokenResult = null;
@@ -55,6 +57,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     {
         $this->tokenizationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
+
+        if (count($batch) > $this->invalidBatchAboveCueCount && $this->invalidBatchAboveCueCount > 0) {
+            throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
+        }
 
         if ($this->tokenizationShouldFail) {
             throw SubtitleProcessingException::enrichmentFailed();
@@ -142,6 +148,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         $this->translationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
+
+        if (count($batch) > $this->invalidBatchAboveCueCount && $this->invalidBatchAboveCueCount > 0) {
+            throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
+        }
 
         if ($this->tokenizationShouldFail || $this->translationShouldFail) {
             throw SubtitleProcessingException::enrichmentFailed();

@@ -12,12 +12,17 @@ use App\Models\User;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use Illuminate\Database\Connection;
+use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\DatabaseQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\QueueFake;
 use Illuminate\Testing\TestResponse;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use RuntimeException;
 use Tests\TestCase;
 
 class LyricsCorrectionContinuationTest extends TestCase
@@ -39,11 +44,190 @@ class LyricsCorrectionContinuationTest extends TestCase
             'subtitles.tiers.default' => 'base',
             'subtitles.tiers.plans.base.generation_concurrency' => 20,
             'subtitles.tiers.plans.base.batch_concurrency' => 20,
+            'subtitles.costs.openai_alignment_microusd_per_call' => 25,
             'subtitles.costs.openai_tokenization_microusd_per_cue' => 10,
             'subtitles.costs.openai_translation_microusd_per_cue' => 5,
             'subtitles.costs.openai_romanization_microusd_per_cue' => 5,
             'subtitles.costs.openai_enrichment_microusd_per_cue' => 5,
         ]);
+    }
+
+    public function test_initial_queue_dispatch_failure_fails_the_fresh_attempt_instead_of_stranding_it(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        $this->useThrowingQueue();
+
+        // The testing transactions manager executes after-commit callbacks
+        // immediately, which turns a post-commit dispatch failure into a
+        // pre-commit one. Swap in the production manager (and end the
+        // per-test wrapping transaction) so the dispatch callback resolves at
+        // the submit's root commit exactly as it does in production, then
+        // restore the testing setup and clean up the committed rows.
+        $realTransactions = new DatabaseTransactionsManager;
+        $database = app('db');
+        $database->connection()->setTransactionManager($realTransactions);
+        app()->instance('db.transactions', $realTransactions);
+        DB::commit();
+
+        try {
+            $this->withExtensionAuth($this->installId(), $queue['job']->user)
+                ->postJson('/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics', ['lyrics' => implode("\n", $queue['texts'])])
+                ->assertStatus(500);
+
+            $stranded = SubtitleTrackLyricsCorrection::query()
+                ->where('subtitle_track_id', $queue['job']->track->id)
+                ->firstOrFail();
+            $this->assertSame('failed', $stranded->status);
+            $this->assertSame(0, $stranded->work_revision);
+            $this->assertNull($stranded->lyrics);
+            $this->assertNull($stranded->work_state);
+
+            Queue::fake();
+
+            $this->withExtensionAuth($this->installId(), $queue['job']->user)
+                ->postJson('/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics', ['lyrics' => implode("\n", $queue['texts'])])
+                ->assertAccepted();
+        } finally {
+            DB::table('subtitle_track_lyrics_corrections')
+                ->where('subtitle_track_id', $queue['job']->track->id)
+                ->delete();
+            DB::table('subtitle_tracks')->where('id', $queue['job']->track->id)->delete();
+            DB::table('subtitle_jobs')->where('id', $queue['job']->id)->delete();
+            DB::table('personal_access_tokens')->where('tokenable_id', $queue['job']->user->id)->delete();
+            DB::table('billing_usage_events')->where('user_id', $queue['job']->user->id)->delete();
+            DB::table('users')->where('id', $queue['job']->user->id)->delete();
+
+            $testingTransactions = new \Illuminate\Foundation\Testing\DatabaseTransactionsManager($this->connectionsToTransact());
+            $database->connection()->setTransactionManager($testingTransactions);
+            app()->instance('db.transactions', $testingTransactions);
+            DB::beginTransaction();
+        }
+    }
+
+    public function test_a_stale_fail_attempt_revision_cannot_fail_or_clear_newer_private_state(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $correction = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $correction->update([
+            'status' => 'running',
+            'work_revision' => 4,
+            'work_state' => ['stage' => 'tokenizing'],
+        ]);
+
+        $failed = app(LyricsCorrectionService::class)->failAttempt(
+            $queue['job']->track->id,
+            $correction->attempt_id,
+            'lyrics_correction_failed',
+            'stale failure',
+            expectedRevision: 3,
+        );
+
+        $this->assertFalse($failed);
+        $current = $correction->fresh();
+        $this->assertSame('running', $current->status);
+        $this->assertSame(4, $current->work_revision);
+        $this->assertSame("Lyrics line 1\nLyrics line 2", $current->lyrics);
+        $this->assertSame('tokenizing', $current->work_state['stage']);
+    }
+
+    public function test_a_stale_job_failure_callback_cannot_fail_the_current_revision(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $correction = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $correction->update([
+            'status' => 'running',
+            'work_revision' => 2,
+            'work_state' => ['stage' => 'tokenizing'],
+        ]);
+
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1))
+            ->failed(new RuntimeException('stale worker failure'));
+
+        $current = $correction->fresh();
+        $this->assertSame('running', $current->status);
+        $this->assertSame(2, $current->work_revision);
+        $this->assertNotNull($current->lyrics);
+        $this->assertNotNull($current->work_state);
+    }
+
+    public function test_continuation_queue_dispatch_failure_fails_the_new_persisted_revision(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'cues' => $queue['alignmentCues']]]);
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $this->useThrowingQueue();
+
+        try {
+            (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))
+                ->handle(app(LyricsCorrectionService::class));
+            $this->fail('Expected the continuation dispatch to fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Redis queue unavailable.', $exception->getMessage());
+        }
+
+        $correction = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('failed', $correction->status);
+        $this->assertSame(1, $correction->work_revision);
+        $this->assertNull($correction->lyrics);
+        $this->assertNull($correction->work_state);
+    }
+
+    public function test_the_job_fails_on_timeout_and_keeps_its_revision_when_serialized(): void
+    {
+        $job = new LyricsCorrectionJob(1, 1, (string) Str::uuid(), 4);
+        $restored = unserialize(serialize($job));
+
+        $this->assertTrue($restored->failOnTimeout);
+        $this->assertSame(4, $restored->expectedRevision);
+        $this->assertSame(300, $restored->timeout);
+    }
+
+    public function test_entitlement_loss_between_alignment_retries_prevents_the_second_prompt(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        $calls = 0;
+        LyricsAlignmentAgent::fake(function () use (&$calls, $queue): array {
+            $calls++;
+            $queue['job']->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
+
+            return ['isMatch' => true, 'cues' => [
+                ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'Invented text'],
+                ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Lyrics line 2'],
+            ]];
+        })->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))->handle(app(LyricsCorrectionService::class));
+
+        $this->assertSame(1, $calls, 'The second alignment prompt must not run without an active plan.');
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('failed', $row->status);
+        $this->assertNull($row->lyrics);
+        $this->assertNull($row->work_state);
+    }
+
+    public function test_each_returned_alignment_response_records_one_call_including_an_invalid_retry(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        LyricsAlignmentAgent::fake([
+            [
+                'isMatch' => true,
+                'cues' => [
+                    ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'Invented text'],
+                    ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Lyrics line 2'],
+                ],
+            ],
+            ['isMatch' => true, 'cues' => $queue['alignmentCues']],
+        ])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))
+            ->handle(app(LyricsCorrectionService::class));
+
+        $this->assertSame(50, $queue['job']->refresh()->estimated_provider_cost_microusd);
+        $this->assertSame('tokenizing', $this->correctionRow($queue['job'], $response->json('attemptId'))->work_state['stage']);
     }
 
     public function test_a_completed_track_with_more_than_22_cues_is_accepted_and_completes(): void
@@ -61,6 +245,25 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame('completed', $row->status);
         $this->assertCount(30, $row->track->cues);
         $this->assertSame('Lyrics line 1', $row->track->cues[0]['sourceText']);
+    }
+
+    public function test_alignment_may_leave_an_unused_timing_slot_when_all_lyrics_are_consumed(): void
+    {
+        $queue = $this->completedTrackWithCues(3, fn (int $position): string => 'Transcript line '.($position + 1));
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'cues' => [
+            ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'First lyric line'],
+            ['cueId' => 'cue-0003', 'index' => 2, 'sourceText' => 'Second lyric line'],
+        ]]])->preventStrayPrompts();
+
+        $response = $this->submitLyrics($queue['job'], ['First lyric line', 'Second lyric line']);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $row->status);
+        $this->assertCount(2, $row->track->cues);
+        $this->assertSame(0, $row->track->cues[0]['startMs']);
+        $this->assertSame(8000, $row->track->cues[1]['startMs']);
+        $this->assertSame(['First lyric line', 'Second lyric line'], array_column($row->track->cues, 'sourceText'));
     }
 
     public function test_work_is_divided_by_the_real_shared_batch_plan(): void
@@ -83,6 +286,31 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(3, $this->translationAnalysis->tokenizationCalls);
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->assertSame('completed', $row->status);
+    }
+
+    public function test_invalid_derived_batch_is_narrowed_across_revisions_instead_of_failing_the_correction(): void
+    {
+        $queue = $this->completedTrackWithCues(20, fn (int $position): string => 'Lyrics line '.($position + 1), ['include_translation' => true]);
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'cues' => $queue['alignmentCues']]]);
+        $this->translationAnalysis->invalidBatchAboveCueCount = 10;
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $service = app(LyricsCorrectionService::class);
+
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))->handle($service);
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1))->handle($service);
+
+        $narrowed = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('running', $narrowed->status);
+        $this->assertSame(2, $narrowed->work_revision);
+        $this->assertSame('analyzing', $narrowed->work_state['stage']);
+        $this->assertSame([[0, 9], [10, 19]], $narrowed->work_state['batchPlan']);
+
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'), startRevision: 2);
+
+        $completed = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $completed->status);
+        $this->assertSame(3, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(3, $this->translationAnalysis->translationCalls);
     }
 
     public function test_each_continuation_advances_exactly_one_stage_or_batch_revision(): void
@@ -148,7 +376,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->assertSame(2, $row->work_revision);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls, 'A duplicate delivery must not rerun the batch provider unit.');
-        $this->assertSame(30, $queue['job']->refresh()->estimated_provider_cost_microusd, 'A duplicate delivery must not record cost twice.');
+        $this->assertSame(55, $queue['job']->refresh()->estimated_provider_cost_microusd, 'A duplicate delivery must not record cost twice.');
     }
 
     public function test_a_transient_provider_failure_leaves_revision_and_stage_resumable_and_a_retry_completes(): void
@@ -207,6 +435,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertNull($row->lyrics);
         $this->assertNull($row->work_state);
         $this->assertSame($oldTrackId, $queue['job']->track->refresh()->public_id);
+        $this->assertSame(25, $queue['job']->refresh()->estimated_provider_cost_microusd, 'The completed alignment call must record cost even on a definitive mismatch.');
     }
 
     public function test_entitlement_loss_between_units_prevents_the_next_provider_call_and_fails_safely(): void
@@ -466,5 +695,44 @@ class LyricsCorrectionContinuationTest extends TestCase
     private function installId(): string
     {
         return 'install_'.str_repeat('a', 32);
+    }
+
+    private function useThrowingQueue(): void
+    {
+        $connection = new class(app('db')->connection()) extends DatabaseQueue
+        {
+            public function __construct(Connection $database)
+            {
+                parent::__construct($database, 'jobs');
+            }
+
+            protected function pushToDatabase($queue, $payload, $delay = 0, $attempts = 0)
+            {
+                throw new RuntimeException('Redis queue unavailable.');
+            }
+        };
+        $connection->setContainer(app());
+
+        $queueRoot = Queue::getFacadeRoot();
+        Queue::swap($queueRoot instanceof QueueFake ? $queueRoot->queue : $queueRoot);
+        Queue::extend('throwing-database', fn () => new class($connection)
+        {
+            public function __construct(private readonly \Illuminate\Contracts\Queue\Queue $queue) {}
+
+            public function connect(array $config): \Illuminate\Contracts\Queue\Queue
+            {
+                return $this->queue;
+            }
+        });
+        config([
+            'queue.default' => 'throwing-database',
+            'subtitles.queue.connection' => 'throwing-database',
+            'queue.connections.throwing-database' => [
+                'driver' => 'throwing-database',
+                'table' => 'jobs',
+                'queue' => 'default',
+                'retry_after' => 1260,
+            ],
+        ]);
     }
 }

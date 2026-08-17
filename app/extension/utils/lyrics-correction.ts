@@ -16,27 +16,12 @@ export function canApplyLyricsCorrection(
 }
 
 /**
- * Panel-only paste memory. The value lives in the panel textarea and in this
- * buffer; it is never written to extension storage. The buffer is scoped to
- * the active YouTube video so a video change clears the paste while a
- * correction failure on the same video keeps it editable for retry.
- */
-export interface LyricsPasteBuffer {
-  videoId: string | null;
-  value: string;
-}
-
-export const EMPTY_LYRICS_PASTE: LyricsPasteBuffer = { videoId: null, value: '' };
-
-export function lyricsPasteForVideo(buffer: LyricsPasteBuffer, videoId: string | null): LyricsPasteBuffer {
-  return videoId === buffer.videoId ? buffer : { videoId, value: '' };
-}
-
-/**
  * Per-tab correction state. status is the latest locally accepted correction
  * for the current completed job; latestRequestId grows monotonically so a
  * response from an older request can never overwrite a newer submit or
- * status response.
+ * status response. Clearing is a tombstone that bumps the revision instead
+ * of deleting the entry, so an in-flight response can never be accepted
+ * against a fresh revision counter after the state was cleared.
  */
 export interface LyricsCorrectionTabState {
   jobId: string | null;
@@ -67,7 +52,7 @@ export function nextLyricsCorrectionSync(
       };
 
     case 'response':
-      if (action.requestId < state.latestRequestId) {
+      if (action.requestId !== state.latestRequestId || action.jobId !== state.jobId) {
         return state;
       }
 
@@ -77,16 +62,18 @@ export function nextLyricsCorrectionSync(
       return { jobId: action.jobId, status: action.status, latestRequestId: state.latestRequestId + 1 };
 
     case 'cleared':
-      return { ...state, jobId: null, status: null };
+      return { ...state, jobId: null, status: null, latestRequestId: state.latestRequestId + 1 };
   }
 }
 
 /**
  * One backend synchronization for a tab. syncBackend: false returns the
- * cached value (including null) without calling the status endpoint. A
- * response is accepted only when its request is still the latest; the server
- * attempt is adopted as-is, so another extension instance's newer attempt is
- * accepted once it is returned by the latest request.
+ * cached value for the current job (including null) without creating a
+ * request id or mutating the map, so a local-only panel refresh never
+ * invalidates an in-flight backend response. A response is accepted only
+ * when its request is still the latest and its job is still active; the
+ * server attempt is adopted as-is, so another extension instance's newer
+ * attempt is accepted once it is returned by the latest request.
  */
 export async function syncLyricsCorrectionStatus(options: {
   tabId: number;
@@ -94,8 +81,14 @@ export async function syncLyricsCorrectionStatus(options: {
   syncBackend: boolean;
   states: Map<number, LyricsCorrectionTabState>;
   fetchStatus: () => Promise<LyricsCorrectionStatus>;
+  onCurrentRequestError?: (error: unknown) => void;
 }): Promise<LyricsCorrectionStatus | null> {
   const current = options.states.get(options.tabId) ?? lyricsCorrectionTabState();
+
+  if (!options.syncBackend) {
+    return current.jobId === options.jobId ? current.status : null;
+  }
+
   const requestId = current.latestRequestId + 1;
   const started = nextLyricsCorrectionSync(current, {
     type: 'sync-started',
@@ -104,19 +97,35 @@ export async function syncLyricsCorrectionStatus(options: {
   });
   options.states.set(options.tabId, started);
 
-  if (!options.syncBackend) {
-    return started.status;
+  let correction: LyricsCorrectionStatus;
+
+  try {
+    correction = await options.fetchStatus();
+  } catch (error) {
+    const latest = options.states.get(options.tabId);
+
+    if (latest?.latestRequestId === requestId && latest.jobId === options.jobId) {
+      options.onCurrentRequestError?.(error);
+    }
+
+    throw error;
   }
 
-  const correction = await options.fetchStatus();
-  const latest = options.states.get(options.tabId) ?? started;
+  const latest = options.states.get(options.tabId);
+
+  if (!latest) {
+    return null;
+  }
+
   const accepted = nextLyricsCorrectionSync(latest, {
     type: 'response',
     jobId: options.jobId,
     requestId,
     status: correction,
   });
-  options.states.set(options.tabId, accepted);
+  if (accepted !== latest) {
+    options.states.set(options.tabId, accepted);
+  }
 
-  return accepted.status === correction ? correction : latest.status;
+  return accepted.status;
 }

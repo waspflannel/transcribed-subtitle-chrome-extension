@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Artisan = Join-Path $ScriptDir "artisan.ps1"
+$Artisan = Join-Path $ScriptDir "..\runtime\artisan.ps1"
 
 function Invoke-Checked {
     param(

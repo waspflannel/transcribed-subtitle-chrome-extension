@@ -12,6 +12,7 @@
 Add one file per meaningful product area or workflow.
 
 - First release readiness: `release-readiness.md`
+- Lyrics editing and full replacement: `lyrics-editing.md`
 
 Recommended format:
 

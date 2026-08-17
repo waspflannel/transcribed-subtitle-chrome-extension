@@ -91,16 +91,21 @@ class FailStalledSubtitleJobs extends Command
         $stalledCorrections = SubtitleTrackLyricsCorrection::query()
             ->where('status', 'running')
             ->where('updated_at', '<=', $correctionCutoff)
-            ->get(['subtitle_track_id', 'attempt_id']);
+            ->get(['subtitle_track_id', 'attempt_id', 'work_revision']);
 
         foreach ($stalledCorrections as $correction) {
-            $corrections->failAttempt(
+            $didFail = $corrections->failAttempt(
                 (int) $correction->subtitle_track_id,
                 (string) $correction->attempt_id,
                 'lyrics_correction_failed',
                 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.',
+                expectedRevision: (int) $correction->work_revision,
+                notUpdatedAfter: $correctionCutoff,
             );
-            $failed++;
+
+            if ($didFail) {
+                $failed++;
+            }
         }
 
         $this->components->info("Failed {$failed} stalled subtitle job(s).");

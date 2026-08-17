@@ -154,6 +154,7 @@ if (-not (Test-Path $EnvPath)) {
 }
 
 $runtimeEnv = @{
+    APP_URL = "http://127.0.0.1:8001"
     DB_CONNECTION = "pgsql"
     DB_HOST = "127.0.0.1"
     DB_PORT = "55432"
@@ -194,7 +195,11 @@ foreach ($entry in $runtimeEnv.GetEnumerator()) {
 if (-not $SkipDocker) {
     Push-Location $Root
     try {
-        docker compose up -d postgres redis
+        docker compose up --wait postgres redis
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker compose up failed with code $LASTEXITCODE."
+        }
     } catch {
         throw "Docker services could not be started. Start Docker Desktop, then rerun this script."
     } finally {
@@ -205,7 +210,7 @@ if (-not $SkipDocker) {
 Push-Location $Backend
 try {
     Invoke-RuntimePhp @("artisan", "config:clear")
-    Invoke-RuntimePhp @("artisan", "subtitles:runtime-check")
+    Invoke-RuntimePhp @("artisan", "subtitles:runtime-check", "--json") | Out-Null
 
     if (-not $SkipMigrate) {
         Invoke-RuntimePhp @("artisan", "migrate", "--force")

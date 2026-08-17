@@ -275,7 +275,7 @@ class LaravelAiTranslationAnalysisProvider
         }
     }
 
-    private function shouldRetryEnrichmentBatch(SubtitleProcessingException $exception, int $cueCount): bool
+    public function shouldRetryEnrichmentBatch(SubtitleProcessingException $exception, int $cueCount): bool
     {
         if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
             return false;
@@ -657,7 +657,7 @@ class LaravelAiTranslationAnalysisProvider
         }
     }
 
-    private function shouldRetryTokenizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
+    public function shouldRetryTokenizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
     {
         if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
             return false;

@@ -49,6 +49,23 @@ final class SubtitleProviderCostRecorder
         }
     }
 
+    /**
+     * One structured alignment call resolves the whole pasted-lyrics prompt,
+     * so record it as a single per-call unit against the analysis model.
+     */
+    public function recordCorrectionAlignment(SubtitleJob $job): void
+    {
+        $this->record(
+            job: $job,
+            stage: 'aligning',
+            provider: Lab::OpenAI->value,
+            model: (string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default'),
+            billingUnit: 'alignment_call',
+            billedUnits: 1,
+            unitPriceMicrousd: max(0, (int) config('subtitles.costs.openai_alignment_microusd_per_call', 0)),
+        );
+    }
+
     public function recordCueBatch(SubtitleJob $job, string $stage, int $cueCount): void
     {
         $purpose = match ($stage) {

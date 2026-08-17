@@ -126,8 +126,8 @@ The first production posture should be a managed Laravel VPS-style setup with ma
 - 2026-06-02: `npm run compile` in `app/extension` passed.
 - 2026-06-02: `npm run build` in `app/extension` passed.
 - 2026-06-02: PowerShell parser passed for all new runtime scripts.
-- 2026-06-02: `.\scripts\runtime\render-supervisor-config.ps1` rendered `tse-generation-priority`, `tse-batch-priority`, `tse-base-generation-guarantee`, and `tse-base-batch-guarantee` Supervisor programs from current Laravel queue config.
-- 2026-06-02: `.\scripts\runtime\build-extension-release.ps1 -ApiBaseUrl "https://api.example.test/v1" -SkipTests` built and zipped a Chrome extension artifact, verified `https://api.example.test/*` host permission, and rejected localhost backend permission.
+- 2026-06-02: `.\scripts\ops\render-supervisor-config.ps1` rendered `tse-generation-priority`, `tse-batch-priority`, `tse-base-generation-guarantee`, and `tse-base-batch-guarantee` Supervisor programs from current Laravel queue config.
+- 2026-06-02: `.\scripts\ops\build-extension-release.ps1 -ApiBaseUrl "https://api.example.test/v1" -SkipTests` built and zipped a Chrome extension artifact, verified `https://api.example.test/*` host permission, and rejected localhost backend permission.
 - 2026-06-02: `vendor\bin\pint --dirty --format agent` passed.
 - 2026-06-02: `.\scripts\agent\check.ps1` passed after implementation: docs lint, contracts, Laravel 188 tests / 1089 assertions, extension 62 tests, TypeScript compile, WXT build.
 - 2026-06-02: `.\scripts\agent\doc-gardening.ps1` passed with no findings.
@@ -144,8 +144,8 @@ The first production posture should be a managed Laravel VPS-style setup with ma
 ## Next External Steps
 
 - Choose hosting, region, managed Postgres/Redis, logging/alerting provider, staging domain, and production domain.
-- Configure staging secrets and run `.\scripts\runtime\check-production-readiness.ps1 -Target staging`.
-- Deploy staging with `.\scripts\runtime\deploy-managed-laravel.ps1 -Target staging -HealthUrl "https://<staging-host>/up"`.
+- Configure staging secrets and run `.\scripts\ops\check-production-readiness.ps1 -Target staging`.
+- Deploy staging with `.\scripts\ops\deploy-managed-laravel.ps1 -Target staging -HealthUrl "https://<staging-host>/up"`.
 - Install rendered Supervisor worker config and scheduler cron.
 - Run staging rollback, provider-backed public-video generation, backup restore, alert smoke, and extension release build against the real staging/production API host.
 

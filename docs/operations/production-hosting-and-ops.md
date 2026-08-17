@@ -51,14 +51,14 @@ Keep the ElevenLabs key only in backend host/provider secret storage. The extens
 8. Run readiness checks:
 
 ```powershell
-.\scripts\runtime\check-production-readiness.ps1 -Target staging
-.\scripts\runtime\check-production-readiness.ps1 -Target production
+.\scripts\ops\check-production-readiness.ps1 -Target staging
+.\scripts\ops\check-production-readiness.ps1 -Target production
 ```
 
 9. Render Supervisor worker config from the checked-in queue group configuration:
 
 ```powershell
-.\scripts\runtime\render-supervisor-config.ps1 `
+.\scripts\ops\render-supervisor-config.ps1 `
   -ApplicationPath "/var/www/transcribed-subtitle-extension/app/backend/current" `
   -WorkerUser "forge" `
   -OutputPath ".\storage\ops\transcribed-subtitle-extension-workers.conf"
@@ -91,7 +91,7 @@ php artisan subtitles:prune-expired --no-ansi
 The deploy script encodes the release order confirmed by Laravel 13 deployment docs: run the repository checks, audit the locked Composer runtime and shared contracts package, clear stale config, check production posture, check the runtime profile, migrate with `--force`, optimize caches, restart queue workers gracefully, and smoke `/up`.
 
 ```powershell
-.\scripts\runtime\deploy-managed-laravel.ps1 `
+.\scripts\ops\deploy-managed-laravel.ps1 `
   -Target staging `
   -HealthUrl "https://staging-api.example.com/up"
 ```
@@ -133,7 +133,7 @@ The first staging rollback must be tested and recorded in the active phase plan 
 Create backups with `pg_dump` custom format:
 
 ```powershell
-.\scripts\runtime\backup-postgres.ps1 `
+.\scripts\ops\backup-postgres.ps1 `
   -DatabaseUrl "postgres://user:password@host:5432/database" `
   -OutputDirectory ".\storage\ops\backups"
 ```
@@ -141,7 +141,7 @@ Create backups with `pg_dump` custom format:
 Test restores against a disposable restore-test database only:
 
 ```powershell
-.\scripts\runtime\restore-postgres-backup.ps1 `
+.\scripts\ops\restore-postgres-backup.ps1 `
   -BackupPath ".\storage\ops\backups\transcribed-subtitle-extension-YYYYMMDD-HHMMSS.dump" `
   -DatabaseUrl "postgres://user:password@host:5432/restore_test_database" `
   -ConfirmRestore
@@ -187,7 +187,7 @@ Logs and traces must remain sanitized: no provider secrets, bearer tokens, raw a
 Build Chrome release artifacts with an HTTPS production API base URL:
 
 ```powershell
-.\scripts\runtime\build-extension-release.ps1 -ApiBaseUrl "https://api.example.com/v1"
+.\scripts\ops\build-extension-release.ps1 -ApiBaseUrl "https://api.example.com/v1"
 ```
 
 The script requires a real extension version, audits shipped production dependencies, runs extension tests and TypeScript compile unless `-SkipTests` is provided, builds with WXT, verifies the manifest contains the configured production API host permission, rejects localhost backend permission, and creates the Chrome ZIP through `wxt zip`.

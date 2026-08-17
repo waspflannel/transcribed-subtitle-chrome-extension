@@ -18,6 +18,7 @@ const schemaFiles = fs
 const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
+  strictRequired: false,
   schemas: [],
 });
 

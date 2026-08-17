@@ -91,6 +91,25 @@ export default defineBackground(() => {
   });
 });
 
+/**
+ * Clearing correction sync state is a tombstone: the per-tab revision keeps
+ * increasing so an already in-flight status response can never be accepted
+ * against a fresh revision counter or a different job.
+ */
+function tombstoneLyricsCorrectionState(tabId: number): void {
+  const current = tabLyricsCorrectionStates.get(tabId);
+
+  if (current) {
+    tabLyricsCorrectionStates.set(tabId, nextLyricsCorrectionSync(current, { type: 'cleared' }));
+  }
+}
+
+function tombstoneAllLyricsCorrectionStates(): void {
+  for (const tabId of [...tabLyricsCorrectionStates.keys()]) {
+    tombstoneLyricsCorrectionState(tabId);
+  }
+}
+
 async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.runtime.MessageSender): Promise<unknown> {
   switch (message.type) {
     case 'content.getState':
@@ -595,7 +614,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
   await clearLocalExtensionState();
   await clearRememberedTracks();
   tabSubtitleStates.clear();
-  tabLyricsCorrectionStates.clear();
+  tombstoneAllLyricsCorrectionStates();
 
   const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
@@ -643,7 +662,7 @@ async function logoutFromPanel(): Promise<PanelState> {
   }
 
   await clearExtensionSession();
-  tabLyricsCorrectionStates.clear();
+  tombstoneAllLyricsCorrectionStates();
 
   console.info('extension.account_logout_completed');
 
@@ -718,8 +737,8 @@ async function syncLyricsCorrection(
   syncBackend: boolean,
 ): Promise<LyricsCorrectionStatus | null> {
   if (tabId === null || !pageStatus?.supported || !session) {
-    if (tabId !== null) {
-      tabLyricsCorrectionStates.delete(tabId);
+    if (syncBackend && tabId !== null) {
+      tombstoneLyricsCorrectionState(tabId);
     }
 
     return null;
@@ -729,7 +748,9 @@ async function syncLyricsCorrection(
     (candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status === 'completed',
   );
   if (!job) {
-    tabLyricsCorrectionStates.delete(tabId);
+    if (syncBackend) {
+      tombstoneLyricsCorrectionState(tabId);
+    }
 
     return null;
   }
@@ -741,6 +762,11 @@ async function syncLyricsCorrection(
       syncBackend,
       states: tabLyricsCorrectionStates,
       fetchStatus: () => subtitleApi.getLyricsCorrectionStatus(installId, session.plainTextToken, job.jobId),
+      onCurrentRequestError: (error) => {
+        if (error instanceof SubtitleApiError && error.code === 'not_found') {
+          tombstoneLyricsCorrectionState(tabId);
+        }
+      },
     });
 
     if (status?.status === 'completed' && status.track) {
@@ -753,13 +779,7 @@ async function syncLyricsCorrection(
     }
 
     return status;
-  } catch (error) {
-    if (error instanceof SubtitleApiError && error.code === 'not_found') {
-      tabLyricsCorrectionStates.delete(tabId);
-
-      return null;
-    }
-
+  } catch {
     return tabLyricsCorrectionStates.get(tabId)?.status ?? null;
   }
 }
@@ -986,7 +1006,7 @@ async function clearSessionIfInvalid(error: unknown): Promise<boolean> {
   }
 
   await clearExtensionSession();
-  tabLyricsCorrectionStates.clear();
+  tombstoneAllLyricsCorrectionStates();
 
   return true;
 }
