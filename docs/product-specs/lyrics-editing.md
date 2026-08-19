@@ -3,7 +3,7 @@
 Status: proposed
 Owner: product
 Created: 2026-08-16
-Implementation status: not started
+Implementation status: builder implementation complete; reviewer validation pending
 
 ## Problem
 
@@ -149,6 +149,14 @@ Add one cancellation operation on the same current correction resource:
 
 ```text
 DELETE /v1/subtitle-jobs/{jobId}/lyrics
+```
+
+The cancellation body must include the current `attemptId` so a delayed request cannot cancel a newer attempt:
+
+```json
+{
+  "attemptId": "current-attempt-uuid"
+}
 ```
 
 Add one token mutation:

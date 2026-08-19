@@ -16,6 +16,9 @@ if (-not $SkipAppChecks) {
         Push-Location $Contracts
         try {
             npm run check
+            if ($LASTEXITCODE -ne 0) {
+                throw "Contract checks failed with exit code $LASTEXITCODE."
+            }
         } finally {
             Pop-Location
         }
@@ -28,6 +31,9 @@ if (-not $SkipAppChecks) {
         Push-Location $Backend
         try {
             php artisan test --compact
+            if ($LASTEXITCODE -ne 0) {
+                throw "Backend tests failed with exit code $LASTEXITCODE."
+            }
         } finally {
             Pop-Location
         }
@@ -40,8 +46,17 @@ if (-not $SkipAppChecks) {
         Push-Location $Extension
         try {
             npm test
+            if ($LASTEXITCODE -ne 0) {
+                throw "Extension tests failed with exit code $LASTEXITCODE."
+            }
             npm run compile
+            if ($LASTEXITCODE -ne 0) {
+                throw "Extension compile failed with exit code $LASTEXITCODE."
+            }
             npm run build
+            if ($LASTEXITCODE -ne 0) {
+                throw "Extension build failed with exit code $LASTEXITCODE."
+            }
         } finally {
             Pop-Location
         }
