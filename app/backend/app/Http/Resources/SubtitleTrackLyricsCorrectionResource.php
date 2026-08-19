@@ -17,6 +17,7 @@ class SubtitleTrackLyricsCorrectionResource extends JsonResource
         $resource = [
             'attemptId' => $this->attempt_id,
             'status' => $this->status,
+            'stage' => $this->publicStage(),
             'updatedAt' => $this->updated_at->toJSON(),
         ];
 
@@ -30,5 +31,23 @@ class SubtitleTrackLyricsCorrectionResource extends JsonResource
         }
 
         return $resource;
+    }
+
+    private function publicStage(): string
+    {
+        return match ($this->status) {
+            'queued' => 'queued',
+            'completed' => 'completed',
+            'failed' => 'failed',
+            'cancelled' => 'cancelled',
+            default => match (is_array($this->work_state) ? ($this->work_state['stage'] ?? null) : null) {
+                'aligning' => 'aligning',
+                'analyzing', 'tokenizing' => 'rebuilding',
+                'romanizing' => 'romanizing',
+                'enriching' => 'enriching',
+                'finalizing' => 'finalizing',
+                default => 'queued',
+            },
+        };
     }
 }

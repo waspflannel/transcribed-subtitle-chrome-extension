@@ -56,6 +56,15 @@ Route::prefix('v1')
                     ->name('subtitle-jobs.lyrics.show')
                     ->middleware('throttle:subtitle-status-api');
 
+                Route::delete('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'cancelLyrics'])
+                    ->name('subtitle-jobs.lyrics.destroy')
+                    ->middleware('throttle:subtitle-api');
+
+                Route::patch('/subtitle-jobs/{jobId}/cues/{cueId}/tokens/{tokenIndex}', [SubtitleJobController::class, 'quickFixToken'])
+                    ->name('subtitle-jobs.tokens.update')
+                    ->middleware('throttle:subtitle-api')
+                    ->where('tokenIndex', '[0-9]{1,4}');
+
                 Route::post('/subtitle-jobs', [SubtitleJobController::class, 'store'])
                     ->name('subtitle-jobs.store')
                     ->middleware('throttle:subtitle-api');

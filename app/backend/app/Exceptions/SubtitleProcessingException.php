@@ -100,6 +100,19 @@ class SubtitleProcessingException extends Exception
     /**
      * @param  array<string, mixed>  $context
      */
+    public static function lyricsIncomplete(array $context = []): self
+    {
+        return new self('lyrics_incomplete', 'These lyrics do not cover the complete song.', 422, $context);
+    }
+
+    public static function lyricsTrackChanged(): self
+    {
+        return new self('lyrics_correction_in_progress', 'The subtitle track changed. Refresh the panel and try again.', 409, ['reason' => 'stale_track']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
     public static function lyricsCorrectionFailed(array $context = [], ?Throwable $previous = null): self
     {
         return new self('lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', 422, $context, $previous);

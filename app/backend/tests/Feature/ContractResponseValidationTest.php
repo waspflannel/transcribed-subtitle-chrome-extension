@@ -167,6 +167,48 @@ class ContractResponseValidationTest extends TestCase
         );
     }
 
+    public function test_lyrics_editing_responses_match_canonical_contract_schemas(): void
+    {
+        $installId = $this->installId('c');
+        $user = User::factory()->create();
+        $track = $this->completedTrack($installId, $user, 'editcontract1');
+        $attemptId = '018f9e2f-0d8c-7500-8f38-9f4c5d1b3020';
+        $track->lyricsCorrection()->create([
+            'attempt_id' => $attemptId,
+            'status' => 'queued',
+            'lyrics' => 'private lyrics',
+            'work_state' => ['stage' => 'aligning'],
+        ]);
+
+        $invalidCancellation = $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics')
+            ->assertUnprocessable();
+        $this->assertResponseMatchesSchema($invalidCancellation, 'api-error.schema.json');
+
+        $staleCancellation = $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics', ['attemptId' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041'])
+            ->assertStatus(409);
+        $this->assertResponseMatchesSchema($staleCancellation, 'api-error.schema.json');
+
+        $cancelled = $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics', ['attemptId' => $attemptId])
+            ->assertOk();
+        $this->assertResponseMatchesSchema($cancelled, 'lyrics-correction-status.schema.json');
+
+        $cue = $track->fresh()->cues[0];
+        $quickFix = $this
+            ->withExtensionAuth($installId, $user)
+            ->patchJson('/v1/subtitle-jobs/'.$track->job->public_id.'/cues/'.$cue['cueId'].'/tokens/0', [
+                'expectedTrackId' => $track->public_id,
+                'text' => 'changed',
+            ])
+            ->assertOk();
+        $this->assertResponseMatchesSchema($quickFix, 'track-response.schema.json');
+    }
+
     private function completedTrack(string $installId, User $user, string $videoId, array $overrides = []): SubtitleTrack
     {
         $sourceLanguage = $overrides['source_language'] ?? 'auto';

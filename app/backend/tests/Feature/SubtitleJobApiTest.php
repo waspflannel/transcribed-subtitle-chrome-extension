@@ -545,6 +545,242 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
     }
 
+    public function test_quick_fix_replaces_one_token_and_clears_derived_cue_data(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $oldTrackId = $job->track->public_id;
+        $oldCueId = $job->track->cues[0]['cueId'];
+        $oldGeneratedAt = $job->track->generated_at->toJSON();
+        $oldExpiresAt = $job->track->expires_at->toJSON();
+        $tokenizationCalls = $this->translationAnalysis->tokenizationCalls;
+
+        $response = $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$oldCueId.'/tokens/0',
+            ['expectedTrackId' => $oldTrackId, 'text' => 'updated'],
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('cues.0.sourceText', 'updated transcript segment')
+            ->assertJsonPath('cues.0.translatedText', 'updated transcript segment')
+            ->assertJsonMissingPath('cues.0.romanization')
+            ->assertJsonMissingPath('cues.0.tokens.0.gloss')
+            ->assertJsonPath('cues.0.tokens.0.text', 'updated')
+            ->assertJsonPath('cues.0.tokens.0.normalizedText', 'updated');
+
+        $job->refresh()->load('track');
+        $this->assertNotSame($oldTrackId, $job->track->public_id);
+        $this->assertNotSame($oldCueId, $job->track->cues[0]['cueId']);
+        $this->assertSame($oldGeneratedAt, $job->track->generated_at->toJSON());
+        $this->assertSame($oldExpiresAt, $job->track->expires_at->toJSON());
+        $this->assertSame($tokenizationCalls, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_quick_fix_uses_the_selected_repeated_token_occurrence(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+        $cue['sourceText'] = 'one two one';
+        $cue['translatedText'] = 'one two one';
+        $cue['tokens'] = [
+            ['index' => 0, 'text' => 'one', 'normalizedText' => 'one'],
+            ['index' => 1, 'text' => 'two', 'normalizedText' => 'two'],
+            ['index' => 2, 'text' => 'one', 'normalizedText' => 'one'],
+        ];
+        $job->track->update(['cues' => [$cue]]);
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/2',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'last'],
+        )->assertOk()->assertJsonPath('cues.0.sourceText', 'one two last');
+    }
+
+    public function test_quick_fix_rejects_stale_track_and_active_replacement(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => (string) Str::uuid(), 'text' => 'updated'],
+        )->assertStatus(409)
+            ->assertJsonPath('error.code', 'lyrics_correction_in_progress')
+            ->assertJsonPath('error.details.reason', 'stale_track');
+
+        Queue::fake();
+        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+            'lyrics' => 'first transcript segment second transcript segment',
+        ])->assertAccepted();
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertStatus(409)
+            ->assertJsonPath('error.code', 'lyrics_correction_in_progress')
+            ->assertJsonMissingPath('error.details.reason');
+    }
+
+    public function test_quick_fix_rejects_a_replacement_with_the_same_normalized_token(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $trackId = $job->track->public_id;
+        $cue = $job->track->cues[0];
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $trackId, 'text' => ' FIRST '],
+        )->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed');
+
+        $this->assertSame($trackId, $job->track->fresh()->public_id);
+    }
+
+    public function test_quick_fix_matches_case_normalized_persisted_token_spans(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+        $cue['sourceText'] = 'Hello world';
+        $cue['translatedText'] = 'Hello world';
+        $cue['tokens'] = [
+            ['index' => 0, 'text' => 'hello', 'normalizedText' => 'hello'],
+            ['index' => 1, 'text' => 'world', 'normalizedText' => 'world'],
+        ];
+        $job->track->update(['cues' => [$cue]]);
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'Hi'],
+        )->assertOk()->assertJsonPath('cues.0.sourceText', 'Hi world');
+    }
+
+    public function test_quick_fix_returns_validation_failure_when_the_resulting_cue_overflows(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+        $cue['sourceText'] = str_repeat('a', 40).' '.str_repeat('b', 40);
+        $cue['translatedText'] = $cue['sourceText'];
+        $cue['tokens'] = [
+            ['index' => 0, 'text' => str_repeat('a', 40), 'normalizedText' => str_repeat('a', 40)],
+            ['index' => 1, 'text' => str_repeat('b', 40), 'normalizedText' => str_repeat('b', 40)],
+        ];
+        $job->track->update(['cues' => [$cue]]);
+        $trackId = $job->track->public_id;
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $trackId, 'text' => str_repeat('c', 50)],
+        )->assertUnprocessable()
+            ->assertJsonPath('error.code', 'validation_failed')
+            ->assertJsonPath('error.details.errors.text.0', 'Replacement text makes this subtitle line longer than 84 characters.');
+
+        $this->assertSame($trackId, $job->track->fresh()->public_id);
+    }
+
+    public function test_quick_fix_rejects_an_out_of_range_token_index_at_the_route_boundary(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/123456789',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertNotFound();
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/9999',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertNotFound();
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/-1',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertNotFound();
+    }
+
+    public function test_quick_fix_rejects_empty_missing_owner_and_expired_targets(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => ''],
+        )->assertUnprocessable();
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => " \n\t"],
+        )->assertUnprocessable();
+
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/missing-cue/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertNotFound();
+
+        $otherUser = User::factory()->create();
+        $this->withExtensionAuth($this->installId('b'), $otherUser)->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertNotFound();
+
+        $job->track->update(['expires_at' => now()->subMinute()]);
+        $this->withExtensionAuth($this->installId())->patchJson(
+            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
+            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
+        )->assertNotFound();
+    }
+
+    public function test_correction_can_be_cancelled_and_exposes_safe_stage(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        Queue::fake();
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+            'lyrics' => 'first transcript segment second transcript segment',
+        ])->assertAccepted();
+
+        $this->withExtensionAuth($this->installId())
+            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => $correction->json('attemptId')])
+            ->assertOk()
+            ->assertJsonPath('attemptId', $correction->json('attemptId'))
+            ->assertJsonPath('status', 'cancelled')
+            ->assertJsonPath('stage', 'cancelled')
+            ->assertJsonMissingPath('track')
+            ->assertJsonMissingPath('message');
+    }
+
+    public function test_cancellation_rejects_invalid_attempts_and_wrong_or_expired_tracks(): void
+    {
+        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        Queue::fake();
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+            'lyrics' => 'first transcript segment second transcript segment',
+        ])->assertAccepted();
+
+        $this->withExtensionAuth($this->installId())
+            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics')
+            ->assertUnprocessable();
+        $this->withExtensionAuth($this->installId())
+            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => 'not-a-uuid'])
+            ->assertUnprocessable();
+
+        $otherUser = User::factory()->create();
+        $this->withExtensionAuth($this->installId('b'), $otherUser)
+            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => $correction->json('attemptId')])
+            ->assertNotFound();
+
+        $job->track->update(['expires_at' => now()->subMinute()]);
+        $this->withExtensionAuth($this->installId())
+            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => $correction->json('attemptId')])
+            ->assertNotFound();
+    }
+
     public function test_transient_correction_provider_failure_requeues_and_retry_completes(): void
     {
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();

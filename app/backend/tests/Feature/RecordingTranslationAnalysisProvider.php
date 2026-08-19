@@ -39,6 +39,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public ?\Closure $beforeTokenResult = null;
 
+    public ?\Closure $beforeRetry = null;
+
     /**
      * @var array<int, string>
      */
@@ -53,12 +55,14 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage, bool $splitInvalidBatches = true): CueEnrichmentResult
+    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage, bool $splitInvalidBatches = true, ?\Closure $beforeRetry = null): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
 
         if (count($batch) > $this->invalidBatchAboveCueCount && $this->invalidBatchAboveCueCount > 0) {
+            ($this->beforeRetry)?->__invoke();
+            $beforeRetry?->__invoke();
             throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
         }
 
@@ -94,6 +98,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         string $targetLanguage,
         bool $includeRomanization = true,
         bool $splitInvalidBatches = true,
+        ?\Closure $beforeRetry = null,
     ): CueEnrichmentResult {
         $this->calls++;
         $this->sourceLanguages[] = $sourceLanguage;
@@ -143,6 +148,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         string $sourceLanguage,
         string $targetLanguage,
         bool $splitInvalidBatches = true,
+        ?\Closure $beforeRetry = null,
     ): CueAnalysisBatchResult {
         $this->tokenizationCalls++;
         $this->translationCalls++;
@@ -150,6 +156,8 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         $this->targetLanguages[] = $targetLanguage;
 
         if (count($batch) > $this->invalidBatchAboveCueCount && $this->invalidBatchAboveCueCount > 0) {
+            ($this->beforeRetry)?->__invoke();
+            $beforeRetry?->__invoke();
             throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
         }
 

@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -20,12 +21,17 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
 
 final class LyricsCorrectionService
 {
+    private const MINIMUM_SLOT_COVERAGE = 0.60;
+
+    private const MINIMUM_TIMELINE_COVERAGE = 0.80;
+
     private const STAGES = ['aligning', 'tokenizing', 'analyzing', 'romanizing', 'enriching', 'finalizing'];
 
     public function __construct(
@@ -33,6 +39,7 @@ final class LyricsCorrectionService
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
         private readonly SubtitleProviderCostRecorder $costs,
+        private readonly LearningTokenOutputValidator $tokenValidator,
     ) {}
 
     public function normalizeLyrics(string $lyrics): string
@@ -136,6 +143,156 @@ final class LyricsCorrectionService
         return $correction->fresh(['track.job']);
     }
 
+    public function cancel(SubtitleJob $job, User $user, string $attemptId): SubtitleTrackLyricsCorrection
+    {
+        if ((int) $job->user_id !== (int) $user->id) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($job, $attemptId): SubtitleTrackLyricsCorrection {
+            $track = SubtitleTrack::query()
+                ->where('subtitle_job_id', $job->getKey())
+                ->where('expires_at', '>', now())
+                ->whereHas('job', fn ($query) => $query->where('status', 'completed'))
+                ->lockForUpdate()
+                ->firstOrFail();
+            $correction = SubtitleTrackLyricsCorrection::query()
+                ->where('subtitle_track_id', $track->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! hash_equals((string) $correction->attempt_id, $attemptId)) {
+                throw SubtitleProcessingException::lyricsCorrectionInProgress();
+            }
+
+            if (in_array($correction->status, ['queued', 'running'], true)) {
+                $correction->update([
+                    'status' => 'cancelled',
+                    'work_revision' => $correction->work_revision + 1,
+                    'lyrics' => null,
+                    'work_state' => null,
+                    'error_code' => null,
+                    'error_message' => null,
+                ]);
+            }
+
+            return $correction->fresh(['track.job']);
+        }, attempts: 5);
+    }
+
+    /**
+     * @param  array{expectedTrackId: string, text: string}  $payload
+     */
+    public function quickFix(
+        SubtitleJob $job,
+        User $user,
+        string $cueId,
+        int $tokenIndex,
+        array $payload,
+    ): SubtitleTrack {
+        if ((int) $job->user_id !== (int) $user->id) {
+            abort(404);
+        }
+
+        return DB::transaction(function () use ($job, $cueId, $tokenIndex, $payload): SubtitleTrack {
+            $track = SubtitleTrack::query()
+                ->where('subtitle_job_id', $job->getKey())
+                ->where('expires_at', '>', now())
+                ->whereHas('job', fn ($query) => $query->where('status', 'completed'))
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! hash_equals((string) $track->public_id, $payload['expectedTrackId'])) {
+                throw SubtitleProcessingException::lyricsTrackChanged();
+            }
+
+            $correction = SubtitleTrackLyricsCorrection::query()
+                ->where('subtitle_track_id', $track->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($correction instanceof SubtitleTrackLyricsCorrection && in_array($correction->status, ['queued', 'running'], true)) {
+                throw SubtitleProcessingException::lyricsCorrectionInProgress();
+            }
+
+            $cues = array_values($track->cues);
+            $cuePosition = array_search($cueId, array_column($cues, 'cueId'), true);
+
+            if (! is_int($cuePosition)) {
+                abort(404);
+            }
+
+            $cue = $cues[$cuePosition];
+            $tokens = is_array($cue['tokens'] ?? null) ? array_values($cue['tokens']) : [];
+            $span = $this->tokenSpan((string) ($cue['sourceText'] ?? ''), $tokens, $tokenIndex);
+
+            if ($span === null) {
+                abort(404);
+            }
+
+            $replacement = SubtitleText::collapseWhitespace($payload['text']);
+            $sourceText = (string) $cue['sourceText'];
+            $updatedSourceText = mb_substr($sourceText, 0, $span[0], 'UTF-8')
+                .$replacement
+                .mb_substr($sourceText, $span[1], null, 'UTF-8');
+
+            if (SubtitleText::collapseWhitespace($updatedSourceText) === '') {
+                throw new SubtitleProcessingException('validation_failed', 'Replacement text must leave a non-empty subtitle line.', 422);
+            }
+
+            if (mb_strlen($updatedSourceText, 'UTF-8') > 84) {
+                throw ValidationException::withMessages([
+                    'text' => ['Replacement text makes this subtitle line longer than 84 characters.'],
+                ]);
+            }
+
+            $updatedTokens = [];
+            $replacementNormalizedText = $this->tokenValidator->normalizeTokenText($replacement);
+
+            foreach ($tokens as $token) {
+                if (! is_array($token) || ! is_int($token['index'] ?? null) || ! is_string($token['text'] ?? null)) {
+                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_quick_fix_tokens']);
+                }
+
+                if ($token['index'] === $tokenIndex && $replacementNormalizedText === (string) ($token['normalizedText'] ?? '')) {
+                    throw new SubtitleProcessingException('validation_failed', 'Replacement text must change the selected token.', 422);
+                }
+
+                $normalizedText = $token['index'] === $tokenIndex
+                    ? $replacementNormalizedText
+                    : (string) ($token['normalizedText'] ?? '');
+
+                if ($normalizedText === '') {
+                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_quick_fix_tokens']);
+                }
+
+                $updatedTokens[] = [
+                    'index' => $token['index'],
+                    'text' => $token['index'] === $tokenIndex ? $replacement : $token['text'],
+                    'normalizedText' => $normalizedText,
+                ];
+            }
+
+            $updatedCue = [
+                ...$cue,
+                'cueId' => 'quick-fix-'.str_replace('-', '', (string) Str::uuid()),
+                'sourceText' => $updatedSourceText,
+                'translatedText' => $updatedSourceText,
+                'tokens' => $updatedTokens,
+            ];
+            unset($updatedCue['romanization']);
+            $cues[$cuePosition] = $updatedCue;
+
+            $track->update([
+                'public_id' => (string) Str::uuid(),
+                'cues' => $cues,
+                'web_vtt' => $this->webVtt($cues),
+            ]);
+
+            return $track->fresh(['job']);
+        }, attempts: 5);
+    }
+
     public function process(int $trackId, string $attemptId, int $expectedRevision): void
     {
         $correction = $this->claimUnit($trackId, $attemptId, $expectedRevision);
@@ -155,6 +312,7 @@ final class LyricsCorrectionService
         $processedStage = is_array($correction->work_state) ? ($correction->work_state['stage'] ?? null) : null;
 
         try {
+            $this->ensureCorrectionCurrent($correction);
             $nextState = $this->advanceUnit($correction, $job);
         } catch (SubtitleProcessingException $exception) {
             if ($exception->isTransient()) {
@@ -179,6 +337,8 @@ final class LyricsCorrectionService
 
             if ($exception->publicCode === 'lyrics_do_not_match') {
                 $this->failAttempt($trackId, $attemptId, 'lyrics_do_not_match', 'These lyrics do not seem to match this song. Check the paste and try again.', expectedRevision: $expectedRevision);
+            } elseif ($exception->publicCode === 'lyrics_incomplete') {
+                $this->failAttempt($trackId, $attemptId, 'lyrics_incomplete', 'These lyrics do not cover the complete song. Your current subtitles are unchanged. Try again with the full lyrics.', expectedRevision: $expectedRevision);
             } else {
                 $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision);
             }
@@ -320,7 +480,7 @@ final class LyricsCorrectionService
 
         return match ($stage) {
             'aligning' => $this->aligningUnit($correction, $job, $lyrics),
-            'tokenizing', 'analyzing', 'romanizing', 'enriching' => $this->derivedUnit($job, $state, $stage),
+            'tokenizing', 'analyzing', 'romanizing', 'enriching' => $this->derivedUnit($correction, $job, $state, $stage),
             'finalizing' => $this->finalizingUnit($state),
             default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
         };
@@ -337,7 +497,7 @@ final class LyricsCorrectionService
             throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'missing_track']);
         }
 
-        $draftCues = $this->alignedCues($job, $track->cues, $lyrics, $job->effectiveSourceLanguage(), $correction->attempt_id);
+        $draftCues = $this->alignedCues($correction, $job, $track->cues, $lyrics, $job->effectiveSourceLanguage(), $correction->attempt_id);
         $batchPlan = $this->artifacts->batchPlan($draftCues);
 
         if ($batchPlan === []) {
@@ -365,7 +525,7 @@ final class LyricsCorrectionService
      * @param  array<string, mixed>  $state
      * @return array<string, mixed>
      */
-    private function derivedUnit(SubtitleJob $job, array $state, string $stage): array
+    private function derivedUnit(SubtitleTrackLyricsCorrection $correction, SubtitleJob $job, array $state, string $stage): array
     {
         $batchPlan = $state['batchPlan'] ?? null;
         $batchIndex = (int) ($state['batchIndex'] ?? -1);
@@ -384,7 +544,7 @@ final class LyricsCorrectionService
 
         $this->requireActivePlan($job);
 
-        $cues = $this->processedBatch($cues, $batch, $bounds, $job, $stage);
+        $cues = $this->processedBatch($cues, $batch, $bounds, $job, $stage, $correction);
 
         if (isset($batchPlan[$batchIndex + 1])) {
             return [...$state, 'batchIndex' => $batchIndex + 1, 'cues' => $cues];
@@ -399,18 +559,29 @@ final class LyricsCorrectionService
      * @param  array{0: int, 1: int}  $bounds
      * @return array<int, array<string, mixed>>
      */
-    private function processedBatch(array $cues, array $batch, array $bounds, SubtitleJob $job, string $stage): array
-    {
+    private function processedBatch(
+        array $cues,
+        array $batch,
+        array $bounds,
+        SubtitleJob $job,
+        string $stage,
+        SubtitleTrackLyricsCorrection $correction,
+    ): array {
+        $this->ensureCorrectionCurrent($correction);
+        $beforeRetry = function () use ($correction): void {
+            $this->ensureCorrectionCurrent($correction);
+        };
+
         switch ($stage) {
             case 'tokenizing':
-                $result = $this->translationAnalysis->tokenizeCueBatch($batch, $cues, $job->effectiveSourceLanguage(), false);
+                $result = $this->translationAnalysis->tokenizeCueBatch($batch, $cues, $job->effectiveSourceLanguage(), false, $beforeRetry);
                 $this->costs->recordCueBatch($job, 'tokenizing', count($result->cues));
                 $this->mergeIntoPositions($cues, $result->cues, $bounds);
 
                 return $cues;
 
             case 'analyzing':
-                $result = $this->translationAnalysis->analyzeCueBatch($batch, $cues, $job->effectiveSourceLanguage(), $job->target_language, false);
+                $result = $this->translationAnalysis->analyzeCueBatch($batch, $cues, $job->effectiveSourceLanguage(), $job->target_language, false, $beforeRetry);
                 $this->costs->recordAnalyzedCueBatch($job, count($result->tokenized->cues));
                 $translatedByCueId = [];
 
@@ -439,7 +610,7 @@ final class LyricsCorrectionService
                 return $cues;
 
             case 'enriching':
-                $result = $this->translationAnalysis->enrichCueBatch($batch, $job->effectiveSourceLanguage(), $job->target_language, $job->include_romanization, false);
+                $result = $this->translationAnalysis->enrichCueBatch($batch, $job->effectiveSourceLanguage(), $job->target_language, $job->include_romanization, false, $beforeRetry);
                 $this->costs->recordCueBatch($job, 'enriching', count($result->cues));
                 $this->mergeIntoPositions($cues, $result->cues, $bounds);
 
@@ -584,7 +755,14 @@ final class LyricsCorrectionService
         }
     }
 
-    private function alignedCues(SubtitleJob $job, array $sourceCues, string $lyrics, string $sourceLanguage, string $attemptId): array
+    private function alignedCues(
+        SubtitleTrackLyricsCorrection $correction,
+        SubtitleJob $job,
+        array $sourceCues,
+        string $lyrics,
+        string $sourceLanguage,
+        string $attemptId,
+    ): array
     {
         $matchingLyrics = $this->matchingLyrics($lyrics);
         $input = [
@@ -597,20 +775,61 @@ final class LyricsCorrectionService
         ];
 
         for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->ensureCorrectionCurrent($correction);
             $this->requireActivePlan($job);
             $output = $this->promptAlignment($input);
             $this->costs->recordCorrectionAlignment($job);
 
             try {
-                return $this->validatedAlignment($sourceCues, $matchingLyrics, $output, $attemptId);
+                $draft = $this->validatedAlignment($sourceCues, $matchingLyrics, $output, $attemptId);
+                $this->ensureCompleteLyricsCoverage($sourceCues, $draft);
+
+                return $draft;
             } catch (SubtitleProcessingException $exception) {
-                if ($exception->isTransient() || $exception->publicCode === 'lyrics_do_not_match') {
+                if ($exception->isTransient() || in_array($exception->publicCode, ['lyrics_do_not_match', 'lyrics_incomplete'], true)) {
                     throw $exception;
                 }
             }
         }
 
         throw SubtitleProcessingException::lyricsCorrectionFailed();
+    }
+
+    private function ensureCorrectionCurrent(SubtitleTrackLyricsCorrection $correction): void
+    {
+        $current = SubtitleTrackLyricsCorrection::query()
+            ->where('subtitle_track_id', $correction->subtitle_track_id)
+            ->where('attempt_id', $correction->attempt_id)
+            ->where('work_revision', $correction->work_revision)
+            ->whereIn('status', ['queued', 'running'])
+            ->exists();
+
+        if (! $current) {
+            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'cancelled_or_stale']);
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $sourceCues
+     * @param  array<int, array<string, mixed>>  $draftCues
+     */
+    private function ensureCompleteLyricsCoverage(array $sourceCues, array $draftCues): void
+    {
+        $sourceCues = array_values($sourceCues);
+        $draftCues = array_values($draftCues);
+
+        if ($sourceCues === [] || $draftCues === []) {
+            throw SubtitleProcessingException::lyricsIncomplete();
+        }
+
+        $sourceSpan = ((int) ($sourceCues[array_key_last($sourceCues)]['endMs'] ?? 0)) - ((int) ($sourceCues[0]['startMs'] ?? 0));
+        $draftSpan = ((int) ($draftCues[array_key_last($draftCues)]['endMs'] ?? 0)) - ((int) ($draftCues[0]['startMs'] ?? 0));
+        $slotCoverage = count($sourceCues) > 0 ? count($draftCues) / count($sourceCues) : 0.0;
+        $timelineCoverage = $sourceSpan > 0 ? $draftSpan / $sourceSpan : 0.0;
+
+        if ($slotCoverage < self::MINIMUM_SLOT_COVERAGE || $timelineCoverage < self::MINIMUM_TIMELINE_COVERAGE) {
+            throw SubtitleProcessingException::lyricsIncomplete();
+        }
     }
 
     private function promptAlignment(array $input): array
@@ -788,6 +1007,64 @@ final class LyricsCorrectionService
         }
 
         return false;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $tokens
+     * @return array{0: int, 1: int}|null
+     */
+    private function tokenSpan(string $sourceText, array $tokens, int $targetIndex): ?array
+    {
+        $cursor = 0;
+
+        foreach ($tokens as $token) {
+            if (! is_array($token) || ! is_int($token['index'] ?? null) || ! is_string($token['text'] ?? null)) {
+                return null;
+            }
+
+            $tokenText = $this->tokenValidator->normalizeTokenText($token['text']);
+            $span = $this->findComparableSpan($sourceText, $tokenText, $cursor);
+
+            if ($span === null) {
+                return null;
+            }
+
+            if ($token['index'] === $targetIndex) {
+                return $span;
+            }
+
+            $cursor = $span[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{0: int, 1: int}|null
+     */
+    private function findComparableSpan(string $sourceText, string $tokenText, int $cursor): ?array
+    {
+        if ($tokenText === '') {
+            return null;
+        }
+
+        $sourceLength = mb_strlen($sourceText, 'UTF-8');
+
+        for ($start = $cursor; $start < $sourceLength; $start++) {
+            if (preg_match('/^\s$/u', mb_substr($sourceText, $start, 1, 'UTF-8')) === 1) {
+                continue;
+            }
+
+            for ($end = $start + 1; $end <= $sourceLength; $end++) {
+                $candidate = $this->tokenValidator->normalizeTokenText(mb_substr($sourceText, $start, $end - $start, 'UTF-8'));
+
+                if ($candidate === $tokenText) {
+                    return [$start, $end];
+                }
+            }
+        }
+
+        return null;
     }
 
     private function webVtt(array $cues): string

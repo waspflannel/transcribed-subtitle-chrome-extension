@@ -97,6 +97,22 @@ class FailStalledSubtitleJobsTest extends TestCase
         $this->assertNull($correction->work_state);
     }
 
+    public function test_it_does_not_fail_cancelled_lyrics_corrections(): void
+    {
+        $job = SubtitleJob::factory()->create(['status' => 'completed']);
+        $track = SubtitleTrack::factory()->for($job, 'job')->create();
+        $correction = $track->lyricsCorrection()->create([
+            'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000035',
+            'status' => 'cancelled',
+            'work_revision' => 4,
+        ]);
+        $correction->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+
+        $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
+
+        $this->assertSame('cancelled', $correction->fresh()->status);
+    }
+
     public function test_it_does_not_fail_queued_lyrics_corrections_waiting_in_the_queue(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
