@@ -8,12 +8,14 @@ export function bindTranscriptView(dom: {
   transcriptSearch: HTMLInputElement;
   transcriptList: HTMLElement;
   transcriptStatus: HTMLElement;
+  onQuickFixToken?: (cueId: string, tokenIndex: number) => void;
 }) {
   let cues: readonly SubtitleCue[] = [];
   let settings: ExtensionSettings | null = null;
   let youtubeVideoId: string | null = null;
   let activeCueId: string | null = null;
   let renderedSignature: string | null = null;
+  let quickFixMode = false;
 
   function renderSignature(): string {
     return JSON.stringify([
@@ -22,6 +24,7 @@ export function bindTranscriptView(dom: {
       dom.transcriptSearch.value,
       settings?.showRomanization ?? false,
       settings?.showTranslation ?? false,
+      quickFixMode,
     ]);
   }
 
@@ -34,7 +37,7 @@ export function bindTranscriptView(dom: {
     renderedSignature = signature;
     dom.transcriptList.innerHTML = total === 0
       ? '<p class="transcript-empty muted">Generate subtitles to see the transcript.</p>'
-      : panelTranscriptListHtml({ cues, activeCueId, query: dom.transcriptSearch.value, settings });
+      : panelTranscriptListHtml({ cues, activeCueId, query: dom.transcriptSearch.value, settings, quickFixMode });
   }
 
   function applyActiveCue(nextCueId: string | null): void {
@@ -47,7 +50,6 @@ export function bindTranscriptView(dom: {
     if (!nextRow) return;
     nextRow.classList.add('on');
     nextRow.setAttribute('aria-current', 'true');
-    nextRow.scrollIntoView({ block: 'nearest' });
   }
 
   function ackButton(button: HTMLButtonElement, label?: string): void {
@@ -66,7 +68,16 @@ export function bindTranscriptView(dom: {
     const cueId = button?.dataset.cueId;
     if (!button || !cueId) return;
     const action = button.dataset.transcriptAction;
+    if (action === 'quick-fix-token') {
+      const tokenIndex = Number(button.dataset.tokenIndex);
+      if (Number.isInteger(tokenIndex) && tokenIndex >= 0) {
+        dom.onQuickFixToken?.(cueId, tokenIndex);
+      }
+      return;
+    }
     if (action === 'jump') {
+      activeCueId = cueId;
+      applyActiveCue(cueId);
       if (youtubeVideoId) {
         void browser.runtime.sendMessage({ type: 'panel.seekToCue', youtubeVideoId, cueId, mode: 'jump' }).catch(() => {});
       }
@@ -91,6 +102,11 @@ export function bindTranscriptView(dom: {
       if (cueId === activeCueId) return;
       activeCueId = cueId;
       applyActiveCue(cueId);
+    },
+    setQuickFixMode(enabled: boolean) {
+      if (quickFixMode === enabled) return;
+      quickFixMode = enabled;
+      render();
     },
     focus() { dom.transcriptSearch.focus(); },
   };

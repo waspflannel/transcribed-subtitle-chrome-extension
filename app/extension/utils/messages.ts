@@ -117,6 +117,24 @@ export type BackgroundRequest =
       windowId?: number;
     }
   | {
+      type: 'panel.cancelLyricsCorrection';
+      jobId: string;
+      trackId: string;
+      attemptId: string;
+      youtubeVideoId: string;
+      windowId?: number;
+    }
+  | {
+      type: 'panel.quickFixToken';
+      jobId: string;
+      trackId: string;
+      youtubeVideoId: string;
+      cueId: string;
+      tokenIndex: number;
+      text: string;
+      windowId?: number;
+    }
+  | {
       type: 'panel.login';
       email: string;
       password: string;
@@ -180,6 +198,22 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         && hasString(value, 'lyrics')
         && optionalNumber(value, 'windowId');
 
+    case 'panel.cancelLyricsCorrection':
+      return hasString(value, 'jobId')
+        && hasString(value, 'trackId')
+        && hasString(value, 'attemptId')
+        && hasString(value, 'youtubeVideoId')
+        && optionalNumber(value, 'windowId');
+
+    case 'panel.quickFixToken':
+      return hasString(value, 'jobId')
+        && hasString(value, 'trackId')
+        && hasString(value, 'youtubeVideoId')
+        && hasString(value, 'cueId')
+        && isNonNegativeInteger(value.tokenIndex)
+        && hasString(value, 'text')
+        && optionalNumber(value, 'windowId');
+
     case 'panel.login':
       return hasString(value, 'email') && hasString(value, 'password');
 
@@ -233,6 +267,8 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'panel.updateSettings':
     case 'panel.generateSubtitles':
     case 'panel.submitLyricsCorrection':
+    case 'panel.cancelLyricsCorrection':
+    case 'panel.quickFixToken':
     case 'panel.login':
     case 'panel.logout':
     case 'panel.clearLocalState':

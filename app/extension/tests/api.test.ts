@@ -265,6 +265,7 @@ describe('SubtitleApiClient', () => {
     const status: LyricsCorrectionStatus = {
       attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
       status: 'queued',
+      stage: 'queued',
       updatedAt: '2026-08-13T00:00:00Z',
     };
     const fetchMock = vi.fn()
@@ -276,6 +277,33 @@ describe('SubtitleApiClient', () => {
     await expect(client.getLyricsCorrectionStatus(installId, authToken, 'job-1')).resolves.toEqual(status);
     expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'POST', body: JSON.stringify({ lyrics: 'hello' }) }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('cancels corrections and patches one token through the canonical endpoints', async () => {
+    const cancelled: LyricsCorrectionStatus = {
+      attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
+      status: 'cancelled',
+      stage: 'cancelled',
+      updatedAt: '2026-08-13T00:00:00Z',
+    };
+    const track = trackResponse();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(cancelled, 200))
+      .mockResolvedValueOnce(jsonResponse(track, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(client.cancelLyricsCorrection(installId, authToken, 'job-1', {
+      attemptId: cancelled.attemptId,
+    })).resolves.toEqual(cancelled);
+    await expect(client.quickFixToken(installId, authToken, 'job-1', 'cue-1', 2, {
+      expectedTrackId: track.trackId,
+      text: 'updated',
+    })).resolves.toEqual(track);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({
+      method: 'DELETE',
+      body: JSON.stringify({ attemptId: cancelled.attemptId }),
+    }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/cues/cue-1/tokens/2', expect.objectContaining({ method: 'PATCH' }));
   });
 
   it('throws stable backend errors', async () => {

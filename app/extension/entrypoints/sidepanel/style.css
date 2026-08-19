@@ -215,6 +215,7 @@ a {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overflow-anchor: none;
   scrollbar-color: rgba(216, 59, 59, 0.5) transparent;
   scrollbar-width: thin;
 }
@@ -827,38 +828,69 @@ select option {
   gap: 10px;
 }
 
-.lyrics-correction {
+.lyrics-edit {
   background: var(--night-high);
   border: 1.5px solid var(--line);
   border-radius: 5px;
-  gap: 8px;
   padding: 13px 14px;
 }
 
-.lyrics-correction summary {
-  color: var(--text);
-  cursor: pointer;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.lyrics-correction-form {
+.lyrics-edit-view {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   margin-top: 10px;
 }
 
-.lyrics-correction textarea {
+.lyrics-edit-modes {
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  gap: 12px;
+  padding-bottom: 7px;
+}
+
+.lyrics-edit-modes .link-button.active {
+  border-bottom: 2px solid var(--accent-bright);
+  color: var(--accent-bright);
+  font-weight: 700;
+}
+
+.lyrics-edit .card-copy {
+  margin-bottom: 2px;
+}
+
+.lyrics-confirm {
+  border-left: 2px solid var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 9px;
+}
+
+.lyrics-correction-form,
+.quick-fix-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lyrics-correction-form textarea,
+.quick-fix-form input {
   background: var(--night);
   border: 1.5px solid var(--line);
   color: var(--text);
-  min-height: 116px;
   padding: 9px;
-  resize: vertical;
   width: 100%;
+}
+
+.lyrics-correction-form textarea {
+  min-height: 116px;
+  resize: vertical;
+}
+
+.lyrics-correction-form textarea:disabled,
+.quick-fix-form input:disabled {
+  opacity: 0.55;
 }
 
 .lyrics-correction-footer {
@@ -901,10 +933,7 @@ select option {
 
 .cue.on {
   background: linear-gradient(90deg, var(--accent-tint), transparent 85%);
-  border-left: 3px solid var(--accent);
-  margin: 0 -16px;
-  padding-left: 24px;
-  padding-right: 16px;
+  box-shadow: inset 3px 0 var(--accent);
 }
 
 .cue .tc {
@@ -932,7 +961,9 @@ select option {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.45;
+  max-width: 100%;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Per-word tokens with romaji riding above — the site's player-mock motif. */
@@ -940,18 +971,39 @@ select option {
   display: flex;
   flex-wrap: wrap;
   gap: 3px 10px;
+  max-width: 100%;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.tok {
+.tok,
+.tok-edit {
   display: inline-flex;
   flex-direction: column-reverse;
   font-size: 14.5px;
   font-weight: 700;
   line-height: 1.2;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
-.tok small {
+.tok-edit {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--accent-bright);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 1px;
+}
+
+.tok-edit:hover,
+.tok-edit:focus-visible {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+
+.tok small,
+.tok-edit small {
   color: var(--accent-bright);
   font-family: var(--mono);
   font-size: 8.5px;

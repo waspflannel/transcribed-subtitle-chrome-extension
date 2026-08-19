@@ -4,8 +4,15 @@ import { guardLyricsCorrectionStatus } from '../utils/api-response-guards';
 import { SubtitleApiError } from '../utils/api';
 import type { LyricsCorrectionStatus, TrackResponse } from '../utils/contracts';
 import {
+  beginPanelRequest,
+  canApplyPanelResponse,
+  finishPanelRequest,
+  panelRequestOrder,
+} from '../utils/panel-request-order';
+import {
   canApplyLyricsCorrection,
   lyricsCharacterCount,
+  lyricsCorrectionProgress,
   lyricsCorrectionTabState,
   nextLyricsCorrectionSync,
   syncLyricsCorrectionStatus,
@@ -14,12 +21,38 @@ import {
 function status(
   attemptId: string,
   correctionStatus: LyricsCorrectionStatus['status'],
-  overrides: Partial<LyricsCorrectionStatus> = {},
+  overrides: {
+    track?: TrackResponse;
+    errorCode?: 'lyrics_incomplete' | 'lyrics_do_not_match' | 'lyrics_correction_failed';
+    message?: string;
+  } = {},
 ): LyricsCorrectionStatus {
-  return { attemptId, status: correctionStatus, updatedAt: '2026-08-13T00:00:00Z', ...overrides };
+  const common = { attemptId, updatedAt: '2026-08-13T00:00:00Z' };
+
+  switch (correctionStatus) {
+    case 'queued':
+      return { ...common, status: 'queued', stage: 'queued', ...overrides } as LyricsCorrectionStatus;
+    case 'running':
+      return { ...common, status: 'running', stage: 'aligning', ...overrides } as LyricsCorrectionStatus;
+    case 'completed':
+      return { ...common, status: 'completed', stage: 'completed', track: overrides.track, ...overrides } as LyricsCorrectionStatus;
+    case 'failed':
+      return { ...common, status: 'failed', stage: 'failed', errorCode: overrides.errorCode, message: overrides.message, ...overrides } as LyricsCorrectionStatus;
+    case 'cancelled':
+      return { ...common, status: 'cancelled', stage: 'cancelled', ...overrides } as LyricsCorrectionStatus;
+  }
 }
 
 describe('lyrics correction guards', () => {
+  it('maps safe correction stages to fixed progress percentages', () => {
+    expect(lyricsCorrectionProgress('queued').percent).toBe(0);
+    expect(lyricsCorrectionProgress('aligning').percent).toBe(15);
+    expect(lyricsCorrectionProgress('rebuilding').percent).toBe(45);
+    expect(lyricsCorrectionProgress('romanizing').percent).toBe(70);
+    expect(lyricsCorrectionProgress('enriching').percent).toBe(85);
+    expect(lyricsCorrectionProgress('finalizing').percent).toBe(95);
+  });
+
   it('counts Unicode code points rather than UTF-16 units', () => {
     expect(lyricsCharacterCount('😀ไทย')).toBe(4);
   });
@@ -29,6 +62,33 @@ describe('lyrics correction guards', () => {
     expect(canApplyLyricsCorrection('a'.repeat(25001), null)).toBe(false);
     expect(canApplyLyricsCorrection('lyrics', { status: 'running' } as never)).toBe(false);
     expect(canApplyLyricsCorrection('lyrics', null)).toBe(true);
+  });
+});
+
+describe('panel request ordering', () => {
+  it('keeps a newer mutation valid when an older mutation finishes first', () => {
+    let state = panelRequestOrder();
+    const first = beginPanelRequest(state, 'mutation');
+    state = first.state;
+    const second = beginPanelRequest(state, 'mutation');
+    state = second.state;
+
+    expect(canApplyPanelResponse(state, 'mutation', first.version, first.startedDuringMutation)).toBe(false);
+    expect(canApplyPanelResponse(state, 'mutation', second.version, second.startedDuringMutation)).toBe(true);
+    state = finishPanelRequest(state);
+    expect(state.mutationVersion).toBe(2);
+  });
+
+  it('rejects polls started before or during a mutation', () => {
+    let state = panelRequestOrder();
+    const before = beginPanelRequest(state, 'normal');
+    const mutation = beginPanelRequest(state, 'mutation');
+    state = mutation.state;
+    const during = beginPanelRequest(state, 'normal');
+
+    expect(canApplyPanelResponse(state, 'normal', before.version, before.startedDuringMutation)).toBe(false);
+    state = finishPanelRequest(state);
+    expect(canApplyPanelResponse(state, 'normal', during.version, during.startedDuringMutation)).toBe(false);
   });
 });
 
@@ -112,6 +172,29 @@ describe('lyrics correction per-tab synchronization state', () => {
 
     expect(afterSubmit.status?.attemptId).toBe('attempt-new');
     expect(afterLateResponse.status?.attemptId).toBe('attempt-new');
+  });
+
+  it('does not apply a delayed cancellation for an older attempt', () => {
+    let state = nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
+      type: 'submit',
+      jobId: 'job-1',
+      status: status('attempt-a', 'running'),
+    });
+    state = nextLyricsCorrectionSync(state, {
+      type: 'submit',
+      jobId: 'job-1',
+      status: status('attempt-b', 'queued'),
+    });
+
+    const delayed = nextLyricsCorrectionSync(state, {
+      type: 'cancelled',
+      jobId: 'job-1',
+      attemptId: 'attempt-a',
+      status: status('attempt-a', 'cancelled'),
+    });
+
+    expect(delayed.status?.attemptId).toBe('attempt-b');
+    expect(delayed.status?.status).toBe('queued');
   });
 
   it('rejects an in-flight response after the state was cleared', () => {
@@ -393,13 +476,27 @@ describe('guardLyricsCorrectionStatus state exclusivity', () => {
     }))).toThrow(TypeError);
   });
 
-  it('accepts the canonical queued, completed, and failed shapes', () => {
+  it('rejects a cancelled response that carries an error field', () => {
+    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'cancelled', {
+      stage: 'cancelled',
+      message: 'cancelled',
+    }))).toThrow(TypeError);
+  });
+
+  it('rejects private or unknown fields on correction status responses', () => {
+    expect(() => guardLyricsCorrectionStatus({ ...status('attempt-1', 'queued'), lyrics: 'private' } as never)).toThrow(TypeError);
+    expect(() => guardLyricsCorrectionStatus({ ...status('attempt-1', 'cancelled'), workState: {} } as never)).toThrow(TypeError);
+  });
+
+  it('accepts the canonical queued, running, completed, failed, and cancelled shapes', () => {
     expect(guardLyricsCorrectionStatus(status('attempt-1', 'queued')).status).toBe('queued');
+    expect(guardLyricsCorrectionStatus(status('attempt-1', 'running')).status).toBe('running');
     expect(guardLyricsCorrectionStatus(status('attempt-1', 'completed', { track: trackResponse() })).status).toBe('completed');
     expect(guardLyricsCorrectionStatus(status('attempt-1', 'failed', {
       errorCode: 'lyrics_correction_failed',
       message: 'failed',
     })).status).toBe('failed');
+    expect(guardLyricsCorrectionStatus(status('attempt-1', 'cancelled', { stage: 'cancelled' })).status).toBe('cancelled');
   });
 });
 

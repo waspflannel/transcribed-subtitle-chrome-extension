@@ -29,9 +29,17 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
-import { canApplyLyricsCorrection, lyricsCharacterCount } from '../../utils/lyrics-correction';
+import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES } from '../../utils/lyrics-correction';
+import type { LyricsCorrectionStatus } from '../../utils/contracts';
+import {
+  beginPanelRequest,
+  canApplyPanelResponse,
+  finishPanelRequest,
+  panelRequestOrder,
+  type PanelRequestOrder,
+} from '../../utils/panel-request-order';
 
-type PanelErrorResponse = { ok: false; error: string };
+type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
 type RequestErrorTarget = 'global' | 'account' | 'correction';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
@@ -51,12 +59,26 @@ const {
   watchSignin,
   watchSetup,
   watchReady,
-  lyricsCorrectionPanel,
+  correctionTerminalStatus,
+  lyricsEditPanel,
+  lyricsEditView,
+  toggleLyricsEditButton,
+  lyricsEditModeButtons,
+  lyricsReplacePanel,
+  lyricsQuickPanel,
   lyricsCorrectionForm,
   lyricsCorrectionTextarea,
   lyricsCorrectionCount,
   lyricsCorrectionStatus,
   lyricsCorrectionButton,
+  lyricsConfirmation,
+  confirmLyricsCorrectionButton,
+  cancelLyricsConfirmationButton,
+  cancelLyricsCorrectionButton,
+  quickFixForm,
+  quickFixInput,
+  quickFixStatus,
+  cancelQuickFixButton,
   openAccountButton,
   toggleLanguagesButton,
   languageExpand,
@@ -97,6 +119,8 @@ const {
   progressActivity,
   progressBar,
   progressStages,
+  progressLabel,
+  progressCopy,
   jobsList,
   jobsError,
   usageSummary,
@@ -125,17 +149,26 @@ let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
 let lyricsCorrectionRequestBusy = false;
+let quickFixRequestBusy = false;
+let lyricsCancellationRequestBusy = false;
 let hasAppliedDefaultView = false;
 let panelWindowId: number | undefined;
 let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
+let panelRequestState: PanelRequestOrder = panelRequestOrder();
+let lastProgressAnnouncement: string | null = null;
 
 /* Watch-tab UI state: the language pickers and the ready-state setup card
    are collapsed by default and expand on request. */
 let languagesExpanded = false;
 let setupExpandedWhileReady = false;
 let lastWatchVideoId: string | null = null;
+let lyricsEditOpen = false;
+let lyricsEditMode: 'replace' | 'quick' = 'replace';
+let lyricsReplaceConfirm = false;
+let quickFixSelection: { cueId: string; tokenIndex: number; text: string } | null = null;
+let quickFixError: { message: string; code?: string; reason?: string } | null = null;
 
 collapseButton.addEventListener('click', () => {
   window.close();
@@ -143,6 +176,36 @@ collapseButton.addEventListener('click', () => {
 generateButton.addEventListener('click', () => void generateSubtitles());
 lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
 lyricsCorrectionTextarea.addEventListener('input', renderLyricsCorrectionInput);
+toggleLyricsEditButton.addEventListener('click', () => {
+  lyricsEditOpen = !lyricsEditOpen;
+  renderLyricsEditState();
+});
+for (const button of lyricsEditModeButtons) {
+  button.addEventListener('click', () => {
+    lyricsEditMode = button.dataset.mode === 'quick' ? 'quick' : 'replace';
+    lyricsReplaceConfirm = false;
+    quickFixSelection = null;
+    quickFixInput.value = '';
+    clearQuickFixError();
+    renderLyricsEditState();
+  });
+}
+confirmLyricsCorrectionButton.addEventListener('click', () => void applyConfirmedLyricsCorrection());
+cancelLyricsConfirmationButton.addEventListener('click', () => {
+  lyricsReplaceConfirm = false;
+  renderLyricsEditState();
+  lyricsCorrectionTextarea.focus();
+});
+cancelLyricsCorrectionButton.addEventListener('click', () => void cancelLyricsCorrection());
+quickFixForm.addEventListener('submit', (event) => void submitQuickFix(event));
+quickFixInput.addEventListener('input', renderQuickFixState);
+cancelQuickFixButton.addEventListener('click', () => {
+  quickFixSelection = null;
+  quickFixInput.value = '';
+  clearQuickFixError();
+  renderQuickFixState();
+  toggleLyricsEditButton.focus();
+});
 clearStateButton.addEventListener('click', () => void clearLocalState());
 openAccountButton.addEventListener('click', () => {
   showTab(tabButtons, panels, 'account');
@@ -203,8 +266,18 @@ const timingControl = bindTimingOffsetControl({
   onCommit: (subtitleTimingOffsetSeconds) => updateSettings({ subtitleTimingOffsetSeconds }),
 });
 
+let backendRefreshInFlight = false;
+let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
+const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const IDLE_POLL_INTERVAL_MS = 30_000;
+
 setupTabs(tabButtons, panels);
-const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
+const transcriptView = bindTranscriptView({
+  transcriptSearch,
+  transcriptList,
+  transcriptStatus,
+  onQuickFixToken: selectQuickFixToken,
+});
 renderShortcutHelp();
 void loadPanelState();
 scheduleNextBackendPoll();
@@ -239,11 +312,6 @@ browser.runtime.onMessage.addListener((message) => {
     transcriptView.focus();
   }
 });
-
-let backendRefreshInFlight = false;
-let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
-const ACTIVE_POLL_INTERVAL_MS = 10_000;
-const IDLE_POLL_INTERVAL_MS = 30_000;
 
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);
@@ -312,11 +380,18 @@ async function refreshBackendState(): Promise<void> {
 }
 
 async function generateSubtitles(): Promise<void> {
-  await sendPanelRequest({ type: 'panel.generateSubtitles' });
+  if (lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
+  await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
 }
 
 async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
   event.preventDefault();
+  lyricsReplaceConfirm = true;
+  renderLyricsEditState();
+  confirmLyricsCorrectionButton.focus();
+}
+
+async function applyConfirmedLyricsCorrection(): Promise<void> {
   const state = latestState;
   const subtitleState = state?.subtitleState;
   const page = state?.pageStatus;
@@ -324,19 +399,23 @@ async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
   if (lyricsCorrectionRequestBusy || !state || subtitleState?.type !== 'ready' || !page?.supported || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, state.lyricsCorrection)) return;
 
   lyricsCorrectionRequestBusy = true;
-  renderLyricsCorrectionInput();
+  renderLyricsEditState();
 
   try {
-    await sendPanelRequest({
+    const applied = await sendPanelRequest({
       type: 'panel.submitLyricsCorrection',
       jobId: subtitleState.track.jobId,
       trackId: subtitleState.track.trackId,
       youtubeVideoId: page.videoId,
       lyrics: lyricsCorrectionTextarea.value,
-    }, 'correction');
+    }, 'correction', 'mutation');
+    if (applied) {
+      (isActiveLyricsCorrection(latestState?.lyricsCorrection) ? cancelLyricsCorrectionButton : toggleLyricsEditButton).focus();
+    }
+    lyricsReplaceConfirm = false;
   } finally {
     lyricsCorrectionRequestBusy = false;
-    renderLyricsCorrectionInput();
+    renderLyricsEditState();
   }
 }
 
@@ -344,6 +423,164 @@ function renderLyricsCorrectionInput(): void {
   const count = lyricsCharacterCount(lyricsCorrectionTextarea.value);
   lyricsCorrectionCount.textContent = `${count.toLocaleString()} / 25,000 characters`;
   lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
+}
+
+async function cancelLyricsCorrection(): Promise<void> {
+  const state = latestState;
+  const page = state?.pageStatus;
+  const track = state?.subtitleState.type === 'ready' ? state.subtitleState.track : null;
+
+  if (lyricsCancellationRequestBusy || !state || !page?.supported || !track || !isActiveLyricsCorrection(state.lyricsCorrection)) return;
+
+  lyricsCancellationRequestBusy = true;
+  renderLyricsEditState();
+  try {
+    const applied = await sendPanelRequest({
+      type: 'panel.cancelLyricsCorrection',
+      jobId: track.jobId,
+      trackId: track.trackId,
+      attemptId: state.lyricsCorrection!.attemptId,
+      youtubeVideoId: page.videoId,
+    }, 'correction', 'mutation');
+    if (applied) toggleLyricsEditButton.focus();
+  } finally {
+    lyricsCancellationRequestBusy = false;
+    renderLyricsEditState();
+  }
+}
+
+function selectQuickFixToken(cueId: string, tokenIndex: number): void {
+  if (!latestState || latestState.subtitleState.type !== 'ready') return;
+
+  const cue = latestState.subtitleState.track.cues.find((candidate) => candidate.cueId === cueId);
+  const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
+
+  if (!cue || !token) return;
+
+  lyricsEditOpen = true;
+  lyricsEditMode = 'quick';
+  quickFixSelection = { cueId, tokenIndex, text: token.text };
+  quickFixInput.value = token.text;
+  clearQuickFixError();
+  renderLyricsEditState();
+  quickFixInput.focus();
+}
+
+async function submitQuickFix(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const state = latestState;
+  const page = state?.pageStatus;
+  const track = state?.subtitleState.type === 'ready' ? state.subtitleState.track : null;
+  const selection = quickFixSelection;
+  const text = quickFixInput.value;
+
+  if (
+    quickFixRequestBusy
+    || !state
+    || !page?.supported
+    || !track
+    || !selection
+    || isActiveLyricsCorrection(state.lyricsCorrection)
+    || text.trim() === selection.text
+    || lyricsCharacterCount(text) === 0
+    || lyricsCharacterCount(text) > 84
+  ) return;
+
+  quickFixRequestBusy = true;
+  renderLyricsEditState();
+
+  const applied = await sendPanelRequest({
+    type: 'panel.quickFixToken',
+    jobId: track.jobId,
+    trackId: track.trackId,
+    youtubeVideoId: page.videoId,
+    cueId: selection.cueId,
+    tokenIndex: selection.tokenIndex,
+    text,
+  }, 'correction', 'mutation');
+
+  quickFixRequestBusy = false;
+
+  if (applied) {
+    quickFixSelection = null;
+    quickFixInput.value = '';
+    clearQuickFixError();
+    toggleLyricsEditButton.focus();
+  } else {
+    if (quickFixError?.code === 'lyrics_correction_in_progress' && quickFixError.reason === 'stale_track') {
+      lyricsEditOpen = false;
+      quickFixSelection = null;
+      quickFixInput.value = '';
+      clearQuickFixError();
+      void refreshBackendState();
+      toggleLyricsEditButton.focus();
+    }
+  }
+
+  renderLyricsEditState();
+}
+
+function isActiveLyricsCorrection(status: LyricsCorrectionStatus | null | undefined): boolean {
+  return status?.status === 'queued' || status?.status === 'running';
+}
+
+function clearQuickFixError(): void {
+  quickFixError = null;
+}
+
+function renderLyricsEditState(): void {
+  const ready = latestState?.subtitleState.type === 'ready' && Date.parse(latestState.subtitleState.track.expiresAt) > Date.now();
+  const activeCorrection = isActiveLyricsCorrection(latestState?.lyricsCorrection);
+
+  lyricsEditPanel.hidden = !ready;
+  lyricsEditView.hidden = !lyricsEditOpen || !ready;
+  toggleLyricsEditButton.setAttribute('aria-expanded', lyricsEditOpen ? 'true' : 'false');
+  lyricsReplacePanel.hidden = lyricsEditMode !== 'replace';
+  lyricsQuickPanel.hidden = lyricsEditMode !== 'quick';
+  lyricsConfirmation.hidden = !lyricsReplaceConfirm || lyricsEditMode !== 'replace';
+  lyricsCorrectionForm.hidden = lyricsReplaceConfirm;
+  confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
+
+  for (const button of lyricsEditModeButtons) {
+    const active = button.dataset.mode === lyricsEditMode;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    button.disabled = lyricsCorrectionRequestBusy || quickFixRequestBusy;
+  }
+
+  transcriptView.setQuickFixMode(lyricsEditOpen && lyricsEditMode === 'quick' && ready);
+  renderLyricsCorrectionInput();
+  renderQuickFixState();
+  cancelLyricsCorrectionButton.hidden = !activeCorrection;
+  cancelLyricsCorrectionButton.disabled = lyricsCancellationRequestBusy;
+}
+
+function renderQuickFixState(): void {
+  const activeCorrection = isActiveLyricsCorrection(latestState?.lyricsCorrection);
+  const selection = quickFixSelection;
+  quickFixForm.hidden = selection === null;
+  quickFixInput.disabled = quickFixRequestBusy || activeCorrection;
+  cancelQuickFixButton.disabled = quickFixRequestBusy;
+
+  if (!selection) {
+    quickFixStatus.textContent = quickFixError?.message ?? 'Choose a source token to edit.';
+
+    return;
+  }
+
+  quickFixStatus.textContent = quickFixError?.message ?? (activeCorrection
+    ? 'Finish or cancel the full replacement before changing a token.'
+    : 'Spaces remain one tappable phrase.');
+  const text = quickFixInput.value;
+  if (!quickFixError && lyricsCharacterCount(text) > 84) {
+    quickFixStatus.textContent = 'Replacement text must be 84 Unicode characters or fewer.';
+  }
+  const valid = text.trim() !== ''
+    && text.trim() !== selection.text
+    && lyricsCharacterCount(text) <= 84
+    && !quickFixRequestBusy
+    && !activeCorrection;
+  quickFixForm.querySelector<HTMLButtonElement>('[data-action="save-quick-fix"]')!.disabled = !valid;
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
@@ -393,11 +630,19 @@ async function logoutAccount(): Promise<void> {
   }
 }
 
-async function sendPanelRequest(request: PanelRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
+async function sendPanelRequest(
+  request: PanelRequest,
+  errorTarget: RequestErrorTarget = 'global',
+  kind: 'normal' | 'mutation' = 'normal',
+): Promise<boolean> {
   const requestWithWindow = typeof panelWindowId === 'number'
     ? { ...request, windowId: panelWindowId }
     : request;
   const seq = ++stateSeq;
+  const isMutation = kind === 'mutation';
+  const ordering = beginPanelRequest(panelRequestState, kind);
+  panelRequestState = ordering.state;
+  const canApply = (): boolean => canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
@@ -408,6 +653,7 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     }
 
     if (!response) {
+      if (!canApply()) return false;
       if (seq < latestAppliedSeq) {
         return false;
       }
@@ -418,16 +664,18 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     }
 
     if ('ok' in response) {
+      if (!canApply()) return false;
       if (seq < latestAppliedSeq) {
         return false;
       }
       latestAppliedSeq = seq;
-      showRequestError(response.error, errorTarget);
+      showRequestError(response.error, errorTarget, response.errorCode, response.details);
 
       return false;
     }
 
-    if (seq < latestAppliedSeq) {
+    if (!canApply()) return false;
+    if (!isMutation && seq < latestAppliedSeq) {
       return true;
     }
     latestAppliedSeq = seq;
@@ -435,6 +683,7 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
 
     return true;
   } catch (error) {
+    if (!canApply()) return false;
     if (seq < latestAppliedSeq) {
       return false;
     }
@@ -442,6 +691,10 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     showRequestError(error, errorTarget);
 
     return false;
+  } finally {
+    if (isMutation) {
+      panelRequestState = finishPanelRequest(panelRequestState);
+    }
   }
 }
 
@@ -567,6 +820,15 @@ function showPanelState(state: PanelState): void {
     setupExpandedWhileReady = false;
     setLanguagesExpanded(false);
     lyricsCorrectionTextarea.value = '';
+    quickFixSelection = null;
+    quickFixInput.value = '';
+    clearQuickFixError();
+    lyricsReplaceConfirm = false;
+    lyricsEditOpen = false;
+    lyricsEditMode = 'replace';
+  } else if (previousCorrectionStatus !== 'completed' && state.lyricsCorrection?.status === 'completed') {
+    lyricsCorrectionTextarea.value = '';
+    lyricsReplaceConfirm = false;
   }
 
   showStatusBanner(state);
@@ -581,8 +843,8 @@ function showPanelState(state: PanelState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading';
-  renderLyricsCorrectionInput();
+  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
+  renderLyricsEditState();
   renderLyricsCorrectionState(state);
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
   renderGenerateNote(state, supported);
@@ -623,19 +885,34 @@ function showPanelState(state: PanelState): void {
 }
 
 function renderLyricsCorrectionState(state: PanelState): void {
-  const ready = state.subtitleState.type === 'ready' && Date.parse(state.subtitleState.track.expiresAt) > Date.now();
   const correction = state.lyricsCorrection;
-  lyricsCorrectionPanel.hidden = !ready;
 
   if (!correction) {
     lyricsCorrectionStatus.textContent = '';
+    correctionTerminalStatus.hidden = true;
+    correctionTerminalStatus.textContent = '';
     return;
   }
+
+  correctionTerminalStatus.hidden = correction.status !== 'failed' && correction.status !== 'cancelled';
+  correctionTerminalStatus.textContent = correction.status === 'cancelled'
+    ? 'Replacement cancelled. Your current subtitles are unchanged.'
+    : correction.status === 'failed'
+      ? correction.errorCode === 'lyrics_incomplete'
+        ? 'Replacement stopped because the pasted lyrics did not cover the complete song. Your current subtitles are unchanged.'
+        : correction.errorCode === 'lyrics_do_not_match'
+          ? 'Replacement stopped because the lyrics did not match this song. Your current subtitles are unchanged.'
+          : 'Replacement failed. Your current subtitles are unchanged.'
+      : '';
 
   if (correction.status === 'queued' || correction.status === 'running') {
     lyricsCorrectionStatus.textContent = 'Formatting lyrics... Your current subtitles will keep playing.';
   } else if (correction.status === 'completed') {
     lyricsCorrectionStatus.textContent = 'Pasted lyrics applied';
+  } else if (correction.status === 'cancelled') {
+    lyricsCorrectionStatus.textContent = 'Replacement cancelled. Your current subtitles are unchanged.';
+  } else if (correction.errorCode === 'lyrics_incomplete') {
+    lyricsCorrectionStatus.textContent = 'These lyrics do not cover the complete song. Paste the full lyrics and try again.';
   } else if (correction.errorCode === 'lyrics_do_not_match') {
     lyricsCorrectionStatus.textContent = 'These lyrics do not seem to match this song. Check the paste and try again.';
   } else {
@@ -660,29 +937,68 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   const subtitleState = state.subtitleState;
   const loading = subtitleState.type === 'loading';
   const ready = subtitleState.type === 'ready';
+  const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
 
   watchUnsupported.hidden = supported;
   watchSignin.hidden = !supported || authenticated;
   watchSetup.hidden = !supported || !authenticated || loading || (ready && !setupExpandedWhileReady);
-  progressContainer.hidden = !loading;
+  progressContainer.hidden = !loading && !correctionRunning;
   watchReady.hidden = !ready;
+  toggleSetupButton.disabled = correctionRunning || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy;
   toggleSetupButton.setAttribute('aria-expanded', setupExpandedWhileReady ? 'true' : 'false');
 
   if (loading) {
     const progress = generationProgress(subtitleState);
 
+    progressLabel.textContent = 'Generating';
+    progressStages.setAttribute('aria-label', 'Generation stages');
+    progressPercent.setAttribute('aria-valuenow', String(progress.percent));
+    progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.activityLabel}`);
     progressPercent.textContent = `${progress.percent}%`;
-    progressActivity.textContent = progress.activityLabel;
+    announceProgress('Generating', progress.activityLabel);
     progressBar.style.width = `${progress.percent}%`;
     progressStages.innerHTML = stageChecklistHtml(subtitleState.stage);
+    progressCopy.textContent = 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
+  } else if (correctionRunning && state.lyricsCorrection) {
+    const progress = lyricsCorrectionProgress(state.lyricsCorrection.stage);
+    progressLabel.textContent = 'Replacing lyrics';
+    progressStages.setAttribute('aria-label', 'Replacement stages');
+    progressPercent.setAttribute('aria-valuenow', String(progress.percent));
+    progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.label}`);
+    progressPercent.textContent = `${progress.percent}%`;
+    announceProgress('Replacing lyrics', progress.label);
+    progressBar.style.width = `${progress.percent}%`;
+    progressStages.innerHTML = lyricsCorrectionStageChecklistHtml(state.lyricsCorrection.stage);
+    progressCopy.textContent = 'Your current subtitles stay active while the replacement runs.';
   }
+}
+
+function announceProgress(operation: string, stage: string): void {
+  const announcement = `${operation}: ${stage}`;
+
+  if (announcement === lastProgressAnnouncement) return;
+
+  lastProgressAnnouncement = announcement;
+  progressActivity.textContent = stage;
+}
+
+function lyricsCorrectionStageChecklistHtml(stage: LyricsCorrectionStatus['stage']): string {
+  const stages = LYRICS_CORRECTION_STAGES;
+  const currentIndex = stages.findIndex((item) => item.key === stage);
+
+  return stages.map((item, index) => `
+    <li class="stage ${index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'pending'}"${index === currentIndex ? ' aria-current="step"' : ''}>
+      <span class="stage-dot" aria-hidden="true"></span>
+      <span>${escapeHtml(item.label)}</span>
+    </li>
+  `).join('');
 }
 
 function stageChecklistHtml(stage: PanelState['jobHistory'][number]['stage']): string {
   return stageTimeline({ stage, status: 'running' })
     .map(
       (item) => `
-        <li class="stage ${item.state}">
+        <li class="stage ${item.state}"${item.state === 'current' ? ' aria-current="step"' : ''}>
           <span class="stage-dot" aria-hidden="true"></span>
           <span>${escapeHtml(item.label)}</span>
         </li>
@@ -814,7 +1130,7 @@ function showError(error: unknown): void {
   setSettingsDisabled(true);
 }
 
-function showRequestError(error: unknown, errorTarget: RequestErrorTarget): void {
+function showRequestError(error: unknown, errorTarget: RequestErrorTarget, errorCode?: string, details?: { reason?: string }): void {
   const message = typeof error === 'string'
     ? error
     : error instanceof Error
@@ -828,7 +1144,12 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget): void
   }
 
   if (errorTarget === 'correction') {
-    lyricsCorrectionStatus.textContent = message;
+    if (lyricsEditMode === 'quick') {
+      quickFixError = { message, code: errorCode, reason: details?.reason };
+      quickFixStatus.textContent = message;
+    } else {
+      lyricsCorrectionStatus.textContent = message;
+    }
 
     return;
   }

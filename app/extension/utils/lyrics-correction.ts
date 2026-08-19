@@ -2,6 +2,21 @@ import type { LyricsCorrectionStatus } from './contracts';
 
 export const LYRICS_CHARACTER_LIMIT = 25000;
 
+export const LYRICS_CORRECTION_STAGES = [
+  { key: 'queued', percent: 0, label: 'Waiting to start' },
+  { key: 'aligning', percent: 15, label: 'Checking and aligning lyrics' },
+  { key: 'rebuilding', percent: 45, label: 'Rebuilding words and translations' },
+  { key: 'romanizing', percent: 70, label: 'Rebuilding pronunciation' },
+  { key: 'enriching', percent: 85, label: 'Rebuilding word cards' },
+  { key: 'finalizing', percent: 95, label: 'Applying replacement' },
+] as const;
+
+export function lyricsCorrectionProgress(stage: LyricsCorrectionStatus['stage']): { percent: number; label: string } {
+  const progress = LYRICS_CORRECTION_STAGES.find((item) => item.key === stage);
+
+  return progress ?? (stage === 'completed' ? { percent: 100, label: 'Complete' } : { percent: 0, label: 'Waiting to start' });
+}
+
 export function lyricsCharacterCount(value: string): number {
   return Array.from(value).length;
 }
@@ -33,6 +48,7 @@ export type LyricsCorrectionSyncAction =
   | { type: 'sync-started'; jobId: string; requestId: number }
   | { type: 'response'; jobId: string; requestId: number; status: LyricsCorrectionStatus }
   | { type: 'submit'; jobId: string; status: LyricsCorrectionStatus }
+  | { type: 'cancelled'; jobId: string; attemptId: string; status: LyricsCorrectionStatus }
   | { type: 'cleared' };
 
 export function lyricsCorrectionTabState(): LyricsCorrectionTabState {
@@ -59,6 +75,13 @@ export function nextLyricsCorrectionSync(
       return { jobId: action.jobId, status: action.status, latestRequestId: state.latestRequestId };
 
     case 'submit':
+      return { jobId: action.jobId, status: action.status, latestRequestId: state.latestRequestId + 1 };
+
+    case 'cancelled':
+      if (state.jobId !== action.jobId || state.status?.attemptId !== action.attemptId) {
+        return state;
+      }
+
       return { jobId: action.jobId, status: action.status, latestRequestId: state.latestRequestId + 1 };
 
     case 'cleared':

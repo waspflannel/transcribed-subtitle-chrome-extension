@@ -114,12 +114,23 @@ export function guardLearningTokenResponse(value: unknown): LearningTokenRespons
 
 export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionStatus {
   const response = record(value, 'lyrics correction status');
+  const allowedKeys = ['attemptId', 'status', 'stage', 'updatedAt', 'track', 'errorCode', 'message'];
+
+  if (Object.keys(response).some((key) => !allowedKeys.includes(key))) {
+    throw invalid('Backend returned unknown lyrics correction status fields.');
+  }
 
   requiredString(response, 'attemptId');
-  oneOf(response, 'status', ['queued', 'running', 'completed', 'failed']);
+  oneOf(response, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
   requiredString(response, 'updatedAt');
 
-  if (response.status === 'queued' || response.status === 'running') {
+  if (response.status === 'queued') oneOf(response, 'stage', ['queued']);
+  if (response.status === 'running') oneOf(response, 'stage', ['aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing']);
+  if (response.status === 'completed') oneOf(response, 'stage', ['completed']);
+  if (response.status === 'failed') oneOf(response, 'stage', ['failed']);
+  if (response.status === 'cancelled') oneOf(response, 'stage', ['cancelled']);
+
+  if (response.status === 'queued' || response.status === 'running' || response.status === 'cancelled') {
     forbidden(response, 'track', response.status);
     forbidden(response, 'errorCode', response.status);
     forbidden(response, 'message', response.status);
@@ -132,7 +143,7 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   }
 
   if (response.status === 'failed') {
-    oneOf(response, 'errorCode', ['lyrics_do_not_match', 'lyrics_correction_failed']);
+    oneOf(response, 'errorCode', ['lyrics_incomplete', 'lyrics_do_not_match', 'lyrics_correction_failed']);
     requiredString(response, 'message');
     forbidden(response, 'track', response.status);
   }

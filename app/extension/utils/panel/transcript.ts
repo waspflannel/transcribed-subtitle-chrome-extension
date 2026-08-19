@@ -27,22 +27,23 @@ export function panelTranscriptListHtml(input: {
   activeCueId: string | null;
   query: string;
   settings: ExtensionSettings;
+  quickFixMode?: boolean;
 }): string {
   const cues = filterTranscriptCues(input.cues, input.query);
   if (cues.length === 0) {
     return '<p class="transcript-empty muted">No cues match that search.</p>';
   }
-  return cues.map((cue) => transcriptRow(cue, cue.cueId === input.activeCueId, input.settings)).join('');
+  return cues.map((cue) => transcriptRow(cue, cue.cueId === input.activeCueId, input.settings, input.quickFixMode ?? false)).join('');
 }
 
-function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings): string {
+function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings, quickFixMode: boolean): string {
   const tr = settings.showTranslation && cue.translatedText.trim() !== cue.sourceText.trim()
     ? `<div class="cg">${escapeHtml(cue.translatedText)}</div>` : '';
   return `
     <article class="cue${active ? ' on' : ''}" role="listitem" aria-current="${active ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
       <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>
       <div class="cbody">
-        ${sourceLineHtml(cue, settings)}
+        ${sourceLineHtml(cue, settings, quickFixMode)}
         ${tr}
         <div class="cue-actions">
           <button type="button" class="cue-action" data-transcript-action="jump" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Jump to cue ${cue.index + 1}">Jump</button>
@@ -58,7 +59,14 @@ function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSet
  * marketing site's player-mock motif); otherwise fall back to the plain
  * source line with an optional whole-line romanization underneath.
  */
-function sourceLineHtml(cue: SubtitleCue, settings: ExtensionSettings): string {
+function sourceLineHtml(cue: SubtitleCue, settings: ExtensionSettings, quickFixMode: boolean): string {
+  if (quickFixMode) {
+    const tokens = cue.tokens.map((token) => `
+      <button type="button" class="tok-edit" data-transcript-action="quick-fix-token" data-cue-id="${escapeHtml(cue.cueId)}" data-token-index="${token.index}" aria-label="Edit source token ${escapeHtml(token.text)}">${escapeHtml(token.text)}</button>`).join(' ');
+
+    return `<div class="toks">${tokens}</div>`;
+  }
+
   const useTokens = settings.showRomanization && cue.tokens.some((token) => typeof token.romanization === 'string' && token.romanization !== '');
 
   if (!useTokens) {
