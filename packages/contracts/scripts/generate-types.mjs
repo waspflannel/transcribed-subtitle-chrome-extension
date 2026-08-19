@@ -17,6 +17,8 @@ const schemaFiles = [
   'learning-token-response.schema.json',
   'lyrics-correction-request.schema.json',
   'lyrics-correction-status.schema.json',
+  'lyrics-correction-cancel-request.schema.json',
+  'quick-fix-token-request.schema.json',
   'job-response.schema.json',
   'subtitle-job-history-response.schema.json',
   'track-response.schema.json',

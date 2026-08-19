@@ -337,16 +337,12 @@ export interface LyricsCorrectionRequest {
 }
 
 // Source: schemas/lyrics-correction-status.schema.json
-export type LyricsCorrectionStatus = {
-  [k: string]: unknown;
-} & {
-  attemptId: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
-  updatedAt: string;
-  track?: TrackResponse;
-  errorCode?: 'lyrics_do_not_match' | 'lyrics_correction_failed';
-  message?: string;
-};
+export type LyricsCorrectionStatus =
+  | { attemptId: string; status: 'queued'; stage: 'queued'; updatedAt: string }
+  | { attemptId: string; status: 'running'; stage: 'aligning' | 'rebuilding' | 'romanizing' | 'enriching' | 'finalizing'; updatedAt: string }
+  | { attemptId: string; status: 'completed'; stage: 'completed'; updatedAt: string; track: TrackResponse }
+  | { attemptId: string; status: 'failed'; stage: 'failed'; updatedAt: string; errorCode: 'lyrics_incomplete' | 'lyrics_do_not_match' | 'lyrics_correction_failed'; message: string }
+  | { attemptId: string; status: 'cancelled'; stage: 'cancelled'; updatedAt: string };
 
 export interface TrackResponse {
   trackId: string;
@@ -670,6 +666,17 @@ export interface LearningToken {
   gloss?: string;
   romanization?: string;
   usageNote?: string;
+}
+
+// Source: schemas/lyrics-correction-cancel-request.schema.json
+export interface LyricsCorrectionCancelRequest {
+  attemptId: string;
+}
+
+// Source: schemas/quick-fix-token-request.schema.json
+export interface QuickFixTokenRequest {
+  expectedTrackId: string;
+  text: string;
 }
 
 // Source: schemas/job-response.schema.json
@@ -1018,6 +1025,7 @@ export type JobResponse = {
     | 'not_found'
     | 'expired'
     | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error';
@@ -1504,6 +1512,7 @@ export type SubtitleJobHistoryItem = {
     | 'not_found'
     | 'expired'
     | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error';
@@ -2129,12 +2138,14 @@ export interface ErrorObject {
     | 'not_found'
     | 'expired'
     | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error';
   message: string;
   details?: {
     [k: string]: unknown;
+    reason?: 'stale_track';
   };
 }
 
@@ -2161,11 +2172,13 @@ export interface ErrorObject {
     | 'not_found'
     | 'expired'
     | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error';
   message: string;
   details?: {
     [k: string]: unknown;
+    reason?: 'stale_track';
   };
 }

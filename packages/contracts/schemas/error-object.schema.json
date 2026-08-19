@@ -32,6 +32,7 @@
         "not_found",
         "expired",
         "lyrics_correction_in_progress",
+        "lyrics_incomplete",
         "lyrics_do_not_match",
         "lyrics_correction_failed",
         "internal_error"
@@ -43,7 +44,13 @@
     },
     "details": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": true,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": ["stale_track"]
+        }
+      }
     }
   }
 }

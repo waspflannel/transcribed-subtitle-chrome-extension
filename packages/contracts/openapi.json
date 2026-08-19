@@ -402,6 +402,96 @@
           "403": {"$ref": "#/components/responses/Forbidden"},
           "429": {"$ref": "#/components/responses/RateLimited"}
         }
+      },
+      "delete": {
+        "operationId": "cancelLyricsCorrection",
+        "summary": "Cancel a queued or running pasted-lyrics correction.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ExtensionInstallId"},
+          {"$ref": "#/components/parameters/ExtensionAuthorization"},
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "./schemas/lyrics-correction-cancel-request.schema.json"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current correction status after cancellation.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "./schemas/lyrics-correction-status.schema.json"}
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
+      }
+    },
+    "/v1/subtitle-jobs/{jobId}/cues/{cueId}/tokens/{tokenIndex}": {
+      "patch": {
+        "operationId": "quickFixSubtitleToken",
+        "summary": "Replace one source token without provider work.",
+        "parameters": [
+          {"$ref": "#/components/parameters/ExtensionInstallId"},
+          {"$ref": "#/components/parameters/ExtensionAuthorization"},
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          },
+          {
+            "name": "cueId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "minLength": 1}
+          },
+          {
+            "name": "tokenIndex",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer", "minimum": 0, "maximum": 9999}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "./schemas/quick-fix-token-request.schema.json"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated canonical subtitle track.",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "./schemas/track-response.schema.json"}
+              }
+            }
+          },
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "429": {"$ref": "#/components/responses/RateLimited"}
+        }
       }
     },
     "/v1/learning-tokens": {

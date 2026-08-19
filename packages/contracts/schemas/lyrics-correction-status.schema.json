@@ -3,68 +3,58 @@
   "$id": "https://transcribed-subtitle-extension.local/schemas/lyrics-correction-status.schema.json",
   "title": "LyricsCorrectionStatus",
   "type": "object",
-  "additionalProperties": false,
-  "required": ["attemptId", "status", "updatedAt"],
-  "properties": {
-    "attemptId": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "status": {
-      "type": "string",
-      "enum": ["queued", "running", "completed", "failed"]
-    },
-    "updatedAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "track": {
-      "$ref": "track-response.schema.json"
-    },
-    "errorCode": {
-      "type": "string",
-      "enum": ["lyrics_do_not_match", "lyrics_correction_failed"]
-    },
-    "message": {
-      "type": "string",
-      "minLength": 1
-    }
-  },
-  "allOf": [
+  "oneOf": [
     {
-      "if": {
-        "required": ["status"],
-        "properties": {"status": {"const": "completed"}}
-      },
-      "then": {
-        "required": ["track"]
+      "additionalProperties": false,
+      "required": ["attemptId", "status", "stage", "updatedAt"],
+      "properties": {
+        "attemptId": {"type": "string", "format": "uuid"},
+        "status": {"const": "queued"},
+        "stage": {"const": "queued"},
+        "updatedAt": {"type": "string", "format": "date-time"}
       }
     },
     {
-      "if": {
-        "required": ["status"],
-        "properties": {"status": {"const": "failed"}}
-      },
-      "then": {
-        "required": ["errorCode", "message"]
+      "additionalProperties": false,
+      "required": ["attemptId", "status", "stage", "updatedAt"],
+      "properties": {
+        "attemptId": {"type": "string", "format": "uuid"},
+        "status": {"const": "running"},
+        "stage": {"enum": ["aligning", "rebuilding", "romanizing", "enriching", "finalizing"]},
+        "updatedAt": {"type": "string", "format": "date-time"}
       }
     },
     {
-      "if": {
-        "required": ["status"],
-        "properties": {"status": {"enum": ["queued", "running", "failed"]}}
-      },
-      "then": {
-        "not": {"required": ["track"]}
+      "additionalProperties": false,
+      "required": ["attemptId", "status", "stage", "updatedAt", "track"],
+      "properties": {
+        "attemptId": {"type": "string", "format": "uuid"},
+        "status": {"const": "completed"},
+        "stage": {"const": "completed"},
+        "updatedAt": {"type": "string", "format": "date-time"},
+        "track": {"$ref": "track-response.schema.json"}
       }
     },
     {
-      "if": {
-        "required": ["status"],
-        "properties": {"status": {"enum": ["queued", "running", "completed"]}}
-      },
-      "then": {
-        "not": {"anyOf": [{"required": ["errorCode"]}, {"required": ["message"]}]}
+      "additionalProperties": false,
+      "required": ["attemptId", "status", "stage", "updatedAt", "errorCode", "message"],
+      "properties": {
+        "attemptId": {"type": "string", "format": "uuid"},
+        "status": {"const": "failed"},
+        "stage": {"const": "failed"},
+        "updatedAt": {"type": "string", "format": "date-time"},
+        "errorCode": {"enum": ["lyrics_incomplete", "lyrics_do_not_match", "lyrics_correction_failed"]},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    {
+      "additionalProperties": false,
+      "required": ["attemptId", "status", "stage", "updatedAt"],
+      "properties": {
+        "attemptId": {"type": "string", "format": "uuid"},
+        "status": {"const": "cancelled"},
+        "stage": {"const": "cancelled"},
+        "updatedAt": {"type": "string", "format": "date-time"}
       }
     }
   ]
