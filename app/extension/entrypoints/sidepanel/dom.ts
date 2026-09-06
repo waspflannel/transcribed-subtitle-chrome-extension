@@ -14,8 +14,8 @@ export interface PanelDom {
   watchSetup: HTMLElement;
   watchReady: HTMLElement;
   correctionTerminalStatus: HTMLElement;
+  correctionCancelError: HTMLElement;
   lyricsEditPanel: HTMLElement;
-  lyricsEditView: HTMLElement;
   toggleLyricsEditButton: HTMLButtonElement;
   lyricsEditModeButtons: HTMLButtonElement[];
   lyricsReplacePanel: HTMLElement;
@@ -29,10 +29,7 @@ export interface PanelDom {
   confirmLyricsCorrectionButton: HTMLButtonElement;
   cancelLyricsConfirmationButton: HTMLButtonElement;
   cancelLyricsCorrectionButton: HTMLButtonElement;
-  quickFixForm: HTMLFormElement;
-  quickFixInput: HTMLInputElement;
   quickFixStatus: HTMLElement;
-  cancelQuickFixButton: HTMLButtonElement;
   progressCopy: HTMLElement;
   openAccountButton: HTMLButtonElement;
   toggleLanguagesButton: HTMLButtonElement;
@@ -114,8 +111,8 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     watchSetup: query(root, '[data-watch-setup]', HTMLElement),
     watchReady: query(root, '[data-watch-ready]', HTMLElement),
     correctionTerminalStatus: query(root, '[data-correction-terminal-status]', HTMLElement),
+    correctionCancelError: query(root, '[data-correction-cancel-error]', HTMLElement),
     lyricsEditPanel: query(root, '[data-lyrics-edit-panel]', HTMLElement),
-    lyricsEditView: query(root, '[data-lyrics-edit-view]', HTMLElement),
     toggleLyricsEditButton: query(root, '[data-action="toggle-lyrics-edit"]', HTMLButtonElement),
     lyricsEditModeButtons: queryAll<HTMLButtonElement>(root, '[data-action="lyrics-edit-mode"]'),
     lyricsReplacePanel: query(root, '[data-lyrics-replace-panel]', HTMLElement),
@@ -129,10 +126,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     confirmLyricsCorrectionButton: query(root, '[data-action="confirm-lyrics-correction"]', HTMLButtonElement),
     cancelLyricsConfirmationButton: query(root, '[data-action="cancel-lyrics-confirmation"]', HTMLButtonElement),
     cancelLyricsCorrectionButton: query(root, '[data-action="cancel-lyrics-correction"]', HTMLButtonElement),
-    quickFixForm: query(root, '[data-quick-fix-form]', HTMLFormElement),
-    quickFixInput: query(root, '[data-quick-fix-input]', HTMLInputElement),
     quickFixStatus: query(root, '[data-quick-fix-status]', HTMLElement),
-    cancelQuickFixButton: query(root, '[data-action="cancel-quick-fix"]', HTMLButtonElement),
     openAccountButton: query(root, '[data-action="open-account"]', HTMLButtonElement),
     toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),
     languageExpand: query(root, '[data-language-expand]', HTMLElement),

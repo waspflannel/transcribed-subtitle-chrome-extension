@@ -96,14 +96,15 @@
             <p class="microcopy">Nothing is sent to the backend until you press generate.</p>
           </div>
 
-          <!-- Generating: one progress surface with named stages. -->
-            <div class="card" data-progress hidden>
+          <!-- Generating / replacing: one progress surface with named stages. -->
+          <div class="card" data-progress hidden>
             <p class="card-label" id="progress-label" data-progress-label>Generating</p>
             <p class="pct"><span data-progress-percent role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span><small data-progress-activity aria-live="polite">standard queue</small></p>
             <div class="progress-bar" aria-hidden="true"><span data-progress-bar></span></div>
             <ol class="stages" data-progress-stages aria-label="Generation stages"></ol>
-              <p class="microcopy" data-progress-copy>Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
-              <button type="button" class="btn-ghost" data-action="cancel-lyrics-correction" hidden>Cancel replacement</button>
+            <p class="microcopy" data-progress-copy>Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
+            <p class="microcopy" data-correction-cancel-error role="alert" hidden></p>
+            <button type="button" class="btn-ghost" data-action="cancel-lyrics-correction" hidden>Cancel replacement</button>
           </div>
 
           <!-- Ready: the transcript is the landing state. -->
@@ -112,54 +113,39 @@
               <label class="search-field">
                 <input type="search" data-transcript-search placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" />
               </label>
+              <button type="button" class="link-button" data-action="toggle-lyrics-edit" aria-expanded="false">Edit</button>
               <button type="button" class="link-button" data-action="toggle-setup" aria-expanded="false">Regenerate</button>
             </div>
             <p class="status-banner correction-status" data-correction-terminal-status role="status" aria-live="polite" hidden></p>
-            <div class="lyrics-edit" data-lyrics-edit-panel>
-              <button type="button" class="link-button" data-action="toggle-lyrics-edit" aria-expanded="false">Edit</button>
-              <div class="lyrics-edit-view" data-lyrics-edit-view hidden>
-                <div class="lyrics-edit-modes" role="group" aria-label="Edit mode">
-                  <button type="button" class="link-button active" data-action="lyrics-edit-mode" data-mode="replace" aria-pressed="true">Replace all</button>
-                  <button type="button" class="link-button" data-action="lyrics-edit-mode" data-mode="quick" aria-pressed="false">Quick fix</button>
-                </div>
+            <div class="card" data-lyrics-edit-panel hidden>
+              <div class="lyrics-edit-modes" role="group" aria-label="Edit mode">
+                <button type="button" class="link-button active" data-action="lyrics-edit-mode" data-mode="quick" aria-pressed="true">Quick fix</button>
+                <button type="button" class="link-button" data-action="lyrics-edit-mode" data-mode="replace" aria-pressed="false">Replace all</button>
+              </div>
 
-                <div data-lyrics-replace-panel>
-                  <form class="lyrics-correction-form" data-lyrics-correction-form>
-                    <p class="card-copy">Paste the complete lyrics for the whole song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. Do not paste only a verse or excerpt.</p>
-                    <label class="field">
-                      <span>Complete lyrics</span>
-                      <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
-                    </label>
-                    <div class="lyrics-correction-footer">
-                      <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>
+              <div data-lyrics-quick-panel>
+                <p class="card-copy">Click a word in the transcript to correct it. You can enter a phrase with spaces — it stays one tappable word. Fixes apply instantly; the line's translation and pronunciation reset.</p>
+                <p class="microcopy" data-quick-fix-status role="status" aria-live="polite"></p>
+              </div>
+
+              <div data-lyrics-replace-panel hidden>
+                <form class="lyrics-correction-form" data-lyrics-correction-form>
+                  <p class="card-copy">Paste the complete lyrics for the whole song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. Do not paste only a verse or excerpt.</p>
+                  <label class="field">
+                    <span>Complete lyrics</span>
+                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
+                  </label>
+                  <p class="lyrics-confirm" data-lyrics-confirmation hidden>This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.</p>
+                  <div class="lyrics-correction-footer">
+                    <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>
+                    <span class="lyrics-correction-actions">
                       <button type="submit" class="btn-primary" data-action="apply-lyrics-correction">Continue</button>
-                    </div>
-                    <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status role="status" aria-live="polite"></p>
-                  </form>
-                  <div class="lyrics-confirm" data-lyrics-confirmation hidden>
-                    <p class="card-copy">This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.</p>
-                    <div class="lyrics-correction-footer">
-                      <button type="button" class="btn-primary" data-action="confirm-lyrics-correction">Replace entire track</button>
-                      <button type="button" class="btn-ghost" data-action="cancel-lyrics-confirmation">Cancel</button>
-                    </div>
+                      <button type="button" class="btn-primary" data-action="confirm-lyrics-correction" hidden>Replace entire track</button>
+                      <button type="button" class="btn-ghost" data-action="cancel-lyrics-confirmation" hidden>Cancel</button>
+                    </span>
                   </div>
-                </div>
-
-                <div data-lyrics-quick-panel hidden>
-                  <p class="card-copy">Select one source token in the transcript. Spaces remain one tappable phrase. The edit is provider-free.</p>
-                  <form class="quick-fix-form" data-quick-fix-form hidden>
-                    <label class="field">
-                      <span>Replacement text</span>
-                      <input type="text" name="quickFixText" autocomplete="off" data-quick-fix-input aria-describedby="quick-fix-help quick-fix-limit" />
-                    </label>
-                    <div class="lyrics-correction-footer">
-                      <button type="submit" class="btn-primary" data-action="save-quick-fix">Save</button>
-                      <button type="button" class="btn-ghost" data-action="cancel-quick-fix">Cancel</button>
-                    </div>
-                  </form>
-                  <p id="quick-fix-help" class="microcopy" data-quick-fix-status role="status" aria-live="polite">Choose a source token to edit.</p>
-                  <p id="quick-fix-limit" class="microcopy">84 Unicode characters maximum.</p>
-                </div>
+                  <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status role="status" aria-live="polite"></p>
+                </form>
               </div>
             </div>
             <div class="transcript-list" data-transcript-list role="list" aria-label="Generated cues"></div>

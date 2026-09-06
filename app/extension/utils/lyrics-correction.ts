@@ -2,6 +2,9 @@ import type { LyricsCorrectionStatus } from './contracts';
 
 export const LYRICS_CHARACTER_LIMIT = 25000;
 
+/** Maximum Unicode code points for one Quick fix replacement token or phrase. */
+export const QUICK_FIX_CHARACTER_LIMIT = 84;
+
 export const LYRICS_CORRECTION_STAGES = [
   { key: 'queued', percent: 0, label: 'Waiting to start' },
   { key: 'aligning', percent: 15, label: 'Checking and aligning lyrics' },

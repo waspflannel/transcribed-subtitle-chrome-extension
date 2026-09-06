@@ -319,6 +319,12 @@ a {
   padding: 9px 12px;
 }
 
+.status-banner.success {
+  background: var(--green-tint);
+  border-color: rgba(44, 122, 75, 0.5);
+  color: var(--green);
+}
+
 /* ============================== Buttons ============================== */
 /* Flashcard-hard edges, offset shadow, tactile press — the site's .button. */
 .btn-primary,
@@ -828,68 +834,54 @@ select option {
   gap: 10px;
 }
 
-.lyrics-edit {
-  background: var(--night-high);
-  border: 1.5px solid var(--line);
-  border-radius: 5px;
-  padding: 13px 14px;
-}
-
-.lyrics-edit-view {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-
+/* Edit subview: the panel reuses .card; this is the mode switch and forms. */
 .lyrics-edit-modes {
-  border-bottom: 1px solid var(--line-soft);
   display: flex;
-  gap: 12px;
-  padding-bottom: 7px;
+  gap: 14px;
+}
+
+.lyrics-edit-modes .link-button {
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding-bottom: 3px;
+}
+
+.lyrics-edit-modes .link-button:hover:not(:disabled) {
+  color: var(--text);
+  text-decoration: none;
 }
 
 .lyrics-edit-modes .link-button.active {
-  border-bottom: 2px solid var(--accent-bright);
+  border-bottom-color: var(--accent-bright);
   color: var(--accent-bright);
   font-weight: 700;
 }
 
-.lyrics-edit .card-copy {
-  margin-bottom: 2px;
-}
-
 .lyrics-confirm {
   border-left: 2px solid var(--accent);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.55;
   padding-left: 9px;
 }
 
-.lyrics-correction-form,
-.quick-fix-form {
+.lyrics-correction-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.lyrics-correction-form textarea,
-.quick-fix-form input {
+.lyrics-correction-form textarea {
   background: var(--night);
   border: 1.5px solid var(--line);
   color: var(--text);
+  min-height: 116px;
   padding: 9px;
+  resize: vertical;
   width: 100%;
 }
 
-.lyrics-correction-form textarea {
-  min-height: 116px;
-  resize: vertical;
-}
-
-.lyrics-correction-form textarea:disabled,
-.quick-fix-form input:disabled {
+.lyrics-correction-form textarea:disabled {
   opacity: 0.55;
 }
 
@@ -900,10 +892,16 @@ select option {
   justify-content: space-between;
 }
 
-.lyrics-correction-footer span {
+.lyrics-correction-footer [data-lyrics-correction-count] {
   color: var(--faint);
   font-family: var(--mono);
   font-size: 10px;
+}
+
+.lyrics-correction-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
 }
 
 .search-field {
@@ -991,6 +989,7 @@ select option {
   background: transparent;
   border: 0;
   border-bottom: 1px dashed var(--accent-bright);
+  border-radius: 3px 3px 0 0;
   color: var(--text);
   cursor: pointer;
   padding: 0 1px;
@@ -999,6 +998,39 @@ select option {
 .tok-edit:hover,
 .tok-edit:focus-visible {
   background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+
+/* Inline Quick fix editor: takes a full row inside the cue's token flow. */
+.tok-editor {
+  background: var(--night);
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 7px;
+  margin: 4px 0;
+  padding: 9px;
+}
+
+.tok-editor-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.tok-editor-hint {
+  color: var(--faint);
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tok-editor-hint.error {
   color: var(--accent-bright);
 }
 
