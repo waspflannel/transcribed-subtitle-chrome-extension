@@ -67,13 +67,13 @@ describe('bindTranscriptView rebuild guard', () => {
     expect(list.querySelectorAll('.cue').length).toBe(1);
   });
 
-  it('never auto-scrolls on the data-render path', () => {
+  it('never auto-scrolls when data or the active cue changes', () => {
     const { view, scrollSpy } = setupDom();
     const settings = { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true };
 
     view.setData('vid', cues, settings);
     view.setActiveCue('c1');
-    expect(scrollSpy.calls).toBe(1);
+    expect(scrollSpy.calls).toBe(0);
 
     scrollSpy.calls = 0;
     view.setData('vid', cues, settings);
@@ -223,6 +223,19 @@ describe('bindTranscriptView quick fix editor', () => {
     expect(document.activeElement).toBe(input);
     expect(hint.textContent).toBe('4 / 84');
     expect(save.disabled).toBe(true);
+  });
+
+  it('does not scroll the transcript when the editor receives focus', () => {
+    const { view, list } = setupQuickFix();
+    const focusSpy = vi.spyOn(list.ownerDocument.defaultView!.HTMLElement.prototype, 'focus');
+    const scrollSpy = vi.spyOn(list.ownerDocument.defaultView!.Element.prototype, 'scrollIntoView');
+
+    openEditor(view, list);
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(scrollSpy).not.toHaveBeenCalled();
+    focusSpy.mockRestore();
+    scrollSpy.mockRestore();
   });
 
   it('validates the draft live and saves through Enter', () => {

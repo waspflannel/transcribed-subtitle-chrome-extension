@@ -77,9 +77,8 @@ export function bindTranscriptView(dom: {
     updateQuickFixEditor();
     if (focusQuickFixEditor) {
       focusQuickFixEditor = false;
-      input.focus();
+      input.focus({ preventScroll: true });
       input.select();
-      input.scrollIntoView({ block: 'nearest' });
     }
   }
 
@@ -131,7 +130,6 @@ export function bindTranscriptView(dom: {
     if (!nextRow) return;
     nextRow.classList.add('on');
     nextRow.setAttribute('aria-current', 'true');
-    nextRow.scrollIntoView({ block: 'nearest' });
   }
 
   function ackButton(button: HTMLButtonElement, label?: string): void {
