@@ -25,6 +25,7 @@ export function bindTranscriptView(dom: {
   let activeCueId: string | null = null;
   let renderedSignature: string | null = null;
   let quickFixMode = false;
+  let editingCueId: string | null = null;
   let quickFixEditing: QuickFixSelection | null = null;
   let quickFixDraft = '';
   let quickFixBusy = false;
@@ -43,6 +44,7 @@ export function bindTranscriptView(dom: {
       settings?.showRomanization ?? false,
       settings?.showTranslation ?? false,
       quickFixMode,
+      editingCueId,
       editingKey(),
     ]);
   }
@@ -62,6 +64,7 @@ export function bindTranscriptView(dom: {
         query: dom.transcriptSearch.value,
         settings,
         quickFixMode,
+        editingCueId,
         quickFixEditing: quickFixEditing
           ? { cueId: quickFixEditing.cueId, tokenIndex: quickFixEditing.tokenIndex, value: quickFixDraft }
           : null,
@@ -102,8 +105,13 @@ export function bindTranscriptView(dom: {
     input.disabled = quickFixBusy;
     cancel.disabled = quickFixBusy;
     save.disabled = quickFixBusy || overLimit || unchanged || quickFixDraft.trim() === '';
+    save.textContent = quickFixBusy ? 'Saving…' : 'Save correction';
+    editor.setAttribute('aria-busy', String(quickFixBusy));
 
-    if (quickFixError) {
+    if (quickFixBusy) {
+      hint.textContent = 'Refreshing translation and word data…';
+      hint.classList.remove('error');
+    } else if (quickFixError) {
       hint.textContent = quickFixError;
       hint.classList.add('error');
     } else {
@@ -148,6 +156,15 @@ export function bindTranscriptView(dom: {
     const cueId = button?.dataset.cueId;
     if (!button) return;
     const action = button.dataset.transcriptAction;
+    if (quickFixBusy && action?.startsWith('quick-fix-')) return;
+    if (action === 'quick-fix-line' && cueId) {
+      if (quickFixEditing) return;
+      editingCueId = editingCueId === cueId ? null : cueId;
+      render();
+      const row = dom.transcriptList.querySelector(`[data-cue-id="${cssAttributeValue(cueId)}"]`);
+      row?.querySelector<HTMLButtonElement>('[data-transcript-action="quick-fix-token"], [data-transcript-action="quick-fix-line"]')?.focus({ preventScroll: true });
+      return;
+    }
     if (action === 'quick-fix-token') {
       const tokenIndex = Number(button.dataset.tokenIndex);
       if (cueId && Number.isInteger(tokenIndex) && tokenIndex >= 0) {
@@ -194,6 +211,7 @@ export function bindTranscriptView(dom: {
   dom.transcriptList.addEventListener('keydown', (event) => {
     const input = (event.target as Element)?.closest<HTMLInputElement>('[data-quick-fix-input]');
     if (!input) return;
+    if (quickFixBusy) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       trySaveQuickFix();
@@ -205,6 +223,7 @@ export function bindTranscriptView(dom: {
 
   return {
     setData(nextYoutubeVideoId: string | null, nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
+      if (youtubeVideoId !== nextYoutubeVideoId || !nextCues.some((cue) => cue.cueId === editingCueId)) editingCueId = null;
       youtubeVideoId = nextYoutubeVideoId; cues = nextCues; settings = nextSettings; render();
     },
     setActiveCue(cueId: string | null) {
@@ -215,6 +234,7 @@ export function bindTranscriptView(dom: {
     setQuickFixMode(enabled: boolean) {
       if (quickFixMode === enabled) return;
       quickFixMode = enabled;
+      if (!enabled) editingCueId = null;
       render();
     },
     /** Open the inline editor on a token, or close it with null. Focuses the input on open. */
@@ -222,6 +242,7 @@ export function bindTranscriptView(dom: {
       const nextKey = selection ? `${selection.cueId}:${selection.tokenIndex}` : null;
       if (nextKey === editingKey()) return;
       quickFixEditing = selection;
+      if (selection) editingCueId = selection.cueId;
       quickFixDraft = selection?.text ?? '';
       quickFixError = null;
       focusQuickFixEditor = selection !== null;

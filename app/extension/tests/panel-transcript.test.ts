@@ -54,7 +54,7 @@ describe('panelTranscriptListHtml quick fix mode', () => {
 
   it('keeps token romanization and spacing identical to normal token rendering', () => {
     const normal = panelTranscriptListHtml({ cues: cuesWithReadings, activeCueId: null, query: '', settings });
-    const quickFix = panelTranscriptListHtml({ cues: cuesWithReadings, activeCueId: null, query: '', settings, quickFixMode: true });
+    const quickFix = panelTranscriptListHtml({ cues: cuesWithReadings, activeCueId: null, query: '', settings, editingCueId: 'c1', quickFixMode: true });
 
     expect(normal).toContain('<span class="tok">hola<small>o-la</small></span>');
     expect(quickFix).toContain('data-transcript-action="quick-fix-token"');
@@ -65,13 +65,13 @@ describe('panelTranscriptListHtml quick fix mode', () => {
   });
 
   it('renders tokens as buttons even when normal mode would show a plain line', () => {
-    const html = panelTranscriptListHtml({ cues, activeCueId: null, query: '', settings: DEFAULT_EXTENSION_SETTINGS, quickFixMode: true });
+    const html = panelTranscriptListHtml({ cues, activeCueId: null, query: '', settings: DEFAULT_EXTENSION_SETTINGS, editingCueId: 'c1', quickFixMode: true });
 
     expect(html).toContain('class="tok tok-edit"');
     expect(html).toContain('aria-label="Edit source token hola"');
   });
 
-  it('swaps the selected token for an inline editor with the prefill escaped', () => {
+  it('keeps the source word and places an escaped editor below the line', () => {
     const editing: SubtitleCue[] = [
       { cueId: 'c1', index: 0, startMs: 0, endMs: 1000, sourceText: 'a "b"', translatedText: 'x', tokens: [{ index: 0, text: 'a "b"', normalizedText: 'a b' }] },
     ];
@@ -80,7 +80,7 @@ describe('panelTranscriptListHtml quick fix mode', () => {
       activeCueId: null,
       query: '',
       settings: DEFAULT_EXTENSION_SETTINGS,
-      quickFixMode: true,
+      editingCueId: 'c1', quickFixMode: true,
       quickFixEditing: { cueId: 'c1', tokenIndex: 0, value: 'a "b"' },
     });
 
@@ -88,7 +88,7 @@ describe('panelTranscriptListHtml quick fix mode', () => {
     expect(html).toContain('value="a &quot;b&quot;"');
     expect(html).toContain('data-transcript-action="quick-fix-save"');
     expect(html).toContain('data-transcript-action="quick-fix-cancel"');
-    expect(html).not.toContain('data-transcript-action="quick-fix-token"');
+    expect(html).toContain('data-transcript-action="quick-fix-token"');
   });
 
   it('does not render token buttons outside quick fix mode', () => {

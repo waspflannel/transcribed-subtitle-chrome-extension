@@ -1,4 +1,10 @@
 export interface PanelDom {
+  readyToolbar: HTMLElement;
+  viewProgressButton: HTMLButtonElement;
+  progressSummaryLabel: HTMLElement;
+  progressSummary: HTMLElement;
+  transcriptMenu: HTMLDetailsElement;
+  backTranscriptButton: HTMLButtonElement;
   tabButtons: HTMLButtonElement[];
   panels: HTMLElement[];
   transcriptSearch: HTMLInputElement;
@@ -17,9 +23,6 @@ export interface PanelDom {
   correctionCancelError: HTMLElement;
   lyricsEditPanel: HTMLElement;
   toggleLyricsEditButton: HTMLButtonElement;
-  lyricsEditModeButtons: HTMLButtonElement[];
-  lyricsReplacePanel: HTMLElement;
-  lyricsQuickPanel: HTMLElement;
   lyricsCorrectionForm: HTMLFormElement;
   lyricsCorrectionTextarea: HTMLTextAreaElement;
   lyricsCorrectionCount: HTMLElement;
@@ -96,6 +99,12 @@ export interface PanelDom {
 
 export function getPanelDom(root: ParentNode = document): PanelDom {
   return {
+    readyToolbar: query(root, '.ready-toolbar', HTMLElement),
+    viewProgressButton: query(root, '[data-action="view-progress"]', HTMLButtonElement),
+    progressSummaryLabel: query(root, '[data-progress-summary-label]', HTMLElement),
+    progressSummary: query(root, '[data-progress-summary]', HTMLElement),
+    transcriptMenu: query(root, '[data-transcript-menu]', HTMLDetailsElement),
+    backTranscriptButton: query(root, '[data-action="back-transcript"]', HTMLButtonElement),
     tabButtons: queryAll<HTMLButtonElement>(root, '[data-tab]'),
     panels: queryAll<HTMLElement>(root, '[data-panel]'),
     transcriptSearch: query<HTMLInputElement>(root, '[data-transcript-search]', HTMLInputElement),
@@ -114,9 +123,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     correctionCancelError: query(root, '[data-correction-cancel-error]', HTMLElement),
     lyricsEditPanel: query(root, '[data-lyrics-edit-panel]', HTMLElement),
     toggleLyricsEditButton: query(root, '[data-action="toggle-lyrics-edit"]', HTMLButtonElement),
-    lyricsEditModeButtons: queryAll<HTMLButtonElement>(root, '[data-action="lyrics-edit-mode"]'),
-    lyricsReplacePanel: query(root, '[data-lyrics-replace-panel]', HTMLElement),
-    lyricsQuickPanel: query(root, '[data-lyrics-quick-panel]', HTMLElement),
     lyricsCorrectionForm: query(root, '[data-lyrics-correction-form]', HTMLFormElement),
     lyricsCorrectionTextarea: query(root, '[data-lyrics-correction-textarea]', HTMLTextAreaElement),
     lyricsCorrectionCount: query(root, '[data-lyrics-correction-count]', HTMLElement),

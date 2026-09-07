@@ -3,22 +3,21 @@
 Status: proposed
 Owner: product
 Created: 2026-08-16
-Implementation status: builder implementation complete; reviewer validation pending
+Implementation status: Quick fix AI refresh supersedes the original provider-free design as of 2026-09-06. Older builder/reviewer instructions below are historical; current work is tracked in `../exec-plans/active/2026-09-06-refresh-learning-data-after-a-single-word-edit.md`.
 
 ## Problem
 
 The current **Use pasted lyrics** form looks like a small edit, but it replaces the full transcript and can take several minutes. It has no meaningful progress, no cancellation, and no protection against replacing a complete song with an excerpt.
 
-Learners also need an instant way to fix one wrong token without running full-track AI work.
+Learners also need a quick way to fix one wrong token without running full-track AI work.
 
 ## Product Shape
 
 Keep editing inside the completed **Watch** state. Do not add a fifth top-level tab at the 320px panel width.
 
-Add one **Edit** action that opens a Watch subview with two modes:
+Each transcript line exposes **Edit**, followed by selecting a word in that line. The correction form appears beneath the unchanged source line. Only one line is editable at a time.
 
-- **Quick fix** edits one existing source token.
-- **Replace all** replaces the complete lyrics and rebuilds learning data.
+A transcript actions menu exposes **Replace full lyrics…** and **Generate again…**. Each opens a dedicated Watch screen with **Back to transcript**, preserving the replacement draft. Replacement progress defaults to a compact strip above the transcript; **View progress** opens detailed stages and cancellation.
 
 The current track stays active until a replacement succeeds. Neither workflow debits generated-video minutes or extends track expiry.
 
@@ -36,7 +35,7 @@ Use **Replace entire track** as the confirmation action and **Cancel replacement
 
 ### Flow
 
-1. The learner opens Watch > Edit > Replace all.
+1. The learner opens Watch > transcript actions > Replace full lyrics.
 2. The learner pastes complete plain-text lyrics.
 3. The existing input validation runs.
 4. One confirmation explains that the action replaces the entire transcript and has no undo.
@@ -60,7 +59,7 @@ Reuse the existing generation progress card and progress bar. Expose the current
 
 Fixed stage percentages avoid another persisted progress field and cannot move backward when a provider batch is split. Skipped stages simply cause a forward jump.
 
-The active progress card appears above the current transcript and recovers from the backend when the panel reopens.
+A compact status strip appears above the current transcript and recovers from the backend when the panel reopens. Detailed progress and cancellation open on their own Watch screen.
 
 ### Complete-Lyrics Safety
 
@@ -103,36 +102,24 @@ The extension derives whether cancellation is available from `queued | running`;
 
 ### Flow
 
-1. The learner opens Watch > Edit > Quick fix.
+1. The learner clicks Edit on a transcript line.
 2. The learner selects one existing source token.
-3. An inline plain-text input replaces that token.
-4. Save updates the transcript and overlay without reload; local cancel closes the input without a request.
+3. A plain-text input appears beneath the source line, keeping the original words visible.
+4. Save refreshes the cue learning data and then updates the transcript and overlay without reload; local cancel closes the input without a request.
 
 The replacement may contain spaces, but remains one tappable token or phrase. It must be non-empty and keep the resulting cue at or below 84 Unicode characters.
 
 ### Data Rules
 
-Quick fix is provider-free. It must not create another queue workflow.
+Quick fix uses one synchronous backend AI request for the edited cue. The learner's replacement is authoritative and stays one token or phrase. Timing, punctuation, other tokens' boundaries, and other cues remain unchanged.
 
-One atomic backend write must:
+Before provider work, verify ownership, an active plan, a completed unexpired track, expected track identity, and no active full replacement. Build the edited cue in memory and remove its stale derived data. Do not hold database locks while waiting for AI.
 
-- Verify ownership and a completed, unexpired track.
-- Match the expected track public ID, cue ID, and token index.
-- Replace the token's exact forward-only span in `sourceText`.
-- Recompute that token's normalized text.
-- Preserve cue timing and surrounding punctuation.
-- Rebuild WebVTT.
-- Give the edited cue and track fresh public identities.
-- Return the updated canonical track.
+Rebuild word translation, gloss, and word-card metadata for every token in the affected cue, since context can change their meaning. Rebuild whole-line translation and cue/token romanization according to the original job's enabled settings. Same-language tracks retain source text as the line translation. Word cards are refreshed even in on-demand mode.
 
-Changing source text makes cue-level translation, romanization, and context-dependent word-card data potentially stale. Clear derived learning data for the edited cue rather than preserving incorrect values:
+Validate cue and token identities, required meanings, enabled translation, and enabled non-Latin romanization. Do not silently accept incomplete AI output. Recheck entitlement, job run, track identity, expiry, and replacement state before atomically publishing the refreshed cue with fresh track/cue IDs and rebuilt WebVTT. Preserve current data on failure and allow retry. Never debit generated-video minutes or extend expiry.
 
-- Keep source token boundaries, text, indexes, and normalized text.
-- Remove cue and token romanization.
-- Remove gloss and word-card fields from every token in the edited cue.
-- Set `translatedText` to the updated `sourceText`; the renderer must not show a duplicate translation line.
-
-Existing on-click enrichment can rebuild individual word cards later. A separate one-cue AI refresh is deferred until users show that losing one cue's derived data is worse than adding another asynchronous workflow.
+The editor shows Saving and refreshing feedback while awaiting the response. The backend agent timeout is 45 seconds; the extension allows 60 seconds. No new queue workflow or persistence table is needed for this single-cue operation.
 
 ### Concurrency
 
@@ -189,7 +176,6 @@ Use canonical schemas under `packages/contracts`. The only new product error cod
 - Timestamp, cue, translation, romanization, gloss, or word-card editing.
 - Adding, deleting, splitting, or merging cues.
 - File upload, bulk replacement, preview, undo, restore, or version history.
-- AI regeneration for Quick fix.
 - Cancelling after publication.
 
 ## Builder Instructions
@@ -393,7 +379,7 @@ Keep all rendered user text escaped and preserve keyboard, focus, live-region, a
 
 ### Quick-Fix Backend
 
-Implement Quick fix as one synchronous, provider-free mutation in the existing lyrics-correction service. Do not add a job or persistence table.
+Historical instruction, superseded on 2026-09-06: Quick fix now refreshes learning data with one AI request before atomic publication. Do not add a job or persistence table.
 
 Use a Form Request for:
 
@@ -499,8 +485,8 @@ Do not include a code review, quality verdict, passing-test claim, commit hash, 
 - [ ] A valid full paste for `Y_vB-3R_BYc` passes completeness checks.
 - [ ] Half-song, one-verse, and every-other-line pastes fail without changing the track.
 - [ ] Queued and running replacements can be cancelled without publishing late work.
-- [ ] One Quick fix changes one token and matching source span without provider work.
-- [ ] Quick fix preserves timing, rebuilds WebVTT, and clears stale derived data for that cue.
+- [ ] One Quick fix changes one token and matching source span, then refreshes the affected cue through one provider request.
+- [ ] Quick fix preserves timing, rebuilds WebVTT, and replaces stale derived data with validated fresh learning data for that cue.
 - [ ] Stale track edits and late clicked-token responses cannot overwrite fresh data.
 - [ ] Neither workflow debits video minutes or extends expiry.
 - [ ] Lyrics and replacement text remain excluded from diagnostics and extension storage.
@@ -509,7 +495,7 @@ Do not include a code review, quality verdict, passing-test claim, commit hash, 
 
 1. Add correction stage, `cancelled`, cancellation, and calibrated completeness validation to the existing correction path.
 2. Reuse the generation progress component and add Replace all confirmation and cancellation in the Watch Edit subview.
-3. Add the canonical token PATCH operation and atomic provider-free mutation.
+3. Use the canonical token PATCH operation for atomic publication after cue refresh.
 4. Add inline Quick fix UI and stale-track recovery.
 5. Run focused contract, backend, extension, 320px, browser, completeness, cancellation-race, and stale-response checks.
 

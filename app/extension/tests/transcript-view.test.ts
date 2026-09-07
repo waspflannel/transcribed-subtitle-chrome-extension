@@ -209,8 +209,21 @@ describe('bindTranscriptView quick fix editor', () => {
     input.dispatchEvent(new input.ownerDocument.defaultView!.Event('input', { bubbles: true }));
   }
 
+  it('opens word selection for only the chosen line and keeps the form beneath its words', () => {
+    const { view, list } = setupQuickFix();
+    expect(list.querySelector('[data-transcript-action="quick-fix-token"]')).toBeNull();
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c1"][data-transcript-action="quick-fix-line"]')!.click();
+    expect(list.querySelector('[data-cue-id="c1"][data-token-index]')).not.toBeNull();
+    expect(list.querySelector('[data-cue-id="c2"][data-token-index]')).toBeNull();
+    openEditor(view, list);
+    const editor = list.querySelector('[data-quick-fix-editor]')!;
+    expect(editor.closest('.toks')).toBeNull();
+    expect(list.querySelector('[data-cue-id="c1"][data-token-index="0"]')?.textContent).toContain('hola');
+  });
+
   it('reports token clicks with cue id and token index', () => {
     const { list, onQuickFixSelect } = setupQuickFix();
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-transcript-action="quick-fix-line"]')!.click();
     list.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-token-index="0"]')!.click();
     expect(onQuickFixSelect).toHaveBeenCalledWith('c2', 0);
   });
@@ -275,6 +288,8 @@ describe('bindTranscriptView quick fix editor', () => {
     view.setQuickFixBusy(true);
     expect(input.disabled).toBe(true);
     expect(save.disabled).toBe(true);
+    expect(save.textContent).toBe('Saving…');
+    expect(hint.textContent).toBe('Refreshing translation and word data…');
 
     view.setQuickFixBusy(false);
     view.setQuickFixError('Could not save. Try again.');
@@ -286,6 +301,18 @@ describe('bindTranscriptView quick fix editor', () => {
     type(input, 'hola!!');
     expect(hint.textContent).toBe('6 / 84');
     expect(hint.classList.contains('error')).toBe(false);
+  });
+
+  it('keeps the selected word while the refresh is pending', () => {
+    const { view, list, onQuickFixSelect, onQuickFixCancel } = setupQuickFix();
+    const { input } = openEditor(view, list);
+    view.setQuickFixBusy(true);
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-transcript-action="quick-fix-line"]')!.click();
+    expect(list.querySelector('[data-cue-id="c2"][data-token-index]')).toBeNull();
+    input.dispatchEvent(new input.ownerDocument.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(onQuickFixSelect).not.toHaveBeenCalled();
+    expect(onQuickFixCancel).not.toHaveBeenCalled();
+    expect(input.value).toBe('hola');
   });
 
   it('keeps the draft when the transcript rebuilds for an unrelated reason', () => {
