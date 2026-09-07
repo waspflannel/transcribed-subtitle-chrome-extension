@@ -185,6 +185,7 @@ export class SubtitleApiClient {
       {
         method: 'PATCH',
         body: JSON.stringify(payload),
+        timeoutMs: 60000,
         authToken,
       },
       guardTrackResponse,

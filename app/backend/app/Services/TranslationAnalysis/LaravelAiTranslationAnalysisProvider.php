@@ -6,17 +6,18 @@ use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
+use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use Closure;
 use Throwable;
 use Transliterator;
 
@@ -25,6 +26,53 @@ class LaravelAiTranslationAnalysisProvider
     public function __construct(
         private readonly LearningTokenOutputValidator $tokenValidator,
     ) {}
+
+    /**
+     * Refresh a single edited line without letting the model change its words or timing.
+     * Unlike optional full-track enrichment, incomplete output fails the edit.
+     *
+     * @param  array<string, mixed>  $cue
+     * @return array<string, mixed>
+     */
+    public function refreshEditedCue(
+        array $cue,
+        string $sourceLanguage,
+        string $targetLanguage,
+        bool $includeTranslation,
+        bool $includeRomanization,
+    ): array {
+        $output = $this->promptAgent(EditedCueAgent::class, [
+            ...$this->cueEnrichmentInput([$cue], $sourceLanguage, $targetLanguage, $includeRomanization),
+            'includeTranslation' => $includeTranslation,
+        ]);
+        $translation = $this->cleanString($output['translatedText'] ?? null);
+        if ($includeTranslation && $sourceLanguage !== $targetLanguage && $translation === null) {
+            $this->failInvalidOutput('missing_edited_cue_translation');
+        }
+
+        $cue['translatedText'] = $includeTranslation && $sourceLanguage !== $targetLanguage
+            ? $translation
+            : $cue['sourceText'];
+        $refreshed = $this->validatedEnrichedCueResult($output, [$cue], $includeRomanization)->cues[0];
+
+        foreach ($refreshed['tokens'] as $token) {
+            if (! isset($token['translation'], $token['gloss'])) {
+                $this->failInvalidOutput('missing_edited_token_meaning');
+            }
+        }
+
+        if ($includeRomanization) {
+            foreach ([$refreshed, ...$refreshed['tokens']] as $item) {
+                $text = $item['sourceText'] ?? $item['text'];
+                $nonLatin = preg_replace('/\p{Latin}/u', '', $text);
+                if (preg_match('/\p{L}/u', $nonLatin) === 1 && ! isset($item['romanization'])) {
+                    $this->failInvalidOutput('missing_edited_cue_romanization');
+                }
+            }
+        }
+
+        return $refreshed;
+    }
 
     /**
      * @param  array<int, array<string, mixed>>  $batch

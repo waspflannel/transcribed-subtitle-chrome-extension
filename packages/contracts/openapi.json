@@ -444,8 +444,9 @@
     },
     "/v1/subtitle-jobs/{jobId}/cues/{cueId}/tokens/{tokenIndex}": {
       "patch": {
+        "description": "Edit one token and refresh its cue translation, enabled romanization, and word cards before atomic publication. Provider failure leaves the track unchanged.",
         "operationId": "quickFixSubtitleToken",
-        "summary": "Replace one source token without provider work.",
+        "summary": "Correct one source token and refresh its learning data.",
         "parameters": [
           {"$ref": "#/components/parameters/ExtensionInstallId"},
           {"$ref": "#/components/parameters/ExtensionAuthorization"},
@@ -488,9 +489,18 @@
           "404": {"$ref": "#/components/responses/NotFound"},
           "409": {"$ref": "#/components/responses/Conflict"},
           "401": {"$ref": "#/components/responses/Unauthenticated"},
+          "402": {"$ref": "#/components/responses/PaymentRequired"},
           "403": {"$ref": "#/components/responses/Forbidden"},
           "422": {"$ref": "#/components/responses/ValidationError"},
-          "429": {"$ref": "#/components/responses/RateLimited"}
+          "429": {"$ref": "#/components/responses/RateLimited"},
+          "502": {
+            "description": "AI enrichment failed; the existing track is unchanged.",
+            "content": {"application/json": {"schema": {"$ref": "./schemas/api-error.schema.json"}}}
+          },
+          "503": {
+            "description": "AI provider unavailable; the existing track is unchanged.",
+            "content": {"application/json": {"schema": {"$ref": "./schemas/api-error.schema.json"}}}
+          }
         }
       }
     },

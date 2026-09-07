@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\Agents\EditedCueAgent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
@@ -171,7 +172,20 @@ class ContractResponseValidationTest extends TestCase
     {
         $installId = $this->installId('c');
         $user = User::factory()->create();
-        $track = $this->completedTrack($installId, $user, 'editcontract1');
+        EditedCueAgent::fake(function ($prompt): array {
+            $input = json_decode($prompt, true);
+            $cue = $input['cues'][0];
+
+            return [
+                'dialect' => 'unknown',
+                'translatedText' => 'Refreshed translation',
+                'cues' => [[...$cue, 'romanization' => 'refreshed pronunciation', 'tokens' => array_map(
+                    fn (array $token): array => [...$token, 'translation' => 'new meaning', 'gloss' => 'new gloss', 'romanization' => 'new reading'],
+                    $cue['tokens'],
+                )]],
+            ];
+        })->preventStrayPrompts();
+        $track = $this->completedTrack($installId, $user, 'editcontr01');
         $attemptId = '018f9e2f-0d8c-7500-8f38-9f4c5d1b3020';
         $track->lyricsCorrection()->create([
             'attempt_id' => $attemptId,

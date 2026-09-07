@@ -145,7 +145,7 @@ Project-specific security defaults:
 - Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
 - Pasted lyrics are sent to configured OpenAI only for alignment.
 - Corrected cue text is sent through the same derived OpenAI stages used by generation.
-- Quick fix replacement text is handled only by the backend's owner-scoped provider-free mutation and never sent to an AI provider.
+- Quick fix replacement text is sent to the AI provider by the owner-scoped backend to refresh the edited cue. Active entitlement is checked before provider work and publication. Replacement text and generated learning data remain excluded from logs and diagnostics.
 - Lyrics and work state are excluded from logs, traces, analytics, API responses, extension storage, URLs, and runtime error payloads.
 - Encrypted database columns are the only persisted private copies, and they are cleared on completion, failure, expiry, or deletion.
   - Laravel responses set CSP, frame, MIME, referrer, permissions, and cross-origin isolation headers. HSTS is sent only for secure production requests; trusted-proxy and session-cookie configuration remain an operator-owned hosting decision.

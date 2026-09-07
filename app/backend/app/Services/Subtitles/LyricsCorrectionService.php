@@ -194,26 +194,8 @@ final class LyricsCorrectionService
             abort(404);
         }
 
-        return DB::transaction(function () use ($job, $cueId, $tokenIndex, $payload): SubtitleTrack {
-            $track = SubtitleTrack::query()
-                ->where('subtitle_job_id', $job->getKey())
-                ->where('expires_at', '>', now())
-                ->whereHas('job', fn ($query) => $query->where('status', 'completed'))
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if (! hash_equals((string) $track->public_id, $payload['expectedTrackId'])) {
-                throw SubtitleProcessingException::lyricsTrackChanged();
-            }
-
-            $correction = SubtitleTrackLyricsCorrection::query()
-                ->where('subtitle_track_id', $track->getKey())
-                ->lockForUpdate()
-                ->first();
-
-            if ($correction instanceof SubtitleTrackLyricsCorrection && in_array($correction->status, ['queued', 'running'], true)) {
-                throw SubtitleProcessingException::lyricsCorrectionInProgress();
-            }
+        [$cuePosition, $updatedCue] = DB::transaction(function () use ($job, $cueId, $tokenIndex, $payload): array {
+            $track = $this->lockQuickFixTrack($job, $payload['expectedTrackId']);
 
             $cues = array_values($track->cues);
             $cuePosition = array_search($cueId, array_column($cues, 'cueId'), true);
@@ -281,16 +263,58 @@ final class LyricsCorrectionService
                 'tokens' => $updatedTokens,
             ];
             unset($updatedCue['romanization']);
-            $cues[$cuePosition] = $updatedCue;
 
+            return [$cuePosition, $updatedCue];
+        }, attempts: 5);
+
+        // Provider work must not hold database locks or publish a half-finished edit.
+        $updatedCue = $this->translationAnalysis->refreshEditedCue(
+            $updatedCue,
+            $job->effectiveSourceLanguage(),
+            $job->target_language,
+            $job->include_translation,
+            $job->include_romanization,
+        );
+
+        return DB::transaction(function () use ($job, $payload, $cuePosition, $updatedCue): SubtitleTrack {
+            $track = $this->lockQuickFixTrack($job, $payload['expectedTrackId']);
+            // Read current cues so concurrent word-card updates elsewhere survive.
+            $cues = array_values($track->cues);
+            $cues[$cuePosition] = $updatedCue;
             $track->update([
                 'public_id' => (string) Str::uuid(),
                 'cues' => $cues,
                 'web_vtt' => $this->webVtt($cues),
             ]);
+            $this->costs->recordCueBatch($job, 'enriching', 1);
 
             return $track->fresh(['job']);
         }, attempts: 5);
+    }
+
+    private function lockQuickFixTrack(SubtitleJob $job, string $expectedTrackId): SubtitleTrack
+    {
+        $user = User::query()->whereKey($job->user_id)->lockForUpdate()->firstOrFail();
+        if ($this->billing->activePlan($user) === null) {
+            throw BillingEntitlementException::paymentRequired();
+        }
+
+        $track = SubtitleTrack::query()
+            ->where('subtitle_job_id', $job->getKey())
+            ->where('expires_at', '>', now())
+            ->whereHas('job', fn ($query) => $query->where('status', 'completed')->where('run_id', $job->run_id))
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        if (! hash_equals((string) $track->public_id, $expectedTrackId)) {
+            throw SubtitleProcessingException::lyricsTrackChanged();
+        }
+
+        if ($track->lyricsCorrection()->whereIn('status', ['queued', 'running'])->exists()) {
+            throw SubtitleProcessingException::lyricsCorrectionInProgress();
+        }
+
+        return $track;
     }
 
     public function process(int $trackId, string $attemptId, int $expectedRevision): void
@@ -762,8 +786,7 @@ final class LyricsCorrectionService
         string $lyrics,
         string $sourceLanguage,
         string $attemptId,
-    ): array
-    {
+    ): array {
         $matchingLyrics = $this->matchingLyrics($lyrics);
         $input = [
             'sourceLanguage' => $sourceLanguage,

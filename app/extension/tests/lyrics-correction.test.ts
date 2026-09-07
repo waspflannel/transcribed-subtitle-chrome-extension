@@ -22,6 +22,7 @@ function status(
   attemptId: string,
   correctionStatus: LyricsCorrectionStatus['status'],
   overrides: {
+    stage?: LyricsCorrectionStatus['stage'];
     track?: TrackResponse;
     errorCode?: 'lyrics_incomplete' | 'lyrics_do_not_match' | 'lyrics_correction_failed';
     message?: string;

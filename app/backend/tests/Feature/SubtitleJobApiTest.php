@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
@@ -12,6 +13,7 @@ use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
+use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
@@ -57,9 +59,26 @@ class SubtitleJobApiTest extends TestCase
 
     private RecordingTranslationAnalysisProvider $translationAnalysis;
 
+    private ?\Closure $duringQuickFix = null;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        EditedCueAgent::fake(function ($prompt): array {
+            ($this->duringQuickFix)?->__invoke();
+            $input = json_decode($prompt, true);
+            $cue = $input['cues'][0];
+
+            return [
+                'dialect' => 'unknown',
+                'translatedText' => 'Refreshed translation',
+                'cues' => [[...$cue, 'romanization' => 'refreshed pronunciation', 'tokens' => array_map(
+                    fn (array $token): array => [...$token, 'translation' => 'new meaning', 'gloss' => 'new gloss', 'romanization' => 'new reading'],
+                    $cue['tokens'],
+                )]],
+            ];
+        })->preventStrayPrompts();
 
         $this->audioSource = new RecordingYouTubeAudioSource;
         $this->transcriptionService = new RecordingTranscriptionService;
@@ -545,7 +564,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
     }
 
-    public function test_quick_fix_replaces_one_token_and_clears_derived_cue_data(): void
+    public function test_quick_fix_replaces_one_token_and_refreshes_derived_cue_data(): void
     {
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
@@ -553,6 +572,8 @@ class SubtitleJobApiTest extends TestCase
         $oldCueId = $job->track->cues[0]['cueId'];
         $oldGeneratedAt = $job->track->generated_at->toJSON();
         $oldExpiresAt = $job->track->expires_at->toJSON();
+        $unchangedCue = $job->track->cues[1];
+        $ledgerCount = BillingUsageEvent::count();
         $tokenizationCalls = $this->translationAnalysis->tokenizationCalls;
 
         $response = $this->withExtensionAuth($this->installId())->patchJson(
@@ -564,8 +585,9 @@ class SubtitleJobApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('cues.0.sourceText', 'updated transcript segment')
             ->assertJsonPath('cues.0.translatedText', 'updated transcript segment')
-            ->assertJsonMissingPath('cues.0.romanization')
-            ->assertJsonMissingPath('cues.0.tokens.0.gloss')
+            ->assertJsonPath('cues.0.romanization', 'refreshed pronunciation')
+            ->assertJsonPath('cues.0.tokens.0.gloss', 'new gloss')
+            ->assertJsonPath('cues.0.tokens.0.translation', 'new meaning')
             ->assertJsonPath('cues.0.tokens.0.text', 'updated')
             ->assertJsonPath('cues.0.tokens.0.normalizedText', 'updated');
 
@@ -574,7 +596,124 @@ class SubtitleJobApiTest extends TestCase
         $this->assertNotSame($oldCueId, $job->track->cues[0]['cueId']);
         $this->assertSame($oldGeneratedAt, $job->track->generated_at->toJSON());
         $this->assertSame($oldExpiresAt, $job->track->expires_at->toJSON());
+        $this->assertSame($unchangedCue, $job->track->cues[1]);
+        $this->assertSame($ledgerCount, BillingUsageEvent::count());
         $this->assertSame($tokenizationCalls, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_quick_fix_refreshes_translation_and_preserves_a_replacement_phrase(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload([
+            'includeTranslation' => true,
+        ]))->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $cue = $track->cues[0];
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0', [
+            'expectedTrackId' => $track->public_id, 'text' => 'new phrase',
+        ])->assertOk()
+            ->assertJsonPath('cues.0.sourceText', 'new phrase transcript segment')
+            ->assertJsonPath('cues.0.translatedText', 'Refreshed translation')
+            ->assertJsonPath('cues.0.romanization', 'refreshed pronunciation')
+            ->assertJsonPath('cues.0.tokens.0.text', 'new phrase')
+            ->assertJsonPath('cues.0.tokens.0.romanization', 'new reading')
+            ->assertJsonPath('cues.0.tokens.0.translation', 'new meaning')
+            ->assertJsonPath('cues.0.tokens.0.gloss', 'new gloss')
+            ->assertJsonCount(count($cue['tokens']), 'cues.0.tokens');
+        $this->assertSame($cue['startMs'], $track->fresh()->cues[0]['startMs']);
+        $this->assertSame($cue['endMs'], $track->fresh()->cues[0]['endMs']);
+        $this->assertStringContainsString('new phrase transcript segment', $track->fresh()->web_vtt);
+    }
+
+    public function test_quick_fix_provider_failure_keeps_the_entire_original_track(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $original = $track->getAttributes();
+        EditedCueAgent::fake(function (): never {
+            throw new \RuntimeException('Provider unavailable');
+        });
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $track->public_id, 'text' => 'updated',
+        ])->assertStatus(502)->assertJsonPath('error.code', 'enrichment_failed');
+        $this->assertSame($original, $track->fresh()->getAttributes());
+    }
+
+    public function test_quick_fix_rechecks_track_identity_after_provider_work(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $originalCues = $track->cues;
+        $newTrackId = (string) Str::uuid();
+        $transactionLevel = DB::transactionLevel();
+        EditedCueAgent::fake(function (string $prompt) use ($track, $newTrackId, $transactionLevel): array {
+            $this->assertSame($transactionLevel, DB::transactionLevel(), 'Provider must run outside mutation locks.');
+            $track->update(['public_id' => $newTrackId]);
+            $cue = json_decode($prompt, true)['cues'][0];
+
+            return ['dialect' => 'unknown', 'translatedText' => 'New translation', 'cues' => [[
+                ...$cue, 'tokens' => array_map(fn ($token) => [...$token, 'translation' => 'new', 'gloss' => 'new'], $cue['tokens']),
+            ]]];
+        });
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $track->public_id, 'text' => 'updated',
+        ])->assertStatus(409)->assertJsonPath('error.details.reason', 'stale_track');
+        $this->assertSame($newTrackId, $track->fresh()->public_id);
+        $this->assertSame($originalCues, $track->fresh()->cues);
+    }
+
+    public function test_quick_fix_rechecks_entitlement_and_replacement_before_publication(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $original = $track->getAttributes();
+        $url = '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0';
+        $payload = ['expectedTrackId' => $track->public_id, 'text' => 'updated'];
+        $this->duringQuickFix = fn () => $job->user->update(['billing_subscription_status' => 'canceled']);
+        $this->patchJson($url, $payload)->assertStatus(402);
+        $this->assertSame($original, $track->fresh()->getAttributes());
+
+        $job->user->update(['billing_subscription_status' => 'active']);
+        $this->duringQuickFix = fn () => $track->lyricsCorrection()->create([
+            'attempt_id' => (string) Str::uuid(), 'status' => 'queued', 'lyrics' => 'full replacement',
+            'work_state' => ['stage' => 'aligning'],
+        ]);
+        $this->patchJson($url, $payload)->assertStatus(409);
+        $this->assertSame($original, $track->fresh()->getAttributes());
+    }
+
+    public function test_quick_fix_preserves_concurrent_word_card_updates_to_other_cues(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $this->duringQuickFix = function () use ($track): void {
+            $cues = $track->cues;
+            $cues[1]['tokens'][0]['gloss'] = 'concurrent word card';
+            $track->update(['cues' => $cues]);
+        };
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $track->public_id, 'text' => 'updated',
+        ])->assertOk()->assertJsonPath('cues.1.tokens.0.gloss', 'concurrent word card');
+    }
+
+    public function test_quick_fix_requires_current_entitlement_before_provider_work(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $job->user->update(['billing_current_period_end' => now()->subMinute()]);
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $track->public_id, 'text' => 'updated',
+        ])->assertStatus(402);
+        EditedCueAgent::assertNeverPrompted();
     }
 
     public function test_quick_fix_uses_the_selected_repeated_token_occurrence(): void
