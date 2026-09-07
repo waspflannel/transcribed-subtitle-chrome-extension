@@ -238,6 +238,8 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertOk()
             ->assertSeeText($job->public_id)
+            ->assertSeeText($job->youtube_video_id)
+            ->assertSee('href="https://www.youtube.com/watch?v='.$job->youtube_video_id.'"', false)
             ->assertSeeText('Spanish to English')
             ->assertSeeText('Billable minutes')
             ->assertSeeText('4')

@@ -689,13 +689,13 @@ Keep one section here for each completed task: what changed, manual steps and ex
 6. With only old-version owned jobs, confirm Clear all remains available despite an empty recent list. With no owned jobs, it should be absent.
 7. Check the wider table and controls on mobile and with keyboard navigation.
 
-**Automated validation:** Both focused suites passed: 29 tests, 242 assertions. Run from `app/backend`:
+**Automated validation:** G4-focused validation passed: 17 tests, 94 assertions. Run from `app/backend`:
 
 ```powershell
-php artisan test --compact --filter="SaasWebsiteAndSeoTest|WebSubtitleJobDeletionTest"
+php artisan test --compact --filter="test_job_detail_is_owner_scoped_and_hides_generated_text|WebSubtitleJobDeletionTest"
 ```
 
-**Remaining limits:** Browser testing is pending. Deletion/credit concurrency risk R16 is unchanged; this task clarifies existing behavior rather than fixing settlement races.
+**Remaining limits:** G4 is resolved in code. Browser testing is pending. Deletion/credit concurrency risk R16 is unchanged; this task clarifies existing behavior rather than fixing settlement races. Its individual commit includes only source identity, deletion scope/copy, and related tests; U4 token filtering remains separate.
 
 ### G2: Honest History Navigation
 

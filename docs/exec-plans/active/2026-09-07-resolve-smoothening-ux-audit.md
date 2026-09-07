@@ -86,6 +86,7 @@ Evidence to capture:
 | 2026-09-07 | Plan created by repository script; full existing diff reviewed. | No staged user work at entry. All known edits belong to prior audit batches. |
 | 2026-09-07 | Documentation checkpoint committed. | `31a91f1`; no application code included. |
 | 2026-09-07 | G3 isolated into refresh-only view/test hunks. | Focused G3: 2 tests/29 assertions passed; no G4/U4 hunks staged. Resolved by allowed manual GET refresh, browser validation deferred. |
+| 2026-09-07 | G3 committed as `3f3bea5`; G4 staged separately. | G4-focused validation: 17 tests/94 assertions passed. Controller count/video data exclude U4 expiry filtering; existing deletion behavior untouched. |
 
 ## Completion Notes
 

@@ -18,6 +18,10 @@
         <x-ui.panel title="Status" description="{{ $job->status }} during {{ $job->stage }}">
             <dl class="metric-grid detail-grid">
                 <div>
+                    <dt>Source video</dt>
+                    <dd><a class="text-link" href="https://www.youtube.com/watch?v={{ rawurlencode($job->youtube_video_id) }}" rel="noopener noreferrer">{{ $job->youtube_video_id }}</a></dd>
+                </div>
+                <div>
                     <dt>Status</dt>
                     <dd><x-ui.status-pill :status="$job->status" /></dd>
                 </div>

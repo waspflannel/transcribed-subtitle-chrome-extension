@@ -38,6 +38,7 @@ class DashboardController extends Controller
             'plans' => $plans->publicPlans(),
             'testingPlanSwitcherEnabled' => $testingPlanSwitcher->enabled(),
             'recentJobs' => $this->recentJobs($user, $usage),
+            'totalJobs' => SubtitleJob::query()->whereBelongsTo($user)->count(),
             'extensionTokens' => $this->extensionTokens($user),
             'pageTitle' => 'Dashboard | '.config('marketing.product_name'),
             'metaDescription' => 'Account dashboard for '.config('marketing.product_name').'.',
@@ -81,6 +82,7 @@ class DashboardController extends Controller
             ->get()
             ->map(fn (SubtitleJob $job): array => [
                 'jobId' => $job->public_id,
+                'videoId' => $job->youtube_video_id,
                 'href' => route('dashboard.jobs.show', ['jobId' => $job->public_id]),
                 'status' => (string) $job->status,
                 'stage' => (string) $job->stage,

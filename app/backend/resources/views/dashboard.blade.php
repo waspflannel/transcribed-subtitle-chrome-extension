@@ -5,6 +5,7 @@
         $limit = max(0, (int) $account['monthlyMinuteLimit']);
         $committed = (int) $account['monthlyMinutesUsed'] + (int) $account['monthlyMinutesPending'];
         $usagePercent = $limit > 0 ? min(100, (int) round(($committed / $limit) * 100)) : 0;
+        $deletionConsequences = 'Deleting removes jobs and stored tracks, so those tracks cannot be reused. Completed usage is not refunded. For queued or running jobs, deletion attempts to release reserved minutes. Provider requests already in progress may finish.';
     @endphp
 
     <section class="workspace">
@@ -82,17 +83,20 @@
                 </x-ui.panel>
 
                 <x-ui.panel title="Recent jobs" description="Public-safe support details for your latest subtitle generations.">
-                    @if ($recentJobs->isNotEmpty())
-                        <form method="post" action="{{ route('dashboard.jobs.clear') }}" data-confirm="Clear all of your subtitle jobs? Running jobs will release their reserved minutes.">
+                    @if ($totalJobs > 0)
+                        <p>Showing {{ $recentJobs->count() }} recent jobs. {{ $totalJobs }} total jobs in your account at this check.</p>
+                        <p>Clear all includes jobs not shown in this list, including older processing versions. {{ $deletionConsequences }}</p>
+                        <form method="post" action="{{ route('dashboard.jobs.clear') }}" data-confirm="Clear all jobs in your account ({{ $totalJobs }} at this check), including jobs not shown here and older processing versions? {{ $deletionConsequences }}">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="button button-secondary button-small">Clear all jobs</button>
+                            <button type="submit" class="button button-secondary button-small">Clear all jobs ({{ $totalJobs }})</button>
                         </form>
                     @endif
                     <div class="table-wrap">
                         <table>
                             <thead>
                                 <tr>
+                                    <th>Video</th>
                                     <th>Status</th>
                                     <th>Language</th>
                                     <th>Minutes</th>
@@ -104,6 +108,7 @@
                             <tbody>
                                 @forelse ($recentJobs as $job)
                                     <tr>
+                                        <td><a class="text-link" href="https://www.youtube.com/watch?v={{ rawurlencode($job['videoId']) }}" rel="noopener noreferrer">{{ $job['videoId'] }}</a></td>
                                         <td>
                                             <x-ui.status-pill :status="$job['status']" />
                                             <small>{{ $job['stage'] }}</small>
@@ -113,16 +118,16 @@
                                         <td>{{ $job['updatedAt'] }}</td>
                                         <td><a class="text-link" href="{{ $job['href'] }}">{{ $job['jobId'] }}</a></td>
                                         <td>
-                                            <form method="post" action="{{ route('dashboard.jobs.destroy', ['jobId' => $job['jobId']]) }}" data-confirm="Delete subtitle job {{ $job['jobId'] }}?">
+                                            <form method="post" action="{{ route('dashboard.jobs.destroy', ['jobId' => $job['jobId']]) }}" data-confirm="Delete subtitle job {{ $job['jobId'] }} for video {{ $job['videoId'] }}? {{ $deletionConsequences }}">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="text-button button-small" aria-label="Delete job {{ $job['jobId'] }}">Delete</button>
+                                                <button type="submit" class="text-button button-small" aria-label="Delete job {{ $job['jobId'] }} for video {{ $job['videoId'] }}">Delete</button>
                                             </form>
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="6">No subtitle jobs yet. Install the extension and start generation from a YouTube watch page or Short.</td>
+                                        <td colspan="7">{{ $totalJobs > 0 ? 'No recent jobs to display.' : 'No subtitle jobs yet. Install the extension and start generation from a YouTube watch page or Short.' }}</td>
                                     </tr>
                                 @endforelse
                             </tbody>
