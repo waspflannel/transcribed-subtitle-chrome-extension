@@ -103,7 +103,7 @@ These findings are established by source inspection, not browser reproduction.
 
 ### G3. P2: Dashboard Waiting States Never Update On Their Own
 
-**Follow-up status (2026-09-06): Partially mitigated.** Dashboard and detail pages now offer native GET "Refresh status" links, timestamped snapshot labels, and explicit non-updating copy. Checkout-return copy directs users to refresh. This meets the audit's manual-refresh acceptance, but does not add automatic synchronization or prove a browser/webhook journey.
+**Resolution (2026-09-07): Resolved by scoped manual-refresh solution.** Dashboard and detail pages offer native GET "Refresh status" links, timestamped snapshot labels, and explicit non-updating copy. Checkout-return copy directs users to refresh. This satisfies the report's allowed acceptance; automatic polling is not required. Browser/webhook journey validation remains deferred.
 
 **Surface:** Dashboard, job details, checkout return.
 
@@ -671,9 +671,9 @@ Keep one section here for each completed task: what changed, manual steps and ex
 4. Open `/dashboard?billing=success`. Confirm the message explains refreshing; clicking Refresh status should navigate to `/dashboard` without replaying checkout or any deletion.
 5. Repeat on desktop and mobile widths; confirm the refresh controls remain reachable.
 
-**Automated validation:** The dashboard/detail refresh regression tests passed in `SaasWebsiteAndSeoTest`.
+**Automated validation:** G3's two focused tests in `SaasWebsiteAndSeoTest` passed with 29 assertions: `php artisan test --compact --filter="test_dashboard_refresh_get|test_job_refresh_get"`. The per-finding commit stages only the two refresh views and these tests/imports, not G4 identity/deletion or U4 expiry changes. Tests ran against the combined worktree; cached diff was inspected separately.
 
-**Remaining limits:** G3 is partially mitigated, not live synchronization. Browser testing is pending.
+**Remaining limits:** G3 is resolved within the approved manual-refresh scope, not live synchronization. Browser testing is pending; no additional polling feature is owed by this finding.
 
 ### G4: Job Identity And Deletion Scope
 

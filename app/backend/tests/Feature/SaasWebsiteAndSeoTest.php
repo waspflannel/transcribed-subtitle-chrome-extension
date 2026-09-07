@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Services\Billing\BillingPlanCatalog;
+use App\Services\Billing\UsageLedger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -246,6 +248,84 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->actingAs($otherUser)
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertNotFound();
+    }
+
+    public function test_dashboard_refresh_get_shows_updated_billing_and_released_minutes(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake();
+        $user = User::factory()->create();
+        $refreshLink = '<a class="button button-secondary" href="'.route('dashboard').'">Refresh status</a>';
+
+        $this->actingAs($user)->get('/dashboard?billing=success')
+            ->assertOk()
+            ->assertSee($refreshLink, false)
+            ->assertSeeText('This page does not update automatically.')
+            ->assertSeeText('Use Refresh status to check for updates.')
+            ->assertSeeText('No active plan');
+
+        $user->forceFill([
+            'billing_plan_code' => 'base',
+            'billing_subscription_status' => 'active',
+            'billing_current_period_start' => now()->startOfMonth(),
+            'billing_current_period_end' => now()->addMonthNoOverflow()->startOfMonth(),
+        ])->save();
+        $job = SubtitleJob::factory()->for($user)->create(['video_duration_seconds' => 120]);
+        $ledger = app(UsageLedger::class);
+        $plan = app(BillingPlanCatalog::class)->requirePlan('base');
+        $period = $ledger->periodForUser($user);
+        $ledger->ensureMonthlyGrant($user, $plan, $period['start'], $period['end']);
+        $ledger->reserveForJob($job, $user, $plan, 2);
+
+        $this->get(route('dashboard', absolute: false))
+            ->assertOk()
+            ->assertSee($refreshLink, false)
+            ->assertSeeText('0 used, 2 reserved')
+            ->assertViewHas('account', fn (array $account): bool => $account['planName'] === $plan['name'])
+            ->assertDontSeeText('No active plan');
+
+        $job->update(['status' => 'failed', 'stage' => 'transcribing']);
+        $ledger->releaseReservation($job, 'test_failure');
+
+        $this->get(route('dashboard', absolute: false))
+            ->assertOk()
+            ->assertSeeText('0 used, 0 reserved')
+            ->assertViewHas('recentJobs', fn ($jobs): bool => $jobs->first()['status'] === 'failed');
+
+        $this->assertModelExists($job);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
+    }
+
+    public function test_job_refresh_get_shows_completion_without_replaying_a_mutation(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake();
+        $user = User::factory()->create();
+        $job = SubtitleJob::factory()->for($user)->create(['progress_percent' => 35]);
+        $url = route('dashboard.jobs.show', ['jobId' => $job->public_id]);
+        $refreshLink = '<a class="button button-secondary" href="'.$url.'">Refresh status</a>';
+
+        $this->actingAs($user)->get($url)
+            ->assertOk()
+            ->assertSee($refreshLink, false)
+            ->assertSeeText('This page does not update automatically.')
+            ->assertSeeText('35%');
+
+        $job->update(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100]);
+        $track = SubtitleTrack::factory()->for($job, 'job')->create();
+
+        $this->get($url)
+            ->assertOk()
+            ->assertSee($refreshLink, false)
+            ->assertSeeText('100%')
+            ->assertSeeText($track->public_id)
+            ->assertViewHas('job', fn (SubtitleJob $job): bool => $job->status === 'completed');
+
+        $this->assertModelExists($job);
+        $this->assertModelExists($track);
+        Http::assertNothingSent();
+        Queue::assertNothingPushed();
     }
 
     public function test_failed_job_detail_shows_public_failure_code(): void

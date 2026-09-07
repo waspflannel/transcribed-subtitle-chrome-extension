@@ -7,8 +7,12 @@
                 <p class="eyebrow">Subtitle job</p>
                 <h1>{{ $job->public_id }}</h1>
                 <p>Public-safe support details. Generated subtitle text and provider payloads are not shown here.</p>
+                <p>Snapshot at {{ now()->toIso8601String() }}. This page does not update automatically.</p>
             </div>
-            <a class="button button-secondary" href="{{ route('dashboard') }}">Back to dashboard</a>
+            <div class="action-stack horizontal-actions">
+                <a class="button button-secondary" href="{{ route('dashboard.jobs.show', ['jobId' => $job->public_id]) }}">Refresh status</a>
+                <a class="button button-secondary" href="{{ route('dashboard') }}">Back to dashboard</a>
+            </div>
         </div>
 
         <x-ui.panel title="Status" description="{{ $job->status }} during {{ $job->stage }}">

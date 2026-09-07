@@ -13,8 +13,10 @@
                 <p class="eyebrow">Account dashboard</p>
                 <h1>{{ $user->email }}</h1>
                 <p>Manage billing, usage, extension connection, and recent subtitle jobs.</p>
+                <p>Snapshot at {{ now()->toIso8601String() }}. This page does not update automatically.</p>
             </div>
             <div class="action-stack horizontal-actions">
+                <a class="button button-secondary" href="{{ route('dashboard') }}">Refresh status</a>
                 <a class="button" href="{{ config('marketing.chrome_extension_url') ?: route('marketing.home').'#install' }}">Install extension</a>
                 <a class="button button-secondary" href="https://www.youtube.com" rel="noopener noreferrer">Open YouTube</a>
             </div>
@@ -42,7 +44,7 @@
         @endif
 
         @if (request('billing') === 'success')
-            <p class="status">Checkout completed. Billing updates can take a moment while Stripe sends webhooks.</p>
+            <p class="status">Checkout completed. Billing updates can take a moment while Stripe sends webhooks. Use Refresh status to check for updates.</p>
         @elseif (request('billing') === 'cancelled')
             <p class="error-copy">Checkout was cancelled.</p>
         @endif

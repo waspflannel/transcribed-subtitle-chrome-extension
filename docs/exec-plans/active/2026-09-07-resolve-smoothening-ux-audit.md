@@ -18,7 +18,7 @@ Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`,
 
 ## Acceptance Criteria
 
-- [ ] Documentation baseline committed separately; prior observations/worktree evidence clearly labeled.
+- [x] Documentation baseline committed separately; prior observations/worktree evidence clearly labeled.
 - [ ] Existing G3, G4, G2, G5 non-password, U4 expiry each have separate implementation/test/doc commits.
 - [ ] Foundation ends with clean status and unchanged password/auth implementation relative to baseline.
 - [ ] Every remaining included finding gets a narrow fix, regression checks, audit What Changed/How to Test section, and individual commit.
@@ -84,6 +84,8 @@ Evidence to capture:
 | Date | Update | Evidence |
 | --- | --- | --- |
 | 2026-09-07 | Plan created by repository script; full existing diff reviewed. | No staged user work at entry. All known edits belong to prior audit batches. |
+| 2026-09-07 | Documentation checkpoint committed. | `31a91f1`; no application code included. |
+| 2026-09-07 | G3 isolated into refresh-only view/test hunks. | Focused G3: 2 tests/29 assertions passed; no G4/U4 hunks staged. Resolved by allowed manual GET refresh, browser validation deferred. |
 
 ## Completion Notes
 
