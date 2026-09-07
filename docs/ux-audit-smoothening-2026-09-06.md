@@ -723,9 +723,9 @@ php artisan test --compact --filter="test_job_detail_is_owner_scoped_and_hides_g
 3. Use fake generation denials for billing/usage/feature restrictions. Expect an Account and billing or Watch-selection next step. Bad-credential and unverified-email error messages should retain baseline wording, without the withdrawn directions.
 4. Inspect Account with a signed-in but non-entitled fixture. Expect Selected/Not selected preferences, access checked on generation, actual backend queue-speed copy, and no disabled Upgrade or unconditional Enabled/Included claims.
 
-**Automated Evidence:** Account/API Vitest tests now expect only the dashboard link, no credential query, honest preferences, baseline verification-error wording, and the three retained billing/feature denial directions. Focused extension: 27 tests passed. `php artisan test --compact tests/Feature/WebAuthTest.php tests/Feature/SaasWebsiteAndSeoTest.php` from `app/backend`: 21 tests, 220 assertions passed. The added verification-switch test was removed; pre-existing registration, verification, login/logout, and password-reset tests remain. `git diff` confirms no changes to the verification view, auth routes, or Fortify actions.
+**Automated Evidence:** `npm test -- tests/account-state.test.ts tests/api.test.ts`: 24 tests passed; `npm run compile` passed. Tests expect only the dashboard link, no credential query, honest preferences, baseline verification-error wording, and the three retained billing/feature denial directions. G5's individual commit contains extension account/billing code/tests only, no backend auth/password changes. Pre-existing registration, verification, login/logout, and password-reset tests remain; all newly added password tests were withdrawn.
 
-**Remaining Limits:** G5 is partial, not fixed. Recovery/verification UX additions are intentionally withdrawn, not scheduled for reimplementation. Website/extension sessions remain separate; browser testing, R8/R12, and R24 are unchanged.
+**Remaining Limits:** G5's authorized non-password subset is resolved; the full original finding remains partial because password/verification UX is explicitly excluded, not scheduled for reimplementation. Website/extension sessions remain separate; browser testing and R8/R12 remain pending. R24 is excluded.
 
 ### U4: Connection Expiry (Password Portion Excluded)
 

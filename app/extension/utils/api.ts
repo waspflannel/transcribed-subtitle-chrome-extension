@@ -223,13 +223,13 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
       return 'Extension sign-in requires HTTPS in production.';
 
     case 'payment_required':
-      return 'Choose an active billing plan before generating subtitles.';
+      return 'Choose an active billing plan before generating subtitles. Open Account and choose Account and billing.';
 
     case 'usage_exhausted':
-      return 'This billing period does not have enough subtitle minutes left.';
+      return 'This billing period does not have enough subtitle minutes left. Check usage and plans through Account and billing in Account.';
 
     case 'feature_unavailable':
-      return 'Your current plan does not include that generation option.';
+      return 'Your current plan does not include that generation option. Change your Watch selections or review plans through Account and billing in Account.';
 
     case 'queue_full':
       return 'Your generation queue is full. Wait for a queued video to finish before adding more.';

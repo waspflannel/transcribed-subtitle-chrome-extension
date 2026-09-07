@@ -18,7 +18,7 @@ import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
 import { PanelPortConnector } from '../../utils/panel-port-registry';
-import { accountFeatureListHtml } from './render/account';
+import { accountFeatureListHtml, accountBillingLinkHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
@@ -111,6 +111,7 @@ const {
   logoutButton,
   accountFeedback,
   featureList,
+  accountBillingLink,
   settingsLanguageSummary,
   shortcutHelpList,
 } = getPanelDom();
@@ -196,6 +197,7 @@ const timingControl = bindTimingOffsetControl({
 });
 
 setupTabs(tabButtons, panels);
+accountBillingLink.innerHTML = accountBillingLinkHtml();
 const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
 renderShortcutHelp();
 void loadPanelState();

@@ -71,6 +71,7 @@ export interface PanelDom {
   logoutButton: HTMLButtonElement;
   accountFeedback: HTMLElement;
   featureList: HTMLElement;
+  accountBillingLink: HTMLElement;
   settingsLanguageSummary: HTMLElement;
   shortcutHelpList: HTMLElement;
 }
@@ -149,6 +150,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     logoutButton: query(root, '[data-action="logout"]', HTMLButtonElement),
     accountFeedback: query(root, '[data-account-feedback]', HTMLElement),
     featureList: query(root, '[data-feature-list]', HTMLElement),
+    accountBillingLink: query(root, '[data-account-billing]', HTMLElement),
     settingsLanguageSummary: query(root, '[data-settings-language-summary]', HTMLElement),
     shortcutHelpList: query(root, '[data-shortcut-help]', HTMLElement),
   };

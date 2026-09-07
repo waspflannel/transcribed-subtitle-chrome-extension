@@ -88,6 +88,7 @@ Evidence to capture:
 | 2026-09-07 | G3 isolated into refresh-only view/test hunks. | Focused G3: 2 tests/29 assertions passed; no G4/U4 hunks staged. Resolved by allowed manual GET refresh, browser validation deferred. |
 | 2026-09-07 | G3 committed as `3f3bea5`; G4 staged separately. | G4-focused validation: 17 tests/94 assertions passed. Controller count/video data exclude U4 expiry filtering; existing deletion behavior untouched. |
 | 2026-09-07 | G4 committed as `2adf8d6`; G2 isolated next. | History renderer suite: 3 tests passed. Main entrypoint stages only History listener/handler removal, excluding account/billing wiring. G2 resolved by approved navigation-only action. |
+| 2026-09-07 | G2 committed as `a80f1c1`; G5 non-password staged. | Account/API suites: 24 tests passed; TypeScript compile passed. No backend password/auth changes; frontend docs reconcile already-committed G2/G3/G4 behavior too. |
 
 ## Completion Notes
 

@@ -1425,7 +1425,8 @@ output {
   height: 12px;
 }
 
-.account-form {
+.account-form,
+.account-billing {
   display: grid;
   gap: 10px;
 }

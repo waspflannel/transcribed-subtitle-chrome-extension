@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { JSDOM } from 'jsdom';
 
 import {
   anonymousAccountState,
@@ -8,11 +9,48 @@ import {
   publicJobTelemetry,
   stageTimeline,
 } from '../utils/account-state';
-import { accountFeatureListHtml } from '../entrypoints/sidepanel/render/account';
+import { accountFeatureListHtml, accountBillingLinkHtml } from '../entrypoints/sidepanel/render/account';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { AccountSummary, SubtitleJobHistoryItem } from '../utils/contracts';
 
 describe('account and job-history state helpers', () => {
+  it('uses the build-configured backend origin for billing without an override', () => {
+    vi.stubEnv('WXT_BACKEND_API_BASE_URL', 'https://configured.example.test/v1');
+    try {
+      expect(accountBillingLinkHtml()).toContain('href="https://configured.example.test/dashboard"');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it.each(['http://localhost:8123/v1', 'https://account.example.test/api/v1'])('links only account and billing to the configured origin %s', (baseUrl) => {
+    const dom = new JSDOM(accountBillingLinkHtml(baseUrl));
+    const links = [...dom.window.document.querySelectorAll('a')];
+    expect(links.map((link) => link.href)).toEqual(
+      [new URL(baseUrl).origin + '/dashboard'],
+    );
+    expect(links.map((link) => link.textContent)).toEqual(['Account and billing']);
+    for (const link of links) {
+      expect(link.target).toBe('_blank');
+      expect(link.rel).toBe('noopener noreferrer');
+      expect(new URL(link.href).search).toBe('');
+    }
+  });
+
+  it('describes selected preferences without promising entitlement to a signed-in account', () => {
+    const account = accountStateFromSummary({
+      ...accountSummary(), planName: 'No active plan', monthlyMinutesRemaining: 0, tierSpeedLabel: 'Generation paused',
+    });
+    const html = accountFeatureListHtml(account, {
+      ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true, showRomanization: false, fullTrackEnrichment: false,
+    });
+    const rows = [...new JSDOM(html).window.document.querySelectorAll('.feature-row')];
+    expect(rows.map((row) => row.querySelector('strong')!.textContent)).toEqual([
+      'Checked when you generate', 'Selected', 'Not selected', 'Not selected', 'Generation paused',
+    ]);
+    expect(html).not.toMatch(/Enabled|Available|Included|Upgrade preview/);
+  });
+
   it('uses an honest anonymous account state without fabricated usage', () => {
     expect(anonymousAccountState()).toEqual({ status: 'anonymous' });
   });

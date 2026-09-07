@@ -13,6 +13,16 @@ const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('SubtitleApiClient', () => {
+  it.each([
+    ['payment_required', 'Account and billing'],
+    ['usage_exhausted', 'Account and billing'],
+    ['feature_unavailable', 'Watch selections'],
+  ] as const)('gives %s a recovery action', (code, action) => {
+    const message = publicSubtitleErrorMessage(new SubtitleApiError(code, 'Rejected.', 403));
+    expect(message).toContain(action);
+    expect(message).toContain('Account');
+  });
+
   it('creates subtitle jobs with the extension install header', async () => {
     const jobResponse: JobResponse = {
       jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
