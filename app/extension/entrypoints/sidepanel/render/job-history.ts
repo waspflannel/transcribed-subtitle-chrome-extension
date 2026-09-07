@@ -69,17 +69,9 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number]): string {
       <span class="job-pill ${escapeHtml(job.status)}">${escapeHtml(jobPillLabel(job, progress.percent))}</span>
       <p class="job-meta">${escapeHtml(meta)}</p>
       ${message === null ? '' : `<p class="job-message ${job.status === 'failed' ? 'error-copy' : ''}">${escapeHtml(message)}</p>`}
+      ${job.status === 'failed' ? '<p class="job-message">Open the video, then review Watch settings before choosing Generate. This job\'s options are not restored.</p>' : ''}
       <div class="job-actions">
-        ${
-          job.status === 'failed'
-            ? `<button class="job-action-button" type="button" data-action="retry-job" data-video-id="${escapeHtml(
-                job.youtubeVideoId,
-              )}" data-video-url="${escapeHtml(job.youtubeUrl)}">Retry</button>`
-            : ''
-        }
-        <button class="job-action-button" type="button" data-action="view-video" data-video-url="${escapeHtml(
-          job.youtubeUrl,
-        )}">Open video</button>
+        <a class="job-action-button" href="${escapeHtml(job.youtubeUrl)}" target="_blank" rel="noopener noreferrer">Open video</a>
       </div>
     </article>
   `;

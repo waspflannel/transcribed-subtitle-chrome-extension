@@ -83,7 +83,7 @@ These findings are established by source inspection, not browser reproduction.
 
 ### G2. P2: History Retry Does Not Reliably Retry The Selected Job
 
-**Follow-up status (2026-09-07): Partially mitigated.** History now offers native Open video links only, with explicit instructions to review Watch settings and a warning that saved job options are not restored. The misleading Retry control and its global-default submission handler were removed. True selected-job retry is deferred; backend compatible-job reuse/reset is unchanged.
+**Resolution (2026-09-07): Resolved by scoped navigation-only solution.** History offers native Open video links, explicit Watch review instructions, and a warning that saved options are not restored. The misleading Retry control and its global-default submission handler are removed. This satisfies the report's allowed honest-action acceptance; selected-job retry is not required. Backend compatible-job reuse/reset is unchanged.
 
 **Surface:** Side-panel History.
 
@@ -708,9 +708,9 @@ php artisan test --compact --filter="test_job_detail_is_owner_scoped_and_hides_g
 3. Activate each Open video link with pointer and keyboard. It should open that card's YouTube URL in a new tab and make no subtitle-job POST. Defaults should not be silently replaced by historical options.
 4. To generate again, explicitly review the Watch language/layer controls first. Only press Generate with the local fake provider configured. This is a new explicit request using reviewed settings, not a guaranteed retry of that history job.
 
-**Automated Evidence:** `npm test -- tests/job-history-render.test.ts tests/account-state.test.ts tests/api.test.ts` from `app/extension`: 27 tests passed after the G5 scope correction. History cases cover same/different active video, distinct historical options, native link targets, absence of action buttons/forms, and review copy. See the latest validation entry below for full-harness results.
+**Automated Evidence:** `npm test -- tests/job-history-render.test.ts` from `app/extension`: 3 tests passed. Cases cover same/different active video, distinct historical options, native link targets, absence of action buttons/forms, and review copy. The individual G2 commit excludes account/billing wiring in the shared main entrypoint.
 
-**Remaining Limits:** G2 is partial: selected-history options are not restored or submitted. R1/R2/R9 and backend retry integrity are not fixed here. No browser journey was executed.
+**Remaining Limits:** G2 is resolved by the approved honest navigation action; selected-history options are deliberately not restored/submitted, and no true-retry feature is owed. R1/R2/R9 and backend retry integrity are not fixed here. No browser journey was executed.
 
 ### G5: Account And Billing (Partial)
 

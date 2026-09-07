@@ -153,7 +153,6 @@ accountLoginForm.addEventListener('submit', (event) => void loginFromAccountForm
 logoutButton.addEventListener('click', () => void logoutAccount());
 accountEmailInput.addEventListener('input', clearAccountFeedback);
 accountPasswordInput.addEventListener('input', clearAccountFeedback);
-jobsList.addEventListener('click', handleJobsListClick);
 sourceLanguageSearchInput.addEventListener('input', handleSourceLanguageSearch);
 targetLanguageSearchInput.addEventListener('input', handleTargetLanguageSearch);
 sourceLanguageList.addEventListener('click', handleSourceLanguageClick);
@@ -461,31 +460,6 @@ function languageButtonCode(event: MouseEvent): string | null {
   const button = target?.closest<HTMLButtonElement>('[data-language-code]');
 
   return button?.dataset.languageCode ?? null;
-}
-
-function handleJobsListClick(event: MouseEvent): void {
-  const target = event.target instanceof Element ? event.target : null;
-  const button = target?.closest<HTMLButtonElement>('[data-action]');
-  const action = button?.dataset.action;
-
-  if (action !== 'view-video' && action !== 'retry-job') {
-    return;
-  }
-
-  const videoUrl = button?.dataset.videoUrl;
-  const videoId = button?.dataset.videoId;
-
-  if (!videoUrl) {
-    return;
-  }
-
-  if (action === 'retry-job' && latestState?.pageStatus?.supported && latestState.pageStatus.videoId === videoId) {
-    void generateSubtitles();
-
-    return;
-  }
-
-  void browser.tabs.create({ url: videoUrl });
 }
 
 function setLanguagesExpanded(expanded: boolean): void {
