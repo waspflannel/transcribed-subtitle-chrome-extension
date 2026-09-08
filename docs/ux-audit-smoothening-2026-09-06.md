@@ -772,6 +772,17 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ### U3. P2: Keep Last Known History On A Refresh Failure
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Successful history is retained per authenticated account when a later refresh fails. The failed refresh error remains separately visible, so the existing job cards stay useful and a temporary outage no longer renders first-use empty copy. Account transitions still discard the previous account's cache.
+
+**How To Test:**
+1. Load a successful history list, then fail the next history GET. Expected: the previous cards remain visible with a refresh error indication.
+2. Sign out and sign in as another account while the failed request is pending. Resolve the old request. Expected: the new account sees only its own history and the old request cannot replace it.
+3. Run the focused `job-history-render.test.ts` check when execution is authorized. Expected: an existing list remains rendered beside a refresh error.
+
+**Limits:** No API outage, account transition, or browser panel run was executed; stale-cache age and backend availability remain visible only through the error copy.
+
 **Surface/impact:** A temporary API failure can replace real job history with first-use empty copy.
 
 **Trigger and actual/expected:** Return successful history, then time out the next GET. Current handling empties the cache and can show "Nothing generated yet" alongside the error. Preserve the last successful same-session list with a stale/error indication instead.

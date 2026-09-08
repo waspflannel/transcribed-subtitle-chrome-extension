@@ -1342,6 +1342,13 @@ async function getPanelJobHistory(
     cachedPanelJobHistory = [];
     cachedPanelJobHistoryError = history.error;
     cachedPanelJobHistoryAccountId = undefined;
+  } else if (history.error && cachedPanelJobHistoryAccountId === session.account.id) {
+    cachedPanelJobHistoryError = history.error;
+    return {
+      jobs: cachedPanelJobHistory,
+      error: history.error,
+      sessionInvalid: false,
+    };
   } else if (await isCurrentAccount(session.account.id)) {
     cachedPanelJobHistory = history.jobs;
     cachedPanelJobHistoryError = history.error;
