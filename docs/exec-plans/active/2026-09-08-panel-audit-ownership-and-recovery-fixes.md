@@ -1,5 +1,7 @@
 # Plan: Panel audit ownership and recovery fixes
 
+Consolidation note (2026-09-08): saved commits are merged into `smoothening-fixes`. The child worktree/branch is retired; continue on the consolidated branch after coordinating access to the main checkout. See root `handoff.md`. Original scope below is historical; remaining findings stay pending and untested.
+
 Status: active
 Owner: panel audit worker
 Created: 2026-09-08

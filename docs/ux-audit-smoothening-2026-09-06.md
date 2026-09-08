@@ -1,12 +1,12 @@
 # Smoothening UX Audit
 
-Handoff checkpoint (2026-09-08): see [`../handoff.md`](../handoff.md) for verified branch/commit locations and remaining work. Nine additional worker commits and an unfinished R11 draft exist in dedicated child audit worktrees and are not yet integrated here. Their implementation/testing sections currently live in those branches' copies of this report. New code is untested at user request; password/verification work remains excluded.
+Consolidation checkpoint (2026-09-08): all foundation and worker commits, plus the unfinished R11 draft `eb6d384`, are now on `smoothening-fixes` in the main repository. Temporary audit worktrees/branches are retired; the lyrics checkout is left untouched. See [`../handoff.md`](../handoff.md) for commit mapping, safe branch-switch instructions and remaining work. All finding-local updates are included below. New code is untested at user request; password/verification work remains excluded.
 
 Date: 2026-09-06
 
 Baseline: `smoothening` at `4969225d80731fc3f5ad95d2a9a3f87b7d685487`.
 
-Audit worktree: `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`.
+Original audit worktree (retired after consolidation): `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`. Current source: branch `smoothening-fixes` in `C:\transcribed-subtitle-extension`.
 
 Follow-up: the G3/G4 and G2/G5/U4 implementation and validation below were added after the read-only audit. Other findings and the original audit evidence remain baseline observations.
 

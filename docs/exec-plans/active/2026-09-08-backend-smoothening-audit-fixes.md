@@ -1,5 +1,7 @@
 ﻿# Plan: Backend smoothening audit fixes
 
+Consolidation note (2026-09-08): R16/R17 are merged into `smoothening-fixes`. The child worktree/branch is retired; continue on the consolidated branch after coordinating access to the main checkout. See root `handoff.md`. R18/R19/R20/U2 remain pending; no application checks ran.
+
 Status: active
 Owner: agent
 Created: 2026-09-08
@@ -74,4 +76,3 @@ Evidence to capture:
 - Simplicity/readability review:
 - Residual risk:
 - Follow-up debt:
-

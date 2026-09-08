@@ -7,11 +7,11 @@ Last updated: 2026-09-08
 
 ## Goal
 
-Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`, one finding per commit on `audit/smoothening-fixes`. Foundation is committed. Implementation is paused at the user's request for transfer to another agent; see root `handoff.md` for the verified multi-worktree checkpoint.
+Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`, one finding per commit on `smoothening-fixes`. Foundation and worker commits are consolidated; implementation remains incomplete. See root `handoff.md` for the current single-branch checkpoint and safe continuation instructions.
 
 ## Scope
 
-- Main integration worktree: `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`. Dedicated sibling panel/overlay/backend audit worktrees contain unintegrated worker changes, mapped in `handoff.md`. Never read/edit the concurrent lyrics checkout as a shortcut.
+- Repository: `C:\transcribed-subtitle-extension`, branch `smoothening-fixes`. The dedicated audit worktrees are retired after consolidation. Coordinate with the user before switching the sole checkout away from ongoing lyrics work; never mix changes into the lyrics branch.
 - Included: G1-G4, non-password G5, R1-R23, U1-U3, U4 connection expiry only, U5. Grouped ordering below does not permit mixed-finding commits.
 - Excluded by user: R24; all password recovery, password-rule/hint, and email-verification portions of G5/U4. Withdraw our register/reset minlength/hints/tests. Preserve pre-existing auth/password enforcement and security. No reintroduction.
 - Latest user instruction (2026-09-08): no test suites or browser tests. Only non-test metadata, diff, and doc checks; mark new changes untested. No production/paid calls, dependency upgrades, shared services, real-data migrations, pushes, or coauthors.
@@ -54,7 +54,7 @@ Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`,
 | 8 | R20 | Owned operational history independent of track compatibility. |
 | 9 | U5 | Read-only partial Watch results after preservation/lifecycle fixes. |
 
-Dependencies, not urgency alone, govern ordering. Parallel workers use isolated audit worktrees and must coordinate shared entrypoints during integration. Each finding still gets its own commit and testing section. The table is the original ordering, not current completion evidence; use the checkpoint below and `handoff.md`.
+Dependencies, not urgency alone, govern ordering. Each finding still gets its own commit and testing section. The table is the original ordering, not current completion evidence; use the latest checkpoint below and `handoff.md`. All former worker commits are integrated; do not cherry-pick them again or recreate worktrees without permission.
 
 ## Validation Plan
 
@@ -95,7 +95,15 @@ Evidence to capture:
 
 ## Completion Notes
 
-### Transfer Checkpoint (2026-09-08)
+### Consolidation Checkpoint (2026-09-08)
+
+- User requested only local `main`, lyrics and `smoothening-fixes` branches and removal of all temporary audit worktrees.
+- Renamed the main audit branch to `smoothening-fixes`. Preserved R11's five dirty files in `eb6d384`, explicitly marked incomplete/untested.
+- Merged panel `2e5959c`, backend `b606412`, and overlay/R11 `dc5979a`. Original per-finding hashes remain ancestors; no squash, rebase or cherry-pick. Automatic merges had no conflicts; inspected shared-file merge diffs.
+- All worker audit sections/plans now exist on the consolidated branch. No application tests or builds ran. R11 and the remaining queue are still unfinished; integration is not correctness validation.
+- Temporary worktrees and merged temporary branches are retired only after ancestry and clean-status checks. Main and the active lyrics checkout are left unchanged. Root `handoff.md` supersedes the historical multi-worktree instructions below.
+
+### Historical Transfer Checkpoint (2026-09-08)
 
 - User paused implementation and requested `handoff.md`. No new implementation or integration is included in this handoff checkpoint.
 - Main branch foundation is complete through `743fe96`, plus the documentation-only handoff commit.

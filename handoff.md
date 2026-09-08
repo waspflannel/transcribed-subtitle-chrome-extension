@@ -1,6 +1,6 @@
 # Smoothening Audit Handoff
 
-Updated: 2026-09-08. This is a verified repository-state checkpoint, not a claim that the audit is finished.
+Updated: 2026-09-08, after branch consolidation. All audit code and documentation are now on `smoothening-fixes` in the main repository. This is not a claim that the audit is finished.
 
 ## User Goal And Constraints
 
@@ -9,41 +9,48 @@ Updated: 2026-09-08. This is a verified repository-state checkpoint, not a claim
 - For each item, document What Changed, How To Test, expected results, and remaining limits. The user plans one large manual testing session later.
 - Latest instruction: do not run test suites or browser tests; focus on code changes. Do not run builds, install dependencies, or exercise real services as a workaround. Regression test source can be added without running it. Mark new changes UNTESTED. Metadata/diff/documentation-only checks are allowed.
 - Exclude password recovery, email-verification UX, password hints/rules, and R24. G5 includes only account/billing navigation and truthful access copy; U4 includes only expired-connection visibility. Our earlier password additions were withdrawn. Preserve pre-existing authentication/security behavior; do not disable verification enforcement or remove existing routes.
-- Never modify, switch, reset, merge into, or commit in `C:\transcribed-subtitle-extension`. It is the actively edited `codex/lyrics-editing-and-full-replacement` worktree.
+- Never mix audit fixes into `codex/lyrics-editing-and-full-replacement` or disturb its ongoing work. `C:\transcribed-subtitle-extension` is the sole retained worktree and was left on that lyrics branch. Switch it to `smoothening-fixes` only after coordinating with the user and ensuring concurrent lyrics work has stopped and its changes are safely saved.
 - No paid generation, production requests, real-data migrations, dependency upgrades, destructive resets, coauthor trailers, or history rewriting.
-- The latest user request pauses implementation for this handoff. Resume the remaining work when the next agent is instructed to continue.
+- The user requested a handoff, then consolidation into one `smoothening-fixes` branch and removal of the audit worktrees/temporary branches. No additional audit fixes were completed during consolidation; R11 was preserved as unfinished work.
 
-## Where To Work
+## Repository And Branches
 
-All audit worktrees are under `C:\Users\jaden\AppData\Local\Temp\opencode` and share Git history. The original lyrics worktree is not an audit workspace.
+Repository: `C:\transcribed-subtitle-extension`. Retained local branches:
 
-| Purpose | Directory Name | Branch | Checkpoint |
-| --- | --- | --- | --- |
-| Main audit integration | `smoothening-ux-audit` | `audit/smoothening-fixes` | `743fe96` before the documentation-only handoff commit |
-| Panel/background worker | `smoothening-panel-fixes` | `audit/smoothening-panel-fixes` | `6603447`; clean |
-| Content/overlay worker | `smoothening-overlay-fixes` | `audit/smoothening-overlay-fixes` | `0411bb2`; dirty R11 work, listed below |
-| Backend worker | `smoothening-backend-fixes` | `audit/smoothening-backend-fixes` | `0d17c64`; clean |
+| Branch | Purpose |
+| --- | --- |
+| `codex/lyrics-editing-and-full-replacement` | Concurrent lyrics work; left checked out and unchanged by consolidation |
+| `smoothening-fixes` | All audit foundation, worker commits, R11 draft, audit report and this handoff |
+| `main` | Existing main branch; unchanged |
 
-Main absolute path: `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`.
+The four temporary audit worktrees are retired. Their former paths under `C:\Users\jaden\AppData\Local\Temp\opencode` are historical locations, not continuation instructions. The old `audit/smoothening-*` branches and redundant `smoothening` baseline branch are retired after confirming their tips are ancestors of `smoothening-fixes`. Remote branches were not changed.
 
-The worker branches all started at `743fe96`. Their later commits have NOT been merged or cherry-picked into the main audit branch. The main audit document therefore does not yet contain those branches' finding-specific updates. Each worker has its own copy of the same document.
+Consolidation preserved original per-finding commit hashes using normal merges, not squash, cherry-pick or rebase:
 
-The three worker tool calls reported usage-limit failures, but they DID save the work listed here. Do not equate a failed agent call with an empty worktree. The coordinator verified Git status, commit logs and the R11 working diff after the interruptions; the new worker implementations have not received a full coordinator correctness review.
+| Merge | Commit |
+| --- | --- |
+| Panel commits | `2e5959c` |
+| Backend commits | `b606412` |
+| Overlay commits and R11 draft | `dc5979a` |
+
+All finding-local updates are now in this branch's audit report. The worker calls had reported usage-limit failures but did save nine commits and an R11 draft. The coordinator inspected the integration diffs; the newer fixes still need full correctness review and remain untested.
+
+While the lyrics branch is checked out, inspect this handoff without switching via `git show smoothening-fixes:handoff.md`. The working-directory copy of a similarly named handoff on another branch is not this audit handoff.
 
 ## Read First
 
-1. This file and the actual `git worktree list`, `git status`, and commit logs. Branches may advance after this checkpoint.
+1. This file and the actual `git worktree list`, `git status`, and commit logs. Coordinate before switching the sole worktree away from ongoing lyrics work.
 2. `AGENTS.md` and the smallest relevant architecture, frontend, reliability, security, and review docs. For Laravel, follow `docs/references/boost-skill-routing.md`.
 3. `docs/ux-audit-smoothening-2026-09-06.md`, the system of record for findings, original evidence, acceptance, and manual steps.
 4. `docs/exec-plans/active/2026-09-07-resolve-smoothening-ux-audit.md`, the overall plan.
-5. In the panel worktree: `docs/exec-plans/active/2026-09-08-panel-audit-ownership-and-recovery-fixes.md`.
-6. In the backend worktree: `docs/exec-plans/active/2026-09-08-backend-smoothening-audit-fixes.md`.
+5. `docs/exec-plans/active/2026-09-08-panel-audit-ownership-and-recovery-fixes.md`, now on this branch.
+6. `docs/exec-plans/active/2026-09-08-backend-smoothening-audit-fixes.md`, now on this branch.
 
 The original report is based on `smoothening` at `4969225d80731fc3f5ad95d2a9a3f87b7d685487`. Its source line references describe that baseline, not today's edited files. This baseline has a Chrome side panel and no lyrics editor; do not import assumptions from the other branch.
 
 ## Main Branch Commits
 
-These changes are already individually committed on the main audit branch.
+These changes are individually committed and retained on `smoothening-fixes`.
 
 | Finding | Commit | Implementation |
 | --- | --- | --- |
@@ -58,11 +65,11 @@ G2 is resolved by the audit's allowed navigation-only solution. G3 is resolved b
 
 Register/reset/verification views and password enforcement were restored to baseline. Do not reintroduce the removed links, password hints, or account-switch verification UI.
 
-## Worker Commits Not Yet Integrated
+## Integrated Worker Commits
 
-Commit order within each branch matters. These are implementation checkpoints, not tested or fully reviewed fixes.
+These commits are all ancestors of `smoothening-fixes`. Do not cherry-pick them again. They are implementation checkpoints, not tested or fully reviewed fixes.
 
-### Panel Branch
+### Panel Commits
 
 | Finding | Commit | Saved Implementation |
 | --- | --- | --- |
@@ -74,7 +81,7 @@ Files include `entrypoints/background.ts`, `entrypoints/sidepanel/main.ts`, `uti
 
 Remaining panel assignment: **R3, R7, R8, R9, R12, R15, U1, U3**.
 
-### Overlay Branch
+### Overlay Commits
 
 | Finding | Commit | Saved Implementation |
 | --- | --- | --- |
@@ -85,9 +92,9 @@ Remaining panel assignment: **R3, R7, R8, R9, R12, R15, U1, U3**.
 
 Files include `entrypoints/content.ts`, `entrypoints/background.ts`, `entrypoints/sidepanel/transcript-view.ts`, `utils/overlay.ts`, and finding-local audit sections. These four commits do not add regression test files; review/add the smallest useful regression source before calling the work complete, without executing it.
 
-Remaining overlay assignment: **R11 (dirty work), R13, R14, R22, R23, U5**.
+Remaining overlay assignment: **R11 (saved draft), R13, R14, R22, R23, U5**.
 
-### Backend Branch
+### Backend Commits
 
 | Finding | Commit | Saved Implementation |
 | --- | --- | --- |
@@ -98,9 +105,9 @@ Files include `WebSubtitleJobController`, billing entitlement/ledger services, s
 
 Remaining backend assignment: **R18, R19, R20, U2**. **G1 cancellation** was reserved until backend run/credit integrity and extension operation ownership are ready. G1 is still unimplemented.
 
-## Preserve The R11 Working Changes
+## R11 Draft Checkpoint
 
-The overlay worktree has five unstaged files beyond `0411bb2`:
+The former overlay worktree's five unstaged files were preserved in **`eb6d384`**, `wip: preserve active cue synchronization draft (R11)`, then merged onto `smoothening-fixes`:
 
 ```text
 app/extension/entrypoints/background.ts
@@ -112,19 +119,19 @@ docs/ux-audit-smoothening-2026-09-06.md
 
 The draft adds `panel.getActiveCue { tabId, youtubeVideoId, trackId }` and `background.getActiveCue { youtubeVideoId, trackId }`. Content returns the current cue; background validates the target tab's video and echoes tab identity. The panel pulls a snapshot when rendering a ready track and rejects outdated responses. Content moves cue broadcasts into overlay updates, deduplicated by video/track/cue identity, to cover seeks as well as natural cue changes.
 
-This is NOT a finished or committed R11 fix. Its audit section already says implemented/untested, which must not be mistaken for review completion. Inspect actual code, complete the missing pieces and regression source, then make a separate R11 commit.
+This is a committed draft, NOT a finished R11 fix. Its audit section explicitly says INCOMPLETE / UNTESTED. Inspect actual code, complete the missing pieces and regression source, then make a separate R11 completion commit; do not amend the preservation commit without permission.
 
 R11/R7 integration points:
 
 - R7 still needs sender/displayed-tab identity on unsolicited cue notices, exact-tab seek targeting, preserved window scope, and destination video validation in content.
 - The R11 draft increments `cueSnapshotRequest` for every active-cue notice. Apply R7 tab/video/track filtering BEFORE that increment and before highlighting. A foreign tab must not invalidate the displayed tab's pull.
-- Preserve R1's early polling-variable initialization when integrating the overlay's `sidepanel/main.ts` changes.
+- R1's early polling-variable initialization was preserved by the merge; keep it intact during further `sidepanel/main.ts` edits.
 - R7 will edit transcript seeking; R10 already edits transcript data invalidation. Preserve both rather than taking one whole-file version.
 - R2 changes background operation ownership; R10 changes enrichment merging; R11 adds message handling. Integrate focused hunks, never replace background.ts wholesale.
 
 ## Full Remaining Queue
 
-After reviewing/integrating the nine worker commits, finish these items individually:
+The nine worker commits are integrated but still need correctness review. Finish these remaining items individually:
 
 | Finding | Work Still Needed |
 | --- | --- |
@@ -132,7 +139,7 @@ After reviewing/integrating the nine worker commits, finish these items individu
 | R7 | Tab-owned cue notices and exact-tab seek/play actions, including duplicate-video tabs/windows |
 | R8 | Session-owned cached and pending state; late account A responses cannot affect account B |
 | R9 | Serialized preference patches and claimed generation submission before awaited preparation |
-| R11 | Finish and commit the existing cue snapshot/seek-notification draft |
+| R11 | Complete the saved cue snapshot/seek-notification draft in a follow-up commit |
 | R12 | Separate account action outcomes/busy state from ordinary snapshot sequencing |
 | R13 | Stable study focus, pause ownership, held-cue lifetime, silent-gap feedback |
 | R14 | Revealable partial layers and actionable local binding retry without regeneration |
@@ -152,30 +159,20 @@ Excluded: **R24 and password/verification parts of G5/U4**. Read each report acc
 
 ## Safe Continuation
 
-1. Verify the worktrees and preserve R11's working changes. Do not clean, reset, or delete child branches/worktrees.
-2. Review the saved commits before integration. Finish R11 in its existing overlay worktree, or deliberately leave it there while integrating the committed prefix. Do not bundle its draft into another finding's commit.
-3. Cherry-pick reviewed worker commits onto `audit/smoothening-fixes` in the main audit worktree, retaining one commit per item. Resolve shared-file/doc conflicts deliberately. No cherry-pick or merge has been performed yet.
-4. Continue remaining fixes on top of the integrated state, or rebase only with explicit user authorization. New isolated branches from the current integrated tip are safer than replaying stale worker bases. If continuing existing workers, do not forget their divergence.
-5. Update each item's own existing audit section with implementation status, What Changed, numbered How To Test and expected outcomes. This limits conflicts between agents. Keep historical evidence distinct from current untested implementation.
-6. Follow the repository's small-change rules and use apply_patch for manual edits. Inspect `git status`, `git diff`, staged diff and `git log --oneline -10` before each commit; stage only the intended item. Do not amend without permission.
-7. Keep the overall plan and this handoff current. Do not claim all tasks done until all included IDs are accounted for and review/integration is complete.
-
-Example integration commands AFTER review, run only in the main audit worktree. These have not been executed and may require conflict resolution:
-
-```powershell
-git cherry-pick ee9258e 0b0e85d 6603447
-git cherry-pick 7f44ae9 0d17c64
-git cherry-pick 0d214a7 e80f732 d94ada5 0411bb2
-```
-
-If R11 is completed later, cherry-pick its new hash separately. Do not use `git add .` while resolving conflicts or working with another agent's files.
+1. Inspect Git state in `C:\transcribed-subtitle-extension`. Do not switch branches while the user or another agent is editing lyrics. Arrange a safe handover first; do not create replacement worktrees without asking.
+2. Once safe, use `git switch smoothening-fixes`. Verify the branch before editing. Do not merge audit work into lyrics or main.
+3. Review the integrated worker code, particularly R16/R17 locking and the shared background/content/panel changes. R11 remains incomplete and R7 remains pending. No integration commands are needed; all old worker commits are already present.
+4. Complete remaining findings on top of the consolidated branch, one finding per commit. Finish the R11 draft in a follow-up commit rather than silently counting its checkpoint as completion.
+5. Update each item's audit section with implementation status, What Changed, numbered How To Test and expected outcomes. Keep historical evidence distinct from current untested implementation.
+6. Use apply_patch for manual edits. Inspect `git status`, `git diff`, staged diff and `git log --oneline -10` before each commit; stage only the intended item. No `git add .`, amend, squash, or rebase without permission.
+7. Keep the overall plan and this handoff current. Do not claim all tasks done until all included IDs are accounted for and review is complete.
 
 ## Validation State
 
 - Early foundation work was tested before the user changed the testing instruction. Historical results are preserved in the audit and plans, but are not proof about new worker code or future integration.
 - No application/browser bug was reproduced during the original audit. Source-supported risks were not represented as observed runtime failures.
-- New worker commits and the dirty R11 implementation are UNTESTED and not fully coordinator-reviewed. Some include regression source; source existing does not mean it passes.
-- The main audit worktree had existing lockfile dependencies and an ignored test-only backend `.env` using SQLite in memory. It is not a persistent interactive development setup. Child worktrees do not inherit ignored dependencies or environment files automatically. Do not copy secrets or environments from the lyrics checkout.
+- New worker commits and the saved R11 draft are UNTESTED and not fully correctness-reviewed. Some include regression source; source existing does not mean it passes. Merges preserve the work, not prove it works.
+- The retired audit worktree's ignored files were generated dependencies/caches/build artifacts and an agent-authored test-only `.env` using SQLite in memory. They are not source changes and are not transferred to the main checkout. Its environment and dependencies remain untouched; do not assume they are suitable for audit runtime work or commit secrets.
 - PostgreSQL locking, provider/queue failures and real Chrome/YouTube journeys still lack runtime evidence. Do not claim SQLite or static inspection establishes concurrency correctness.
 - Allowed documentation-only command: `.\scripts\agent\check.ps1 -SkipAppChecks`. Do not run the full harness, suites, builds or browser until the user authorizes testing again.
 
@@ -183,19 +180,22 @@ If R11 is completed later, cherry-pick its new hash separately. Do not use `git 
 
 ```text
 Continue the smoothening UX audit from:
-C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit\handoff.md
+the smoothening-fixes branch in C:\transcribed-subtitle-extension.
+Read its handoff using git show smoothening-fixes:handoff.md if another
+branch is currently checked out.
 
 Read the handoff, audit report, repo instructions and actual Git state first.
-Use audit/smoothening-fixes in the dedicated audit worktree. Never touch the
-concurrent C:\transcribed-subtitle-extension lyrics branch.
+Do not interrupt ongoing lyrics work. Coordinate a safe branch switch with
+the user before editing; keep audit changes only on smoothening-fixes.
 
-Review/integrate the saved per-finding worker commits and preserve/finish
-the dirty R11 work in smoothening-overlay-fixes. Finish every remaining
-included audit item, one individual commit per finding, with What Changed
+All worker commits are already merged; do not cherry-pick them again.
+Review the integrated code and finish the R11 draft saved in eb6d384.
+Finish every remaining included audit item, one individual commit per
+finding, with What Changed
 and How To Test documentation. Exclude all password/verification work and
 R24; preserve pre-existing auth/security. No test suites, browser tests,
 builds, production/paid requests, dependency upgrades or pushes. Mark code
 untested and leave manual testing instructions for my later testing session.
-Do not squash, reset worktrees, amend existing commits or lose worker edits.
-Continue until all included items are accounted for, reviewed and integrated.
+Do not squash, reset, amend existing commits or recreate retired worktrees.
+Continue until all included items are accounted for and reviewed.
 ```
