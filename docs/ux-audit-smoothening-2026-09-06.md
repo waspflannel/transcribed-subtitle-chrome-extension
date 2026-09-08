@@ -464,6 +464,15 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R17. P1: Some Pipeline Continuations Can Adopt A Retried Run
 
+**Status: implemented UNTESTED (2026-09-08).**
+
+**What Changed:** Merge, cached transcript and analysis-result continuations re-lock the captured run and expected stage before writing language/duration/artifacts or advancing stages. Batch publication follows the committed guarded transition. Duration settlement and provider-cost recording reject stale/terminal runs without refreshing their input into a replacement. Completion logging keeps its captured run.
+
+**How To Test:**
+1. Run `SubtitleContinuationRunTest` when authorized. Expected: replacing A during draft preparation on both merge and cache paths leaves B at preparing with unchanged duration/language/cost, no artifacts, no settlement and no analysis dispatch.
+2. Interleave Postgres connections before each guarded transaction, including analysis assembly and finalization. Expected: A never writes B; duplicate continuation claims at the same stage advance only once.
+3. Delay publication/provider completion across reset. Expected: published payloads retain A's run ID and workers reject stale A. Remaining limits: requests already in flight cannot be stopped, and provider-cost telemetry is an estimate, not a provider invoice. Post-commit publication is not a distributed transaction. Test source added only; no runtime, suite or browser execution.
+
 **Surface:** Transcript merge, cached-transcript continuation, provider-cost recording.
 
 **Impact:** Stale work can advance replacement generation out of order or dispatch duplicate analysis.

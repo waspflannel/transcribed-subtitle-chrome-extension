@@ -5,6 +5,7 @@ namespace App\Services\Billing;
 use App\Exceptions\BillingEntitlementException;
 use App\Models\SubtitleJob;
 use App\Models\User;
+use App\Services\Subtitles\SubtitleJobLock;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +103,12 @@ final class BillingEntitlementService
     public function syncJobReservationToActualDuration(SubtitleJob $job): void
     {
         DB::transaction(function () use ($job): void {
+            $job = SubtitleJobLock::current($job->id, $job->run_id);
+
+            if ($job === null || $job->status !== 'running') {
+                return;
+            }
+
             $lockedUser = User::query()
                 ->whereKey($job->user_id)
                 ->lockForUpdate()
@@ -125,7 +132,7 @@ final class BillingEntitlementService
                 throw BillingEntitlementException::usageExhausted();
             }
 
-            $this->ledger->adjustReservationToActualDuration($job->refresh()->load('user'));
+            $this->ledger->adjustReservationToActualDuration($job);
         });
     }
 

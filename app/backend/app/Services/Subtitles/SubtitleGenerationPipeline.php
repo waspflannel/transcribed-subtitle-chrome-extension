@@ -293,26 +293,30 @@ class SubtitleGenerationPipeline
                 durationSeconds: $durationSeconds,
             );
 
-            $this->telemetry->recordStageCompleted($job, 'transcribing', $transcribingStartedAtMs);
-            $this->costs->recordTranscription($job, $durationSeconds);
-
-            $this->logger->transcriptionCompleted($job, $transcript, $durationSeconds);
-            $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
-            $this->transcriptCache->store(
-                youtubeVideoId: $job->youtube_video_id,
-                requestedSourceLanguage: $job->source_language,
-                transcript: $transcript,
-                audioDurationSeconds: $durationSeconds,
-            );
-
-            $job = $job->refresh();
             $draftCues = $this->tracks->draftCues($transcript);
 
-            $this->artifacts->putTranscript($job, $transcript);
-            $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
-            $this->telemetry->recordFirstCueAvailable($job);
+            DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $draftCues, $durationSeconds, $transcribingStartedAtMs): void {
+                $job = $this->lockRunningJob($subtitleJobId, $runId);
 
-            $this->dispatchTokenizationAndTranslationBatches($job);
+                if ($job === null || $job->stage !== 'transcribing') {
+                    return;
+                }
+
+                $this->telemetry->recordStageCompleted($job, 'transcribing', $transcribingStartedAtMs);
+                $this->costs->recordTranscription($job, $durationSeconds);
+                $this->logger->transcriptionCompleted($job, $transcript, $durationSeconds);
+                $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
+                $this->transcriptCache->store(
+                    youtubeVideoId: $job->youtube_video_id,
+                    requestedSourceLanguage: $job->source_language,
+                    transcript: $transcript,
+                    audioDurationSeconds: $durationSeconds,
+                );
+                $this->artifacts->putTranscript($job, $transcript);
+                $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
+                $this->telemetry->recordFirstCueAvailable($job);
+                $this->dispatchTokenizationAndTranslationBatches($job);
+            }, attempts: 5);
         } catch (Throwable $exception) {
             $this->failureHandler->failJob($subtitleJobId, 'transcribing', $exception, $runId);
 
@@ -354,23 +358,24 @@ class SubtitleGenerationPipeline
     private function continueWithCachedTranscript(SubtitleJob $job, CachedVideoTranscript $cached): void
     {
         $transcript = $this->transcriptCache->transcript($cached);
-
-        $this->telemetry->recordTranscriptCacheHit($job);
-
-        $job->update(['video_duration_seconds' => $cached->audio_duration_seconds]);
-        $job = $job->refresh()->load('user');
-        $this->billing->syncJobReservationToActualDuration($job);
-
-        $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
-
-        $job = $job->refresh();
         $draftCues = $this->tracks->draftCues($transcript);
 
-        $this->artifacts->putTranscript($job, $transcript);
-        $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
-        $this->telemetry->recordFirstCueAvailable($job);
+        DB::transaction(function () use ($job, $cached, $transcript, $draftCues): void {
+            $job = $this->lockRunningJob($job->id, $job->run_id);
 
-        $this->dispatchTokenizationAndTranslationBatches($job);
+            if ($job === null || $job->stage !== 'acquiring-audio') {
+                return;
+            }
+
+            $this->telemetry->recordTranscriptCacheHit($job);
+            $job->update(['video_duration_seconds' => $cached->audio_duration_seconds]);
+            $this->billing->syncJobReservationToActualDuration($job);
+            $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
+            $this->artifacts->putTranscript($job, $transcript);
+            $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
+            $this->telemetry->recordFirstCueAvailable($job);
+            $this->dispatchTokenizationAndTranslationBatches($job);
+        }, attempts: 5);
     }
 
     public function prepareCuesAfterCompletedAnalysisBatches(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
@@ -465,7 +470,8 @@ class SubtitleGenerationPipeline
             return;
         }
 
-        $job = $job->refresh()->load('track');
+        $job->setRelation('track', $track);
+        $job->status = 'completed';
         $this->logger->trackGenerated(
             job: $job,
             track: $track,
@@ -512,7 +518,7 @@ class SubtitleGenerationPipeline
                 : $analysisJob;
         }
 
-        $this->batchDispatcher->dispatchAnalysis($job, $jobs);
+        DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
     }
 
     private function dispatchWordCardEnrichmentBatches(SubtitleJob $job): void
@@ -528,7 +534,7 @@ class SubtitleGenerationPipeline
             $jobs[] = new EnrichSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
         }
 
-        $this->batchDispatcher->dispatchEnrichment($job, $jobs);
+        DB::afterCommit(fn () => $this->batchDispatcher->dispatchEnrichment($job, $jobs));
     }
 
     private function storeMergedCuesAndContinue(
@@ -537,20 +543,29 @@ class SubtitleGenerationPipeline
         ?CueEnrichmentResult $translated,
     ): void {
         $merged = $this->mergeTranslatedText($base, $translated);
-        $this->artifacts->putCueCollection(
-            job: $job,
-            artifactType: SubtitleJobArtifactStore::MERGED_CUES,
-            cues: $merged->cues,
-            sourceDialect: $merged->sourceDialect,
-        );
+        DB::transaction(function () use ($job, $merged): void {
+            $job = $this->lockRunningJob($job->id, $job->run_id);
 
-        if ($job->enrichment_mode === 'full' && ! $this->isSameLanguageGeneration($job)) {
-            $this->dispatchWordCardEnrichmentBatches($job);
+            if ($job === null || $job->stage !== 'tokenizing') {
+                return;
+            }
 
-            return;
-        }
+            $this->artifacts->putCueCollection(
+                job: $job,
+                artifactType: SubtitleJobArtifactStore::MERGED_CUES,
+                cues: $merged->cues,
+                sourceDialect: $merged->sourceDialect,
+            );
 
-        $this->batchDispatcher->dispatchMergedCueTrackFinalization($job);
+            if ($job->enrichment_mode === 'full' && ! $this->isSameLanguageGeneration($job)) {
+                $this->dispatchWordCardEnrichmentBatches($job);
+
+                return;
+            }
+
+            $this->markJobRunning($job, 'finalizing', 95);
+            DB::afterCommit(fn () => $this->batchDispatcher->dispatchMergedCueTrackFinalization($job));
+        }, attempts: 5);
     }
 
     private function mergeTranslatedText(
