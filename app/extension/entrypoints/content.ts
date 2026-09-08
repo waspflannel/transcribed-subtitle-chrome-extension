@@ -396,6 +396,9 @@ export default defineContentScript({
         videoBindRetryTimer = undefined;
       }
       releaseStudyPause();
+      studyHoverActive = false;
+      studyFocusActive = false;
+      studyPauseRequested = false;
       cueHold.clear();
       bindingError = null;
       activeCue = null;
