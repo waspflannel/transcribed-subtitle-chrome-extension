@@ -1,0 +1,49 @@
+# Smoothening manual checks
+
+Use the extension build from `C:/transcribed-subtitle-smoothening` on `codex/remaining-smoothening-fixes`. The original checkout is for the user's separate feature. This checklist records checks for the user to perform; no browser pass is claimed.
+
+Use local fake providers and disposable test accounts for failure, cancellation, usage and queue scenarios. Backend automated tests cover deterministic fake-service behavior; production database locking and real provider timing require separate runtime evidence. Account A and B below are distinct test accounts. Video A and B are distinct videos unless a step explicitly asks for duplicate tabs.
+
+The audit report contains the detailed original acceptance criteria. This list is a compact per-fix handoff. Leave each box unchecked until manually verified.
+
+## Remaining fixes delivered in this batch
+
+- [ ] **R3 — recover the same generation.** Start generation, wait for partial cues, interrupt one status GET, then reconnect. Close/reopen the panel and restart the extension background while work is active. Repeat after same-account reauthentication. Expect the same job to continue without another generation POST, partial cues to remain readable, and completion to arrive even with the panel closed.
+- [ ] **R7 — target the displayed tab.** Open the same video in two tabs and two windows, with different playback positions. Open the panel for one, seek from its transcript, then focus the other window during the request. Expect only the displayed tab to seek/highlight; foreign notices must not change its selection. Repeat around login/logout.
+- [ ] **R8 — isolate accounts.** Delay an account A status/history/word-card/quick-fix response, then sign into B. Release both success and failure responses. Expect B's session, history, track and current operation to remain intact. Repeat with an expired A session response and same-account sign-out/sign-in.
+- [ ] **R9 — preserve settings and one submission.** Change several settings quickly and immediately Generate; double-click Generate while preparation is delayed. Expect all settings patches to survive, the request to use the latest selections and only one submission for that operation.
+- [ ] **R11 — paused cue synchronization.** Pause within a cue, close and reopen the panel. Jump/replay/previous/next using both extension controls and shortcuts. Expect the matching cue to highlight immediately without waiting for playback; a stale response from the prior video must have no effect.
+- [ ] **R12 — stable account actions.** Delay login/logout/refresh while normal panel polling continues. Trigger one account-action failure. Expect busy controls to remain busy until that action ends, its outcome to stay visible, and the last valid view to survive a refresh failure.
+- [ ] **R13 — study focus and pause.** Hover then focus a word while playing; release hover while focus remains, then leave focus. Repeat with keyboard-only activation, the card close button, async card updates and a video manually paused beforehand. Expect one extension-owned pause/resume, stable focus and no unexpected resume of a manual pause. Hold a cue through a gap and hover a long active cue; neither should disappear early. Trigger an action during silence and check its feedback.
+- [ ] **R14 — partial layers and attachment retry.** While partial cues are visible, reveal source, romanization and translation separately by pointer and keyboard. Simulate a local track-load/player-binding failure, then Retry attachment. Expect the existing track to attach without a new generation or charge and the error to clear on success.
+- [ ] **R15 — full local reset.** With settings, history, a remembered track and delayed work present, clear local state. Expect signed-out defaults and no active track across tabs; release old responses and verify nothing returns. Backend history remains available after an explicit later login.
+- [ ] **R18 — publication failure.** With a local failing queue adapter, fail the initial dispatch, then a queued-job promotion. Expect a durable `queue_publication_failed` outcome, released reservation and free running slot. Restore the adapter and retry; expect usable generation without duplicate settlement or dispatch.
+- [ ] **R19 — duplicate/FIFO/heartbeat integrity.** Submit compatible requests concurrently, queue multiple jobs and retry an older failed row. Expect one compatible active run and FIFO by the new submission time. Race a worker heartbeat with stalled-job claiming; a fresh heartbeat must prevent timeout. Use the runtime database for lock/concurrency verification.
+- [ ] **R20 — operational history.** Seed old and old-processing-version queued/running jobs plus recent terminal jobs. Expect owned active work and recent terminal outcomes in History/dashboard/detail, while expired or incompatible completed tracks are not reused for generation.
+- [ ] **R22 — timing and visible player.** Apply a positive subtitle delay near time zero; expect no cue before its delayed start. Place a playing video offscreen with a paused visible player; expect the visible player to own captions.
+- [ ] **R23 — editable targets and card bounds.** Type in inputs, textareas, normal/empty/plaintext-only editable regions and textbox widgets; extension shortcuts must not fire. Check a non-editable island separately. Open long cards at every rail position in a narrow/short viewport and with zoom; close controls must remain reachable.
+- [ ] **U1 — honest queue state.** Fill the running slot and submit another job. Expect waiting/queued copy and no running stage until admission, followed by normal progress without an invented ETA.
+- [ ] **U2 — honest minutes.** Inspect support details for unknown duration, reserved work, completed work and refunded failure/cancellation. Expect separate estimate, reserved, charged and released values; unknown duration must not appear as a known bill.
+- [ ] **U3 — stale history.** Load History successfully, then fail its next refresh. Expect the same account's cards to remain with a refresh error/stale indication. Switch account and verify the old cards disappear.
+- [ ] **U5 — partial reading continuity.** Search and scroll the partial Watch transcript while new revisions arrive. Expect read-only source text and Copy, no unsupported edit/word-card/Jump controls, and stable reading position through updates and final completion. Completed-track editing must still work.
+- [ ] **G1 — explicit generation cancellation.** Cancel queued work and running work from Watch and History, repeat cancellation, then let a late worker finish. Expect a durable Cancelled outcome, one reservation release, no resurrected track and admission of the next queued run. Navigate to another video during the request and verify its state survives. Failed cancellation must remain retryable. Completed/failed jobs have no cancel action. An already-running external provider request may still finish externally.
+
+## Previously completed fixes to regression-check
+
+- [ ] **R1 — panel startup.** Open the panel on supported and unsupported pages; startup, listeners and polling should initialize without an error.
+- [ ] **R2 — exact operation.** Generate when old failed/completed variants exist; delayed history must not replace submitting state or select another job.
+- [ ] **R4 — SPA entry.** Navigate from YouTube home/search into Watch and Shorts without a document reload; captions should activate when supported.
+- [ ] **R5 — player lifecycle.** Replace/detach the player, enter/exit fullscreen and scroll. The same track should reattach to the current visible player without duplicate rails.
+- [ ] **R6 — stale content responses.** Navigate A to B while hydration/enrichment for A is delayed. Neither success nor failure may replace or clear B's captions.
+- [ ] **R10 — transcript and word-card updates.** Change cue text through Quick fix/full replacement and request two word cards concurrently. Updated text should appear and both card results should survive.
+- [ ] **R16 — terminal settlement.** Race completion/failure/deletion with disposable local jobs. Expect account-before-job locking and one run-scoped settlement without harming a replacement run.
+- [ ] **R17 — stale pipeline run.** Retry a failed job, then deliver stages/results from its old run. The new run's artifacts, cost and track must remain unchanged.
+- [ ] **R21 — full response deadline.** Delay the response body after headers arrive. Expect a bounded timeout and useful feedback rather than an indefinitely busy panel.
+- [ ] **G2 — honest History navigation.** Open a failed job's video from History. Expect navigation and instructions to review Watch settings; no automatic generation or misleading Retry action.
+- [ ] **G3 — explicit dashboard refresh.** Return from checkout or refresh job status using the visible refresh action. Expect a current snapshot with clear refresh copy.
+- [ ] **G4 — owned deletion scope.** Delete a disposable video's tracks/jobs from the dashboard. Confirm the displayed count and video scope match the owned records removed, with unrelated videos intact.
+- [ ] **G5 — account/billing navigation only.** Open Account and billing and exercise a denied generation preference. Expect useful access directions and no credentials in the URL.
+- [ ] **U4 — connection expiry only.** Include newer expired connections and older valid ones. Expect the valid connections to remain visible and expired ones omitted.
+- [ ] **Lyrics merge regression.** Use Quick fix and full replacement, including partial-lyrics confirmation, mismatch failure and lyrics cancellation. Generation cancellation and lyrics cancellation must remain separate actions.
+
+Excluded by request: R24, password recovery/email-verification changes in G5, and password-rule/hint changes in U4. Existing authentication enforcement remains part of the baseline.
