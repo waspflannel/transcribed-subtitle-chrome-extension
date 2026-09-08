@@ -262,7 +262,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'background.seekToCue':
       return hasString(value, 'cueId')
         && (value.type === 'background.seekToCue'
-          || (hasString(value, 'youtubeVideoId') && hasString(value, 'trackId')))
+          || (hasString(value, 'youtubeVideoId')
+            && (hasString(value, 'trackId') || !('tabId' in value))))
         && (value.mode === 'jump' || value.mode === 'replay')
         && (value.type !== 'panel.seekToCue' || optionalNumber(value, 'tabId'))
         && optionalNumber(value, 'windowId');
