@@ -16,20 +16,31 @@ const installIdStorage = storage.defineItem<string | null>('local:installId', {
   fallback: null,
 });
 
+let settingsWriteQueue = Promise.resolve();
+
 export async function getExtensionSettings(): Promise<ExtensionSettings> {
   return createExtensionSettingsFromPartial(await settingsStorage.getValue());
 }
 
 export async function updateExtensionSettings(patch: Partial<ExtensionSettings>): Promise<ExtensionSettings> {
-  const currentSettings = await getExtensionSettings();
-  const nextSettings = createExtensionSettingsFromPartial({
-    ...currentSettings,
-    ...patch,
+  const write = settingsWriteQueue.then(async () => {
+    const currentSettings = await getExtensionSettings();
+    const nextSettings = createExtensionSettingsFromPartial({
+      ...currentSettings,
+      ...patch,
+    });
+
+    await settingsStorage.setValue(nextSettings);
+
+    return nextSettings;
   });
+  settingsWriteQueue = write.then(() => undefined, () => undefined);
 
-  await settingsStorage.setValue(nextSettings);
+  return write;
+}
 
-  return nextSettings;
+export function waitForExtensionSettingsWrites(): Promise<void> {
+  return settingsWriteQueue;
 }
 
 export async function clearLocalExtensionState(): Promise<void> {

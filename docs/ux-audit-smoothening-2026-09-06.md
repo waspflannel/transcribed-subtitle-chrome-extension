@@ -369,6 +369,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R9. P2: Overlapping Actions Can Lose Preferences Or Duplicate Submission
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Settings read/merge/write operations now run through one small write queue, and generation waits for queued preference writes before taking its request snapshot. The background claims a tab generation operation before preparation awaits, while the panel claims the Generate action immediately and keeps the button busy until the response is applied.
+
+**How To Test:**
+1. Delay two independent settings writes and change both controls before either resolves. Expected: both values remain in storage and the panel reflects both values.
+2. Change a generation option, immediately double-click Generate, and delay the page snapshot/POST. Expected: one request and one monitor are created, the latest settings are sent, and the button stays busy during preparation.
+3. Run the focused `settings.test.ts` check when execution is authorized. Expected: concurrent patches preserve both fields.
+
+**Limits:** No browser journey, build, or API call was run; the extension dependency runtime is unavailable in this worktree. Backend idempotency/charge behavior remains governed by its own server-side contract.
+
 **Surface:** Settings storage, generation setup, background handlers.
 
 **Impact:** Selected options can silently revert; rapid Generate clicks can produce overlapping requests/monitors.

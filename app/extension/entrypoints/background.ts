@@ -32,6 +32,7 @@ import {
   getExtensionSettings,
   getOrCreateInstallId,
   updateExtensionSettings,
+  waitForExtensionSettingsWrites,
 } from '../utils/settings';
 import type { ExtensionSettings } from '../utils/settings-model';
 import { trackWithLearningToken } from '../utils/track-tokens';
@@ -318,42 +319,45 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
     throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
   }
 
-  const persistedOperation = await getTabOperation(activeTabId);
-  if (persistedOperation?.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId) {
-    const session = await getStoredExtensionSession();
-
-    if (!session) {
-      throw new SubtitleApiError('unauthenticated', 'Sign in before continuing subtitle work.', 401);
-    }
-
-    if (persistedOperation.kind === 'correction') {
-      const correction = await subtitleApi.getLyricsCorrectionStatus(
-        await getOrCreateInstallId(),
-        session.plainTextToken,
-        persistedOperation.jobId,
-      );
-
-      if (correction.status === 'queued' || correction.status === 'running') {
-        throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
-      }
-    } else {
-      const job = await subtitleApi.getSubtitleJob(await getOrCreateInstallId(), session.plainTextToken, persistedOperation.jobId);
-
-      if (job.status === 'queued' || job.status === 'running') {
-        throw new SubtitleApiError('lyrics_correction_in_progress', 'Subtitle generation is already in progress.', 409);
-      }
-    }
-
-    await clearTabOperation(activeTabId);
-  } else if (persistedOperation) {
-    await clearTabOperation(activeTabId);
-  }
-
+  const operation = Symbol('generation');
+  tabOperations.set(activeTabId, operation);
   tabGenerationInFlight.add(activeTabId);
   let generationStarted = false;
 
   try {
     const session = await getStoredExtensionSession();
+    const persistedOperation = await getTabOperation(activeTabId);
+
+    if (persistedOperation && persistedOperation.accountId !== session?.account.id) {
+      await clearTabOperation(activeTabId);
+    } else if (persistedOperation?.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId) {
+      if (!session) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before continuing subtitle work.', 401);
+      }
+
+      if (persistedOperation.kind === 'correction') {
+        const correction = await subtitleApi.getLyricsCorrectionStatus(
+          await getOrCreateInstallId(),
+          session.plainTextToken,
+          persistedOperation.jobId,
+        );
+
+        if (correction.status === 'queued' || correction.status === 'running') {
+          throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
+        }
+      } else {
+        const job = await subtitleApi.getSubtitleJob(await getOrCreateInstallId(), session.plainTextToken, persistedOperation.jobId);
+
+        if (job.status === 'queued' || job.status === 'running') {
+          throw new SubtitleApiError('lyrics_correction_in_progress', 'Subtitle generation is already in progress.', 409);
+        }
+      }
+
+      await clearTabOperation(activeTabId);
+    } else if (persistedOperation) {
+      await clearTabOperation(activeTabId);
+    }
+
     const currentState = await getSubtitleStateForPage(activeTabId, pageStatus, session?.account.id);
     if (currentState.type === 'ready' && session) {
       try {
@@ -374,11 +378,21 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
     }
 
     if (currentState.type !== 'loading') {
-      const operation = Symbol('generation');
-      tabOperations.set(activeTabId, operation);
+      if (!session) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+      }
+
+      await waitForExtensionSettingsWrites();
+      if (!await isCurrentSession(session.sessionId)) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+      }
       const settings = await getExtensionSettings();
       const pageSnapshot = await getPageSnapshotFromTab(activeTabId);
       const now = new Date().toISOString();
+
+      if (!await isCurrentSession(session.sessionId)) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+      }
 
       await publishSubtitleState(activeTabId, {
         type: 'loading',
@@ -389,11 +403,8 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
         progressPercent: 5,
         startedAt: now,
         lastUpdatedAt: now,
-      });
+      }, session.account.id);
 
-      if (!session) {
-        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
-      }
       await setTabOperation(activeTabId, { kind: 'generation', accountId: session.account.id, youtubeVideoId: pageStatus.videoId });
       generationStarted = true;
       void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, operation)
@@ -403,6 +414,7 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
     return getPanelState({ syncBackend: false });
   } finally {
     if (!generationStarted) {
+      if (tabOperations.get(activeTabId) === operation) tabOperations.delete(activeTabId);
       tabGenerationInFlight.delete(activeTabId);
     }
   }

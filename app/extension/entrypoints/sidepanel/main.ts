@@ -151,6 +151,7 @@ let latestState: PanelState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
+let generationRequestBusy = false;
 let lyricsCorrectionRequestBusy = false;
 let quickFixRequestBusy = false;
 let lyricsCancellationRequestBusy = false;
@@ -401,9 +402,19 @@ async function refreshBackendState(): Promise<void> {
 }
 
 async function generateSubtitles(): Promise<void> {
-  if (lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
-  const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
-  if (applied) openWatchScreen('transcript');
+  if (generationRequestBusy || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
+
+  generationRequestBusy = true;
+  generateButton.disabled = true;
+  generateButton.textContent = 'Starting...';
+
+  try {
+    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
+    if (applied) openWatchScreen('transcript');
+  } finally {
+    generationRequestBusy = false;
+    if (latestState) showPanelState(latestState);
+  }
 }
 
 async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
@@ -936,7 +947,7 @@ function showPanelState(state: PanelState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
+  generateButton.disabled = generationRequestBusy || !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
   renderLyricsEditState();
   renderLyricsCorrectionState(state);
   if (!hadPartialConfirmation && partialLyricsConfirmation) {
