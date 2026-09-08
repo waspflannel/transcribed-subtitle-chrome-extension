@@ -252,7 +252,8 @@
         "queued",
         "running",
         "completed",
-        "failed"
+        "failed",
+        "cancelled"
       ]
     },
     "stage": {

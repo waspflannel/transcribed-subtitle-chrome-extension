@@ -23,18 +23,25 @@ class SubtitleJobFailureHandler
     /**
      * @param  array<string, mixed>  $context
      */
-    public function failJob(int $subtitleJobId, string $stage, Throwable $exception, string $runId, array $context = []): void
+    public function failJob(
+        int $subtitleJobId,
+        string $stage,
+        Throwable $exception,
+        string $runId,
+        array $context = [],
+        bool $promoteQueued = true,
+    ): bool
     {
         $job = SubtitleJob::query()->find($subtitleJobId);
 
         if ($job === null) {
-            return;
+            return false;
         }
 
         if ($job->run_id !== $runId) {
             $this->telemetry->recordStaleRunSkipped($job, $runId, $stage);
 
-            return;
+            return false;
         }
 
         [$errorCode, $errorMessage] = $this->resolveErrorPayload($exception);
@@ -60,25 +67,29 @@ class SubtitleJobFailureHandler
         }, attempts: 5);
 
         if ($job === null) {
-            return;
+            return false;
         }
 
-        $this->admission->promoteQueuedJobs($job->user_id);
+        if ($promoteQueued) {
+            $this->admission->promoteQueuedJobs($job->user_id);
+        }
 
         if ($exception instanceof BillingEntitlementException) {
             $this->recordExpectedFailure($job, $stage, $exception, $context);
 
-            return;
+            return true;
         }
 
         if ($exception instanceof SubtitleProcessingException) {
             $this->recordExpectedFailure($job, $stage, $exception, $context);
 
-            return;
+            return true;
         }
 
         $this->logger->unexpectedFailure($job, $stage, $exception);
         $this->telemetry->recordJobFailed($job, $stage, $exception, $context);
+
+        return true;
     }
 
     /**

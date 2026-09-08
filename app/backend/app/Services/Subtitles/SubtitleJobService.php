@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Models\SubtitleJob;
 use App\Models\User;
@@ -15,6 +16,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use Throwable;
 
 class SubtitleJobService
 {
@@ -40,6 +42,7 @@ class SubtitleJobService
         private readonly SubtitleRuntimeTracer $tracer,
         private readonly BillingEntitlementService $billing,
         private readonly FunnelAnalytics $analytics,
+        private readonly SubtitleJobFailureHandler $failureHandler,
     ) {}
 
     /**
@@ -195,9 +198,23 @@ class SubtitleJobService
         // running slot frees up.
         if ($job->status === 'running'
             && in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
-            AcquireSubtitleAudio::dispatch($job->id, $job->run_id)
-                ->onConnection(SubtitleQueue::connection())
-                ->onQueue(SubtitleQueue::generationNameForJob($job));
+            try {
+                AcquireSubtitleAudio::dispatch($job->id, $job->run_id)
+                    ->onConnection(SubtitleQueue::connection())
+                    ->onQueue(SubtitleQueue::generationNameForJob($job));
+            } catch (Throwable $exception) {
+                $this->failureHandler->failJob(
+                    subtitleJobId: $job->id,
+                    stage: 'preparing',
+                    exception: SubtitleProcessingException::queuePublicationFailed(
+                        ['reason' => 'queue_publication_failed'],
+                        $exception,
+                    ),
+                    runId: (string) $job->run_id,
+                    context: ['reason' => 'queue_publication_failed'],
+                    promoteQueued: false,
+                );
+            }
 
             $job = $job->refresh()->load('track');
         }

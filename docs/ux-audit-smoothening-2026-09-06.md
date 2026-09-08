@@ -570,6 +570,13 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Acceptance:** Inject publication failure. The reservation/slot releases, the UI sees a stable actionable failure, and a later retry dispatches once.
 
+**What Changed:** Initial and promoted generation dispatches now catch queue publication failures and settle the captured run through the existing failure ledger path. The job becomes a stable \`failed\` record with \`queue_publication_failed\`, its reserved minutes are released, and promotion stops without recursively attempting another queue publish.
+
+**How To Test:**
+1. Make the queue connection throw while \`SubtitleJobService::generate()\` publishes a newly admitted running job. Expected: the response contains one failed job with \`errorCode: queue_publication_failed\`, the reservation is refunded, and no slot remains occupied.
+2. Fill a tier's running slot, then make the queue connection throw while \`SubtitleJobAdmission\` promotes the oldest queued job. Expected: that promoted job is failed and refunded, the next queued job remains queued, and no second dispatch is attempted during the outage.
+3. Restore queue publication and submit the same payload again. Expected: the failed row is eligible for the existing stale/reset path and exactly one new run is published. Limits: queue publication was not induced here; no Redis or worker service may be started in this handoff.
+
 ### R19. P2: Queue Admission And Timeout Decisions Can Be Stale Or Misordered
 
 **Surface:** Duplicate submission, queued-job order, stalled-job recovery.

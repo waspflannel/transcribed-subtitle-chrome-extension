@@ -2,10 +2,12 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Models\SubtitleJob;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Promotes a user's queued subtitle jobs into processing as running slots
@@ -28,9 +30,25 @@ class SubtitleJobAdmission
         // Deleting several jobs at once can free several slots; keep
         // promoting until the next queued job no longer fits.
         while (($promoted = $this->promoteNext($userId)) !== null) {
-            AcquireSubtitleAudio::dispatch($promoted->id, $promoted->run_id)
-                ->onConnection(SubtitleQueue::connection())
-                ->onQueue(SubtitleQueue::generationNameForJob($promoted));
+            try {
+                AcquireSubtitleAudio::dispatch($promoted->id, $promoted->run_id)
+                    ->onConnection(SubtitleQueue::connection())
+                    ->onQueue(SubtitleQueue::generationNameForJob($promoted));
+            } catch (Throwable $exception) {
+                app(SubtitleJobFailureHandler::class)->failJob(
+                    subtitleJobId: $promoted->id,
+                    stage: 'preparing',
+                    exception: SubtitleProcessingException::queuePublicationFailed(
+                        ['reason' => 'queue_publication_failed'],
+                        $exception,
+                    ),
+                    runId: (string) $promoted->run_id,
+                    context: ['reason' => 'queue_publication_failed'],
+                    promoteQueued: false,
+                );
+
+                break;
+            }
         }
     }
 

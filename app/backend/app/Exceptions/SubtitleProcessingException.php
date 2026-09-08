@@ -82,6 +82,23 @@ class SubtitleProcessingException extends Exception
     }
 
     /**
+     * Queue publication failed after the job transaction committed. The
+     * caller can persist this as a terminal, retryable job outcome.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    public static function queuePublicationFailed(array $context = [], ?Throwable $previous = null): self
+    {
+        return new self(
+            'queue_publication_failed',
+            'Generation could not be queued. Try again.',
+            503,
+            $context,
+            $previous,
+        );
+    }
+
+    /**
      * @param  array<string, mixed>  $context
      */
     public static function lyricsCorrectionInProgress(array $context = []): self

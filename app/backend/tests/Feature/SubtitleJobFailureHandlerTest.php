@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
+use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -95,6 +96,31 @@ class SubtitleJobFailureHandlerTest extends TestCase
             'event' => 'job.failed',
         ]);
         $this->assertSame(0, (int) BillingUsageEvent::query()->where('subtitle_job_id', $job->id)->where('event_type', 'refund')->count());
+    }
+
+    public function test_queue_publication_failure_releases_reservation_without_recursive_promotion(): void
+    {
+        $user = $this->userWithActiveBilling();
+        $job = SubtitleJob::factory()->for($user)->create(['status' => 'running', 'stage' => 'preparing']);
+        $ledger = app(UsageLedger::class);
+        $ledger->reserveForJob($job, $user, app(BillingPlanCatalog::class)->requirePlan('base'), 1);
+
+        $this->mock(SubtitleJobAdmission::class)
+            ->shouldReceive('promoteQueuedJobs')
+            ->never();
+
+        $settled = app(SubtitleJobFailureHandler::class)->failJob(
+            subtitleJobId: $job->id,
+            stage: 'preparing',
+            exception: SubtitleProcessingException::queuePublicationFailed(),
+            runId: $job->run_id,
+            promoteQueued: false,
+        );
+
+        $this->assertTrue($settled);
+        $this->assertSame('failed', $job->refresh()->status);
+        $this->assertSame('queue_publication_failed', $job->error_code);
+        $this->assertSame(0, $ledger->reservedMinutesForJob($job));
     }
 
     public function test_fail_job_does_not_overwrite_already_completed_job(): void
