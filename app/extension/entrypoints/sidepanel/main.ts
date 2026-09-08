@@ -1384,10 +1384,11 @@ function setSettingsDisabled(disabled: boolean): void {
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
   keyboardShortcutsEnabledInput.disabled = disabled;
-  accountEmailInput.disabled = disabled;
-  accountPasswordInput.disabled = disabled;
-  accountLoginButton.disabled = disabled;
-  logoutButton.disabled = disabled || latestState?.accountState.status !== 'authenticated';
+  const authenticated = latestState?.accountState.status === 'authenticated';
+  accountEmailInput.disabled = disabled || accountRequestBusy || authenticated;
+  accountPasswordInput.disabled = disabled || accountRequestBusy || authenticated;
+  accountLoginButton.disabled = disabled || accountRequestBusy || authenticated;
+  logoutButton.disabled = disabled || accountRequestBusy || !authenticated;
   clearStateButton.disabled = disabled;
   resetTimingButton.disabled = disabled;
   timingOffsetRangeInput.disabled = disabled;
