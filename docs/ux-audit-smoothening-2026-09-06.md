@@ -226,6 +226,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R3. P1: Transient Poll Failure Or Job Recovery Can Strand UI
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Generation polling now retries transient status failures while retaining the known job and most recent partial cues. Authentication interruption preserves the account-owned persisted operation for same-account reauthentication without clearing another session. Partial revisions are stored with the operation, and panel/content recovery starts one monitor for queued or running work after a background restart; terminal results are applied only to the matching operation and account.
+
+**How To Test:**
+1. Start a generation, fail one status GET, then return running and completed responses. Expected: no second POST, the loading state keeps its job/partial cues, and the completed track becomes ready.
+2. Expire authentication during polling, reauthenticate as the same account, and reopen the panel after completion. Expected: the persisted job resumes once and the finished track is recovered; signing in as another account does not adopt it.
+3. Restart the background while a queued/running job has a partial revision, then open the panel with the panel closed during completion. Expected: one recovered monitor resumes, partial cues remain available, and the final track is stored without duplicate submission.
+4. Run the focused `backend-subtitle-state.test.ts` check when execution is authorized. Expected: a refreshed running state retains its last partial track.
+
+**Limits:** The focused check, browser restart, authentication transition, and real queue/API behavior were not run; this worktree lacks the installed extension test runtime. Retry cadence is the existing two-second poll interval, and backend/provider retry semantics remain unchanged.
+
 **Surface:** Background polling, Watch, partial overlay.
 
 **Impact:** Backend work can finish while Watch stays failed or loading. Users lose usable partial results and may retry unnecessarily.
