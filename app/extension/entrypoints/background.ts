@@ -468,9 +468,9 @@ async function generateSubtitlesForTab(
     const current = tabSubtitleStates.get(tabId);
     if (current?.type !== 'loading') return;
     tabSubtitleStates.set(tabId, { ...current, jobId: initialJob.jobId });
-    tabSubtitleStateOwners.set(tabId, accountId);
+    tabSubtitleStateOwners.set(tabId, accountId!);
     if (!await isCurrentSession(sessionId)) return;
-    await setTabOperation(tabId, { kind: 'generation', accountId, youtubeVideoId: pageStatus.videoId, jobId: initialJob.jobId });
+    await setTabOperation(tabId, { kind: 'generation', accountId: accountId!, youtubeVideoId: pageStatus.videoId, jobId: initialJob.jobId });
     const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session, initialJob, operation);
 
     if (job === null) {
