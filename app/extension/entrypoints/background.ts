@@ -1635,6 +1635,7 @@ async function clearSessionIfInvalid(error: unknown, expectedSessionId?: string)
 
   await clearExtensionSession();
   tombstoneAllLyricsCorrectionStates();
+  await clearLocalSubtitleStates();
 
   return true;
 }
