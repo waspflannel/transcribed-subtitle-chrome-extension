@@ -1107,7 +1107,7 @@ async function loginFromPanel(email: string, password: string): Promise<PanelSta
 }
 
 async function logoutFromPanel(windowId?: number): Promise<PanelState> {
-  accountMutationVersion += 1;
+  const mutationVersion = ++accountMutationVersion;
   const installId = await getOrCreateInstallId();
   const session = await getStoredExtensionSession();
 
@@ -1120,6 +1120,8 @@ async function logoutFromPanel(windowId?: number): Promise<PanelState> {
       });
     }
   }
+
+  if (mutationVersion !== accountMutationVersion) return getPanelState({ syncBackend: false, windowId });
 
   await clearExtensionSession();
   tombstoneAllLyricsCorrectionStates();
