@@ -11,13 +11,10 @@ import {
 } from '../../utils/languages';
 import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
-import { selectDefaultView } from '../../utils/panel/view-state';
 import { generationProgress } from '../../utils/panel-progress';
 import { anonymousAccountState, formatResetDate, stageTimeline } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
-import { pollIntervalMs, shouldPollNow } from '../../utils/poll-schedule';
-import { PanelPortConnector } from '../../utils/panel-port-registry';
 import { accountFeatureListHtml, accountBillingLinkHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -32,13 +29,28 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
+import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
+import type { LyricsCorrectionStatus } from '../../utils/contracts';
+import {
+  beginPanelRequest,
+  canApplyPanelResponse,
+  finishPanelRequest,
+  panelRequestOrder,
+  type PanelRequestOrder,
+} from '../../utils/panel-request-order';
 
-type PanelErrorResponse = { ok: false; error: string };
+type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account';
+type RequestErrorTarget = 'global' | 'account' | 'correction' | 'quickfix' | 'cancel';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
 const {
+  backTranscriptButton,
+  transcriptMenu,
+  progressSummary,
+  progressSummaryLabel,
+  viewProgressButton,
+  readyToolbar,
   tabButtons,
   panels,
   transcriptSearch,
@@ -53,6 +65,23 @@ const {
   watchSignin,
   watchSetup,
   watchReady,
+  correctionTerminalStatus,
+  correctionTerminalMessage,
+  dismissCorrectionStatusButton,
+  correctionCancelError,
+  correctionSyncError,
+  lyricsEditPanel,
+  toggleLyricsEditButton,
+  lyricsCorrectionForm,
+  lyricsCorrectionTextarea,
+  lyricsCorrectionCount,
+  lyricsCorrectionStatus,
+  lyricsCorrectionButton,
+  lyricsConfirmation,
+  confirmLyricsCorrectionButton,
+  cancelLyricsConfirmationButton,
+  cancelLyricsCorrectionButton,
+  quickFixStatus,
   openAccountButton,
   toggleLanguagesButton,
   languageExpand,
@@ -84,7 +113,6 @@ const {
   blurTranslationInput,
   pauseOnWordHoverInput,
   keyboardShortcutsEnabledInput,
-  fullTrackEnrichmentInput,
   timingOffsetRangeInput,
   timingOffsetNumberInput,
   timingOffsetOutput,
@@ -93,6 +121,8 @@ const {
   progressActivity,
   progressBar,
   progressStages,
+  progressLabel,
+  progressCopy,
   jobsList,
   jobsError,
   usageSummary,
@@ -121,24 +151,81 @@ let latestState: PanelState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
+let lyricsCorrectionRequestBusy = false;
+let quickFixRequestBusy = false;
+let lyricsCancellationRequestBusy = false;
 let hasAppliedDefaultView = false;
 let panelWindowId: number | undefined;
 let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
-let backendRefreshInFlight = false;
-let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
+let panelRequestState: PanelRequestOrder = panelRequestOrder();
+let lastProgressAnnouncement: string | null = null;
 
-/* Watch-tab UI state: the language pickers and the ready-state setup card
-   are collapsed by default and expand on request. */
+/* Watch opens on the transcript; whole-track tasks each occupy one screen. */
 let languagesExpanded = false;
-let setupExpandedWhileReady = false;
+let watchScreen: 'transcript' | 'replace' | 'generate' | 'progress' = 'transcript';
 let lastWatchVideoId: string | null = null;
+let lyricsReplaceConfirm = false;
+type LyricsCorrectionDraft = {
+  attemptId: string;
+  trackId: string;
+  youtubeVideoId: string;
+  lyrics: string;
+};
+let partialLyricsConfirmation: LyricsCorrectionDraft | null = null;
+let pendingLyricsCorrection: LyricsCorrectionDraft | null = null;
+const dismissedCorrectionAttempts = new Set<string>();
+let quickFixSelection: { cueId: string; tokenIndex: number; text: string } | null = null;
+let quickFixError: { message: string; code?: string; reason?: string } | null = null;
+let quickFixNotice: string | null = null;
 
 collapseButton.addEventListener('click', () => {
   window.close();
 });
 generateButton.addEventListener('click', () => void generateSubtitles());
+lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
+lyricsCorrectionTextarea.addEventListener('input', () => {
+  /* Editing the paste after Continue drops back out of the confirmation step. */
+  lyricsReplaceConfirm = false;
+  partialLyricsConfirmation = null;
+  pendingLyricsCorrection = null;
+  renderLyricsEditState();
+});
+function openWatchScreen(screen: typeof watchScreen): void {
+  if (quickFixRequestBusy || lyricsCorrectionRequestBusy) return;
+  watchScreen = screen;
+  transcriptMenu.open = false;
+  if (latestState) showPanelState(latestState);
+  if (screen === 'transcript') transcriptSearch.focus({ preventScroll: true });
+  else backTranscriptButton.focus({ preventScroll: true });
+}
+toggleLyricsEditButton.addEventListener('click', () => openWatchScreen('replace'));
+backTranscriptButton.addEventListener('click', () => openWatchScreen('transcript'));
+viewProgressButton.addEventListener('click', () => openWatchScreen('progress'));
+dismissCorrectionStatusButton.addEventListener('click', () => {
+  if (latestState?.lyricsCorrection) dismissedCorrectionAttempts.add(latestState.lyricsCorrection.attemptId);
+  correctionTerminalStatus.hidden = true;
+  correctionTerminalMessage.textContent = '';
+});
+document.addEventListener('click', (event) => {
+  if (!transcriptMenu.contains(event.target as Node)) transcriptMenu.open = false;
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && transcriptMenu.open) {
+    transcriptMenu.open = false;
+    transcriptMenu.querySelector('summary')?.focus();
+  }
+});
+confirmLyricsCorrectionButton.addEventListener('click', () => void applyConfirmedLyricsCorrection());
+cancelLyricsConfirmationButton.addEventListener('click', () => {
+  lyricsReplaceConfirm = false;
+  partialLyricsConfirmation = null;
+  pendingLyricsCorrection = null;
+  renderLyricsEditState();
+  lyricsCorrectionTextarea.focus();
+});
+cancelLyricsCorrectionButton.addEventListener('click', () => void cancelLyricsCorrection());
 clearStateButton.addEventListener('click', () => void clearLocalState());
 openAccountButton.addEventListener('click', () => {
   showTab(tabButtons, panels, 'account');
@@ -147,11 +234,7 @@ openAccountButton.addEventListener('click', () => {
 toggleLanguagesButton.addEventListener('click', () => {
   setLanguagesExpanded(!languagesExpanded);
 });
-toggleSetupButton.addEventListener('click', () => {
-  setupExpandedWhileReady = !setupExpandedWhileReady;
-  toggleSetupButton.setAttribute('aria-expanded', setupExpandedWhileReady ? 'true' : 'false');
-  if (latestState) showPanelState(latestState);
-});
+toggleSetupButton.addEventListener('click', () => openWatchScreen('generate'));
 accountLoginForm.addEventListener('submit', (event) => void loginFromAccountForm(event));
 logoutButton.addEventListener('click', () => void logoutAccount());
 accountEmailInput.addEventListener('input', clearAccountFeedback);
@@ -187,9 +270,6 @@ pauseOnWordHoverInput.addEventListener('change', () =>
 keyboardShortcutsEnabledInput.addEventListener('change', () =>
   void updateSettings({ keyboardShortcutsEnabled: keyboardShortcutsEnabledInput.checked }),
 );
-fullTrackEnrichmentInput.addEventListener('change', () =>
-  void updateSettings({ fullTrackEnrichment: fullTrackEnrichmentInput.checked }),
-);
 const timingControl = bindTimingOffsetControl({
   rangeInput: timingOffsetRangeInput,
   numberInput: timingOffsetNumberInput,
@@ -198,10 +278,26 @@ const timingControl = bindTimingOffsetControl({
   onCommit: (subtitleTimingOffsetSeconds) => updateSettings({ subtitleTimingOffsetSeconds }),
 });
 
+let backendRefreshInFlight = false;
+let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
+const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const IDLE_POLL_INTERVAL_MS = 30_000;
+
 setupTabs(tabButtons, panels);
 accountBillingLink.innerHTML = accountBillingLinkHtml();
-const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
 let cueSnapshotRequest = 0;
+const transcriptView = bindTranscriptView({
+  transcriptSearch,
+  transcriptList,
+  transcriptStatus,
+  onQuickFixSelect: selectQuickFixToken,
+  onQuickFixSave: (cueId, tokenIndex, value) => void submitQuickFix(cueId, tokenIndex, value),
+  onQuickFixCancel: () => {
+    clearQuickFixSelection();
+    renderLyricsEditState();
+    transcriptSearch.focus({ preventScroll: true });
+  },
+});
 renderShortcutHelp();
 void loadPanelState();
 scheduleNextBackendPoll();
@@ -215,8 +311,17 @@ document.addEventListener('visibilitychange', () => {
 
 void resolvePanelWindowId().then(attachTabListeners);
 
-const panelPortConnector = new PanelPortConnector((name) => browser.runtime.connect({ name }));
-panelPortConnector.connect();
+function connectPanel(): void {
+  try {
+    browser.runtime.connect({ name: 'panel' }).onDisconnect.addListener(() => {
+      setTimeout(connectPanel, 1000);
+    });
+  } catch {
+    setTimeout(connectPanel, 1000);
+  }
+}
+
+connectPanel();
 
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;
@@ -231,10 +336,12 @@ browser.runtime.onMessage.addListener((message) => {
 
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);
-  const hasInFlightJob = latestState?.subtitleState.type === 'loading';
-  const interval = pollIntervalMs(hasInFlightJob);
+  const hasInFlightJob = latestState?.subtitleState.type === 'loading'
+    || latestState?.lyricsCorrection?.status === 'queued'
+    || latestState?.lyricsCorrection?.status === 'running';
+  const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
   backendPollTimer = setTimeout(() => {
-    if (shouldPollNow({ visibilityState: document.visibilityState })) {
+    if (document.visibilityState === 'visible') {
       void refreshBackendState();
     }
     scheduleNextBackendPoll();
@@ -294,7 +401,266 @@ async function refreshBackendState(): Promise<void> {
 }
 
 async function generateSubtitles(): Promise<void> {
-  await sendPanelRequest({ type: 'panel.generateSubtitles' });
+  if (lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
+  const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
+  if (applied) openWatchScreen('transcript');
+}
+
+async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  if (!canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection)) return;
+  lyricsReplaceConfirm = true;
+  partialLyricsConfirmation = null;
+  renderLyricsEditState();
+  confirmLyricsCorrectionButton.focus();
+}
+
+async function applyConfirmedLyricsCorrection(): Promise<void> {
+  const state = latestState;
+  const subtitleState = state?.subtitleState;
+  const page = state?.pageStatus;
+
+  if (lyricsCorrectionRequestBusy || !state || subtitleState?.type !== 'ready' || !page?.supported || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, state.lyricsCorrection)) return;
+
+  const submittedLyrics = lyricsCorrectionTextarea.value;
+  const submittedTrackId = subtitleState.track.trackId;
+  const submittedVideoId = page.videoId;
+  if (partialLyricsConfirmation && (
+    partialLyricsConfirmation.lyrics !== submittedLyrics
+    || partialLyricsConfirmation.trackId !== submittedTrackId
+    || partialLyricsConfirmation.youtubeVideoId !== submittedVideoId
+    || state.lyricsCorrection?.attemptId !== partialLyricsConfirmation.attemptId
+    || state.lyricsCorrection.status !== 'failed'
+    || state.lyricsCorrection.errorCode !== 'lyrics_incomplete'
+  )) {
+    partialLyricsConfirmation = null;
+    lyricsReplaceConfirm = false;
+    renderLyricsEditState();
+    return;
+  }
+  const submittedPartial = partialLyricsConfirmation !== null;
+  lyricsCorrectionRequestBusy = true;
+  renderLyricsEditState();
+
+  try {
+    const applied = await sendPanelRequest({
+      type: 'panel.submitLyricsCorrection',
+      jobId: subtitleState.track.jobId,
+      trackId: submittedTrackId,
+      youtubeVideoId: submittedVideoId,
+      lyrics: submittedLyrics,
+      ...(submittedPartial ? { allowPartial: true } : {}),
+    }, 'correction', 'mutation');
+    if (applied) {
+      const correction = latestState?.lyricsCorrection;
+
+      pendingLyricsCorrection = !submittedPartial && correction && (correction.status === 'queued' || correction.status === 'running' || correction.status === 'failed')
+        ? {
+            attemptId: correction.attemptId,
+            trackId: submittedTrackId,
+            youtubeVideoId: submittedVideoId,
+            lyrics: submittedLyrics,
+          }
+        : null;
+
+      const immediateIncomplete = correction?.status === 'failed'
+        && correction.errorCode === 'lyrics_incomplete'
+        && !submittedPartial;
+
+      if (immediateIncomplete) {
+        offerPartialLyricsConfirmation(correction);
+        if (latestState) showPanelState(latestState);
+      }
+
+      if (!immediateIncomplete) {
+        watchScreen = 'transcript';
+        if (latestState) showPanelState(latestState);
+        lyricsReplaceConfirm = false;
+        partialLyricsConfirmation = null;
+      }
+    }
+    if (!partialLyricsConfirmation) lyricsReplaceConfirm = false;
+  } finally {
+    lyricsCorrectionRequestBusy = false;
+    renderLyricsEditState();
+    if (partialLyricsConfirmation) confirmLyricsCorrectionButton.focus({ preventScroll: true });
+  }
+}
+
+function renderLyricsCorrectionInput(): void {
+  const count = lyricsCharacterCount(lyricsCorrectionTextarea.value);
+  lyricsCorrectionCount.textContent = `${count.toLocaleString()} / 25,000 characters`;
+  lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
+}
+
+async function cancelLyricsCorrection(): Promise<void> {
+  const state = latestState;
+  const page = state?.pageStatus;
+  const track = state?.subtitleState.type === 'ready' ? state.subtitleState.track : null;
+
+  if (lyricsCancellationRequestBusy || !state || !page?.supported || !track || !isActiveLyricsCorrection(state.lyricsCorrection)) return;
+
+  lyricsCancellationRequestBusy = true;
+  correctionCancelError.hidden = true;
+  correctionCancelError.textContent = '';
+  renderLyricsEditState();
+  try {
+    const applied = await sendPanelRequest({
+      type: 'panel.cancelLyricsCorrection',
+      jobId: track.jobId,
+      trackId: track.trackId,
+      attemptId: state.lyricsCorrection!.attemptId,
+      youtubeVideoId: page.videoId,
+    }, 'cancel', 'mutation');
+    if (applied) {
+      watchScreen = 'replace';
+      if (latestState) showPanelState(latestState);
+      dismissCorrectionStatusButton.focus({ preventScroll: true });
+    }
+  } finally {
+    lyricsCancellationRequestBusy = false;
+    renderLyricsEditState();
+  }
+}
+
+function selectQuickFixToken(cueId: string, tokenIndex: number): void {
+  if (quickFixRequestBusy || !latestState || latestState.subtitleState.type !== 'ready') return;
+
+  const cue = latestState.subtitleState.track.cues.find((candidate) => candidate.cueId === cueId);
+  const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
+
+  if (!cue || !token) return;
+
+  quickFixSelection = { cueId, tokenIndex, text: token.text };
+  quickFixError = null;
+  quickFixNotice = null;
+  renderLyricsEditState();
+}
+
+async function submitQuickFix(cueId: string, tokenIndex: number, text: string): Promise<void> {
+  const state = latestState;
+  const page = state?.pageStatus;
+  const track = state?.subtitleState.type === 'ready' ? state.subtitleState.track : null;
+  const selection = quickFixSelection;
+
+  if (
+    quickFixRequestBusy
+    || !state
+    || !page?.supported
+    || !track
+    || !selection
+    || selection.cueId !== cueId
+    || selection.tokenIndex !== tokenIndex
+    || isActiveLyricsCorrection(state.lyricsCorrection)
+    || text.trim() === selection.text.trim()
+    || lyricsCharacterCount(text) === 0
+    || lyricsCharacterCount(text) > QUICK_FIX_CHARACTER_LIMIT
+  ) return;
+
+  quickFixRequestBusy = true;
+  transcriptView.setQuickFixBusy(true);
+  renderLyricsEditState();
+
+  const applied = await sendPanelRequest({
+    type: 'panel.quickFixToken',
+    jobId: track.jobId,
+    trackId: track.trackId,
+    youtubeVideoId: page.videoId,
+    cueId,
+    tokenIndex,
+    text,
+  }, 'quickfix', 'mutation');
+
+  quickFixRequestBusy = false;
+  transcriptView.setQuickFixBusy(false);
+
+  if (applied) {
+    clearQuickFixSelection();
+    quickFixNotice = 'Saved.';
+    transcriptSearch.focus({ preventScroll: true });
+  } else if (quickFixError?.code === 'lyrics_correction_in_progress' && quickFixError.reason === 'stale_track') {
+    clearQuickFixSelection();
+    quickFixNotice = 'The subtitles changed — the latest version is loaded.';
+    void refreshBackendState();
+    transcriptSearch.focus({ preventScroll: true });
+  } else {
+    transcriptView.setQuickFixError(quickFixError?.message ?? 'Could not save. Try again.');
+  }
+
+  renderLyricsEditState();
+}
+
+function clearQuickFixSelection(): void {
+  quickFixSelection = null;
+  quickFixError = null;
+}
+
+function isActiveLyricsCorrection(status: LyricsCorrectionStatus | null | undefined): boolean {
+  return status?.status === 'queued' || status?.status === 'running';
+}
+
+function offerPartialLyricsConfirmation(correction: LyricsCorrectionStatus): void {
+  const pending = pendingLyricsCorrection;
+  const currentTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
+
+  if (
+    correction.status !== 'failed'
+    || correction.errorCode !== 'lyrics_incomplete'
+    || !pending
+    || pending.attemptId !== correction.attemptId
+    || pending.trackId !== currentTrackId
+    || pending.youtubeVideoId !== latestState?.pageStatus?.videoId
+    || pending.lyrics !== lyricsCorrectionTextarea.value
+  ) {
+    return;
+  }
+
+  partialLyricsConfirmation = pending;
+  pendingLyricsCorrection = null;
+  watchScreen = 'replace';
+  lyricsReplaceConfirm = true;
+  lyricsCorrectionStatus.textContent = '';
+}
+
+function renderLyricsEditState(): void {
+  const ready = latestState?.subtitleState.type === 'ready' && Date.parse(latestState.subtitleState.track.expiresAt) > Date.now();
+  const activeCorrection = isActiveLyricsCorrection(latestState?.lyricsCorrection);
+  const editOpen = watchScreen === 'replace' && ready;
+  const quickActive = ready && !activeCorrection;
+
+  /* Drop a selection whose cue no longer exists (e.g. the track rotated). */
+  if (quickFixSelection) {
+    const track = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track : null;
+    if (!quickActive || !track?.cues.some((cue) => cue.cueId === quickFixSelection!.cueId)) {
+      clearQuickFixSelection();
+    }
+  }
+
+  lyricsEditPanel.hidden = !editOpen;
+  backTranscriptButton.disabled = quickFixRequestBusy || lyricsCorrectionRequestBusy;
+  toggleSetupButton.disabled = activeCorrection || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy;
+  toggleLyricsEditButton.disabled = !ready || activeCorrection || lyricsCorrectionRequestBusy || quickFixRequestBusy;
+
+  /* Replace all: Continue reveals the inline warning and swaps the footer
+     actions; the pasted text stays visible while confirming. */
+  lyricsConfirmation.hidden = !lyricsReplaceConfirm;
+  lyricsConfirmation.textContent = partialLyricsConfirmation
+    ? 'These lyrics appear incomplete. Would you like AI to combine them with your current lyrics? Existing lyrics will be kept where needed.'
+    : 'This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.';
+  lyricsCorrectionButton.hidden = lyricsReplaceConfirm;
+  confirmLyricsCorrectionButton.hidden = !lyricsReplaceConfirm;
+  cancelLyricsConfirmationButton.hidden = !lyricsReplaceConfirm;
+  confirmLyricsCorrectionButton.textContent = partialLyricsConfirmation ? 'Proceed' : 'Replace entire track';
+  cancelLyricsConfirmationButton.textContent = partialLyricsConfirmation ? 'Edit paste' : 'Cancel';
+  lyricsCorrectionTextarea.disabled = lyricsCorrectionRequestBusy;
+  confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
+
+  quickFixStatus.textContent = quickFixNotice ?? '';
+  transcriptView.setQuickFixMode(quickActive);
+  transcriptView.setQuickFixEditing(quickActive ? quickFixSelection : null);
+  renderLyricsCorrectionInput();
+  cancelLyricsCorrectionButton.hidden = !activeCorrection;
+  cancelLyricsCorrectionButton.disabled = lyricsCancellationRequestBusy;
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
@@ -344,11 +710,19 @@ async function logoutAccount(): Promise<void> {
   }
 }
 
-async function sendPanelRequest(request: PanelRequest, errorTarget: RequestErrorTarget = 'global'): Promise<boolean> {
+async function sendPanelRequest(
+  request: PanelRequest,
+  errorTarget: RequestErrorTarget = 'global',
+  kind: 'normal' | 'mutation' = 'normal',
+): Promise<boolean> {
   const requestWithWindow = typeof panelWindowId === 'number'
     ? { ...request, windowId: panelWindowId }
     : request;
   const seq = ++stateSeq;
+  const isMutation = kind === 'mutation';
+  const ordering = beginPanelRequest(panelRequestState, kind);
+  panelRequestState = ordering.state;
+  const canApply = (): boolean => canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
@@ -359,6 +733,7 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     }
 
     if (!response) {
+      if (!canApply()) return false;
       if (seq < latestAppliedSeq) {
         return false;
       }
@@ -369,16 +744,18 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     }
 
     if ('ok' in response) {
+      if (!canApply()) return false;
       if (seq < latestAppliedSeq) {
         return false;
       }
       latestAppliedSeq = seq;
-      showRequestError(response.error, errorTarget);
+      showRequestError(response.error, errorTarget, response.errorCode, response.details);
 
       return false;
     }
 
-    if (seq < latestAppliedSeq) {
+    if (!canApply()) return false;
+    if (!isMutation && seq < latestAppliedSeq) {
       return true;
     }
     latestAppliedSeq = seq;
@@ -386,6 +763,7 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
 
     return true;
   } catch (error) {
+    if (!canApply()) return false;
     if (seq < latestAppliedSeq) {
       return false;
     }
@@ -393,6 +771,10 @@ async function sendPanelRequest(request: PanelRequest, errorTarget: RequestError
     showRequestError(error, errorTarget);
 
     return false;
+  } finally {
+    if (isMutation) {
+      panelRequestState = finishPanelRequest(panelRequestState);
+    }
   }
 }
 
@@ -474,14 +856,18 @@ function setLanguagesExpanded(expanded: boolean): void {
 
 function showPanelState(state: PanelState): void {
   const previousStateType = latestState?.subtitleState.type;
+  const previousCorrectionStatus = latestState?.lyricsCorrection?.status;
+  const previousTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
+  const hadPartialConfirmation = partialLyricsConfirmation !== null;
   latestState = state;
 
   const pageStatus = state.pageStatus;
-  const subtitleState = state.subtitleState;
   const settings = state.settings;
   const supported = Boolean(pageStatus?.supported);
   const { accountState } = state;
   const authenticated = accountState.status === 'authenticated';
+  const subtitleState = state.subtitleState;
+  const nextTrackId = subtitleState.type === 'ready' ? subtitleState.track.trackId : null;
 
   currentSettings = settings;
 
@@ -489,8 +875,51 @@ function showPanelState(state: PanelState): void {
   const watchVideoId = pageStatus?.supported ? pageStatus.videoId : null;
   if (watchVideoId !== lastWatchVideoId) {
     lastWatchVideoId = watchVideoId;
-    setupExpandedWhileReady = false;
+    watchScreen = 'transcript';
     setLanguagesExpanded(false);
+    lyricsCorrectionTextarea.value = '';
+    clearQuickFixSelection();
+    quickFixNotice = null;
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    pendingLyricsCorrection = null;
+  } else if (previousCorrectionStatus !== 'completed' && state.lyricsCorrection?.status === 'completed') {
+    lyricsCorrectionTextarea.value = '';
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    pendingLyricsCorrection = null;
+  } else if (nextTrackId !== previousTrackId) {
+    /* A refreshed track invalidates any permission to retry the old paste. */
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    pendingLyricsCorrection = null;
+  }
+
+  if (
+    partialLyricsConfirmation
+    && (
+      state.lyricsCorrection?.status !== 'failed'
+      || state.lyricsCorrection.errorCode !== 'lyrics_incomplete'
+      || state.lyricsCorrection.attemptId !== partialLyricsConfirmation.attemptId
+      || lyricsCorrectionTextarea.value !== partialLyricsConfirmation.lyrics
+    )
+  ) {
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+  }
+
+  if (state.lyricsCorrection?.status === 'failed') {
+    if (state.lyricsCorrection.errorCode !== 'lyrics_incomplete') {
+      pendingLyricsCorrection = null;
+    } else {
+      offerPartialLyricsConfirmation(state.lyricsCorrection);
+    }
+  }
+  if (pendingLyricsCorrection && (
+    state.lyricsCorrection?.attemptId !== pendingLyricsCorrection.attemptId
+    || state.lyricsCorrection.status === 'cancelled'
+  )) {
+    pendingLyricsCorrection = null;
   }
 
   showStatusBanner(state);
@@ -507,7 +936,12 @@ function showPanelState(state: PanelState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading';
+  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
+  renderLyricsEditState();
+  renderLyricsCorrectionState(state);
+  if (!hadPartialConfirmation && partialLyricsConfirmation) {
+    confirmLyricsCorrectionButton.focus({ preventScroll: true });
+  }
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
   renderGenerateNote(state, supported);
 
@@ -526,7 +960,6 @@ function showPanelState(state: PanelState): void {
   blurTranslationInput.checked = settings.blurTranslation;
   pauseOnWordHoverInput.checked = settings.pauseOnWordHover;
   keyboardShortcutsEnabledInput.checked = settings.keyboardShortcutsEnabled;
-  fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
   timingControl.showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
 
@@ -538,12 +971,58 @@ function showPanelState(state: PanelState): void {
 
   if (!hasAppliedDefaultView) {
     hasAppliedDefaultView = true;
-    showTab(tabButtons, panels, selectDefaultView(state));
+    showTab(tabButtons, panels, 'watch');
   }
 
-  if (previousStateType !== state.subtitleState.type) {
+  if (previousStateType !== state.subtitleState.type || previousCorrectionStatus !== state.lyricsCorrection?.status) {
     scheduleNextBackendPoll();
   }
+}
+
+/* Terminal correction outcomes live in one banner outside the collapsible
+   Edit panel; in-form status is reserved for request errors. */
+function renderLyricsCorrectionState(state: PanelState): void {
+  const correction = state.lyricsCorrection;
+  correctionSyncError.hidden = !state.lyricsCorrectionSyncError;
+  correctionSyncError.textContent = state.lyricsCorrectionSyncError ?? '';
+
+  if (
+    !correction
+    || correction.status === 'queued'
+    || correction.status === 'running'
+    || dismissedCorrectionAttempts.has(correction.attemptId)
+    || (correction.status === 'failed' && correction.errorCode === 'lyrics_incomplete' && partialLyricsConfirmation !== null)
+  ) {
+    correctionTerminalStatus.hidden = true;
+    correctionTerminalMessage.textContent = '';
+    if (!correction) {
+      lyricsCorrectionStatus.textContent = '';
+      correctionCancelError.hidden = true;
+      correctionCancelError.textContent = '';
+    }
+    return;
+  }
+
+  /* A terminal outcome supersedes any in-form request error. */
+  lyricsCorrectionStatus.textContent = '';
+  correctionCancelError.hidden = true;
+  correctionCancelError.textContent = '';
+
+  correctionTerminalStatus.hidden = false;
+  if (correction.status === 'completed') {
+    correctionTerminalStatus.className = 'status-banner correction-status success';
+    correctionTerminalMessage.textContent = 'Lyrics replaced — the transcript is up to date.';
+    return;
+  }
+
+  correctionTerminalStatus.className = 'status-banner correction-status';
+  correctionTerminalMessage.textContent = correction.status === 'cancelled'
+    ? 'Replacement cancelled. Your current subtitles are unchanged.'
+    : correction.errorCode === 'lyrics_incomplete'
+      ? 'These lyrics appear incomplete. Your current subtitles are unchanged. Paste them again to review and continue.'
+      : correction.errorCode === 'lyrics_do_not_match'
+        ? 'Replacement stopped — these lyrics do not match this song. Your current subtitles are unchanged.'
+        : correction.message || 'Replacement failed. Your current subtitles are unchanged.';
 }
 
 function showStatusBanner(state: PanelState): void {
@@ -581,29 +1060,75 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   const subtitleState = state.subtitleState;
   const loading = subtitleState.type === 'loading';
   const ready = subtitleState.type === 'ready';
+  const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
 
   watchUnsupported.hidden = supported;
   watchSignin.hidden = !supported || authenticated;
-  watchSetup.hidden = !supported || !authenticated || loading || (ready && !setupExpandedWhileReady);
-  progressContainer.hidden = !loading;
+  watchSetup.hidden = !supported || !authenticated || loading || (ready && watchScreen !== 'generate');
+  if (watchScreen === 'progress' && !loading && !correctionRunning) watchScreen = 'transcript';
+  progressContainer.hidden = (!loading && !correctionRunning) || (ready && watchScreen !== 'progress');
+  progressSummary.hidden = !ready || !correctionRunning || watchScreen !== 'transcript';
+  progressSummaryLabel.textContent = correctionRunning ? 'Updating lyrics…' : '';
+  backTranscriptButton.hidden = !ready || watchScreen === 'transcript';
+  backTranscriptButton.disabled = quickFixRequestBusy || lyricsCorrectionRequestBusy;
+  readyToolbar.hidden = watchScreen !== 'transcript';
+  transcriptList.hidden = watchScreen !== 'transcript';
+  transcriptStatus.hidden = watchScreen !== 'transcript';
+  quickFixStatus.hidden = watchScreen !== 'transcript';
   watchReady.hidden = !ready;
-  toggleSetupButton.setAttribute('aria-expanded', setupExpandedWhileReady ? 'true' : 'false');
 
   if (loading) {
     const progress = generationProgress(subtitleState);
 
+    progressLabel.textContent = 'Generating';
+    progressStages.setAttribute('aria-label', 'Generation stages');
+    progressPercent.setAttribute('aria-valuenow', String(progress.percent));
+    progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.activityLabel}`);
     progressPercent.textContent = `${progress.percent}%`;
-    progressActivity.textContent = progress.activityLabel;
+    announceProgress('Generating', progress.activityLabel);
     progressBar.style.width = `${progress.percent}%`;
     progressStages.innerHTML = stageChecklistHtml(subtitleState.stage);
+    progressCopy.textContent = 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
+  } else if (correctionRunning && state.lyricsCorrection) {
+    const progress = lyricsCorrectionProgress(state.lyricsCorrection.stage);
+    progressLabel.textContent = 'Replacing lyrics';
+    progressStages.setAttribute('aria-label', 'Replacement stages');
+    progressPercent.setAttribute('aria-valuenow', String(progress.percent));
+    progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.label}`);
+    progressPercent.textContent = `${progress.percent}%`;
+    announceProgress('Replacing lyrics', progress.label);
+    progressBar.style.width = `${progress.percent}%`;
+    progressStages.innerHTML = lyricsCorrectionStageChecklistHtml(state.lyricsCorrection.stage);
+    progressCopy.textContent = 'Your current subtitles stay active while the replacement runs.';
   }
+}
+
+function announceProgress(operation: string, stage: string): void {
+  const announcement = `${operation}: ${stage}`;
+
+  if (announcement === lastProgressAnnouncement) return;
+
+  lastProgressAnnouncement = announcement;
+  progressActivity.textContent = stage;
+}
+
+function lyricsCorrectionStageChecklistHtml(stage: LyricsCorrectionStatus['stage']): string {
+  const stages = LYRICS_CORRECTION_STAGES;
+  const currentIndex = stages.findIndex((item) => item.key === stage);
+
+  return stages.map((item, index) => `
+    <li class="stage ${index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'pending'}"${index === currentIndex ? ' aria-current="step"' : ''}>
+      <span class="stage-dot" aria-hidden="true"></span>
+      <span>${escapeHtml(item.label)}</span>
+    </li>
+  `).join('');
 }
 
 function stageChecklistHtml(stage: PanelState['jobHistory'][number]['stage']): string {
   return stageTimeline({ stage, status: 'running' })
     .map(
       (item) => `
-        <li class="stage ${item.state}">
+        <li class="stage ${item.state}"${item.state === 'current' ? ' aria-current="step"' : ''}>
           <span class="stage-dot" aria-hidden="true"></span>
           <span>${escapeHtml(item.label)}</span>
         </li>
@@ -715,6 +1240,8 @@ function showError(error: unknown): void {
   watchSignin.hidden = true;
   watchSetup.hidden = true;
   progressContainer.hidden = true;
+  progressSummary.hidden = true;
+  backTranscriptButton.hidden = true;
   watchReady.hidden = true;
   jobsList.innerHTML = '<p class="empty-state">Unable to load jobs.</p>';
   renderLanguagePair(null);
@@ -735,7 +1262,7 @@ function showError(error: unknown): void {
   setSettingsDisabled(true);
 }
 
-function showRequestError(error: unknown, errorTarget: RequestErrorTarget): void {
+function showRequestError(error: unknown, errorTarget: RequestErrorTarget, errorCode?: string, details?: { reason?: string }): void {
   const message = typeof error === 'string'
     ? error
     : error instanceof Error
@@ -744,6 +1271,29 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget): void
 
   if (errorTarget === 'account') {
     showAccountFeedback('error', message);
+
+    return;
+  }
+
+  if (errorTarget === 'quickfix') {
+    quickFixError = { message, code: errorCode, reason: details?.reason };
+
+    return;
+  }
+
+  if (errorTarget === 'correction') {
+    /* Incomplete corrections are terminal async outcomes. The partial retry
+       is offered only by showPanelState after matching the attempt and draft. */
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    lyricsCorrectionStatus.textContent = message;
+
+    return;
+  }
+
+  if (errorTarget === 'cancel') {
+    correctionCancelError.hidden = false;
+    correctionCancelError.textContent = message;
 
     return;
   }
@@ -798,7 +1348,6 @@ function setSettingsDisabled(disabled: boolean): void {
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
   keyboardShortcutsEnabledInput.disabled = disabled;
-  fullTrackEnrichmentInput.disabled = disabled;
   accountEmailInput.disabled = disabled;
   accountPasswordInput.disabled = disabled;
   accountLoginButton.disabled = disabled;

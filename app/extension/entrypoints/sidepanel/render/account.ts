@@ -14,7 +14,7 @@ export function accountFeatureListHtml(accountState: AccountState, settings: Ext
     ['Generation access', 'Checked when you generate'],
     ['Cue translation', settings.showTranslation ? 'Selected' : 'Not selected'],
     ['Romanization', settings.showRomanization ? 'Selected' : 'Not selected'],
-    ['Full word cards', settings.fullTrackEnrichment ? 'Selected' : 'Not selected'],
+    ['Word cards', 'On click'],
     ['Queue speed', accountState.tierSpeedLabel],
   ]);
 }

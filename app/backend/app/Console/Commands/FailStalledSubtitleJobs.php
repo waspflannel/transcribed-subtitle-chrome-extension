@@ -3,9 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -15,7 +19,7 @@ use Illuminate\Support\Facades\Log;
 #[Description('Fail running subtitle jobs whose stage has exceeded its timeout plus slack.')]
 class FailStalledSubtitleJobs extends Command
 {
-    public function handle(SubtitleJobFailureHandler $failureHandler, SubtitleJobAdmission $admission): int
+    public function handle(SubtitleJobFailureHandler $failureHandler, SubtitleJobAdmission $admission, LyricsCorrectionService $corrections): int
     {
         if (! (bool) config('subtitles.stalled_job.enabled', true)) {
             $this->components->info('Stalled-job watcher is disabled.');
@@ -72,6 +76,27 @@ class FailStalledSubtitleJobs extends Command
             );
 
             $failed++;
+        }
+
+        // Recover a missing delivery once per revision, after an existing worker
+        // and its queue retry have had time to finish. Duplicate deliveries are
+        // serialized by the attempt lock and rejected by the revision check.
+        $correctionCutoff = $now->copy()->subSeconds(
+            (int) config('queue.connections.'.SubtitleQueue::connection().'.retry_after', 0)
+                + LyricsCorrectionJob::MAX_BACKOFF_SECONDS
+                + $slackSeconds,
+        );
+
+        $stalledCorrections = SubtitleTrackLyricsCorrection::query()
+            ->whereIn('status', ['queued', 'running'])
+            ->where('updated_at', '<=', $correctionCutoff)
+            ->get(['id', 'subtitle_track_id', 'attempt_id', 'work_revision']);
+
+        foreach ($stalledCorrections as $correction) {
+            $corrections->recoverStalledAttempt($correction, $correctionCutoff);
+            if ($correction->fresh()?->status === 'failed') {
+                $failed++;
+            }
         }
 
         $this->components->info("Failed {$failed} stalled subtitle job(s).");

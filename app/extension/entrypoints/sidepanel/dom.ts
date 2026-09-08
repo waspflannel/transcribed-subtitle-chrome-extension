@@ -1,4 +1,10 @@
 export interface PanelDom {
+  readyToolbar: HTMLElement;
+  viewProgressButton: HTMLButtonElement;
+  progressSummaryLabel: HTMLElement;
+  progressSummary: HTMLElement;
+  transcriptMenu: HTMLDetailsElement;
+  backTranscriptButton: HTMLButtonElement;
   tabButtons: HTMLButtonElement[];
   panels: HTMLElement[];
   transcriptSearch: HTMLInputElement;
@@ -13,6 +19,24 @@ export interface PanelDom {
   watchSignin: HTMLElement;
   watchSetup: HTMLElement;
   watchReady: HTMLElement;
+  correctionTerminalStatus: HTMLElement;
+  correctionTerminalMessage: HTMLElement;
+  dismissCorrectionStatusButton: HTMLButtonElement;
+  correctionCancelError: HTMLElement;
+  correctionSyncError: HTMLElement;
+  lyricsEditPanel: HTMLElement;
+  toggleLyricsEditButton: HTMLButtonElement;
+  lyricsCorrectionForm: HTMLFormElement;
+  lyricsCorrectionTextarea: HTMLTextAreaElement;
+  lyricsCorrectionCount: HTMLElement;
+  lyricsCorrectionStatus: HTMLElement;
+  lyricsCorrectionButton: HTMLButtonElement;
+  lyricsConfirmation: HTMLElement;
+  confirmLyricsCorrectionButton: HTMLButtonElement;
+  cancelLyricsConfirmationButton: HTMLButtonElement;
+  cancelLyricsCorrectionButton: HTMLButtonElement;
+  quickFixStatus: HTMLElement;
+  progressCopy: HTMLElement;
   openAccountButton: HTMLButtonElement;
   toggleLanguagesButton: HTMLButtonElement;
   languageExpand: HTMLElement;
@@ -44,7 +68,6 @@ export interface PanelDom {
   blurTranslationInput: HTMLInputElement;
   pauseOnWordHoverInput: HTMLInputElement;
   keyboardShortcutsEnabledInput: HTMLInputElement;
-  fullTrackEnrichmentInput: HTMLInputElement;
   timingOffsetRangeInput: HTMLInputElement;
   timingOffsetNumberInput: HTMLInputElement;
   timingOffsetOutput: HTMLOutputElement;
@@ -53,6 +76,7 @@ export interface PanelDom {
   progressActivity: HTMLElement;
   progressBar: HTMLElement;
   progressStages: HTMLElement;
+  progressLabel: HTMLElement;
   jobsList: HTMLElement;
   jobsError: HTMLElement;
   usageSummary: HTMLElement;
@@ -78,6 +102,12 @@ export interface PanelDom {
 
 export function getPanelDom(root: ParentNode = document): PanelDom {
   return {
+    readyToolbar: query(root, '.ready-toolbar', HTMLElement),
+    viewProgressButton: query(root, '[data-action="view-progress"]', HTMLButtonElement),
+    progressSummaryLabel: query(root, '[data-progress-summary-label]', HTMLElement),
+    progressSummary: query(root, '[data-progress-summary]', HTMLElement),
+    transcriptMenu: query(root, '[data-transcript-menu]', HTMLDetailsElement),
+    backTranscriptButton: query(root, '[data-action="back-transcript"]', HTMLButtonElement),
     tabButtons: queryAll<HTMLButtonElement>(root, '[data-tab]'),
     panels: queryAll<HTMLElement>(root, '[data-panel]'),
     transcriptSearch: query<HTMLInputElement>(root, '[data-transcript-search]', HTMLInputElement),
@@ -92,6 +122,23 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     watchSignin: query(root, '[data-watch-signin]', HTMLElement),
     watchSetup: query(root, '[data-watch-setup]', HTMLElement),
     watchReady: query(root, '[data-watch-ready]', HTMLElement),
+    correctionTerminalStatus: query(root, '[data-correction-terminal-status]', HTMLElement),
+    correctionTerminalMessage: query(root, '[data-correction-terminal-message]', HTMLElement),
+    dismissCorrectionStatusButton: query(root, '[data-action="dismiss-correction-status"]', HTMLButtonElement),
+    correctionCancelError: query(root, '[data-correction-cancel-error]', HTMLElement),
+    correctionSyncError: query(root, '[data-correction-sync-error]', HTMLElement),
+    lyricsEditPanel: query(root, '[data-lyrics-edit-panel]', HTMLElement),
+    toggleLyricsEditButton: query(root, '[data-action="toggle-lyrics-edit"]', HTMLButtonElement),
+    lyricsCorrectionForm: query(root, '[data-lyrics-correction-form]', HTMLFormElement),
+    lyricsCorrectionTextarea: query(root, '[data-lyrics-correction-textarea]', HTMLTextAreaElement),
+    lyricsCorrectionCount: query(root, '[data-lyrics-correction-count]', HTMLElement),
+    lyricsCorrectionStatus: query(root, '[data-lyrics-correction-status]', HTMLElement),
+    lyricsCorrectionButton: query(root, '[data-action="apply-lyrics-correction"]', HTMLButtonElement),
+    lyricsConfirmation: query(root, '[data-lyrics-confirmation]', HTMLElement),
+    confirmLyricsCorrectionButton: query(root, '[data-action="confirm-lyrics-correction"]', HTMLButtonElement),
+    cancelLyricsConfirmationButton: query(root, '[data-action="cancel-lyrics-confirmation"]', HTMLButtonElement),
+    cancelLyricsCorrectionButton: query(root, '[data-action="cancel-lyrics-correction"]', HTMLButtonElement),
+    quickFixStatus: query(root, '[data-quick-fix-status]', HTMLElement),
     openAccountButton: query(root, '[data-action="open-account"]', HTMLButtonElement),
     toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),
     languageExpand: query(root, '[data-language-expand]', HTMLElement),
@@ -123,7 +170,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     blurTranslationInput: query(root, 'input[name="blurTranslation"]', HTMLInputElement),
     pauseOnWordHoverInput: query(root, 'input[name="pauseOnWordHover"]', HTMLInputElement),
     keyboardShortcutsEnabledInput: query(root, 'input[name="keyboardShortcutsEnabled"]', HTMLInputElement),
-    fullTrackEnrichmentInput: query(root, 'input[name="fullTrackEnrichment"]', HTMLInputElement),
     timingOffsetRangeInput: query(root, 'input[name="subtitleTimingOffsetSeconds"]', HTMLInputElement),
     timingOffsetNumberInput: query(root, 'input[name="subtitleTimingOffsetNumber"]', HTMLInputElement),
     timingOffsetOutput: query(root, '[data-timing-offset]', HTMLOutputElement),
@@ -132,6 +178,8 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     progressActivity: query(root, '[data-progress-activity]', HTMLElement),
     progressBar: query(root, '[data-progress-bar]', HTMLElement),
     progressStages: query(root, '[data-progress-stages]', HTMLElement),
+    progressLabel: query(root, '[data-progress-label]', HTMLElement),
+    progressCopy: query(root, '[data-progress-copy]', HTMLElement),
     jobsList: query(root, '[data-jobs-list]', HTMLElement),
     jobsError: query(root, '[data-jobs-error]', HTMLElement),
     usageSummary: query(root, '[data-usage-summary]', HTMLElement),

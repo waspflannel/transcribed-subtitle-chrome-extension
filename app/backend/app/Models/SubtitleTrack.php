@@ -6,6 +6,7 @@ use Database\Factories\SubtitleTrackFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class SubtitleTrack extends Model
 {
@@ -19,7 +20,6 @@ class SubtitleTrack extends Model
         'source_language',
         'detected_source_language',
         'target_language',
-        'source_dialect',
         'processing_version',
         'generated_at',
         'expires_at',
@@ -30,6 +30,11 @@ class SubtitleTrack extends Model
     public function job(): BelongsTo
     {
         return $this->belongsTo(SubtitleJob::class, 'subtitle_job_id');
+    }
+
+    public function lyricsCorrection(): HasOne
+    {
+        return $this->hasOne(SubtitleTrackLyricsCorrection::class);
     }
 
     public function isExpired(): bool

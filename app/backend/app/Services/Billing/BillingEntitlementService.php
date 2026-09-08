@@ -38,7 +38,7 @@ final class BillingEntitlementService
             throw BillingEntitlementException::paymentRequired();
         }
 
-        if (($payload['enrichmentMode'] ?? null) === 'full' && ! $this->plans->hasFeature($plan, 'full_word_cards')) {
+        if (($payload['enrichmentMode'] ?? null) === 'full' && ! $this->plans->supportsFullWordCards($plan)) {
             throw BillingEntitlementException::featureUnavailable();
         }
 
@@ -150,7 +150,7 @@ final class BillingEntitlementService
                 'id' => (string) $user->id,
                 'email' => $user->email,
                 'name' => $user->name,
-                'emailVerified' => $user->hasVerifiedEmail(),
+                'emailVerified' => true,
                 'planName' => 'No active plan',
                 'tierName' => 'Inactive',
                 'tierSpeedLabel' => 'Generation paused',
@@ -171,7 +171,7 @@ final class BillingEntitlementService
             'id' => (string) $user->id,
             'email' => $user->email,
             'name' => $user->name,
-            'emailVerified' => $user->hasVerifiedEmail(),
+            'emailVerified' => true,
             'planName' => $this->plans->name($plan),
             'tierName' => $this->plans->name($plan),
             'tierSpeedLabel' => $this->plans->speedLabel($plan),

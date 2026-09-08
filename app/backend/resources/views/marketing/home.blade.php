@@ -94,7 +94,7 @@
         <div class="step-list" data-reveal>
             <article class="step">
                 <h3>Install the Chrome extension</h3>
-                <p>Add the extension to Chrome, then sign in from the side panel Account tab with your verified account email.</p>
+                <p>Add the extension to Chrome, then sign in from the side panel Account tab with your account email.</p>
             </article>
             <article class="step">
                 <h3>Pick a video and generate</h3>

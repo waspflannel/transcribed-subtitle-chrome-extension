@@ -116,7 +116,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status, request: $request);
+            $details = $exception->publicCode === 'lyrics_correction_in_progress'
+                && ($exception->context['reason'] ?? null) === 'stale_track'
+                ? ['reason' => 'stale_track']
+                : [];
+
+            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status, details: $details, request: $request);
         });
 
         $exceptions->render(function (BillingEntitlementException $exception, Request $request) {

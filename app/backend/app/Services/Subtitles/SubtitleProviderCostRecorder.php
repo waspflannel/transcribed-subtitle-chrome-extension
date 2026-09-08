@@ -50,7 +50,25 @@ final class SubtitleProviderCostRecorder
         }
     }
 
-    public function recordCueBatch(SubtitleJob $job, string $stage, int $cueCount): void
+    /**
+     * One structured alignment call resolves the whole pasted-lyrics prompt,
+     * so record it as a single per-call unit against the analysis model.
+     */
+    public function recordCorrectionAlignment(SubtitleJob $job): void
+    {
+        $this->record(
+            job: $job,
+            stage: 'aligning',
+            provider: Lab::OpenAI->value,
+            model: (string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default'),
+            billingUnit: 'alignment_call',
+            billedUnits: 1,
+            unitPriceMicrousd: max(0, (int) config('subtitles.costs.openai_alignment_microusd_per_call', 0)),
+            requiredStatus: 'completed',
+        );
+    }
+
+    public function recordCueBatch(SubtitleJob $job, string $stage, int $cueCount, string $requiredStatus = 'running'): void
     {
         $purpose = match ($stage) {
             'tokenizing' => 'tokenization',
@@ -73,6 +91,7 @@ final class SubtitleProviderCostRecorder
             billingUnit: 'cue',
             billedUnits: max(0, $cueCount),
             unitPriceMicrousd: $unitPrice,
+            requiredStatus: $requiredStatus,
         );
     }
 
@@ -84,13 +103,14 @@ final class SubtitleProviderCostRecorder
         string $billingUnit,
         int $billedUnits,
         int $unitPriceMicrousd,
+        string $requiredStatus = 'running',
     ): void {
         $costMicrousd = $billedUnits * $unitPriceMicrousd;
 
-        DB::transaction(function () use ($job, $stage, $provider, $model, $billingUnit, $billedUnits, $unitPriceMicrousd, $costMicrousd): void {
+        DB::transaction(function () use ($job, $stage, $provider, $model, $billingUnit, $billedUnits, $unitPriceMicrousd, $costMicrousd, $requiredStatus): void {
             $job = SubtitleJobLock::current($job->id, $job->run_id);
 
-            if ($job === null || $job->status !== 'running') {
+            if ($job === null || $job->status !== $requiredStatus) {
                 return;
             }
 

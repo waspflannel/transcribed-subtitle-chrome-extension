@@ -328,6 +328,393 @@ export interface LearningToken {
   usageNote?: string;
 }
 
+// Source: schemas/lyrics-correction-request.schema.json
+export interface LyricsCorrectionRequest {
+  /**
+   * Identity of the track the learner intends to replace.
+   */
+  expectedTrackId: string;
+  /**
+   * Pasted plain-text lyrics, complete or partial. The backend applies a Unicode character limit after validation.
+   */
+  lyrics: string;
+  /**
+   * Allow the backend to continue after suspected incomplete lyrics and ask the AI to merge the supplied lyrics with the generated transcript.
+   */
+  allowPartial?: boolean;
+}
+
+// Source: schemas/lyrics-correction-status.schema.json
+export type LyricsCorrectionStatus =
+  | {
+      attemptId: string;
+      status: 'queued';
+      stage: 'queued';
+      updatedAt: string;
+    }
+  | {
+      attemptId: string;
+      status: 'running';
+      stage: 'aligning' | 'rebuilding' | 'romanizing' | 'enriching' | 'finalizing';
+      updatedAt: string;
+    }
+  | {
+      attemptId: string;
+      status: 'completed';
+      stage: 'completed';
+      updatedAt: string;
+      track: TrackResponse;
+    }
+  | {
+      attemptId: string;
+      status: 'failed';
+      stage: 'failed';
+      updatedAt: string;
+      errorCode: 'lyrics_incomplete' | 'lyrics_do_not_match' | 'lyrics_correction_failed';
+      message: string;
+    }
+  | {
+      attemptId: string;
+      status: 'cancelled';
+      stage: 'cancelled';
+      updatedAt: string;
+    };
+
+export interface TrackResponse {
+  trackId: string;
+  jobId: string;
+  youtubeVideoId: string;
+  sourceLanguage:
+    | 'auto'
+    | 'bel'
+    | 'bos'
+    | 'bul'
+    | 'cat'
+    | 'hrv'
+    | 'ces'
+    | 'dan'
+    | 'nld'
+    | 'eng'
+    | 'est'
+    | 'fin'
+    | 'fra'
+    | 'glg'
+    | 'deu'
+    | 'ell'
+    | 'hun'
+    | 'isl'
+    | 'ind'
+    | 'ita'
+    | 'jpn'
+    | 'kan'
+    | 'lav'
+    | 'mkd'
+    | 'msa'
+    | 'mal'
+    | 'nor'
+    | 'pol'
+    | 'por'
+    | 'ron'
+    | 'rus'
+    | 'slk'
+    | 'spa'
+    | 'swe'
+    | 'tur'
+    | 'ukr'
+    | 'vie'
+    | 'hye'
+    | 'aze'
+    | 'ben'
+    | 'yue'
+    | 'fil'
+    | 'kat'
+    | 'guj'
+    | 'hin'
+    | 'kaz'
+    | 'lit'
+    | 'mlt'
+    | 'cmn'
+    | 'mar'
+    | 'nep'
+    | 'ori'
+    | 'fas'
+    | 'srp'
+    | 'slv'
+    | 'swa'
+    | 'tam'
+    | 'tel'
+    | 'afr'
+    | 'ara'
+    | 'asm'
+    | 'ast'
+    | 'mya'
+    | 'hau'
+    | 'heb'
+    | 'jav'
+    | 'kor'
+    | 'kir'
+    | 'ltz'
+    | 'mri'
+    | 'oci'
+    | 'pan'
+    | 'tgk'
+    | 'tha'
+    | 'uzb'
+    | 'cym'
+    | 'amh'
+    | 'lug'
+    | 'ibo'
+    | 'gle'
+    | 'khm'
+    | 'kur'
+    | 'lao'
+    | 'mon'
+    | 'nso'
+    | 'pus'
+    | 'sna'
+    | 'snd'
+    | 'som'
+    | 'urd'
+    | 'wol'
+    | 'xho'
+    | 'yor'
+    | 'zul';
+  targetLanguage:
+    | 'bel'
+    | 'bos'
+    | 'bul'
+    | 'cat'
+    | 'hrv'
+    | 'ces'
+    | 'dan'
+    | 'nld'
+    | 'eng'
+    | 'est'
+    | 'fin'
+    | 'fra'
+    | 'glg'
+    | 'deu'
+    | 'ell'
+    | 'hun'
+    | 'isl'
+    | 'ind'
+    | 'ita'
+    | 'jpn'
+    | 'kan'
+    | 'lav'
+    | 'mkd'
+    | 'msa'
+    | 'mal'
+    | 'nor'
+    | 'pol'
+    | 'por'
+    | 'ron'
+    | 'rus'
+    | 'slk'
+    | 'spa'
+    | 'swe'
+    | 'tur'
+    | 'ukr'
+    | 'vie'
+    | 'hye'
+    | 'aze'
+    | 'ben'
+    | 'yue'
+    | 'fil'
+    | 'kat'
+    | 'guj'
+    | 'hin'
+    | 'kaz'
+    | 'lit'
+    | 'mlt'
+    | 'cmn'
+    | 'mar'
+    | 'nep'
+    | 'ori'
+    | 'fas'
+    | 'srp'
+    | 'slv'
+    | 'swa'
+    | 'tam'
+    | 'tel'
+    | 'afr'
+    | 'ara'
+    | 'asm'
+    | 'ast'
+    | 'mya'
+    | 'hau'
+    | 'heb'
+    | 'jav'
+    | 'kor'
+    | 'kir'
+    | 'ltz'
+    | 'mri'
+    | 'oci'
+    | 'pan'
+    | 'tgk'
+    | 'tha'
+    | 'uzb'
+    | 'cym'
+    | 'amh'
+    | 'lug'
+    | 'ibo'
+    | 'gle'
+    | 'khm'
+    | 'kur'
+    | 'lao'
+    | 'mon'
+    | 'nso'
+    | 'pus'
+    | 'sna'
+    | 'snd'
+    | 'som'
+    | 'urd'
+    | 'wol'
+    | 'xho'
+    | 'yor'
+    | 'zul';
+  generatedAt: string;
+  expiresAt: string;
+  webVtt: string;
+  /**
+   * @minItems 1
+   */
+  cues: [SubtitleCue, ...SubtitleCue[]];
+  /**
+   * Provider-detected source language when sourceLanguage was auto and detection produced a catalog language.
+   */
+  detectedSourceLanguage?:
+    | 'bel'
+    | 'bos'
+    | 'bul'
+    | 'cat'
+    | 'hrv'
+    | 'ces'
+    | 'dan'
+    | 'nld'
+    | 'eng'
+    | 'est'
+    | 'fin'
+    | 'fra'
+    | 'glg'
+    | 'deu'
+    | 'ell'
+    | 'hun'
+    | 'isl'
+    | 'ind'
+    | 'ita'
+    | 'jpn'
+    | 'kan'
+    | 'lav'
+    | 'mkd'
+    | 'msa'
+    | 'mal'
+    | 'nor'
+    | 'pol'
+    | 'por'
+    | 'ron'
+    | 'rus'
+    | 'slk'
+    | 'spa'
+    | 'swe'
+    | 'tur'
+    | 'ukr'
+    | 'vie'
+    | 'hye'
+    | 'aze'
+    | 'ben'
+    | 'yue'
+    | 'fil'
+    | 'kat'
+    | 'guj'
+    | 'hin'
+    | 'kaz'
+    | 'lit'
+    | 'mlt'
+    | 'cmn'
+    | 'mar'
+    | 'nep'
+    | 'ori'
+    | 'fas'
+    | 'srp'
+    | 'slv'
+    | 'swa'
+    | 'tam'
+    | 'tel'
+    | 'afr'
+    | 'ara'
+    | 'asm'
+    | 'ast'
+    | 'mya'
+    | 'hau'
+    | 'heb'
+    | 'jav'
+    | 'kor'
+    | 'kir'
+    | 'ltz'
+    | 'mri'
+    | 'oci'
+    | 'pan'
+    | 'tgk'
+    | 'tha'
+    | 'uzb'
+    | 'cym'
+    | 'amh'
+    | 'lug'
+    | 'ibo'
+    | 'gle'
+    | 'khm'
+    | 'kur'
+    | 'lao'
+    | 'mon'
+    | 'nso'
+    | 'pus'
+    | 'sna'
+    | 'snd'
+    | 'som'
+    | 'urd'
+    | 'wol'
+    | 'xho'
+    | 'yor'
+    | 'zul';
+}
+export interface SubtitleCue {
+  cueId: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  sourceText: string;
+  translatedText: string;
+  romanization?: string;
+  /**
+   * @minItems 1
+   */
+  tokens: [LearningToken, ...LearningToken[]];
+}
+export interface LearningToken {
+  index: number;
+  text: string;
+  normalizedText: string;
+  lemma?: string;
+  root?: string;
+  partOfSpeech?: string;
+  translation?: string;
+  gloss?: string;
+  romanization?: string;
+  usageNote?: string;
+}
+
+// Source: schemas/lyrics-correction-cancel-request.schema.json
+export interface LyricsCorrectionCancelRequest {
+  attemptId: string;
+}
+
+// Source: schemas/quick-fix-token-request.schema.json
+export interface QuickFixTokenRequest {
+  expectedTrackId: string;
+  text: string;
+}
+
 // Source: schemas/job-response.schema.json
 export type JobResponse = {
   [k: string]: unknown;
@@ -671,9 +1058,12 @@ export type JobResponse = {
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
-    | 'queue_unavailable'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
 };
 
@@ -1155,9 +1545,12 @@ export type SubtitleJobHistoryItem = {
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
-    | 'queue_unavailable'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
   targetLanguage:
     | 'bel'
@@ -1778,12 +2171,16 @@ export interface ErrorObject {
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
-    | 'queue_unavailable'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
   message: string;
   details?: {
+    reason?: 'stale_track';
     [k: string]: unknown;
   };
 }
@@ -1808,12 +2205,16 @@ export interface ErrorObject {
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
-    | 'queue_unavailable'
     | 'not_found'
     | 'expired'
+    | 'lyrics_correction_in_progress'
+    | 'lyrics_incomplete'
+    | 'lyrics_do_not_match'
+    | 'lyrics_correction_failed'
     | 'internal_error';
   message: string;
   details?: {
+    reason?: 'stale_track';
     [k: string]: unknown;
   };
 }

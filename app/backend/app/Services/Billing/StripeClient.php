@@ -111,6 +111,23 @@ final class StripeClient
         return $this->sessionResponse($response->json());
     }
 
+    public function cancelSubscription(string $subscriptionId): void
+    {
+        if ($subscriptionId === '') {
+            throw new RuntimeException('Stripe subscription id is required.');
+        }
+
+        $response = $this->request()
+            ->delete('/subscriptions/'.rawurlencode($subscriptionId));
+
+        // A 404 means the subscription is already gone in Stripe — nothing left to cancel.
+        if ($response->notFound()) {
+            return;
+        }
+
+        $response->throw();
+    }
+
     /**
      * @return array<string, mixed>
      */

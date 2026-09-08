@@ -13,7 +13,7 @@ This runbook is provider-neutral. Fill in the hosting provider, region, managed 
 - Web/API host: managed VPS or Laravel-oriented host running PHP 8.4, Composer, Nginx or equivalent, HTTPS, and Supervisor.
 - Database: managed Postgres with private networking or IP restrictions where the provider supports it.
 - Cache/queue: managed Redis with separate logical DBs or equivalent isolation for default/cache/queue/concurrency use.
-- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, `SUBTITLE_AUTO_START_WORKERS=false`, configured `yt-dlp`, configured `ffmpeg`, and bounded database/Redis connection timeouts. ElevenLabs Audio Isolation stays disabled until TD-014 evidence supports enabling it.
+- Runtime: `APP_DEBUG=false`, `APP_URL=https://...`, `DB_CONNECTION=pgsql`, `QUEUE_CONNECTION=redis`, `SUBTITLE_QUEUE_CONNECTION=redis`, configured `yt-dlp`, configured `ffmpeg`, and bounded database/Redis connection timeouts.
 - Secrets: keep `APP_KEY`, provider keys, Stripe keys, database credentials, and Redis credentials in host/provider environment settings only. Do not put them in extension builds.
 - Extension: build with `WXT_BACKEND_API_BASE_URL=https://<api-host>/v1`; the built manifest should contain only the production API origin plus YouTube host permission.
 
@@ -34,7 +34,7 @@ Record these in the active phase plan before the first real staging deploy:
 2. Attach managed Postgres and Redis with least-privilege credentials.
 3. Configure HTTPS and set `APP_URL` to the exact public API/web origin.
 4. Configure Laravel environment variables from [app/backend/.env.example](../../app/backend/.env.example).
-5. Set `SUBTITLE_AUTO_START_WORKERS=false`; production workers are owned by Supervisor.
+5. Configure production workers under Supervisor.
 6. Install and configure `yt-dlp` and `ffmpeg`; set `YOUTUBE_AUDIO_BINARY` and `FFMPEG_BINARY` when the binaries are not available on the host `PATH`.
 7. Configure provider and audio-preparation environment variables:
 
@@ -43,27 +43,22 @@ ELEVENLABS_API_KEY=<server-side ElevenLabs API key>
 ELEVENLABS_URL=https://api.elevenlabs.io/v1
 ELEVENLABS_TRANSCRIPTION_MODEL=scribe_v2
 ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS=600
-ELEVENLABS_AUDIO_ISOLATION_ENABLED=false
-ELEVENLABS_AUDIO_ISOLATION_TIMEOUT_SECONDS=600
-ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true
 FFMPEG_BINARY=ffmpeg
 SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS=600
 ```
 
 Keep the ElevenLabs key only in backend host/provider secret storage. The extension build must never contain provider keys.
-
-Voice isolation stays disabled until the clean/noisy/music-heavy A/B comparison (TD-014) proves it improves transcript quality for its added provider cost and latency; when enabling it, keep `ELEVENLABS_AUDIO_ISOLATION_FAIL_OPEN=true`.
 8. Run readiness checks:
 
 ```powershell
-.\scripts\runtime\check-production-readiness.ps1 -Target staging
-.\scripts\runtime\check-production-readiness.ps1 -Target production
+.\scripts\ops\check-production-readiness.ps1 -Target staging
+.\scripts\ops\check-production-readiness.ps1 -Target production
 ```
 
 9. Render Supervisor worker config from the checked-in queue group configuration:
 
 ```powershell
-.\scripts\runtime\render-supervisor-config.ps1 `
+.\scripts\ops\render-supervisor-config.ps1 `
   -ApplicationPath "/var/www/transcribed-subtitle-extension/app/backend/current" `
   -WorkerUser "forge" `
   -OutputPath ".\storage\ops\transcribed-subtitle-extension-workers.conf"
@@ -96,7 +91,7 @@ php artisan subtitles:prune-expired --no-ansi
 The deploy script encodes the release order confirmed by Laravel 13 deployment docs: run the repository checks, audit the locked Composer runtime and shared contracts package, clear stale config, check production posture, check the runtime profile, migrate with `--force`, optimize caches, restart queue workers gracefully, and smoke `/up`.
 
 ```powershell
-.\scripts\runtime\deploy-managed-laravel.ps1 `
+.\scripts\ops\deploy-managed-laravel.ps1 `
   -Target staging `
   -HealthUrl "https://staging-api.example.com/up"
 ```
@@ -138,7 +133,7 @@ The first staging rollback must be tested and recorded in the active phase plan 
 Create backups with `pg_dump` custom format:
 
 ```powershell
-.\scripts\runtime\backup-postgres.ps1 `
+.\scripts\ops\backup-postgres.ps1 `
   -DatabaseUrl "postgres://user:password@host:5432/database" `
   -OutputDirectory ".\storage\ops\backups"
 ```
@@ -146,7 +141,7 @@ Create backups with `pg_dump` custom format:
 Test restores against a disposable restore-test database only:
 
 ```powershell
-.\scripts\runtime\restore-postgres-backup.ps1 `
+.\scripts\ops\restore-postgres-backup.ps1 `
   -BackupPath ".\storage\ops\backups\transcribed-subtitle-extension-YYYYMMDD-HHMMSS.dump" `
   -DatabaseUrl "postgres://user:password@host:5432/restore_test_database" `
   -ConfirmRestore
@@ -192,7 +187,7 @@ Logs and traces must remain sanitized: no provider secrets, bearer tokens, raw a
 Build Chrome release artifacts with an HTTPS production API base URL:
 
 ```powershell
-.\scripts\runtime\build-extension-release.ps1 -ApiBaseUrl "https://api.example.com/v1"
+.\scripts\ops\build-extension-release.ps1 -ApiBaseUrl "https://api.example.com/v1"
 ```
 
 The script requires a real extension version, audits shipped production dependencies, runs extension tests and TypeScript compile unless `-SkipTests` is provided, builds with WXT, verifies the manifest contains the configured production API host permission, rejects localhost backend permission, and creates the Chrome ZIP through `wxt zip`.

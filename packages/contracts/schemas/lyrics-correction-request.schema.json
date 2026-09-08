@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/lyrics-correction-request.schema.json",
+  "title": "LyricsCorrectionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expectedTrackId", "lyrics"],
+  "properties": {
+    "expectedTrackId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identity of the track the learner intends to replace."
+    },
+    "lyrics": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 25000,
+      "description": "Pasted plain-text lyrics, complete or partial. The backend applies a Unicode character limit after validation."
+    },
+    "allowPartial": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow the backend to continue after suspected incomplete lyrics and ask the AI to merge the supplied lyrics with the generated transcript."
+    }
+  }
+}

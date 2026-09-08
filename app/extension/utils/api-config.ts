@@ -1,4 +1,4 @@
-export const LOCAL_BACKEND_API_BASE_URL = 'http://localhost:8000/v1';
+export const LOCAL_BACKEND_API_BASE_URL = 'http://127.0.0.1:8001/v1';
 
 export function resolveBackendApiBaseUrl(value?: string): string {
   const rawValue = value?.trim() || LOCAL_BACKEND_API_BASE_URL;

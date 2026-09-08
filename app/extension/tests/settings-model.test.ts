@@ -25,7 +25,6 @@ describe('settings model', () => {
         blurRomanization: true,
         blurTranslation: true,
         pauseOnWordHover: false,
-        fullTrackEnrichment: true,
         subtitleTimingOffsetSeconds: 4.54,
       }),
     ).toEqual({
@@ -42,7 +41,6 @@ describe('settings model', () => {
       blurRomanization: true,
       blurTranslation: true,
       pauseOnWordHover: false,
-      fullTrackEnrichment: true,
       subtitleTimingOffsetSeconds: 4.5,
     });
   });

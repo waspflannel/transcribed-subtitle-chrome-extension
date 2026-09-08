@@ -42,11 +42,11 @@ describe('account and job-history state helpers', () => {
       ...accountSummary(), planName: 'No active plan', monthlyMinutesRemaining: 0, tierSpeedLabel: 'Generation paused',
     });
     const html = accountFeatureListHtml(account, {
-      ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true, showRomanization: false, fullTrackEnrichment: false,
+      ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true, showRomanization: false,
     });
     const rows = [...new JSDOM(html).window.document.querySelectorAll('.feature-row')];
     expect(rows.map((row) => row.querySelector('strong')!.textContent)).toEqual([
-      'Checked when you generate', 'Selected', 'Not selected', 'Not selected', 'Generation paused',
+      'Checked when you generate', 'Selected', 'Not selected', 'On click', 'Generation paused',
     ]);
     expect(html).not.toMatch(/Enabled|Available|Included|Upgrade preview/);
   });

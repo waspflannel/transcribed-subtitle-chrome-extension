@@ -47,9 +47,6 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             'ai.providers.eleven.models.transcription.default' => 'scribe_v2',
             'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg-test',
             'subtitles.audio_preparation.ffmpeg_timeout_seconds' => 45,
-            'subtitles.audio_preparation.voice_isolation.enabled' => false,
-            'subtitles.audio_preparation.voice_isolation.timeout_seconds' => 55,
-            'subtitles.audio_preparation.voice_isolation.fail_open' => true,
             'subtitles.transcription.timeout_seconds' => 30,
         ]);
 
@@ -103,42 +100,6 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertCount(2, $transcript->segments);
         $this->assertSame('Hola mundo.', $transcript->segments[0]->text);
         $this->assertTrue($requestMatched);
-    }
-
-    public function test_it_uploads_voice_isolated_prepared_flac_when_audio_isolation_is_enabled(): void
-    {
-        config(['subtitles.audio_preparation.voice_isolation.enabled' => true]);
-        $scribeRequestMatched = false;
-
-        Process::fake(function (PendingProcess $process) {
-            $command = $process->command;
-            $this->assertIsArray($command);
-            $outputPath = $command[array_key_last($command)];
-
-            File::put($outputPath, str_ends_with($outputPath, '.pcm') ? 'raw-pcm' : 'isolated-flac');
-
-            return Process::result();
-        });
-
-        Http::fake(function (Request $request) use (&$scribeRequestMatched) {
-            if (str_ends_with($request->url(), '/audio-isolation')) {
-                return Http::response('isolated-provider-audio', 200);
-            }
-
-            $body = $request->body();
-            $scribeRequestMatched = $request->url() === 'https://api.elevenlabs.test/v1/speech-to-text'
-                && str_contains($body, 'name="file"; filename="audio.flac"')
-                && str_contains($body, 'isolated-flac')
-                && str_contains($body, 'name="diarize"')
-                && str_contains($body, 'false');
-
-            return Http::response($this->sampleScribePayload(), 200);
-        });
-
-        $transcript = $this->transcribeWholeAudio($this->audio, 'spa');
-
-        $this->assertSame('spa', $transcript->language);
-        $this->assertTrue($scribeRequestMatched);
     }
 
     public function test_it_passes_catalog_language_codes_directly_to_scribe(): void

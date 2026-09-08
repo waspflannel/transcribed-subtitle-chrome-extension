@@ -6,7 +6,6 @@ use App\Models\SubtitleJob;
 use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
-use App\Services\Billing\TestingPlanSwitcher;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\SubtitleJobService;
@@ -22,7 +21,6 @@ class DashboardController extends Controller
         Request $request,
         BillingEntitlementService $billing,
         BillingPlanCatalog $plans,
-        TestingPlanSwitcher $testingPlanSwitcher,
         UsageLedger $usage,
     ): View {
         $user = $request->user();
@@ -37,7 +35,6 @@ class DashboardController extends Controller
             'account' => $billing->accountSummary($user),
             'checkoutBlocked' => $billing->subscriptionRequiresPortal($user),
             'plans' => $plans->publicPlans(),
-            'testingPlanSwitcherEnabled' => $testingPlanSwitcher->enabled(),
             'recentJobs' => $this->recentJobs($user, $usage),
             'totalJobs' => SubtitleJob::query()->whereBelongsTo($user)->count(),
             'extensionTokens' => $this->extensionTokens($user),

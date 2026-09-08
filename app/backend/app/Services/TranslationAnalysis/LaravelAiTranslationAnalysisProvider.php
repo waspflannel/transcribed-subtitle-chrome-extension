@@ -6,10 +6,12 @@ use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
+use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
@@ -26,11 +28,63 @@ class LaravelAiTranslationAnalysisProvider
     ) {}
 
     /**
+     * Refresh a single edited line without letting the model change its words or timing.
+     * Unlike optional full-track enrichment, incomplete output fails the edit.
+     *
+     * @param  array<string, mixed>  $cue
+     * @return array<string, mixed>
+     */
+    public function refreshEditedCue(
+        array $cue,
+        string $sourceLanguage,
+        string $targetLanguage,
+        bool $includeTranslation,
+        bool $includeRomanization,
+    ): array {
+        $output = $this->promptAgent(EditedCueAgent::class, [
+            ...$this->cueEnrichmentInput([$cue], $sourceLanguage, $targetLanguage, $includeRomanization),
+            'includeTranslation' => $includeTranslation,
+        ]);
+        $translation = $this->cleanString($output['translatedText'] ?? null);
+        if ($includeTranslation && $sourceLanguage !== $targetLanguage && $translation === null) {
+            $this->failInvalidOutput('missing_edited_cue_translation');
+        }
+
+        $cue['translatedText'] = $includeTranslation && $sourceLanguage !== $targetLanguage
+            ? $translation
+            : $cue['sourceText'];
+        $refreshed = $this->validatedEnrichedCueResult($output, [$cue], $includeRomanization)->cues[0];
+
+        foreach ($refreshed['tokens'] as $token) {
+            if (! isset($token['translation'], $token['gloss'])) {
+                $this->failInvalidOutput('missing_edited_token_meaning');
+            }
+        }
+
+        if ($includeRomanization) {
+            foreach ([$refreshed, ...$refreshed['tokens']] as $item) {
+                $text = $item['sourceText'] ?? $item['text'];
+                $nonLatin = preg_replace('/\p{Latin}/u', '', $text);
+                if (preg_match('/\p{L}/u', $nonLatin) === 1 && ! isset($item['romanization'])) {
+                    $this->failInvalidOutput('missing_edited_cue_romanization');
+                }
+            }
+        }
+
+        return $refreshed;
+    }
+
+    /**
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
-    {
+    public function tokenizeCueBatch(
+        array $batch,
+        array $allCues,
+        string $sourceLanguage,
+        bool $splitInvalidBatches = true,
+        ?Closure $beforeRetry = null,
+    ): CueEnrichmentResult {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
         }
@@ -39,15 +93,21 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_context_cues');
         }
 
-        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues, allowReprompt: true);
+        return $this->tokenizeBatch($batch, $sourceLanguage, $allCues, allowReprompt: true, splitInvalidBatches: $splitInvalidBatches, beforeRetry: $beforeRetry);
     }
 
     /**
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    private function tokenizeBatch(array $batch, string $sourceLanguage, array $allCues, bool $allowReprompt): CueEnrichmentResult
-    {
+    private function tokenizeBatch(
+        array $batch,
+        string $sourceLanguage,
+        array $allCues,
+        bool $allowReprompt,
+        bool $splitInvalidBatches = true,
+        ?Closure $beforeRetry = null,
+    ): CueEnrichmentResult {
         $output = $this->promptAgent(
             CueTokenizationAgent::class,
             $this->tokenizationInput($batch, $sourceLanguage, $allCues),
@@ -58,7 +118,8 @@ class LaravelAiTranslationAnalysisProvider
         try {
             return $this->tokenizedBatchResult($output, $batch);
         } catch (SubtitleProcessingException $exception) {
-            if ($this->shouldRetryTokenizationBatch($exception, $cueCount)) {
+            if ($splitInvalidBatches && $this->shouldRetryTokenizationBatch($exception, $cueCount)) {
+                $beforeRetry?->__invoke();
                 $reason = $exception->context['reason'] ?? 'unknown';
 
                 Log::info('backend.tokenization_batch_retried', [
@@ -71,8 +132,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false);
-                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false);
+                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
+                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
@@ -81,7 +142,7 @@ class LaravelAiTranslationAnalysisProvider
             }
 
             if ($cueCount <= 1) {
-                return $this->tokenizeSingleCueWithFallback($batch, $sourceLanguage, $allCues, $allowReprompt);
+                return $this->tokenizeSingleCueWithFallback($batch, $sourceLanguage, $allCues, $allowReprompt, $beforeRetry);
             }
 
             throw $exception;
@@ -105,8 +166,10 @@ class LaravelAiTranslationAnalysisProvider
         string $sourceLanguage,
         array $allCues,
         bool $allowReprompt,
+        ?Closure $beforeRetry = null,
     ): CueEnrichmentResult {
         if ($allowReprompt) {
+            $beforeRetry?->__invoke();
             try {
                 $output = $this->promptAgent(
                     CueTokenizationAgent::class,
@@ -193,12 +256,14 @@ class LaravelAiTranslationAnalysisProvider
         string $sourceLanguage,
         string $targetLanguage,
         bool $includeRomanization = true,
+        bool $splitInvalidBatches = true,
+        ?Closure $beforeRetry = null,
     ): CueEnrichmentResult {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
         }
 
-        return $this->enrichBatch($batch, $sourceLanguage, $targetLanguage, $includeRomanization);
+        return $this->enrichBatch($batch, $sourceLanguage, $targetLanguage, $includeRomanization, $splitInvalidBatches, $beforeRetry);
     }
 
     /**
@@ -209,6 +274,8 @@ class LaravelAiTranslationAnalysisProvider
         string $sourceLanguage,
         string $targetLanguage,
         bool $includeRomanization,
+        bool $splitInvalidBatches = true,
+        ?Closure $beforeRetry = null,
     ): CueEnrichmentResult {
         $output = $this->promptAgent(
             CueEnrichmentAgent::class,
@@ -220,7 +287,8 @@ class LaravelAiTranslationAnalysisProvider
         try {
             return $this->validatedEnrichedCueResult($output, $batch, $includeRomanization);
         } catch (SubtitleProcessingException $exception) {
-            if ($this->shouldRetryEnrichmentBatch($exception, $cueCount)) {
+            if ($splitInvalidBatches && $this->shouldRetryEnrichmentBatch($exception, $cueCount)) {
+                $beforeRetry?->__invoke();
                 $reason = $exception->context['reason'] ?? 'unknown';
 
                 Log::info('backend.enrichment_batch_retried', [
@@ -234,8 +302,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization);
-                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization);
+                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, beforeRetry: $beforeRetry);
+                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, beforeRetry: $beforeRetry);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
@@ -264,7 +332,7 @@ class LaravelAiTranslationAnalysisProvider
         }
     }
 
-    private function shouldRetryEnrichmentBatch(SubtitleProcessingException $exception, int $cueCount): bool
+    public function shouldRetryEnrichmentBatch(SubtitleProcessingException $exception, int $cueCount): bool
     {
         if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
             return false;
@@ -294,6 +362,8 @@ class LaravelAiTranslationAnalysisProvider
         array $allCues,
         string $sourceLanguage,
         string $targetLanguage,
+        bool $splitInvalidBatches = true,
+        ?Closure $beforeRetry = null,
     ): CueAnalysisBatchResult {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
@@ -303,7 +373,7 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_context_cues');
         }
 
-        return $this->analyzeBatch($batch, $sourceLanguage, $targetLanguage, $allCues, allowReprompt: true);
+        return $this->analyzeBatch($batch, $sourceLanguage, $targetLanguage, $allCues, allowReprompt: true, splitInvalidBatches: $splitInvalidBatches, beforeRetry: $beforeRetry);
     }
 
     /**
@@ -316,6 +386,8 @@ class LaravelAiTranslationAnalysisProvider
         string $targetLanguage,
         array $allCues,
         bool $allowReprompt,
+        bool $splitInvalidBatches = true,
+        ?Closure $beforeRetry = null,
     ): CueAnalysisBatchResult {
         $output = $this->promptAgent(
             CueAnalysisAgent::class,
@@ -327,7 +399,8 @@ class LaravelAiTranslationAnalysisProvider
         try {
             return $this->analyzedBatchResult($output, $batch);
         } catch (SubtitleProcessingException $exception) {
-            if ($this->shouldRetryTokenizationBatch($exception, $cueCount)) {
+            if ($splitInvalidBatches && $this->shouldRetryTokenizationBatch($exception, $cueCount)) {
+                $beforeRetry?->__invoke();
                 $reason = $exception->context['reason'] ?? 'unknown';
 
                 Log::info('backend.analysis_batch_retried', [
@@ -341,8 +414,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false);
-                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false);
+                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
+                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
 
                 return new CueAnalysisBatchResult(
                     $this->combinedResult($left->tokenized, $right->tokenized),
@@ -351,7 +424,7 @@ class LaravelAiTranslationAnalysisProvider
             }
 
             if ($cueCount <= 1) {
-                return $this->analyzeSingleCueWithFallback($batch, $sourceLanguage, $targetLanguage, $allCues, $allowReprompt);
+                return $this->analyzeSingleCueWithFallback($batch, $sourceLanguage, $targetLanguage, $allCues, $allowReprompt, $beforeRetry);
             }
 
             throw $exception;
@@ -372,8 +445,10 @@ class LaravelAiTranslationAnalysisProvider
         string $targetLanguage,
         array $allCues,
         bool $allowReprompt,
+        ?Closure $beforeRetry = null,
     ): CueAnalysisBatchResult {
         if ($allowReprompt) {
+            $beforeRetry?->__invoke();
             try {
                 $output = $this->promptAgent(
                     CueAnalysisAgent::class,
@@ -644,7 +719,7 @@ class LaravelAiTranslationAnalysisProvider
         }
     }
 
-    private function shouldRetryTokenizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
+    public function shouldRetryTokenizationBatch(SubtitleProcessingException $exception, int $cueCount): bool
     {
         if ($cueCount <= 1 || $exception->publicCode !== 'enrichment_failed') {
             return false;

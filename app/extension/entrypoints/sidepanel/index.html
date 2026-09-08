@@ -41,8 +41,11 @@
             <button type="button" class="btn-primary" data-action="open-account">Go to sign in</button>
           </div>
 
+          <button type="button" class="link-button watch-back" data-action="back-transcript" hidden>← Back to transcript</button>
+
           <!-- Setup: languages, layers, generate. -->
           <div class="watch-setup" data-watch-setup hidden>
+            <h2>Generate subtitles</h2>
             <div class="card">
               <p class="card-label">Languages</p>
               <div class="pair-row">
@@ -84,10 +87,6 @@
                   <input type="checkbox" name="showRomanization" disabled />
                   <span>Romanization</span>
                 </label>
-                <label class="chip">
-                  <input type="checkbox" name="fullTrackEnrichment" disabled />
-                  <span>Word cards for every word</span>
-                </label>
               </div>
             </div>
 
@@ -96,13 +95,17 @@
             <p class="microcopy">Nothing is sent to the backend until you press generate.</p>
           </div>
 
-          <!-- Generating: one progress surface with named stages. -->
+          <!-- Generating / replacing: one progress surface with named stages. -->
+          <p class="status-banner" data-correction-sync-error role="status" hidden></p>
+          <div class="progress-summary" data-progress-summary hidden><span data-progress-summary-label role="status"></span><button type="button" class="link-button" data-action="view-progress">View progress</button></div>
           <div class="card" data-progress hidden>
-            <p class="card-label">Generating</p>
-            <p class="pct"><span data-progress-percent>0%</span><small data-progress-activity>standard queue</small></p>
+            <p class="card-label" id="progress-label" data-progress-label>Generating</p>
+            <p class="pct"><span data-progress-percent role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span><small data-progress-activity aria-live="polite">standard queue</small></p>
             <div class="progress-bar" aria-hidden="true"><span data-progress-bar></span></div>
             <ol class="stages" data-progress-stages aria-label="Generation stages"></ol>
-            <p class="microcopy">Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
+            <p class="microcopy" data-progress-copy>Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
+            <p class="microcopy" data-correction-cancel-error role="alert" hidden></p>
+            <button type="button" class="btn-ghost" data-action="cancel-lyrics-correction" hidden>Cancel replacement</button>
           </div>
 
           <!-- Ready: the transcript is the landing state. -->
@@ -111,8 +114,41 @@
               <label class="search-field">
                 <input type="search" data-transcript-search placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" />
               </label>
-              <button type="button" class="link-button" data-action="toggle-setup" aria-expanded="false">Regenerate</button>
+              <details class="transcript-menu" data-transcript-menu>
+                <summary aria-label="Transcript actions">Actions <span aria-hidden="true">▾</span></summary>
+                <div class="transcript-menu-items">
+                  <button type="button" class="link-button" data-action="toggle-lyrics-edit">Replace full lyrics…</button>
+                  <button type="button" class="link-button" data-action="toggle-setup">Generate again…</button>
+                </div>
+              </details>
             </div>
+            <div class="status-banner correction-status" data-correction-terminal-status role="status" aria-live="polite" hidden>
+              <span data-correction-terminal-message></span>
+              <button type="button" class="status-banner-close" data-action="dismiss-correction-status" aria-label="Dismiss replacement status">×</button>
+            </div>
+            <div class="card" data-lyrics-edit-panel hidden>
+              <h2>Replace full lyrics</h2>
+              <div data-lyrics-replace-panel>
+                <form class="lyrics-correction-form" data-lyrics-correction-form>
+                  <p class="card-copy">Paste lyrics for this song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. If they appear incomplete, we will ask before combining them with your current lyrics.</p>
+                  <label class="field">
+                    <span>Lyrics</span>
+                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
+                  </label>
+                  <p class="lyrics-confirm" data-lyrics-confirmation hidden role="status" aria-live="polite"></p>
+                  <div class="lyrics-correction-footer">
+                    <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>
+                    <span class="lyrics-correction-actions">
+                      <button type="submit" class="btn-primary" data-action="apply-lyrics-correction">Continue</button>
+                      <button type="button" class="btn-primary" data-action="confirm-lyrics-correction" hidden>Replace entire track</button>
+                      <button type="button" class="btn-ghost" data-action="cancel-lyrics-confirmation" hidden>Cancel</button>
+                    </span>
+                  </div>
+                  <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status role="status" aria-live="polite"></p>
+                </form>
+              </div>
+            </div>
+            <p class="microcopy" data-quick-fix-status role="status" aria-live="polite"></p>
             <div class="transcript-list" data-transcript-list role="list" aria-label="Generated cues"></div>
             <p class="transcript-status" data-transcript-status role="status" aria-live="polite"></p>
           </div>

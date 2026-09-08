@@ -4,10 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CancelSubtitleLyricsRequest;
+use App\Http\Requests\CorrectSubtitleLyricsRequest;
 use App\Http\Requests\CreateSubtitleJobRequest;
+use App\Http\Requests\QuickFixSubtitleTokenRequest;
 use App\Http\Resources\SubtitleJobHistoryResource;
 use App\Http\Resources\SubtitleJobResource;
+use App\Http\Resources\SubtitleTrackLyricsCorrectionResource;
+use App\Http\Resources\SubtitleTrackResource;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use Illuminate\Http\JsonResponse;
@@ -61,7 +68,6 @@ class SubtitleJobController extends Controller
             payload: $request->subtitlePayload(),
             user: $this->extensionUser($request),
             installId: $request->extensionInstallId(),
-            requestIp: $request->ip(),
         );
 
         return response()->json(
@@ -113,5 +119,78 @@ class SubtitleJobController extends Controller
         }
 
         return response()->json($partialTrack);
+    }
+
+    public function correctLyrics(
+        CorrectSubtitleLyricsRequest $request,
+        string $jobId,
+        LyricsCorrectionService $corrections,
+    ): JsonResponse {
+        $job = $this->ownedJob($request, $jobId);
+
+        $correction = $corrections->submit(
+            job: $job,
+            user: $this->extensionUser($request),
+            lyrics: $request->lyrics(),
+            expectedTrackId: (string) $request->validated('expectedTrackId'),
+            allowPartial: $request->allowPartial(),
+        );
+
+        return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve(), 202);
+    }
+
+    public function lyricsCorrectionStatus(Request $request, string $jobId): JsonResponse
+    {
+        $correction = SubtitleTrackLyricsCorrection::query()
+            ->with(['track.job'])
+            ->whereHas('track', fn ($query) => $query->where('expires_at', '>', now()))
+            ->whereHas('track.job', function ($query) use ($request, $jobId): void {
+                $query
+                    ->where('public_id', $jobId)
+                    ->whereBelongsTo($this->extensionUser($request));
+            })
+            ->firstOrFail();
+
+        return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());
+    }
+
+    public function cancelLyrics(
+        CancelSubtitleLyricsRequest $request,
+        string $jobId,
+        LyricsCorrectionService $corrections,
+    ): JsonResponse {
+        $job = $this->ownedJob($request, $jobId);
+        $correction = $corrections->cancel($job, $this->extensionUser($request), (string) $request->validated('attemptId'));
+
+        return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());
+    }
+
+    public function quickFixToken(
+        QuickFixSubtitleTokenRequest $request,
+        string $jobId,
+        string $cueId,
+        int $tokenIndex,
+        LyricsCorrectionService $corrections,
+    ): JsonResponse {
+        $job = $this->ownedJob($request, $jobId);
+        $track = $corrections->quickFix(
+            job: $job,
+            user: $this->extensionUser($request),
+            cueId: $cueId,
+            tokenIndex: $tokenIndex,
+            payload: $request->validated(),
+        );
+
+        return response()->json(SubtitleTrackResource::make($track)->resolve());
+    }
+
+    private function ownedJob(Request $request, string $jobId): SubtitleJob
+    {
+        return SubtitleJob::query()
+            ->with('track')
+            ->where('public_id', $jobId)
+            ->whereBelongsTo($this->extensionUser($request))
+            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+            ->firstOrFail();
     }
 }

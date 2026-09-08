@@ -36,7 +36,6 @@ class SubtitleJob extends Model
         'error_code',
         'error_message',
         'install_id',
-        'request_ip',
         'expires_at',
     ];
 

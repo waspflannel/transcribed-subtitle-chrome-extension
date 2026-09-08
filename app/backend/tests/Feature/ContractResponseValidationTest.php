@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\Agents\EditedCueAgent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
@@ -165,6 +166,61 @@ class ContractResponseValidationTest extends TestCase
                 ->assertNotFound(),
             'api-error.schema.json',
         );
+    }
+
+    public function test_lyrics_editing_responses_match_canonical_contract_schemas(): void
+    {
+        $installId = $this->installId('c');
+        $user = User::factory()->create();
+        EditedCueAgent::fake(function ($prompt): array {
+            $input = json_decode($prompt, true);
+            $cue = $input['cues'][0];
+
+            return [
+                'dialect' => 'unknown',
+                'translatedText' => 'Refreshed translation',
+                'cues' => [[...$cue, 'romanization' => 'refreshed pronunciation', 'tokens' => array_map(
+                    fn (array $token): array => [...$token, 'translation' => 'new meaning', 'gloss' => 'new gloss', 'romanization' => 'new reading'],
+                    $cue['tokens'],
+                )]],
+            ];
+        })->preventStrayPrompts();
+        $track = $this->completedTrack($installId, $user, 'editcontr01');
+        $attemptId = '018f9e2f-0d8c-7500-8f38-9f4c5d1b3020';
+        $track->lyricsCorrection()->create([
+            'attempt_id' => $attemptId,
+            'status' => 'queued',
+            'lyrics' => 'private lyrics',
+            'work_state' => ['stage' => 'aligning'],
+        ]);
+
+        $invalidCancellation = $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics')
+            ->assertUnprocessable();
+        $this->assertResponseMatchesSchema($invalidCancellation, 'api-error.schema.json');
+
+        $staleCancellation = $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics', ['attemptId' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041'])
+            ->assertStatus(409);
+        $this->assertResponseMatchesSchema($staleCancellation, 'api-error.schema.json');
+
+        $cancelled = $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics', ['attemptId' => $attemptId])
+            ->assertOk();
+        $this->assertResponseMatchesSchema($cancelled, 'lyrics-correction-status.schema.json');
+
+        $cue = $track->fresh()->cues[0];
+        $quickFix = $this
+            ->withExtensionAuth($installId, $user)
+            ->patchJson('/v1/subtitle-jobs/'.$track->job->public_id.'/cues/'.$cue['cueId'].'/tokens/0', [
+                'expectedTrackId' => $track->public_id,
+                'text' => 'changed',
+            ])
+            ->assertOk();
+        $this->assertResponseMatchesSchema($quickFix, 'track-response.schema.json');
     }
 
     private function completedTrack(string $installId, User $user, string $videoId, array $overrides = []): SubtitleTrack

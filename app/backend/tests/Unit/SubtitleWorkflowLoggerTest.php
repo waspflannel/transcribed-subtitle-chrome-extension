@@ -115,7 +115,6 @@ class SubtitleWorkflowLoggerTest extends TestCase
             ->once()
             ->with('backend.enrichment_completed', Mockery::on(
                 fn (array $context): bool => $context['job_id'] === $job->public_id
-                    && $context['source_dialect'] === 'unknown'
                     && $context['cue_count'] === 1
                     && $context['token_count'] === 1
                     && ! array_key_exists('translated_text', $context),

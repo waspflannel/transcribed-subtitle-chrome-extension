@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SubtitleJobEvent extends Model
 {
@@ -27,11 +26,6 @@ class SubtitleJobEvent extends Model
         'exception',
         'context',
     ];
-
-    public function job(): BelongsTo
-    {
-        return $this->belongsTo(SubtitleJob::class, 'subtitle_job_id');
-    }
 
     protected function casts(): array
     {

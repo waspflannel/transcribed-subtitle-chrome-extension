@@ -27,7 +27,9 @@ it('imports the real panel entrypoint and attaches synchronization without a lex
   vi.stubGlobal('window', dom.window);
   vi.stubGlobal('document', dom.window.document);
   vi.stubGlobal('Element', dom.window.Element);
-  vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
+  for (const name of ['HTMLElement', 'HTMLButtonElement', 'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'HTMLDetailsElement', 'HTMLFormElement', 'HTMLOutputElement']) {
+    vi.stubGlobal(name, dom.window[name as keyof Window]);
+  }
   await import('../entrypoints/sidepanel/main');
   await Promise.resolve();
   expect(mocks.connect).toHaveBeenCalledOnce();

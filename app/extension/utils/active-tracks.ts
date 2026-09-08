@@ -8,6 +8,18 @@ const activeTracksStorage = storage.defineItem<Record<string, TrackResponse>>('l
   fallback: {},
 });
 
+export interface StoredTabOperation {
+  kind: 'generation' | 'correction';
+  youtubeVideoId: string;
+  jobId?: string;
+  trackId?: string;
+  attemptId?: string;
+}
+
+const tabOperationsStorage = storage.defineItem<Record<string, StoredTabOperation>>('local:tabSubtitleOperations', {
+  fallback: {},
+});
+
 export async function rememberActiveTrack(track: TrackResponse): Promise<void> {
   const storedTracks = pruneExpiredTracks(await activeTracksStorage.getValue());
   const nextTracks = {
@@ -36,8 +48,40 @@ export async function getRememberedTrack(youtubeVideoId: string): Promise<TrackR
   return track;
 }
 
+export async function forgetRememberedTrack(youtubeVideoId: string, expectedTrackId: string): Promise<void> {
+  const storedTracks = await activeTracksStorage.getValue();
+
+  if (storedTracks[youtubeVideoId]?.trackId === expectedTrackId) {
+    delete storedTracks[youtubeVideoId];
+    await activeTracksStorage.setValue(storedTracks);
+  }
+}
+
 export async function clearRememberedTracks(): Promise<void> {
   await activeTracksStorage.removeValue();
+}
+
+export async function getTabOperation(tabId: number): Promise<StoredTabOperation | null> {
+  return (await tabOperationsStorage.getValue())[String(tabId)] ?? null;
+}
+
+export async function setTabOperation(tabId: number, operation: StoredTabOperation): Promise<void> {
+  const operations = await tabOperationsStorage.getValue();
+  operations[String(tabId)] = operation;
+  await tabOperationsStorage.setValue(operations);
+}
+
+export async function clearTabOperation(tabId: number): Promise<void> {
+  const operations = await tabOperationsStorage.getValue();
+
+  if (operations[String(tabId)]) {
+    delete operations[String(tabId)];
+    await tabOperationsStorage.setValue(operations);
+  }
+}
+
+export async function clearTabOperations(): Promise<void> {
+  await tabOperationsStorage.removeValue();
 }
 
 function limitStoredTracks(tracks: Record<string, TrackResponse>): Record<string, TrackResponse> {

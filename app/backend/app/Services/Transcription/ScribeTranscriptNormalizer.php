@@ -4,6 +4,7 @@ namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
+use App\Services\Subtitles\SubtitleWebVttFormatter;
 use App\Services\Text\NoSpaceArtifactBoundary;
 use App\Services\Text\SubtitleText;
 
@@ -156,17 +157,7 @@ class ScribeTranscriptNormalizer
      */
     private function webVttFromSegments(array $segments): string
     {
-        $blocks = ['WEBVTT'];
-
-        foreach ($segments as $index => $segment) {
-            $blocks[] = implode("\n", [
-                sprintf('cue-%04d', $index + 1),
-                $this->formatTimestamp($segment->startSeconds).' --> '.$this->formatTimestamp($segment->endSeconds),
-                $segment->text,
-            ]);
-        }
-
-        return implode("\n\n", $blocks)."\n";
+        return SubtitleWebVttFormatter::fromSegments($segments);
     }
 
     /**
@@ -379,19 +370,6 @@ class ScribeTranscriptNormalizer
             ...array_column($currentWords, 'text'),
             $candidate['text'],
         ])), 'UTF-8');
-    }
-
-    private function formatTimestamp(float $seconds): string
-    {
-        $milliseconds = (int) round($seconds * 1000);
-        $hours = intdiv($milliseconds, 3_600_000);
-        $milliseconds -= $hours * 3_600_000;
-        $minutes = intdiv($milliseconds, 60_000);
-        $milliseconds -= $minutes * 60_000;
-        $wholeSeconds = intdiv($milliseconds, 1000);
-        $milliseconds -= $wholeSeconds * 1000;
-
-        return sprintf('%02d:%02d:%02d.%03d', $hours, $minutes, $wholeSeconds, $milliseconds);
     }
 
     /**

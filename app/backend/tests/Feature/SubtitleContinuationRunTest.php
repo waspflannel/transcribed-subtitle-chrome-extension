@@ -43,7 +43,7 @@ class SubtitleContinuationRunTest extends TestCase
         $transcript = new TimestampedTranscript('en', 600, [], "WEBVTT\n\n");
         $this->mock(TimestampedSubtitleTrackGenerator::class)->shouldReceive('draftCues')->once()
             ->andReturnUsing(function () use ($job, $replacement): array {
-                $job->update(['run_id' => $replacement, 'stage' => 'preparing', 'video_duration_seconds' => 123]);
+                $job->refresh()->update(['run_id' => $replacement, 'stage' => 'preparing', 'video_duration_seconds' => 123]);
 
                 return [];
             });

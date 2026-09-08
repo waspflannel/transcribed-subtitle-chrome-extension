@@ -18,6 +18,7 @@ const schemaFiles = fs
 const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
+  strictRequired: false,
   schemas: [],
 });
 
@@ -48,6 +49,11 @@ const fixtures = [
   ['create-subtitle-job-request.schema.json', 'valid-create-subtitle-job-request-full.json'],
   ['learning-token-request.schema.json', 'valid-learning-token-request.json'],
   ['learning-token-response.schema.json', 'valid-learning-token-response.json'],
+  ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request.json'],
+  ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request-partial.json'],
+  ['lyrics-correction-status.schema.json', 'valid-lyrics-correction-status.json'],
+  ['lyrics-correction-cancel-request.schema.json', 'valid-lyrics-correction-cancel-request.json'],
+  ['quick-fix-token-request.schema.json', 'valid-quick-fix-token-request.json'],
   ['job-response.schema.json', 'valid-job-response.json'],
   ['subtitle-job-history-response.schema.json', 'valid-subtitle-job-history-response.json'],
   ['track-response.schema.json', 'valid-track-response.json'],
@@ -66,6 +72,64 @@ for (const [schemaFile, fixtureFile] of fixtures) {
   console.log(`validated ${fixtureFile}`);
 }
 
+const lyricsCorrectionStatus = ajv.getSchema('lyrics-correction-status.schema.json');
+
+const invalidLyricsCorrectionFixtures = [
+  'invalid-lyrics-correction-queued-aligning.json',
+  'invalid-lyrics-correction-running-queued.json',
+  'invalid-lyrics-correction-completed-failed.json',
+  'invalid-lyrics-correction-failed-completed.json',
+  'invalid-lyrics-correction-cancelled-aligning.json',
+];
+
+for (const fixtureFile of invalidLyricsCorrectionFixtures) {
+  const fixture = JSON.parse(fs.readFileSync(path.join(fixturesDir, fixtureFile), 'utf8'));
+
+  if (lyricsCorrectionStatus(fixture)) {
+    throw new Error(`${fixtureFile} unexpectedly passed lyrics correction status validation.`);
+  }
+
+  console.log(`rejected ${fixtureFile}`);
+}
+
+const quickFixTokenRequest = ajv.getSchema('quick-fix-token-request.schema.json');
+assertInvalid(
+  quickFixTokenRequest,
+  JSON.parse(fs.readFileSync(path.join(fixturesDir, 'invalid-quick-fix-token-request-whitespace.json'), 'utf8')),
+  'whitespace-only quick fix text',
+);
+
+const lyricsCorrectionRequest = ajv.getSchema('lyrics-correction-request.schema.json');
+assertInvalid(lyricsCorrectionRequest, {
+  expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041',
+  lyrics: 'First line',
+  allowPartial: 'true',
+}, 'non-boolean allowPartial');
+
+const correctionStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled'];
+const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing', 'completed', 'failed', 'cancelled'];
+const validCorrectionStageByStatus = {
+  queued: ['queued'],
+  running: ['aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing'],
+  completed: ['completed'],
+  failed: ['failed'],
+  cancelled: ['cancelled'],
+};
+
+for (const status of correctionStatuses) {
+  for (const stage of correctionStages) {
+    if (validCorrectionStageByStatus[status].includes(stage)) continue;
+
+    assertInvalid(lyricsCorrectionStatus, {
+      attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3040',
+      status,
+      stage,
+      updatedAt: '2026-08-13T00:00:00Z',
+      ...(status === 'failed' ? { errorCode: 'lyrics_correction_failed', message: 'failed' } : {}),
+    }, `invalid correction status/stage pair ${status}/${stage}`);
+  }
+}
+
 const createSubtitleJobRequest = ajv.getSchema('create-subtitle-job-request.schema.json');
 assertInvalid(createSubtitleJobRequest, {
   youtubeVideoId: 'dQw4w9WgXcQ',
@@ -82,6 +146,29 @@ assertInvalid(createSubtitleJobRequest, {
   sourceLanguage: 'eng',
   targetLanguage: 'not-a-language',
 }, 'invalid target language');
+
+assertInvalid(lyricsCorrectionStatus, {
+  attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
+  status: 'queued',
+  stage: 'queued',
+  updatedAt: '2026-08-13T00:00:00Z',
+  track: {},
+}, 'queued correction with track');
+assertInvalid(lyricsCorrectionStatus, {
+  attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
+  status: 'completed',
+  stage: 'completed',
+  updatedAt: '2026-08-13T00:00:00Z',
+  errorCode: 'lyrics_correction_failed',
+  message: 'failed',
+}, 'completed correction with error');
+assertInvalid(lyricsCorrectionStatus, {
+  attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
+  status: 'cancelled',
+  stage: 'cancelled',
+  updatedAt: '2026-08-13T00:00:00Z',
+  message: 'cancelled',
+}, 'cancelled correction with error');
 
 await SwaggerParser.validate(path.join(root, 'openapi.json'));
 console.log('validated openapi.json');

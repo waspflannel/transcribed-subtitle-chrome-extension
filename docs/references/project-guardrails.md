@@ -9,7 +9,7 @@ These guardrails apply to the YouTube AI Language Subtitle Extension. Use them w
 ## Product Guardrails
 
 - Build the first product path only: public YouTube video -> generated subtitle track -> synchronized language-to-language overlay.
-- Keep Netflix, other platforms, live captioning, accounts, vocabulary review, and subtitle editing out of the first release.
+- Keep Netflix, other platforms, live captioning, accounts, vocabulary review, and general subtitle editing out of the first release. The narrow pasted-lyrics correction flow is the documented exception for completed generated tracks.
 - The user must explicitly start AI subtitle generation.
 - Extension code must never call OpenAI or any AI provider directly.
 - Raw audio is temporary processing data and must be deleted after processing succeeds or fails.

@@ -316,6 +316,99 @@ class CueEnrichmentServiceTest extends TestCase
         );
     }
 
+    public function test_tokenization_without_split_retries_fails_invalid_multi_cue_batches_without_recursing(): void
+    {
+        $calls = 0;
+        CueTokenizationAgent::fake(function () use (&$calls): array {
+            $calls++;
+
+            return [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens('Bonjour a tous', ['Bonjour', 'a tous']),
+                    ],
+                ],
+            ];
+        })->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->tokenizeCueBatch([
+                $this->sourceCue('cue-0001', 0, 'Bonjour a tous'),
+                $this->sourceCue('cue-0002', 1, 'Je suis tres heureux'),
+            ], [
+                $this->sourceCue('cue-0001', 0, 'Bonjour a tous'),
+                $this->sourceCue('cue-0002', 1, 'Je suis tres heureux'),
+            ], 'fra', splitInvalidBatches: false),
+            'cue_count_mismatch',
+        );
+
+        $this->assertSame(1, $calls, 'Correction tokenization must not recursively split an invalid multi-cue batch.');
+    }
+
+    public function test_analysis_without_split_retries_fails_invalid_multi_cue_batches_without_recursing(): void
+    {
+        $calls = 0;
+        CueAnalysisAgent::fake(function () use (&$calls): array {
+            $calls++;
+
+            return [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens('Bonjour a tous', ['Bonjour', 'a tous']),
+                    ],
+                ],
+            ];
+        })->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->analyzeCueBatch([
+                $this->sourceCue('cue-0001', 0, 'Bonjour a tous'),
+                $this->sourceCue('cue-0002', 1, 'Je suis tres heureux'),
+            ], [
+                $this->sourceCue('cue-0001', 0, 'Bonjour a tous'),
+                $this->sourceCue('cue-0002', 1, 'Je suis tres heureux'),
+            ], 'fra', 'eng', splitInvalidBatches: false),
+            'cue_count_mismatch',
+        );
+
+        $this->assertSame(1, $calls, 'Correction analysis must not recursively split an invalid multi-cue batch.');
+    }
+
+    public function test_enrichment_without_split_retries_fails_invalid_multi_cue_batches_without_recursing(): void
+    {
+        $calls = 0;
+        CueEnrichmentAgent::fake(function () use (&$calls): array {
+            $calls++;
+
+            return [
+                'dialect' => 'unknown',
+                'cues' => [
+                    [
+                        'cueId' => 'cue-0001',
+                        'index' => 0,
+                        'tokens' => $this->generatedTokens('Bonjour a tous', ['Bonjour', 'a tous']),
+                    ],
+                ],
+            ];
+        })->preventStrayPrompts();
+
+        $this->assertProviderFailureReason(
+            fn () => $this->provider()->enrichCueBatch([
+                $this->sourceCue('cue-0001', 0, 'Bonjour a tous'),
+                $this->sourceCue('cue-0002', 1, 'Je suis tres heureux'),
+            ], 'fra', 'eng', false, splitInvalidBatches: false),
+            'cue_count_mismatch',
+        );
+
+        $this->assertSame(1, $calls, 'Correction enrichment must not recursively split an invalid multi-cue batch.');
+    }
+
     public function test_tokenization_accepts_valid_agent_output(): void
     {
         $sourceText = '違う姿違う形なの';

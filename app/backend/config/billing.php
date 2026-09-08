@@ -10,10 +10,6 @@ return [
         'connect_timeout_seconds' => (int) env('STRIPE_CONNECT_TIMEOUT_SECONDS', 5),
     ],
 
-    'testing_plan_switcher' => [
-        'enabled' => (bool) env('BILLING_TEST_PLAN_SWITCHER', in_array(env('APP_ENV', 'production'), ['local', 'testing'], true)),
-    ],
-
     'plans' => [
         'base' => [
             'name' => 'Base',
@@ -23,8 +19,6 @@ return [
             'generation_tier' => 'base',
             'speed_label' => 'Standard queue',
             'features' => [
-                'cue_translation' => true,
-                'romanization' => true,
                 'full_word_cards' => false,
             ],
         ],
@@ -36,8 +30,6 @@ return [
             'generation_tier' => 'plus',
             'speed_label' => 'Priority queue',
             'features' => [
-                'cue_translation' => true,
-                'romanization' => true,
                 'full_word_cards' => true,
             ],
         ],
@@ -49,8 +41,6 @@ return [
             'generation_tier' => 'pro',
             'speed_label' => 'Fast queue',
             'features' => [
-                'cue_translation' => true,
-                'romanization' => true,
                 'full_word_cards' => true,
             ],
         ],

@@ -32,7 +32,7 @@ describe('bindWebVttTrackToVideo', () => {
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(changes).toEqual([{ cueId: null }]);
 
-    trackElement.track.activeCues = new FakeCueList([new FakeTextCue(0.5, 2.1, 'first transcript segment')]);
+    trackElement.track.activeCues = new FakeCueList([new FakeTextCue(0.5, 2.1, 'first transcript segment', 'cue-0001')]);
     trackElement.track.dispatchEvent(new Event('cuechange'));
 
     expect(changes).toEqual([
@@ -196,7 +196,7 @@ function trackResponse(): TrackResponse {
     targetLanguage: 'fra',
     generatedAt: '2026-05-02T00:00:00Z',
     expiresAt: '2026-06-01T00:00:00Z',
-    webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n",
+    webVtt: "WEBVTT\n\ncue-0001\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n",
     cues: [
       {
         cueId: 'cue-0001',

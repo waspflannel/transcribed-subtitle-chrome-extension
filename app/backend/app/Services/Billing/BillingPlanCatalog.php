@@ -154,15 +154,15 @@ final class BillingPlanCatalog
     /**
      * @param  array<string, mixed>  $plan
      */
-    public function hasFeature(array $plan, string $feature): bool
+    public function supportsFullWordCards(array $plan): bool
     {
         $features = $plan['features'] ?? null;
 
-        if (! is_array($features) || ! array_key_exists($feature, $features)) {
-            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define feature [{$feature}].");
+        if (! is_array($features) || ! array_key_exists('full_word_cards', $features)) {
+            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define feature [full_word_cards].");
         }
 
-        return (bool) $features[$feature];
+        return (bool) $features['full_word_cards'];
     }
 
     /**

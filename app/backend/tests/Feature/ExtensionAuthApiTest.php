@@ -72,23 +72,6 @@ class ExtensionAuthApiTest extends TestCase
             ->assertJsonPath('error.code', 'invalid_credentials');
     }
 
-    public function test_unverified_users_cannot_issue_extension_tokens(): void
-    {
-        User::factory()->unverified()->create([
-            'email' => 'learner@example.com',
-            'password' => Hash::make('correct-password1'),
-        ]);
-
-        $this
-            ->withHeader('X-Extension-Install-Id', $this->installId())
-            ->postJson('/v1/extension-auth/login', [
-                'email' => 'learner@example.com',
-                'password' => 'correct-password1',
-            ])
-            ->assertForbidden()
-            ->assertJsonPath('error.code', 'email_not_verified');
-    }
-
     public function test_protected_extension_api_requires_token_and_rejects_expired_tokens(): void
     {
         $this
@@ -152,12 +135,10 @@ class ExtensionAuthApiTest extends TestCase
             ->assertJsonPath('error.code', 'unauthenticated');
     }
 
-    public function test_logout_still_revokes_token_after_user_becomes_unverified(): void
+    public function test_logout_revokes_token(): void
     {
         $user = User::factory()->create();
         $issuedToken = app(ExtensionTokenIssuer::class)->issue($user, $this->installId());
-
-        $user->forceFill(['email_verified_at' => null])->save();
 
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())

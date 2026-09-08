@@ -7,8 +7,13 @@ import type {
   JobResponse,
   LearningTokenRequest,
   LearningTokenResponse,
+  LyricsCorrectionRequest,
+  LyricsCorrectionCancelRequest,
+  LyricsCorrectionStatus,
+  QuickFixTokenRequest,
   PartialTrackResponse,
   SubtitleJobHistoryResponse,
+  TrackResponse,
 } from './contracts';
 import { resolveBackendApiBaseUrl } from './api-config';
 import {
@@ -16,9 +21,11 @@ import {
   guardExtensionAuthResponse,
   guardJobResponse,
   guardLearningTokenResponse,
+  guardLyricsCorrectionStatus,
   guardOkResponse,
   guardPartialTrackResponse,
   guardSubtitleJobHistoryResponse,
+  guardTrackResponse,
 } from './api-response-guards';
 
 export const DEFAULT_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl(import.meta.env.WXT_BACKEND_API_BASE_URL);
@@ -122,6 +129,67 @@ export class SubtitleApiClient {
       timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
       authToken,
     }, guardLearningTokenResponse);
+  }
+
+  public async startLyricsCorrection(
+    installId: string,
+    authToken: string,
+    jobId: string,
+    payload: LyricsCorrectionRequest,
+  ): Promise<LyricsCorrectionStatus> {
+    return this.request<LyricsCorrectionStatus>(`subtitle-jobs/${encodeURIComponent(jobId)}/lyrics`, installId, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
+      authToken,
+    }, guardLyricsCorrectionStatus);
+  }
+
+  public async getLyricsCorrectionStatus(
+    installId: string,
+    authToken: string,
+    jobId: string,
+  ): Promise<LyricsCorrectionStatus> {
+    return this.request<LyricsCorrectionStatus>(`subtitle-jobs/${encodeURIComponent(jobId)}/lyrics`, installId, {
+      method: 'GET',
+      timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
+      authToken,
+    }, guardLyricsCorrectionStatus);
+  }
+
+  public async cancelLyricsCorrection(
+    installId: string,
+    authToken: string,
+    jobId: string,
+    payload: LyricsCorrectionCancelRequest,
+  ): Promise<LyricsCorrectionStatus> {
+    return this.request<LyricsCorrectionStatus>(`subtitle-jobs/${encodeURIComponent(jobId)}/lyrics`, installId, {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+      timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
+      authToken,
+    }, guardLyricsCorrectionStatus);
+  }
+
+  public async quickFixToken(
+    installId: string,
+    authToken: string,
+    jobId: string,
+    cueId: string,
+    tokenIndex: number,
+    payload: QuickFixTokenRequest,
+  ): Promise<TrackResponse> {
+    return this.request<TrackResponse>(
+      `subtitle-jobs/${encodeURIComponent(jobId)}/cues/${encodeURIComponent(cueId)}/tokens/${tokenIndex}`,
+      installId,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+        timeoutMs: 60000,
+        authToken,
+      },
+      guardTrackResponse,
+    );
   }
 
   private async request<TResponse>(
@@ -254,14 +322,23 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
     case 'rate_limited':
       return 'Subtitle generation is temporarily rate limited. Wait a minute and try again.';
 
-    case 'queue_unavailable':
-      return 'The subtitle queue is temporarily unavailable. Wait a moment, then try again.';
-
     case 'not_found':
     case 'expired':
       return 'The generated subtitle track is no longer available. Generate subtitles again.';
 
     case 'internal_error':
       return 'The backend hit an unexpected error. Try again later.';
+
+    case 'lyrics_correction_in_progress':
+      return 'A pasted-lyrics correction is already in progress.';
+
+    case 'lyrics_incomplete':
+      return 'Paste the complete lyrics for the song. Your current subtitles are unchanged.';
+
+    case 'lyrics_do_not_match':
+      return 'These lyrics do not seem to match this song. Check the paste and try again.';
+
+    case 'lyrics_correction_failed':
+      return 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
   }
 }

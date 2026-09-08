@@ -6,11 +6,58 @@ use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
+use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
+use App\Ai\Agents\LyricsAlignmentAgent;
+use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Tests\TestCase;
 
 class AiAgentInstructionTest extends TestCase
 {
+    public function test_subtitle_agents_leave_temperature_unset_for_model_compatibility(): void
+    {
+        foreach ([
+            CueAnalysisAgent::class,
+            CueEnrichmentAgent::class,
+            CueRomanizationAgent::class,
+            CueTokenizationAgent::class,
+            EditedCueAgent::class,
+            LearningTokenCardAgent::class,
+        ] as $agentClass) {
+            $this->assertNull(TextGenerationOptions::forAgent(new $agentClass)->temperature);
+        }
+    }
+
+    public function test_openai_provider_options_follow_the_fast_mode_toggle(): void
+    {
+        $agentClasses = [
+            CueAnalysisAgent::class,
+            CueEnrichmentAgent::class,
+            CueRomanizationAgent::class,
+            CueTokenizationAgent::class,
+            EditedCueAgent::class,
+            LearningTokenCardAgent::class,
+            LyricsAlignmentAgent::class,
+        ];
+
+        foreach ($agentClasses as $agentClass) {
+            $this->assertSame(
+                ['reasoning' => ['effort' => 'high'], 'service_tier' => 'fast'],
+                (new $agentClass)->providerOptions(Lab::OpenAI),
+            );
+        }
+
+        config(['ai.providers.openai.provider_options' => ['reasoning' => ['effort' => 'high']]]);
+
+        foreach ($agentClasses as $agentClass) {
+            $this->assertSame(
+                ['reasoning' => ['effort' => 'high']],
+                (new $agentClass)->providerOptions(Lab::OpenAI),
+            );
+        }
+    }
+
     public function test_tokenization_agent_owns_stable_token_boundary_rules(): void
     {
         $instructions = (new CueTokenizationAgent)->instructions();

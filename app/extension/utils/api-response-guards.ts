@@ -5,6 +5,7 @@ import type {
   JobResponse,
   LearningToken,
   LearningTokenResponse,
+  LyricsCorrectionStatus,
   PartialTrackResponse,
   SubtitleCue,
   SubtitleJobHistoryItem,
@@ -109,6 +110,45 @@ export function guardLearningTokenResponse(value: unknown): LearningTokenRespons
   guardLearningToken(response.token);
 
   return response as unknown as LearningTokenResponse;
+}
+
+export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionStatus {
+  const response = record(value, 'lyrics correction status');
+  const allowedKeys = ['attemptId', 'status', 'stage', 'updatedAt', 'track', 'errorCode', 'message'];
+
+  if (Object.keys(response).some((key) => !allowedKeys.includes(key))) {
+    throw invalid('Backend returned unknown lyrics correction status fields.');
+  }
+
+  requiredString(response, 'attemptId');
+  oneOf(response, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
+  requiredString(response, 'updatedAt');
+
+  if (response.status === 'queued') oneOf(response, 'stage', ['queued']);
+  if (response.status === 'running') oneOf(response, 'stage', ['aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing']);
+  if (response.status === 'completed') oneOf(response, 'stage', ['completed']);
+  if (response.status === 'failed') oneOf(response, 'stage', ['failed']);
+  if (response.status === 'cancelled') oneOf(response, 'stage', ['cancelled']);
+
+  if (response.status === 'queued' || response.status === 'running' || response.status === 'cancelled') {
+    forbidden(response, 'track', response.status);
+    forbidden(response, 'errorCode', response.status);
+    forbidden(response, 'message', response.status);
+  }
+
+  if (response.status === 'completed') {
+    guardTrackResponse(response.track);
+    forbidden(response, 'errorCode', response.status);
+    forbidden(response, 'message', response.status);
+  }
+
+  if (response.status === 'failed') {
+    oneOf(response, 'errorCode', ['lyrics_incomplete', 'lyrics_do_not_match', 'lyrics_correction_failed']);
+    requiredString(response, 'message');
+    forbidden(response, 'track', response.status);
+  }
+
+  return response as LyricsCorrectionStatus;
 }
 
 function guardAccountSummary(value: unknown): AccountSummary {
@@ -277,6 +317,12 @@ function requiredBoolean(value: Record<string, unknown>, key: string): void {
 function literal<TValue extends string | boolean>(value: Record<string, unknown>, key: string, expected: TValue): void {
   if (value[key] !== expected) {
     throw invalid(`Backend response field ${key} must be ${String(expected)}.`);
+  }
+}
+
+function forbidden(value: Record<string, unknown>, key: string, status: string): void {
+  if (key in value) {
+    throw invalid(`Backend response field ${key} must be absent when status is ${status}.`);
   }
 }
 

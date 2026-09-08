@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 class BillingAndUsageTest extends TestCase
@@ -198,94 +199,32 @@ class BillingAndUsageTest extends TestCase
         }
     }
 
-    public function test_testing_plan_switcher_changes_plans_without_stripe_and_rebalances_minutes(): void
+    public function test_dashboard_billing_box_offers_cancellation_for_active_subscriptions(): void
     {
-        config(['billing.testing_plan_switcher.enabled' => true]);
+        $user = User::factory()->create([
+            'stripe_subscription_id' => 'sub_active',
+            'billing_subscription_status' => 'active',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSeeText('Manage or cancel subscription')
+            ->assertSeeText('cancel anytime');
+    }
+
+    public function test_dashboard_billing_box_shows_plain_manage_button_without_a_subscription(): void
+    {
         $user = User::factory()->create();
 
         $this
             ->actingAs($user)
             ->get('/dashboard')
             ->assertOk()
-            ->assertSee('Test billing')
-            ->assertSee('Switch plans without Stripe.');
-
-        $this
-            ->actingAs($user)
-            ->post(route('billing.testing-plan'), ['plan_code' => 'pro'])
-            ->assertRedirectToRoute('dashboard')
-            ->assertSessionHas('billing_status', 'Test billing plan switched to Pro.');
-
-        $summary = app(BillingEntitlementService::class)->accountSummary($user->fresh());
-
-        $this->assertSame('pro', $user->fresh()->billing_plan_code);
-        $this->assertSame('active', $user->fresh()->billing_subscription_status);
-        $this->assertSame(600, $summary['monthlyMinuteLimit']);
-        $this->assertSame(600, $summary['monthlyMinutesRemaining']);
-
-        $this
-            ->actingAs($user->fresh())
-            ->post(route('billing.testing-plan'), ['plan_code' => 'base'])
-            ->assertRedirectToRoute('dashboard')
-            ->assertSessionHas('billing_status', 'Test billing plan switched to Base.');
-
-        $summary = app(BillingEntitlementService::class)->accountSummary($user->fresh());
-
-        $this->assertSame('base', $user->fresh()->billing_plan_code);
-        $this->assertSame(90, $summary['monthlyMinuteLimit']);
-        $this->assertSame(90, $summary['monthlyMinutesRemaining']);
-        $this->assertSame(
-            -510,
-            (int) BillingUsageEvent::query()
-                ->where('event_type', 'adjustment')
-                ->where('created_by', 'billing-test-plan-switcher')
-                ->sum('available_minutes_delta'),
-        );
-    }
-
-    public function test_testing_plan_switcher_can_clear_the_local_plan(): void
-    {
-        config(['billing.testing_plan_switcher.enabled' => true]);
-        $user = User::factory()->create();
-
-        $this
-            ->actingAs($user)
-            ->post(route('billing.testing-plan'), ['plan_code' => 'plus'])
-            ->assertRedirectToRoute('dashboard');
-
-        $this->assertSame('plus', $user->fresh()->billing_plan_code);
-
-        $this
-            ->actingAs($user->fresh())
-            ->post(route('billing.testing-plan'), ['plan_code' => 'none'])
-            ->assertRedirectToRoute('dashboard')
-            ->assertSessionHas('billing_status', 'Test billing plan cleared.');
-
-        $user = $user->fresh();
-
-        $this->assertNull($user->billing_plan_code);
-        $this->assertNull($user->billing_subscription_status);
-        $this->assertNull($user->billing_current_period_end);
-        $this->assertSame('No active plan', app(BillingEntitlementService::class)->accountSummary($user)['planName']);
-    }
-
-    public function test_testing_plan_switcher_is_hidden_and_blocked_when_disabled(): void
-    {
-        config(['billing.testing_plan_switcher.enabled' => false]);
-        $user = User::factory()->create();
-
-        $this
-            ->actingAs($user)
-            ->get('/dashboard')
-            ->assertOk()
-            ->assertDontSee('Test billing');
-
-        $this
-            ->actingAs($user)
-            ->post(route('billing.testing-plan'), ['plan_code' => 'pro'])
-            ->assertNotFound();
-
-        $this->assertNull($user->fresh()->billing_plan_code);
+            ->assertSeeText('Manage billing')
+            ->assertSeeText('No active subscription.')
+            ->assertDontSeeText('Manage or cancel subscription');
     }
 
     public function test_stripe_webhook_updates_subscription_state_and_replay_does_not_duplicate_grants(): void
@@ -379,6 +318,31 @@ class BillingAndUsageTest extends TestCase
         $this->assertSame('evt_missing_user', $event->stripe_event_id);
         $this->assertNull($event->processed_at);
         $this->assertStringContainsString('did not match a local user', (string) $event->processing_error);
+    }
+
+    public function test_subscription_deleted_webhook_for_a_deleted_account_is_acknowledged_without_retry(): void
+    {
+        config(['billing.stripe.webhook_secret' => 'whsec_test']);
+        $payload = $this->stripePayload([
+            'id' => 'evt_deleted_account',
+            'type' => 'customer.subscription.deleted',
+            'data' => [
+                'object' => [
+                    'id' => 'sub_deleted_account',
+                    'customer' => 'cus_deleted_account',
+                    'status' => 'canceled',
+                ],
+            ],
+        ]);
+
+        $this
+            ->call('POST', '/stripe/webhook', [], [], [], $this->stripeHeaders($payload), $payload)
+            ->assertOk();
+
+        $event = StripeWebhookEvent::query()->firstOrFail();
+        $this->assertSame('evt_deleted_account', $event->stripe_event_id);
+        $this->assertNotNull($event->processed_at);
+        $this->assertNull($event->processing_error);
     }
 
     public function test_stale_subscription_updated_does_not_overwrite_newer_period_and_status(): void
@@ -932,6 +896,17 @@ class BillingAndUsageTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'usage000001']))
             ->assertStatus(402)
             ->assertJsonPath('error.code', 'usage_exhausted');
+    }
+
+    public function test_full_word_cards_feature_must_be_explicitly_configured(): void
+    {
+        config(['billing.plans.base.features' => []]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Billing plan [base] must define feature [full_word_cards].');
+
+        $plans = app(BillingPlanCatalog::class);
+        $plans->supportsFullWordCards($plans->requirePlan('base'));
     }
 
     public function test_submission_over_processing_concurrency_is_queued_not_rejected(): void

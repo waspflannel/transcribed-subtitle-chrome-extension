@@ -3,7 +3,7 @@
 @section('content')
     <div>
         <h1>Create account</h1>
-        <p>Use the same email in the extension side panel after verification.</p>
+        <p>Use the same email in the extension side panel.</p>
     </div>
 
     <x-form.error-list :errors="$errors" />
@@ -11,7 +11,7 @@
     @if ($selectedPlan ?? null)
         <p class="plan-pick-note">
             {{ $selectedPlan['name'] }} plan selected — ${{ number_format(((int) $selectedPlan['price_cents']) / 100, 0) }}/month.
-            After you verify your email, checkout continues from your dashboard.
+            After you sign up, checkout continues from your dashboard.
         </p>
     @endif
 

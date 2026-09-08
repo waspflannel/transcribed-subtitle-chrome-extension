@@ -27,7 +27,6 @@ class SubtitleTrackFactory extends Factory
             'source_language' => 'auto',
             'detected_source_language' => 'spa',
             'target_language' => 'eng',
-            'source_dialect' => 'unknown',
             'processing_version' => SubtitleJobService::processingVersionFor('on_demand', false, false),
             'generated_at' => now(),
             'expires_at' => now()->addDays(30),

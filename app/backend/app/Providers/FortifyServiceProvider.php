@@ -13,7 +13,6 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Laravel\Fortify\Contracts\LogoutResponse;
 use Laravel\Fortify\Contracts\RegisterResponse;
-use Laravel\Fortify\Contracts\VerifyEmailResponse;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -33,7 +32,7 @@ class FortifyServiceProvider extends ServiceProvider
                     $request->session()->put('checkout_plan', $plan['code']);
                 }
 
-                return redirect()->route('verification.notice');
+                return redirect()->route('dashboard');
             }
         });
 
@@ -47,15 +46,6 @@ class FortifyServiceProvider extends ServiceProvider
             }
         });
 
-        $this->app->singleton(VerifyEmailResponse::class, fn (): Responsable => new class implements VerifyEmailResponse
-        {
-            public function toResponse($request)
-            {
-                return $request->wantsJson()
-                    ? response()->noContent()
-                    : redirect()->route('dashboard');
-            }
-        });
     }
 
     /**
@@ -72,8 +62,6 @@ class FortifyServiceProvider extends ServiceProvider
             'email' => $request->query('email'),
             'token' => $request->route('token'),
         ]));
-        Fortify::verifyEmailView(fn () => view('auth.verify-email'));
-
         Fortify::createUsersUsing(CreateNewUser::class);
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
 

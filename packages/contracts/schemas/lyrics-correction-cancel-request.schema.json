@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/lyrics-correction-cancel-request.schema.json",
+  "title": "LyricsCorrectionCancelRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["attemptId"],
+  "properties": {
+    "attemptId": {
+      "type": "string",
+      "format": "uuid"
+    }
+  }
+}

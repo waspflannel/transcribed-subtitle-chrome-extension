@@ -23,7 +23,6 @@ class TimestampedSubtitleTrackGenerator
             'source_language' => $job->source_language,
             'detected_source_language' => $job->detected_source_language,
             'target_language' => $job->target_language,
-            'source_dialect' => $enrichment->sourceDialect,
             'processing_version' => $job->processing_version,
             'generated_at' => $generatedAt,
             'expires_at' => $generatedAt->copy()->addDays(30),

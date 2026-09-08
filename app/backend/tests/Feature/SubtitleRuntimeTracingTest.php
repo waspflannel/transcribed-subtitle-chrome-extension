@@ -3,21 +3,21 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
-use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
-use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\MergeSubtitleTranscript;
+use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
-use App\Services\Audio\TemporaryAudioFile;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
+use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Subtitles\SubtitleBatchDispatcher;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
@@ -772,7 +772,7 @@ class TraceRecordingTranslationAnalysisProvider extends LaravelAiTranslationAnal
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage): CueEnrichmentResult
+    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage, bool $splitInvalidBatches = true, ?\Closure $beforeRetry = null): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
 

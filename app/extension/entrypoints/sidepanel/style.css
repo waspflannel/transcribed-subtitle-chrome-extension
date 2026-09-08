@@ -215,6 +215,7 @@ a {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overflow-anchor: none;
   scrollbar-color: rgba(216, 59, 59, 0.5) transparent;
   scrollbar-width: thin;
 }
@@ -316,6 +317,32 @@ a {
   font-weight: 500;
   overflow-wrap: anywhere;
   padding: 9px 12px;
+}
+
+.status-banner.success {
+  background: var(--green-tint);
+  border-color: rgba(44, 122, 75, 0.5);
+  color: var(--green);
+}
+
+.correction-status {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-block: 12px;
+}
+
+.status-banner-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1;
+  margin: -2px -4px 0 0;
+  padding: 0 2px;
 }
 
 /* ============================== Buttons ============================== */
@@ -827,6 +854,54 @@ select option {
   gap: 10px;
 }
 
+/* Edit subview: the panel reuses .card; this is the mode switch and forms. */
+.lyrics-confirm {
+  border-left: 2px solid var(--accent);
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding-left: 9px;
+}
+
+.lyrics-correction-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lyrics-correction-form textarea {
+  background: var(--night);
+  border: 1.5px solid var(--line);
+  color: var(--text);
+  min-height: 116px;
+  padding: 9px;
+  resize: vertical;
+  width: 100%;
+}
+
+.lyrics-correction-form textarea:disabled {
+  opacity: 0.55;
+}
+
+.lyrics-correction-footer {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.lyrics-correction-footer [data-lyrics-correction-count] {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.lyrics-correction-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+}
+
 .search-field {
   display: block;
   flex: 1;
@@ -854,10 +929,7 @@ select option {
 
 .cue.on {
   background: linear-gradient(90deg, var(--accent-tint), transparent 85%);
-  border-left: 3px solid var(--accent);
-  margin: 0 -16px;
-  padding-left: 24px;
-  padding-right: 16px;
+  box-shadow: inset 3px 0 var(--accent);
 }
 
 .cue .tc {
@@ -885,7 +957,9 @@ select option {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.45;
+  max-width: 100%;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Per-word tokens with romaji riding above — the site's player-mock motif. */
@@ -893,18 +967,73 @@ select option {
   display: flex;
   flex-wrap: wrap;
   gap: 3px 10px;
+  max-width: 100%;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.tok {
+.tok,
+.tok-edit {
   display: inline-flex;
   flex-direction: column-reverse;
   font-size: 14.5px;
   font-weight: 700;
   line-height: 1.2;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
-.tok small {
+.tok-edit {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--accent-bright);
+  border-radius: 3px 3px 0 0;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 1px;
+}
+
+.tok-edit:hover,
+.tok-edit:focus-visible {
+  background: var(--accent-tint);
+  color: var(--accent-bright);
+}
+
+/* Word correction form below the source line. */
+.tok-editor {
+  background: var(--night);
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 7px;
+  margin: 4px 0;
+  padding: 9px;
+}
+
+.tok-editor-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.tok-editor-hint {
+  color: var(--faint);
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tok-editor-hint.error {
+  color: var(--accent-bright);
+}
+
+.tok small,
+.tok-edit small {
   color: var(--accent-bright);
   font-family: var(--mono);
   font-size: 8.5px;
@@ -1499,7 +1628,103 @@ output {
     padding: 12px;
   }
 
+  .lyrics-correction-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lyrics-correction-footer .btn-primary {
+    width: 100%;
+  }
+
   .row select {
     width: 112px;
   }
+}
+
+/* Whole-track tasks occupy Watch; the transcript stays the default surface. */
+.watch-back {
+  margin: 0 0 16px;
+  min-height: 44px;
+  padding: 10px 2px;
+  font-family: var(--body);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.watch-setup h2, [data-lyrics-edit-panel] h2 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.transcript-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.transcript-menu summary {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 40px;
+  background: var(--night-high);
+  border: 1px solid var(--faint);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.transcript-menu summary:hover,
+.transcript-menu[open] summary {
+  background: var(--accent-tint);
+  border-color: var(--accent-bright);
+}
+.transcript-menu summary::-webkit-details-marker {
+  display: none;
+}
+.transcript-menu-items {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  width: 220px;
+  padding: 8px;
+  background: var(--night);
+  border: 1px solid var(--faint);
+  box-shadow: 0 8px 24px #0008;
+}
+.transcript-menu-items button {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+}
+.progress-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 12px;
+}
+.tok-editor {
+  min-width: 0;
+  margin-top: 12px;
+}
+.tok-editor label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.tok-editor input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+.tok-editor-row {
+  flex-wrap: wrap;
+}
+.tok-editor-hint {
+  flex-basis: 100%;
 }

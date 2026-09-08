@@ -5,19 +5,25 @@ namespace App\Ai\Agents;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Provider;
-use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
 #[Provider(Lab::OpenAI)]
-#[Temperature(0.2)]
 #[MaxTokens(1200)]
-class LearningTokenCardAgent implements Agent, HasStructuredOutput
+class LearningTokenCardAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
+
+    public function providerOptions(Lab|string $provider): array
+    {
+        return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
+            ? config('ai.providers.openai.provider_options', [])
+            : [];
+    }
 
     public function instructions(): Stringable|string
     {

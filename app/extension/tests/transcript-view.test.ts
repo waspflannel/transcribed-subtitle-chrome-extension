@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
@@ -67,13 +67,13 @@ describe('bindTranscriptView rebuild guard', () => {
     expect(list.querySelectorAll('.cue').length).toBe(1);
   });
 
-  it('never auto-scrolls on the data-render path', () => {
+  it('never auto-scrolls when data or the active cue changes', () => {
     const { view, scrollSpy } = setupDom();
     const settings = { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true };
 
     view.setData('vid', cues, settings);
     view.setActiveCue('c1');
-    expect(scrollSpy.calls).toBe(1);
+    expect(scrollSpy.calls).toBe(0);
 
     scrollSpy.calls = 0;
     view.setData('vid', cues, settings);
@@ -163,5 +163,173 @@ describe('bindTranscriptView setActiveCue', () => {
     view.setActiveCue('c2');
     expect(scrollSpy.calls).toBe(0);
     expect(list.querySelectorAll('.cue.on').length).toBe(0);
+  });
+});
+
+describe('bindTranscriptView quick fix editor', () => {
+  function setupQuickFix() {
+    const dom = new JSDOM('<input id="search" /><ol id="list"></ol><p id="status"></p>');
+    const document = dom.window.document;
+    (dom.window.Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
+    const onQuickFixSelect = vi.fn();
+    const onQuickFixSave = vi.fn();
+    const onQuickFixCancel = vi.fn();
+    const view = bindTranscriptView({
+      transcriptSearch: document.getElementById('search') as HTMLInputElement,
+      transcriptList: document.getElementById('list') as HTMLElement,
+      transcriptStatus: document.getElementById('status') as HTMLElement,
+      onQuickFixSelect,
+      onQuickFixSave,
+      onQuickFixCancel,
+    });
+    view.setData('vid', cues, DEFAULT_EXTENSION_SETTINGS);
+    view.setQuickFixMode(true);
+    return {
+      view,
+      document,
+      list: document.getElementById('list') as HTMLElement,
+      onQuickFixSelect,
+      onQuickFixSave,
+      onQuickFixCancel,
+    };
+  }
+
+  function openEditor(view: ReturnType<typeof setupQuickFix>['view'], list: HTMLElement) {
+    view.setQuickFixEditing({ cueId: 'c1', tokenIndex: 0, text: 'hola' });
+    return {
+      input: list.querySelector<HTMLInputElement>('[data-quick-fix-input]')!,
+      hint: list.querySelector<HTMLElement>('[data-quick-fix-hint]')!,
+      save: list.querySelector<HTMLButtonElement>('[data-transcript-action="quick-fix-save"]')!,
+      cancel: list.querySelector<HTMLButtonElement>('[data-transcript-action="quick-fix-cancel"]')!,
+    };
+  }
+
+  function type(input: HTMLInputElement, value: string): void {
+    input.value = value;
+    input.dispatchEvent(new input.ownerDocument.defaultView!.Event('input', { bubbles: true }));
+  }
+
+  it('opens word selection for only the chosen line and keeps the form beneath its words', () => {
+    const { view, list } = setupQuickFix();
+    expect(list.querySelector('[data-transcript-action="quick-fix-token"]')).toBeNull();
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c1"][data-transcript-action="quick-fix-line"]')!.click();
+    expect(list.querySelector('[data-cue-id="c1"][data-token-index]')).not.toBeNull();
+    expect(list.querySelector('[data-cue-id="c2"][data-token-index]')).toBeNull();
+    openEditor(view, list);
+    const editor = list.querySelector('[data-quick-fix-editor]')!;
+    expect(editor.closest('.toks')).toBeNull();
+    expect(list.querySelector('[data-cue-id="c1"][data-token-index="0"]')?.textContent).toContain('hola');
+  });
+
+  it('reports token clicks with cue id and token index', () => {
+    const { list, onQuickFixSelect } = setupQuickFix();
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-transcript-action="quick-fix-line"]')!.click();
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-token-index="0"]')!.click();
+    expect(onQuickFixSelect).toHaveBeenCalledWith('c2', 0);
+  });
+
+  it('opens a prefilled focused editor and disables save while unchanged', () => {
+    const { view, list, document } = setupQuickFix();
+    const { input, hint, save } = openEditor(view, list);
+
+    expect(input.value).toBe('hola');
+    expect(document.activeElement).toBe(input);
+    expect(hint.textContent).toBe('4 / 84');
+    expect(save.disabled).toBe(true);
+  });
+
+  it('does not scroll the transcript when the editor receives focus', () => {
+    const { view, list } = setupQuickFix();
+    const focusSpy = vi.spyOn(list.ownerDocument.defaultView!.HTMLElement.prototype, 'focus');
+    const scrollSpy = vi.spyOn(list.ownerDocument.defaultView!.Element.prototype, 'scrollIntoView');
+
+    openEditor(view, list);
+
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    expect(scrollSpy).not.toHaveBeenCalled();
+    focusSpy.mockRestore();
+    scrollSpy.mockRestore();
+  });
+
+  it('validates the draft live and saves through Enter', () => {
+    const { view, list, onQuickFixSave } = setupQuickFix();
+    const { input, hint, save } = openEditor(view, list);
+
+    type(input, 'hola!');
+    expect(hint.textContent).toBe('5 / 84');
+    expect(save.disabled).toBe(false);
+
+    type(input, 'x'.repeat(85));
+    expect(hint.textContent).toBe('85 / 84');
+    expect(hint.classList.contains('error')).toBe(true);
+    expect(save.disabled).toBe(true);
+
+    type(input, 'hola!');
+    input.dispatchEvent(new input.ownerDocument.defaultView!.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(onQuickFixSave).toHaveBeenCalledWith('c1', 0, 'hola!');
+  });
+
+  it('cancels through Escape and the cancel button', () => {
+    const { view, list, onQuickFixCancel } = setupQuickFix();
+    const { input, cancel } = openEditor(view, list);
+
+    input.dispatchEvent(new input.ownerDocument.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(onQuickFixCancel).toHaveBeenCalledTimes(1);
+
+    cancel.click();
+    expect(onQuickFixCancel).toHaveBeenCalledTimes(2);
+  });
+
+  it('disables the editor while busy and shows errors in the hint', () => {
+    const { view, list } = setupQuickFix();
+    const { input, hint, save } = openEditor(view, list);
+
+    type(input, 'hola!');
+    view.setQuickFixBusy(true);
+    expect(input.disabled).toBe(true);
+    expect(save.disabled).toBe(true);
+    expect(save.textContent).toBe('Saving…');
+    expect(hint.textContent).toBe('Refreshing translation and word data…');
+
+    view.setQuickFixBusy(false);
+    view.setQuickFixError('Could not save. Try again.');
+    expect(hint.textContent).toBe('Could not save. Try again.');
+    expect(hint.classList.contains('error')).toBe(true);
+    expect(save.disabled).toBe(false);
+
+    /* Typing clears the error and restores the live count. */
+    type(input, 'hola!!');
+    expect(hint.textContent).toBe('6 / 84');
+    expect(hint.classList.contains('error')).toBe(false);
+  });
+
+  it('keeps the selected word while the refresh is pending', () => {
+    const { view, list, onQuickFixSelect, onQuickFixCancel } = setupQuickFix();
+    const { input } = openEditor(view, list);
+    view.setQuickFixBusy(true);
+    list.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-transcript-action="quick-fix-line"]')!.click();
+    expect(list.querySelector('[data-cue-id="c2"][data-token-index]')).toBeNull();
+    input.dispatchEvent(new input.ownerDocument.defaultView!.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(onQuickFixSelect).not.toHaveBeenCalled();
+    expect(onQuickFixCancel).not.toHaveBeenCalled();
+    expect(input.value).toBe('hola');
+  });
+
+  it('keeps the draft when the transcript rebuilds for an unrelated reason', () => {
+    const { view, list } = setupQuickFix();
+    const { input } = openEditor(view, list);
+    type(input, 'hola!');
+
+    view.setActiveCue('c2');
+    view.setData('vid', cues, { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true });
+
+    expect(list.querySelector<HTMLInputElement>('[data-quick-fix-input]')?.value).toBe('hola!');
+  });
+
+  it('closing the editing state removes the editor', () => {
+    const { view, list } = setupQuickFix();
+    openEditor(view, list);
+    view.setQuickFixEditing(null);
+    expect(list.querySelector('[data-quick-fix-editor]')).toBeNull();
   });
 });
