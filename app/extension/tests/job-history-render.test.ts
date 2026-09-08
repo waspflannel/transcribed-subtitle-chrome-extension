@@ -84,4 +84,16 @@ describe('renderJobHistory links', () => {
     expect(link!.getAttribute('href')).toBe('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     expect(link!.getAttribute('target')).toBe('_blank');
   });
+
+  it('keeps the last successful list visible beside a refresh error', () => {
+    const dom = new JSDOM('<div id="list"></div><p id="err"></p>');
+    const jobsList = dom.window.document.getElementById('list')!;
+    const jobsError = dom.window.document.getElementById('err')!;
+
+    renderJobHistory({ ...stateWithJob(), jobHistoryError: 'Unable to refresh jobs.' }, { jobsList, jobsError });
+
+    expect(jobsError.textContent).toBe('Unable to refresh jobs.');
+    expect(jobsList.textContent).toContain('Ready');
+    expect(jobsList.textContent).not.toContain('Nothing generated yet');
+  });
 });

@@ -32,6 +32,7 @@ import {
   getExtensionSettings,
   getOrCreateInstallId,
   updateExtensionSettings,
+  waitForExtensionSettingsWrites,
 } from '../utils/settings';
 import type { ExtensionSettings } from '../utils/settings-model';
 import { trackWithLearningToken } from '../utils/track-tokens';
@@ -45,6 +46,7 @@ import {
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
+const tabSubtitleStateOwners = new Map<number, string>();
 const tabOperations = new Map<number, symbol>();
 const tabLyricsCorrectionStates = new Map<number, LyricsCorrectionTabState>();
 const tabGenerationInFlight = new Set<number>();
@@ -52,6 +54,9 @@ const tabCorrectionMutationInFlight = new Set<number>();
 const panelPorts = new Set<Browser.runtime.Port>();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
 let cachedPanelJobHistoryError: string | undefined;
+let cachedPanelJobHistoryAccountId: string | undefined;
+let localStateResetVersion = 0;
+let accountMutationVersion = 0;
 const JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
@@ -92,6 +97,7 @@ export default defineBackground(() => {
   browser.tabs.onRemoved.addListener((tabId) => {
     tabOperations.delete(tabId);
     tabSubtitleStates.delete(tabId);
+    tabSubtitleStateOwners.delete(tabId);
     tabLyricsCorrectionStates.delete(tabId);
     tabGenerationInFlight.delete(tabId);
     tabCorrectionMutationInFlight.delete(tabId);
@@ -162,7 +168,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return loginFromPanel(message.email, message.password);
 
     case 'panel.logout':
-      return logoutFromPanel();
+      return logoutFromPanel(message.windowId);
 
     case 'panel.clearLocalState':
       return clearLocalStateFromPanel(message.windowId);
@@ -222,11 +228,18 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
   const tabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
   const pageStatus = parseYoutubePage(sender.tab?.url ?? '');
   const installId = await getOrCreateInstallId();
+  const session = await getStoredExtensionSession();
+  const accountId = session?.account.id;
   const settings = await getExtensionSettings();
-  let subtitleState = tabId === null ? DEFAULT_SUBTITLE_STATE : await getSubtitleStateForPage(tabId, pageStatus);
+  let subtitleState = tabId === null ? DEFAULT_SUBTITLE_STATE : await getSubtitleStateForPage(tabId, pageStatus, accountId);
 
   if (tabId !== null && subtitleState.type === 'no-track' && pageStatus.supported) {
-    subtitleState = await recoverSubtitleStateFromBackend(tabId, pageStatus, subtitleState, installId);
+    subtitleState = await recoverSubtitleStateFromBackend(tabId, pageStatus, subtitleState, installId, session);
+  }
+
+  const currentSession = await getStoredExtensionSession();
+  if (session?.sessionId !== currentSession?.sessionId) {
+    subtitleState = DEFAULT_SUBTITLE_STATE;
   }
 
   return { installId, settings, subtitleState };
@@ -245,9 +258,8 @@ async function recoverSubtitleStateFromBackend(
   pageStatus: YoutubePageInfo,
   localState: SubtitleState,
   installId: string,
+  session: StoredExtensionSession | null,
 ): Promise<SubtitleState> {
-  const session = await getStoredExtensionSession();
-
   if (!session) {
     return localState;
   }
@@ -259,17 +271,40 @@ async function recoverSubtitleStateFromBackend(
   }
 
   const resolved = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
-    resolveCompletedSubtitleJob(installId, session.plainTextToken, job),
+    resolveCompletedSubtitleJob(installId, session.plainTextToken, job, session.sessionId),
   );
 
+  if (!await isCurrentSession(session.sessionId)) return localState;
+
   if (resolved.type === 'ready') {
-    await storeReadySubtitleState(tabId, resolved);
+    await storeReadySubtitleState(tabId, resolved, session.account.id);
 
     return resolved;
   }
 
   if (resolved.type === 'loading') {
     tabSubtitleStates.set(tabId, resolved);
+    tabSubtitleStateOwners.set(tabId, session.account.id);
+
+    if (resolved.jobId && !tabGenerationInFlight.has(tabId) && await isCurrentSession(session.sessionId)) {
+      const persistedOperation = await getTabOperation(tabId);
+      if (!await isCurrentSession(session.sessionId)) return localState;
+      if (persistedOperation?.kind === 'generation' && persistedOperation.accountId === session.account.id
+        && persistedOperation.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId === resolved.jobId) {
+        ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
+      } else if (!persistedOperation || persistedOperation.accountId !== session.account.id) {
+        if (persistedOperation) await clearTabOperation(tabId);
+        if (await isCurrentSession(session.sessionId)) {
+          await setTabOperation(tabId, {
+            kind: 'generation',
+            accountId: session.account.id,
+            youtubeVideoId: pageStatus.videoId,
+            jobId: resolved.jobId,
+          });
+          ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
+        }
+      }
+    }
 
     return resolved;
   }
@@ -334,43 +369,46 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
     throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
   }
 
-  const persistedOperation = await getTabOperation(activeTabId);
-  if (persistedOperation?.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId) {
-    const session = await getStoredExtensionSession();
-
-    if (!session) {
-      throw new SubtitleApiError('unauthenticated', 'Sign in before continuing subtitle work.', 401);
-    }
-
-    if (persistedOperation.kind === 'correction') {
-      const correction = await subtitleApi.getLyricsCorrectionStatus(
-        await getOrCreateInstallId(),
-        session.plainTextToken,
-        persistedOperation.jobId,
-      );
-
-      if (correction.status === 'queued' || correction.status === 'running') {
-        throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
-      }
-    } else {
-      const job = await subtitleApi.getSubtitleJob(await getOrCreateInstallId(), session.plainTextToken, persistedOperation.jobId);
-
-      if (job.status === 'queued' || job.status === 'running') {
-        throw new SubtitleApiError('lyrics_correction_in_progress', 'Subtitle generation is already in progress.', 409);
-      }
-    }
-
-    await clearTabOperation(activeTabId);
-  } else if (persistedOperation) {
-    await clearTabOperation(activeTabId);
-  }
-
+  const operation = Symbol('generation');
+  tabOperations.set(activeTabId, operation);
   tabGenerationInFlight.add(activeTabId);
   let generationStarted = false;
 
   try {
-    const currentState = await getSubtitleStateForPage(activeTabId, pageStatus);
     const session = await getStoredExtensionSession();
+    const persistedOperation = await getTabOperation(activeTabId);
+
+    if (persistedOperation && persistedOperation.accountId !== session?.account.id) {
+      await clearTabOperation(activeTabId);
+    } else if (persistedOperation?.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId) {
+      if (!session) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before continuing subtitle work.', 401);
+      }
+
+      if (persistedOperation.kind === 'correction') {
+        const correction = await subtitleApi.getLyricsCorrectionStatus(
+          await getOrCreateInstallId(),
+          session.plainTextToken,
+          persistedOperation.jobId,
+        );
+
+        if (correction.status === 'queued' || correction.status === 'running') {
+          throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
+        }
+      } else {
+        const job = await subtitleApi.getSubtitleJob(await getOrCreateInstallId(), session.plainTextToken, persistedOperation.jobId);
+
+        if (job.status === 'queued' || job.status === 'running') {
+          throw new SubtitleApiError('lyrics_correction_in_progress', 'Subtitle generation is already in progress.', 409);
+        }
+      }
+
+      await clearTabOperation(activeTabId);
+    } else if (persistedOperation) {
+      await clearTabOperation(activeTabId);
+    }
+
+    const currentState = await getSubtitleStateForPage(activeTabId, pageStatus, session?.account.id);
     if (currentState.type === 'ready' && session) {
       try {
         const correction = await subtitleApi.getLyricsCorrectionStatus(
@@ -390,14 +428,25 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
     }
 
     if (currentState.type !== 'loading') {
-      const operation = Symbol('generation');
-      tabOperations.set(activeTabId, operation);
+      if (!session) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+      }
+
+      await waitForExtensionSettingsWrites();
+      if (!await isCurrentSession(session.sessionId)) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+      }
       const settings = await getExtensionSettings();
       const pageSnapshot = await getPageSnapshotFromTab(activeTabId);
       const now = new Date().toISOString();
 
+      if (!await isCurrentSession(session.sessionId)) {
+        throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
+      }
+
       await publishSubtitleState(activeTabId, {
         type: 'loading',
+        status: 'running',
         youtubeVideoId: pageStatus.videoId,
         youtubeUrl: pageStatus.url,
         message: 'Preparing request...',
@@ -405,9 +454,9 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
         progressPercent: 5,
         startedAt: now,
         lastUpdatedAt: now,
-      });
+      }, session.account.id);
 
-      await setTabOperation(activeTabId, { kind: 'generation', youtubeVideoId: pageStatus.videoId });
+      await setTabOperation(activeTabId, { kind: 'generation', accountId: session.account.id, youtubeVideoId: pageStatus.videoId });
       generationStarted = true;
       void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, operation)
         .finally(() => tabGenerationInFlight.delete(activeTabId));
@@ -416,6 +465,7 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
     return getPanelState({ syncBackend: false, windowId });
   } finally {
     if (!generationStarted) {
+      if (tabOperations.get(activeTabId) === operation) tabOperations.delete(activeTabId);
       tabGenerationInFlight.delete(activeTabId);
     }
   }
@@ -428,12 +478,19 @@ async function generateSubtitlesForTab(
   pageSnapshot: PageSnapshot,
   operation: symbol,
 ): Promise<void> {
+  let sessionId: string | undefined;
+  let accountId: string | undefined;
+  let retainOperation = false;
+
   try {
     const session = await getStoredExtensionSession();
 
     if (!session) {
       throw new SubtitleApiError('unauthenticated', 'Sign in before generating subtitles.', 401);
     }
+
+    sessionId = session.sessionId;
+    accountId = session.account.id;
 
     console.info('extension.subtitle_generation_started', {
       youtubeVideoId: pageStatus.videoId,
@@ -461,10 +518,13 @@ async function generateSubtitlesForTab(
     const current = tabSubtitleStates.get(tabId);
     if (current?.type !== 'loading') return;
     tabSubtitleStates.set(tabId, { ...current, jobId: initialJob.jobId });
-    await setTabOperation(tabId, { kind: 'generation', youtubeVideoId: pageStatus.videoId, jobId: initialJob.jobId });
-    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session.plainTextToken, initialJob, operation);
+    tabSubtitleStateOwners.set(tabId, accountId!);
+    if (!await isCurrentSession(sessionId)) return;
+    await setTabOperation(tabId, { kind: 'generation', accountId: accountId!, youtubeVideoId: pageStatus.videoId, jobId: initialJob.jobId });
+    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session, initialJob, operation);
 
     if (job === null) {
+      retainOperation = true;
       return;
     }
 
@@ -481,7 +541,7 @@ async function generateSubtitlesForTab(
           jobId: job.jobId,
           youtubeVideoId: pageStatus.videoId,
           message: publicSubtitleJobFailureMessage(job),
-        });
+        }, accountId);
       }
 
       return;
@@ -491,11 +551,15 @@ async function generateSubtitlesForTab(
       throw new Error('Completed subtitle job did not include a track.');
     }
 
-    if (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
-      await publishSubtitleState(tabId, {
-        type: 'ready',
-        track: job.track,
-      });
+    if (tabOperations.get(tabId) === operation && await isCurrentSession(sessionId!)) {
+      if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+        await publishSubtitleState(tabId, {
+          type: 'ready',
+          track: job.track,
+        }, accountId);
+      } else {
+        await rememberActiveTrack(job.track, accountId!);
+      }
     }
 
     console.info('extension.subtitle_generation_completed', {
@@ -504,7 +568,8 @@ async function generateSubtitlesForTab(
       trackId: job.track.trackId,
     });
   } catch (error) {
-    await clearSessionIfInvalid(error);
+    if (sessionId && isSessionInvalidError(error)) retainOperation = true;
+    await clearSessionIfInvalid(error, sessionId);
 
     console.warn('extension.subtitle_generation_failed', {
       youtubeVideoId: pageStatus.videoId,
@@ -512,17 +577,19 @@ async function generateSubtitlesForTab(
       status: error instanceof SubtitleApiError ? error.status : undefined,
     });
 
-    if (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
+    if (accountId && sessionId && await isCurrentSession(sessionId)
+      && tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
       await publishSubtitleState(tabId, {
         type: 'error',
         youtubeVideoId: pageStatus.videoId,
         message: publicSubtitleErrorMessage(error),
-      });
+      }, accountId);
     }
   } finally {
-    const operation = await getTabOperation(tabId);
+    const persistedOperation = await getTabOperation(tabId);
 
-    if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId) {
+    if (!retainOperation && tabOperations.get(tabId) === operation && persistedOperation?.kind === 'generation'
+      && persistedOperation.accountId === accountId && persistedOperation.youtubeVideoId === pageStatus.videoId) {
       await clearTabOperation(tabId);
     }
   }
@@ -542,40 +609,83 @@ async function waitForCompletedSubtitleJob(
   tabId: number,
   pageStatus: SupportedYoutubePageInfo,
   installId: string,
-  authToken: string,
+  session: StoredExtensionSession,
   initialJob: JobResponse,
   operation: symbol,
 ): Promise<JobResponse | null> {
   let job = initialJob;
-  let partialTrack: PartialSubtitleTrack | undefined;
+  let partialTrack = (await getTabOperation(tabId))?.partialTrack;
 
-  while (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
+  while (tabOperations.get(tabId) === operation) {
     if (job.status === 'completed' || job.status === 'failed') {
       return job;
     }
 
-    if (PARTIAL_TRACK_STAGES.has(job.stage)) {
-      partialTrack = (await fetchPartialTrack(installId, authToken, job)) ?? partialTrack;
+    const currentSession = await getStoredExtensionSession();
+    if (!currentSession || currentSession.account.id !== session.account.id || currentSession.sessionId !== session.sessionId) {
+      return null;
     }
 
-    if (tabOperations.get(tabId) !== operation || !isCurrentLoadingState(tabId, pageStatus.videoId)) return null;
+    if (PARTIAL_TRACK_STAGES.has(job.stage)) {
+      partialTrack = (await fetchPartialTrack(installId, currentSession.plainTextToken, job)) ?? partialTrack;
+      if (partialTrack && tabOperations.get(tabId) === operation) {
+        if (!await isCurrentSession(session.sessionId)) return null;
+        const persistedOperation = await getTabOperation(tabId);
+        if (persistedOperation?.kind === 'generation' && persistedOperation.accountId === session.account.id) {
+          await setTabOperation(tabId, { ...persistedOperation, partialTrack });
+        }
+      }
+    }
 
-    await publishSubtitleState(tabId, {
-      type: 'loading',
-      jobId: job.jobId,
-      youtubeVideoId: pageStatus.videoId,
-      youtubeUrl: pageStatus.url,
-      message: loadingMessageForStage(job.stage),
-      stage: job.stage,
-      progressPercent: job.progressPercent,
-      startedAt: job.createdAt,
-      lastUpdatedAt: job.updatedAt,
-      ...(partialTrack ? { partialTrack } : {}),
-    });
+    if (tabOperations.get(tabId) !== operation) return null;
+
+    if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+      await publishSubtitleState(tabId, {
+        type: 'loading',
+        status: job.status,
+        jobId: job.jobId,
+        youtubeVideoId: pageStatus.videoId,
+        youtubeUrl: pageStatus.url,
+        message: job.status === 'queued' ? 'Queued - waiting for a generation slot...' : loadingMessageForStage(job.stage),
+        stage: job.stage,
+        progressPercent: job.progressPercent,
+        startedAt: job.createdAt,
+        lastUpdatedAt: job.updatedAt,
+        ...(partialTrack ? { partialTrack } : {}),
+      }, session.account.id);
+    }
 
     await delay(JOB_POLL_INTERVAL_MS);
-    if (tabOperations.get(tabId) !== operation || !isCurrentLoadingState(tabId, pageStatus.videoId)) return null;
-    job = await subtitleApi.getSubtitleJob(installId, authToken, job.jobId);
+    if (tabOperations.get(tabId) !== operation) return null;
+    const refreshedSession = await getStoredExtensionSession();
+    if (!refreshedSession || refreshedSession.account.id !== session.account.id || refreshedSession.sessionId !== session.sessionId) return null;
+
+    try {
+      job = await subtitleApi.getSubtitleJob(installId, refreshedSession.plainTextToken, job.jobId);
+    } catch (error) {
+      if (isSessionInvalidError(error)) {
+        await clearSessionIfInvalid(error, refreshedSession.sessionId);
+
+        return null;
+      }
+
+      if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+        await publishSubtitleState(tabId, {
+          type: 'loading',
+          status: job.status,
+          jobId: job.jobId,
+          youtubeVideoId: pageStatus.videoId,
+          youtubeUrl: pageStatus.url,
+          message: 'Reconnecting to generation status...',
+          stage: job.stage,
+          progressPercent: job.progressPercent,
+          startedAt: job.createdAt,
+          lastUpdatedAt: new Date().toISOString(),
+          ...(partialTrack ? { partialTrack } : {}),
+        }, session.account.id);
+      }
+      continue;
+    }
     if (job.jobId !== initialJob.jobId || job.youtubeVideoId !== pageStatus.videoId) {
       throw new Error('Subtitle status did not match the requested job.');
     }
@@ -591,6 +701,8 @@ async function fetchPartialTrack(
 ): Promise<PartialSubtitleTrack | undefined> {
   try {
     const response = await subtitleApi.getSubtitleJobPartialTrack(installId, authToken, job.jobId);
+
+    if (response.jobId !== job.jobId || response.youtubeVideoId !== job.youtubeVideoId) return undefined;
 
     return {
       jobId: response.jobId,
@@ -624,12 +736,15 @@ async function enrichLearningTokenFromContent(
     throw new Error('Learning token enrichment requires an active content tab.');
   }
 
-  const currentState = await readySubtitleStateForEnrichment(tabId, message.youtubeVideoId, message.trackId);
   const session = await getStoredExtensionSession();
 
   if (!session) {
     throw new SubtitleApiError('unauthenticated', 'Sign in before enriching learning tokens.', 401);
   }
+
+  const sessionId = session.sessionId;
+  const accountId = session.account.id;
+  const currentState = await readySubtitleStateForEnrichment(tabId, message.youtubeVideoId, message.trackId, accountId);
 
   if (!currentState) {
     throw new Error('No generated subtitle track is active for this tab.');
@@ -645,25 +760,29 @@ async function enrichLearningTokenFromContent(
       tokenIndex: message.tokenIndex,
     });
   } catch (error) {
-    await clearSessionIfInvalid(error);
+    await clearSessionIfInvalid(error, sessionId);
 
     throw error;
   }
 
-  await readySubtitleStateForEnrichment(tabId, message.youtubeVideoId, message.trackId);
+  if (!await isCurrentSession(sessionId)) return { ok: true, stale: true };
+  await readySubtitleStateForEnrichment(tabId, message.youtubeVideoId, message.trackId, accountId);
   const freshState = tabSubtitleStates.get(tabId);
 
   if (response.cueId !== message.cueId || response.token.index !== message.tokenIndex || freshState?.type !== 'ready' || freshState.track.trackId !== message.trackId
-    || freshState.track.youtubeVideoId !== message.youtubeVideoId || !freshState.track.cues.some((cue) => cue.cueId === message.cueId && cue.tokens.some((token) => token.index === message.tokenIndex))) {
+    || tabSubtitleStateOwners.get(tabId) !== accountId || freshState.track.youtubeVideoId !== message.youtubeVideoId
+    || !freshState.track.cues.some((cue) => cue.cueId === message.cueId && cue.tokens.some((token) => token.index === message.tokenIndex))) {
     return { ok: true, stale: true };
   }
+
+  if (!await isCurrentSession(sessionId)) return { ok: true, stale: true };
 
   const track = trackWithLearningToken(freshState.track, response.cueId, response.token);
 
   await storeReadySubtitleState(tabId, {
     type: 'ready',
     track,
-  });
+  }, accountId);
 
   return {
     ok: true,
@@ -686,7 +805,7 @@ async function submitLyricsCorrectionFromPanel(
   }
 
   const pageStatus = parseYoutubePage(activeTab.url ?? '');
-  const currentState = await getSubtitleStateForPage(tabId, pageStatus);
+  const currentState = await getSubtitleStateForPage(tabId, pageStatus, session.account.id);
 
   if (!pageStatus.supported || pageStatus.videoId !== message.youtubeVideoId || currentState.type !== 'ready' || currentState.track.jobId !== message.jobId || currentState.track.trackId !== message.trackId) {
     throw new SubtitleApiError('not_found', 'The active subtitle track has changed. Refresh the panel and try again.', 404);
@@ -698,9 +817,12 @@ async function submitLyricsCorrectionFromPanel(
 
   tabCorrectionMutationInFlight.add(tabId);
   try {
+    const sessionId = session.sessionId;
+    const accountId = session.account.id;
     const installId = await getOrCreateInstallId();
     await setTabOperation(tabId, {
       kind: 'correction',
+      accountId,
       youtubeVideoId: message.youtubeVideoId,
       jobId: message.jobId,
       trackId: message.trackId,
@@ -719,20 +841,22 @@ async function submitLyricsCorrectionFromPanel(
         },
       );
     } catch (error) {
-      await clearTabOperation(tabId);
+      if (await isCurrentSession(sessionId)) await clearTabOperation(tabId);
       throw error;
     }
+    if (!await isCurrentSession(sessionId)) return getPanelState({ syncBackend: false, windowId });
     await setTabOperation(tabId, {
       kind: 'correction',
+      accountId,
       youtubeVideoId: message.youtubeVideoId,
       jobId: message.jobId,
       trackId: message.trackId,
       attemptId: correction.attemptId,
     });
 
-    if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId)) {
-      if (correction.status === 'completed' && correction.track) {
-        await rememberActiveTrack(correction.track);
+    if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId, accountId)) {
+      if (correction.status === 'completed' && correction.track && await isCurrentSession(sessionId)) {
+        await rememberActiveTrack(correction.track, accountId);
       }
 
       return getPanelState({ syncBackend: true, windowId });
@@ -744,7 +868,7 @@ async function submitLyricsCorrectionFromPanel(
     ));
 
     if (correction.status === 'completed' && correction.track) {
-      await publishSubtitleState(tabId, { type: 'ready', track: correction.track });
+      await publishSubtitleState(tabId, { type: 'ready', track: correction.track }, accountId);
       await clearTabOperation(tabId);
     }
 
@@ -777,11 +901,14 @@ async function cancelLyricsCorrectionFromPanel(
 
   tabCorrectionMutationInFlight.add(tabId);
   try {
+    const sessionId = session.sessionId;
+    const accountId = session.account.id;
     const installId = await getOrCreateInstallId();
     const correction = await subtitleApi.cancelLyricsCorrection(installId, session.plainTextToken, message.jobId, { attemptId: message.attemptId });
-    if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId)) {
-      if (correction.status === 'completed' && correction.track) {
-        await rememberActiveTrack(correction.track);
+    if (!await isCurrentSession(sessionId)) return getPanelState({ syncBackend: false, windowId });
+    if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId, accountId)) {
+      if (correction.status === 'completed' && correction.track && await isCurrentSession(sessionId)) {
+        await rememberActiveTrack(correction.track, accountId);
       }
 
       return getPanelState({ syncBackend: true, windowId });
@@ -798,7 +925,7 @@ async function cancelLyricsCorrectionFromPanel(
     ));
 
     if (correction.status === 'completed' && correction.track) {
-      await publishSubtitleState(tabId, { type: 'ready', track: correction.track });
+      await publishSubtitleState(tabId, { type: 'ready', track: correction.track }, accountId);
     }
 
     await clearTabOperation(tabId);
@@ -822,7 +949,7 @@ async function quickFixTokenFromPanel(
   }
 
   const pageStatus = parseYoutubePage(activeTab.url ?? '');
-  const currentState = await getSubtitleStateForPage(tabId, pageStatus);
+  const currentState = await getSubtitleStateForPage(tabId, pageStatus, session.account.id);
 
   if (!pageStatus.supported || pageStatus.videoId !== message.youtubeVideoId || currentState.type !== 'ready' || currentState.track.jobId !== message.jobId || currentState.track.trackId !== message.trackId) {
     throw new SubtitleApiError('not_found', 'The active subtitle track has changed. Refresh the panel and try again.', 404);
@@ -834,6 +961,8 @@ async function quickFixTokenFromPanel(
 
   tabCorrectionMutationInFlight.add(tabId);
   try {
+    const sessionId = session.sessionId;
+    const accountId = session.account.id;
     const installId = await getOrCreateInstallId();
     let track: TrackResponse;
 
@@ -849,21 +978,26 @@ async function quickFixTokenFromPanel(
     } catch (error) {
       if (error instanceof SubtitleApiError && error.code === 'lyrics_correction_in_progress' && error.details?.reason === 'stale_track') {
         tabSubtitleStates.delete(tabId);
-        await forgetRememberedTrack(message.youtubeVideoId, message.trackId);
-        await recoverExactJobAfterStaleTrack(tabId, message, installId, session.plainTextToken);
+        tabSubtitleStateOwners.delete(tabId);
+        if (await isCurrentSession(sessionId)) {
+          await forgetRememberedTrack(message.youtubeVideoId, message.trackId, accountId);
+          await recoverExactJobAfterStaleTrack(tabId, message, installId, session.plainTextToken, sessionId, accountId);
+        }
       }
 
       throw error;
     }
 
-    if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId)) {
+    if (!await isCurrentSession(sessionId)) return getPanelState({ syncBackend: false, windowId });
+    if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId, accountId)) {
       tabSubtitleStates.delete(tabId);
-      await rememberActiveTrack(track);
+      tabSubtitleStateOwners.delete(tabId);
+      if (await isCurrentSession(sessionId)) await rememberActiveTrack(track, accountId);
 
       return getPanelState({ syncBackend: true, windowId });
     }
 
-    await publishSubtitleState(tabId, { type: 'ready', track });
+    await publishSubtitleState(tabId, { type: 'ready', track }, accountId);
 
     return getPanelState({ syncBackend: true, windowId });
   } finally {
@@ -876,18 +1010,24 @@ async function recoverExactJobAfterStaleTrack(
   message: Extract<BackgroundRequest, { type: 'panel.quickFixToken' }>,
   installId: string,
   authToken: string,
+  sessionId: string,
+  accountId: string,
 ): Promise<void> {
   try {
+    const session = await getStoredExtensionSession();
+    if (!session || session.sessionId !== sessionId || session.account.id !== accountId) return;
     const job = await subtitleApi.getSubtitleJob(installId, authToken, message.jobId);
 
     if (job.status !== 'completed' || !job.track) return;
 
-    await rememberActiveTrack(job.track);
+    if (!await isCurrentSession(session.sessionId)) return;
+
+    await rememberActiveTrack(job.track, accountId);
     const tab = await browser.tabs.get(tabId).catch(() => undefined);
     const pageStatus = tab ? parseYoutubePage(tab.url ?? '') : undefined;
 
     if (pageStatus?.supported && pageStatus.videoId === message.youtubeVideoId) {
-      await publishSubtitleState(tabId, { type: 'ready', track: job.track });
+      await publishSubtitleState(tabId, { type: 'ready', track: job.track }, accountId);
     }
   } catch {
     // The original stale-track error remains the user-visible result.
@@ -899,6 +1039,7 @@ async function activeReadyTrackMatches(
   youtubeVideoId: string,
   jobId: string,
   trackId: string,
+  accountId: string,
 ): Promise<boolean> {
   const activeTab = await browser.tabs.get(tabId).catch(() => undefined);
 
@@ -911,38 +1052,46 @@ async function activeReadyTrackMatches(
     return false;
   }
 
-  const currentState = await getSubtitleStateForPage(tabId, pageStatus);
+  const currentState = await getSubtitleStateForPage(tabId, pageStatus, accountId);
 
   return currentState.type === 'ready'
     && currentState.track.jobId === jobId
     && currentState.track.trackId === trackId;
 }
 
-async function storeReadySubtitleState(tabId: number, subtitleState: Extract<SubtitleState, { type: 'ready' }>): Promise<void> {
+async function storeReadySubtitleState(
+  tabId: number,
+  subtitleState: Extract<SubtitleState, { type: 'ready' }>,
+  accountId: string,
+): Promise<void> {
   tabSubtitleStates.set(tabId, subtitleState);
-  await rememberActiveTrack(subtitleState.track);
+  tabSubtitleStateOwners.set(tabId, accountId);
+  await rememberActiveTrack(subtitleState.track, accountId);
 }
 
 async function readySubtitleStateForEnrichment(
   tabId: number,
   youtubeVideoId: string,
   trackId: string,
+  accountId: string,
 ): Promise<Extract<SubtitleState, { type: 'ready' }> | null> {
   const currentState = tabSubtitleStates.get(tabId);
+  const ownsState = tabSubtitleStateOwners.get(tabId) === accountId;
 
-  if (currentState?.type === 'ready' && currentState.track.trackId === trackId) {
+  if (ownsState && currentState?.type === 'ready' && currentState.track.trackId === trackId) {
     return currentState;
   }
 
-  if (currentState && currentState.type !== 'no-track' && isSubtitleStateForVideo(currentState, youtubeVideoId)) {
+  if (ownsState && currentState && currentState.type !== 'no-track' && isSubtitleStateForVideo(currentState, youtubeVideoId)) {
     return null;
   }
 
-  const rememberedTrack = await getRememberedTrack(youtubeVideoId);
+  const rememberedTrack = await getRememberedTrack(youtubeVideoId, accountId);
 
   if (rememberedTrack?.trackId === trackId) {
     const restoredState: Extract<SubtitleState, { type: 'ready' }> = { type: 'ready', track: rememberedTrack };
     tabSubtitleStates.set(tabId, restoredState);
+    tabSubtitleStateOwners.set(tabId, accountId);
 
     return restoredState;
   }
@@ -951,11 +1100,18 @@ async function readySubtitleStateForEnrichment(
 }
 
 async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> {
+  localStateResetVersion += 1;
+  accountMutationVersion += 1;
+  await waitForExtensionSettingsWrites();
   await clearLocalExtensionState();
+  await clearExtensionSession();
   await clearRememberedTracks();
   await clearTabOperations();
   tabSubtitleStates.clear();
+  tabSubtitleStateOwners.clear();
   tabOperations.clear();
+  tabGenerationInFlight.clear();
+  tabCorrectionMutationInFlight.clear();
   tombstoneAllLyricsCorrectionStates();
 
   const activeTab = await getActiveTab(windowId);
@@ -979,8 +1135,13 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
 }
 
 async function loginFromPanel(email: string, password: string): Promise<PanelState> {
+  const mutationVersion = ++accountMutationVersion;
+  const resetVersion = localStateResetVersion;
   const installId = await getOrCreateInstallId();
   const response = await subtitleApi.loginExtension(installId, { email, password });
+  if (mutationVersion !== accountMutationVersion || resetVersion !== localStateResetVersion) {
+    return getPanelState({ syncBackend: false });
+  }
 
   await storeExtensionSession(response);
 
@@ -989,7 +1150,8 @@ async function loginFromPanel(email: string, password: string): Promise<PanelSta
   return getPanelState({ syncBackend: true });
 }
 
-async function logoutFromPanel(): Promise<PanelState> {
+async function logoutFromPanel(windowId?: number): Promise<PanelState> {
+  const mutationVersion = ++accountMutationVersion;
   const installId = await getOrCreateInstallId();
   const session = await getStoredExtensionSession();
 
@@ -1003,8 +1165,11 @@ async function logoutFromPanel(): Promise<PanelState> {
     }
   }
 
+  if (mutationVersion !== accountMutationVersion) return getPanelState({ syncBackend: false, windowId });
+
   await clearExtensionSession();
   tombstoneAllLyricsCorrectionStates();
+  await clearLocalSubtitleStates(windowId);
 
   console.info('extension.account_logout_completed');
 
@@ -1032,21 +1197,25 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
     effectiveSession = null;
     cachedPanelJobHistory = [];
     cachedPanelJobHistoryError = undefined;
+    cachedPanelJobHistoryAccountId = undefined;
   }
 
   const localState =
     activeTabId === null || pageStatus === undefined
       ? DEFAULT_SUBTITLE_STATE
-      : await getSubtitleStateForPage(activeTabId, pageStatus);
+       : await getSubtitleStateForPage(activeTabId, pageStatus, effectiveSession?.account.id);
 
   let stateForRecovery = localState;
   if (activeTabId !== null && pageStatus?.supported && effectiveSession) {
     const operation = await getTabOperation(activeTabId);
 
-    if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId) {
+    if (operation && operation.accountId !== effectiveSession.account.id) {
+      await clearTabOperation(activeTabId);
+    } else if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId) {
       if (!operation.jobId) {
         stateForRecovery = {
           type: 'loading',
+          status: 'running',
           youtubeVideoId: pageStatus.videoId,
           youtubeUrl: pageStatus.url,
           message: 'Preparing request...',
@@ -1060,6 +1229,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
           if (job.status === 'queued' || job.status === 'running') {
             stateForRecovery = {
               type: 'loading',
+              status: job.status,
               jobId: job.jobId,
               youtubeVideoId: pageStatus.videoId,
               youtubeUrl: pageStatus.url,
@@ -1068,10 +1238,14 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
               progressPercent: job.progressPercent,
               startedAt: job.createdAt,
               lastUpdatedAt: job.updatedAt,
+              ...(operation.partialTrack ? { partialTrack: operation.partialTrack } : {}),
             };
+            tabSubtitleStates.set(activeTabId, stateForRecovery);
+            tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
+            ensureRecoveredGenerationMonitor(activeTabId, pageStatus, installId, effectiveSession, job);
           } else if (job.status === 'completed' && job.track) {
             stateForRecovery = { type: 'ready', track: job.track };
-            await rememberActiveTrack(job.track);
+            await rememberActiveTrack(job.track, effectiveSession.account.id);
             await clearTabOperation(activeTabId);
           } else {
             stateForRecovery = {
@@ -1085,6 +1259,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
         } catch {
           stateForRecovery = {
             type: 'loading',
+            status: 'running',
             jobId: operation.jobId,
             youtubeVideoId: pageStatus.videoId,
             youtubeUrl: pageStatus.url,
@@ -1092,18 +1267,25 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
             stage: 'preparing',
             progressPercent: 5,
           };
+          tabSubtitleStates.set(activeTabId, stateForRecovery);
+          tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
+          ensureRecoveredGenerationMonitor(activeTabId, pageStatus, installId, effectiveSession);
         }
       }
     }
   }
 
   let subtitleState = await stateWithBackendProgress(stateForRecovery, pageStatus, history.jobs, (job) =>
-    effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job) : Promise.resolve(null),
+    effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job, effectiveSession.sessionId) : Promise.resolve(null),
   );
   const lyricsCorrection = await syncLyricsCorrection(activeTabId, pageStatus, effectiveSession, installId, options.syncBackend, stateForRecovery);
 
   if (activeTabId !== null && pageStatus?.supported) {
-    const currentSubtitleState = tabSubtitleStates.get(activeTabId);
+    const currentSubtitleState = effectiveSession?.account.id === undefined
+      ? undefined
+      : tabSubtitleStateOwners.get(activeTabId) === effectiveSession.account.id
+        ? tabSubtitleStates.get(activeTabId)
+        : undefined;
 
     if (currentSubtitleState && currentSubtitleState !== localState && isSubtitleStateForVideo(currentSubtitleState, pageStatus.videoId)) {
       subtitleState = currentSubtitleState;
@@ -1111,7 +1293,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
   }
 
   if (activeTabId !== null && subtitleState.type === 'ready' && localState.type !== 'ready') {
-    await publishSubtitleState(activeTabId, subtitleState);
+    await publishSubtitleState(activeTabId, subtitleState, effectiveSession?.account.id);
   }
 
   return {
@@ -1147,6 +1329,9 @@ async function syncLyricsCorrection(
   }
 
   const persistedOperation = await getTabOperation(tabId);
+  if (persistedOperation && persistedOperation.accountId !== session.account.id) {
+    await clearTabOperation(tabId);
+  }
   const trackedJobId = subtitleState.type === 'ready'
     ? subtitleState.track.jobId
     : tabLyricsCorrectionStates.get(tabId)?.jobId ?? (persistedOperation?.kind === 'correction' ? persistedOperation.jobId : undefined);
@@ -1160,6 +1345,7 @@ async function syncLyricsCorrection(
   }
 
   try {
+    const sessionId = session.sessionId;
     const status = await syncLyricsCorrectionStatus({
       tabId,
       jobId: trackedJobId,
@@ -1168,26 +1354,32 @@ async function syncLyricsCorrection(
       fetchStatus: () => subtitleApi.getLyricsCorrectionStatus(installId, session.plainTextToken, trackedJobId),
       onCurrentRequestError: (error) => {
         if (error instanceof SubtitleApiError && error.code === 'not_found') {
-          tombstoneLyricsCorrectionState(tabId);
+          void isCurrentSession(sessionId).then((current) => {
+            if (current) tombstoneLyricsCorrectionState(tabId);
+          });
         }
       },
     });
 
-    if (status?.status === 'completed' && status.track) {
+    if (!await isCurrentSession(sessionId)) return tabLyricsCorrectionStates.get(tabId)?.status ?? null;
+
+    if (status?.status === 'completed' && status.track && await isCurrentSession(sessionId)) {
       const currentSubtitleState = tabSubtitleStates.get(tabId);
       const currentTrack = currentSubtitleState?.type === 'ready' ? currentSubtitleState.track : null;
 
-      if (currentTrack && await activeReadyTrackMatches(tabId, pageStatus.videoId, trackedJobId, currentTrack.trackId)) {
-        await publishSubtitleState(tabId, { type: 'ready', track: status.track });
-      } else {
-        await rememberActiveTrack(status.track);
+      if (currentTrack && await activeReadyTrackMatches(tabId, pageStatus.videoId, trackedJobId, currentTrack.trackId, session.account.id)) {
+        if (await isCurrentSession(sessionId)) {
+          await publishSubtitleState(tabId, { type: 'ready', track: status.track }, session.account.id);
+        }
+      } else if (await isCurrentSession(sessionId)) {
+        await rememberActiveTrack(status.track, session.account.id);
       }
     }
 
     if (status && !['queued', 'running'].includes(status.status)) {
       const operation = await getTabOperation(tabId);
 
-      if (operation?.kind === 'correction' && operation.jobId === trackedJobId) {
+      if (operation?.kind === 'correction' && operation.accountId === session.account.id && operation.jobId === trackedJobId) {
         await clearTabOperation(tabId);
       }
     }
@@ -1206,11 +1398,16 @@ async function getPanelJobHistory(
   if (!session) {
     cachedPanelJobHistory = [];
     cachedPanelJobHistoryError = undefined;
+    cachedPanelJobHistoryAccountId = undefined;
 
     return { jobs: [], error: undefined, sessionInvalid: false };
   }
 
   if (!syncBackend) {
+    if (cachedPanelJobHistoryAccountId !== session.account.id) {
+      return { jobs: [], error: undefined, sessionInvalid: false };
+    }
+
     return {
       jobs: cachedPanelJobHistory,
       error: cachedPanelJobHistoryError,
@@ -1218,10 +1415,24 @@ async function getPanelJobHistory(
     };
   }
 
-  const history = await listBackendJobHistory(installId, session.plainTextToken);
+  const history = await listBackendJobHistory(installId, session.plainTextToken, session.sessionId);
 
-  cachedPanelJobHistory = history.jobs;
-  cachedPanelJobHistoryError = history.error;
+  if (history.sessionInvalid) {
+    cachedPanelJobHistory = [];
+    cachedPanelJobHistoryError = history.error;
+    cachedPanelJobHistoryAccountId = undefined;
+  } else if (history.error && cachedPanelJobHistoryAccountId === session.account.id) {
+    cachedPanelJobHistoryError = history.error;
+    return {
+      jobs: cachedPanelJobHistory,
+      error: history.error,
+      sessionInvalid: false,
+    };
+  } else if (await isCurrentAccount(session.account.id)) {
+    cachedPanelJobHistory = history.jobs;
+    cachedPanelJobHistoryError = history.error;
+    cachedPanelJobHistoryAccountId = session.account.id;
+  }
 
   return history;
 }
@@ -1247,13 +1458,14 @@ async function getPageSnapshotFromTab(tabId: number): Promise<PageSnapshot> {
 async function listBackendJobHistory(
   installId: string,
   authToken: string,
+  expectedSessionId: string,
 ): Promise<{ jobs: SubtitleJobHistoryItem[]; error?: string; sessionInvalid: boolean }> {
   try {
     const response = await subtitleApi.listSubtitleJobs(installId, authToken);
 
     return { jobs: response.jobs, sessionInvalid: false };
   } catch (error) {
-    if (await clearSessionIfInvalid(error)) {
+    if (await clearSessionIfInvalid(error, expectedSessionId)) {
       return {
         jobs: [],
         error: error instanceof Error ? error.message : 'Extension session expired.',
@@ -1273,9 +1485,12 @@ async function resolveCompletedSubtitleJob(
   installId: string,
   authToken: string,
   historyJob: SubtitleJobHistoryItem,
+  expectedSessionId?: string,
 ): Promise<JobResponse | null> {
   try {
     const job = await subtitleApi.getSubtitleJob(installId, authToken, historyJob.jobId);
+
+    if (expectedSessionId !== undefined && !await isCurrentSession(expectedSessionId)) return null;
 
     return job.status === 'completed' && job.track ? job : null;
   } catch (error) {
@@ -1297,9 +1512,11 @@ async function syncExtensionAccount(
   try {
     const response = await subtitleApi.getExtensionAccount(installId, session.plainTextToken);
 
-    return updateStoredAccount(response.account);
+    const updated = await updateStoredAccount(response.account, session.sessionId);
+
+    return updated ?? await getStoredExtensionSession();
   } catch (error) {
-    if (await clearSessionIfInvalid(error)) {
+    if (await clearSessionIfInvalid(error, session.sessionId)) {
       return null;
     }
 
@@ -1307,8 +1524,10 @@ async function syncExtensionAccount(
   }
 }
 
-async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInfo): Promise<SubtitleState> {
-  const subtitleState = tabSubtitleStates.get(tabId) ?? DEFAULT_SUBTITLE_STATE;
+async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInfo, accountId?: string): Promise<SubtitleState> {
+  const subtitleState = accountId !== undefined && tabSubtitleStateOwners.get(tabId) === accountId
+    ? tabSubtitleStates.get(tabId) ?? DEFAULT_SUBTITLE_STATE
+    : DEFAULT_SUBTITLE_STATE;
 
   if (!pageStatus.supported) {
     return DEFAULT_SUBTITLE_STATE;
@@ -1318,7 +1537,11 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
     return subtitleState;
   }
 
-  const rememberedTrack = await getRememberedTrack(pageStatus.videoId);
+  if (accountId === undefined) {
+    return DEFAULT_SUBTITLE_STATE;
+  }
+
+  const rememberedTrack = await getRememberedTrack(pageStatus.videoId, accountId);
 
   if (!rememberedTrack) {
     return DEFAULT_SUBTITLE_STATE;
@@ -1326,6 +1549,7 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
 
   const restoredState: SubtitleState = { type: 'ready', track: rememberedTrack };
   tabSubtitleStates.set(tabId, restoredState);
+  tabSubtitleStateOwners.set(tabId, accountId);
 
   return restoredState;
 }
@@ -1377,11 +1601,16 @@ function isCurrentLoadingState(tabId: number, youtubeVideoId: string): boolean {
   return currentState?.type === 'loading' && currentState.youtubeVideoId === youtubeVideoId;
 }
 
-async function publishSubtitleState(tabId: number, subtitleState: SubtitleState): Promise<void> {
+async function publishSubtitleState(tabId: number, subtitleState: SubtitleState, accountId?: string): Promise<void> {
   tabSubtitleStates.set(tabId, subtitleState);
+  if (accountId !== undefined) {
+    tabSubtitleStateOwners.set(tabId, accountId);
+  } else {
+    tabSubtitleStateOwners.delete(tabId);
+  }
 
-  if (subtitleState.type === 'ready') {
-    await rememberActiveTrack(subtitleState.track);
+  if (subtitleState.type === 'ready' && accountId !== undefined) {
+    await rememberActiveTrack(subtitleState.track, accountId);
   }
 
   await sendTabMessage(tabId, {
@@ -1419,15 +1648,117 @@ function isSessionInvalidError(error: unknown): boolean {
     && (error.code === 'unauthenticated' || error.code === 'expired' || error.code === 'email_not_verified');
 }
 
-async function clearSessionIfInvalid(error: unknown): Promise<boolean> {
+async function clearSessionIfInvalid(error: unknown, expectedSessionId?: string): Promise<boolean> {
   if (!isSessionInvalidError(error)) {
+    return false;
+  }
+
+  const currentSession = await getStoredExtensionSession();
+
+  if (!currentSession || (expectedSessionId !== undefined && currentSession.sessionId !== expectedSessionId)) {
     return false;
   }
 
   await clearExtensionSession();
   tombstoneAllLyricsCorrectionStates();
+  await clearLocalSubtitleStates();
 
   return true;
+}
+
+async function clearLocalSubtitleStates(windowId?: number): Promise<void> {
+  const activeTabId = (await getActiveTab(windowId))?.id;
+  const tabIds = new Set(tabSubtitleStates.keys());
+  if (typeof activeTabId === 'number') tabIds.add(activeTabId);
+  tabSubtitleStates.clear();
+  tabSubtitleStateOwners.clear();
+
+  await Promise.all([...tabIds].map((tabId) => sendTabMessage(tabId, {
+    type: 'background.subtitleStateChanged',
+    subtitleState: DEFAULT_SUBTITLE_STATE,
+  })));
+}
+
+function ensureRecoveredGenerationMonitor(
+  tabId: number,
+  pageStatus: SupportedYoutubePageInfo,
+  installId: string,
+  session: StoredExtensionSession,
+  initialJob?: JobResponse,
+): void {
+  if (tabGenerationInFlight.has(tabId)) return;
+
+  const operation = Symbol('recovered-generation');
+  tabOperations.set(tabId, operation);
+  tabGenerationInFlight.add(tabId);
+  let terminal = false;
+
+  void (async () => {
+    let job = initialJob;
+
+    while (tabOperations.get(tabId) === operation && !job) {
+      const currentSession = await getStoredExtensionSession();
+      if (!currentSession || currentSession.account.id !== session.account.id || currentSession.sessionId !== session.sessionId) return;
+
+      try {
+        const persisted = await getTabOperation(tabId);
+        if (!persisted?.jobId || persisted.accountId !== session.account.id) return;
+        job = await subtitleApi.getSubtitleJob(installId, currentSession.plainTextToken, persisted.jobId);
+      } catch (error) {
+        if (isSessionInvalidError(error)) {
+          await clearSessionIfInvalid(error, currentSession.sessionId);
+          return;
+        }
+
+        await delay(JOB_POLL_INTERVAL_MS);
+      }
+    }
+
+    if (!job || tabOperations.get(tabId) !== operation) return;
+
+    const result = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session, job, operation);
+    if (!result || tabOperations.get(tabId) !== operation || !await isCurrentSession(session.sessionId)) return;
+    terminal = true;
+
+    if (result.status === 'failed') {
+      if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+        await publishSubtitleState(tabId, {
+          type: 'error',
+          jobId: result.jobId,
+          youtubeVideoId: pageStatus.videoId,
+          message: publicSubtitleJobFailureMessage(result),
+        }, session.account.id);
+      }
+      return;
+    }
+
+    if (!result.track) return;
+
+    if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+      await publishSubtitleState(tabId, { type: 'ready', track: result.track }, session.account.id);
+    } else {
+      await rememberActiveTrack(result.track, session.account.id);
+    }
+  })().finally(async () => {
+    tabGenerationInFlight.delete(tabId);
+    const persisted = await getTabOperation(tabId);
+    if (persisted?.kind === 'generation' && persisted.accountId === session.account.id && tabOperations.get(tabId) === operation) {
+      const current = await getStoredExtensionSession();
+      if (terminal && current?.sessionId === session.sessionId) await clearTabOperation(tabId);
+    }
+  });
+}
+
+async function isCurrentSession(sessionId: string): Promise<boolean> {
+  const session = await getStoredExtensionSession();
+
+  return session?.sessionId === sessionId;
+}
+
+async function isCurrentAccount(accountId: string): Promise<boolean> {
+  const session = await getStoredExtensionSession();
+
+  return session?.account.id === accountId;
 }
 
 function assertNever(value: never): never {

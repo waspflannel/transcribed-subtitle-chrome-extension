@@ -15,6 +15,13 @@ describe('panel progress helpers', () => {
     expect(generationProgress({ stage: 'enriching', progressPercent: 75 }).stageLabel).toBe('Generating word cards');
   });
 
+  it('labels queued work as waiting for admission', () => {
+    expect(generationProgress({ stage: 'preparing', progressPercent: 0, status: 'queued' })).toMatchObject({
+      stageLabel: 'Preparing request',
+      activityLabel: 'Waiting for a generation slot',
+    });
+  });
+
   it('fails loudly for invalid history timestamps', () => {
     expect(() => formatHistoryTimestamp('not-a-date')).toThrow('Invalid history timestamp');
   });

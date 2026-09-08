@@ -1,4 +1,4 @@
-import type { SubtitleCue } from '../contracts';
+import type { PartialSubtitleCue, SubtitleCue } from '../contracts';
 import type { ExtensionSettings } from '../settings-model';
 import { escapeHtml } from '../html';
 
@@ -44,6 +44,33 @@ export function panelTranscriptListHtml(input: {
     return '<p class="transcript-empty muted">No cues match that search.</p>';
   }
   return cues.map((cue) => transcriptRow(cue, cue.cueId === input.activeCueId, input.settings, input.quickFixMode ?? false, input.editingCueId ?? null, input.quickFixEditing ?? null)).join('');
+}
+
+export function panelPartialTranscriptListHtml(input: {
+  cues: readonly PartialSubtitleCue[];
+  activeCueId: string | null;
+  query: string;
+}): string {
+  const query = input.query.trim().toLowerCase();
+  const cues = query === ''
+    ? input.cues
+    : input.cues.filter((cue) => [cue.sourceText, cue.romanization ?? '', cue.translatedText ?? ''].join(' ').toLowerCase().includes(query));
+
+  if (cues.length === 0) return '<p class="transcript-empty muted">No cues match that search.</p>';
+
+  return cues.map((cue) => `
+    <article class="cue${cue.cueId === input.activeCueId ? ' on' : ''}" role="listitem" aria-current="${cue.cueId === input.activeCueId ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
+      <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>
+      <div class="cbody">
+        <div class="ct">${escapeHtml(cue.sourceText)}</div>
+        ${cue.romanization ? `<div class="cr">${escapeHtml(cue.romanization)}</div>` : ''}
+        ${cue.translatedText ? `<div class="cg">${escapeHtml(cue.translatedText)}</div>` : ''}
+        <div class="cue-actions">
+          <button type="button" class="cue-action" data-transcript-action="jump" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Jump to cue ${cue.index + 1}">Jump</button>
+          <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Copy cue ${cue.index + 1}">Copy</button>
+        </div>
+      </div>
+    </article>`).join('');
 }
 
 function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings, quickFixMode: boolean, editingCueId: string | null, quickFixEditing: QuickFixEditing | null): string {

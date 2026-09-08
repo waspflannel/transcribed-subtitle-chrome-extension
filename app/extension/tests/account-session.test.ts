@@ -72,6 +72,15 @@ describe('extension account session storage', () => {
 
     expect(await getStoredExtensionSession()).toBeNull();
   });
+
+  it('rejects a late account refresh from an older session', async () => {
+    const { getStoredExtensionSession, storeExtensionSession, updateStoredAccount } = await accountSession();
+    const first = await storeExtensionSession(authResponse());
+    const second = await storeExtensionSession({ ...authResponse(), account: { ...authResponse().account, id: '2' } });
+
+    expect(await updateStoredAccount({ ...first.account, email: 'old@example.com' }, first.sessionId)).toBeNull();
+    await expect(getStoredExtensionSession()).resolves.toEqual(second);
+  });
 });
 
 async function accountSession(): Promise<typeof import('../utils/account-session')> {

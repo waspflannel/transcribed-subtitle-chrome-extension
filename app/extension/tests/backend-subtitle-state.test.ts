@@ -120,6 +120,20 @@ describe('backend subtitle state helpers', () => {
     });
   });
 
+  it('keeps the last partial track while recovered progress is refreshed', async () => {
+    const partialTrack = {
+      jobId: 'job-1', youtubeVideoId: pageStatus.videoId, sourceLanguage: 'eng', revision: 3,
+      cues: [{ cueId: 'cue-1', index: 0, startMs: 0, endMs: 1000, sourceText: 'hello' }],
+    };
+
+    await expect(stateWithBackendProgress({
+      type: 'loading', jobId: 'job-1', youtubeVideoId: pageStatus.videoId, message: 'Reconnecting...',
+      stage: 'tokenizing', progressPercent: 65, partialTrack,
+    }, pageStatus, [jobHistory({ jobId: 'job-1', status: 'running', stage: 'romanizing', progressPercent: 82 })])).resolves.toMatchObject({
+      type: 'loading', jobId: 'job-1', stage: 'romanizing', partialTrack,
+    });
+  });
+
   it('shows failed backend jobs as public extension errors', async () => {
     await expect(
       stateWithBackendProgress({ type: 'no-track' }, pageStatus, [

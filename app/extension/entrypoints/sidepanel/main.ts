@@ -41,7 +41,7 @@ import {
 
 type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account' | 'correction' | 'quickfix' | 'cancel';
+type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
 const {
@@ -151,6 +151,7 @@ let latestState: PanelState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
+let generationRequestBusy = false;
 let lyricsCorrectionRequestBusy = false;
 let quickFixRequestBusy = false;
 let lyricsCancellationRequestBusy = false;
@@ -160,6 +161,8 @@ let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
 let panelRequestState: PanelRequestOrder = panelRequestOrder();
+let accountActionVersion = 0;
+let accountActionsInFlight = 0;
 let lastProgressAnnouncement: string | null = null;
 
 /* Watch opens on the transcript; whole-track tasks each occupy one screen. */
@@ -421,9 +424,19 @@ async function refreshBackendState(): Promise<void> {
 }
 
 async function generateSubtitles(): Promise<void> {
-  if (lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
-  const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
-  if (applied) openWatchScreen('transcript');
+  if (generationRequestBusy || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
+
+  generationRequestBusy = true;
+  generateButton.disabled = true;
+  generateButton.textContent = 'Starting...';
+
+  try {
+    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
+    if (applied) openWatchScreen('transcript');
+  } finally {
+    generationRequestBusy = false;
+    if (latestState) showPanelState(latestState);
+  }
 }
 
 async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
@@ -684,11 +697,11 @@ function renderLyricsEditState(): void {
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  await sendPanelRequest({ type: 'panel.updateSettings', patch });
+  await sendPanelRequest({ type: 'panel.updateSettings', patch }, 'settings', 'mutation');
 }
 
 async function clearLocalState(): Promise<void> {
-  await sendPanelRequest({ type: 'panel.clearLocalState' });
+  await sendPanelRequest({ type: 'panel.clearLocalState' }, 'global', 'mutation');
 }
 
 async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
@@ -704,6 +717,8 @@ async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
         password: accountPasswordInput.value,
       },
       'account',
+      'mutation',
+      true,
     );
 
     accountPasswordInput.value = '';
@@ -720,7 +735,7 @@ async function logoutAccount(): Promise<void> {
   setAccountRequestBusy(true, 'Signing out...');
 
   try {
-    const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account');
+    const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account', 'mutation', true);
 
     if (signedOut) {
       showAccountFeedback('success', 'Signed out.');
@@ -734,6 +749,7 @@ async function sendPanelRequest(
   request: PanelRequest,
   errorTarget: RequestErrorTarget = 'global',
   kind: 'normal' | 'mutation' = 'normal',
+  accountAction = false,
 ): Promise<boolean> {
   const requestWithWindow = typeof panelWindowId === 'number'
     ? { ...request, windowId: panelWindowId }
@@ -742,7 +758,13 @@ async function sendPanelRequest(
   const isMutation = kind === 'mutation';
   const ordering = beginPanelRequest(panelRequestState, kind);
   panelRequestState = ordering.state;
-  const canApply = (): boolean => canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
+  const startedDuringAccountAction = accountActionsInFlight > 0;
+  const actionVersion = accountAction ? ++accountActionVersion : accountActionVersion;
+  if (accountAction) accountActionsInFlight += 1;
+  const canApply = (): boolean => accountAction
+    ? actionVersion === accountActionVersion
+    : !startedDuringAccountAction && accountActionsInFlight === 0
+      && canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
@@ -795,6 +817,7 @@ async function sendPanelRequest(
     if (isMutation) {
       panelRequestState = finishPanelRequest(panelRequestState);
     }
+    if (accountAction) accountActionsInFlight = Math.max(0, accountActionsInFlight - 1);
   }
 }
 
@@ -947,6 +970,8 @@ function showPanelState(state: PanelState): void {
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
     void pullActiveCue(state);
+  } else if (subtitleState.type === 'loading' && subtitleState.partialTrack) {
+    transcriptView.setPartialData(subtitleState.partialTrack.youtubeVideoId, subtitleState.partialTrack.cues, settings);
   } else {
     cueSnapshotRequest += 1;
     transcriptView.setData(null, [], settings);
@@ -956,7 +981,7 @@ function showPanelState(state: PanelState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
+  generateButton.disabled = generationRequestBusy || !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
   renderLyricsEditState();
   renderLyricsCorrectionState(state);
   if (!hadPartialConfirmation && partialLyricsConfirmation) {
@@ -1082,6 +1107,7 @@ async function pullActiveCue(state: PanelState): Promise<void> {
 function showWatchState(state: PanelState, supported: boolean, authenticated: boolean): void {
   const subtitleState = state.subtitleState;
   const loading = subtitleState.type === 'loading';
+  const partial = loading && subtitleState.partialTrack !== undefined;
   const ready = subtitleState.type === 'ready';
   const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
 
@@ -1094,24 +1120,27 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   progressSummaryLabel.textContent = correctionRunning ? 'Updating lyrics…' : '';
   backTranscriptButton.hidden = !ready || watchScreen === 'transcript';
   backTranscriptButton.disabled = quickFixRequestBusy || lyricsCorrectionRequestBusy;
-  readyToolbar.hidden = watchScreen !== 'transcript';
+  readyToolbar.hidden = watchScreen !== 'transcript' || partial;
   transcriptList.hidden = watchScreen !== 'transcript';
   transcriptStatus.hidden = watchScreen !== 'transcript';
   quickFixStatus.hidden = watchScreen !== 'transcript';
-  watchReady.hidden = !ready;
+  watchReady.hidden = !ready && !partial;
 
   if (loading) {
+    const queued = subtitleState.status === 'queued';
     const progress = generationProgress(subtitleState);
 
-    progressLabel.textContent = 'Generating';
+    progressLabel.textContent = queued ? 'Queued' : 'Generating';
     progressStages.setAttribute('aria-label', 'Generation stages');
     progressPercent.setAttribute('aria-valuenow', String(progress.percent));
     progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.activityLabel}`);
     progressPercent.textContent = `${progress.percent}%`;
-    announceProgress('Generating', progress.activityLabel);
+    announceProgress(queued ? 'Queued' : 'Generating', progress.activityLabel);
     progressBar.style.width = `${progress.percent}%`;
     progressStages.innerHTML = stageChecklistHtml(subtitleState.stage);
-    progressCopy.textContent = 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
+    progressCopy.textContent = queued
+      ? 'Waiting for a generation slot. You can close this panel — generation keeps going.'
+      : 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
   } else if (correctionRunning && state.lyricsCorrection) {
     const progress = lyricsCorrectionProgress(state.lyricsCorrection.stage);
     progressLabel.textContent = 'Replacing lyrics';
@@ -1298,6 +1327,13 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
     return;
   }
 
+  if (errorTarget === 'settings') {
+    statusBanner.hidden = false;
+    statusBanner.textContent = message;
+
+    return;
+  }
+
   if (errorTarget === 'quickfix') {
     quickFixError = { message, code: errorCode, reason: details?.reason };
 
@@ -1371,10 +1407,11 @@ function setSettingsDisabled(disabled: boolean): void {
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
   keyboardShortcutsEnabledInput.disabled = disabled;
-  accountEmailInput.disabled = disabled;
-  accountPasswordInput.disabled = disabled;
-  accountLoginButton.disabled = disabled;
-  logoutButton.disabled = disabled || latestState?.accountState.status !== 'authenticated';
+  const authenticated = latestState?.accountState.status === 'authenticated';
+  accountEmailInput.disabled = disabled || accountRequestBusy || authenticated;
+  accountPasswordInput.disabled = disabled || accountRequestBusy || authenticated;
+  accountLoginButton.disabled = disabled || accountRequestBusy || authenticated;
+  logoutButton.disabled = disabled || accountRequestBusy || !authenticated;
   clearStateButton.disabled = disabled;
   resetTimingButton.disabled = disabled;
   timingOffsetRangeInput.disabled = disabled;

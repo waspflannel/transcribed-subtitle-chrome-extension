@@ -240,6 +240,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R3. P1: Transient Poll Failure Or Job Recovery Can Strand UI
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Generation polling now retries transient status failures while retaining the known job and most recent partial cues. Authentication interruption preserves the account-owned persisted operation for same-account reauthentication without clearing another session. Partial revisions are stored with the operation, and panel/content recovery starts one monitor for queued or running work after a background restart; terminal results are applied only to the matching operation and account.
+
+**How To Test:**
+1. Start a generation, fail one status GET, then return running and completed responses. Expected: no second POST, the loading state keeps its job/partial cues, and the completed track becomes ready.
+2. Expire authentication during polling, reauthenticate as the same account, and reopen the panel after completion. Expected: the persisted job resumes once and the finished track is recovered; signing in as another account does not adopt it.
+3. Restart the background while a queued/running job has a partial revision, then open the panel with the panel closed during completion. Expected: one recovered monitor resumes, partial cues remain available, and the final track is stored without duplicate submission.
+4. Run the focused `backend-subtitle-state.test.ts` check when execution is authorized. Expected: a refreshed running state retains its last partial track.
+
+**Limits:** The focused check, browser restart, authentication transition, and real queue/API behavior were not run; this worktree lacks the installed extension test runtime. Retry cadence is the existing two-second poll interval, and backend/provider retry semantics remain unchanged.
+
 **Surface:** Background polling, Watch, partial overlay.
 
 **Impact:** Backend work can finish while Watch stays failed or loading. Users lose usable partial results and may retry unnecessarily.
@@ -366,6 +378,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R8. P1: Account Changes Do Not Isolate Cached And Pending State
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Stored sessions now carry a local session identity. Remembered tracks and persisted tab operations are account-scoped, panel history cache writes accept only the current account, and late account refresh/enrichment/correction/generation writes verify their originating session before updating local state. Logout clears rendered subtitle state across content tabs, and anonymous panel reads cannot restore an authenticated track.
+
+**How To Test:**
+1. Sign in as account A, load a track, and leave account/history and enrichment responses pending. Sign out, sign in as account B, then resolve A's success and 401 responses. Expected: B's token, account summary, history and displayed track remain B-owned; A's late 401 does not sign B out.
+2. Sign out and sign in as B with A's remembered video still stored. Open that video. Expected: no A track is restored; a B-owned track remains readable if one was previously stored.
+3. Run the focused `account-session.test.ts` and `active-tracks.test.ts` checks when execution is authorized. Expected: session-guarded account updates are rejected and another account cannot read a remembered track.
+
+**Limits:** The implementation is source-reviewed and the focused checks are untested in this handoff; browser tab duplication and real account transitions remain for the later manual session. Backend authorization is unchanged.
+
 **Surface:** Sign-in/out, remembered tracks, account/history requests.
 
 **Impact:** Account B can receive account A's local transcript or account summary; a late A failure can invalidate B's new session.
@@ -383,6 +406,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Resolve A's successful and 401 responses after B signs in. B's token, summary, history, and displayed tracks remain unchanged by A.
 
 ### R9. P2: Overlapping Actions Can Lose Preferences Or Duplicate Submission
+
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Settings read/merge/write operations now run through one small write queue, and generation waits for queued preference writes before taking its request snapshot. The background claims a tab generation operation before preparation awaits, while the panel claims the Generate action immediately and keeps the button busy until the response is applied.
+
+**How To Test:**
+1. Delay two independent settings writes and change both controls before either resolves. Expected: both values remain in storage and the panel reflects both values.
+2. Change a generation option, immediately double-click Generate, and delay the page snapshot/POST. Expected: one request and one monitor are created, the latest settings are sent, and the button stays busy during preparation.
+3. Run the focused `settings.test.ts` check when execution is authorized. Expected: concurrent patches preserve both fields.
+
+**Limits:** No browser journey, build, or API call was run; the extension dependency runtime is unavailable in this worktree. Backend idempotency/charge behavior remains governed by its own server-side contract.
 
 **Surface:** Settings storage, generation setup, background handlers.
 
@@ -456,6 +490,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Remaining Limits:** The real side-panel lifecycle, browser cuechange timing, player replacement, duplicate tabs/windows, and delayed pull interleavings still need the planned manual browser session.
 
 ### R12. P2: Background Refresh Can Swallow Sign-In Feedback
+
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Account actions now have their own outcome/version guard while still blocking ordinary snapshot responses from applying during the action. A delayed refresh cannot overwrite sign-in/sign-out identity or feedback. Settings mutations report failures in the existing status banner and retain the last valid panel snapshot instead of rendering synthetic signed-out/no-video state; account controls remain owned by the account busy state.
+
+**How To Test:**
+1. Delay login, complete a newer ordinary refresh first, then resolve login success and failure in separate runs. Expected: the account feedback and disabled controls match the action result, and a stale refresh cannot replace the account identity.
+2. While a preference update is pending, force its request to fail. Expected: the existing account/video snapshot remains visible and the error appears in the status banner.
+3. Run the panel request-order and panel entrypoint focused checks when execution is authorized. Expected: older snapshot responses remain suppressed across mutation/action boundaries.
+
+**Limits:** The browser panel journey and delayed-message runtime checks were not run because extension dependencies are unavailable; this change covers local rendering/ordering only and does not alter backend auth.
 
 **Surface:** Account form and global panel rendering.
 
@@ -535,6 +580,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Each partial blur layer reveals independently by pointer/keyboard. Track-load failure and exhausted binding show a retry action that uses the existing track and clears after successful attachment.
 
 ### R15. P2: Clear Local State Can Preserve Login And Immediately Restore The Track
+
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Clear local state now removes settings, install identity, the local extension session/account cache, remembered tracks, pending tab operations, correction/generation guards, and in-memory subtitle state. It publishes default settings/no-track state to the active tab and does not perform backend history recovery afterward. Late requests are invalidated by cleared operation/session ownership and cannot restore the old track; backend tracks remain untouched.
+
+**How To Test:**
+1. Seed a signed-in session, settings, history and remembered track, then clear local state once. Expected: the panel is signed out, settings are defaults, the active tab has no track, and history is empty until a new sign-in.
+2. Leave a generation, enrichment, history, and account refresh pending when clearing. Resolve every old success and 401 afterward. Expected: no old session, account data, track, operation or history reappears.
+3. Sign in again and open the old video. Expected: the cleared local state remains; the backend track still exists and is only available after a deliberate new account-scoped recovery/generation path.
+4. Run the focused state/session tests when execution is authorized. Expected: old session updates and remembered tracks remain rejected after reset.
+
+**Limits:** The reset, delayed-request, and backend-retention journeys were not run in a browser or against a live service. Clearing local state intentionally signs out this device; server-side token revocation and backend track deletion are separate operations.
 
 **Surface:** Study's this-device reset.
 
@@ -793,6 +850,17 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ### U1. P2: Describe Queued Work As Waiting, Not Active Generation
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Queued status is preserved in subtitle state and progress view models. Watch now labels the state `Queued`, announces `Waiting for a generation slot`, and keeps the existing no-ETA copy until backend admission changes the job to running.
+
+**How To Test:**
+1. Return a queued generation fixture to Watch and History. Expected: Watch shows `Queued` and `Waiting for a generation slot`; History shows `Queued`; neither implies active provider processing or an ETA.
+2. Advance the same job to running. Expected: Watch changes to `Generating` and shows the current stage after admission.
+3. Run the focused `panel-progress.test.ts` check when execution is authorized. Expected: queued progress uses the waiting label.
+
+**Limits:** No browser/UI runtime or backend queue transition was exercised; wording and state propagation are source-reviewed only in this handoff.
+
 **Surface/impact:** Watch progress can imply active processing while the job waits for an account slot.
 
 **Trigger and actual/expected:** Return a queued job. History/state know it is waiting, but Watch builds a timeline with running status and "Active now" language. It should show a waiting state and explain admission without inventing a completion ETA.
@@ -820,6 +888,17 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ### U3. P2: Keep Last Known History On A Refresh Failure
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Successful history is retained per authenticated account when a later refresh fails. The failed refresh error remains separately visible, so the existing job cards stay useful and a temporary outage no longer renders first-use empty copy. Account transitions still discard the previous account's cache.
+
+**How To Test:**
+1. Load a successful history list, then fail the next history GET. Expected: the previous cards remain visible with a refresh error indication.
+2. Sign out and sign in as another account while the failed request is pending. Resolve the old request. Expected: the new account sees only its own history and the old request cannot replace it.
+3. Run the focused `job-history-render.test.ts` check when execution is authorized. Expected: an existing list remains rendered beside a refresh error.
+
+**Limits:** No API outage, account transition, or browser panel run was executed; stale-cache age and backend availability remain visible only through the error copy.
+
 **Surface/impact:** A temporary API failure can replace real job history with first-use empty copy.
 
 **Trigger and actual/expected:** Return successful history, then time out the next GET. Current handling empties the cache and can show "Nothing generated yet" alongside the error. Preserve the last successful same-session list with a stale/error indication instead.
@@ -841,6 +920,17 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 **Smallest fix/acceptance:** Show existing rules before submission with `minlength`, retaining server checks; filter or label expired tokens. Requirements are available to assistive technology, and expired-only accounts are not described as actively connected.
 
 ### U5. P3: Consider Making Existing Partial Results Readable In Watch
+
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Watch now renders available partial source cues in a read-only transcript while the generation progress card remains visible. The partial view supports search, cue highlighting, jump, and copy, but has no edit or word-card controls. Partial revisions reuse the existing transcript surface and search value, and final completion switches back to the full editable transcript without changing the correction workflow.
+
+**How To Test:**
+1. Return a running job with partial cues and update its revision while viewing a later row. Expected: readable source cues show with a `Still generating` status, progress remains visible, search/highlight/jump/copy work, and the view does not expose editing.
+2. Complete the same job. Expected: the final transcript replaces the partial rows, full-track and per-token editing semantics return, and the viewer remains on the same Watch surface.
+3. Run the focused `panel-transcript.test.ts` check when execution is authorized. Expected: partial rows are readable and contain navigation controls without quick-fix controls.
+
+**Limits:** No browser playback, revision update, or final-transition journey was run; partial Watch rendering is source-reviewed and intentionally excludes partial enrichment/word cards.
 
 **Surface/impact:** The overlay can use partial cues, but the side-panel transcript remains unavailable until final completion.
 

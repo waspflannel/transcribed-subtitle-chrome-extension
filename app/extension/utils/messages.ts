@@ -49,6 +49,7 @@ export type SubtitleState =
     }
   | {
       type: 'loading';
+      status?: 'queued' | 'running';
       jobId?: string;
       youtubeVideoId: string;
       youtubeUrl?: string;
@@ -143,6 +144,7 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.logout';
+      windowId?: number;
     }
   | {
       type: 'content.enrichLearningToken';
@@ -320,6 +322,7 @@ function isSubtitleStateValue(value: unknown): value is SubtitleState {
         && hasString(value, 'message')
         && isSubtitleStage(value.stage)
         && isProgressPercent(value.progressPercent)
+        && (!('status' in value) || value.status === 'queued' || value.status === 'running')
         && optionalString(value, 'jobId')
         && optionalString(value, 'youtubeUrl')
         && optionalString(value, 'startedAt')
