@@ -221,6 +221,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R4. P1: Home/Search SPA Entry Can Leave Videos Without A Content Script
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Inject on all YouTube documents; keep hydration, shortcuts and the rail inactive on unsupported routes. Existing SPA events activate watch/Shorts without a reload.
+
+**How To Test:**
+1. Load Home/search/channel with the extension, then open watch and Shorts using SPA navigation. Expected: an existing track and shortcuts work without refresh.
+2. Navigate back/forward and return Home. Expected: one overlay on supported pages and no rail or intercepted shortcuts on Home. Limits: real-site injection and navigation have not been exercised; no tests or builds run.
+
 **Surface:** YouTube entry journey, overlay, shortcuts, transcript seek.
 
 **Impact:** Normal discovery-to-watch navigation can lack captions and page controls until refresh.

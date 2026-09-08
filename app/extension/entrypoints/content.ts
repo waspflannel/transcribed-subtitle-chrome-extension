@@ -28,7 +28,7 @@ const VIDEO_BIND_RETRY_LIMIT = 10;
 const VIDEO_BIND_RETRY_DELAY_MS = 300;
 
 export default defineContentScript({
-  matches: ['*://*.youtube.com/watch*', '*://*.youtube.com/shorts/*'],
+  matches: ['*://*.youtube.com/*'],
   runAt: 'document_idle',
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
@@ -187,6 +187,7 @@ export default defineContentScript({
     }
 
     function handleKeyboardShortcut(event: KeyboardEvent): void {
+      if (!parseYoutubePage(window.location.href).supported) return;
       const action = shortcutActionFromKeyboardEvent(event, {
         enabled: settings.keyboardShortcutsEnabled,
       });
@@ -248,6 +249,7 @@ export default defineContentScript({
     }
 
     async function hydrateContentState(): Promise<void> {
+      if (!parseYoutubePage(window.location.href).supported) return;
       try {
         const state = await browser.runtime.sendMessage({ type: 'content.getState' });
 
@@ -269,6 +271,11 @@ export default defineContentScript({
 
     function updateOverlay(): void {
       if (disposed) {
+        return;
+      }
+
+      if (!parseYoutubePage(window.location.href).supported) {
+        overlay.unmount();
         return;
       }
 
