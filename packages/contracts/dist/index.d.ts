@@ -335,9 +335,13 @@ export interface LyricsCorrectionRequest {
    */
   expectedTrackId: string;
   /**
-   * Complete pasted plain-text lyrics. The backend applies a Unicode character limit after validation.
+   * Pasted plain-text lyrics, complete or partial. The backend applies a Unicode character limit after validation.
    */
   lyrics: string;
+  /**
+   * Allow the backend to continue after suspected incomplete lyrics and ask the AI to merge the supplied lyrics with the generated transcript.
+   */
+  allowPartial?: boolean;
 }
 
 // Source: schemas/lyrics-correction-status.schema.json

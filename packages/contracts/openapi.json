@@ -338,8 +338,8 @@
     "/v1/subtitle-jobs/{jobId}/lyrics": {
       "post": {
         "operationId": "startLyricsCorrection",
-        "summary": "Queue a correction from complete pasted plain-text lyrics.",
-        "description": "Requires expectedTrackId to match the current track. Rejects stale track identity and lyrics that cannot fit the existing timing slots before queueing.",
+        "summary": "Queue a correction from pasted plain-text lyrics.",
+        "description": "Requires expectedTrackId to match the current track. Rejects stale track identity and lyrics that cannot fit the existing timing slots before queueing. Set allowPartial to true to continue after suspected incomplete lyrics and have the AI merge the supplied lyrics with the generated transcript.",
         "parameters": [
           {"$ref": "#/components/parameters/ExtensionInstallId"},
           {"$ref": "#/components/parameters/ExtensionAuthorization"},

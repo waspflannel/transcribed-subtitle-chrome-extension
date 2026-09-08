@@ -50,6 +50,7 @@ const fixtures = [
   ['learning-token-request.schema.json', 'valid-learning-token-request.json'],
   ['learning-token-response.schema.json', 'valid-learning-token-response.json'],
   ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request.json'],
+  ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request-partial.json'],
   ['lyrics-correction-status.schema.json', 'valid-lyrics-correction-status.json'],
   ['lyrics-correction-cancel-request.schema.json', 'valid-lyrics-correction-cancel-request.json'],
   ['quick-fix-token-request.schema.json', 'valid-quick-fix-token-request.json'],
@@ -97,6 +98,13 @@ assertInvalid(
   JSON.parse(fs.readFileSync(path.join(fixturesDir, 'invalid-quick-fix-token-request-whitespace.json'), 'utf8')),
   'whitespace-only quick fix text',
 );
+
+const lyricsCorrectionRequest = ajv.getSchema('lyrics-correction-request.schema.json');
+assertInvalid(lyricsCorrectionRequest, {
+  expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041',
+  lyrics: 'First line',
+  allowPartial: 'true',
+}, 'non-boolean allowPartial');
 
 const correctionStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled'];
 const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing', 'completed', 'failed', 'cancelled'];
