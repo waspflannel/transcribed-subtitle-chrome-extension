@@ -180,7 +180,10 @@ export default defineContentScript({
       }
 
       if (message.type === 'background.seekToCue') {
-        if (subtitleState.type === 'ready') {
+        const page = parseYoutubePage(window.location.href);
+        if (page.supported && page.videoId === message.youtubeVideoId
+          && subtitleState.type === 'ready' && subtitleState.track.youtubeVideoId === message.youtubeVideoId
+          && subtitleState.track.trackId === message.trackId) {
           const cue = subtitleState.track.cues.find((c) => c.cueId === message.cueId);
           if (cue) {
             if (message.mode === 'replay') {
@@ -313,7 +316,12 @@ export default defineContentScript({
         const identity = JSON.stringify([page.videoId, boundReadyTrackId, cueId]);
         if (identity !== lastBroadcastCue) {
           lastBroadcastCue = identity;
-          void browser.runtime.sendMessage({ type: 'content.activeCueChanged', youtubeVideoId: page.videoId, cueId }).catch(() => {});
+          void browser.runtime.sendMessage({
+            type: 'content.activeCueChanged',
+            youtubeVideoId: page.videoId,
+            trackId: boundReadyTrackId,
+            cueId,
+          }).catch(() => {});
         }
       }
     }

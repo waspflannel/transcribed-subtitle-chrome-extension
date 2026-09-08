@@ -322,6 +322,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R7. P1: Transcript Controls Can Follow Or Seek The Wrong Tab
 
+**Implementation Status: Fixed in code; focused protocol tests added; browser validation deferred.**
+
+**What Changed:** Active-cue notices now carry the source tab, window, video, and track identity, and panels ignore notices that do not belong to their displayed tab/window/track. Transcript seeks capture the displayed tab and window, validate the destination URL before delivery, and include track identity so the content script rejects a stale or duplicate-video destination. Video lookup also preserves the requested window when it has to resolve a legacy request. Panel state responses for window-scoped mutations keep the supplied window.
+
+**How To Test:**
+1. Open two generated videos, then two copies of the same video across one and two windows. Play each in turn. Expected: only the panel displaying the source tab highlights its cue; foreign notices leave its highlight and pending snapshot unchanged.
+2. Use Jump from each panel while switching focus during delivery. Expected: only the captured displayed tab seeks and plays, and a duplicate video in another tab/window does not move.
+3. Reopen the panel and invoke the transcript shortcut from a supported tab. Expected: the target window receives the focus request; a different window ignores it.
+4. Run `npm test -- tests/messages.test.ts`. Expected: the cue notice and exact-tab seek identity contracts pass. Browser and full-suite checks remain deferred.
+
+**Remaining Limits:** The panel entrypoint, real Chrome side-panel routing, player replacement, duplicate tabs/windows, and delayed browser message interleavings still need the planned manual browser session. Legacy callers without a target tab use the active tab within the requested window and cannot disambiguate an unscoped duplicate video.
+
 **Surface:** Background cue messages and panel transcript navigation.
 
 **Impact:** A hidden tab can move the visible highlight; Jump can start playback in another tab/window.

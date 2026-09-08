@@ -1,5 +1,3 @@
-import { browser } from 'wxt/browser';
-
 import type { SubtitleCue } from '../../utils/contracts';
 import type { ExtensionSettings } from '../../utils/settings-model';
 import { panelTranscriptListHtml } from '../../utils/panel/transcript';
@@ -15,6 +13,7 @@ export function bindTranscriptView(dom: {
   transcriptSearch: HTMLInputElement;
   transcriptList: HTMLElement;
   transcriptStatus: HTMLElement;
+  onSeekToCue?: (cueId: string, mode: 'jump' | 'replay') => void;
   onQuickFixSelect?: (cueId: string, tokenIndex: number) => void;
   onQuickFixSave?: (cueId: string, tokenIndex: number, value: string) => void;
   onQuickFixCancel?: () => void;
@@ -184,9 +183,7 @@ export function bindTranscriptView(dom: {
     if (action === 'jump') {
       activeCueId = cueId;
       applyActiveCue(cueId);
-      if (youtubeVideoId) {
-        void browser.runtime.sendMessage({ type: 'panel.seekToCue', youtubeVideoId, cueId, mode: 'jump' }).catch(() => {});
-      }
+      if (youtubeVideoId) dom.onSeekToCue?.(cueId, 'jump');
       ackButton(button);
     } else if (action === 'copy') {
       const text = cues.find((c) => c.cueId === cueId)?.sourceText;

@@ -135,11 +135,12 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
     case 'panel.getActiveCue': {
       const tab = await browser.tabs.get(message.tabId);
       const page = parseYoutubePage(tab.url ?? '');
-      if (!page.supported || page.videoId !== message.youtubeVideoId) return { ok: false };
+      if (!page.supported || page.videoId !== message.youtubeVideoId
+        || (typeof message.windowId === 'number' && tab.windowId !== message.windowId)) return { ok: false };
       const snapshot = await browser.tabs.sendMessage(message.tabId, {
         type: 'background.getActiveCue', youtubeVideoId: message.youtubeVideoId, trackId: message.trackId,
       });
-      return { ...snapshot, tabId: message.tabId };
+      return { ...snapshot, tabId: message.tabId, windowId: tab.windowId };
     }
 
     case 'panel.updateSettings':
@@ -167,23 +168,43 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return clearLocalStateFromPanel(message.windowId);
 
     case 'content.activeCueChanged':
-      if (panelPorts.size > 0) {
+      if (panelPorts.size > 0 && typeof sender.tab?.id === 'number' && typeof message.trackId === 'string') {
         void browser.runtime.sendMessage({
           type: 'background.activeCueChanged',
           cueId: message.cueId,
           youtubeVideoId: message.youtubeVideoId,
+          trackId: message.trackId,
+          tabId: sender.tab.id,
+          ...(typeof sender.tab.windowId === 'number' ? { windowId: sender.tab.windowId } : {}),
         }).catch(() => {});
       }
       return { ok: true };
 
     case 'content.focusPanelTranscript':
-      void browser.runtime.sendMessage({ type: 'background.focusTranscript' }).catch(() => {});
+      void browser.runtime.sendMessage({
+        type: 'background.focusTranscript',
+        ...(typeof sender.tab?.windowId === 'number' ? { windowId: sender.tab.windowId } : {}),
+      }).catch(() => {});
       return { ok: true };
 
     case 'panel.seekToCue': {
-      const tabId = await tabIdForVideo(message.youtubeVideoId, message.windowId);
+      const tabId = typeof message.tabId === 'number'
+        ? message.tabId
+        : await tabIdForVideo(message.youtubeVideoId, message.windowId);
       if (tabId !== null) {
-        await sendTabMessage(tabId, { type: 'background.seekToCue', cueId: message.cueId, mode: message.mode });
+        const tab = await browser.tabs.get(tabId).catch(() => undefined);
+        const page = parseYoutubePage(tab?.url ?? '');
+        if (!tab || !page.supported || page.videoId !== message.youtubeVideoId
+          || (typeof message.windowId === 'number' && tab.windowId !== message.windowId)) {
+          return { ok: false };
+        }
+        await sendTabMessage(tabId, {
+          type: 'background.seekToCue',
+          youtubeVideoId: message.youtubeVideoId,
+          trackId: message.trackId,
+          cueId: message.cueId,
+          mode: message.mode,
+        });
       }
       return { ok: true };
     }
@@ -268,7 +289,7 @@ async function updateSettingsFromPanel(patch: Partial<ExtensionSettings>, window
     });
   }
 
-  return getPanelState({ syncBackend: false });
+  return getPanelState({ syncBackend: false, windowId });
 }
 
 async function updateSettingsFromContent(
@@ -306,7 +327,7 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
 
     await publishSubtitleState(activeTabId, subtitleState);
 
-    return getPanelState({ syncBackend: true });
+    return getPanelState({ syncBackend: true, windowId });
   }
 
   if (tabGenerationInFlight.has(activeTabId) || tabCorrectionMutationInFlight.has(activeTabId)) {
@@ -392,7 +413,7 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
         .finally(() => tabGenerationInFlight.delete(activeTabId));
     }
 
-    return getPanelState({ syncBackend: false });
+    return getPanelState({ syncBackend: false, windowId });
   } finally {
     if (!generationStarted) {
       tabGenerationInFlight.delete(activeTabId);
@@ -954,7 +975,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
     await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
   }
 
-  return getPanelState({ syncBackend: true });
+  return getPanelState({ syncBackend: true, windowId });
 }
 
 async function loginFromPanel(email: string, password: string): Promise<PanelState> {
@@ -1311,6 +1332,11 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
 
 async function tabIdForVideo(youtubeVideoId: string, windowId?: number): Promise<number | null> {
   for (const [tabId, subtitleState] of tabSubtitleStates) {
+    if (typeof windowId === 'number') {
+      const tab = await browser.tabs.get(tabId).catch(() => undefined);
+      if (tab?.windowId !== windowId) continue;
+    }
+
     if (subtitleState.type === 'ready' && subtitleState.track.youtubeVideoId === youtubeVideoId) {
       return tabId;
     }

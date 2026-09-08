@@ -290,6 +290,20 @@ const transcriptView = bindTranscriptView({
   transcriptSearch,
   transcriptList,
   transcriptStatus,
+  onSeekToCue: (cueId, mode) => {
+    const state = latestState;
+    const track = state?.subtitleState.type === 'ready' ? state.subtitleState.track : null;
+    if (!track || state.activeTabId === undefined) return;
+    void browser.runtime.sendMessage({
+      type: 'panel.seekToCue',
+      tabId: state.activeTabId,
+      youtubeVideoId: track.youtubeVideoId,
+      trackId: track.trackId,
+      cueId,
+      mode,
+      ...(typeof panelWindowId === 'number' ? { windowId: panelWindowId } : {}),
+    }).catch(() => {});
+  },
   onQuickFixSelect: selectQuickFixToken,
   onQuickFixSave: (cueId, tokenIndex, value) => void submitQuickFix(cueId, tokenIndex, value),
   onQuickFixCancel: () => {
@@ -326,9 +340,15 @@ connectPanel();
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;
   if (message.type === 'background.activeCueChanged') {
+    if (panelWindowId !== undefined && message.windowId !== panelWindowId) return;
+    if (latestState?.activeTabId !== message.tabId
+      || latestState.subtitleState.type !== 'ready'
+      || latestState.subtitleState.track.youtubeVideoId !== message.youtubeVideoId
+      || latestState.subtitleState.track.trackId !== message.trackId) return;
     cueSnapshotRequest += 1;
     transcriptView.setActiveCue(message.cueId);
   } else if (message.type === 'background.focusTranscript') {
+    if (panelWindowId !== undefined && message.windowId !== panelWindowId) return;
     showTab(tabButtons, panels, 'watch');
     transcriptView.focus();
   }
@@ -1044,10 +1064,13 @@ async function pullActiveCue(state: PanelState): Promise<void> {
   try {
     const snapshot = await browser.runtime.sendMessage({
       type: 'panel.getActiveCue', tabId: state.activeTabId, youtubeVideoId, trackId,
+      ...(typeof panelWindowId === 'number' ? { windowId: panelWindowId } : {}),
     });
     if (request !== cueSnapshotRequest || latestState?.activeTabId !== state.activeTabId
       || latestState.subtitleState.type !== 'ready' || latestState.subtitleState.track.trackId !== trackId
-      || !snapshot?.ok || snapshot.tabId !== state.activeTabId || snapshot.youtubeVideoId !== youtubeVideoId
+      || !snapshot?.ok || snapshot.tabId !== state.activeTabId
+      || (panelWindowId !== undefined && snapshot.windowId !== panelWindowId)
+      || snapshot.youtubeVideoId !== youtubeVideoId
       || snapshot.trackId !== trackId || !(snapshot.cueId === null || typeof snapshot.cueId === 'string')) return;
     transcriptView.setActiveCue(snapshot.cueId);
   } catch {
