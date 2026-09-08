@@ -126,6 +126,8 @@ let panelWindowId: number | undefined;
 let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
+let backendRefreshInFlight = false;
+let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
 
 /* Watch-tab UI state: the language pickers and the ready-state setup card
    are collapsed by default and expand on request. */
@@ -224,9 +226,6 @@ browser.runtime.onMessage.addListener((message) => {
     transcriptView.focus();
   }
 });
-
-let backendRefreshInFlight = false;
-let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
 
 function scheduleNextBackendPoll(): void {
   if (backendPollTimer) clearTimeout(backendPollTimer);

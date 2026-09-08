@@ -135,8 +135,6 @@ export class SubtitleApiClient {
     const controller = new AbortController();
     const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
-    let response: Response;
-
     try {
       const headers: Record<string, string> = {
         Accept: 'application/json',
@@ -148,14 +146,36 @@ export class SubtitleApiClient {
         headers.Authorization = `Bearer ${init.authToken}`;
       }
 
-      response = await this.fetchImpl(new URL(path, baseUrl).toString(), {
+      const response = await this.fetchImpl(new URL(path, baseUrl).toString(), {
         method: init.method,
         headers,
         body: init.body,
         signal: controller.signal,
       });
+      const body = await response.json().catch((error: unknown) => {
+        if (controller.signal.aborted || isAbortError(error)) throw error;
+        return null;
+      });
+
+      if (!response.ok) {
+        const apiError = body as Partial<ApiError> | null;
+        const error = apiError?.error;
+
+        throw new SubtitleApiError(
+          error?.code ?? 'internal_error',
+          error?.message ?? `Backend request failed with status ${response.status}`,
+          response.status,
+          error?.details,
+        );
+      }
+
+      if (body === null) {
+        throw new TypeError('Backend returned invalid JSON.');
+      }
+
+      return guardResponse(body);
     } catch (error) {
-      if (isAbortError(error)) {
+      if (controller.signal.aborted || isAbortError(error)) {
         throw new TypeError('Backend request timed out.');
       }
 
@@ -164,25 +184,6 @@ export class SubtitleApiClient {
       globalThis.clearTimeout(timeoutId);
     }
 
-    const body = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      const apiError = body as Partial<ApiError> | null;
-      const error = apiError?.error;
-
-      throw new SubtitleApiError(
-        error?.code ?? 'internal_error',
-        error?.message ?? `Backend request failed with status ${response.status}`,
-        response.status,
-        error?.details,
-      );
-    }
-
-    if (body === null) {
-      throw new TypeError('Backend returned invalid JSON.');
-    }
-
-    return guardResponse(body);
   }
 }
 

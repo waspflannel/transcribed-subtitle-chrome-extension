@@ -13,6 +13,28 @@ const pageStatus: YoutubePageInfo = {
 };
 
 describe('backend subtitle state helpers', () => {
+  it('preserves submission and follows only its exact accepted job', async () => {
+    const submitting: SubtitleState = {
+      type: 'loading', youtubeVideoId: pageStatus.videoId, message: 'Preparing request...',
+      stage: 'preparing', progressPercent: 5,
+    };
+    const old = [jobHistory({ status: 'completed' }), jobHistory({ status: 'failed' })];
+    const resolver = vi.fn(async () => completedJobResponse(trackResponse()));
+    expect(await stateWithBackendProgress(submitting, pageStatus, old, resolver)).toBe(submitting);
+    const accepted = { ...submitting, jobId: 'new-job' };
+    expect(await stateWithBackendProgress(accepted, pageStatus, old, resolver)).toBe(accepted);
+    expect(await stateWithBackendProgress(accepted, pageStatus, [...old, jobHistory({ jobId: 'new-job' })], resolver))
+      .toMatchObject({ type: 'loading', jobId: 'new-job', stage: 'transcribing' });
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it('does not prefer a failed variant over a usable completed track', async () => {
+    const track = trackResponse();
+    expect(await stateWithBackendProgress({ type: 'no-track' }, pageStatus,
+      [jobHistory({ status: 'failed' }), jobHistory({ status: 'completed' })],
+      async () => completedJobResponse(track))).toEqual({ type: 'ready', track });
+  });
+
   it('recovers a ready subtitle state from completed job history by loading job details', async () => {
     const historyJob = jobHistory({ status: 'completed' });
     const track = trackResponse();

@@ -13,6 +13,27 @@ const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('SubtitleApiClient', () => {
+  it('keeps the timeout active while a response body is still streaming', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('{"jobs":['));
+            init?.signal?.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')));
+          },
+        }),
+      ));
+      const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+      const assertion = expect(client.listSubtitleJobs(installId, authToken)).rejects.toThrow('Backend request timed out.');
+      await vi.advanceTimersByTimeAsync(2500);
+      await assertion;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     ['payment_required', 'Account and billing'],
     ['usage_exhausted', 'Account and billing'],

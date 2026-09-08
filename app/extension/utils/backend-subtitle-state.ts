@@ -19,12 +19,17 @@ export async function stateWithBackendProgress(
     return localState;
   }
 
+  if (localState.type === 'loading' && !localState.jobId) return localState;
+
   const activeJob = jobs.find(
-    (candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status !== 'completed',
+    (candidate) => candidate.youtubeVideoId === pageStatus.videoId
+      && (candidate.status === 'running' || candidate.status === 'queued'),
   );
-  const job =
-    activeJob ??
-    jobs.find((candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status === 'completed');
+  const job = localState.type === 'loading'
+    ? jobs.find((candidate) => candidate.jobId === localState.jobId && candidate.youtubeVideoId === pageStatus.videoId)
+    : activeJob
+      ?? jobs.find((candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status === 'completed')
+      ?? jobs.find((candidate) => candidate.youtubeVideoId === pageStatus.videoId && candidate.status === 'failed');
 
   if (!job) {
     return localState;
@@ -33,7 +38,8 @@ export async function stateWithBackendProgress(
   if (job.status === 'completed') {
     const completedJob = resolveCompletedJob ? await resolveCompletedJob(job) : null;
 
-    if (completedJob?.status === 'completed' && completedJob.track) {
+    if (completedJob?.status === 'completed' && completedJob.jobId === job.jobId
+      && completedJob.track?.youtubeVideoId === pageStatus.videoId) {
       return {
         type: 'ready',
         track: completedJob.track,
@@ -62,6 +68,7 @@ export async function stateWithBackendProgress(
     progressPercent: job.progressPercent,
     startedAt: job.startedAt,
     lastUpdatedAt: job.lastUpdatedAt,
+    ...(localState.type === 'loading' && localState.partialTrack ? { partialTrack: localState.partialTrack } : {}),
   };
 }
 

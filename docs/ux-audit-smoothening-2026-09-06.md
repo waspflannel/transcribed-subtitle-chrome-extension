@@ -169,6 +169,16 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R1. P1: Panel Startup Can Fail Before Synchronization Listeners Attach
 
+**Follow-up status:** Code implemented; untested (2026-09-08).
+
+**What Changed:** Poll state initializes before any startup calls. Added a regression importing the actual panel entrypoint with DOM/browser mocks and checking its timer, connection, and listeners.
+
+**How To Test:**
+1. Run `npm test -- tests/panel-entrypoint.test.ts` in `app/extension` when testing is authorized. Expect a successful real-entrypoint import, one timer, panel connection, and tab/cue listener registration.
+2. Open the panel in isolated WXT dev and production profiles. Expect no initialization exception and updates after changing tabs or cues.
+
+**Limits:** Regression source only; no tests, build, or browser checks were run. Bundle/runtime behavior still needs validation.
+
 **Surface:** Side-panel initialization.
 
 **Impact:** Polling, tab-change handling, panel connection, and active-cue listeners may never initialize.
@@ -186,6 +196,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Import the actual entrypoint with browser/DOM mocks and smoke-test WXT dev plus the production extension. Assert no startup exception, one poll timer, a connected panel port, and functioning tab/cue listeners.
 
 ### R2. P1: Old History Can Replace A Newly Submitted Generation
+
+**Follow-up status:** Code implemented; untested (2026-09-08).
+
+**What Changed:** Submitting state ignores history until POST supplies a job ID. Reconciliation then selects only that ID; fallback prefers queued/running or completed over failed variants. Per-tab operation identity guards delayed polls and terminal writes, and delayed panel recovery cannot overwrite newer local state. Partial data survives exact-job reconciliation.
+
+**How To Test:**
+1. When authorized, run `npm test -- tests/backend-subtitle-state.test.ts`. Expect pending/accepted operations to ignore old variants and failed fallback not to hide a completed track.
+2. With local fake providers, defer a new language-variant POST while old completed/failed history is present. Refresh Watch repeatedly; expect preparing until POST resolves, then only its returned job.
+3. Reset or replace the operation while a poll/partial request is pending. Resolve it afterward; expect no old result to replace the new operation.
+
+**Limits:** Tests/build/browser not run. Submission claim serialization and recovered monitor startup are addressed separately by R9/R3; this commit does not claim those sibling fixes.
 
 **Surface:** Background state, Watch, overlay.
 
@@ -528,6 +549,16 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** A five-hour-old queued job remains visible; a newly failed old job remains inspectable; old-version active work stays visible/cancelable without reusing incompatible tracks.
 
 ### R21. P2: API Timeouts Do Not Cover Response Body Consumption
+
+**Follow-up status:** Code implemented; untested (2026-09-08).
+
+**What Changed:** The request timer now spans fetch, JSON body consumption, and response validation. Body aborts keep the timeout error instead of being mislabeled invalid JSON. Added a response-stream regression.
+
+**How To Test:**
+1. When authorized, run `npm test -- tests/api.test.ts` in `app/extension`. Expect a stalled history body to reject at 2500 ms with the timeout message and no remaining timer.
+2. Use a local endpoint that sends headers then stalls JSON for account/history/job calls. Expect each configured budget to end the request and callers to release busy state; valid and malformed completed bodies should retain their existing behavior.
+
+**Limits:** No tests, build, or browser checks run. The stream mock connects abort to stream failure like native fetch; no live server was started.
 
 **Surface:** Login/account/history/job requests and associated busy states.
 
