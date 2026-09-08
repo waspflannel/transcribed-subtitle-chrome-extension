@@ -527,6 +527,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R15. P2: Clear Local State Can Preserve Login And Immediately Restore The Track
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Clear local state now removes settings, install identity, the local extension session/account cache, remembered tracks, pending tab operations, correction/generation guards, and in-memory subtitle state. It publishes default settings/no-track state to the active tab and does not perform backend history recovery afterward. Late requests are invalidated by cleared operation/session ownership and cannot restore the old track; backend tracks remain untouched.
+
+**How To Test:**
+1. Seed a signed-in session, settings, history and remembered track, then clear local state once. Expected: the panel is signed out, settings are defaults, the active tab has no track, and history is empty until a new sign-in.
+2. Leave a generation, enrichment, history, and account refresh pending when clearing. Resolve every old success and 401 afterward. Expected: no old session, account data, track, operation or history reappears.
+3. Sign in again and open the old video. Expected: the cleared local state remains; the backend track still exists and is only available after a deliberate new account-scoped recovery/generation path.
+4. Run the focused state/session tests when execution is authorized. Expected: old session updates and remembered tracks remain rejected after reset.
+
+**Limits:** The reset, delayed-request, and backend-retention journeys were not run in a browser or against a live service. Clearing local state intentionally signs out this device; server-side token revocation and backend track deletion are separate operations.
+
 **Surface:** Study's this-device reset.
 
 **Impact:** The action does not deliver the documented reset and can appear to do nothing to the active transcript.

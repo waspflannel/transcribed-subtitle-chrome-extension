@@ -957,9 +957,13 @@ async function recoverExactJobAfterStaleTrack(
   accountId: string,
 ): Promise<void> {
   try {
+    const session = await getStoredExtensionSession();
+    if (!session || session.account.id !== accountId) return;
     const job = await subtitleApi.getSubtitleJob(installId, authToken, message.jobId);
 
     if (job.status !== 'completed' || !job.track) return;
+
+    if (!await isCurrentSession(session.sessionId)) return;
 
     await rememberActiveTrack(job.track, accountId);
     const tab = await browser.tabs.get(tabId).catch(() => undefined);
@@ -1038,12 +1042,16 @@ async function readySubtitleStateForEnrichment(
 }
 
 async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> {
+  await waitForExtensionSettingsWrites();
   await clearLocalExtensionState();
+  await clearExtensionSession();
   await clearRememberedTracks();
   await clearTabOperations();
   tabSubtitleStates.clear();
   tabSubtitleStateOwners.clear();
   tabOperations.clear();
+  tabGenerationInFlight.clear();
+  tabCorrectionMutationInFlight.clear();
   tombstoneAllLyricsCorrectionStates();
 
   const activeTab = await getActiveTab(windowId);

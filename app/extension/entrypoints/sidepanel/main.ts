@@ -681,7 +681,7 @@ async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> 
 }
 
 async function clearLocalState(): Promise<void> {
-  await sendPanelRequest({ type: 'panel.clearLocalState' });
+  await sendPanelRequest({ type: 'panel.clearLocalState' }, 'global', 'mutation');
 }
 
 async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
