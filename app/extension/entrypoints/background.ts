@@ -42,6 +42,7 @@ import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 
 const subtitleApi = new SubtitleApiClient();
 const tabSubtitleStates = new Map<number, SubtitleState>();
+const tabOperations = new Map<number, symbol>();
 const panelPorts = new PanelPortRegistry();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
 let cachedPanelJobHistoryError: string | undefined;
@@ -82,6 +83,7 @@ export default defineBackground(() => {
   });
 
   browser.tabs.onRemoved.addListener((tabId) => {
+    tabOperations.delete(tabId);
     tabSubtitleStates.delete(tabId);
   });
 });
@@ -261,6 +263,8 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
   const currentState = await getSubtitleStateForPage(activeTabId, pageStatus);
 
   if (currentState.type !== 'loading') {
+    const operation = Symbol('generation');
+    tabOperations.set(activeTabId, operation);
     const settings = await getExtensionSettings();
     const pageSnapshot = await getPageSnapshotFromTab(activeTabId);
     const now = new Date().toISOString();
@@ -276,7 +280,7 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
       lastUpdatedAt: now,
     });
 
-    void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot);
+    void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, operation);
   }
 
   return getPanelState({ syncBackend: false });
@@ -287,6 +291,7 @@ async function generateSubtitlesForTab(
   pageStatus: SupportedYoutubePageInfo,
   settings: ExtensionSettings,
   pageSnapshot: PageSnapshot,
+  operation: symbol,
 ): Promise<void> {
   try {
     const session = await getStoredExtensionSession();
@@ -317,7 +322,11 @@ async function generateSubtitlesForTab(
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
-    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session.plainTextToken, initialJob);
+    if (tabOperations.get(tabId) !== operation) return;
+    const current = tabSubtitleStates.get(tabId);
+    if (current?.type !== 'loading') return;
+    tabSubtitleStates.set(tabId, { ...current, jobId: initialJob.jobId });
+    const job = await waitForCompletedSubtitleJob(tabId, pageStatus, installId, session.plainTextToken, initialJob, operation);
 
     if (job === null) {
       return;
@@ -330,7 +339,7 @@ async function generateSubtitlesForTab(
         backendMessage: job.message,
       });
 
-      if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+      if (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
         await publishSubtitleState(tabId, {
           type: 'error',
           jobId: job.jobId,
@@ -346,7 +355,7 @@ async function generateSubtitlesForTab(
       throw new Error('Completed subtitle job did not include a track.');
     }
 
-    if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+    if (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
       await publishSubtitleState(tabId, {
         type: 'ready',
         track: job.track,
@@ -367,7 +376,7 @@ async function generateSubtitlesForTab(
       status: error instanceof SubtitleApiError ? error.status : undefined,
     });
 
-    if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+    if (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
       await publishSubtitleState(tabId, {
         type: 'error',
         youtubeVideoId: pageStatus.videoId,
@@ -393,11 +402,12 @@ async function waitForCompletedSubtitleJob(
   installId: string,
   authToken: string,
   initialJob: JobResponse,
+  operation: symbol,
 ): Promise<JobResponse | null> {
   let job = initialJob;
   let partialTrack: PartialSubtitleTrack | undefined;
 
-  while (isCurrentLoadingState(tabId, pageStatus.videoId)) {
+  while (tabOperations.get(tabId) === operation && isCurrentLoadingState(tabId, pageStatus.videoId)) {
     if (job.status === 'completed' || job.status === 'failed') {
       return job;
     }
@@ -405,6 +415,8 @@ async function waitForCompletedSubtitleJob(
     if (PARTIAL_TRACK_STAGES.has(job.stage)) {
       partialTrack = (await fetchPartialTrack(installId, authToken, job)) ?? partialTrack;
     }
+
+    if (tabOperations.get(tabId) !== operation || !isCurrentLoadingState(tabId, pageStatus.videoId)) return null;
 
     await publishSubtitleState(tabId, {
       type: 'loading',
@@ -420,7 +432,11 @@ async function waitForCompletedSubtitleJob(
     });
 
     await delay(JOB_POLL_INTERVAL_MS);
+    if (tabOperations.get(tabId) !== operation || !isCurrentLoadingState(tabId, pageStatus.videoId)) return null;
     job = await subtitleApi.getSubtitleJob(installId, authToken, job.jobId);
+    if (job.jobId !== initialJob.jobId || job.youtubeVideoId !== pageStatus.videoId) {
+      throw new Error('Subtitle status did not match the requested job.');
+    }
   }
 
   return null;
@@ -543,6 +559,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
   await clearLocalExtensionState();
   await clearRememberedTracks();
   tabSubtitleStates.clear();
+  tabOperations.clear();
 
   const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
@@ -624,9 +641,11 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
       ? DEFAULT_SUBTITLE_STATE
       : await getSubtitleStateForPage(activeTabId, pageStatus);
 
-  const subtitleState = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
+  const resolvedState = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
     effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job) : Promise.resolve(null),
   );
+  const currentState = activeTabId === null ? undefined : tabSubtitleStates.get(activeTabId);
+  const subtitleState = currentState && currentState !== localState ? currentState : resolvedState;
 
   if (activeTabId !== null && subtitleState.type === 'ready' && localState.type !== 'ready') {
     await publishSubtitleState(activeTabId, subtitleState);

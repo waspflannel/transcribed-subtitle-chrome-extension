@@ -195,6 +195,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R2. P1: Old History Can Replace A Newly Submitted Generation
 
+**Follow-up status:** Code implemented; untested (2026-09-08).
+
+**What Changed:** Submitting state ignores history until POST supplies a job ID. Reconciliation then selects only that ID; fallback prefers queued/running or completed over failed variants. Per-tab operation identity guards delayed polls and terminal writes, and delayed panel recovery cannot overwrite newer local state. Partial data survives exact-job reconciliation.
+
+**How To Test:**
+1. When authorized, run `npm test -- tests/backend-subtitle-state.test.ts`. Expect pending/accepted operations to ignore old variants and failed fallback not to hide a completed track.
+2. With local fake providers, defer a new language-variant POST while old completed/failed history is present. Refresh Watch repeatedly; expect preparing until POST resolves, then only its returned job.
+3. Reset or replace the operation while a poll/partial request is pending. Resolve it afterward; expect no old result to replace the new operation.
+
+**Limits:** Tests/build/browser not run. Submission claim serialization and recovered monitor startup are addressed separately by R9/R3; this commit does not claim those sibling fixes.
+
 **Surface:** Background state, Watch, overlay.
 
 **Impact:** A new operation can immediately appear completed or failed using an older result, and its monitor can stop.
