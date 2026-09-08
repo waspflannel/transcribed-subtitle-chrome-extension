@@ -17,6 +17,14 @@ describe('runtime message validation', () => {
       youtubeVideoId: 'video',
       lyrics: 'lyrics',
     })).toBe(true);
+    expect(isRuntimeMessage({
+      type: 'panel.submitLyricsCorrection',
+      jobId: 'job',
+      trackId: 'track',
+      youtubeVideoId: 'video',
+      lyrics: 'lyrics',
+      allowPartial: true,
+    })).toBe(true);
     expect(
       isRuntimeMessage({
         type: 'content.enrichLearningToken',
@@ -43,6 +51,14 @@ describe('runtime message validation', () => {
   it('rejects messages that only provide a type without the payload contract', () => {
     expect(isRuntimeMessage({ type: 'panel.updateSettings' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.submitLyricsCorrection', lyrics: 'lyrics' })).toBe(false);
+    expect(isRuntimeMessage({
+      type: 'panel.submitLyricsCorrection',
+      jobId: 'job',
+      trackId: 'track',
+      youtubeVideoId: 'video',
+      lyrics: 'lyrics',
+      allowPartial: 'yes',
+    })).toBe(false);
     expect(isRuntimeMessage({ type: 'content.updateSettings' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: 'yes' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.login', email: 'learner@example.com' })).toBe(false);

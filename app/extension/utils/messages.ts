@@ -115,6 +115,7 @@ export type BackgroundRequest =
       trackId: string;
       youtubeVideoId: string;
       lyrics: string;
+      allowPartial?: boolean;
       windowId?: number;
     }
   | {
@@ -197,6 +198,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         && hasString(value, 'trackId')
         && hasString(value, 'youtubeVideoId')
         && hasString(value, 'lyrics')
+        && optionalBoolean(value, 'allowPartial')
         && optionalNumber(value, 'windowId');
 
     case 'panel.cancelLyricsCorrection':

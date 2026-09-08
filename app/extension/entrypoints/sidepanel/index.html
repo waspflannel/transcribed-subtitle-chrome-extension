@@ -130,12 +130,12 @@
               <h2>Replace full lyrics</h2>
               <div data-lyrics-replace-panel>
                 <form class="lyrics-correction-form" data-lyrics-correction-form>
-                  <p class="card-copy">Paste the complete lyrics for the whole song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. Do not paste only a verse or excerpt.</p>
+                  <p class="card-copy">Paste lyrics for this song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. If they appear incomplete, we will ask before combining them with your current lyrics.</p>
                   <label class="field">
-                    <span>Complete lyrics</span>
+                    <span>Lyrics</span>
                     <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
                   </label>
-                  <p class="lyrics-confirm" data-lyrics-confirmation hidden>This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.</p>
+                  <p class="lyrics-confirm" data-lyrics-confirmation hidden role="status" aria-live="polite"></p>
                   <div class="lyrics-correction-footer">
                     <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>
                     <span class="lyrics-correction-actions">

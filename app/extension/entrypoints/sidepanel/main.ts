@@ -166,6 +166,14 @@ let languagesExpanded = false;
 let watchScreen: 'transcript' | 'replace' | 'generate' | 'progress' = 'transcript';
 let lastWatchVideoId: string | null = null;
 let lyricsReplaceConfirm = false;
+type LyricsCorrectionDraft = {
+  attemptId: string;
+  trackId: string;
+  youtubeVideoId: string;
+  lyrics: string;
+};
+let partialLyricsConfirmation: LyricsCorrectionDraft | null = null;
+let pendingLyricsCorrection: LyricsCorrectionDraft | null = null;
 const dismissedCorrectionAttempts = new Set<string>();
 let quickFixSelection: { cueId: string; tokenIndex: number; text: string } | null = null;
 let quickFixError: { message: string; code?: string; reason?: string } | null = null;
@@ -179,6 +187,8 @@ lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorr
 lyricsCorrectionTextarea.addEventListener('input', () => {
   /* Editing the paste after Continue drops back out of the confirmation step. */
   lyricsReplaceConfirm = false;
+  partialLyricsConfirmation = null;
+  pendingLyricsCorrection = null;
   renderLyricsEditState();
 });
 function openWatchScreen(screen: typeof watchScreen): void {
@@ -209,6 +219,8 @@ document.addEventListener('keydown', (event) => {
 confirmLyricsCorrectionButton.addEventListener('click', () => void applyConfirmedLyricsCorrection());
 cancelLyricsConfirmationButton.addEventListener('click', () => {
   lyricsReplaceConfirm = false;
+  partialLyricsConfirmation = null;
+  pendingLyricsCorrection = null;
   renderLyricsEditState();
   lyricsCorrectionTextarea.focus();
 });
@@ -395,6 +407,7 @@ async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
   event.preventDefault();
   if (!canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection)) return;
   lyricsReplaceConfirm = true;
+  partialLyricsConfirmation = null;
   renderLyricsEditState();
   confirmLyricsCorrectionButton.focus();
 }
@@ -406,6 +419,23 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
 
   if (lyricsCorrectionRequestBusy || !state || subtitleState?.type !== 'ready' || !page?.supported || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, state.lyricsCorrection)) return;
 
+  const submittedLyrics = lyricsCorrectionTextarea.value;
+  const submittedTrackId = subtitleState.track.trackId;
+  const submittedVideoId = page.videoId;
+  if (partialLyricsConfirmation && (
+    partialLyricsConfirmation.lyrics !== submittedLyrics
+    || partialLyricsConfirmation.trackId !== submittedTrackId
+    || partialLyricsConfirmation.youtubeVideoId !== submittedVideoId
+    || state.lyricsCorrection?.attemptId !== partialLyricsConfirmation.attemptId
+    || state.lyricsCorrection.status !== 'failed'
+    || state.lyricsCorrection.errorCode !== 'lyrics_incomplete'
+  )) {
+    partialLyricsConfirmation = null;
+    lyricsReplaceConfirm = false;
+    renderLyricsEditState();
+    return;
+  }
+  const submittedPartial = partialLyricsConfirmation !== null;
   lyricsCorrectionRequestBusy = true;
   renderLyricsEditState();
 
@@ -413,18 +443,44 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
     const applied = await sendPanelRequest({
       type: 'panel.submitLyricsCorrection',
       jobId: subtitleState.track.jobId,
-      trackId: subtitleState.track.trackId,
-      youtubeVideoId: page.videoId,
-      lyrics: lyricsCorrectionTextarea.value,
+      trackId: submittedTrackId,
+      youtubeVideoId: submittedVideoId,
+      lyrics: submittedLyrics,
+      ...(submittedPartial ? { allowPartial: true } : {}),
     }, 'correction', 'mutation');
     if (applied) {
-      watchScreen = 'transcript';
-      if (latestState) showPanelState(latestState);
+      const correction = latestState?.lyricsCorrection;
+
+      pendingLyricsCorrection = !submittedPartial && correction && (correction.status === 'queued' || correction.status === 'running' || correction.status === 'failed')
+        ? {
+            attemptId: correction.attemptId,
+            trackId: submittedTrackId,
+            youtubeVideoId: submittedVideoId,
+            lyrics: submittedLyrics,
+          }
+        : null;
+
+      const immediateIncomplete = correction?.status === 'failed'
+        && correction.errorCode === 'lyrics_incomplete'
+        && !submittedPartial;
+
+      if (immediateIncomplete) {
+        offerPartialLyricsConfirmation(correction);
+        if (latestState) showPanelState(latestState);
+      }
+
+      if (!immediateIncomplete) {
+        watchScreen = 'transcript';
+        if (latestState) showPanelState(latestState);
+        lyricsReplaceConfirm = false;
+        partialLyricsConfirmation = null;
+      }
     }
-    lyricsReplaceConfirm = false;
+    if (!partialLyricsConfirmation) lyricsReplaceConfirm = false;
   } finally {
     lyricsCorrectionRequestBusy = false;
     renderLyricsEditState();
+    if (partialLyricsConfirmation) confirmLyricsCorrectionButton.focus({ preventScroll: true });
   }
 }
 
@@ -540,6 +596,29 @@ function isActiveLyricsCorrection(status: LyricsCorrectionStatus | null | undefi
   return status?.status === 'queued' || status?.status === 'running';
 }
 
+function offerPartialLyricsConfirmation(correction: LyricsCorrectionStatus): void {
+  const pending = pendingLyricsCorrection;
+  const currentTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
+
+  if (
+    correction.status !== 'failed'
+    || correction.errorCode !== 'lyrics_incomplete'
+    || !pending
+    || pending.attemptId !== correction.attemptId
+    || pending.trackId !== currentTrackId
+    || pending.youtubeVideoId !== latestState?.pageStatus?.videoId
+    || pending.lyrics !== lyricsCorrectionTextarea.value
+  ) {
+    return;
+  }
+
+  partialLyricsConfirmation = pending;
+  pendingLyricsCorrection = null;
+  watchScreen = 'replace';
+  lyricsReplaceConfirm = true;
+  lyricsCorrectionStatus.textContent = '';
+}
+
 function renderLyricsEditState(): void {
   const ready = latestState?.subtitleState.type === 'ready' && Date.parse(latestState.subtitleState.track.expiresAt) > Date.now();
   const activeCorrection = isActiveLyricsCorrection(latestState?.lyricsCorrection);
@@ -562,9 +641,14 @@ function renderLyricsEditState(): void {
   /* Replace all: Continue reveals the inline warning and swaps the footer
      actions; the pasted text stays visible while confirming. */
   lyricsConfirmation.hidden = !lyricsReplaceConfirm;
+  lyricsConfirmation.textContent = partialLyricsConfirmation
+    ? 'These lyrics appear incomplete. Would you like AI to combine them with your current lyrics? Existing lyrics will be kept where needed.'
+    : 'This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.';
   lyricsCorrectionButton.hidden = lyricsReplaceConfirm;
   confirmLyricsCorrectionButton.hidden = !lyricsReplaceConfirm;
   cancelLyricsConfirmationButton.hidden = !lyricsReplaceConfirm;
+  confirmLyricsCorrectionButton.textContent = partialLyricsConfirmation ? 'Proceed' : 'Replace entire track';
+  cancelLyricsConfirmationButton.textContent = partialLyricsConfirmation ? 'Edit paste' : 'Cancel';
   lyricsCorrectionTextarea.disabled = lyricsCorrectionRequestBusy;
   confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 
@@ -795,6 +879,8 @@ function setLanguagesExpanded(expanded: boolean): void {
 function showPanelState(state: PanelState): void {
   const previousStateType = latestState?.subtitleState.type;
   const previousCorrectionStatus = latestState?.lyricsCorrection?.status;
+  const previousTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
+  const hadPartialConfirmation = partialLyricsConfirmation !== null;
   latestState = state;
 
   const pageStatus = state.pageStatus;
@@ -803,6 +889,7 @@ function showPanelState(state: PanelState): void {
   const { accountState } = state;
   const authenticated = accountState.status === 'authenticated';
   const subtitleState = state.subtitleState;
+  const nextTrackId = subtitleState.type === 'ready' ? subtitleState.track.trackId : null;
 
   currentSettings = settings;
 
@@ -816,9 +903,45 @@ function showPanelState(state: PanelState): void {
     clearQuickFixSelection();
     quickFixNotice = null;
     lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    pendingLyricsCorrection = null;
   } else if (previousCorrectionStatus !== 'completed' && state.lyricsCorrection?.status === 'completed') {
     lyricsCorrectionTextarea.value = '';
     lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    pendingLyricsCorrection = null;
+  } else if (nextTrackId !== previousTrackId) {
+    /* A refreshed track invalidates any permission to retry the old paste. */
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+    pendingLyricsCorrection = null;
+  }
+
+  if (
+    partialLyricsConfirmation
+    && (
+      state.lyricsCorrection?.status !== 'failed'
+      || state.lyricsCorrection.errorCode !== 'lyrics_incomplete'
+      || state.lyricsCorrection.attemptId !== partialLyricsConfirmation.attemptId
+      || lyricsCorrectionTextarea.value !== partialLyricsConfirmation.lyrics
+    )
+  ) {
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
+  }
+
+  if (state.lyricsCorrection?.status === 'failed') {
+    if (state.lyricsCorrection.errorCode !== 'lyrics_incomplete') {
+      pendingLyricsCorrection = null;
+    } else {
+      offerPartialLyricsConfirmation(state.lyricsCorrection);
+    }
+  }
+  if (pendingLyricsCorrection && (
+    state.lyricsCorrection?.attemptId !== pendingLyricsCorrection.attemptId
+    || state.lyricsCorrection.status === 'cancelled'
+  )) {
+    pendingLyricsCorrection = null;
   }
 
   showStatusBanner(state);
@@ -836,6 +959,9 @@ function showPanelState(state: PanelState): void {
   generateButton.disabled = !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
   renderLyricsEditState();
   renderLyricsCorrectionState(state);
+  if (!hadPartialConfirmation && partialLyricsConfirmation) {
+    confirmLyricsCorrectionButton.focus({ preventScroll: true });
+  }
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
   renderGenerateNote(state, supported);
 
@@ -880,7 +1006,13 @@ function renderLyricsCorrectionState(state: PanelState): void {
   correctionSyncError.hidden = !state.lyricsCorrectionSyncError;
   correctionSyncError.textContent = state.lyricsCorrectionSyncError ?? '';
 
-  if (!correction || correction.status === 'queued' || correction.status === 'running' || dismissedCorrectionAttempts.has(correction.attemptId)) {
+  if (
+    !correction
+    || correction.status === 'queued'
+    || correction.status === 'running'
+    || dismissedCorrectionAttempts.has(correction.attemptId)
+    || (correction.status === 'failed' && correction.errorCode === 'lyrics_incomplete' && partialLyricsConfirmation !== null)
+  ) {
     correctionTerminalStatus.hidden = true;
     correctionTerminalMessage.textContent = '';
     if (!correction) {
@@ -907,7 +1039,7 @@ function renderLyricsCorrectionState(state: PanelState): void {
   correctionTerminalMessage.textContent = correction.status === 'cancelled'
     ? 'Replacement cancelled. Your current subtitles are unchanged.'
     : correction.errorCode === 'lyrics_incomplete'
-      ? 'Replacement stopped — the pasted lyrics did not cover the whole song. Your current subtitles are unchanged.'
+      ? 'These lyrics appear incomplete. Your current subtitles are unchanged. Paste them again to review and continue.'
       : correction.errorCode === 'lyrics_do_not_match'
         ? 'Replacement stopped — these lyrics do not match this song. Your current subtitles are unchanged.'
         : correction.message || 'Replacement failed. Your current subtitles are unchanged.';
@@ -1152,6 +1284,10 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
   }
 
   if (errorTarget === 'correction') {
+    /* Incomplete corrections are terminal async outcomes. The partial retry
+       is offered only by showPanelState after matching the attempt and draft. */
+    lyricsReplaceConfirm = false;
+    partialLyricsConfirmation = null;
     lyricsCorrectionStatus.textContent = message;
 
     return;

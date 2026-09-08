@@ -663,7 +663,11 @@ async function submitLyricsCorrectionFromPanel(
         installId,
         session.plainTextToken,
         message.jobId,
-        { lyrics: message.lyrics, expectedTrackId: message.trackId },
+        {
+          lyrics: message.lyrics,
+          expectedTrackId: message.trackId,
+          ...(message.allowPartial ? { allowPartial: true } : {}),
+        },
       );
     } catch (error) {
       await clearTabOperation(tabId);
