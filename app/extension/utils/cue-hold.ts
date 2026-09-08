@@ -19,6 +19,7 @@ export interface CueHoldOptions {
  */
 export class CueHoldController {
   private timeout: number | null = null;
+  private paused = false;
 
   constructor(private readonly options: CueHoldOptions) {}
 
@@ -33,7 +34,7 @@ export class CueHoldController {
       return incoming;
     }
 
-    if (current !== null && isPlaying) {
+    if (current !== null && isPlaying && !this.paused) {
       this.scheduleExpiry();
       return current;
     }
@@ -45,6 +46,22 @@ export class CueHoldController {
   /** Immediately drop any active hold (seek, video change, teardown). */
   clear(): void {
     this.cancel();
+    this.paused = false;
+  }
+
+  /** Suspend expiry while study owns a playback pause; the held cue remains visible. */
+  pause(): void {
+    this.paused = true;
+    this.cancel();
+  }
+
+  /** Resume expiry after study releases its pause. */
+  resume(current: SubtitleCue | null, isPlaying: boolean): void {
+    this.paused = false;
+
+    if (current !== null && isPlaying) {
+      this.scheduleExpiry();
+    }
   }
 
   private scheduleExpiry(): void {

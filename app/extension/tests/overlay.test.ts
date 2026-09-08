@@ -110,6 +110,19 @@ describe('renderOverlayContent', () => {
     expect(pinnedHtml).toContain('Usage note');
     expect(pinnedHtml).toContain('Common greeting.');
     expect(pinnedHtml).not.toContain('null');
+    expect(pinnedHtml).toContain('data-focus-key="cue-0001:0"');
+    expect(pinnedHtml).toContain('data-return-focus-key="cue-0001:0"');
+  });
+
+  it('keeps an action message visible during a silent gap', () => {
+    const state = readyState();
+    const html = renderOverlayContent({ ...state, activeCue: null }, {
+      pinnedTokenIndex: null,
+      actionStatus: { message: 'Open the side panel for the transcript.', tone: 'info' },
+    });
+
+    expect(html).toContain('Open the side panel for the transcript.');
+    expect(html).toContain('There is no subtitle cue at the current playback position.');
   });
 
   it('renders generation progress while the background job is running', () => {

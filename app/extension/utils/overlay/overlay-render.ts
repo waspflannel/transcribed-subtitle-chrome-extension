@@ -28,7 +28,14 @@ export function renderOverlayContent(
     const cue = state.activeCue;
 
     if (!cue) {
-      return renderFrame('');
+      return interaction.actionStatus
+        ? renderFrame(renderShell({
+            eyebrow: 'AI subtitles',
+            title: interaction.actionStatus.message,
+            detail: 'There is no subtitle cue at the current playback position.',
+            meta: [],
+          }))
+        : renderFrame('');
     }
 
     const cueRomanization =
@@ -163,7 +170,9 @@ function renderSourceLine(
 
       return `
         <span class="token-slot">
-          <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${
+          <button class="token-card" type="button" data-token-index="${token.index}" data-focus-key="${escapeHtml(
+            `${cue.cueId}:${token.index}`,
+          )}" aria-pressed="${
             isPinned ? 'true' : 'false'
           }" aria-label="Study word: ${escapeHtml(token.text)}">
             <span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
@@ -205,7 +214,9 @@ function renderTokenInteraction(
       <div class="token-popover">
         <div class="token-popover-header">
           <span class="token-popover-title">${escapeHtml(token.text)}</span>
-          <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
+          <button class="icon-button" type="button" data-close-token-detail data-return-focus-key="${escapeHtml(
+            `${cue.cueId}:${token.index}`,
+          )}" aria-label="Close token detail">x</button>
         </div>
         <div class="detail">${escapeHtml(detail)}</div>
       </div>
@@ -227,7 +238,9 @@ function renderTokenInteraction(
     <div class="token-popover">
       <div class="token-popover-header">
         <span class="token-popover-title">${escapeHtml(token.text)}</span>
-        <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
+        <button class="icon-button" type="button" data-close-token-detail data-return-focus-key="${escapeHtml(
+          `${cue.cueId}:${token.index}`,
+        )}" aria-label="Close token detail">x</button>
       </div>
       <div class="token-fields">${rows}</div>
     </div>

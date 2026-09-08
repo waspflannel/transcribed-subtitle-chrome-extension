@@ -43,7 +43,10 @@ export default defineContentScript({
     let routeHydrateTimer: number | undefined;
     let videoBindRetryTimer: number | undefined;
     let videoBindRetriesLeft = 0;
-    let studyHoverPaused = false;
+    let studyHoverActive = false;
+    let studyFocusActive = false;
+    let studyPauseOwned = false;
+    let studyPauseRequested = false;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
@@ -62,11 +65,13 @@ export default defineContentScript({
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
       onReplayCue: (cue) => replayCue(cue),
-      onStudyHoverEnd: () => resumeVideoAfterStudyHover(),
-      onTokenPreview: () => pauseVideoForStudy(),
-      onTokenPreviewEnd: () => resumeVideoAfterStudyHover(),
+      onStudyHoverEnd: () => endStudyHover(),
+      onTokenPreview: () => beginStudyHover(),
+      onTokenPreviewEnd: () => endStudyHover(),
+      onTokenFocus: () => beginStudyFocus(),
+      onTokenBlur: () => endStudyFocus(),
       onTokenClick: (cue, token) => {
-        pauseVideoForStudy();
+        beginStudyFocus();
         void enrichLearningToken(cue, token);
       },
     });
@@ -136,6 +141,10 @@ export default defineContentScript({
           nextSettings.subtitleTimingOffsetSeconds !== settings.subtitleTimingOffsetSeconds;
 
         settings = nextSettings;
+
+        if (!settings.overlayVisible || !settings.pauseOnWordHover) {
+          releaseStudyPause();
+        }
 
         if (timingOffsetChanged && subtitleState.type === 'ready') {
           clearBoundWebVttTrack();
@@ -255,7 +264,7 @@ export default defineContentScript({
 
         case 'toggle-transcript':
           void browser.runtime.sendMessage({ type: 'content.focusPanelTranscript' }).catch(() => {});
-          overlay.showActionStatus('Transcript is in the side panel.', 'info');
+          overlay.showActionStatus('Open the side panel for the transcript.', 'info');
           return;
 
         case 'copy-current-cue':
@@ -381,13 +390,13 @@ export default defineContentScript({
         window.clearTimeout(videoBindRetryTimer);
         videoBindRetryTimer = undefined;
       }
+      releaseStudyPause();
       cueHold.clear();
       activeCue = null;
       activePartialCue = null;
       boundPartialTrackKey = null;
       boundReadyTrackId = null;
       activeVideo = null;
-      studyHoverPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
     }
@@ -584,17 +593,22 @@ export default defineContentScript({
     function bindVideoStateListeners(video: HTMLVideoElement): void {
       activeVideo = video;
 
-      const clearStudyHoverPause = (): void => {
-        studyHoverPaused = false;
+      const handleVideoPause = (): void => {
+        if (!studyPauseRequested) studyPauseOwned = false;
+      };
+      const handleVideoPlay = (): void => {
+        if (!studyPauseRequested) studyPauseOwned = false;
       };
 
-      video.addEventListener('play', clearStudyHoverPause);
-      video.addEventListener('playing', clearStudyHoverPause);
+      video.addEventListener('pause', handleVideoPause);
+      video.addEventListener('play', handleVideoPlay);
+      video.addEventListener('playing', handleVideoPlay);
       video.addEventListener('seeked', handleSeeked);
 
       stopVideoStateListeners = () => {
-        video.removeEventListener('play', clearStudyHoverPause);
-        video.removeEventListener('playing', clearStudyHoverPause);
+        video.removeEventListener('pause', handleVideoPause);
+        video.removeEventListener('play', handleVideoPlay);
+        video.removeEventListener('playing', handleVideoPlay);
         video.removeEventListener('seeked', handleSeeked);
       };
     }
@@ -612,23 +626,55 @@ export default defineContentScript({
       updateOverlay();
     }
 
-    function pauseVideoForStudy(): void {
-      if (!settings.pauseOnWordHover || !activeVideo || activeVideo.paused) {
-        return;
-      }
-
-      studyHoverPaused = true;
-      activeVideo.pause();
+    function beginStudyHover(): void {
+      studyHoverActive = true;
+      pauseVideoForStudy();
     }
 
-    function resumeVideoAfterStudyHover(): void {
-      if (!studyHoverPaused || !activeVideo) {
+    function endStudyHover(): void {
+      studyHoverActive = false;
+      releaseStudyPauseWhenIdle();
+    }
+
+    function beginStudyFocus(): void {
+      studyFocusActive = true;
+      pauseVideoForStudy();
+    }
+
+    function endStudyFocus(): void {
+      studyFocusActive = false;
+      releaseStudyPauseWhenIdle();
+    }
+
+    function pauseVideoForStudy(): void {
+      if (!settings.pauseOnWordHover || !activeVideo || activeVideo.paused || studyPauseOwned) {
         return;
       }
 
-      studyHoverPaused = false;
+      studyPauseOwned = true;
+      cueHold.pause();
+      studyPauseRequested = true;
+      try {
+        activeVideo.pause();
+      } finally {
+        studyPauseRequested = false;
+      }
+    }
 
-      if (!activeVideo.paused) {
+    function releaseStudyPauseWhenIdle(): void {
+      if (studyHoverActive || studyFocusActive) {
+        return;
+      }
+
+      releaseStudyPause();
+    }
+
+    function releaseStudyPause(): void {
+      const shouldResume = studyPauseOwned;
+      studyPauseOwned = false;
+      cueHold.resume(activeCue, Boolean(activeVideo && !activeVideo.paused));
+
+      if (!shouldResume || !activeVideo || !activeVideo.paused) {
         return;
       }
 
@@ -700,7 +746,6 @@ export default defineContentScript({
 
       activeVideo.currentTime = cueStartPlaybackSeconds(cue, settings.subtitleTimingOffsetSeconds);
       activeCue = cue;
-      studyHoverPaused = false;
       updateOverlay();
     }
 
@@ -715,7 +760,6 @@ export default defineContentScript({
 
       activeVideo.currentTime = cueStartPlaybackSeconds(sourceCue, settings.subtitleTimingOffsetSeconds);
       activeCue = sourceCue;
-      studyHoverPaused = false;
       updateOverlay();
       const playResult = activeVideo.play();
 

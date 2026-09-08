@@ -461,6 +461,19 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R13. P2: Learning Interaction Can Lose Focus, Pause Ownership, And Feedback
 
+**Implementation Status: Fixed in code; focused cue-hold/render regression source added; browser validation deferred.**
+
+**What Changed:** Token buttons now keep cue-scoped focus keys, close actions return focus to the selected word, and hover/focus pause ownership is tracked independently so releasing one interaction cannot resume playback while the other remains active. Extension-owned pause is released during settings changes and teardown, manual play/pause clears ownership, and held-cue expiry is suspended while study owns the pause. Action feedback renders during silent gaps, and the transcript shortcut explains how to reach the closed side panel.
+
+**How To Test:**
+1. Open a word card with the keyboard, trigger a metadata refresh, then close it with the close button or Escape. Expected: focus returns to the same cue word.
+2. Hover a token, focus it, then end only the hover. Expected: playback remains paused until focus also ends. Manually pause while studying, then end study. Expected: the manually paused video stays paused.
+3. Enter a held cue's silent gap, start study before the hold expires, and release study after the original timeout. Expected: the held cue remains available during study and expiry resumes only after release.
+4. Hide or rebind the overlay while it owns a pause. Expected: playback ownership is released without resuming a video the user paused.
+5. Run `npm test -- tests/cue-hold.test.ts tests/overlay.test.ts`. Expected: focus keys, silent-gap feedback, and suspended cue-hold expiry pass. Browser and full-suite checks remain deferred.
+
+**Remaining Limits:** The actual Shadow DOM focus sequence, pointer/focus event ordering on YouTube, autoplay policy, and closed-panel opening behavior still need browser validation. Hold expiry is restarted with the configured hold duration after study release rather than preserving elapsed wall-clock time.
+
 **Surface:** Overlay word cards, source hover-pause, cue hold, transcript shortcut.
 
 **Impact:** Keyboard study loses its place; playback can resume while a word remains focused; a held cue can disappear during study; recovery/status feedback can be invisible.
