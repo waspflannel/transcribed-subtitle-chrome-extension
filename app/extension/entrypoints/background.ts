@@ -102,6 +102,16 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
     case 'panel.getState':
       return getPanelState({ syncBackend: message.syncBackend ?? true, windowId: message.windowId });
 
+    case 'panel.getActiveCue': {
+      const tab = await browser.tabs.get(message.tabId);
+      const page = parseYoutubePage(tab.url ?? '');
+      if (!page.supported || page.videoId !== message.youtubeVideoId) return { ok: false };
+      const snapshot = await browser.tabs.sendMessage(message.tabId, {
+        type: 'background.getActiveCue', youtubeVideoId: message.youtubeVideoId, trackId: message.trackId,
+      });
+      return { ...snapshot, tabId: message.tabId };
+    }
+
     case 'panel.updateSettings':
       return updateSettingsFromPanel(message.patch, message.windowId);
 
@@ -508,7 +518,13 @@ async function enrichLearningTokenFromContent(
     throw error;
   }
 
-  const track = trackWithLearningToken(currentState.track, response.cueId, response.token);
+  const latestState = tabSubtitleStates.get(tabId);
+  if (latestState?.type !== 'ready' || latestState.track.trackId !== message.trackId
+    || latestState.track.youtubeVideoId !== message.youtubeVideoId
+    || response.cueId !== message.cueId || response.token.index !== message.tokenIndex) {
+    throw new Error('The active track changed before the word card arrived.');
+  }
+  const track = trackWithLearningToken(latestState.track, response.cueId, response.token);
 
   await storeReadySubtitleState(tabId, {
     type: 'ready',

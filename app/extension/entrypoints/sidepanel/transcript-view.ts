@@ -18,7 +18,7 @@ export function bindTranscriptView(dom: {
   function renderSignature(): string {
     return JSON.stringify([
       youtubeVideoId,
-      cues.map((cue) => cue.cueId),
+      cues,
       dom.transcriptSearch.value,
       settings?.showRomanization ?? false,
       settings?.showTranslation ?? false,

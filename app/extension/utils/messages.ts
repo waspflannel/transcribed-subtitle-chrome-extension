@@ -127,10 +127,12 @@ export type BackgroundRequest =
       windowId?: number;
     }
   | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
+  | { type: 'panel.getActiveCue'; tabId: number; youtubeVideoId: string; trackId: string }
   | { type: 'panel.seekToCue'; youtubeVideoId: string; cueId: string; mode: 'jump' | 'replay'; windowId?: number }
   | { type: 'content.focusPanelTranscript' };
 
 export type ContentRequest =
+  | { type: 'background.getActiveCue'; youtubeVideoId: string; trackId: string }
   | {
       type: 'background.getPageSnapshot';
     }
@@ -157,6 +159,10 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   }
 
   switch (value.type) {
+    case 'panel.getActiveCue':
+      return isNonNegativeInteger(value.tabId) && hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
+    case 'background.getActiveCue':
+      return hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
     case 'content.getState':
     case 'panel.generateSubtitles':
     case 'panel.logout':
@@ -221,6 +227,10 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'panel.clearLocalState':
     case 'panel.seekToCue':
       return true;
+    case 'panel.getActiveCue':
+      return true;
+    case 'background.getActiveCue':
+      return false;
 
     case 'background.getPageSnapshot':
     case 'background.settingsChanged':

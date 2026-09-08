@@ -15,7 +15,7 @@ import { OverlayShell } from '../utils/overlay';
 import { cueForNavigation, cueForPlaybackTime, cueStartPlaybackSeconds } from '../utils/cue-navigation';
 import { CueHoldController } from '../utils/cue-hold';
 import { shortcutActionFromKeyboardEvent, type KeyboardShortcutAction } from '../utils/keyboard-shortcuts';
-import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
+import { hasLearningMetadata, tokenKey, trackWithLearningToken } from '../utils/track-tokens';
 import { bindWebVttTrackToVideo, buildWebVttFromCues } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
 import type { LearningToken, PartialSubtitleCue, SubtitleCue, TrackResponse } from '../utils/contracts';
@@ -28,7 +28,7 @@ const VIDEO_BIND_RETRY_LIMIT = 10;
 const VIDEO_BIND_RETRY_DELAY_MS = 300;
 
 export default defineContentScript({
-  matches: ['*://*.youtube.com/watch*', '*://*.youtube.com/shorts/*'],
+  matches: ['*://*.youtube.com/*'],
   runAt: 'document_idle',
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
@@ -47,18 +47,15 @@ export default defineContentScript({
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
+    let stateEpoch = 0;
+    let hydrationRequest = 0;
+    let lastBroadcastCue: string | null = null;
     const cueHold = new CueHoldController({
       holdMs: 1800,
       view: window,
       onExpire: () => {
         activeCue = null;
         updateOverlay();
-        const clearedPage = parseYoutubePage(window.location.href);
-        if (clearedPage.supported) {
-          void browser.runtime
-            .sendMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: clearedPage.videoId })
-            .catch(() => {});
-        }
       },
     });
 
@@ -95,6 +92,10 @@ export default defineContentScript({
     }
 
     window.addEventListener('keydown', handleKeyboardShortcut, true);
+    window.addEventListener('fullscreenchange', recoverPlayerBinding);
+    window.addEventListener('resize', recoverPlayerBinding);
+    window.addEventListener('scroll', recoverPlayerBinding, true);
+    const playerRecoveryTimer = window.setInterval(recoverPlayerBinding, 1000);
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
     void hydrateContentState();
 
@@ -102,6 +103,7 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       disposed = true;
+      stateEpoch += 1;
       if (routeHydrateTimer !== undefined) {
         window.clearTimeout(routeHydrateTimer);
         routeHydrateTimer = undefined;
@@ -111,6 +113,10 @@ export default defineContentScript({
       }
       window.removeEventListener('keydown', handleKeyboardShortcut, true);
       browser.runtime.onMessage.removeListener(handleRuntimeMessage);
+      window.clearInterval(playerRecoveryTimer);
+      window.removeEventListener('fullscreenchange', recoverPlayerBinding);
+      window.removeEventListener('resize', recoverPlayerBinding);
+      window.removeEventListener('scroll', recoverPlayerBinding, true);
       clearBoundWebVttTrack();
       overlay.unmount();
     });
@@ -165,6 +171,14 @@ export default defineContentScript({
         return false;
       }
 
+      if (message.type === 'background.getActiveCue') {
+        const matches = subtitleState.type === 'ready' && subtitleStateMatchesCurrentPage(subtitleState)
+          && subtitleState.track.youtubeVideoId === message.youtubeVideoId && subtitleState.track.trackId === message.trackId;
+        sendResponse({ ok: matches, youtubeVideoId: message.youtubeVideoId, trackId: message.trackId,
+          cueId: matches ? activeCueFromState()?.cueId ?? null : null });
+        return false;
+      }
+
       if (message.type === 'background.seekToCue') {
         if (subtitleState.type === 'ready') {
           const cue = subtitleState.track.cues.find((c) => c.cueId === message.cueId);
@@ -187,6 +201,7 @@ export default defineContentScript({
     }
 
     function handleKeyboardShortcut(event: KeyboardEvent): void {
+      if (!parseYoutubePage(window.location.href).supported) return;
       const action = shortcutActionFromKeyboardEvent(event, {
         enabled: settings.keyboardShortcutsEnabled,
       });
@@ -248,8 +263,13 @@ export default defineContentScript({
     }
 
     async function hydrateContentState(): Promise<void> {
+      if (!parseYoutubePage(window.location.href).supported) return;
+      const request = ++hydrationRequest;
+      const epoch = stateEpoch;
+      const url = window.location.href;
       try {
         const state = await browser.runtime.sendMessage({ type: 'content.getState' });
+        if (disposed || request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) return;
 
         if (state?.settings) {
           settings = createExtensionSettingsFromPartial(state.settings);
@@ -261,6 +281,7 @@ export default defineContentScript({
           return;
         }
       } catch {
+        if (disposed || request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) return;
         // The overlay can still render its default local state when background state is unavailable.
       }
 
@@ -269,6 +290,11 @@ export default defineContentScript({
 
     function updateOverlay(): void {
       if (disposed) {
+        return;
+      }
+
+      if (!parseYoutubePage(window.location.href).supported) {
+        overlay.unmount();
         return;
       }
 
@@ -281,6 +307,31 @@ export default defineContentScript({
         pendingTokenKeys,
         failedTokenKeys,
       });
+      const page = parseYoutubePage(window.location.href);
+      if (page.supported) {
+        const cueId = activeCue?.cueId ?? null;
+        const identity = JSON.stringify([page.videoId, boundReadyTrackId, cueId]);
+        if (identity !== lastBroadcastCue) {
+          lastBroadcastCue = identity;
+          void browser.runtime.sendMessage({ type: 'content.activeCueChanged', youtubeVideoId: page.videoId, cueId }).catch(() => {});
+        }
+      }
+    }
+
+    function recoverPlayerBinding(): void {
+      if (disposed || !subtitleStateMatchesCurrentPage(subtitleState)) return;
+      if (subtitleState.type !== 'ready' && !(subtitleState.type === 'loading' && subtitleState.partialTrack)) {
+        updateOverlay();
+        return;
+      }
+      const video = findActiveYoutubeVideo(document);
+      if (video !== activeVideo || (activeVideo !== null && !activeVideo.isConnected)) {
+        applySubtitleState(subtitleState);
+      } else if (video && !stopWebVttTrack
+        && (subtitleState.type === 'ready' || (subtitleState.type === 'loading' && subtitleState.partialTrack))) {
+        applySubtitleState(subtitleState);
+      }
+      updateOverlay();
     }
 
     /**
@@ -313,6 +364,7 @@ export default defineContentScript({
     }
 
     function clearBoundWebVttTrack(): void {
+      stateEpoch += 1;
       stopWebVttTrack?.();
       stopVideoStateListeners?.();
       stopWebVttTrack = null;
@@ -326,12 +378,6 @@ export default defineContentScript({
       activePartialCue = null;
       boundPartialTrackKey = null;
       boundReadyTrackId = null;
-      const clearedPage = parseYoutubePage(window.location.href);
-      if (clearedPage.supported) {
-        void browser.runtime
-          .sendMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: clearedPage.videoId })
-          .catch(() => {});
-      }
       activeVideo = null;
       studyHoverPaused = false;
       pendingTokenKeys.clear();
@@ -345,6 +391,8 @@ export default defineContentScript({
     }
 
     function applySubtitleState(nextSubtitleState: SubtitleState): void {
+      if (disposed || !subtitleStateMatchesCurrentPage(nextSubtitleState)) return;
+      hydrationRequest += 1;
       // Loading updates for an already-bound partial track (progress text,
       // unchanged revision) must not rebind: rebinding resets the text track
       // and drops the currently displayed cue every 2s poll.
@@ -353,6 +401,7 @@ export default defineContentScript({
       if (
         nextPartialKey !== null
         && nextPartialKey === boundPartialTrackKey
+        && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)
         && subtitleStateMatchesCurrentPage(nextSubtitleState)
       ) {
         subtitleState = nextSubtitleState;
@@ -361,27 +410,25 @@ export default defineContentScript({
         return;
       }
 
-      // The same finalized track can be re-delivered (background publish plus
-      // a hydrate pull). Rebinding would reset the text track and drop the
-      // active cue, and the local copy may carry newer on-click enrichment —
-      // keep it.
+      // Metadata-only updates do not need a native timing-track replacement.
       if (
         nextSubtitleState.type === 'ready'
         && boundReadyTrackId === nextSubtitleState.track.trackId
+        && subtitleState.type === 'ready'
+        && subtitleState.track.webVtt === nextSubtitleState.track.webVtt
+        && JSON.stringify(subtitleState.track.cues.map(({ cueId, startMs, endMs }) => [cueId, startMs, endMs]))
+          === JSON.stringify(nextSubtitleState.track.cues.map(({ cueId, startMs, endMs }) => [cueId, startMs, endMs]))
+        && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)
         && subtitleStateMatchesCurrentPage(nextSubtitleState)
       ) {
+        subtitleState = nextSubtitleState;
+        activeCue = nextSubtitleState.track.cues.find((cue) => cue.cueId === activeCue?.cueId) ?? null;
+        updateOverlay();
         return;
       }
 
       clearBoundWebVttTrack();
       videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
-
-      if (!subtitleStateMatchesCurrentPage(nextSubtitleState)) {
-        subtitleState = DEFAULT_SUBTITLE_STATE;
-        updateOverlay();
-
-        return;
-      }
 
       subtitleState = nextSubtitleState;
       pendingTokenKeys.clear();
@@ -502,7 +549,9 @@ export default defineContentScript({
         timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
         onCueChange(change) {
           const isPlaying = typeof video.currentTime === 'number' && !video.paused && !video.ended;
-          const next = cueHold.select(change.activeCue, isPlaying, activeCue);
+          const currentCue = subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId
+            ? subtitleState.track.cues.find((cue) => cue.cueId === change.activeCue?.cueId) ?? null : null;
+          const next = cueHold.select(currentCue, isPlaying, activeCue);
 
           if (next === activeCue && activeCue !== null) {
             updateOverlay(); // hold: keep prior cue rendered, no broadcast change
@@ -511,14 +560,6 @@ export default defineContentScript({
 
           activeCue = next;
           updateOverlay();
-          const page = parseYoutubePage(window.location.href);
-          if (page.supported) {
-            void browser.runtime.sendMessage({
-              type: 'content.activeCueChanged',
-              cueId: activeCue?.cueId ?? null,
-              youtubeVideoId: page.videoId,
-            }).catch(() => {});
-          }
         },
         logger: webVttTrackLogger,
       });
@@ -561,12 +602,6 @@ export default defineContentScript({
       }
       activeCue = next;
       updateOverlay();
-      const clearedPage = parseYoutubePage(window.location.href);
-      if (clearedPage.supported) {
-        void browser.runtime
-          .sendMessage({ type: 'content.activeCueChanged', cueId: next?.cueId ?? null, youtubeVideoId: clearedPage.videoId })
-          .catch(() => {});
-      }
     }
 
     function pauseVideoForStudy(): void {
@@ -786,6 +821,13 @@ export default defineContentScript({
         return;
       }
 
+      const { trackId, youtubeVideoId } = subtitleState.track;
+      const epoch = stateEpoch;
+      const isCurrent = (): boolean => !disposed && epoch === stateEpoch
+        && subtitleState.type === 'ready' && subtitleState.track.trackId === trackId
+        && subtitleState.track.youtubeVideoId === youtubeVideoId
+        && subtitleStateMatchesCurrentPage(subtitleState);
+
       pendingTokenKeys.add(key);
       failedTokenKeys.delete(key);
       updateOverlay();
@@ -793,20 +835,29 @@ export default defineContentScript({
       try {
         const response = (await browser.runtime.sendMessage({
           type: 'content.enrichLearningToken',
-          youtubeVideoId: subtitleState.track.youtubeVideoId,
-          trackId: subtitleState.track.trackId,
+          youtubeVideoId,
+          trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,
         })) as { ok?: boolean; track?: TrackResponse; error?: string };
 
+        if (!isCurrent()) return;
+
         if (response?.ok === false || !response?.track) {
           throw new Error(response?.error ?? 'Unable to generate word card.');
         }
+        if (response.track.trackId !== trackId || response.track.youtubeVideoId !== youtubeVideoId) return;
 
-        applyEnrichedTrack(response.track, cue.cueId, key);
+        const enrichedToken = response.track.cues.find((candidate) => candidate.cueId === cue.cueId)
+          ?.tokens.find((candidate) => candidate.index === token.index);
+        if (!enrichedToken || enrichedToken.text !== token.text) throw new Error('Word card does not match the requested token.');
+        if (subtitleState.type === 'ready') {
+          applyEnrichedTrack(trackWithLearningToken(subtitleState.track, cue.cueId, enrichedToken), cue.cueId, key);
+        }
       } catch (error) {
+        if (!isCurrent()) return;
         console.warn('extension.learning_token_enrichment_failed', {
-          trackId: subtitleState.track.trackId,
+          trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,
           error: error instanceof Error ? error.message : 'Unknown extension enrichment error',

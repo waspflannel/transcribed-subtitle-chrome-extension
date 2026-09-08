@@ -4,6 +4,7 @@ import { renderOverlayContent } from './overlay/overlay-render';
 import { overlayStyles } from './overlay/overlay-styles';
 import type { OverlayRenderState, OverlayStatus } from './overlay/types';
 import { hasLearningMetadata, tokenKey } from './track-tokens';
+import { findActiveYoutubeVideo } from './youtube-video';
 
 const OVERLAY_FONTS: ReadonlyArray<readonly [string, number, string]> = [
   ['Geist Sans', 400, 'geist-sans-latin-400-normal.woff2'],
@@ -64,11 +65,27 @@ export class OverlayShell {
       this.mount();
     }
 
+    const video = findActiveYoutubeVideo(this.documentRef);
+    const parent = this.documentRef.fullscreenElement ?? this.documentRef.body ?? this.documentRef.documentElement;
+    if (this.host!.parentElement !== parent) parent.append(this.host!);
+    const rect = video?.getBoundingClientRect();
+    const view = this.documentRef.defaultView;
+    if (rect && view) {
+      const left = Math.max(0, rect.left) + 16;
+      const right = Math.max(0, view.innerWidth - rect.right) + 16;
+      this.host!.style.left = state.settings.overlayPosition === 'compact' ? 'auto' : `${left}px`;
+      this.host!.style.right = `${right}px`;
+      this.host!.style.maxWidth = `${Math.max(0, view.innerWidth - left - right)}px`;
+      this.host!.style.top = state.settings.overlayPosition === 'top' ? `${Math.max(0, rect.top) + 16}px` : 'auto';
+      this.host!.style.bottom = state.settings.overlayPosition === 'top' ? 'auto'
+        : `${Math.max(0, view.innerHeight - rect.bottom) + Math.min(82, rect.height / 4)}px`;
+    }
+
     this.host!.dataset.position = state.settings.overlayPosition;
     this.host!.dataset.captionSize = state.settings.captionFontSize;
     this.host!.dataset.captionDensity = state.settings.captionDensity;
     this.host!.dataset.captionTheme = state.settings.captionContrastTheme;
-    this.host!.style.display = state.settings.overlayVisible ? 'block' : 'none';
+    this.host!.style.display = state.settings.overlayVisible && video ? 'block' : 'none';
     this.currentState = state;
 
     const activeCueId = state.subtitleState.type === 'ready' ? state.activeCue?.cueId ?? null : null;

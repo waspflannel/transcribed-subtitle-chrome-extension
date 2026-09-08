@@ -244,6 +244,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R4. P1: Home/Search SPA Entry Can Leave Videos Without A Content Script
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Inject on all YouTube documents; keep hydration, shortcuts and the rail inactive on unsupported routes. Existing SPA events activate watch/Shorts without a reload.
+
+**How To Test:**
+1. Load Home/search/channel with the extension, then open watch and Shorts using SPA navigation. Expected: an existing track and shortcuts work without refresh.
+2. Navigate back/forward and return Home. Expected: one overlay on supported pages and no rail or intercepted shortcuts on Home. Limits: real-site injection and navigation have not been exercised; no tests or builds run.
+
 **Surface:** YouTube entry journey, overlay, shortcuts, transcript seek.
 
 **Impact:** Normal discovery-to-watch navigation can lack captions and page controls until refresh.
@@ -262,6 +270,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R5. P1: Player Replacement And Fullscreen Lack Reliable Overlay Recovery
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Same-track deduplication now requires the connected selected video. A disposed-safe one-second liveness check recovers delayed/replaced players after the initial retry window; scroll/resize/fullscreen refresh geometry. The existing host is reattached in the fullscreen subtree and positioned within the visible player rectangle, not the document rail.
+
+**How To Test:**
+1. Delay video mounting past ten seconds, replace a paused video, and remove the host. Expected: the existing track returns within a second with one host, one native track and one listener set, without generation.
+2. Switch normal/theater/fullscreen, scroll and resize with the panel docked. Expected: rail follows the player and hides without a player. Limits: one-second replacement latency; native video-only fullscreen cannot display sibling HTML; geometry and real YouTube behavior not runtime-tested.
+
 **Surface:** Overlay mounting and video binding.
 
 **Impact:** Captions can disappear, stay stale, sit outside the player, or seek a detached video.
@@ -279,6 +295,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Replace the player while paused, remove the host, delay mounting, and transition normal/theater/fullscreen with the panel docked. Recover the existing track without regeneration, duplicate tracks, or duplicate listeners.
 
 ### R6. P1: Late Content Responses Can Clear Or Replace The Current Video
+
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Hydration captures request, state epoch and URL; enrichment captures epoch/video/track on both success and failure. Foreign pushed states are rejected before teardown. Logging uses captured track identity, not a potentially cleared state.
+
+**How To Test:**
+1. Defer A hydration, navigate to B, then resolve and reject A in separate runs. Expected: B stays intact. Repeat with a newer push, reset, regeneration and content invalidation.
+2. Repeat with a pending A word card and a same-ID regenerated track. Expected: no foreign metadata, post-teardown update or exception. Limits: messaging races are source-reviewed only; tests/builds not run.
 
 **Surface:** Content hydration and on-click word cards.
 
@@ -352,6 +376,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R10. P2: Same-ID Transcript And Word-Card Updates Can Remain Stale
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Transcript invalidation includes cue content. Metadata-only pushes refresh current cue data without rebinding; timing changes rebind. Native cue IDs resolve against the latest ready track, preserving source rather than shifted timings. Background and content merge only the requested returned token into current matching state, preserving concurrent cards.
+
+**How To Test:**
+1. Deliver same-ID source/readings/translation updates and search for the new text. Expected: rows, search and active overlay agree; timing changes update native playback.
+2. Resolve two different card requests in reverse order, revisit each cue and repull state. Expected: both cards remain loaded without another request. Limits: account-epoch protection is owned by R8; background merge hunk must retain those guards during integration. No tests/builds run.
+
 **Surface:** Panel transcript and overlay learning cards.
 
 **Impact:** Rendered text/readings/search results can disagree with current data; learned word metadata can revert when revisiting a cue.
@@ -369,6 +401,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Same-ID data updates refresh visible rows/search. Enrich two words in either response order, leave/replay the cue, and retain both cards without another request.
 
 ### R11. P2: Panel Reopen And Extension Seeks Can Miss Active-Cue Updates
+
+**Implementation Status: INCOMPLETE / UNTESTED.** Draft preserved in its own commit for branch consolidation. R7 tab-notice guards, review and regression coverage remain pending; this checkpoint does not complete R11.
+
+**What Changed:** Every overlay-state update publishes a changed video/track/cue identity independently of render deduplication, including jump/replay. Panel ready snapshots pull the current cue through `panel.getActiveCue {tabId,youtubeVideoId,trackId}` and `background.getActiveCue {youtubeVideoId,trackId}`. Responses echo identity plus `ok`, `cueId` and background-added `tabId`; newer notices/requests invalidate late pulls.
+
+**How To Test:**
+1. Pause mid-cue, close/reopen the panel and change tabs (including duplicate videos). Expected: an immediate current highlight from the explicitly targeted tab, without waiting for cuechange.
+2. Use Jump, replay, previous and next at zero/nonzero offset. Expected: each destination highlights immediately. Resolve an old pull after a newer cue notice/navigation; expected: no rollback. Limits: merge R7 notice/tab guards before its request-counter increment; no runtime tests/builds run.
 
 **Surface:** Transcript highlighting and playback relay.
 
