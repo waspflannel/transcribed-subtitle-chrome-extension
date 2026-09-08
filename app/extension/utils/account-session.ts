@@ -13,6 +13,7 @@ export interface StoredExtensionSession {
 const extensionSessionStorage = storage.defineItem<StoredExtensionSession | null>('local:extensionSession', {
   fallback: null,
 });
+let sessionWriteQueue = Promise.resolve();
 
 export async function getStoredExtensionSession(now: Date = new Date()): Promise<StoredExtensionSession | null> {
   const session = await extensionSessionStorage.getValue();
@@ -35,7 +36,9 @@ export async function storeExtensionSession(response: ExtensionAuthResponse): Pr
     account: response.account,
   };
 
-  await extensionSessionStorage.setValue(session);
+  const write = sessionWriteQueue.then(() => extensionSessionStorage.setValue(session));
+  sessionWriteQueue = write.then(() => undefined, () => undefined);
+  await write;
 
   return session;
 }
@@ -44,24 +47,31 @@ export async function updateStoredAccount(
   account: AccountSummary,
   expectedSessionId?: string,
 ): Promise<StoredExtensionSession | null> {
-  const session = await getStoredExtensionSession();
+  const write = sessionWriteQueue.then(async () => {
+    const session = await getStoredExtensionSession();
 
-  if (!session || (expectedSessionId !== undefined && session.sessionId !== expectedSessionId)) {
-    return null;
-  }
+    if (!session || (expectedSessionId !== undefined && session.sessionId !== expectedSessionId)) {
+      return null;
+    }
 
-  const nextSession: StoredExtensionSession = {
-    ...session,
-    account,
-  };
+    const nextSession: StoredExtensionSession = {
+      ...session,
+      account,
+    };
 
-  await extensionSessionStorage.setValue(nextSession);
+    await extensionSessionStorage.setValue(nextSession);
 
-  return nextSession;
+    return nextSession;
+  });
+  sessionWriteQueue = write.then(() => undefined, () => undefined);
+
+  return write;
 }
 
 export async function clearExtensionSession(): Promise<void> {
-  await extensionSessionStorage.removeValue();
+  const clear = sessionWriteQueue.then(() => extensionSessionStorage.removeValue());
+  sessionWriteQueue = clear.then(() => undefined, () => undefined);
+  await clear;
 }
 
 function isStoredExtensionSession(value: unknown): value is StoredExtensionSession {
