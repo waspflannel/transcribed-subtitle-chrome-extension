@@ -55,6 +55,7 @@ const panelPorts = new Set<Browser.runtime.Port>();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
 let cachedPanelJobHistoryError: string | undefined;
 let cachedPanelJobHistoryAccountId: string | undefined;
+let localStateResetVersion = 0;
 const JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
@@ -1054,6 +1055,7 @@ async function readySubtitleStateForEnrichment(
 }
 
 async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> {
+  localStateResetVersion += 1;
   await waitForExtensionSettingsWrites();
   await clearLocalExtensionState();
   await clearExtensionSession();
@@ -1087,8 +1089,10 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
 }
 
 async function loginFromPanel(email: string, password: string): Promise<PanelState> {
+  const resetVersion = localStateResetVersion;
   const installId = await getOrCreateInstallId();
   const response = await subtitleApi.loginExtension(installId, { email, password });
+  if (resetVersion !== localStateResetVersion) return getPanelState({ syncBackend: false });
 
   await storeExtensionSession(response);
 
