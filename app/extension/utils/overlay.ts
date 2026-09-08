@@ -175,6 +175,8 @@ export class OverlayShell {
       this.bindTokenInteractions();
       this.restoreFocusAfterRender(focusSnapshot);
     }
+
+    this.constrainPopovers();
   }
 
   private bindTokenInteractions(): void {
@@ -345,6 +347,23 @@ export class OverlayShell {
 
     if (focusTarget instanceof HTMLInputElement && typeof focusSnapshot?.selectionStart === 'number') {
       focusTarget.setSelectionRange(focusSnapshot.selectionStart, focusSnapshot.selectionEnd ?? focusSnapshot.selectionStart);
+    }
+  }
+
+  private constrainPopovers(): void {
+    const view = this.documentRef.defaultView;
+    if (!view || !this.content) return;
+
+    for (const popover of this.content.querySelectorAll<HTMLElement>('.token-popover')) {
+      popover.style.setProperty('--popover-shift', '0px');
+      const rect = popover.getBoundingClientRect();
+      const padding = 8;
+      const shift = rect.left < padding
+        ? padding - rect.left
+        : rect.right > view.innerWidth - padding
+          ? view.innerWidth - padding - rect.right
+          : 0;
+      if (shift !== 0) popover.style.setProperty('--popover-shift', `${shift}px`);
     }
   }
 

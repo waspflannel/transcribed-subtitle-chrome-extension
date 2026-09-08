@@ -705,6 +705,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R23. P2: Overlay Accessibility And Popover Placement Have Recovery Gaps
 
+**Implementation Status: Fixed in code; focused editable-target and overlay-layout regression source added; browser validation deferred.**
+
+**What Changed:** Shortcut filtering now honors the native `isContentEditable` state and any `[contenteditable]` ancestor, including empty and `plaintext-only` values, while retaining native form and textbox checks. Top-position popovers flip below their token, all standard popovers clamp horizontally to the viewport, and long cards gain a bounded scrolling region so their close controls remain reachable.
+
+**How To Test:**
+1. Run `npm test -- tests/keyboard-shortcuts.test.ts tests/overlay.test.ts`. Expected: native editable targets are ignored by extension shortcuts and layout rules cover top placement, viewport shifting, and scrollable card height.
+2. Open a long word card on the first and last token at top and bottom positions, then repeat at compact position, narrow width, and zoom. Expected: card text and close control remain reachable; top cards open below the token and standard cards stay horizontally inside the viewport.
+3. Focus `contenteditable=""`, `contenteditable="plaintext-only"`, a nested descendant, and a role textbox. Expected: all extension shortcut chords leave editing untouched.
+
+**Remaining Limits:** Popover clamping runs after each rendered update and does not measure browser zoom/vertical collision beyond the top-position flip and bounded scroll. Browser and assistive-technology checks remain deferred.
+
 **Surface:** Top-position word cards and editable-page shortcut handling.
 
 **Impact:** Card content/close controls can be outside the viewport, and shortcuts can intercept typing in valid editable surfaces.

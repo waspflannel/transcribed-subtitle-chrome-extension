@@ -336,9 +336,14 @@
           box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
           left: 50%;
           position: absolute;
-          transform: translateX(-50%);
+          transform: translateX(calc(-50% + var(--popover-shift, 0px)));
           width: min(270px, calc(100vw - 48px));
           z-index: 2;
+        }
+
+        :host([data-position="top"]) .token-popover {
+          bottom: auto;
+          top: calc(100% + 14px);
         }
 
         .token-popover::after {

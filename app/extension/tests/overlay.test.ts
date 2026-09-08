@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import { renderOverlayContent } from '../utils/overlay/overlay-render';
+import { overlayStyles } from '../utils/overlay/overlay-styles';
 import type { OverlayRenderState } from '../utils/overlay/types';
 import type { TrackResponse } from '../utils/contracts';
 
@@ -186,6 +187,14 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('Subtitle display needs a retry');
     expect(html).toContain('The subtitle track could not load.');
     expect(html).toContain('data-retry-binding');
+  });
+
+  it('keeps top popovers below their token and scrollable within the viewport', () => {
+    expect(overlayStyles).toContain(':host([data-position="top"]) .token-popover');
+    expect(overlayStyles).toContain('top: calc(100% + 14px)');
+    expect(overlayStyles).toContain('max-height: min(60vh, 420px)');
+    expect(overlayStyles).toContain('overflow-y: auto');
+    expect(overlayStyles).toContain('var(--popover-shift, 0px)');
   });
 
   it('hides the partial translation when translation display is disabled', () => {

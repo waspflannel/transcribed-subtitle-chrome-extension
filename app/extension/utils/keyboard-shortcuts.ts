@@ -142,6 +142,7 @@ export function isEditableShortcutTarget(
 
 interface ElementLike {
   tagName?: string;
+  isContentEditable?: boolean;
   closest?: (selector: string) => unknown;
 }
 
@@ -150,13 +151,17 @@ function isElementLike(value: unknown): value is ElementLike {
 }
 
 function isEditableElement(element: ElementLike): boolean {
+  if (element.isContentEditable === true) {
+    return true;
+  }
+
   const tagName = element.tagName?.toLowerCase();
 
   if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
     return true;
   }
 
-  if (element.closest?.('[contenteditable="true"], [role="textbox"], [aria-multiline="true"]')) {
+  if (element.closest?.('[contenteditable], [role="textbox"], [aria-multiline="true"]')) {
     return true;
   }
 

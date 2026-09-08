@@ -46,6 +46,22 @@ describe('keyboard shortcuts', () => {
         { enabled: true },
       ),
     ).toBeNull();
+    expect(
+      shortcutActionFromKeyboardEvent(
+        keyboardEvent('r', {
+          path: [{ tagName: 'DIV', isContentEditable: true }],
+        }),
+        { enabled: true },
+      ),
+    ).toBeNull();
+    expect(
+      shortcutActionFromKeyboardEvent(
+        keyboardEvent('r', {
+          path: [{ tagName: 'DIV', closest: () => ({}) }],
+        }),
+        { enabled: true },
+      ),
+    ).toBeNull();
   });
 
   it('ignores unmodified YouTube-owned keys', () => {
