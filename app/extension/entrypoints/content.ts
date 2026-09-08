@@ -731,11 +731,13 @@ export default defineContentScript({
       const playResult = activeVideo.play();
 
       if (playResult && typeof playResult.catch === 'function') {
-        playResult.catch((error: unknown) => {
+        playResult.then(() => cueHold.resume(activeCue, true)).catch((error: unknown) => {
           console.warn('extension.subtitle_study_resume_failed', {
             error: error instanceof Error ? error.message : 'Unknown resume error',
           });
         });
+      } else {
+        cueHold.resume(activeCue, true);
       }
     }
 
