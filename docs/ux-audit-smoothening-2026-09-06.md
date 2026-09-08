@@ -676,6 +676,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R22. P2: Local Timing And Player Selection Have Concrete Edge Cases
 
+**Implementation Status: Fixed in code; focused cue-navigation and player-selection regression source added; browser validation deferred.**
+
+**What Changed:** Playback-to-source conversion preserves negative source time when applying a positive subtitle delay, while destination cue seeks retain their zero clamp. Video visibility now checks viewport intersection and computed visibility before preferring a playing element, so an offscreen player cannot outrank an onscreen paused player.
+
+**How To Test:**
+1. Run `npm test -- tests/cue-navigation.test.ts tests/youtube-video.test.ts`. Expected: a cue at source time zero stays inactive until its +5 second delay and Next selects cue one before that delay; destination starts remain clamped at zero.
+2. Expose an offscreen playing video and an onscreen paused video with positive dimensions. Expected: player selection chooses the onscreen video. Repeat with an element using `display:none` or `visibility:hidden`.
+3. Check a Shorts layout and a normal watch layout while resizing or scrolling. Expected: controls remain bound to the visible player; real browser geometry still needs the planned manual session.
+
+**Remaining Limits:** The selector still uses the first qualifying visible player when several visible players are present, and browser-specific viewport/layout behavior has not been exercised. No browser tests or full suite were run.
+
 **Surface:** Delayed captions, cue navigation, Shorts/multiple video elements.
 
 **Impact:** The first cue can appear before its configured delay or be skipped by Next; playback controls can bind to an offscreen video.

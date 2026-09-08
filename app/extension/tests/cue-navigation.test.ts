@@ -70,6 +70,19 @@ describe('cue navigation', () => {
     expect(cueStartPlaybackSeconds(cues[0], -2)).toBe(0);
   });
 
+  it('keeps inverse timing negative before a delayed first cue', () => {
+    const cues = cueList();
+
+    expect(cueForPlaybackTime({ cues }, 2, 5)).toBeNull();
+    expect(cueForNavigation({
+      track: { cues },
+      activeCue: null,
+      currentTimeSeconds: 2,
+      timingOffsetSeconds: 5,
+      direction: 'next',
+    })?.cueId).toBe('cue-1');
+  });
+
   it('treats the cue interval as half-open so the next cue wins at the shared millisecond', () => {
     const cues: SubtitleCue[] = [
       cue('cue-a', 0, 0, 1500),

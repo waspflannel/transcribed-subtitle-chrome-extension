@@ -99,5 +99,5 @@ function cueForNavigationFromPlaybackTime(
 }
 
 function playbackTimeToSourceMilliseconds(currentTimeSeconds: number, timingOffsetSeconds: number): number {
-  return Math.max(0, Math.round((currentTimeSeconds - timingOffsetSeconds) * 1000));
+  return Math.round((currentTimeSeconds - timingOffsetSeconds) * 1000);
 }
