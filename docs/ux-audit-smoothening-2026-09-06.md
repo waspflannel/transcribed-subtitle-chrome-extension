@@ -537,6 +537,16 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R21. P2: API Timeouts Do Not Cover Response Body Consumption
 
+**Follow-up status:** Code implemented; untested (2026-09-08).
+
+**What Changed:** The request timer now spans fetch, JSON body consumption, and response validation. Body aborts keep the timeout error instead of being mislabeled invalid JSON. Added a response-stream regression.
+
+**How To Test:**
+1. When authorized, run `npm test -- tests/api.test.ts` in `app/extension`. Expect a stalled history body to reject at 2500 ms with the timeout message and no remaining timer.
+2. Use a local endpoint that sends headers then stalls JSON for account/history/job calls. Expect each configured budget to end the request and callers to release busy state; valid and malformed completed bodies should retain their existing behavior.
+
+**Limits:** No tests, build, or browser checks run. The stream mock connects abort to stream failure like native fetch; no live server was started.
+
 **Surface:** Login/account/history/job requests and associated busy states.
 
 **Impact:** A request can hold the UI or a polling single-flight operation beyond the advertised timeout.
