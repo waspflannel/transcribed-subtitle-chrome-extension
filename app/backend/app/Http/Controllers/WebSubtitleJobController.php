@@ -35,7 +35,7 @@ class WebSubtitleJobController extends Controller
         return view('account.job-show', [
             'job' => $job,
             'track' => $job->track,
-            'billableMinutes' => $usage->billableMinutes($job->video_duration_seconds),
+            'usage' => $usage->usageForJob($job),
             'languagePair' => $this->languagePair($job),
             'pageTitle' => 'Subtitle job '.$job->public_id.' | '.config('marketing.product_name'),
             'metaDescription' => 'Public-safe subtitle job status for support.',

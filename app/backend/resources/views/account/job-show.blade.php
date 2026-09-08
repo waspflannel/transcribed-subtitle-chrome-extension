@@ -38,8 +38,20 @@
                     <dd>{{ $languagePair }}</dd>
                 </div>
                 <div>
-                    <dt>Billable minutes</dt>
-                    <dd>{{ $billableMinutes }}</dd>
+                    <dt>Estimated video minutes</dt>
+                    <dd>{{ $usage['estimatedMinutes'] ?? 'Unknown' }}</dd>
+                </div>
+                <div>
+                    <dt>Reserved minutes</dt>
+                    <dd>{{ $usage['reservedMinutes'] }}</dd>
+                </div>
+                <div>
+                    <dt>Charged minutes</dt>
+                    <dd>{{ $usage['chargedMinutes'] }}</dd>
+                </div>
+                <div>
+                    <dt>Released minutes</dt>
+                    <dd>{{ $usage['releasedMinutes'] }}</dd>
                 </div>
                 <div>
                     <dt>Video duration</dt>
@@ -64,7 +76,7 @@
             </dl>
         </x-ui.panel>
 
-        @if ($job->status === 'failed')
+        @if (in_array($job->status, ['failed', 'cancelled'], true))
             <x-ui.panel class="failure-panel" title="Failure" description="Share this stable failure code with support.">
                 <dl class="metric-grid">
                     <div>

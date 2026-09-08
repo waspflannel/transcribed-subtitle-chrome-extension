@@ -241,7 +241,10 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText($job->youtube_video_id)
             ->assertSee('href="https://www.youtube.com/watch?v='.$job->youtube_video_id.'"', false)
             ->assertSeeText('Spanish to English')
-            ->assertSeeText('Billable minutes')
+            ->assertSeeText('Estimated video minutes')
+            ->assertSeeText('Reserved minutes')
+            ->assertSeeText('Charged minutes')
+            ->assertSeeText('Released minutes')
             ->assertSeeText('4')
             ->assertSeeText('Generated track')
             ->assertDontSee('private generated text');
@@ -407,6 +410,40 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText('Failure code')
             ->assertSeeText('transcription_failed')
             ->assertSeeText('Auto detect to English');
+    }
+
+    public function test_failed_unknown_duration_shows_estimate_and_settlement_separately(): void
+    {
+        $user = User::factory()->create([
+            'billing_plan_code' => 'base',
+            'billing_subscription_status' => 'active',
+            'billing_current_period_start' => now()->startOfMonth(),
+            'billing_current_period_end' => now()->addMonthNoOverflow()->startOfMonth(),
+        ]);
+        $job = SubtitleJob::factory()->for($user)->create([
+            'status' => 'failed',
+            'stage' => 'acquiring-audio',
+            'video_duration_seconds' => null,
+            'error_code' => 'audio_acquisition_failed',
+            'error_message' => 'Audio acquisition failed.',
+        ]);
+        $ledger = app(UsageLedger::class);
+        $plan = app(BillingPlanCatalog::class)->requirePlan('base');
+        $period = $ledger->periodForUser($user);
+        $ledger->ensureMonthlyGrant($user, $plan, $period['start'], $period['end']);
+        $ledger->reserveForJob($job, $user, $plan, 1);
+        $ledger->releaseReservation($job, 'failure');
+
+        $this
+            ->actingAs($user)
+            ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
+            ->assertOk()
+            ->assertSeeText('Estimated video minutes')
+            ->assertSeeText('Unknown')
+            ->assertSeeText('Reserved minutes')
+            ->assertSeeText('Charged minutes')
+            ->assertSeeText('Released minutes')
+            ->assertSeeText('1');
     }
 
     public function test_funnel_analytics_logs_sanitized_marketing_signup_checkout_and_extension_events(): void

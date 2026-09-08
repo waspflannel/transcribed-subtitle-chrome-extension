@@ -735,6 +735,13 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 **Smallest fix/acceptance:** Rename the estimate, show unknown when appropriate, and use existing ledger data for settlement wording. A refunded failure clearly shows no charge and does not claim a measured minute.
 
+**What Changed:** Support details now show separate estimated video minutes, current reserved minutes, charged minutes, and released minutes from the run-scoped usage ledger. Unknown duration remains \`Unknown\`; a refunded failure therefore shows zero charged minutes and the released reservation without presenting the fallback reservation estimate as a bill.
+
+**How To Test:**
+1. Open a failed acquisition job with no measured duration after its one-minute reservation is refunded. Expected: estimated video minutes is \`Unknown\`, reserved and charged are \`0\`, and released shows the refunded amount.
+2. Open a completed job with a measured duration. Expected: the estimate is rounded up from the duration while charged minutes comes from the debit ledger event.
+3. Submit a job with a known duration and inspect its support details before settlement. Expected: estimated and reserved values are labeled separately. Limits: no provider or billing service was contacted; the ledger view covers local usage events only.
+
 ### U3. P2: Keep Last Known History On A Refresh Failure
 
 **Surface/impact:** A temporary API failure can replace real job history with first-use empty copy.

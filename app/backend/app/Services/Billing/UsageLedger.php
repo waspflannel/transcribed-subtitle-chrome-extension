@@ -269,6 +269,41 @@ final class UsageLedger
             : 1;
     }
 
+    public function estimatedMinutes(?int $durationSeconds): ?int
+    {
+        return is_int($durationSeconds) && $durationSeconds > 0
+            ? max(1, (int) ceil($durationSeconds / 60))
+            : null;
+    }
+
+    /**
+     * @return array{estimatedMinutes: int|null, reservedMinutes: int, chargedMinutes: int, releasedMinutes: int}
+     */
+    public function usageForJob(SubtitleJob $job): array
+    {
+        $runScope = $job->id.':'.$job->run_id;
+        $events = BillingUsageEvent::query()
+            ->where('subtitle_job_id', $job->id)
+            ->where(function ($query) use ($runScope): void {
+                $query
+                    ->where('idempotency_key', 'like', '%:'.$runScope.':%')
+                    ->orWhereIn('idempotency_key', [
+                        'debit:'.$runScope,
+                        'settlement:'.$runScope,
+                    ]);
+            })
+            ->get(['event_type', 'reserved_minutes_delta', 'used_minutes_delta']);
+
+        return [
+            'estimatedMinutes' => $this->estimatedMinutes($job->video_duration_seconds),
+            'reservedMinutes' => $this->reservedMinutesForJob($job),
+            'chargedMinutes' => max(0, (int) $events->sum('used_minutes_delta')),
+            'releasedMinutes' => max(0, -((int) $events
+                ->where('event_type', 'refund')
+                ->sum('reserved_minutes_delta'))),
+        ];
+    }
+
     /**
      * @return array{start: CarbonInterface, end: CarbonInterface}|null
      */
