@@ -22,7 +22,7 @@ class LyricsAlignmentAgent implements Agent, HasProviderOptions, HasStructuredOu
     public function providerOptions(Lab|string $provider): array
     {
         return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
-            ? ['reasoning' => ['effort' => 'high'], 'service_tier' => 'fast']
+            ? config('ai.providers.openai.provider_options', [])
             : [];
     }
 
