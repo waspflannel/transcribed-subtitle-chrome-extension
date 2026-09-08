@@ -58,18 +58,24 @@ describe('runtime message validation', () => {
 });
 
 describe('phase 2 transcript relay', () => {
-  it('requires track identity on cue changes and seeks', () => {
+  it('requires track identity on new cue changes while accepting legacy notices', () => {
     expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1' })).toBe(true);
     expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: 'v', trackId: null })).toBe(true);
     expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v' })).toBe(true);
     expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1', tabId: 12 })).toBe(true);
+    expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v' })).toBe(true);
     expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1', tabId: '12' })).toBe(false);
-    expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 12, youtubeVideoId: 'v', trackId: 'track-1', cueId: 'cue-1', mode: 'jump' })).toBe(true);
-    expect(isRuntimeMessage({ type: 'background.seekToCue', youtubeVideoId: 'v', trackId: 'track-1', cueId: 'cue-1', mode: 'replay' })).toBe(true);
-    expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 12, youtubeVideoId: 'v', cueId: 'cue-1', mode: 'jump' })).toBe(false);
   });
 
-  it('accepts transcript focus signals scoped to a window', () => {
+  it('accepts exact-tab and legacy seek requests with valid modes', () => {
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 12, youtubeVideoId: 'v', trackId: 'track-1', cueId: 'cue-1', mode: 'jump' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', youtubeVideoId: 'v', cueId: 'cue-1', mode: 'jump' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'background.seekToCue', cueId: 'cue-1', mode: 'replay' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', cueId: 'cue-1', mode: 'nope' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', cueId: 'cue-1', mode: 'jump' })).toBe(false);
+  });
+
+  it('accepts transcript-focus signals scoped to a window', () => {
     expect(isRuntimeMessage({ type: 'content.focusPanelTranscript' })).toBe(true);
     expect(isRuntimeMessage({ type: 'background.focusTranscript', windowId: 4 })).toBe(true);
   });
