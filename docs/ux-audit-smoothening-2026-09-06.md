@@ -340,6 +340,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R8. P1: Account Changes Do Not Isolate Cached And Pending State
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Stored sessions now carry a local session identity. Remembered tracks and persisted tab operations are account-scoped, panel history cache writes accept only the current account, and late account refresh/enrichment/correction/generation writes verify their originating session before updating local state. Anonymous panel reads cannot restore an authenticated track.
+
+**How To Test:**
+1. Sign in as account A, load a track, and leave account/history and enrichment responses pending. Sign out, sign in as account B, then resolve A's success and 401 responses. Expected: B's token, account summary, history and displayed track remain B-owned; A's late 401 does not sign B out.
+2. Sign out and sign in as B with A's remembered video still stored. Open that video. Expected: no A track is restored; a B-owned track remains readable if one was previously stored.
+3. Run the focused `account-session.test.ts` and `active-tracks.test.ts` checks when execution is authorized. Expected: session-guarded account updates are rejected and another account cannot read a remembered track.
+
+**Limits:** The implementation is source-reviewed and the focused checks are untested in this handoff; browser tab duplication and real account transitions remain for the later manual session. Backend authorization is unchanged.
+
 **Surface:** Sign-in/out, remembered tracks, account/history requests.
 
 **Impact:** Account B can receive account A's local transcript or account summary; a late A failure can invalidate B's new session.

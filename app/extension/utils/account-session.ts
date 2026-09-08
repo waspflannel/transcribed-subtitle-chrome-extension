@@ -3,6 +3,7 @@ import { storage } from 'wxt/utils/storage';
 import type { AccountSummary, ExtensionAuthResponse } from './contracts';
 
 export interface StoredExtensionSession {
+  sessionId: string;
   plainTextToken: string;
   tokenType: 'Bearer';
   expiresAt: string;
@@ -27,6 +28,7 @@ export async function getStoredExtensionSession(now: Date = new Date()): Promise
 
 export async function storeExtensionSession(response: ExtensionAuthResponse): Promise<StoredExtensionSession> {
   const session: StoredExtensionSession = {
+    sessionId: createSessionId(),
     plainTextToken: response.token.plainTextToken,
     tokenType: response.token.tokenType,
     expiresAt: response.token.expiresAt,
@@ -38,10 +40,13 @@ export async function storeExtensionSession(response: ExtensionAuthResponse): Pr
   return session;
 }
 
-export async function updateStoredAccount(account: AccountSummary): Promise<StoredExtensionSession | null> {
+export async function updateStoredAccount(
+  account: AccountSummary,
+  expectedSessionId?: string,
+): Promise<StoredExtensionSession | null> {
   const session = await getStoredExtensionSession();
 
-  if (!session) {
+  if (!session || (expectedSessionId !== undefined && session.sessionId !== expectedSessionId)) {
     return null;
   }
 
@@ -66,7 +71,9 @@ function isStoredExtensionSession(value: unknown): value is StoredExtensionSessi
 
   const session = value as Partial<StoredExtensionSession>;
 
-  return typeof session.plainTextToken === 'string'
+  return typeof session.sessionId === 'string'
+    && session.sessionId.trim().length > 0
+    && typeof session.plainTextToken === 'string'
     && session.plainTextToken.trim().length > 0
     && session.tokenType === 'Bearer'
     && typeof session.expiresAt === 'string'
@@ -74,4 +81,12 @@ function isStoredExtensionSession(value: unknown): value is StoredExtensionSessi
     && typeof session.account === 'object'
     && session.account !== null
     && session.account.status === 'authenticated';
+}
+
+function createSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
