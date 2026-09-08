@@ -144,6 +144,7 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.logout';
+      windowId?: number;
     }
   | {
       type: 'content.enrichLearningToken';

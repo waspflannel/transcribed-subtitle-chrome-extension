@@ -166,7 +166,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return loginFromPanel(message.email, message.password);
 
     case 'panel.logout':
-      return logoutFromPanel();
+      return logoutFromPanel(message.windowId);
 
     case 'panel.clearLocalState':
       return clearLocalStateFromPanel(message.windowId);
@@ -1101,7 +1101,7 @@ async function loginFromPanel(email: string, password: string): Promise<PanelSta
   return getPanelState({ syncBackend: true });
 }
 
-async function logoutFromPanel(): Promise<PanelState> {
+async function logoutFromPanel(windowId?: number): Promise<PanelState> {
   const installId = await getOrCreateInstallId();
   const session = await getStoredExtensionSession();
 
@@ -1117,6 +1117,7 @@ async function logoutFromPanel(): Promise<PanelState> {
 
   await clearExtensionSession();
   tombstoneAllLyricsCorrectionStates();
+  await clearLocalSubtitleStates(windowId);
 
   console.info('extension.account_logout_completed');
 
@@ -1603,6 +1604,19 @@ async function clearSessionIfInvalid(error: unknown, expectedSessionId?: string)
   tombstoneAllLyricsCorrectionStates();
 
   return true;
+}
+
+async function clearLocalSubtitleStates(windowId?: number): Promise<void> {
+  const activeTabId = (await getActiveTab(windowId))?.id;
+  const tabIds = new Set(tabSubtitleStates.keys());
+  if (typeof activeTabId === 'number') tabIds.add(activeTabId);
+  tabSubtitleStates.clear();
+  tabSubtitleStateOwners.clear();
+
+  await Promise.all([...tabIds].map((tabId) => sendTabMessage(tabId, {
+    type: 'background.subtitleStateChanged',
+    subtitleState: DEFAULT_SUBTITLE_STATE,
+  })));
 }
 
 function ensureRecoveredGenerationMonitor(
