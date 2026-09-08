@@ -214,6 +214,11 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
     subtitleState = await recoverSubtitleStateFromBackend(tabId, pageStatus, subtitleState, installId, session);
   }
 
+  const currentSession = await getStoredExtensionSession();
+  if (session?.sessionId !== currentSession?.sessionId) {
+    subtitleState = DEFAULT_SUBTITLE_STATE;
+  }
+
   return { installId, settings, subtitleState };
 }
 
@@ -928,8 +933,10 @@ async function quickFixTokenFromPanel(
       if (error instanceof SubtitleApiError && error.code === 'lyrics_correction_in_progress' && error.details?.reason === 'stale_track') {
         tabSubtitleStates.delete(tabId);
         tabSubtitleStateOwners.delete(tabId);
-        await forgetRememberedTrack(message.youtubeVideoId, message.trackId, accountId);
-        await recoverExactJobAfterStaleTrack(tabId, message, installId, session.plainTextToken, accountId);
+        if (await isCurrentSession(sessionId)) {
+          await forgetRememberedTrack(message.youtubeVideoId, message.trackId, accountId);
+          await recoverExactJobAfterStaleTrack(tabId, message, installId, session.plainTextToken, sessionId, accountId);
+        }
       }
 
       throw error;
@@ -957,11 +964,12 @@ async function recoverExactJobAfterStaleTrack(
   message: Extract<BackgroundRequest, { type: 'panel.quickFixToken' }>,
   installId: string,
   authToken: string,
+  sessionId: string,
   accountId: string,
 ): Promise<void> {
   try {
     const session = await getStoredExtensionSession();
-    if (!session || session.account.id !== accountId) return;
+    if (!session || session.sessionId !== sessionId || session.account.id !== accountId) return;
     const job = await subtitleApi.getSubtitleJob(installId, authToken, message.jobId);
 
     if (job.status !== 'completed' || !job.track) return;
