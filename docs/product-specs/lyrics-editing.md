@@ -23,6 +23,16 @@ The current track stays active until a replacement succeeds. Neither workflow de
 
 ## Replace Full Lyrics
 
+### Partial-lyrics confirmation update (2026-09-08)
+
+The alignment AI assesses whether the paste belongs to the song and whether it appears complete. Unrelated lyrics remain a hard rejection, including when the user permits partial merging. Completeness is an AI assessment against the existing transcript, not audio verification. The former 60% slot and 80% timeline thresholds no longer reject replacements.
+
+Suspected incomplete lyrics stop before derived learning work and leave the current track unchanged. The existing `lyrics_incomplete` result prompts a warning in the panel: AI can combine the supplied lyrics with the current lyrics and keep existing text where needed. The user can proceed or edit the paste. Proceed submits a new attempt with `allowPartial: true`; ordinary submissions omit that optional boolean. Permission applies only to the submitted draft and current track. Editing the draft or changing the video or track invalidates it. No lyrics are persisted in extension storage.
+
+After confirmation, AI chooses placement and combines the two sources. Supplied lyrics take priority where they correspond; uncovered sections retain existing lyrics, including any existing mistakes. Server-side reconstruction preserves pasted text and only accepts valid source references and timing slots. The model must not invent missing lyrics. Complete replacements still consume all pasted text. Invalid output, unrelated lyrics, cancellation, or stale state never publish a partial result.
+
+The hard input, maximum capacity, per-cue length, timing, authorization, expiry, concurrency, and atomic publication checks remain. Match and completeness assessments are probabilistic; confirmation permits merging, not bypassing unrelated-song rejection.
+
 ### Reliability update (2026-09-07)
 
 The local text-processing model and example environment now use `gpt-6-astra`. When fast mode is enabled, OpenAI agents request high reasoning effort and `service_tier: fast`, including lyrics alignment and derived learning data. Fast processing carries a premium and does not guarantee latency. Audio transcription retains its existing provider and model.
@@ -31,7 +41,7 @@ The POST requires `expectedTrackId`; stale identities return the existing confli
 
 Recognized section headings and credits are removed before both alignment and exact-text validation. All remaining text must be consumed. Requests that exceed the maximum character capacity of the existing timing slots fail validation before queueing. Alignment retries receive the rejected validation reason, and safe diagnostics retain attempt, revision, stage, reason, and cue counts without lyrics or provider output.
 
-Alignment receives numbered authoritative text parts and returns inclusive end indices for existing timing slots. The server copies text from those parts, preserving repetitions and punctuation instead of asking the model to reproduce the lyrics. Boundaries must increase, consume every part, and produce cues within the 84-code-point limit. Long unspaced text uses grapheme boundaries. Song-match and completeness checks still apply before publication. Correction notices have 12px of vertical separation from neighboring controls.
+Alignment receives numbered authoritative pasted parts and numbered existing parts per cue. It returns ordered source segments with inclusive start/end indices for existing timing slots. The server copies text from those parts, preserving repetitions and punctuation instead of asking the model to reproduce the lyrics. Pasted boundaries must be contiguous, consume every pasted part, and produce cues within the 84-code-point limit. Confirmed partial merges may also copy existing segments and add a space at source switches; complete replacements use only pasted segments. Long unspaced text uses grapheme boundaries. Song-match and completeness checks still apply before publication. Correction notices have 12px of vertical separation from neighboring controls.
 
 The existing stalled-job sweep recovers a missing delivery once per revision after the queue retry window and slack. A second stalled running unit fails safely; queued work waiting for worker capacity is preserved. Existing attempt locks and revision checks reject duplicate or cancelled deliveries.
 
@@ -43,17 +53,17 @@ Rename **Use pasted lyrics** to **Replace full lyrics**.
 
 Use this description:
 
-> Paste the complete lyrics for the whole song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. Do not paste only a verse or excerpt.
+> Paste lyrics for this song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data. If they appear incomplete, we will ask before combining them with your current lyrics.
 
 Use **Replace entire track** as the confirmation action and **Cancel replacement** while work is active.
 
 ### Flow
 
 1. The learner opens Watch > transcript actions > Replace full lyrics.
-2. The learner pastes complete plain-text lyrics.
+2. The learner pastes plain-text lyrics for this song.
 3. The existing input validation runs.
 4. One confirmation explains that the action replaces the entire transcript and has no undo.
-5. The existing correction workflow aligns, rebuilds, and atomically publishes the track.
+5. The correction workflow assesses the paste. Unrelated lyrics are rejected; suspected incomplete lyrics require explicit confirmation before AI merges them with existing lyrics. Accepted lyrics are aligned, rebuilt, and atomically published.
 6. The current transcript and overlay keep working until publication.
 7. Success updates the transcript, overlay, search, copy actions, and WebVTT without reload.
 
@@ -79,12 +89,7 @@ A compact status strip appears above the current transcript and recovers from th
 
 Exact text consumption prevents invented or dropped pasted text, but it does not prove that the learner pasted the whole song.
 
-Add one server-side completeness gate after alignment and before derived work. It must compare:
-
-- How much of the existing cue timeline the alignment spans.
-- How many existing timing slots the alignment uses.
-
-Start with a minimum 60% timing-slot coverage and 80% timeline-span coverage. The reviewer must calibrate these provisional thresholds against real fixtures before acceptance. A valid full replacement for `Y_vB-3R_BYc` using 64 of 69 timing slots must pass. Half-song, one-verse, and every-other-line pastes must fail with `lyrics_incomplete` and leave the current track unchanged.
+The AI assesses completeness before derived work. A suspected excerpt returns `lyrics_incomplete` and leaves the current track unchanged until the learner explicitly permits merging. A confirmed excerpt can proceed with AI-selected placement and existing lyrics filling uncovered sections. Slot count and timeline span are not proof of completeness and are not hard rejection thresholds.
 
 Do not add an aligned preview yet. Add one only if the confirmation and completeness gate prove insufficient in manual QA.
 
