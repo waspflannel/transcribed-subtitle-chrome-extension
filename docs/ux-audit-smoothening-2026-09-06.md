@@ -54,7 +54,7 @@ All source references are repository-relative and refer to this exact `smootheni
 | User report | Audit status | Conclusion |
 | --- | --- | --- |
 | UI sometimes fails to update when underlying state changes | Unverified at application runtime; strong code support | Startup ordering, wrong-job reconciliation, terminal local errors after failed polls, missing recovered-job monitoring, cue relay gaps, and content-insensitive transcript rendering are concrete candidates. See R1-R3, R7, R10-R12. |
-| Users lack actions such as canceling generation | Confirmed implementation gap | No dedicated extension cancellation action/API exists. Dashboard deletion is the implemented stop/remove path, but it is destructive and separate from the generation progress journey. See G1. |
+| Users lack actions such as canceling generation | Resolved in backend and extension | Watch and History expose owner-scoped cancellation for queued/running jobs, with durable canceled history and explicit success/error feedback. See G1. |
 | Lyrics/transcript panel disappears until refresh | Unverified at application runtime; strong code support for overlay loss | SPA entry, stale hydration, detached binding, and fullscreen containment can explain missing on-page captions. They do not prove why Chrome's native side panel would disappear. This baseline has no lyrics editor. See R4-R6 and R13. |
 
 Important distinction: the caption rail intentionally renders nothing when a ready track has no active cue. A normal silent gap, a hidden overlay preference, a detached overlay, and a closed native side panel are different states. Reproduction should identify which element disappears before selecting a fix.
@@ -71,9 +71,9 @@ These findings are established by source inspection, not browser reproduction.
 
 **Trigger/manual steps:** With a local fake provider, submit one running and one queued job. Inspect Watch and History for a stop action. Close the panel or hide the overlay, then inspect job status separately. Do not use paid generation for this check without approval.
 
-**Expected versus actual:** An explicit cancellation action should explain what stops and what happens to minutes. The extension has no cancellation request/action. Dashboard deletion is the existing stop/remove path and removes the job rather than leaving a clear canceled outcome.
+**Expected versus actual:** An explicit cancellation action should explain what stops and what happens to minutes. Watch now offers cancellation for its exact active job, and History offers it for every owned queued/running job, including older jobs. The action leaves a canceled history record and keeps the captured stage and progress visible.
 
-**Evidence:** `app/extension/entrypoints/background.ts:89-138`; `app/backend/tests/Feature/SubtitleJobApiTest.php:1922-1928`; `app/backend/app/Http/Controllers/WebSubtitleJobController.php:61-71,99-127`; `docs/RELIABILITY.md:49-51`.
+**Evidence:** `app/extension/entrypoints/background.ts`; `app/extension/entrypoints/sidepanel/main.ts`; `app/extension/entrypoints/sidepanel/render/job-history.ts`; `app/backend/tests/Feature/SubtitleJobApiTest.php`; `app/backend/app/Http/Controllers/WebSubtitleJobController.php`; `docs/RELIABILITY.md:49-51`.
 
 **Confidence:** High, source-confirmed absence. No cancellation operation was executed.
 
@@ -86,16 +86,22 @@ These findings are established by source inspection, not browser reproduction.
 **What Changed:** The backend now exposes owner-scoped \`DELETE /v1/subtitle-jobs/{jobId}\` for queued and running generation runs. It locks the account before the run row, writes a durable \`cancelled\` outcome, removes run artifacts, releases the reservation through the existing idempotent settlement ledger, and promotes the next queued job after a running slot is freed. Repeating the request for an already-cancelled run returns the same snapshot; completed and failed runs return a stable 409. Existing worker run/status guards reject late stages and failure callbacks, so an in-flight provider call may finish externally without resurrecting the canceled run.
 
 **G1 API contract:**
-- **Implementation status:** Backend/API/contracts are complete; extension Watch/History integration is pending coordinator follow-up.
+- **Implementation status:** Complete across backend, contracts, extension API validation, background state recovery, Watch, and History.
 - \`DELETE /v1/subtitle-jobs/{jobId}\` accepts the owner-scoped job ID and extension authentication headers; it has no request body.
 - \`200\` returns the normal \`JobResponse\` shape with \`status: "cancelled"\`, the captured \`stage\` and \`progressPercent\`, \`errorCode: "generation_cancelled"\`, and the public message that reserved minutes were released. A repeated delete of that same canceled run returns the same \`200\` snapshot.
 - \`404\` hides jobs owned by another account or missing; \`409\` uses \`generation_not_cancellable\` for completed/failed jobs; auth, validation, and rate-limit responses retain existing contracts.
-- Queued cancellation makes no provider call and does not dispatch work. Running cancellation releases its reservation and admits the next queued run after commit. A worker or queue publication arriving after cancellation is ignored by the run/status guard and cannot settle the run a second time. Extension Watch/History integration remains pending.
+- Queued cancellation makes no provider call and does not dispatch work. Running cancellation releases its reservation and admits the next queued run after commit. A worker or queue publication arriving after cancellation is ignored by the run/status guard and cannot settle the run a second time.
+
+**Extension What Changed:** `SubtitleApiClient` sends the owner-authenticated, bodyless `DELETE` request and validates the canceled response. Background cancellation captures the job, video, tab, window, and current extension session; it rejects a stale Watch target before calling the backend, clears only the matching local operation and remembered track after a successful cancellation, and keeps polling or provider completion from restoring a canceled track. Watch shows a busy `Cancel generation` action for the exact queued/running job. History shows the same action for every owned queued/running job, including old-version jobs, then renders `Cancelled`, the captured stage, progress, and released-minute message. Completed and failed jobs remain non-cancellable, and lyrics replacement keeps its separate cancel path.
 
 **How To Test:**
 1. Create one running and one queued owned generation, cancel the running job, then read both jobs. Expected: the first is \`cancelled\`, its reservation is zero and its refund/settlement is recorded once, and the queued job becomes \`running\` with one dispatch.
 2. Repeat the running-job cancellation and invoke its old worker failure callback. Expected: both calls are safe no-ops after the first terminal transition, the response remains \`cancelled\`, and no second refund or failure event is written.
-3. Cancel a queued job before any worker handles it. Expected: it remains \`cancelled\`, no provider call is made, and no queue dispatch is published. Limits: external provider interruption cannot be claimed; only late persistence/publication safety is guaranteed.
+3. Cancel a queued job before any worker handles it. Expected: it remains \`cancelled\`, no provider call is made, and no queue dispatch is published.
+4. In the extension, start a queued or running job and open Watch progress. Click `Cancel generation`. Expected: the button immediately reads `Cancelling…`; on success the panel removes the active progress state, shows that reserved minutes were released, and the video receives no late track. Switch to History and repeat with an older queued/running owned job. Expected: the exact card is busy during the request and then shows `Cancelled`, its captured stage and percent, and the cancellation message.
+5. Try a completed or failed card, a missing/foreign job, and a stale Watch tab/video identity. Expected: no generation POST or dashboard deletion is sent; the panel shows a meaningful error and leaves unrelated tracks and operations unchanged. Limits: external provider interruption cannot be claimed; only late persistence/publication safety is guaranteed. Browser and live-provider checks remain out of scope for this audit run.
+
+**Automated checks:** `npm run compile` and focused Vitest coverage for API cancellation request shape, canceled state reconciliation, runtime message validation, progress labels, and History cancellation rendering pass in `app/extension`.
 
 ### G2. P2: History Retry Does Not Reliably Retry The Selected Job
 

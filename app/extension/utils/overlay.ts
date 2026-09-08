@@ -383,7 +383,7 @@ export class OverlayShell {
     host.setAttribute('aria-live', 'polite');
 
     const shadowRoot = host.attachShadow({ mode: 'open' });
-    shadowRoot.addEventListener('keydown', this.handleShadowKeydown);
+    shadowRoot.addEventListener('keydown', (event) => this.handleShadowKeydown(event as KeyboardEvent));
     shadowRoot.innerHTML = `
       <style>
         ${buildOverlayFontFaces()}${overlayStyles}

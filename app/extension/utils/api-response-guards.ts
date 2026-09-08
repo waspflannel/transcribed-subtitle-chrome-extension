@@ -60,6 +60,12 @@ export function guardJobResponse(value: unknown): JobResponse {
     guardTrackResponse(response.track);
   }
 
+  if (response.status === 'cancelled') {
+    requiredString(response, 'errorCode');
+    requiredString(response, 'message');
+    forbidden(response, 'track', response.status);
+  }
+
   return response as JobResponse;
 }
 
@@ -186,6 +192,11 @@ function guardSubtitleJobHistoryItem(value: unknown): SubtitleJobHistoryItem {
   optionalString(item, 'message');
   optionalString(item, 'errorCode');
 
+  if (item.status === 'cancelled') {
+    requiredString(item, 'errorCode');
+    requiredString(item, 'message');
+  }
+
   return item as SubtitleJobHistoryItem;
 }
 
@@ -198,7 +209,7 @@ function guardJobCore(value: Record<string, unknown>): void {
   oneOf(value, 'enrichmentMode', ['on_demand', 'full']);
   requiredBoolean(value, 'includeRomanization');
   requiredBoolean(value, 'includeTranslation');
-  oneOf(value, 'status', ['queued', 'running', 'completed', 'failed']);
+  oneOf(value, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
   oneOf(value, 'stage', [
     'preparing',
     'acquiring-audio',

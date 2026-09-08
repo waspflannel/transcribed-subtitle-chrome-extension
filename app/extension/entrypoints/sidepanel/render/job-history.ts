@@ -5,7 +5,10 @@ import type { PanelState } from '../../../utils/messages';
 import { formatHistoryTimestamp, generationProgress } from '../../../utils/panel-progress';
 import { formatDurationSeconds, formatJobTiming, publicJobTelemetry } from '../../../utils/account-state';
 
-export function renderJobHistory(state: PanelState, elements: { jobsList: HTMLElement; jobsError: HTMLElement }): void {
+export function renderJobHistory(
+  state: PanelState,
+  elements: { jobsList: HTMLElement; jobsError: HTMLElement; cancellationBusy?: boolean },
+): void {
   if (state.jobHistoryError) {
     elements.jobsError.hidden = false;
     elements.jobsError.textContent = state.jobHistoryError;
@@ -23,12 +26,12 @@ export function renderJobHistory(state: PanelState, elements: { jobsList: HTMLEl
   const groups = groupJobHistoryByMediaKind(state.jobHistory);
 
   elements.jobsList.innerHTML = [
-    jobHistorySectionHtml('Videos', groups.videos),
-    jobHistorySectionHtml('Shorts', groups.shorts),
+    jobHistorySectionHtml('Videos', groups.videos, state, elements.cancellationBusy ?? false),
+    jobHistorySectionHtml('Shorts', groups.shorts, state, elements.cancellationBusy ?? false),
   ].join('');
 }
 
-function jobHistorySectionHtml(title: string, jobs: PanelState['jobHistory']): string {
+function jobHistorySectionHtml(title: string, jobs: PanelState['jobHistory'], state: PanelState, cancellationBusy: boolean): string {
   if (jobs.length === 0) {
     return '';
   }
@@ -39,13 +42,13 @@ function jobHistorySectionHtml(title: string, jobs: PanelState['jobHistory']): s
         <h3>${escapeHtml(title)}</h3>
         <span>${jobs.length}</span>
       </div>
-      <div class="job-section-list">${jobs.map((job) => jobHistoryItemHtml(job)).join('')}</div>
+      <div class="job-section-list">${jobs.map((job) => jobHistoryItemHtml(job, state, cancellationBusy)).join('')}</div>
     </section>
   `;
 }
 
 /** Video-first history card: title, plain-word status, compact meta, and the actions people actually take. */
-function jobHistoryItemHtml(job: PanelState['jobHistory'][number]): string {
+function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelState, cancellationBusy: boolean): string {
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
   const meta = [
@@ -61,7 +64,12 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number]): string {
   ]
     .filter((value): value is string => typeof value === 'string' && value !== '')
     .join(' · ');
-  const message = jobMessage(job, progress.stageLabel, telemetry.errorMessage);
+  const message = jobMessage(job, progress, telemetry.errorMessage);
+  const canCancel = job.status === 'queued' || job.status === 'running';
+  const watchMatchesJob = state.activeTabId !== undefined
+    && state.subtitleState.type === 'loading'
+    && state.subtitleState.jobId === job.jobId
+    && state.subtitleState.youtubeVideoId === job.youtubeVideoId;
 
   return `
     <article class="job-item">
@@ -72,6 +80,7 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number]): string {
       ${job.status === 'failed' ? '<p class="job-message">Open the video, then review Watch settings before choosing Generate. This job\'s options are not restored.</p>' : ''}
       <div class="job-actions">
         <a class="job-action-button" href="${escapeHtml(job.youtubeUrl)}" target="_blank" rel="noopener noreferrer">Open video</a>
+        ${canCancel ? `<button type="button" class="job-action-button" data-action="cancel-generation" data-job-id="${escapeHtml(job.jobId)}" data-youtube-video-id="${escapeHtml(job.youtubeVideoId)}"${watchMatchesJob ? ` data-tab-id="${state.activeTabId}"` : ''}${cancellationBusy ? ' disabled' : ''}>${cancellationBusy ? 'Cancelling…' : 'Cancel generation'}</button>` : ''}
       </div>
     </article>
   `;
@@ -90,12 +99,15 @@ function jobPillLabel(job: PanelState['jobHistory'][number], percent: number): s
 
     case 'failed':
       return 'Failed';
+
+    case 'cancelled':
+      return `Cancelled · ${percent}%`;
   }
 }
 
 function jobMessage(
   job: PanelState['jobHistory'][number],
-  stageLabel: string,
+  progress: ReturnType<typeof generationProgress>,
   errorMessage: string | undefined,
 ): string | null {
   if (errorMessage) {
@@ -103,7 +115,11 @@ function jobMessage(
   }
 
   if (job.status === 'running' || job.status === 'queued') {
-    return stageLabel;
+    return progress.stageLabel;
+  }
+
+  if (job.status === 'cancelled') {
+    return `${job.message ?? 'Generation cancelled. Reserved minutes were released.'} ${progress.stageLabel} · ${progress.percent}% captured.`;
   }
 
   return null;

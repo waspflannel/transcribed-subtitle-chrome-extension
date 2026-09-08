@@ -22,7 +22,9 @@ export function generationProgress(job?: Pick<SubtitleJobHistoryItem, 'progressP
   return {
     percent: Math.max(0, Math.min(100, job?.progressPercent ?? 0)),
     stageLabel: job?.stage ? stageLabel(job.stage) : 'Preparing request',
-    activityLabel: job?.status === 'queued'
+    activityLabel: job?.status === 'cancelled'
+      ? 'Cancelled'
+      : job?.status === 'queued'
       ? 'Waiting for a generation slot'
       : job?.progressPercent === 100 ? 'Completed' : 'Active now',
   };

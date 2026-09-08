@@ -58,6 +58,10 @@ export async function stateWithBackendProgress(
     };
   }
 
+  if (job.status === 'cancelled') {
+    return { type: 'no-track' };
+  }
+
   return {
     type: 'loading',
     status: job.status,

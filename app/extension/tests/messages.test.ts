@@ -10,6 +10,8 @@ describe('runtime message validation', () => {
     expect(isRuntimeMessage({ type: 'content.updateSettings', patch: { blurSourceWords: true } })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.login', email: 'learner@example.com', password: 'secret' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.logout' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.cancelSubtitleJob', jobId: 'job', youtubeVideoId: 'video', tabId: 12, windowId: 4 })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.cancelSubtitleJob', jobId: 'old-job', youtubeVideoId: 'video' })).toBe(true);
     expect(isRuntimeMessage({
       type: 'panel.submitLyricsCorrection', jobId: 'job', trackId: 'track', youtubeVideoId: 'video', lyrics: 'lyrics',
     })).toBe(true);
@@ -28,6 +30,7 @@ describe('runtime message validation', () => {
 
   it('rejects messages that only provide a type without the payload contract', () => {
     expect(isRuntimeMessage({ type: 'panel.updateSettings' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.cancelSubtitleJob', jobId: 'job', youtubeVideoId: 'video', tabId: '12' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.submitLyricsCorrection', lyrics: 'lyrics' })).toBe(false);
     expect(isRuntimeMessage({
       type: 'panel.submitLyricsCorrection', jobId: 'job', trackId: 'track', youtubeVideoId: 'video', lyrics: 'lyrics', allowPartial: 'yes',

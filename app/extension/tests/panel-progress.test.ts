@@ -22,6 +22,14 @@ describe('panel progress helpers', () => {
     });
   });
 
+  it('labels cancelled work while retaining its captured progress', () => {
+    expect(generationProgress({ stage: 'transcribing', progressPercent: 42, status: 'cancelled' })).toEqual({
+      percent: 42,
+      stageLabel: 'Transcribing audio',
+      activityLabel: 'Cancelled',
+    });
+  });
+
   it('fails loudly for invalid history timestamps', () => {
     expect(() => formatHistoryTimestamp('not-a-date')).toThrow('Invalid history timestamp');
   });

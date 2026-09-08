@@ -35,6 +35,7 @@ export interface PanelDom {
   confirmLyricsCorrectionButton: HTMLButtonElement;
   cancelLyricsConfirmationButton: HTMLButtonElement;
   cancelLyricsCorrectionButton: HTMLButtonElement;
+  cancelGenerationButton: HTMLButtonElement;
   quickFixStatus: HTMLElement;
   progressCopy: HTMLElement;
   openAccountButton: HTMLButtonElement;
@@ -138,6 +139,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     confirmLyricsCorrectionButton: query(root, '[data-action="confirm-lyrics-correction"]', HTMLButtonElement),
     cancelLyricsConfirmationButton: query(root, '[data-action="cancel-lyrics-confirmation"]', HTMLButtonElement),
     cancelLyricsCorrectionButton: query(root, '[data-action="cancel-lyrics-correction"]', HTMLButtonElement),
+    cancelGenerationButton: query(root, '[data-action="cancel-generation"]', HTMLButtonElement),
     quickFixStatus: query(root, '[data-quick-fix-status]', HTMLElement),
     openAccountButton: query(root, '[data-action="open-account"]', HTMLButtonElement),
     toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),

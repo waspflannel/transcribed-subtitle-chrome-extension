@@ -425,7 +425,9 @@ export default defineContentScript({
       if (state.type === 'ready') {
         bindGeneratedSubtitles(state.track);
       } else {
-        bindPartialSubtitles(state.partialTrack, partialTrackKey(state));
+        const partialTrack = state.partialTrack;
+        if (!partialTrack) return;
+        bindPartialSubtitles(partialTrack, partialTrackKey(state));
       }
       updateOverlay();
     }

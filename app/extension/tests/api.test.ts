@@ -121,6 +121,40 @@ describe('SubtitleApiClient', () => {
     );
   });
 
+  it('cancels one subtitle job without sending a request body', async () => {
+    const jobResponse: JobResponse = {
+      jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001',
+      youtubeVideoId: 'dQw4w9WgXcQ',
+      sourceLanguage: 'auto',
+      targetLanguage: 'fra',
+      enrichmentMode: 'on_demand',
+      includeRomanization: true,
+      includeTranslation: true,
+      status: 'cancelled',
+      stage: 'transcribing',
+      progressPercent: 42,
+      errorCode: 'generation_cancelled',
+      message: 'Generation was cancelled. Reserved minutes were released.',
+      createdAt: '2026-04-30T00:00:00Z',
+      updatedAt: '2026-04-30T00:01:00Z',
+    };
+    const fetchMock = vi.fn(async () => jsonResponse(jobResponse, 200));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+
+    await expect(client.cancelSubtitleJob(installId, authToken, jobResponse.jobId)).resolves.toEqual(jobResponse);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `http://localhost:8000/v1/subtitle-jobs/${jobResponse.jobId}`,
+      expect.objectContaining({
+        method: 'DELETE',
+        body: undefined,
+        headers: expect.objectContaining({
+          Authorization: `Bearer ${authToken}`,
+          'X-Extension-Install-Id': installId,
+        }),
+      }),
+    );
+  });
+
   it('lists backend job history from the shared jobs endpoint', async () => {
     const history: SubtitleJobHistoryResponse = {
       jobs: [

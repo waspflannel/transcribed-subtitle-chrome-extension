@@ -41,8 +41,9 @@ import {
 
 type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel';
+type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-cancel';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
+type GenerationCancelFeedback = { kind: 'success' | 'error'; message: string };
 
 const {
   backTranscriptButton,
@@ -81,6 +82,7 @@ const {
   confirmLyricsCorrectionButton,
   cancelLyricsConfirmationButton,
   cancelLyricsCorrectionButton,
+  cancelGenerationButton,
   quickFixStatus,
   openAccountButton,
   toggleLanguagesButton,
@@ -155,6 +157,8 @@ let generationRequestBusy = false;
 let lyricsCorrectionRequestBusy = false;
 let quickFixRequestBusy = false;
 let lyricsCancellationRequestBusy = false;
+let generationCancellationRequestBusy = false;
+let generationCancelFeedback: GenerationCancelFeedback | null = null;
 let hasAppliedDefaultView = false;
 let panelWindowId: number | undefined;
 let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -229,6 +233,13 @@ cancelLyricsConfirmationButton.addEventListener('click', () => {
   lyricsCorrectionTextarea.focus();
 });
 cancelLyricsCorrectionButton.addEventListener('click', () => void cancelLyricsCorrection());
+cancelGenerationButton.addEventListener('click', () => void cancelGeneration(cancelGenerationButton));
+jobsList.addEventListener('click', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  const button = target?.closest<HTMLButtonElement>('[data-action="cancel-generation"]');
+
+  if (button) void cancelGeneration(button);
+});
 clearStateButton.addEventListener('click', () => void clearLocalState());
 openAccountButton.addEventListener('click', () => {
   showTab(tabButtons, panels, 'account');
@@ -296,7 +307,7 @@ const transcriptView = bindTranscriptView({
   onSeekToCue: (cueId, mode) => {
     const state = latestState;
     const track = state?.subtitleState.type === 'ready' ? state.subtitleState.track : null;
-    if (!track || state.activeTabId === undefined) return;
+    if (!state || !track || state.activeTabId === undefined) return;
     void browser.runtime.sendMessage({
       type: 'panel.seekToCue',
       tabId: state.activeTabId,
@@ -424,8 +435,9 @@ async function refreshBackendState(): Promise<void> {
 }
 
 async function generateSubtitles(): Promise<void> {
-  if (generationRequestBusy || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
+  if (generationRequestBusy || generationCancellationRequestBusy || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
 
+  generationCancelFeedback = null;
   generationRequestBusy = true;
   generateButton.disabled = true;
   generateButton.textContent = 'Starting...';
@@ -435,6 +447,46 @@ async function generateSubtitles(): Promise<void> {
     if (applied) openWatchScreen('transcript');
   } finally {
     generationRequestBusy = false;
+    if (latestState) showPanelState(latestState);
+  }
+}
+
+async function cancelGeneration(button: HTMLButtonElement): Promise<void> {
+  const state = latestState;
+  const jobId = button.dataset.jobId;
+  const youtubeVideoId = button.dataset.youtubeVideoId;
+
+  if (generationCancellationRequestBusy || !state || !jobId || !youtubeVideoId) return;
+
+  const job = state.jobHistory.find((candidate) => candidate.jobId === jobId && candidate.youtubeVideoId === youtubeVideoId);
+  const watchMatchesJob = state.activeTabId !== undefined
+    && state.subtitleState.type === 'loading'
+    && state.subtitleState.jobId === jobId
+    && state.subtitleState.youtubeVideoId === youtubeVideoId;
+  if ((!job && !watchMatchesJob) || (job && job.status !== 'queued' && job.status !== 'running')) return;
+
+  const tabId = watchMatchesJob
+    ? state.activeTabId
+    : button.dataset.tabId ? Number(button.dataset.tabId) : undefined;
+
+  generationCancellationRequestBusy = true;
+  generationCancelFeedback = null;
+  if (latestState) showPanelState(latestState);
+
+  try {
+    const applied = await sendPanelRequest({
+      type: 'panel.cancelSubtitleJob',
+      jobId,
+      youtubeVideoId,
+      ...(typeof tabId === 'number' && Number.isInteger(tabId) ? { tabId } : {}),
+    }, 'generation-cancel', 'mutation');
+
+    if (applied) {
+      generationCancelFeedback = { kind: 'success', message: 'Generation cancelled. Reserved minutes were released.' };
+      if (latestState) showPanelState(latestState);
+    }
+  } finally {
+    generationCancellationRequestBusy = false;
     if (latestState) showPanelState(latestState);
   }
 }
@@ -918,6 +970,7 @@ function showPanelState(state: PanelState): void {
   const watchVideoId = pageStatus?.supported ? pageStatus.videoId : null;
   if (watchVideoId !== lastWatchVideoId) {
     lastWatchVideoId = watchVideoId;
+    generationCancelFeedback = null;
     watchScreen = 'transcript';
     setLanguagesExpanded(false);
     lyricsCorrectionTextarea.value = '';
@@ -976,7 +1029,7 @@ function showPanelState(state: PanelState): void {
     cueSnapshotRequest += 1;
     transcriptView.setData(null, [], settings);
   }
-  renderJobHistory(state, { jobsList, jobsError });
+  renderJobHistory(state, { jobsList, jobsError, cancellationBusy: generationCancellationRequestBusy });
   renderUsage(accountState);
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
@@ -1071,14 +1124,24 @@ function renderLyricsCorrectionState(state: PanelState): void {
 }
 
 function showStatusBanner(state: PanelState): void {
+  if (generationCancelFeedback) {
+    statusBanner.hidden = false;
+    statusBanner.className = `status-banner${generationCancelFeedback.kind === 'success' ? ' success' : ''}`;
+    statusBanner.textContent = generationCancelFeedback.message;
+
+    return;
+  }
+
   if (state.subtitleState.type === 'error') {
     statusBanner.hidden = false;
+    statusBanner.className = 'status-banner';
     statusBanner.textContent = state.subtitleState.message || 'Generation failed.';
 
     return;
   }
 
   statusBanner.hidden = true;
+  statusBanner.className = 'status-banner';
   statusBanner.textContent = '';
 }
 
@@ -1110,6 +1173,9 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   const partial = loading && subtitleState.partialTrack !== undefined;
   const ready = subtitleState.type === 'ready';
   const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
+  const canCancelGeneration = loading
+    && subtitleState.jobId !== undefined
+    && (subtitleState.status === 'queued' || subtitleState.status === 'running');
 
   watchUnsupported.hidden = supported;
   watchSignin.hidden = !supported || authenticated;
@@ -1125,6 +1191,18 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   transcriptStatus.hidden = watchScreen !== 'transcript';
   quickFixStatus.hidden = watchScreen !== 'transcript';
   watchReady.hidden = !ready && !partial;
+  cancelGenerationButton.hidden = !canCancelGeneration;
+  cancelGenerationButton.disabled = generationCancellationRequestBusy;
+  cancelGenerationButton.textContent = generationCancellationRequestBusy ? 'Cancelling…' : 'Cancel generation';
+  if (canCancelGeneration) {
+    cancelGenerationButton.dataset.jobId = subtitleState.jobId;
+    cancelGenerationButton.dataset.youtubeVideoId = subtitleState.youtubeVideoId;
+    if (state.activeTabId !== undefined) cancelGenerationButton.dataset.tabId = String(state.activeTabId);
+  } else {
+    delete cancelGenerationButton.dataset.jobId;
+    delete cancelGenerationButton.dataset.youtubeVideoId;
+    delete cancelGenerationButton.dataset.tabId;
+  }
 
   if (loading) {
     const queued = subtitleState.status === 'queued';
@@ -1282,7 +1360,9 @@ function showError(error: unknown): void {
 
   latestState = null;
   currentSettings = null;
+  generationCancelFeedback = null;
   statusBanner.hidden = false;
+  statusBanner.className = 'status-banner';
   statusBanner.textContent =
     typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unable to load extension state';
   nowPlayingEyebrow.textContent = 'No video';
@@ -1353,6 +1433,15 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
   if (errorTarget === 'cancel') {
     correctionCancelError.hidden = false;
     correctionCancelError.textContent = message;
+
+    return;
+  }
+
+  if (errorTarget === 'generation-cancel') {
+    generationCancelFeedback = { kind: 'error', message };
+    statusBanner.hidden = false;
+    statusBanner.className = 'status-banner';
+    statusBanner.textContent = message;
 
     return;
   }

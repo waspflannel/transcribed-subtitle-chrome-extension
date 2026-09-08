@@ -111,6 +111,13 @@ export type BackgroundRequest =
       windowId?: number;
     }
   | {
+      type: 'panel.cancelSubtitleJob';
+      jobId: string;
+      youtubeVideoId: string;
+      tabId?: number;
+      windowId?: number;
+    }
+  | {
       type: 'panel.submitLyricsCorrection';
       jobId: string;
       trackId: string;
@@ -210,6 +217,12 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         && optionalBoolean(value, 'allowPartial')
         && optionalNumber(value, 'windowId');
 
+    case 'panel.cancelSubtitleJob':
+      return hasString(value, 'jobId')
+        && hasString(value, 'youtubeVideoId')
+        && (!('tabId' in value) || isNonNegativeInteger(value.tabId))
+        && optionalNumber(value, 'windowId');
+
     case 'panel.cancelLyricsCorrection':
       return hasString(value, 'jobId')
         && hasString(value, 'trackId')
@@ -285,6 +298,7 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'panel.getState':
     case 'panel.updateSettings':
     case 'panel.generateSubtitles':
+    case 'panel.cancelSubtitleJob':
     case 'panel.submitLyricsCorrection':
     case 'panel.cancelLyricsCorrection':
     case 'panel.quickFixToken':

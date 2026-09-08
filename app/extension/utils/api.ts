@@ -93,6 +93,14 @@ export class SubtitleApiClient {
     }, guardJobResponse);
   }
 
+  public async cancelSubtitleJob(installId: string, authToken: string, jobId: string): Promise<JobResponse> {
+    return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
+      method: 'DELETE',
+      timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
+      authToken,
+    }, guardJobResponse);
+  }
+
   public async getSubtitleJobPartialTrack(
     installId: string,
     authToken: string,
@@ -340,5 +348,13 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
 
     case 'lyrics_correction_failed':
       return 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
+
+    case 'generation_cancelled':
+      return 'Generation cancelled. Reserved minutes were released.';
+
+    case 'generation_not_cancellable':
+      return 'This generation has already finished and cannot be cancelled.';
   }
+
+  return 'Unable to generate subtitles. Try again later.';
 }

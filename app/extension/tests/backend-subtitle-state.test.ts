@@ -148,6 +148,26 @@ describe('backend subtitle state helpers', () => {
       message: 'Subtitle generation is temporarily rate limited. Wait a minute and try again.',
     });
   });
+
+  it('clears a local loading state when its backend job was cancelled', async () => {
+    await expect(
+      stateWithBackendProgress({
+        type: 'loading',
+        jobId: 'cancelled-job',
+        youtubeVideoId: pageStatus.videoId,
+        message: 'Transcribing audio...',
+        stage: 'transcribing',
+        progressPercent: 42,
+      }, pageStatus, [jobHistory({
+        jobId: 'cancelled-job',
+        status: 'cancelled',
+        stage: 'transcribing',
+        progressPercent: 42,
+        errorCode: 'generation_cancelled',
+        message: 'Generation was cancelled. Reserved minutes were released.',
+      })]),
+    ).resolves.toEqual({ type: 'no-track' });
+  });
 });
 
 function jobHistory(overrides: Partial<SubtitleJobHistoryItem>): SubtitleJobHistoryItem {

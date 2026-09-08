@@ -96,4 +96,26 @@ describe('renderJobHistory links', () => {
     expect(jobsList.textContent).toContain('Ready');
     expect(jobsList.textContent).not.toContain('Nothing generated yet');
   });
+
+  it('shows cancellation progress and an action for owned active jobs', () => {
+    const dom = new JSDOM('<div id="list"></div><p id="err"></p>');
+    const jobsList = dom.window.document.getElementById('list')!;
+    const jobsError = dom.window.document.getElementById('err')!;
+    const job = makeJob({ status: 'running', progressPercent: 42, stage: 'transcribing' });
+
+    renderJobHistory({ ...stateWithJob(), jobHistory: [job] }, { jobsList, jobsError, cancellationBusy: true });
+
+    const cancelButton = jobsList.querySelector('[data-action="cancel-generation"]') as HTMLButtonElement | null;
+    expect(cancelButton?.disabled).toBe(true);
+    expect(cancelButton?.textContent).toContain('Cancelling');
+    expect(jobsList.textContent).toContain('Generating · 42%');
+
+    renderJobHistory({ ...stateWithJob(), jobHistory: [makeJob({
+      status: 'cancelled', progressPercent: 42, stage: 'transcribing', errorCode: 'generation_cancelled',
+      message: 'Generation was cancelled. Reserved minutes were released.',
+    })] }, { jobsList, jobsError });
+    expect(jobsList.textContent).toContain('Cancelled');
+    expect(jobsList.textContent).toContain('Reserved minutes were released');
+    expect(jobsList.querySelector('[data-action="cancel-generation"]')).toBeNull();
+  });
 });
