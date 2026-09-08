@@ -84,16 +84,19 @@ class FailStalledSubtitleJobsTest extends TestCase
             'updated_at' => now()->subMinutes(30),
         ]);
 
-        SubtitleJob::retrieved(function (SubtitleJob $observed) use ($stalled): void {
+        $heartbeatTouched = false;
+        SubtitleJob::retrieved(function (SubtitleJob $observed) use ($stalled, &$heartbeatTouched): void {
             if ($observed->id === $stalled->id) {
+                $heartbeatTouched = true;
                 DB::table('subtitle_jobs')
-                    ->whereKey($stalled->id)
+                    ->where('id', $stalled->id)
                     ->update(['updated_at' => now()]);
             }
         });
 
         $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
 
+        $this->assertTrue($heartbeatTouched);
         $this->assertSame('running', $stalled->fresh()->status);
     }
 

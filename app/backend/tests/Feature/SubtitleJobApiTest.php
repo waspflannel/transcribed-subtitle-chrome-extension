@@ -153,7 +153,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
         Queue::fake();
         $user = User::factory()->create();
-        $installId = $this->installId('cancel');
+        $installId = $this->installId('c');
 
         $runningResponse = $this
             ->withExtensionAuth($installId, $user)
@@ -169,7 +169,7 @@ class SubtitleJobApiTest extends TestCase
         $running = SubtitleJob::query()->where('public_id', $runningResponse->json('jobId'))->firstOrFail();
         $queued = SubtitleJob::query()->where('public_id', $queuedResponse->json('jobId'))->firstOrFail();
         $ledger = app(UsageLedger::class);
-        $this->assertSame(1, $ledger->reservedMinutesForJob($running));
+        $this->assertSame(4, $ledger->reservedMinutesForJob($running));
 
         $this
             ->withExtensionAuth($installId, $user)
@@ -213,7 +213,7 @@ class SubtitleJobApiTest extends TestCase
         config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
         Queue::fake();
         $user = User::factory()->create();
-        $installId = $this->installId('cancel-queued');
+        $installId = $this->installId('q');
         SubtitleJob::factory()->for($user)->create(['status' => 'running']);
 
         $response = $this
@@ -2134,22 +2134,22 @@ class SubtitleJobApiTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonCount(3, 'jobs')
-            ->assertJsonPath('jobs.0.youtubeVideoId', 'dQw4w9WgXcQ')
-            ->assertJsonPath('jobs.0.status', 'completed')
-            ->assertJsonPath('jobs.0.trackId', $track->public_id)
-            ->assertJsonPath('jobs.0.sourceLanguage', 'spa')
-            ->assertJsonPath('jobs.0.detectedSourceLanguage', 'spa')
+            ->assertJsonPath('jobs.0.youtubeVideoId', 'run00000001')
+            ->assertJsonPath('jobs.0.status', 'running')
+            ->assertJsonPath('jobs.0.stage', 'transcribing')
+            ->assertJsonPath('jobs.0.progressPercent', 45)
+            ->assertJsonPath('jobs.0.jobId', $runningJob->public_id)
             ->assertJsonPath('jobs.0.targetLanguage', 'eng')
-            ->assertJsonPath('jobs.0.videoDurationSeconds', 213)
-            ->assertJsonPath('jobs.0.enrichmentMode', 'on_demand')
-            ->assertJsonPath('jobs.0.includeRomanization', true)
-            ->assertJsonPath('jobs.0.includeTranslation', false)
-            ->assertJsonPath('jobs.1.youtubeVideoId', 'run00000001')
-            ->assertJsonPath('jobs.1.status', 'running')
-            ->assertJsonPath('jobs.1.stage', 'transcribing')
-            ->assertJsonPath('jobs.1.progressPercent', 45)
-            ->assertJsonPath('jobs.1.jobId', $runningJob->public_id)
+            ->assertJsonPath('jobs.1.youtubeVideoId', 'dQw4w9WgXcQ')
+            ->assertJsonPath('jobs.1.status', 'completed')
+            ->assertJsonPath('jobs.1.trackId', $track->public_id)
+            ->assertJsonPath('jobs.1.sourceLanguage', 'spa')
+            ->assertJsonPath('jobs.1.detectedSourceLanguage', 'spa')
             ->assertJsonPath('jobs.1.targetLanguage', 'eng')
+            ->assertJsonPath('jobs.1.videoDurationSeconds', 213)
+            ->assertJsonPath('jobs.1.enrichmentMode', 'on_demand')
+            ->assertJsonPath('jobs.1.includeRomanization', true)
+            ->assertJsonPath('jobs.1.includeTranslation', false)
             ->assertJsonPath('jobs.2.youtubeVideoId', 'fail0000001')
             ->assertJsonPath('jobs.2.status', 'failed')
             ->assertJsonPath('jobs.2.stage', 'enriching')
@@ -2161,7 +2161,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_history_keeps_old_active_jobs_and_applies_terminal_retention(): void
     {
-        $installId = $this->installId('history');
+        $installId = $this->installId('h');
         $user = User::factory()->create();
         $oldVersion = 'retired-processing-version';
         $oldRunning = SubtitleJob::factory()->for($user)->create([

@@ -35,6 +35,10 @@ class SubtitleJobAdmission
                     ->onConnection(SubtitleQueue::connection())
                     ->onQueue(SubtitleQueue::generationNameForJob($promoted));
             } catch (Throwable $exception) {
+                if (SubtitleQueue::connection() === 'sync') {
+                    throw $exception;
+                }
+
                 app(SubtitleJobFailureHandler::class)->failJob(
                     subtitleJobId: $promoted->id,
                     stage: 'preparing',
