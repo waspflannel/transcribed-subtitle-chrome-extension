@@ -253,6 +253,8 @@ async function recoverSubtitleStateFromBackend(
     resolveCompletedSubtitleJob(installId, session.plainTextToken, job, session.sessionId),
   );
 
+  if (!await isCurrentSession(session.sessionId)) return localState;
+
   if (resolved.type === 'ready') {
     await storeReadySubtitleState(tabId, resolved, session.account.id);
 
@@ -586,6 +588,7 @@ async function waitForCompletedSubtitleJob(
     if (PARTIAL_TRACK_STAGES.has(job.stage)) {
       partialTrack = (await fetchPartialTrack(installId, currentSession.plainTextToken, job)) ?? partialTrack;
       if (partialTrack && tabOperations.get(tabId) === operation) {
+        if (!await isCurrentSession(session.sessionId)) return null;
         const persistedOperation = await getTabOperation(tabId);
         if (persistedOperation?.kind === 'generation' && persistedOperation.accountId === session.account.id) {
           await setTabOperation(tabId, { ...persistedOperation, partialTrack });
@@ -811,7 +814,7 @@ async function submitLyricsCorrectionFromPanel(
     });
 
     if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId, accountId)) {
-      if (correction.status === 'completed' && correction.track) {
+      if (correction.status === 'completed' && correction.track && await isCurrentSession(sessionId)) {
         await rememberActiveTrack(correction.track, accountId);
       }
 
@@ -863,7 +866,7 @@ async function cancelLyricsCorrectionFromPanel(
     const correction = await subtitleApi.cancelLyricsCorrection(installId, session.plainTextToken, message.jobId, { attemptId: message.attemptId });
     if (!await isCurrentSession(sessionId)) return getPanelState({ syncBackend: false, windowId });
     if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId, accountId)) {
-      if (correction.status === 'completed' && correction.track) {
+      if (correction.status === 'completed' && correction.track && await isCurrentSession(sessionId)) {
         await rememberActiveTrack(correction.track, accountId);
       }
 
@@ -948,7 +951,7 @@ async function quickFixTokenFromPanel(
     if (!await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.jobId, message.trackId, accountId)) {
       tabSubtitleStates.delete(tabId);
       tabSubtitleStateOwners.delete(tabId);
-      await rememberActiveTrack(track, accountId);
+      if (await isCurrentSession(sessionId)) await rememberActiveTrack(track, accountId);
 
       return getPanelState({ syncBackend: true, windowId });
     }
@@ -1319,13 +1322,15 @@ async function syncLyricsCorrection(
 
     if (!await isCurrentSession(sessionId)) return tabLyricsCorrectionStates.get(tabId)?.status ?? null;
 
-    if (status?.status === 'completed' && status.track) {
+    if (status?.status === 'completed' && status.track && await isCurrentSession(sessionId)) {
       const currentSubtitleState = tabSubtitleStates.get(tabId);
       const currentTrack = currentSubtitleState?.type === 'ready' ? currentSubtitleState.track : null;
 
       if (currentTrack && await activeReadyTrackMatches(tabId, pageStatus.videoId, trackedJobId, currentTrack.trackId, session.account.id)) {
-        await publishSubtitleState(tabId, { type: 'ready', track: status.track }, session.account.id);
-      } else {
+        if (await isCurrentSession(sessionId)) {
+          await publishSubtitleState(tabId, { type: 'ready', track: status.track }, session.account.id);
+        }
+      } else if (await isCurrentSession(sessionId)) {
         await rememberActiveTrack(status.track, session.account.id);
       }
     }
