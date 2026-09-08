@@ -199,6 +199,7 @@ const timingControl = bindTimingOffsetControl({
 setupTabs(tabButtons, panels);
 accountBillingLink.innerHTML = accountBillingLinkHtml();
 const transcriptView = bindTranscriptView({ transcriptSearch, transcriptList, transcriptStatus });
+let cueSnapshotRequest = 0;
 renderShortcutHelp();
 void loadPanelState();
 scheduleNextBackendPoll();
@@ -218,6 +219,7 @@ panelPortConnector.connect();
 browser.runtime.onMessage.addListener((message) => {
   if (!isRuntimeMessage(message)) return;
   if (message.type === 'background.activeCueChanged') {
+    cueSnapshotRequest += 1;
     transcriptView.setActiveCue(message.cueId);
   } else if (message.type === 'background.focusTranscript') {
     showTab(tabButtons, panels, 'watch');
@@ -496,7 +498,9 @@ function showPanelState(state: PanelState): void {
   showWatchState(state, supported, authenticated);
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
+    void pullActiveCue(state);
   } else {
+    cueSnapshotRequest += 1;
     transcriptView.setData(null, [], settings);
   }
   renderJobHistory(state, { jobsList, jobsError });
@@ -553,6 +557,24 @@ function showStatusBanner(state: PanelState): void {
 
   statusBanner.hidden = true;
   statusBanner.textContent = '';
+}
+
+async function pullActiveCue(state: PanelState): Promise<void> {
+  const request = ++cueSnapshotRequest;
+  if (state.activeTabId === undefined || state.subtitleState.type !== 'ready') return;
+  const { youtubeVideoId, trackId } = state.subtitleState.track;
+  try {
+    const snapshot = await browser.runtime.sendMessage({
+      type: 'panel.getActiveCue', tabId: state.activeTabId, youtubeVideoId, trackId,
+    });
+    if (request !== cueSnapshotRequest || latestState?.activeTabId !== state.activeTabId
+      || latestState.subtitleState.type !== 'ready' || latestState.subtitleState.track.trackId !== trackId
+      || !snapshot?.ok || snapshot.tabId !== state.activeTabId || snapshot.youtubeVideoId !== youtubeVideoId
+      || snapshot.trackId !== trackId || !(snapshot.cueId === null || typeof snapshot.cueId === 'string')) return;
+    transcriptView.setActiveCue(snapshot.cueId);
+  } catch {
+    // A missing content script must not replace the valid panel snapshot.
+  }
 }
 
 /** Toggle the Watch tab's mutually exclusive states: unsupported page, sign-in prompt, setup, progress, transcript. */

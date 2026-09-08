@@ -379,6 +379,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R11. P2: Panel Reopen And Extension Seeks Can Miss Active-Cue Updates
 
+**Implementation Status: INCOMPLETE / UNTESTED.** Draft preserved in its own commit for branch consolidation. R7 tab-notice guards, review and regression coverage remain pending; this checkpoint does not complete R11.
+
+**What Changed:** Every overlay-state update publishes a changed video/track/cue identity independently of render deduplication, including jump/replay. Panel ready snapshots pull the current cue through `panel.getActiveCue {tabId,youtubeVideoId,trackId}` and `background.getActiveCue {youtubeVideoId,trackId}`. Responses echo identity plus `ok`, `cueId` and background-added `tabId`; newer notices/requests invalidate late pulls.
+
+**How To Test:**
+1. Pause mid-cue, close/reopen the panel and change tabs (including duplicate videos). Expected: an immediate current highlight from the explicitly targeted tab, without waiting for cuechange.
+2. Use Jump, replay, previous and next at zero/nonzero offset. Expected: each destination highlights immediately. Resolve an old pull after a newer cue notice/navigation; expected: no rollback. Limits: merge R7 notice/tab guards before its request-counter increment; no runtime tests/builds run.
+
 **Surface:** Transcript highlighting and playback relay.
 
 **Impact:** The video/overlay moves while the panel remains unhighlighted or highlights the previous cue.

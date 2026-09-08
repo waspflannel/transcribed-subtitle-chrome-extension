@@ -100,6 +100,16 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
     case 'panel.getState':
       return getPanelState({ syncBackend: message.syncBackend ?? true, windowId: message.windowId });
 
+    case 'panel.getActiveCue': {
+      const tab = await browser.tabs.get(message.tabId);
+      const page = parseYoutubePage(tab.url ?? '');
+      if (!page.supported || page.videoId !== message.youtubeVideoId) return { ok: false };
+      const snapshot = await browser.tabs.sendMessage(message.tabId, {
+        type: 'background.getActiveCue', youtubeVideoId: message.youtubeVideoId, trackId: message.trackId,
+      });
+      return { ...snapshot, tabId: message.tabId };
+    }
+
     case 'panel.updateSettings':
       return updateSettingsFromPanel(message.patch, message.windowId);
 

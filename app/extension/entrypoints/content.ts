@@ -49,18 +49,13 @@ export default defineContentScript({
     let disposed = false;
     let stateEpoch = 0;
     let hydrationRequest = 0;
+    let lastBroadcastCue: string | null = null;
     const cueHold = new CueHoldController({
       holdMs: 1800,
       view: window,
       onExpire: () => {
         activeCue = null;
         updateOverlay();
-        const clearedPage = parseYoutubePage(window.location.href);
-        if (clearedPage.supported) {
-          void browser.runtime
-            .sendMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: clearedPage.videoId })
-            .catch(() => {});
-        }
       },
     });
 
@@ -173,6 +168,14 @@ export default defineContentScript({
           videoDurationSeconds: currentVideoDurationSeconds(),
         });
 
+        return false;
+      }
+
+      if (message.type === 'background.getActiveCue') {
+        const matches = subtitleState.type === 'ready' && subtitleStateMatchesCurrentPage(subtitleState)
+          && subtitleState.track.youtubeVideoId === message.youtubeVideoId && subtitleState.track.trackId === message.trackId;
+        sendResponse({ ok: matches, youtubeVideoId: message.youtubeVideoId, trackId: message.trackId,
+          cueId: matches ? activeCueFromState()?.cueId ?? null : null });
         return false;
       }
 
@@ -304,6 +307,15 @@ export default defineContentScript({
         pendingTokenKeys,
         failedTokenKeys,
       });
+      const page = parseYoutubePage(window.location.href);
+      if (page.supported) {
+        const cueId = activeCue?.cueId ?? null;
+        const identity = JSON.stringify([page.videoId, boundReadyTrackId, cueId]);
+        if (identity !== lastBroadcastCue) {
+          lastBroadcastCue = identity;
+          void browser.runtime.sendMessage({ type: 'content.activeCueChanged', youtubeVideoId: page.videoId, cueId }).catch(() => {});
+        }
+      }
     }
 
     function recoverPlayerBinding(): void {
@@ -366,12 +378,6 @@ export default defineContentScript({
       activePartialCue = null;
       boundPartialTrackKey = null;
       boundReadyTrackId = null;
-      const clearedPage = parseYoutubePage(window.location.href);
-      if (clearedPage.supported) {
-        void browser.runtime
-          .sendMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: clearedPage.videoId })
-          .catch(() => {});
-      }
       activeVideo = null;
       studyHoverPaused = false;
       pendingTokenKeys.clear();
@@ -554,14 +560,6 @@ export default defineContentScript({
 
           activeCue = next;
           updateOverlay();
-          const page = parseYoutubePage(window.location.href);
-          if (page.supported) {
-            void browser.runtime.sendMessage({
-              type: 'content.activeCueChanged',
-              cueId: activeCue?.cueId ?? null,
-              youtubeVideoId: page.videoId,
-            }).catch(() => {});
-          }
         },
         logger: webVttTrackLogger,
       });
@@ -604,12 +602,6 @@ export default defineContentScript({
       }
       activeCue = next;
       updateOverlay();
-      const clearedPage = parseYoutubePage(window.location.href);
-      if (clearedPage.supported) {
-        void browser.runtime
-          .sendMessage({ type: 'content.activeCueChanged', cueId: next?.cueId ?? null, youtubeVideoId: clearedPage.videoId })
-          .catch(() => {});
-      }
     }
 
     function pauseVideoForStudy(): void {
