@@ -252,6 +252,41 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_dashboard_filters_expired_connections_before_limiting_the_list(): void
+    {
+        $this->freezeTime();
+        config(['sanctum.expiration' => 60]);
+        $user = User::factory()->create();
+        $active = $user->createToken('Chrome extension active', ['*'], now()->addDay())->accessToken;
+        $active->forceFill(['created_at' => now()->subMinutes(2)])->save();
+        $noExpiry = $user->createToken('Chrome extension no-expiry')->accessToken;
+        $noExpiry->forceFill(['created_at' => now()->subMinute()])->save();
+        for ($i = 0; $i < 4; $i++) {
+            $user->createToken('Chrome extension expired-'.$i, ['*'], now()->subMinute());
+        }
+        $user->createToken('Chrome extension expires-now', ['*'], now());
+        $old = $user->createToken('Chrome extension globally-expired', ['*'], now()->addDay())->accessToken;
+        $old->forceFill(['created_at' => now()->subMinutes(61)])->save();
+        $user->createToken('Other API token');
+        User::factory()->create()->createToken('Chrome extension other-owner');
+
+        $this->actingAs($user)->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('extensionTokens', fn ($tokens): bool => $tokens->pluck('label')->all() === [$noExpiry->name, $active->name])
+            ->assertDontSeeText('Chrome extension expired-')
+            ->assertDontSeeText('Chrome extension globally-expired');
+
+        $active->update(['expires_at' => now()->subMinute()]);
+        $noExpiry->update(['expires_at' => now()->subMinute()]);
+        $this->get(route('dashboard'))->assertOk()
+            ->assertViewHas('extensionTokens', fn ($tokens): bool => $tokens->isEmpty())
+            ->assertSeeText('No connected extension installs.');
+
+        config(['sanctum.expiration' => 0]);
+        $this->get(route('dashboard'))->assertOk()
+            ->assertViewHas('extensionTokens', fn ($tokens): bool => $tokens->pluck('label')->all() === [$old->name]);
+    }
+
     public function test_dashboard_refresh_get_shows_updated_billing_and_released_minutes(): void
     {
         Http::preventStrayRequests();

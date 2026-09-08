@@ -19,6 +19,8 @@
 
 ## Expectations
 
+- Dashboard connection listings filter both per-token and configured Sanctum expiration before taking three recent extension tokens. This is a token-status snapshot, not browser-presence detection; viewing it does not revoke tokens.
+
 - Dashboard and job-detail pages expose native GET "Refresh status" links and timestamped snapshot labels; they do not poll. Source videos are identified by stored IDs and canonical YouTube links. Dashboard Clear all shows the full owned-job count, including jobs outside the recent list/processing versions, and explains track and usage consequences before confirmation.
 
 - Keep the WXT extension bootable from the documented `app/extension` package commands.

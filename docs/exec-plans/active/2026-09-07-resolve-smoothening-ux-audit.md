@@ -3,7 +3,7 @@
 Status: active
 Owner: agent
 Created: 2026-09-07
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Goal
 
@@ -14,16 +14,16 @@ Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`,
 - Worktree: `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit` only. Never read/edit the concurrent lyrics checkout as a shortcut.
 - Included: G1-G4, non-password G5, R1-R23, U1-U3, U4 connection expiry only, U5. Grouped ordering below does not permit mixed-finding commits.
 - Excluded by user: R24; all password recovery, password-rule/hint, and email-verification portions of G5/U4. Withdraw our register/reset minlength/hints/tests. Preserve pre-existing auth/password enforcement and security. No reintroduction.
-- No browser until all batches and explicit testing authorization; no production/paid calls, dependency upgrades, shared services, real-data migrations, pushes, or coauthors.
+- Latest user instruction (2026-09-08): no test suites or browser tests. Only non-test metadata, diff, and doc checks; mark new changes untested. No production/paid calls, dependency upgrades, shared services, real-data migrations, pushes, or coauthors.
 
 ## Acceptance Criteria
 
 - [x] Documentation baseline committed separately; prior observations/worktree evidence clearly labeled.
-- [ ] Existing G3, G4, G2, G5 non-password, U4 expiry each have separate implementation/test/doc commits.
-- [ ] Foundation ends with clean status and unchanged password/auth implementation relative to baseline.
+- [x] Existing G3, G4, G2, G5 non-password, U4 expiry each have separate implementation/test/doc commits (U4 is this final foundation commit).
+- [x] Foundation changes fully accounted for; password/auth implementation unchanged relative to baseline. Verify clean status immediately after final commit.
 - [ ] Every remaining included finding gets a narrow fix, regression checks, audit What Changed/How to Test section, and individual commit.
-- [ ] Preserve native mechanisms: G2 navigation-only and G3 manual GET refresh resolve their allowed minimal acceptance; do not add retry protocols or polling to close them again.
-- [ ] Full harness components checked individually; limitations and exclusions never presented as runtime evidence.
+- [x] Preserve native mechanisms: G2 navigation-only and G3 manual GET refresh resolve their allowed minimal acceptance; do not add retry protocols or polling to close them again.
+- [x] Prior worker's foundation harness results retained as historical reports only. Current handoff is untested; do not repeat suites without user authorization.
 
 ## Relevant Context
 
@@ -37,8 +37,8 @@ Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`,
 
 - [x] Verify worktree/status/diff/log and create a new branch, without switching an existing unexpected branch.
 - [x] Withdraw remaining uncommitted password hints/tests using apply_patch only.
-- [ ] Commit docs baseline, then G3, G4, G2, G5 non-password, U4 expiry using noninteractive index patches.
-- [ ] Validate final foundation, review each staged diff, record commit mapping, stop for parallel batch coordination.
+- [x] Commit docs baseline, then G3, G4, G2, G5 non-password, U4 expiry using noninteractive index patches (U4 is this final foundation commit).
+- [x] Validate final foundation, review each staged diff, record commit mapping, stop for parallel batch coordination after verifying final commit/status.
 
 ## Remaining Batch Order
 
@@ -58,18 +58,18 @@ Dependencies, not urgency alone, govern ordering. Parallel workers must own disj
 
 ## Validation Plan
 
-Commands:
+Current permitted command (documentation only):
 
 ```powershell
-.\scripts\agent\check.ps1
+.\scripts\agent\check.ps1 -SkipAppChecks
 ```
 
 Evidence to capture:
 
-- Tests: focused backend website/deletion suites, extension history/account/API suites, then full root harness.
+- Tests: deferred by latest user instruction, including focused tests and the full root harness. Existing results below are prior-worker reports, not current-session verification.
 - Screenshots or video: deferred; record setup, steps, expected outcomes per completed finding for later testing.
 - Index isolation: inspect each cached diff for foreign finding hunks; whole-worktree tests validate the combined foundation, not pretend to test historical commit trees.
-- Formatting: Pint; git diff --check. Never stage test-only .env, caches, dependencies, or generated no-op files.
+- Current checks: documentation lint and git diff --check only. Never stage test-only .env, caches, dependencies, or generated no-op files.
 
 ## Decision Log
 
@@ -89,11 +89,14 @@ Evidence to capture:
 | 2026-09-07 | G3 committed as `3f3bea5`; G4 staged separately. | G4-focused validation: 17 tests/94 assertions passed. Controller count/video data exclude U4 expiry filtering; existing deletion behavior untouched. |
 | 2026-09-07 | G4 committed as `2adf8d6`; G2 isolated next. | History renderer suite: 3 tests passed. Main entrypoint stages only History listener/handler removal, excluding account/billing wiring. G2 resolved by approved navigation-only action. |
 | 2026-09-07 | G2 committed as `a80f1c1`; G5 non-password staged. | Account/API suites: 24 tests passed; TypeScript compile passed. No backend password/auth changes; frontend docs reconcile already-committed G2/G3/G4 behavior too. |
+| 2026-09-07 | G5 committed as `81f9764`; final U4 expiry commit prepared. | U4: 1 test/9 assertions passed. Pint passed. Full harness: backend 327 tests/2622 assertions, extension 157 tests/26 files; docs/contracts/TypeScript/build all pass. |
+| 2026-09-07 | Foundation isolation reviewed. | No diff from 4969225 for auth views, WebAuthTest, routes, or Fortify actions. Temporary index patches removed. No new findings started. |
+| 2026-09-08 | Resumed with baseline/G3/G4/G2/G5 already committed and only U4 staged. | Preserved existing commits and U4 code/test hunks. Updated validation instructions only; new handoff changes are untested. No test suites or browser tests run. |
 
 ## Completion Notes
 
-- Foundation mapping: pending individual commits below.
-- Validation results: pending final foundation check.
+- Foundation mapping: baseline `31a91f1`; G3 `3f3bea5`; G4 `2adf8d6`; G2 `a80f1c1`; G5 non-password `81f9764`; U4 expiry = commit titled `fix: omit expired extension connections (U4)` containing this entry (resolve ID with git log, avoiding a self-referential hash).
+- Validation results: prior worker reported the focused checks and full harness above passed; not rerun or independently verified in this handoff. Current changes are untested; only doc lint/diff checks precede the U4 commit. Whole-worktree test evidence is not per-commit checkout testing. No browser evidence.
 - Simplicity/readability review: stage by finding, not by file; keep existing runtime behavior and avoid speculative replacements.
 - Residual risk: remaining findings are unimplemented, browser validation deferred, password scope explicitly excluded.
-- Follow-up: stop after foundation; user will coordinate parallel next batches.
+- Follow-up: foundation complete; remaining table is still pending and this plan stays active. User will coordinate parallel next batches. Next candidates R1/R21; one finding per commit, no password work or extra G2 retry/G3 polling features.

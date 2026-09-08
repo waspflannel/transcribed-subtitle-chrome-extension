@@ -635,7 +635,7 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ### U4. P3: Make Password Rules And Connection Expiry Explicit
 
-**Follow-up scope (2026-09-07): Connection-expiry fix only; password portion excluded.** Dashboard filters per-token and Sanctum-wide expiration before taking three connections; expired-only accounts show no connected installs. Our registration/reset hints, minlength, and associated test were withdrawn under the broader password exclusion. Existing backend password enforcement remains unchanged.
+**Resolution (2026-09-07): Connection-expiry subset resolved; password portion excluded.** Dashboard filters per-token and Sanctum-wide expiration before taking three connections; expired-only accounts show no connected installs. Our registration/reset hints, minlength, and associated test were withdrawn under the broader password exclusion. Existing backend password enforcement remains unchanged.
 
 **Surface/impact:** Registration/reset requires avoidable re-entry; dashboard connection labels can disagree with an expired extension session.
 
@@ -657,7 +657,7 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ## Completed Tasks And Testing
 
-Keep one section here for each completed task: what changed, manual steps and expected results, automated validation, and remaining limits. User browser testing is deferred until the implementation batches are finished; continue automated checks for every batch. Keep audit implementation in the isolated smoothening worktree, separate from the lyrics branch.
+Keep one section here for each completed task: what changed, manual steps and expected results, automated validation, and remaining limits. Latest user instruction (2026-09-08): do not run test suites or browser tests; only non-test metadata, diff, and doc checks are allowed. New handoff changes are untested. All passing test results below are historical prior-worker reports, not verification in this handoff. Keep audit implementation in the isolated smoothening worktree, separate from the lyrics branch.
 
 ### G3: Manual Status Refresh
 
@@ -737,11 +737,21 @@ php artisan test --compact --filter="test_job_detail_is_owner_scoped_and_hides_g
 2. Check a future-expiry token older than `sanctum.expiration`, and a recent token with no explicit expiry. The first should be hidden; the second should appear. With global expiry disabled, only explicit expiry governs filtering.
 3. Expire every owned extension token and refresh. Expect No connected extension installs, not a connected count. Refresh itself must not revoke/delete tokens.
 
-**Automated Evidence:** SaasWebsiteAndSeoTest checks pre-limit expiry filtering, owner/type scope, explicit boundary expiry, global expiry, null expiry, disabled global expiry, and expired-only state. Historical totals below predate withdrawal of the password-hints test; foundation validation will record the current totals.
+**Automated Evidence (historical):** Prior worker reported `php artisan test --compact --filter=test_dashboard_filters_expired_connections_before_limiting_the_list`: 1 test/9 assertions passed. SaasWebsiteAndSeoTest covers pre-limit filtering, owner/type scope, explicit boundary expiry, global expiry, null expiry, disabled global expiry, and expired-only state. The separate U4 commit includes only token listing changes and this regression; no password-form or auth-enforcement changes. **Current handoff: untested**, with no suites or browser tests run under the latest instruction.
 
 **Remaining Limits:** Connection listing remains a three-token snapshot, not proof that a browser is currently online. Browser and assistive-technology testing are deferred. U1 was not included: queued-state propagation needs a separate shared-flow change.
 
 ## Tested And Inspected
+
+### Commit Foundation Validation (2026-09-07)
+
+Historical prior-worker reports below were already present when this handoff resumed on 2026-09-08. They have not been independently verified or rerun. U4 was the only remaining staged finding; its code/test hunks were preserved, and current documentation changes are untested.
+
+- Documentation checkpoint: `31a91f1`. Individual implementations: G3 `3f3bea5`, G4 `2adf8d6`, G2 `a80f1c1`, G5 non-password `81f9764`, U4 expiry in the commit titled `fix: omit expired extension connections (U4)` containing this entry. Each cached diff inspected; shared source files staged by finding, noninteractively.
+- Focused checks: G3 2 tests/29 assertions; G4 17 tests/94 assertions; G2 3 tests; G5 24 tests plus TypeScript; U4 1 test/9 assertions. These ran in the combined worktree, not separate checkouts of historical commit trees.
+- `scripts/agent/check.ps1`: all component checks passed after the broad password exclusion: docs lint, contracts validation/type generation, backend **327 tests/2622 assertions**, extension **157 tests/26 files**, TypeScript compile, Chrome MV3 build. Pint passed. Initial doc-staging check found trailing blank lines in generated plans; removed before the documentation commit.
+- `git diff 4969225 -- app/backend/resources/views/auth app/backend/tests/Feature/WebAuthTest.php app/backend/routes app/backend/app/Actions/Fortify`: empty. All remaining password hints/minlength/tests withdrawn; pre-existing enforcement untouched.
+- No new findings implemented during foundation. G2/G3 resolved by their approved scoped solutions; G5/U4 non-password subsets resolved with excluded portions explicit. Remaining non-password work is ordered in the active overall plan, one future fix per commit. Browser testing deferred. No production, paid calls, migrations against real data, pushes, or concurrent lyrics-checkout edits.
 
 ### G2/G5/U4 Follow-Up Validation (2026-09-07)
 

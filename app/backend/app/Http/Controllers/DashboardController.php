@@ -10,6 +10,7 @@ use App\Services\Billing\TestingPlanSwitcher;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\SubtitleJobService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -99,6 +100,8 @@ class DashboardController extends Controller
     {
         return $user->tokens()
             ->where('name', 'like', 'Chrome extension %')
+            ->where(fn (Builder $query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->when(config('sanctum.expiration'), fn (Builder $query, int $minutes) => $query->where('created_at', '>', now()->subMinutes($minutes)))
             ->latest('created_at')
             ->limit(3)
             ->get(['id', 'name', 'last_used_at', 'expires_at', 'created_at'])
