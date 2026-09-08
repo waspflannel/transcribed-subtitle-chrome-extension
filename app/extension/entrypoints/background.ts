@@ -719,9 +719,12 @@ async function enrichLearningTokenFromContent(
   const freshState = tabSubtitleStates.get(tabId);
 
   if (response.cueId !== message.cueId || response.token.index !== message.tokenIndex || freshState?.type !== 'ready' || freshState.track.trackId !== message.trackId
-    || freshState.track.youtubeVideoId !== message.youtubeVideoId || !freshState.track.cues.some((cue) => cue.cueId === message.cueId && cue.tokens.some((token) => token.index === message.tokenIndex))) {
+    || tabSubtitleStateOwners.get(tabId) !== accountId || freshState.track.youtubeVideoId !== message.youtubeVideoId
+    || !freshState.track.cues.some((cue) => cue.cueId === message.cueId && cue.tokens.some((token) => token.index === message.tokenIndex))) {
     return { ok: true, stale: true };
   }
+
+  if (!await isCurrentSession(sessionId)) return { ok: true, stale: true };
 
   const track = trackWithLearningToken(freshState.track, response.cueId, response.token);
 
@@ -1019,12 +1022,13 @@ async function readySubtitleStateForEnrichment(
   accountId: string,
 ): Promise<Extract<SubtitleState, { type: 'ready' }> | null> {
   const currentState = tabSubtitleStates.get(tabId);
+  const ownsState = tabSubtitleStateOwners.get(tabId) === accountId;
 
-  if (currentState?.type === 'ready' && currentState.track.trackId === trackId) {
+  if (ownsState && currentState?.type === 'ready' && currentState.track.trackId === trackId) {
     return currentState;
   }
 
-  if (currentState && currentState.type !== 'no-track' && isSubtitleStateForVideo(currentState, youtubeVideoId)) {
+  if (ownsState && currentState && currentState.type !== 'no-track' && isSubtitleStateForVideo(currentState, youtubeVideoId)) {
     return null;
   }
 
