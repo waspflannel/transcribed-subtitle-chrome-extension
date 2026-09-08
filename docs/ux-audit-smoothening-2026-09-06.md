@@ -1,5 +1,7 @@
 # Smoothening UX Audit
 
+Handoff checkpoint (2026-09-08): see [`../handoff.md`](../handoff.md) for verified branch/commit locations and remaining work. Nine additional worker commits and an unfinished R11 draft exist in dedicated child audit worktrees and are not yet integrated here. Their implementation/testing sections currently live in those branches' copies of this report. New code is untested at user request; password/verification work remains excluded.
+
 Date: 2026-09-06
 
 Baseline: `smoothening` at `4969225d80731fc3f5ad95d2a9a3f87b7d685487`.

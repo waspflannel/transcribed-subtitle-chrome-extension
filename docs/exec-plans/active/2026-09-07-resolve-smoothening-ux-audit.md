@@ -7,11 +7,11 @@ Last updated: 2026-09-08
 
 ## Goal
 
-Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`, one finding per commit on `audit/smoothening-fixes`. First establish a clean commit foundation from the existing work; do not start remaining findings during this foundation task.
+Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`, one finding per commit on `audit/smoothening-fixes`. Foundation is committed. Implementation is paused at the user's request for transfer to another agent; see root `handoff.md` for the verified multi-worktree checkpoint.
 
 ## Scope
 
-- Worktree: `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit` only. Never read/edit the concurrent lyrics checkout as a shortcut.
+- Main integration worktree: `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`. Dedicated sibling panel/overlay/backend audit worktrees contain unintegrated worker changes, mapped in `handoff.md`. Never read/edit the concurrent lyrics checkout as a shortcut.
 - Included: G1-G4, non-password G5, R1-R23, U1-U3, U4 connection expiry only, U5. Grouped ordering below does not permit mixed-finding commits.
 - Excluded by user: R24; all password recovery, password-rule/hint, and email-verification portions of G5/U4. Withdraw our register/reset minlength/hints/tests. Preserve pre-existing auth/password enforcement and security. No reintroduction.
 - Latest user instruction (2026-09-08): no test suites or browser tests. Only non-test metadata, diff, and doc checks; mark new changes untested. No production/paid calls, dependency upgrades, shared services, real-data migrations, pushes, or coauthors.
@@ -54,7 +54,7 @@ Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`,
 | 8 | R20 | Owned operational history independent of track compatibility. |
 | 9 | U5 | Read-only partial Watch results after preservation/lifecycle fixes. |
 
-Dependencies, not urgency alone, govern ordering. Parallel workers must own disjoint files or coordinate shared entrypoints; inspect and preserve concurrent work. Each finding still gets its own commit and testing section. No implementation beyond foundation in this turn.
+Dependencies, not urgency alone, govern ordering. Parallel workers use isolated audit worktrees and must coordinate shared entrypoints during integration. Each finding still gets its own commit and testing section. The table is the original ordering, not current completion evidence; use the checkpoint below and `handoff.md`.
 
 ## Validation Plan
 
@@ -94,6 +94,19 @@ Evidence to capture:
 | 2026-09-08 | Resumed with baseline/G3/G4/G2/G5 already committed and only U4 staged. | Preserved existing commits and U4 code/test hunks. Updated validation instructions only; new handoff changes are untested. No test suites or browser tests run. |
 
 ## Completion Notes
+
+### Transfer Checkpoint (2026-09-08)
+
+- User paused implementation and requested `handoff.md`. No new implementation or integration is included in this handoff checkpoint.
+- Main branch foundation is complete through `743fe96`, plus the documentation-only handoff commit.
+- Panel branch saved R1 `ee9258e`, R21 `0b0e85d`, R2 `6603447`; clean worktree.
+- Overlay branch saved R4 `0d214a7`, R6 `e80f732`, R5 `d94ada5`, R10 `0411bb2`; five dirty files contain unfinished R11 cue-sync work. Preserve them.
+- Backend branch saved R16 `7f44ae9`, R17 `0d17c64`; clean worktree.
+- Those nine worker commits are not integrated into main, not fully coordinator-reviewed, and untested. Failed worker calls did leave real commits and working changes.
+- Remaining: R3, R7-R9, R11-R15, R18-R20, R22-R23, U1-U3, U5, then G1 after dependencies. Password exclusions remain unchanged.
+- Next agent should follow root `handoff.md` for locations, commit order, shared-file conflicts, manual-test policy and continuation prompt. The plan remains active; the audit is not complete.
+
+### Historical Foundation Notes
 
 - Foundation mapping: baseline `31a91f1`; G3 `3f3bea5`; G4 `2adf8d6`; G2 `a80f1c1`; G5 non-password `81f9764`; U4 expiry = commit titled `fix: omit expired extension connections (U4)` containing this entry (resolve ID with git log, avoiding a self-referential hash).
 - Validation results: prior worker reported the focused checks and full harness above passed; not rerun or independently verified in this handoff. Current changes are untested; only doc lint/diff checks precede the U4 commit. Whole-worktree test evidence is not per-commit checkout testing. No browser evidence.
