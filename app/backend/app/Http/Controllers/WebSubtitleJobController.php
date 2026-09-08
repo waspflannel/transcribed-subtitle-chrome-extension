@@ -10,7 +10,6 @@ use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobLock;
-use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -31,7 +30,6 @@ class WebSubtitleJobController extends Controller
             ->with('track')
             ->whereBelongsTo($user)
             ->where('public_id', $jobId)
-            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
             ->firstOrFail();
 
         return view('account.job-show', [

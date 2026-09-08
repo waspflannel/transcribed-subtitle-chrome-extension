@@ -8,7 +8,6 @@ use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
-use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -74,7 +73,7 @@ class DashboardController extends Controller
         return SubtitleJob::query()
             ->with('track')
             ->whereBelongsTo($user)
-            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+            ->orderByRaw("case when status in ('queued', 'running') then 0 else 1 end")
             ->latest('updated_at')
             ->limit(8)
             ->get()

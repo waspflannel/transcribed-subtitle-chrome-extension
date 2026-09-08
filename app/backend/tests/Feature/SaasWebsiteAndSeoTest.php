@@ -252,6 +252,28 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_dashboard_and_support_detail_keep_old_active_jobs_visible(): void
+    {
+        $user = User::factory()->create();
+        $job = SubtitleJob::factory()->for($user)->create([
+            'processing_version' => 'retired-processing-version',
+            'status' => 'running',
+            'stage' => 'transcribing',
+            'created_at' => now()->subHours(6),
+            'updated_at' => now()->subHours(6),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard', absolute: false))
+            ->assertOk()
+            ->assertViewHas('recentJobs', fn ($jobs): bool => $jobs->contains('jobId', $job->public_id));
+
+        $this->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
+            ->assertOk()
+            ->assertSeeText($job->public_id)
+            ->assertSeeText('running');
+    }
+
     public function test_dashboard_filters_expired_connections_before_limiting_the_list(): void
     {
         $this->freezeTime();

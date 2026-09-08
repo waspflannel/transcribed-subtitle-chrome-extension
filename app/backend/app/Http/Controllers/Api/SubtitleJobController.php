@@ -27,32 +27,29 @@ class SubtitleJobController extends Controller
     public function index(Request $request): JsonResponse
     {
         $now = now();
-        $recentIncompleteCutoff = now()->subHours(4);
+        $terminalCutoff = now()->subDays(30);
         $user = $this->extensionUser($request);
         $jobs = SubtitleJob::query()
             ->with('track')
             ->whereBelongsTo($user)
-            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
-            ->where('created_at', '>=', now()->subDays(30))
-            ->where(function ($query) use ($now, $recentIncompleteCutoff): void {
+            ->where(function ($query) use ($now, $terminalCutoff): void {
                 $query
-                    ->where(function ($query) use ($now): void {
+                    ->where(function ($query): void {
                         $query
-                            ->where('expires_at', '>', $now)
-                            ->whereHas('track', function ($query) use ($now): void {
-                                $query
-                                    ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
-                                    ->where('expires_at', '>', $now);
-                            });
+                            ->whereIn('status', ['queued', 'running']);
                     })
-                    ->orWhere(function ($query) use ($recentIncompleteCutoff): void {
+                    ->orWhere(function ($query) use ($now): void {
                         $query
-                            ->whereNull('expires_at')
-                            ->whereDoesntHave('track')
-                            ->whereIn('status', ['queued', 'running', 'failed'])
-                            ->where('created_at', '>=', $recentIncompleteCutoff);
+                            ->where('status', 'completed')
+                            ->whereHas('track', fn ($query) => $query->where('expires_at', '>', $now));
+                    })
+                    ->orWhere(function ($query) use ($terminalCutoff): void {
+                        $query
+                            ->whereIn('status', ['failed', 'cancelled'])
+                            ->where('updated_at', '>=', $terminalCutoff);
                     });
             })
+            ->orderByRaw("case when status in ('queued', 'running') then 0 else 1 end")
             ->latest('updated_at')
             ->limit(25)
             ->get()
@@ -82,7 +79,11 @@ class SubtitleJobController extends Controller
             ->with('track')
             ->where('public_id', $jobId)
             ->whereBelongsTo($this->extensionUser($request))
-            ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+            ->where(function ($query): void {
+                $query
+                    ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+                    ->orWhereIn('status', ['queued', 'running', 'failed', 'cancelled']);
+            })
             ->first();
 
         if ($job === null || ($job->status === 'completed' && ! $job->hasReadyTrack())) {

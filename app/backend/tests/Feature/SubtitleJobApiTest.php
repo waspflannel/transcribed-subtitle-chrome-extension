@@ -2067,6 +2067,53 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.2.jobId', $failedJob->public_id);
     }
 
+    public function test_history_keeps_old_active_jobs_and_applies_terminal_retention(): void
+    {
+        $installId = $this->installId('history');
+        $user = User::factory()->create();
+        $oldVersion = 'retired-processing-version';
+        $oldRunning = SubtitleJob::factory()->for($user)->create([
+            'youtube_video_id' => 'oldrun00001',
+            'install_id' => $installId,
+            'processing_version' => $oldVersion,
+            'status' => 'running',
+            'updated_at' => now()->subHours(6),
+            'created_at' => now()->subHours(6),
+        ]);
+        $recentFailed = SubtitleJob::factory()->for($user)->create([
+            'youtube_video_id' => 'olderr00001',
+            'install_id' => $installId,
+            'processing_version' => $oldVersion,
+            'status' => 'failed',
+            'error_code' => 'transcription_failed',
+            'error_message' => 'Transcription failed.',
+            'updated_at' => now()->subDays(2),
+        ]);
+        SubtitleJob::factory()->for($user)->create([
+            'youtube_video_id' => 'expir000001',
+            'install_id' => $installId,
+            'processing_version' => $oldVersion,
+            'status' => 'failed',
+            'error_code' => 'transcription_failed',
+            'error_message' => 'Transcription failed.',
+            'updated_at' => now()->subDays(31),
+        ]);
+
+        $this->withExtensionAuth($installId, $user)
+            ->getJson('/v1/subtitle-jobs')
+            ->assertOk()
+            ->assertJsonCount(2, 'jobs')
+            ->assertJsonPath('jobs.0.jobId', $oldRunning->public_id)
+            ->assertJsonPath('jobs.0.status', 'running')
+            ->assertJsonPath('jobs.1.jobId', $recentFailed->public_id)
+            ->assertJsonPath('jobs.1.errorCode', 'transcription_failed');
+
+        $this->withExtensionAuth($installId, $user)
+            ->getJson('/v1/subtitle-jobs/'.$oldRunning->public_id)
+            ->assertOk()
+            ->assertJsonPath('status', 'running');
+    }
+
     public function test_subtitle_job_status_polling_uses_separate_rate_limit_from_generation_requests(): void
     {
         config([

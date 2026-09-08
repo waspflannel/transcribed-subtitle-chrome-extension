@@ -618,6 +618,13 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Smallest useful fix:** Do not age-filter active work. Retain failures according to an explicit terminal-time policy. Separate permission to view owned status/billing metadata from permission to reuse/render an old track.
 
+**What Changed:** Owned queued and running jobs remain in API history and dashboard discovery regardless of age or processing version. Recent terminal records use an explicit 30-day \`updated_at\` retention window, while completed history still requires a live track. Operational job details can inspect older processing versions; generation reuse and partial-track delivery retain their existing compatibility gates.
+
+**How To Test:**
+1. Age an owned queued or running job beyond four hours and assign it an old processing version. Expected: API history, dashboard recent jobs, and the support detail URL still expose its status and metadata.
+2. Create a failed old job updated within 30 days and an older failed job outside the retention window. Expected: the first is listed with its stable failure code and the second is omitted according to the explicit terminal policy.
+3. Keep a completed old-version track available and submit the same payload. Expected: the old track remains operationally inspectable while generation creates or reuses only a current compatible track. Limits: retention and version behavior are covered by source tests; no long-running outage or deployment was exercised.
+
 **Acceptance:** A five-hour-old queued job remains visible; a newly failed old job remains inspectable; old-version active work stays visible/cancelable without reusing incompatible tracks.
 
 ### R21. P2: API Timeouts Do Not Cover Response Body Consumption
