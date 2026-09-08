@@ -541,9 +541,9 @@ class SubtitleJobApiTest extends TestCase
     public function test_correction_rebuilds_track_atomically_and_clears_lyrics(): void
     {
         LyricsAlignmentAgent::fake([
-            ['isMatch' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
-                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
+            ['isMatch' => true, 'isComplete' => true, 'cues' => [
+                ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
+                ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
             ]],
         ]);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
@@ -934,9 +934,9 @@ class SubtitleJobApiTest extends TestCase
                 throw RateLimitedException::forProvider('openai', 429);
             }
 
-            return ['isMatch' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
-                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
+            return ['isMatch' => true, 'isComplete' => true, 'cues' => [
+                ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
+                ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
             ]];
         })->preventStrayPrompts();
 
@@ -971,9 +971,9 @@ class SubtitleJobApiTest extends TestCase
     public function test_section_heading_filter_does_not_drop_sung_words(): void
     {
         LyricsAlignmentAgent::fake([
-            ['isMatch' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
-                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
+            ['isMatch' => true, 'isComplete' => true, 'cues' => [
+                ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
+                ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
             ]],
         ]);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
