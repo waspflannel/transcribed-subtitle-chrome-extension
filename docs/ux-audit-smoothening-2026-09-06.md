@@ -167,6 +167,16 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R1. P1: Panel Startup Can Fail Before Synchronization Listeners Attach
 
+**Follow-up status:** Code implemented; untested (2026-09-08).
+
+**What Changed:** Poll state initializes before any startup calls. Added a regression importing the actual panel entrypoint with DOM/browser mocks and checking its timer, connection, and listeners.
+
+**How To Test:**
+1. Run `npm test -- tests/panel-entrypoint.test.ts` in `app/extension` when testing is authorized. Expect a successful real-entrypoint import, one timer, panel connection, and tab/cue listener registration.
+2. Open the panel in isolated WXT dev and production profiles. Expect no initialization exception and updates after changing tabs or cues.
+
+**Limits:** Regression source only; no tests, build, or browser checks were run. Bundle/runtime behavior still needs validation.
+
 **Surface:** Side-panel initialization.
 
 **Impact:** Polling, tab-change handling, panel connection, and active-cue listeners may never initialize.
