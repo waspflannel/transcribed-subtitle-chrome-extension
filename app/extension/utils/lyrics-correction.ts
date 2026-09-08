@@ -45,6 +45,7 @@ export interface LyricsCorrectionTabState {
   jobId: string | null;
   status: LyricsCorrectionStatus | null;
   latestRequestId: number;
+  syncError?: string;
 }
 
 export type LyricsCorrectionSyncAction =
@@ -68,6 +69,7 @@ export function nextLyricsCorrectionSync(
         jobId: action.jobId,
         status: action.jobId === state.jobId ? state.status : null,
         latestRequestId: action.requestId,
+        syncError: action.jobId === state.jobId ? state.syncError : undefined,
       };
 
     case 'response':
@@ -88,7 +90,7 @@ export function nextLyricsCorrectionSync(
       return { jobId: action.jobId, status: action.status, latestRequestId: state.latestRequestId + 1 };
 
     case 'cleared':
-      return { ...state, jobId: null, status: null, latestRequestId: state.latestRequestId + 1 };
+      return { jobId: null, status: null, latestRequestId: state.latestRequestId + 1 };
   }
 }
 
@@ -131,6 +133,10 @@ export async function syncLyricsCorrectionStatus(options: {
     const latest = options.states.get(options.tabId);
 
     if (latest?.latestRequestId === requestId && latest.jobId === options.jobId) {
+      options.states.set(options.tabId, {
+        ...latest,
+        syncError: 'Could not refresh replacement status. Showing the last known state; retrying automatically.',
+      });
       options.onCurrentRequestError?.(error);
     }
 

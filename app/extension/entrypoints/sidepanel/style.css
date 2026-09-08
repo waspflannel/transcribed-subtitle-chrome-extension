@@ -325,6 +325,26 @@ a {
   color: var(--green);
 }
 
+.correction-status {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-block: 12px;
+}
+
+.status-banner-close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1;
+  margin: -2px -4px 0 0;
+  padding: 0 2px;
+}
+
 /* ============================== Buttons ============================== */
 /* Flashcard-hard edges, offset shadow, tactile press — the site's .button. */
 .btn-primary,

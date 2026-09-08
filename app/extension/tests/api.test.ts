@@ -273,9 +273,9 @@ describe('SubtitleApiClient', () => {
       .mockResolvedValueOnce(jsonResponse(status, 200));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
 
-    await expect(client.startLyricsCorrection(installId, authToken, 'job-1', { lyrics: 'hello' })).resolves.toEqual(status);
+    await expect(client.startLyricsCorrection(installId, authToken, 'job-1', { lyrics: 'hello', expectedTrackId: 'track-1' })).resolves.toEqual(status);
     await expect(client.getLyricsCorrectionStatus(installId, authToken, 'job-1')).resolves.toEqual(status);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'POST', body: JSON.stringify({ lyrics: 'hello' }) }));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'POST', body: JSON.stringify({ lyrics: 'hello', expectedTrackId: 'track-1' }) }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'GET' }));
   });
 

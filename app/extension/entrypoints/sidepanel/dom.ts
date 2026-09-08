@@ -20,7 +20,10 @@ export interface PanelDom {
   watchSetup: HTMLElement;
   watchReady: HTMLElement;
   correctionTerminalStatus: HTMLElement;
+  correctionTerminalMessage: HTMLElement;
+  dismissCorrectionStatusButton: HTMLButtonElement;
   correctionCancelError: HTMLElement;
+  correctionSyncError: HTMLElement;
   lyricsEditPanel: HTMLElement;
   toggleLyricsEditButton: HTMLButtonElement;
   lyricsCorrectionForm: HTMLFormElement;
@@ -65,7 +68,6 @@ export interface PanelDom {
   blurTranslationInput: HTMLInputElement;
   pauseOnWordHoverInput: HTMLInputElement;
   keyboardShortcutsEnabledInput: HTMLInputElement;
-  fullTrackEnrichmentInput: HTMLInputElement;
   timingOffsetRangeInput: HTMLInputElement;
   timingOffsetNumberInput: HTMLInputElement;
   timingOffsetOutput: HTMLOutputElement;
@@ -120,7 +122,10 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     watchSetup: query(root, '[data-watch-setup]', HTMLElement),
     watchReady: query(root, '[data-watch-ready]', HTMLElement),
     correctionTerminalStatus: query(root, '[data-correction-terminal-status]', HTMLElement),
+    correctionTerminalMessage: query(root, '[data-correction-terminal-message]', HTMLElement),
+    dismissCorrectionStatusButton: query(root, '[data-action="dismiss-correction-status"]', HTMLButtonElement),
     correctionCancelError: query(root, '[data-correction-cancel-error]', HTMLElement),
+    correctionSyncError: query(root, '[data-correction-sync-error]', HTMLElement),
     lyricsEditPanel: query(root, '[data-lyrics-edit-panel]', HTMLElement),
     toggleLyricsEditButton: query(root, '[data-action="toggle-lyrics-edit"]', HTMLButtonElement),
     lyricsCorrectionForm: query(root, '[data-lyrics-correction-form]', HTMLFormElement),
@@ -164,7 +169,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     blurTranslationInput: query(root, 'input[name="blurTranslation"]', HTMLInputElement),
     pauseOnWordHoverInput: query(root, 'input[name="pauseOnWordHover"]', HTMLInputElement),
     keyboardShortcutsEnabledInput: query(root, 'input[name="keyboardShortcutsEnabled"]', HTMLInputElement),
-    fullTrackEnrichmentInput: query(root, 'input[name="fullTrackEnrichment"]', HTMLInputElement),
     timingOffsetRangeInput: query(root, 'input[name="subtitleTimingOffsetSeconds"]', HTMLInputElement),
     timingOffsetNumberInput: query(root, 'input[name="subtitleTimingOffsetNumber"]', HTMLInputElement),
     timingOffsetOutput: query(root, '[data-timing-offset]', HTMLOutputElement),

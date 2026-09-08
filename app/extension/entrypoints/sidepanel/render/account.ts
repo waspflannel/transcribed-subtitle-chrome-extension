@@ -15,7 +15,7 @@ export function accountFeatureListHtml(accountState: AccountState, settings: Ext
     ['Subtitle generation', 'Enabled'],
     ['Cue translation', settings.showTranslation ? 'On for next job' : 'Available'],
     ['Romanization', settings.showRomanization ? 'On for next job' : 'Available'],
-    ['Full word cards', settings.fullTrackEnrichment ? 'On for next job' : 'Available'],
+    ['Word cards', 'On click'],
     ['Priority speed', prioritySpeed],
   ]);
 }

@@ -84,6 +84,7 @@ export interface PanelState {
   jobHistory: SubtitleJobHistoryItem[];
   jobHistoryError?: string;
   lyricsCorrection?: LyricsCorrectionStatus | null;
+  lyricsCorrectionSyncError?: string;
 }
 
 export type BackgroundRequest =

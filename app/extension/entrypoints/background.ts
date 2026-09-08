@@ -403,7 +403,7 @@ async function generateSubtitlesForTab(
       youtubeVideoId: pageStatus.videoId,
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
-      enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
+      enrichmentMode: 'on_demand',
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -417,7 +417,7 @@ async function generateSubtitlesForTab(
         : {}),
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
-      enrichmentMode: settings.fullTrackEnrichment ? 'full' : 'on_demand',
+      enrichmentMode: 'on_demand',
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -663,7 +663,7 @@ async function submitLyricsCorrectionFromPanel(
         installId,
         session.plainTextToken,
         message.jobId,
-        { lyrics: message.lyrics },
+        { lyrics: message.lyrics, expectedTrackId: message.trackId },
       );
     } catch (error) {
       await clearTabOperation(tabId);
@@ -1072,6 +1072,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
     jobHistory: history.jobs,
     jobHistoryError: history.error,
     lyricsCorrection,
+    lyricsCorrectionSyncError: activeTabId !== null ? tabLyricsCorrectionStates.get(activeTabId)?.syncError : undefined,
   };
 }
 

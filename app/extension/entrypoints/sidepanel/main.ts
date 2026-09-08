@@ -66,7 +66,10 @@ const {
   watchSetup,
   watchReady,
   correctionTerminalStatus,
+  correctionTerminalMessage,
+  dismissCorrectionStatusButton,
   correctionCancelError,
+  correctionSyncError,
   lyricsEditPanel,
   toggleLyricsEditButton,
   lyricsCorrectionForm,
@@ -110,7 +113,6 @@ const {
   blurTranslationInput,
   pauseOnWordHoverInput,
   keyboardShortcutsEnabledInput,
-  fullTrackEnrichmentInput,
   timingOffsetRangeInput,
   timingOffsetNumberInput,
   timingOffsetOutput,
@@ -164,6 +166,7 @@ let languagesExpanded = false;
 let watchScreen: 'transcript' | 'replace' | 'generate' | 'progress' = 'transcript';
 let lastWatchVideoId: string | null = null;
 let lyricsReplaceConfirm = false;
+const dismissedCorrectionAttempts = new Set<string>();
 let quickFixSelection: { cueId: string; tokenIndex: number; text: string } | null = null;
 let quickFixError: { message: string; code?: string; reason?: string } | null = null;
 let quickFixNotice: string | null = null;
@@ -189,6 +192,11 @@ function openWatchScreen(screen: typeof watchScreen): void {
 toggleLyricsEditButton.addEventListener('click', () => openWatchScreen('replace'));
 backTranscriptButton.addEventListener('click', () => openWatchScreen('transcript'));
 viewProgressButton.addEventListener('click', () => openWatchScreen('progress'));
+dismissCorrectionStatusButton.addEventListener('click', () => {
+  if (latestState?.lyricsCorrection) dismissedCorrectionAttempts.add(latestState.lyricsCorrection.attemptId);
+  correctionTerminalStatus.hidden = true;
+  correctionTerminalMessage.textContent = '';
+});
 document.addEventListener('click', (event) => {
   if (!transcriptMenu.contains(event.target as Node)) transcriptMenu.open = false;
 });
@@ -249,9 +257,6 @@ pauseOnWordHoverInput.addEventListener('change', () =>
 );
 keyboardShortcutsEnabledInput.addEventListener('change', () =>
   void updateSettings({ keyboardShortcutsEnabled: keyboardShortcutsEnabledInput.checked }),
-);
-fullTrackEnrichmentInput.addEventListener('change', () =>
-  void updateSettings({ fullTrackEnrichment: fullTrackEnrichmentInput.checked }),
 );
 const timingControl = bindTimingOffsetControl({
   rangeInput: timingOffsetRangeInput,
@@ -448,7 +453,11 @@ async function cancelLyricsCorrection(): Promise<void> {
       attemptId: state.lyricsCorrection!.attemptId,
       youtubeVideoId: page.videoId,
     }, 'cancel', 'mutation');
-    if (applied) transcriptSearch.focus({ preventScroll: true });
+    if (applied) {
+      watchScreen = 'replace';
+      if (latestState) showPanelState(latestState);
+      dismissCorrectionStatusButton.focus({ preventScroll: true });
+    }
   } finally {
     lyricsCancellationRequestBusy = false;
     renderLyricsEditState();
@@ -845,7 +854,6 @@ function showPanelState(state: PanelState): void {
   blurTranslationInput.checked = settings.blurTranslation;
   pauseOnWordHoverInput.checked = settings.pauseOnWordHover;
   keyboardShortcutsEnabledInput.checked = settings.keyboardShortcutsEnabled;
-  fullTrackEnrichmentInput.checked = settings.fullTrackEnrichment;
   timingControl.showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
 
@@ -869,10 +877,12 @@ function showPanelState(state: PanelState): void {
    Edit panel; in-form status is reserved for request errors. */
 function renderLyricsCorrectionState(state: PanelState): void {
   const correction = state.lyricsCorrection;
+  correctionSyncError.hidden = !state.lyricsCorrectionSyncError;
+  correctionSyncError.textContent = state.lyricsCorrectionSyncError ?? '';
 
-  if (!correction || correction.status === 'queued' || correction.status === 'running') {
+  if (!correction || correction.status === 'queued' || correction.status === 'running' || dismissedCorrectionAttempts.has(correction.attemptId)) {
     correctionTerminalStatus.hidden = true;
-    correctionTerminalStatus.textContent = '';
+    correctionTerminalMessage.textContent = '';
     if (!correction) {
       lyricsCorrectionStatus.textContent = '';
       correctionCancelError.hidden = true;
@@ -889,18 +899,18 @@ function renderLyricsCorrectionState(state: PanelState): void {
   correctionTerminalStatus.hidden = false;
   if (correction.status === 'completed') {
     correctionTerminalStatus.className = 'status-banner correction-status success';
-    correctionTerminalStatus.textContent = 'Lyrics replaced — the transcript is up to date.';
+    correctionTerminalMessage.textContent = 'Lyrics replaced — the transcript is up to date.';
     return;
   }
 
   correctionTerminalStatus.className = 'status-banner correction-status';
-  correctionTerminalStatus.textContent = correction.status === 'cancelled'
+  correctionTerminalMessage.textContent = correction.status === 'cancelled'
     ? 'Replacement cancelled. Your current subtitles are unchanged.'
     : correction.errorCode === 'lyrics_incomplete'
       ? 'Replacement stopped — the pasted lyrics did not cover the whole song. Your current subtitles are unchanged.'
       : correction.errorCode === 'lyrics_do_not_match'
         ? 'Replacement stopped — these lyrics do not match this song. Your current subtitles are unchanged.'
-        : 'Replacement failed. Your current subtitles are unchanged.';
+        : correction.message || 'Replacement failed. Your current subtitles are unchanged.';
 }
 
 function showStatusBanner(state: PanelState): void {
@@ -1204,7 +1214,6 @@ function setSettingsDisabled(disabled: boolean): void {
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
   keyboardShortcutsEnabledInput.disabled = disabled;
-  fullTrackEnrichmentInput.disabled = disabled;
   accountEmailInput.disabled = disabled;
   accountPasswordInput.disabled = disabled;
   accountLoginButton.disabled = disabled;

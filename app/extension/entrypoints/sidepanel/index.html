@@ -87,10 +87,6 @@
                   <input type="checkbox" name="showRomanization" disabled />
                   <span>Romanization</span>
                 </label>
-                <label class="chip">
-                  <input type="checkbox" name="fullTrackEnrichment" disabled />
-                  <span>Word cards for every word</span>
-                </label>
               </div>
             </div>
 
@@ -100,6 +96,7 @@
           </div>
 
           <!-- Generating / replacing: one progress surface with named stages. -->
+          <p class="status-banner" data-correction-sync-error role="status" hidden></p>
           <div class="progress-summary" data-progress-summary hidden><span data-progress-summary-label role="status"></span><button type="button" class="link-button" data-action="view-progress">View progress</button></div>
           <div class="card" data-progress hidden>
             <p class="card-label" id="progress-label" data-progress-label>Generating</p>
@@ -125,7 +122,10 @@
                 </div>
               </details>
             </div>
-            <p class="status-banner correction-status" data-correction-terminal-status role="status" aria-live="polite" hidden></p>
+            <div class="status-banner correction-status" data-correction-terminal-status role="status" aria-live="polite" hidden>
+              <span data-correction-terminal-message></span>
+              <button type="button" class="status-banner-close" data-action="dismiss-correction-status" aria-label="Dismiss replacement status">×</button>
+            </div>
             <div class="card" data-lyrics-edit-panel hidden>
               <h2>Replace full lyrics</h2>
               <div data-lyrics-replace-panel>

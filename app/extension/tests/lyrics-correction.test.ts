@@ -231,6 +231,17 @@ describe('lyrics correction per-tab synchronization state', () => {
 });
 
 describe('syncLyricsCorrectionStatus', () => {
+  it('keeps cached progress with a refresh error, then clears the error on recovery', async () => {
+    const cached = status('attempt-1', 'running');
+    const states = new Map([[1, nextLyricsCorrectionSync(lyricsCorrectionTabState(), { type: 'submit', jobId: 'job-1', status: cached })]]);
+    const options = { tabId: 1, jobId: 'job-1', syncBackend: true, states };
+    await expect(syncLyricsCorrectionStatus({ ...options, fetchStatus: async () => { throw new Error('offline'); } })).rejects.toThrow('offline');
+    expect(states.get(1)?.status).toEqual(cached);
+    expect(states.get(1)?.syncError).toContain('retrying automatically');
+    await syncLyricsCorrectionStatus({ ...options, fetchStatus: async () => status('attempt-1', 'completed') });
+    expect(states.get(1)?.syncError).toBeUndefined();
+  });
+
   it('makes zero status API calls and mutates no state when backend sync is disabled', async () => {
     const fetchStatus = vi.fn(async () => status('attempt-1', 'running'));
     const states = new Map();

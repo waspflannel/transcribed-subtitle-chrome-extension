@@ -28,7 +28,6 @@ export interface ExtensionSettings {
   blurRomanization: boolean;
   blurTranslation: boolean;
   pauseOnWordHover: boolean;
-  fullTrackEnrichment: boolean;
   subtitleTimingOffsetSeconds: number;
 }
 
@@ -51,7 +50,6 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   blurRomanization: false,
   blurTranslation: false,
   pauseOnWordHover: true,
-  fullTrackEnrichment: false,
   subtitleTimingOffsetSeconds: 0,
 };
 
@@ -122,10 +120,6 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
 
   if (typeof value?.pauseOnWordHover === 'boolean') {
     settings.pauseOnWordHover = value.pauseOnWordHover;
-  }
-
-  if (typeof value?.fullTrackEnrichment === 'boolean') {
-    settings.fullTrackEnrichment = value.fullTrackEnrichment;
   }
 
   settings.subtitleTimingOffsetSeconds = normalizeSubtitleTimingOffsetSeconds(value?.subtitleTimingOffsetSeconds);

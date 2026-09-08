@@ -12,6 +12,7 @@ Keep the transcript central and separate word corrections from whole-track tasks
 - Whole-track forms and detailed progress occupy their own Watch screen. Back preserves replacement text.
 - Running replacement defaults to a compact progress strip beside the usable transcript.
 - Playback highlights without scrolling or stealing editor focus.
+- Cancelling a replacement returns to the Replace full lyrics screen with a dismissible notice; leaving that screen clears the notice.
 
 ## Validation
 
