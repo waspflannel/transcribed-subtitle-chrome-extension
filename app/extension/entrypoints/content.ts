@@ -540,6 +540,7 @@ export default defineContentScript({
       activeVideo = video;
       boundPartialTrackKey = partialKey;
       bindingError = null;
+      const bindingEpoch = stateEpoch;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
@@ -555,13 +556,13 @@ export default defineContentScript({
           updateOverlay();
         },
         onTrackLoaded: () => {
-          if (subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
             bindingError = null;
             updateOverlay();
           }
         },
         onTrackLoadError: () => {
-          if (subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
             bindingError = 'The partial subtitle track could not load. Retry attachment.';
             updateOverlay();
           }
@@ -597,6 +598,7 @@ export default defineContentScript({
       bindVideoStateListeners(video);
       boundReadyTrackId = track.trackId;
       bindingError = null;
+      const bindingEpoch = stateEpoch;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
@@ -617,13 +619,13 @@ export default defineContentScript({
           updateOverlay();
         },
         onTrackLoaded: () => {
-          if (subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
             bindingError = null;
             updateOverlay();
           }
         },
         onTrackLoadError: () => {
-          if (subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
             bindingError = 'The subtitle track could not load. Retry attachment.';
             updateOverlay();
           }
