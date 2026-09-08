@@ -15,7 +15,7 @@ import { OverlayShell } from '../utils/overlay';
 import { cueForNavigation, cueForPlaybackTime, cueStartPlaybackSeconds } from '../utils/cue-navigation';
 import { CueHoldController } from '../utils/cue-hold';
 import { shortcutActionFromKeyboardEvent, type KeyboardShortcutAction } from '../utils/keyboard-shortcuts';
-import { hasLearningMetadata, tokenKey } from '../utils/track-tokens';
+import { hasLearningMetadata, tokenKey, trackWithLearningToken } from '../utils/track-tokens';
 import { bindWebVttTrackToVideo, buildWebVttFromCues } from '../utils/webvtt-track';
 import { webVttTrackLogger } from '../utils/webvtt-track-logger';
 import type { LearningToken, PartialSubtitleCue, SubtitleCue, TrackResponse } from '../utils/contracts';
@@ -404,16 +404,20 @@ export default defineContentScript({
         return;
       }
 
-      // The same finalized track can be re-delivered (background publish plus
-      // a hydrate pull). Rebinding would reset the text track and drop the
-      // active cue, and the local copy may carry newer on-click enrichment —
-      // keep it.
+      // Metadata-only updates do not need a native timing-track replacement.
       if (
         nextSubtitleState.type === 'ready'
         && boundReadyTrackId === nextSubtitleState.track.trackId
+        && subtitleState.type === 'ready'
+        && subtitleState.track.webVtt === nextSubtitleState.track.webVtt
+        && JSON.stringify(subtitleState.track.cues.map(({ cueId, startMs, endMs }) => [cueId, startMs, endMs]))
+          === JSON.stringify(nextSubtitleState.track.cues.map(({ cueId, startMs, endMs }) => [cueId, startMs, endMs]))
         && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)
         && subtitleStateMatchesCurrentPage(nextSubtitleState)
       ) {
+        subtitleState = nextSubtitleState;
+        activeCue = nextSubtitleState.track.cues.find((cue) => cue.cueId === activeCue?.cueId) ?? null;
+        updateOverlay();
         return;
       }
 
@@ -539,7 +543,9 @@ export default defineContentScript({
         timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
         onCueChange(change) {
           const isPlaying = typeof video.currentTime === 'number' && !video.paused && !video.ended;
-          const next = cueHold.select(change.activeCue, isPlaying, activeCue);
+          const currentCue = subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId
+            ? subtitleState.track.cues.find((cue) => cue.cueId === change.activeCue?.cueId) ?? null : null;
+          const next = cueHold.select(currentCue, isPlaying, activeCue);
 
           if (next === activeCue && activeCue !== null) {
             updateOverlay(); // hold: keep prior cue rendered, no broadcast change
@@ -850,7 +856,12 @@ export default defineContentScript({
         }
         if (response.track.trackId !== trackId || response.track.youtubeVideoId !== youtubeVideoId) return;
 
-        applyEnrichedTrack(response.track, cue.cueId, key);
+        const enrichedToken = response.track.cues.find((candidate) => candidate.cueId === cue.cueId)
+          ?.tokens.find((candidate) => candidate.index === token.index);
+        if (!enrichedToken || enrichedToken.text !== token.text) throw new Error('Word card does not match the requested token.');
+        if (subtitleState.type === 'ready') {
+          applyEnrichedTrack(trackWithLearningToken(subtitleState.track, cue.cueId, enrichedToken), cue.cueId, key);
+        }
       } catch (error) {
         if (!isCurrent()) return;
         console.warn('extension.learning_token_enrichment_failed', {

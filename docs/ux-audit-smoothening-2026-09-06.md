@@ -353,6 +353,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R10. P2: Same-ID Transcript And Word-Card Updates Can Remain Stale
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Transcript invalidation includes cue content. Metadata-only pushes refresh current cue data without rebinding; timing changes rebind. Native cue IDs resolve against the latest ready track, preserving source rather than shifted timings. Background and content merge only the requested returned token into current matching state, preserving concurrent cards.
+
+**How To Test:**
+1. Deliver same-ID source/readings/translation updates and search for the new text. Expected: rows, search and active overlay agree; timing changes update native playback.
+2. Resolve two different card requests in reverse order, revisit each cue and repull state. Expected: both cards remain loaded without another request. Limits: account-epoch protection is owned by R8; background merge hunk must retain those guards during integration. No tests/builds run.
+
 **Surface:** Panel transcript and overlay learning cards.
 
 **Impact:** Rendered text/readings/search results can disagree with current data; learned word metadata can revert when revisiting a cue.

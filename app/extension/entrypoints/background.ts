@@ -492,7 +492,13 @@ async function enrichLearningTokenFromContent(
     throw error;
   }
 
-  const track = trackWithLearningToken(currentState.track, response.cueId, response.token);
+  const latestState = tabSubtitleStates.get(tabId);
+  if (latestState?.type !== 'ready' || latestState.track.trackId !== message.trackId
+    || latestState.track.youtubeVideoId !== message.youtubeVideoId
+    || response.cueId !== message.cueId || response.token.index !== message.tokenIndex) {
+    throw new Error('The active track changed before the word card arrived.');
+  }
+  const track = trackWithLearningToken(latestState.track, response.cueId, response.token);
 
   await storeReadySubtitleState(tabId, {
     type: 'ready',
