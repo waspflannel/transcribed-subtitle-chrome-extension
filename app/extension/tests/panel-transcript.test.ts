@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
-import type { SubtitleCue } from '../utils/contracts';
-import { filterTranscriptCues, panelTranscriptListHtml } from '../utils/panel/transcript';
+import type { PartialSubtitleCue, SubtitleCue } from '../utils/contracts';
+import { filterTranscriptCues, panelPartialTranscriptListHtml, panelTranscriptListHtml } from '../utils/panel/transcript';
 
 const cues: SubtitleCue[] = [
   { cueId: 'c1', index: 0, startMs: 500, endMs: 2100, sourceText: 'hola', translatedText: 'hello', romanization: 'o-la', tokens: [{ index: 0, text: 'hola', normalizedText: 'hola' }] },
@@ -32,6 +32,21 @@ describe('panelTranscriptListHtml', () => {
   });
   it('shows an empty-state when the query matches nothing', () => {
     expect(panelTranscriptListHtml({ cues, activeCueId: null, query: 'zzz', settings: DEFAULT_EXTENSION_SETTINGS })).toContain('No cues match');
+  });
+});
+
+describe('panelPartialTranscriptListHtml', () => {
+  const partialCues: PartialSubtitleCue[] = [
+    { cueId: 'p1', index: 0, startMs: 0, endMs: 1000, sourceText: 'hola', translatedText: 'hello' },
+  ];
+
+  it('renders readable source cues with safe navigation and no editing controls', () => {
+    const html = panelPartialTranscriptListHtml({ cues: partialCues, activeCueId: 'p1', query: '' });
+
+    expect(html).toContain('hola');
+    expect(html).toContain('aria-current="true"');
+    expect(html).toContain('data-transcript-action="jump"');
+    expect(html).not.toContain('quick-fix');
   });
 });
 

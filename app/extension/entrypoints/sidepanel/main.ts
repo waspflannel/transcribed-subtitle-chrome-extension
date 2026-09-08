@@ -950,6 +950,8 @@ function showPanelState(state: PanelState): void {
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
     void pullActiveCue(state);
+  } else if (subtitleState.type === 'loading' && subtitleState.partialTrack) {
+    transcriptView.setPartialData(subtitleState.partialTrack.youtubeVideoId, subtitleState.partialTrack.cues, settings);
   } else {
     cueSnapshotRequest += 1;
     transcriptView.setData(null, [], settings);
@@ -1082,6 +1084,7 @@ async function pullActiveCue(state: PanelState): Promise<void> {
 function showWatchState(state: PanelState, supported: boolean, authenticated: boolean): void {
   const subtitleState = state.subtitleState;
   const loading = subtitleState.type === 'loading';
+  const partial = loading && subtitleState.partialTrack !== undefined;
   const ready = subtitleState.type === 'ready';
   const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
 
@@ -1094,11 +1097,11 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   progressSummaryLabel.textContent = correctionRunning ? 'Updating lyrics…' : '';
   backTranscriptButton.hidden = !ready || watchScreen === 'transcript';
   backTranscriptButton.disabled = quickFixRequestBusy || lyricsCorrectionRequestBusy;
-  readyToolbar.hidden = watchScreen !== 'transcript';
+  readyToolbar.hidden = watchScreen !== 'transcript' || partial;
   transcriptList.hidden = watchScreen !== 'transcript';
   transcriptStatus.hidden = watchScreen !== 'transcript';
   quickFixStatus.hidden = watchScreen !== 'transcript';
-  watchReady.hidden = !ready;
+  watchReady.hidden = !ready && !partial;
 
   if (loading) {
     const queued = subtitleState.status === 'queued';

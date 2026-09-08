@@ -1,8 +1,8 @@
 import { browser } from 'wxt/browser';
 
-import type { SubtitleCue } from '../../utils/contracts';
+import type { PartialSubtitleCue, SubtitleCue } from '../../utils/contracts';
 import type { ExtensionSettings } from '../../utils/settings-model';
-import { panelTranscriptListHtml } from '../../utils/panel/transcript';
+import { panelPartialTranscriptListHtml, panelTranscriptListHtml } from '../../utils/panel/transcript';
 import { lyricsCharacterCount, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
 
 export interface QuickFixSelection {
@@ -20,6 +20,8 @@ export function bindTranscriptView(dom: {
   onQuickFixCancel?: () => void;
 }) {
   let cues: readonly SubtitleCue[] = [];
+  let partialCues: readonly PartialSubtitleCue[] = [];
+  let partial = false;
   let settings: ExtensionSettings | null = null;
   let youtubeVideoId: string | null = null;
   let activeCueId: string | null = null;
@@ -43,6 +45,8 @@ export function bindTranscriptView(dom: {
       dom.transcriptSearch.value,
       settings?.showRomanization ?? false,
       settings?.showTranslation ?? false,
+      partial,
+      partialCues,
       quickFixMode,
       editingCueId,
       editingKey(),
@@ -53,12 +57,19 @@ export function bindTranscriptView(dom: {
     if (!settings) return;
     const total = cues.length;
     const signature = renderSignature();
-    dom.transcriptStatus.textContent = total === 0 ? '' : `${total} cues`;
+    const partialTotal = partialCues.length;
+    dom.transcriptStatus.textContent = partial
+      ? partialTotal === 0 ? '' : `${partialTotal} cues · Still generating`
+      : total === 0 ? '' : `${total} cues`;
     if (signature === renderedSignature) return;
     renderedSignature = signature;
-    dom.transcriptList.innerHTML = total === 0
+    dom.transcriptList.innerHTML = (partial ? partialTotal : total) === 0
       ? '<p class="transcript-empty muted">Generate subtitles to see the transcript.</p>'
-      : panelTranscriptListHtml({
+      : partial ? panelPartialTranscriptListHtml({
+        cues: partialCues,
+        activeCueId,
+        query: dom.transcriptSearch.value,
+      }) : panelTranscriptListHtml({
         cues,
         activeCueId,
         query: dom.transcriptSearch.value,
@@ -189,7 +200,7 @@ export function bindTranscriptView(dom: {
       }
       ackButton(button);
     } else if (action === 'copy') {
-      const text = cues.find((c) => c.cueId === cueId)?.sourceText;
+      const text = (partial ? partialCues : cues).find((c) => c.cueId === cueId)?.sourceText;
       if (text && navigator.clipboard) {
         void navigator.clipboard.writeText(text)
           .then(() => ackButton(button, 'Copied'))
@@ -224,7 +235,10 @@ export function bindTranscriptView(dom: {
   return {
     setData(nextYoutubeVideoId: string | null, nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
       if (youtubeVideoId !== nextYoutubeVideoId || !nextCues.some((cue) => cue.cueId === editingCueId)) editingCueId = null;
-      youtubeVideoId = nextYoutubeVideoId; cues = nextCues; settings = nextSettings; render();
+      youtubeVideoId = nextYoutubeVideoId; cues = nextCues; partialCues = []; partial = false; settings = nextSettings; render();
+    },
+    setPartialData(nextYoutubeVideoId: string, nextCues: readonly PartialSubtitleCue[], nextSettings: ExtensionSettings) {
+      youtubeVideoId = nextYoutubeVideoId; cues = []; partialCues = nextCues; partial = true; settings = nextSettings; render();
     },
     setActiveCue(cueId: string | null) {
       if (cueId === activeCueId) return;

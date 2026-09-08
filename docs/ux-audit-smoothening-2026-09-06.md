@@ -817,6 +817,17 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ### U5. P3: Consider Making Existing Partial Results Readable In Watch
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Watch now renders available partial source cues in a read-only transcript while the generation progress card remains visible. The partial view supports search, cue highlighting, jump, and copy, but has no edit or word-card controls. Partial revisions reuse the existing transcript surface and search value, and final completion switches back to the full editable transcript without changing the correction workflow.
+
+**How To Test:**
+1. Return a running job with partial cues and update its revision while viewing a later row. Expected: readable source cues show with a `Still generating` status, progress remains visible, search/highlight/jump/copy work, and the view does not expose editing.
+2. Complete the same job. Expected: the final transcript replaces the partial rows, full-track and per-token editing semantics return, and the viewer remains on the same Watch surface.
+3. Run the focused `panel-transcript.test.ts` check when execution is authorized. Expected: partial rows are readable and contain navigation controls without quick-fix controls.
+
+**Limits:** No browser playback, revision update, or final-transition journey was run; partial Watch rendering is source-reviewed and intentionally excludes partial enrichment/word cards.
+
 **Surface/impact:** The overlay can use partial cues, but the side-panel transcript remains unavailable until final completion.
 
 **Trigger and actual/expected:** Supply a running job with partial cues. Watch stays in its progress-only state. An optional improvement is to permit reading those existing cues with a clear "Still generating" label while progress remains visible.
