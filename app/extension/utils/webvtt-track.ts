@@ -31,6 +31,8 @@ export interface WebVttVideoTrackOptions<TCue extends WebVttBindableCue> {
   video: HTMLVideoElement;
   track: WebVttBindableTrack<TCue>;
   onCueChange: (change: WebVttCueChange<TCue>) => void;
+  onTrackLoaded?: () => void;
+  onTrackLoadError?: () => void;
   logger?: Pick<WebVttTrackLogger, 'trackLoaded' | 'trackLoadError'>;
   timingOffsetSeconds?: number;
 }
@@ -65,11 +67,13 @@ export function bindWebVttTrackToVideo<TCue extends WebVttBindableCue>(
 
   const handleLoad = (): void => {
     logger?.trackLoaded({ video, textTrack, track });
+    options.onTrackLoaded?.();
     emitCueChange();
   };
 
   const handleError = (): void => {
     logger?.trackLoadError(track);
+    options.onTrackLoadError?.();
   };
 
   textTrack.mode = 'hidden';

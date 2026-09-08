@@ -24,6 +24,10 @@ export function renderOverlayContent(
     }));
   }
 
+  if (state.bindingError) {
+    return renderFrame(renderBindingError(state.bindingError));
+  }
+
   if (state.subtitleState.type === 'ready') {
     const cue = state.activeCue;
 
@@ -138,9 +142,11 @@ function renderPartialRail(
       <div class="rail-main">
         <div class="token-area" dir="auto" lang="${
           sourceLanguage === 'auto' ? 'und' : escapeHtml(sourceLanguage)
-        }"><span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
-          cue.sourceText,
-        )}</span></div>
+        }"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${
+          settings.blurSourceWords
+            ? ' tabindex="0" aria-label="Partial source text, focus to reveal blurred text"'
+            : ''
+        }>${escapeHtml(cue.sourceText)}</span></div>
         ${cueRomanization}
         ${translation}
       </div>
@@ -355,6 +361,23 @@ function renderShell(input: { eyebrow: string; title: string; detail: string; me
         <div class="title">${escapeHtml(input.title)}</div>
         <div class="detail">${escapeHtml(input.detail)}</div>
         ${meta}
+      </div>
+    </section>
+  `;
+}
+
+function renderBindingError(detail: string): string {
+  return `
+    <section class="rail rail--message" role="alert">
+      <div class="rail-meta">
+        <span class="eyebrow">AI subtitles</span>
+      </div>
+      <div class="rail-main rail-main--message">
+        <div class="title">Subtitle display needs a retry</div>
+        <div class="detail">${escapeHtml(detail)}</div>
+      </div>
+      <div class="rail-controls">
+        <button class="study-control" type="button" data-retry-binding>Retry attachment</button>
       </div>
     </section>
   `;

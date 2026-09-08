@@ -213,6 +213,13 @@
           user-select: none;
         }
 
+        .partial-source-layer:hover,
+        .partial-source-layer:focus-visible {
+          filter: blur(0);
+          opacity: 1;
+          user-select: text;
+        }
+
         .token-card:hover .study-blur--token,
         .token-card:focus-visible .study-blur--token,
         .token-card[aria-pressed="true"] .study-blur--token,
@@ -301,6 +308,10 @@
           font-size: 13px;
           gap: 8px;
           padding: 12px 14px;
+          box-sizing: border-box;
+          max-height: min(60vh, 420px);
+          max-width: min(270px, calc(100vw - 24px));
+          overflow-y: auto;
         }
 
         .token-inline-preview {

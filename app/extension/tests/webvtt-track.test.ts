@@ -61,11 +61,13 @@ describe('bindWebVttTrackToVideo', () => {
       trackLoaded: vi.fn(),
       trackLoadError: vi.fn(),
     };
+    const onTrackLoaded = vi.fn();
 
     const cleanup = bindWebVttTrackToVideo({
       video: video as unknown as HTMLVideoElement,
       track,
       onCueChange: () => undefined,
+      onTrackLoaded,
       logger,
     });
 
@@ -76,6 +78,7 @@ describe('bindWebVttTrackToVideo', () => {
       textTrack: video.appendedTrack!.track,
       track,
     });
+    expect(onTrackLoaded).toHaveBeenCalledTimes(1);
 
     cleanup();
   });
@@ -138,17 +141,20 @@ describe('bindWebVttTrackToVideo', () => {
       trackLoaded: vi.fn(),
       trackLoadError: vi.fn(),
     };
+    const onTrackLoadError = vi.fn();
 
     const cleanup = bindWebVttTrackToVideo({
       video: video as unknown as HTMLVideoElement,
       track,
       onCueChange: () => undefined,
+      onTrackLoadError,
       logger,
     });
 
     video.appendedTrack!.dispatchEvent(new Event('error'));
 
     expect(logger.trackLoadError).toHaveBeenCalledWith(track);
+    expect(onTrackLoadError).toHaveBeenCalledTimes(1);
 
     cleanup();
   });

@@ -170,6 +170,24 @@ describe('renderOverlayContent', () => {
     expect(html).not.toContain('class="cue-romanization');
   });
 
+  it('makes a blurred partial source layer independently revealable', () => {
+    const html = renderOverlayContent({
+      ...partialLoadingState(),
+      settings: { ...DEFAULT_EXTENSION_SETTINGS, blurSourceWords: true },
+    });
+
+    expect(html).toContain('partial-source-layer token-text study-blur study-blur--token');
+    expect(html).toContain('tabindex="0" aria-label="Partial source text, focus to reveal blurred text"');
+  });
+
+  it('renders an actionable local attachment failure', () => {
+    const html = renderOverlayContent({ ...readyState(), bindingError: 'The subtitle track could not load.' });
+
+    expect(html).toContain('Subtitle display needs a retry');
+    expect(html).toContain('The subtitle track could not load.');
+    expect(html).toContain('data-retry-binding');
+  });
+
   it('hides the partial translation when translation display is disabled', () => {
     const state = partialLoadingState({ translatedText: 'Bonjour a tous' });
     const html = renderOverlayContent({

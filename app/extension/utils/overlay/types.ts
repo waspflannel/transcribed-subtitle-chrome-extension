@@ -12,6 +12,7 @@ export interface OverlayRenderState {
   activePartialCue?: PartialSubtitleCue | null;
   pendingTokenKeys?: ReadonlySet<string>;
   failedTokenKeys?: ReadonlySet<string>;
+  bindingError?: string | null;
 }
 
 export interface OverlayInteractionState {

@@ -67,6 +67,7 @@ export class OverlayShell {
     private readonly options: {
       onCopyCue?: (cue: SubtitleCue) => Promise<boolean>;
       onReplayCue?: (cue: SubtitleCue) => void;
+      onRetryBinding?: () => void;
       onStudyHoverEnd?: () => void;
       onTokenFocus?: () => void;
       onTokenBlur?: () => void;
@@ -243,6 +244,10 @@ export class OverlayShell {
         void this.handleStudyControl(button.dataset.studyControl);
       });
     }
+
+    this.content.querySelector<HTMLButtonElement>('[data-retry-binding]')?.addEventListener('click', () => {
+      this.options.onRetryBinding?.();
+    });
   }
 
   private async handleStudyControl(control: string | undefined): Promise<void> {

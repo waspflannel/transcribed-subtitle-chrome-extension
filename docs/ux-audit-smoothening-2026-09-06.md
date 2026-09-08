@@ -492,6 +492,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R14. P2: Partial Captions And Local Binding Failures Have Unusable States
 
+**Implementation Status: Fixed in code; focused partial/render and WebVTT callback regression source added; browser validation deferred.**
+
+**What Changed:** Partial source text is a separately focusable blur layer that reveals with pointer or keyboard focus. WebVTT binding exposes load success/failure callbacks; the content script records track-load failures and exhausted player-binding retries as local attachment errors. The overlay shows the existing track's failure with a Retry attachment action, and retry clears the local error, reuses the current ready/partial track, and restores the short player-binding retry window.
+
+**How To Test:**
+1. Run `npm test -- tests/overlay.test.ts tests/webvtt-track.test.ts`. Expected: partial source reveal markup, actionable attachment error markup, and load/error callback checks pass.
+2. Enable source blur during partial delivery. Expected: source text, romanization, and translation layers reveal independently by pointer and keyboard focus.
+3. Force the hidden WebVTT track to emit an error. Expected: the overlay reports a local attachment problem with Retry attachment; selecting it binds the same track without a new generation request, and a subsequent load clears the error.
+4. Exhaust video-binding retries while no player is mounted, then mount the player and select retry. Expected: the terminal local error is actionable and the existing track attaches when the player is available.
+
+**Remaining Limits:** No real browser track-load failure, retry timing, assistive-technology focus, or YouTube player-mount journey was exercised. The retry action is local to the content script and cannot repair a malformed backend track; regeneration remains a separate action.
+
 **Surface:** Partial overlay and completed-track attachment.
 
 **Impact:** Early captions can be unreadable with study blur enabled; an attachment failure can look like a normal gap or missing generation.

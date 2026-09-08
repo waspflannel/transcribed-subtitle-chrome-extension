@@ -40,6 +40,7 @@ export default defineContentScript({
     let activeVideo: HTMLVideoElement | null = null;
     let stopWebVttTrack: (() => void) | null = null;
     let stopVideoStateListeners: (() => void) | null = null;
+    let bindingError: string | null = null;
     let routeHydrateTimer: number | undefined;
     let videoBindRetryTimer: number | undefined;
     let videoBindRetriesLeft = 0;
@@ -65,6 +66,7 @@ export default defineContentScript({
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
       onReplayCue: (cue) => replayCue(cue),
+      onRetryBinding: () => retryVideoBinding(),
       onStudyHoverEnd: () => endStudyHover(),
       onTokenPreview: () => beginStudyHover(),
       onTokenPreviewEnd: () => endStudyHover(),
@@ -318,6 +320,7 @@ export default defineContentScript({
         activePartialCue,
         pendingTokenKeys,
         failedTokenKeys,
+        bindingError,
       });
       const page = parseYoutubePage(window.location.href);
       if (page.supported) {
@@ -357,9 +360,9 @@ export default defineContentScript({
      * giving up (which used to leave the overlay empty until a refresh),
      * retry briefly while the current subtitle state stays unchanged.
      */
-    function scheduleVideoBindRetry(bind: () => void): void {
+    function scheduleVideoBindRetry(bind: () => void): boolean {
       if (disposed || videoBindRetriesLeft <= 0) {
-        return;
+        return false;
       }
 
       videoBindRetriesLeft -= 1;
@@ -378,6 +381,8 @@ export default defineContentScript({
 
         bind();
       }, VIDEO_BIND_RETRY_DELAY_MS);
+
+      return true;
     }
 
     function clearBoundWebVttTrack(): void {
@@ -392,6 +397,7 @@ export default defineContentScript({
       }
       releaseStudyPause();
       cueHold.clear();
+      bindingError = null;
       activeCue = null;
       activePartialCue = null;
       boundPartialTrackKey = null;
@@ -404,6 +410,20 @@ export default defineContentScript({
     function clearSubtitles(): void {
       clearBoundWebVttTrack();
       subtitleState = DEFAULT_SUBTITLE_STATE;
+      updateOverlay();
+    }
+
+    function retryVideoBinding(): void {
+      if (disposed) return;
+      const state = subtitleState;
+      if (state.type !== 'ready' && !(state.type === 'loading' && state.partialTrack)) return;
+      clearBoundWebVttTrack();
+      videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
+      if (state.type === 'ready') {
+        bindGeneratedSubtitles(state.track);
+      } else {
+        bindPartialSubtitles(state.partialTrack, partialTrackKey(state));
+      }
       updateOverlay();
     }
 
@@ -509,7 +529,9 @@ export default defineContentScript({
       const video = findActiveYoutubeVideo(document);
 
       if (!video) {
-        scheduleVideoBindRetry(() => bindPartialSubtitles(partialTrack, partialKey));
+        if (!scheduleVideoBindRetry(() => bindPartialSubtitles(partialTrack, partialKey))) {
+          bindingError = 'The video player is unavailable. Retry attachment when it is visible.';
+        }
         updateOverlay();
 
         return;
@@ -517,6 +539,7 @@ export default defineContentScript({
 
       activeVideo = video;
       boundPartialTrackKey = partialKey;
+      bindingError = null;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
@@ -530,6 +553,18 @@ export default defineContentScript({
         onCueChange(change) {
           activePartialCue = change.activeCue;
           updateOverlay();
+        },
+        onTrackLoaded: () => {
+          if (subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+            bindingError = null;
+            updateOverlay();
+          }
+        },
+        onTrackLoadError: () => {
+          if (subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+            bindingError = 'The partial subtitle track could not load. Retry attachment.';
+            updateOverlay();
+          }
         },
         logger: webVttTrackLogger,
       });
@@ -551,7 +586,9 @@ export default defineContentScript({
 
       if (!video) {
         webVttTrackLogger.videoMissing(track);
-        scheduleVideoBindRetry(() => bindGeneratedSubtitles(track));
+        if (!scheduleVideoBindRetry(() => bindGeneratedSubtitles(track))) {
+          bindingError = 'The video player is unavailable. Retry attachment when it is visible.';
+        }
         updateOverlay();
 
         return;
@@ -559,6 +596,7 @@ export default defineContentScript({
 
       bindVideoStateListeners(video);
       boundReadyTrackId = track.trackId;
+      bindingError = null;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
@@ -577,6 +615,18 @@ export default defineContentScript({
 
           activeCue = next;
           updateOverlay();
+        },
+        onTrackLoaded: () => {
+          if (subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
+            bindingError = null;
+            updateOverlay();
+          }
+        },
+        onTrackLoadError: () => {
+          if (subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
+            bindingError = 'The subtitle track could not load. Retry attachment.';
+            updateOverlay();
+          }
         },
         logger: webVttTrackLogger,
       });
