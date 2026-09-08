@@ -47,6 +47,8 @@ export default defineContentScript({
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
+    let stateEpoch = 0;
+    let hydrationRequest = 0;
     const cueHold = new CueHoldController({
       holdMs: 1800,
       view: window,
@@ -102,6 +104,7 @@ export default defineContentScript({
 
     ctx.onInvalidated(() => {
       disposed = true;
+      stateEpoch += 1;
       if (routeHydrateTimer !== undefined) {
         window.clearTimeout(routeHydrateTimer);
         routeHydrateTimer = undefined;
@@ -250,8 +253,12 @@ export default defineContentScript({
 
     async function hydrateContentState(): Promise<void> {
       if (!parseYoutubePage(window.location.href).supported) return;
+      const request = ++hydrationRequest;
+      const epoch = stateEpoch;
+      const url = window.location.href;
       try {
         const state = await browser.runtime.sendMessage({ type: 'content.getState' });
+        if (disposed || request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) return;
 
         if (state?.settings) {
           settings = createExtensionSettingsFromPartial(state.settings);
@@ -263,6 +270,7 @@ export default defineContentScript({
           return;
         }
       } catch {
+        if (disposed || request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) return;
         // The overlay can still render its default local state when background state is unavailable.
       }
 
@@ -320,6 +328,7 @@ export default defineContentScript({
     }
 
     function clearBoundWebVttTrack(): void {
+      stateEpoch += 1;
       stopWebVttTrack?.();
       stopVideoStateListeners?.();
       stopWebVttTrack = null;
@@ -352,6 +361,8 @@ export default defineContentScript({
     }
 
     function applySubtitleState(nextSubtitleState: SubtitleState): void {
+      if (disposed || !subtitleStateMatchesCurrentPage(nextSubtitleState)) return;
+      hydrationRequest += 1;
       // Loading updates for an already-bound partial track (progress text,
       // unchanged revision) must not rebind: rebinding resets the text track
       // and drops the currently displayed cue every 2s poll.
@@ -382,13 +393,6 @@ export default defineContentScript({
 
       clearBoundWebVttTrack();
       videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
-
-      if (!subtitleStateMatchesCurrentPage(nextSubtitleState)) {
-        subtitleState = DEFAULT_SUBTITLE_STATE;
-        updateOverlay();
-
-        return;
-      }
 
       subtitleState = nextSubtitleState;
       pendingTokenKeys.clear();
@@ -793,6 +797,13 @@ export default defineContentScript({
         return;
       }
 
+      const { trackId, youtubeVideoId } = subtitleState.track;
+      const epoch = stateEpoch;
+      const isCurrent = (): boolean => !disposed && epoch === stateEpoch
+        && subtitleState.type === 'ready' && subtitleState.track.trackId === trackId
+        && subtitleState.track.youtubeVideoId === youtubeVideoId
+        && subtitleStateMatchesCurrentPage(subtitleState);
+
       pendingTokenKeys.add(key);
       failedTokenKeys.delete(key);
       updateOverlay();
@@ -800,20 +811,24 @@ export default defineContentScript({
       try {
         const response = (await browser.runtime.sendMessage({
           type: 'content.enrichLearningToken',
-          youtubeVideoId: subtitleState.track.youtubeVideoId,
-          trackId: subtitleState.track.trackId,
+          youtubeVideoId,
+          trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,
         })) as { ok?: boolean; track?: TrackResponse; error?: string };
 
+        if (!isCurrent()) return;
+
         if (response?.ok === false || !response?.track) {
           throw new Error(response?.error ?? 'Unable to generate word card.');
         }
+        if (response.track.trackId !== trackId || response.track.youtubeVideoId !== youtubeVideoId) return;
 
         applyEnrichedTrack(response.track, cue.cueId, key);
       } catch (error) {
+        if (!isCurrent()) return;
         console.warn('extension.learning_token_enrichment_failed', {
-          trackId: subtitleState.track.trackId,
+          trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,
           error: error instanceof Error ? error.message : 'Unknown extension enrichment error',

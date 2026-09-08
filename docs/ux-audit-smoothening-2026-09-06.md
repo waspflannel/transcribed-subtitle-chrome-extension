@@ -265,6 +265,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R6. P1: Late Content Responses Can Clear Or Replace The Current Video
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Hydration captures request, state epoch and URL; enrichment captures epoch/video/track on both success and failure. Foreign pushed states are rejected before teardown. Logging uses captured track identity, not a potentially cleared state.
+
+**How To Test:**
+1. Defer A hydration, navigate to B, then resolve and reject A in separate runs. Expected: B stays intact. Repeat with a newer push, reset, regeneration and content invalidation.
+2. Repeat with a pending A word card and a same-ID regenerated track. Expected: no foreign metadata, post-teardown update or exception. Limits: messaging races are source-reviewed only; tests/builds not run.
+
 **Surface:** Content hydration and on-click word cards.
 
 **Impact:** A delayed response for video A can blank video B or place A's cue/card data into B's UI.
