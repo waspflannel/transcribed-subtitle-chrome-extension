@@ -354,7 +354,7 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
 
-**What Changed:** Stored sessions now carry a local session identity. Remembered tracks and persisted tab operations are account-scoped, panel history cache writes accept only the current account, and late account refresh/enrichment/correction/generation writes verify their originating session before updating local state. Anonymous panel reads cannot restore an authenticated track.
+**What Changed:** Stored sessions now carry a local session identity. Remembered tracks and persisted tab operations are account-scoped, panel history cache writes accept only the current account, and late account refresh/enrichment/correction/generation writes verify their originating session before updating local state. Logout clears rendered subtitle state across content tabs, and anonymous panel reads cannot restore an authenticated track.
 
 **How To Test:**
 1. Sign in as account A, load a track, and leave account/history and enrichment responses pending. Sign out, sign in as account B, then resolve A's success and 401 responses. Expected: B's token, account summary, history and displayed track remain B-owned; A's late 401 does not sign B out.
