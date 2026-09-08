@@ -68,7 +68,11 @@ After these complete, assign G1 extension integration and any cross-branch resol
 - Created integration and three coding worktrees from `4a25575`.
 - Dispatched three independent Luna xhigh coding assignments with exact finding ownership and explicit exclusions.
 - Read every remaining acceptance criterion and prepared this review map while workers run.
+- Integrated backend fixes and their focused regression corrections, then merged the content and panel branches. Luna completed extension cancellation at `3791353`.
+- Initial integrated checks: contracts passed; extension compile/build passed; extension suite had 204 passes and one expired-date fixture failure. Backend focused failures were corrected in `deea02e` and the affected suites passed. These are intermediate checks, not final validation.
+- Coordinator code and Ponytail reviews found remaining session/cancellation races, asynchronous pause ownership defects, partial transcript controls without behavior, legacy identity fallbacks, and gaps in dispatch-site regression coverage.
+- Assigned bounded correction batches on `codex/smoothening-panel-review`, `codex/smoothening-content-review`, and `codex/smoothening-backend-review`, each based on `3791353` in its existing isolated worktree. Workers retain their original file boundaries and Luna xhigh settings. No progress inspections.
 
 ## Validation And Review
 
-Pending worker completion. Browser testing belongs to the user. No live concurrency or provider behavior is claimed from source inspection or SQLite tests.
+Review corrections are in progress. See `docs/smoothening-review-2026-09-08.md` for the coordinator's findings. Browser testing belongs to the user. No live concurrency or provider behavior is claimed from source inspection or SQLite tests.
