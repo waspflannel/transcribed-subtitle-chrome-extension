@@ -171,9 +171,14 @@ class SubtitleJobService
                 throw $exception;
             }
 
-            $job = $this->compatibleJobQuery($payload, $user, $processingVersion)
-                ->with('track')
-                ->first();
+            $job = DB::transaction(function () use ($payload, $user, $processingVersion): ?SubtitleJob {
+                User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+                return $this->compatibleJobQuery($payload, $user, $processingVersion)
+                    ->with('track')
+                    ->lockForUpdate()
+                    ->first();
+            }, attempts: 5);
 
             if ($job === null) {
                 throw $exception;

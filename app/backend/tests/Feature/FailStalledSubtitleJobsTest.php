@@ -76,6 +76,27 @@ class FailStalledSubtitleJobsTest extends TestCase
         $this->assertSame('running', $stalled->status);
     }
 
+    public function test_a_new_generation_heartbeat_wins_over_an_old_timeout_snapshot(): void
+    {
+        $stalled = SubtitleJob::factory()->create([
+            'status' => 'running',
+            'stage' => 'tokenizing',
+            'updated_at' => now()->subMinutes(30),
+        ]);
+
+        SubtitleJob::retrieved(function (SubtitleJob $observed) use ($stalled): void {
+            if ($observed->id === $stalled->id) {
+                DB::table('subtitle_jobs')
+                    ->whereKey($stalled->id)
+                    ->update(['updated_at' => now()]);
+            }
+        });
+
+        $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
+
+        $this->assertSame('running', $stalled->fresh()->status);
+    }
+
     public function test_it_fails_and_clears_lyrics_corrections_that_stall_again_after_recovery(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);

@@ -7,6 +7,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\UsageLedger;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -30,6 +31,8 @@ class SubtitleJobFailureHandler
         string $runId,
         array $context = [],
         bool $promoteQueued = true,
+        ?CarbonInterface $expectedUpdatedAt = null,
+        ?string $expectedStage = null,
     ): bool
     {
         $job = SubtitleJob::query()->find($subtitleJobId);
@@ -46,10 +49,25 @@ class SubtitleJobFailureHandler
 
         [$errorCode, $errorMessage] = $this->resolveErrorPayload($exception);
 
-        $job = DB::transaction(function () use ($subtitleJobId, $runId, $stage, $errorCode, $errorMessage): ?SubtitleJob {
+        $job = DB::transaction(function () use (
+            $subtitleJobId,
+            $runId,
+            $stage,
+            $errorCode,
+            $errorMessage,
+            $expectedUpdatedAt,
+            $expectedStage,
+        ): ?SubtitleJob {
             $current = SubtitleJobLock::current($subtitleJobId, $runId);
 
             if ($current === null || in_array($current->status, ['completed', 'failed'], true)) {
+                return null;
+            }
+
+            if (
+                ($expectedUpdatedAt !== null && ! $current->updated_at?->equalTo($expectedUpdatedAt))
+                || ($expectedStage !== null && $current->stage !== $expectedStage)
+            ) {
                 return null;
             }
 

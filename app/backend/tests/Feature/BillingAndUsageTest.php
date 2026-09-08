@@ -974,6 +974,43 @@ class BillingAndUsageTest extends TestCase
         );
     }
 
+    public function test_queue_promotion_uses_current_submission_time_before_row_id(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 5,
+        ]);
+        Queue::fake();
+        $user = User::factory()->create();
+        $running = SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+        $laterSubmission = SubtitleJob::factory()->for($user)->create([
+            'status' => 'queued',
+            'stage' => 'preparing',
+            'progress_percent' => 0,
+        ]);
+        $earlierRetry = SubtitleJob::factory()->for($user)->create([
+            'status' => 'queued',
+            'stage' => 'preparing',
+            'progress_percent' => 0,
+        ]);
+        $laterSubmission->forceFill(['created_at' => now()->subMinute()])->saveQuietly();
+        $earlierRetry->forceFill(['created_at' => now()->subMinutes(5)])->saveQuietly();
+
+        app(SubtitleJobFailureHandler::class)->failJob(
+            $running->id,
+            'preparing',
+            SubtitleProcessingException::enrichmentFailed(),
+            $running->run_id,
+        );
+
+        $this->assertSame('running', $earlierRetry->fresh()->status);
+        $this->assertSame('queued', $laterSubmission->fresh()->status);
+        Queue::assertPushed(
+            AcquireSubtitleAudio::class,
+            fn (AcquireSubtitleAudio $job): bool => $job->subtitleJobId === $earlierRetry->id,
+        );
+    }
+
     public function test_compatible_running_generation_reuse_does_not_consume_another_generation_slot(): void
     {
         config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);

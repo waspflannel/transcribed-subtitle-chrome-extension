@@ -67,15 +67,17 @@ class FailStalledSubtitleJobs extends Command
                 'stage_timeout_seconds' => $stageTimeout,
             ]);
 
-            $failureHandler->failJob(
+            $didFail = $failureHandler->failJob(
                 subtitleJobId: $job->id,
                 stage: $stage ?: 'unknown',
                 exception: $exception,
                 runId: (string) $job->run_id,
                 context: ['reason' => 'stalled_timeout'],
+                expectedUpdatedAt: $job->updated_at,
+                expectedStage: $stage,
             );
 
-            $failed++;
+            $failed += (int) $didFail;
         }
 
         // Recover a missing delivery once per revision, after an existing worker

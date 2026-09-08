@@ -595,6 +595,13 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Acceptance:** Concurrent identical requests return one job/reservation/dispatch at capacity; an earlier waiting submission precedes a later retry; a new heartbeat between selection and claim prevents failure. Lock tests require disposable Postgres.
 
+**What Changed:** The unique duplicate recovery path now reacquires the account lock before reading the compatible job, keeping duplicate reuse in the same lock order as admission and reservation. Queue promotion orders by the current submission timestamp with the row ID as a deterministic tie-breaker. Stalled failure claims carry the observed heartbeat and stage into the locked update, so a newer worker heartbeat causes the timeout claim to no-op.
+
+**How To Test:**
+1. Submit the same payload concurrently at the generation limit. Expected: one compatible row, one reservation, and one published \`AcquireSubtitleAudio\` job; the duplicate path resolves the row only after the account lock.
+2. Create queued rows with an older retry timestamp on the higher row ID, then free a running slot. Expected: the older current submission is promoted first and the later submission remains queued.
+3. Let the stalled command select an expired running row, update its heartbeat before the locked failure claim, and run the command. Expected: the row remains running and the command does not count it as failed. Limits: lock interleavings require disposable Postgres; this handoff adds source-level tests without starting a database service.
+
 ### R20. P2: History Can Hide Work That Still Holds Capacity Or Minutes
 
 **Surface:** Extension history, dashboard discovery, job support links.

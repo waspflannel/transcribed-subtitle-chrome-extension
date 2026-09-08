@@ -64,6 +64,7 @@ class SubtitleJobAdmission
             $next = SubtitleJob::query()
                 ->whereBelongsTo($lockedUser)
                 ->where('status', 'queued')
+                ->orderBy('created_at')
                 ->orderBy('id')
                 ->first();
 
