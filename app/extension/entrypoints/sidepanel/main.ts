@@ -1089,17 +1089,20 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   watchReady.hidden = !ready;
 
   if (loading) {
+    const queued = subtitleState.status === 'queued';
     const progress = generationProgress(subtitleState);
 
-    progressLabel.textContent = 'Generating';
+    progressLabel.textContent = queued ? 'Queued' : 'Generating';
     progressStages.setAttribute('aria-label', 'Generation stages');
     progressPercent.setAttribute('aria-valuenow', String(progress.percent));
     progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.activityLabel}`);
     progressPercent.textContent = `${progress.percent}%`;
-    announceProgress('Generating', progress.activityLabel);
+    announceProgress(queued ? 'Queued' : 'Generating', progress.activityLabel);
     progressBar.style.width = `${progress.percent}%`;
     progressStages.innerHTML = stageChecklistHtml(subtitleState.stage);
-    progressCopy.textContent = 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
+    progressCopy.textContent = queued
+      ? 'Waiting for a generation slot. You can close this panel — generation keeps going.'
+      : 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
   } else if (correctionRunning && state.lyricsCorrection) {
     const progress = lyricsCorrectionProgress(state.lyricsCorrection.stage);
     progressLabel.textContent = 'Replacing lyrics';

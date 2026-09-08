@@ -396,6 +396,7 @@ async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState
 
       await publishSubtitleState(activeTabId, {
         type: 'loading',
+        status: 'running',
         youtubeVideoId: pageStatus.videoId,
         youtubeUrl: pageStatus.url,
         message: 'Preparing request...',
@@ -590,6 +591,7 @@ async function waitForCompletedSubtitleJob(
     if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
       await publishSubtitleState(tabId, {
         type: 'loading',
+        status: job.status,
         jobId: job.jobId,
         youtubeVideoId: pageStatus.videoId,
         youtubeUrl: pageStatus.url,
@@ -619,6 +621,7 @@ async function waitForCompletedSubtitleJob(
       if (isCurrentLoadingState(tabId, pageStatus.videoId)) {
         await publishSubtitleState(tabId, {
           type: 'loading',
+          status: job.status,
           jobId: job.jobId,
           youtubeVideoId: pageStatus.videoId,
           youtubeUrl: pageStatus.url,
@@ -1135,6 +1138,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
       if (!operation.jobId) {
         stateForRecovery = {
           type: 'loading',
+          status: 'running',
           youtubeVideoId: pageStatus.videoId,
           youtubeUrl: pageStatus.url,
           message: 'Preparing request...',
@@ -1148,6 +1152,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
           if (job.status === 'queued' || job.status === 'running') {
             stateForRecovery = {
               type: 'loading',
+              status: job.status,
               jobId: job.jobId,
               youtubeVideoId: pageStatus.videoId,
               youtubeUrl: pageStatus.url,
@@ -1177,6 +1182,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number 
         } catch {
           stateForRecovery = {
             type: 'loading',
+            status: 'running',
             jobId: operation.jobId,
             youtubeVideoId: pageStatus.videoId,
             youtubeUrl: pageStatus.url,

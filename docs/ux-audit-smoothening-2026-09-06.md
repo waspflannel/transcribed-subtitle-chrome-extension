@@ -730,6 +730,17 @@ These should follow core state/lifecycle fixes. They are bounded changes, not a 
 
 ### U1. P2: Describe Queued Work As Waiting, Not Active Generation
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Queued status is preserved in subtitle state and progress view models. Watch now labels the state `Queued`, announces `Waiting for a generation slot`, and keeps the existing no-ETA copy until backend admission changes the job to running.
+
+**How To Test:**
+1. Return a queued generation fixture to Watch and History. Expected: Watch shows `Queued` and `Waiting for a generation slot`; History shows `Queued`; neither implies active provider processing or an ETA.
+2. Advance the same job to running. Expected: Watch changes to `Generating` and shows the current stage after admission.
+3. Run the focused `panel-progress.test.ts` check when execution is authorized. Expected: queued progress uses the waiting label.
+
+**Limits:** No browser/UI runtime or backend queue transition was exercised; wording and state propagation are source-reviewed only in this handoff.
+
 **Surface/impact:** Watch progress can imply active processing while the job waits for an account slot.
 
 **Trigger and actual/expected:** Return a queued job. History/state know it is waiting, but Watch builds a timeline with running status and "Active now" language. It should show a waiting state and explain admission without inventing a completion ETA.

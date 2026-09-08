@@ -60,6 +60,7 @@ export async function stateWithBackendProgress(
 
   return {
     type: 'loading',
+    status: job.status,
     jobId: job.jobId,
     youtubeVideoId: job.youtubeVideoId,
     youtubeUrl: job.youtubeUrl,
