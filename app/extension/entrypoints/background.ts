@@ -265,6 +265,26 @@ async function recoverSubtitleStateFromBackend(
     tabSubtitleStates.set(tabId, resolved);
     tabSubtitleStateOwners.set(tabId, session.account.id);
 
+    if (resolved.jobId && !tabGenerationInFlight.has(tabId) && await isCurrentSession(session.sessionId)) {
+      const persistedOperation = await getTabOperation(tabId);
+      if (!await isCurrentSession(session.sessionId)) return localState;
+      if (persistedOperation?.kind === 'generation' && persistedOperation.accountId === session.account.id
+        && persistedOperation.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId === resolved.jobId) {
+        ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
+      } else if (!persistedOperation || persistedOperation.accountId !== session.account.id) {
+        if (persistedOperation) await clearTabOperation(tabId);
+        if (await isCurrentSession(session.sessionId)) {
+          await setTabOperation(tabId, {
+            kind: 'generation',
+            accountId: session.account.id,
+            youtubeVideoId: pageStatus.videoId,
+            jobId: resolved.jobId,
+          });
+          ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
+        }
+      }
+    }
+
     return resolved;
   }
 
