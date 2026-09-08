@@ -237,7 +237,7 @@
     "/v1/subtitle-jobs/{jobId}": {
       "get": {
         "operationId": "getSubtitleJob",
-        "summary": "Poll one subtitle job until it completes or fails.",
+        "summary": "Poll one subtitle job until it completes, fails, or is cancelled.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
@@ -274,6 +274,58 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelSubtitleJob",
+        "summary": "Cancel one queued or running subtitle generation.",
+        "description": "Cancels the owned generation run, releases its reserved minutes once, and returns the cancellation snapshot. A queued run never reaches a provider. A running provider request may finish externally, but its late result is ignored by the immutable run and terminal status guards. Repeating cancellation for an already-cancelled run is idempotent.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
+          {
+            "$ref": "#/components/parameters/ExtensionAuthorization"
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current cancelled subtitle job status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/job-response.schema.json"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           },
           "422": {
             "$ref": "#/components/responses/ValidationError"
@@ -690,7 +742,7 @@
         }
       },
       "Conflict": {
-        "description": "A correction is already in progress.",
+        "description": "The requested operation conflicts with the current resource state.",
         "content": {
           "application/json": {
             "schema": {

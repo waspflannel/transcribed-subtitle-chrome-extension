@@ -60,7 +60,7 @@ class SubtitleJobFailureHandler
         ): ?SubtitleJob {
             $current = SubtitleJobLock::current($subtitleJobId, $runId);
 
-            if ($current === null || in_array($current->status, ['completed', 'failed'], true)) {
+            if ($current === null || in_array($current->status, ['completed', 'failed', 'cancelled'], true)) {
                 return null;
             }
 

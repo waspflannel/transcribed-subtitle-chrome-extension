@@ -101,6 +101,19 @@ class SubtitleProcessingException extends Exception
     /**
      * @param  array<string, mixed>  $context
      */
+    public static function generationNotCancellable(array $context = []): self
+    {
+        return new self(
+            'generation_not_cancellable',
+            'Only queued or running subtitle generations can be cancelled.',
+            409,
+            $context,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     */
     public static function lyricsCorrectionInProgress(array $context = []): self
     {
         return new self('lyrics_correction_in_progress', 'A pasted-lyrics correction is already in progress.', 409, $context);

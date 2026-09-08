@@ -12,6 +12,7 @@ use App\Services\Billing\BillingEntitlementService;
 use App\Support\PostgresErrors;
 use App\Support\SubtitleProcessingVersion;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -43,6 +44,8 @@ class SubtitleJobService
         private readonly BillingEntitlementService $billing,
         private readonly FunnelAnalytics $analytics,
         private readonly SubtitleJobFailureHandler $failureHandler,
+        private readonly SubtitleJobArtifactStore $artifacts,
+        private readonly SubtitleJobAdmission $admission,
     ) {}
 
     /**
@@ -225,6 +228,53 @@ class SubtitleJobService
         }
 
         return $job;
+    }
+
+    public function cancel(SubtitleJob $job, User $user): SubtitleJob
+    {
+        $promoteQueued = false;
+
+        $cancelled = DB::transaction(function () use ($job, $user, &$promoteQueued): SubtitleJob {
+            $current = SubtitleJobLock::current($job->id, $job->run_id, $user->id);
+
+            if ($current === null) {
+                throw (new ModelNotFoundException)->setModel(SubtitleJob::class, [$job->id]);
+            }
+
+            if ($current->status === 'cancelled') {
+                return $current->load('track');
+            }
+
+            if (! in_array($current->status, ['queued', 'running'], true)) {
+                throw SubtitleProcessingException::generationNotCancellable([
+                    'status' => $current->status,
+                ]);
+            }
+
+            $promoteQueued = $current->status === 'running';
+            $runId = (string) $current->run_id;
+            $this->billing->releaseJobReservation($current, 'cancelled');
+            $this->artifacts->deleteForJob($current);
+            $current->forceFill([
+                'status' => 'cancelled',
+                'error_code' => 'generation_cancelled',
+                'error_message' => 'Generation was cancelled. Reserved minutes were released.',
+            ])->save();
+            $this->tracer->jobEvent($current, 'job.cancelled', [
+                'stage' => $current->stage,
+                'status' => 'cancelled',
+                'reason' => 'generation_cancelled',
+            ]);
+            DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($runId));
+
+            return $current->refresh()->load('track');
+        }, attempts: 5);
+
+        if ($promoteQueued) {
+            $this->admission->promoteQueuedJobs($user->id);
+        }
+
+        return $cancelled;
     }
 
     /**

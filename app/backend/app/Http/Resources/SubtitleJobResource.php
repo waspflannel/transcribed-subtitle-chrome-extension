@@ -29,7 +29,7 @@ class SubtitleJobResource extends JsonResource
         $includeRomanization = $this->requiredBoolean($this->include_romanization, 'include_romanization');
         $includeTranslation = $this->requiredBoolean($this->include_translation, 'include_translation');
 
-        if (! in_array($status, ['queued', 'running', 'completed', 'failed'], true)) {
+        if (! in_array($status, ['queued', 'running', 'completed', 'failed', 'cancelled'], true)) {
             throw new LogicException('Subtitle job has an invalid status.');
         }
 
@@ -71,7 +71,7 @@ class SubtitleJobResource extends JsonResource
             $resource['expiresAt'] = $track->expires_at->toJSON();
         }
 
-        if ($status === 'failed') {
+        if (in_array($status, ['failed', 'cancelled'], true)) {
             $resource['errorCode'] = $this->requiredString($this->error_code, 'error_code');
             $resource['message'] = $this->requiredString($this->error_message, 'error_message');
         }

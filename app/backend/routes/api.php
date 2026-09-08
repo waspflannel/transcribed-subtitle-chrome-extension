@@ -44,6 +44,10 @@ Route::prefix('v1')
                     ->name('subtitle-jobs.show')
                     ->middleware('throttle:subtitle-status-api');
 
+                Route::delete('/subtitle-jobs/{jobId}', [SubtitleJobController::class, 'cancel'])
+                    ->name('subtitle-jobs.cancel')
+                    ->middleware('throttle:subtitle-api');
+
                 Route::get('/subtitle-jobs/{jobId}/partial-track', [SubtitleJobController::class, 'partialTrack'])
                     ->name('subtitle-jobs.partial-track')
                     ->middleware('throttle:subtitle-status-api');

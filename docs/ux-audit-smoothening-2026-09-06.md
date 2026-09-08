@@ -81,7 +81,21 @@ These findings are established by source inspection, not browser reproduction.
 
 **Acceptance:** Cancel queued and running jobs. Queued work must make no provider call; late results must not resurrect the canceled run; reservation settlement must occur once; the next queued job must be admitted. Cancellation must not claim to interrupt a provider request already in progress.
 
-**Current semantics:** Hiding UI is not stopping backend work. Batch cancellation can skip jobs before execution but does not interrupt external calls already underway. Deleting a completed track does not mean completed usage is refunded. Credit-race concerns in R16 must be addressed before presenting cancellation as reliable.
+**Current semantics:** Hiding UI is not stopping backend work. Batch cancellation can skip jobs before execution but does not interrupt external calls already underway. Deleting a completed track does not mean completed usage is refunded. The account-before-job locks from R16 are preserved for cancellation and settlement.
+
+**What Changed:** The backend now exposes owner-scoped \`DELETE /v1/subtitle-jobs/{jobId}\` for queued and running generation runs. It locks the account before the run row, writes a durable \`cancelled\` outcome, removes run artifacts, releases the reservation through the existing idempotent settlement ledger, and promotes the next queued job after a running slot is freed. Repeating the request for an already-cancelled run returns the same snapshot; completed and failed runs return a stable 409. Existing worker run/status guards reject late stages and failure callbacks, so an in-flight provider call may finish externally without resurrecting the canceled run.
+
+**G1 API contract:**
+- **Implementation status:** Backend/API/contracts are complete; extension Watch/History integration is pending coordinator follow-up.
+- \`DELETE /v1/subtitle-jobs/{jobId}\` accepts the owner-scoped job ID and extension authentication headers; it has no request body.
+- \`200\` returns the normal \`JobResponse\` shape with \`status: "cancelled"\`, the captured \`stage\` and \`progressPercent\`, \`errorCode: "generation_cancelled"\`, and the public message that reserved minutes were released. A repeated delete of that same canceled run returns the same \`200\` snapshot.
+- \`404\` hides jobs owned by another account or missing; \`409\` uses \`generation_not_cancellable\` for completed/failed jobs; auth, validation, and rate-limit responses retain existing contracts.
+- Queued cancellation makes no provider call and does not dispatch work. Running cancellation releases its reservation and admits the next queued run after commit. A worker or queue publication arriving after cancellation is ignored by the run/status guard and cannot settle the run a second time. Extension Watch/History integration remains pending.
+
+**How To Test:**
+1. Create one running and one queued owned generation, cancel the running job, then read both jobs. Expected: the first is \`cancelled\`, its reservation is zero and its refund/settlement is recorded once, and the queued job becomes \`running\` with one dispatch.
+2. Repeat the running-job cancellation and invoke its old worker failure callback. Expected: both calls are safe no-ops after the first terminal transition, the response remains \`cancelled\`, and no second refund or failure event is written.
+3. Cancel a queued job before any worker handles it. Expected: it remains \`cancelled\`, no provider call is made, and no queue dispatch is published. Limits: external provider interruption cannot be claimed; only late persistence/publication safety is guaranteed.
 
 ### G2. P2: History Retry Does Not Reliably Retry The Selected Job
 

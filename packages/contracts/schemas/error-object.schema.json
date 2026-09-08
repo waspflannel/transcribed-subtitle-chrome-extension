@@ -27,6 +27,8 @@
         "video_too_long",
         "audio_acquisition_failed",
         "queue_publication_failed",
+        "generation_cancelled",
+        "generation_not_cancellable",
         "transcription_failed",
         "enrichment_failed",
         "rate_limited",

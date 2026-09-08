@@ -93,6 +93,23 @@ class SubtitleJobController extends Controller
         return response()->json(SubtitleJobResource::make($job)->resolve());
     }
 
+    public function cancel(
+        Request $request,
+        string $jobId,
+        SubtitleJobService $subtitleJobs,
+    ): JsonResponse {
+        $user = $this->extensionUser($request);
+        $job = SubtitleJob::query()
+            ->with('track')
+            ->where('public_id', $jobId)
+            ->whereBelongsTo($user)
+            ->firstOrFail();
+
+        $cancelled = $subtitleJobs->cancel($job, $user);
+
+        return response()->json(SubtitleJobResource::make($cancelled)->resolve());
+    }
+
     /**
      * Cues already available for a still-running job. 404 until transcription
      * lands and once the job stops running; the extension polls the job and

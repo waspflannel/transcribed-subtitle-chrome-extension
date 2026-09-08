@@ -926,7 +926,7 @@ export type JobResponse = {
    * Whether the request asked the backend to translate cue text.
    */
   includeTranslation: boolean;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   stage:
     | 'preparing'
     | 'acquiring-audio'
@@ -1055,6 +1055,9 @@ export type JobResponse = {
     | 'audio_unavailable'
     | 'video_too_long'
     | 'audio_acquisition_failed'
+    | 'queue_publication_failed'
+    | 'generation_cancelled'
+    | 'generation_not_cancellable'
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
@@ -1401,7 +1404,7 @@ export type SubtitleJobHistoryItem = {
    */
   videoDurationSeconds?: number;
   youtubeUrl: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   startedAt: string;
   lastUpdatedAt: string;
   completedAt?: string;
@@ -1542,6 +1545,9 @@ export type SubtitleJobHistoryItem = {
     | 'audio_unavailable'
     | 'video_too_long'
     | 'audio_acquisition_failed'
+    | 'queue_publication_failed'
+    | 'generation_cancelled'
+    | 'generation_not_cancellable'
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
@@ -2168,6 +2174,9 @@ export interface ErrorObject {
     | 'audio_unavailable'
     | 'video_too_long'
     | 'audio_acquisition_failed'
+    | 'queue_publication_failed'
+    | 'generation_cancelled'
+    | 'generation_not_cancellable'
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'
@@ -2202,6 +2211,9 @@ export interface ErrorObject {
     | 'audio_unavailable'
     | 'video_too_long'
     | 'audio_acquisition_failed'
+    | 'queue_publication_failed'
+    | 'generation_cancelled'
+    | 'generation_not_cancellable'
     | 'transcription_failed'
     | 'enrichment_failed'
     | 'rate_limited'

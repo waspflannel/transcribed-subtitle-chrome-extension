@@ -481,6 +481,33 @@
           ]
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "cancelled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "errorCode": {},
+          "message": {}
+        },
+        "required": [
+          "errorCode",
+          "message"
+        ],
+        "not": {
+          "properties": {
+            "track": {}
+          },
+          "required": [
+            "track"
+          ]
+        }
+      }
     }
   ]
 }

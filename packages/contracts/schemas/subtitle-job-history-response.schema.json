@@ -56,7 +56,8 @@
             "queued",
             "running",
             "completed",
-            "failed"
+            "failed",
+            "cancelled"
           ]
         },
         "startedAt": {
@@ -462,6 +463,27 @@
               "completedAt",
               "trackId",
               "expiresAt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "cancelled"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "completedAt": {},
+              "errorCode": {},
+              "message": {}
+            },
+            "required": [
+              "completedAt",
+              "errorCode",
+              "message"
             ]
           }
         }

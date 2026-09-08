@@ -24,6 +24,7 @@ use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
@@ -140,6 +141,97 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame($first->json('jobId'), $second->json('jobId'));
         Queue::assertPushed(AcquireSubtitleAudio::class, 1);
+    }
+
+    public function test_cancelling_running_job_releases_minutes_promotes_queue_and_is_idempotent(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 3,
+            'queue.default' => 'database',
+            'subtitles.queue.connection' => 'database',
+        ]);
+        Queue::fake();
+        $user = User::factory()->create();
+        $installId = $this->installId('cancel');
+
+        $runningResponse = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'canrun00001']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'running');
+        $queuedResponse = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'canque00001']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued');
+
+        $running = SubtitleJob::query()->where('public_id', $runningResponse->json('jobId'))->firstOrFail();
+        $queued = SubtitleJob::query()->where('public_id', $queuedResponse->json('jobId'))->firstOrFail();
+        $ledger = app(UsageLedger::class);
+        $this->assertSame(1, $ledger->reservedMinutesForJob($running));
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$running->public_id)
+            ->assertOk()
+            ->assertJsonPath('status', 'cancelled')
+            ->assertJsonPath('errorCode', 'generation_cancelled');
+
+        $this->assertSame('cancelled', $running->fresh()->status);
+        $this->assertSame(0, $ledger->reservedMinutesForJob($running));
+        $this->assertSame('running', $queued->fresh()->status);
+        $this->assertSame(1, (int) BillingUsageEvent::query()
+            ->where('subtitle_job_id', $running->id)
+            ->where('event_type', 'refund')
+            ->count());
+        Queue::assertPushed(AcquireSubtitleAudio::class, 2);
+
+        app(SubtitleJobFailureHandler::class)->failJob(
+            $running->id,
+            'acquiring-audio',
+            SubtitleProcessingException::audioAcquisitionFailed(),
+            $running->run_id,
+        );
+
+        $this->assertSame('cancelled', $running->fresh()->status);
+        $this->assertSame(1, (int) BillingUsageEvent::query()
+            ->where('subtitle_job_id', $running->id)
+            ->where('event_type', 'refund')
+            ->count());
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$running->public_id)
+            ->assertOk()
+            ->assertJsonPath('status', 'cancelled')
+            ->assertJsonPath('errorCode', 'generation_cancelled');
+    }
+
+    public function test_cancelling_queued_job_does_not_dispatch_or_call_provider(): void
+    {
+        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+        Queue::fake();
+        $user = User::factory()->create();
+        $installId = $this->installId('cancel-queued');
+        SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+
+        $response = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'canq0000001']))
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued');
+        $job = SubtitleJob::query()->where('public_id', $response->json('jobId'))->firstOrFail();
+
+        $this
+            ->withExtensionAuth($installId, $user)
+            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id)
+            ->assertOk()
+            ->assertJsonPath('status', 'cancelled');
+
+        $this->assertSame('cancelled', $job->fresh()->status);
+        Queue::assertNothingPushed();
+        $this->assertSame(0, $this->audioSource->calls);
     }
 
     public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
