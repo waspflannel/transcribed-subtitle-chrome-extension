@@ -75,6 +75,17 @@ describe('CueHoldController', () => {
     timers.runPending(1000);
     expect(expired).toEqual(['blank']);
   });
+
+  it('keeps the held cue when a paused study video reports a gap', () => {
+    const timers = fakeTimers();
+    const controller = new CueHoldController({ holdMs: 1000, view: timers.view, onExpire: () => {} });
+    const held = stubCue('cue-1');
+
+    controller.pause();
+
+    expect(controller.select(null, false, held)).toBe(held);
+    expect(timers.pending()).toBe(0);
+  });
 });
 
 function fakeTimers() {

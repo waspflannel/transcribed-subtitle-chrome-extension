@@ -34,8 +34,10 @@ export class CueHoldController {
       return incoming;
     }
 
-    if (current !== null && isPlaying && !this.paused) {
-      this.scheduleExpiry();
+    if (current !== null && (isPlaying || this.paused)) {
+      if (!this.paused) {
+        this.scheduleExpiry();
+      }
       return current;
     }
 
