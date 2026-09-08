@@ -414,13 +414,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R11. P2: Panel Reopen And Extension Seeks Can Miss Active-Cue Updates
 
-**Implementation Status: INCOMPLETE / UNTESTED.** Draft preserved in its own commit for branch consolidation. R7 tab-notice guards, review and regression coverage remain pending; this checkpoint does not complete R11.
+**Implementation Status: Fixed in code; focused relay regression source added; browser validation deferred.** The saved draft is completed here after R7's identity guards were integrated.
 
 **What Changed:** Every overlay-state update publishes a changed video/track/cue identity independently of render deduplication, including jump/replay. Panel ready snapshots pull the current cue through `panel.getActiveCue {tabId,youtubeVideoId,trackId}` and `background.getActiveCue {youtubeVideoId,trackId}`. Responses echo identity plus `ok`, `cueId` and background-added `tabId`; newer notices/requests invalidate late pulls.
 
 **How To Test:**
 1. Pause mid-cue, close/reopen the panel and change tabs (including duplicate videos). Expected: an immediate current highlight from the explicitly targeted tab, without waiting for cuechange.
-2. Use Jump, replay, previous and next at zero/nonzero offset. Expected: each destination highlights immediately. Resolve an old pull after a newer cue notice/navigation; expected: no rollback. Limits: merge R7 notice/tab guards before its request-counter increment; no runtime tests/builds run.
+2. Use Jump, replay, previous and next at zero/nonzero offset. Expected: each destination highlights immediately. Resolve an old pull after a newer cue notice/navigation; expected: no rollback.
+3. Run `npm test -- tests/messages.test.ts tests/transcript-view.test.ts`. Expected: the identity contract and transcript relay source checks pass. Browser and full-suite checks remain deferred.
 
 **Surface:** Transcript highlighting and playback relay.
 
@@ -436,7 +437,9 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Smallest useful fix:** Pull the current cue from the target tab on connection/tab change and publish through a shared active-cue assignment path. Deduplicate against last broadcast identity, not just render state.
 
-**Acceptance:** Reopen while paused and perform every extension seek path. Correct highlighting appears immediately without waiting for the next natural cue transition or rebinding the track.
+**Acceptance:** Reopen while paused and perform every extension seek path. Correct highlighting appears immediately without waiting for the next natural cue transition or rebinding the track. Foreign tab notices do not invalidate the displayed tab's snapshot.
+
+**Remaining Limits:** The real side-panel lifecycle, browser cuechange timing, player replacement, duplicate tabs/windows, and delayed pull interleavings still need the planned manual browser session.
 
 ### R12. P2: Background Refresh Can Swallow Sign-In Feedback
 

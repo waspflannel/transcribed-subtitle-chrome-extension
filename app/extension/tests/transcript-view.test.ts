@@ -83,6 +83,24 @@ describe('bindTranscriptView rebuild guard', () => {
 });
 
 describe('bindTranscriptView setActiveCue', () => {
+  it('relays a jump through the panel owner callback after updating the highlight', () => {
+    const dom = new JSDOM('<input id="search" /><ol id="list"></ol><p id="status"></p>');
+    const document = dom.window.document;
+    const onSeekToCue = vi.fn();
+    const view = bindTranscriptView({
+      transcriptSearch: document.getElementById('search') as HTMLInputElement,
+      transcriptList: document.getElementById('list') as HTMLElement,
+      transcriptStatus: document.getElementById('status') as HTMLElement,
+      onSeekToCue,
+    });
+    view.setData('vid', cues, DEFAULT_EXTENSION_SETTINGS);
+
+    document.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-transcript-action="jump"]')!.click();
+
+    expect(onSeekToCue).toHaveBeenCalledWith('c2', 'jump');
+    expect(document.querySelector('[data-cue-id="c2"]')?.classList.contains('on')).toBe(true);
+  });
+
   it('toggles the .on class on exactly the right row without rebuilding', () => {
     const { view, list } = setupDom();
     view.setData('vid', cues, { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true });
