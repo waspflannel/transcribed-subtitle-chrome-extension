@@ -55,6 +55,37 @@ describe('CueHoldController', () => {
 
     expect(timers.pending()).toBe(0);
   });
+
+  it('pauses expiry while study owns playback and resumes it after release', () => {
+    const timers = fakeTimers();
+    const expired: string[] = [];
+    const controller = new CueHoldController({
+      holdMs: 1000,
+      view: timers.view,
+      onExpire: () => expired.push('blank'),
+    });
+    const held = stubCue('cue-1');
+
+    expect(controller.select(null, true, held)).toBe(held);
+    controller.pause();
+    timers.runPending(2000);
+    expect(expired).toEqual([]);
+
+    controller.resume(held, true);
+    timers.runPending(1000);
+    expect(expired).toEqual(['blank']);
+  });
+
+  it('keeps the held cue when a paused study video reports a gap', () => {
+    const timers = fakeTimers();
+    const controller = new CueHoldController({ holdMs: 1000, view: timers.view, onExpire: () => {} });
+    const held = stubCue('cue-1');
+
+    controller.pause();
+
+    expect(controller.select(null, false, held)).toBe(held);
+    expect(timers.pending()).toBe(0);
+  });
 });
 
 function fakeTimers() {

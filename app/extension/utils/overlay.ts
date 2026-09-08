@@ -47,13 +47,30 @@ export class OverlayShell {
   private actionStatusTimeout: number | null = null;
   private copyStatus: 'copied' | 'failed' | null = null;
   private copyStatusTimeout: number | null = null;
+  private focusKeyAfterRender: string | null = null;
+
+  private readonly handleShadowKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || this.pinnedTokenIndex === null || !this.currentState) {
+      return;
+    }
+
+    const cueId = this.currentState.activeCue?.cueId ?? this.currentCueId;
+    if (!cueId) return;
+    this.focusKeyAfterRender = `${cueId}:${this.pinnedTokenIndex}`;
+    this.pinnedTokenIndex = null;
+    event.preventDefault();
+    this.render();
+  };
 
   public constructor(
     private readonly documentRef: Document = document,
     private readonly options: {
       onCopyCue?: (cue: SubtitleCue) => Promise<boolean>;
       onReplayCue?: (cue: SubtitleCue) => void;
+      onRetryBinding?: () => void;
       onStudyHoverEnd?: () => void;
+      onTokenFocus?: () => void;
+      onTokenBlur?: () => void;
       onTokenClick?: (cue: SubtitleCue, token: LearningToken) => void;
       onTokenPreview?: () => void;
       onTokenPreviewEnd?: () => void;
@@ -93,6 +110,7 @@ export class OverlayShell {
     if (activeCueId !== this.currentCueId) {
       this.currentCueId = activeCueId;
       this.pinnedTokenIndex = null;
+      this.focusKeyAfterRender = null;
       this.actionStatus = null;
       this.copyStatus = null;
       this.clearActionStatusTimeout();
@@ -110,6 +128,7 @@ export class OverlayShell {
     this.currentState = null;
     this.currentCueId = null;
     this.pinnedTokenIndex = null;
+    this.focusKeyAfterRender = null;
     this.actionStatus = null;
     this.copyStatus = null;
     this.clearActionStatusTimeout();
@@ -156,6 +175,8 @@ export class OverlayShell {
       this.bindTokenInteractions();
       this.restoreFocusAfterRender(focusSnapshot);
     }
+
+    this.constrainPopovers();
   }
 
   private bindTokenInteractions(): void {
@@ -175,11 +196,11 @@ export class OverlayShell {
       });
 
       button.addEventListener('focus', () => {
-        this.options.onTokenPreview?.();
+        (this.options.onTokenFocus ?? this.options.onTokenPreview)?.();
       });
 
       button.addEventListener('blur', () => {
-        this.options.onTokenPreviewEnd?.();
+        (this.options.onTokenBlur ?? this.options.onTokenPreviewEnd)?.();
       });
 
       button.addEventListener('click', () => {
@@ -208,6 +229,8 @@ export class OverlayShell {
     }
 
     this.content.querySelector<HTMLButtonElement>('[data-close-token-detail]')?.addEventListener('click', () => {
+      this.focusKeyAfterRender = this.content?.querySelector<HTMLButtonElement>('[data-close-token-detail]')
+        ?.dataset.returnFocusKey ?? null;
       this.pinnedTokenIndex = null;
       this.render();
     });
@@ -223,6 +246,10 @@ export class OverlayShell {
         void this.handleStudyControl(button.dataset.studyControl);
       });
     }
+
+    this.content.querySelector<HTMLButtonElement>('[data-retry-binding]')?.addEventListener('click', () => {
+      this.options.onRetryBinding?.();
+    });
   }
 
   private async handleStudyControl(control: string | undefined): Promise<void> {
@@ -306,17 +333,37 @@ export class OverlayShell {
     }
 
     if (!focusSnapshot) {
-      return;
+      if (this.focusKeyAfterRender === null) return;
     }
 
+    const focusKey = this.focusKeyAfterRender ?? focusSnapshot?.key;
+    this.focusKeyAfterRender = null;
+    if (!focusKey) return;
     const focusTarget = this.content.querySelector<HTMLElement>(
-      `[data-focus-key="${cssAttributeValue(focusSnapshot.key)}"]`,
+      `[data-focus-key="${cssAttributeValue(focusKey)}"]`,
     );
 
     focusTarget?.focus();
 
-    if (focusTarget instanceof HTMLInputElement && typeof focusSnapshot.selectionStart === 'number') {
+    if (focusTarget instanceof HTMLInputElement && typeof focusSnapshot?.selectionStart === 'number') {
       focusTarget.setSelectionRange(focusSnapshot.selectionStart, focusSnapshot.selectionEnd ?? focusSnapshot.selectionStart);
+    }
+  }
+
+  private constrainPopovers(): void {
+    const view = this.documentRef.defaultView;
+    if (!view || !this.content) return;
+
+    for (const popover of this.content.querySelectorAll<HTMLElement>('.token-popover')) {
+      popover.style.setProperty('--popover-shift', '0px');
+      const rect = popover.getBoundingClientRect();
+      const padding = 8;
+      const shift = rect.left < padding
+        ? padding - rect.left
+        : rect.right > view.innerWidth - padding
+          ? view.innerWidth - padding - rect.right
+          : 0;
+      if (shift !== 0) popover.style.setProperty('--popover-shift', `${shift}px`);
     }
   }
 
@@ -336,6 +383,7 @@ export class OverlayShell {
     host.setAttribute('aria-live', 'polite');
 
     const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.addEventListener('keydown', this.handleShadowKeydown);
     shadowRoot.innerHTML = `
       <style>
         ${buildOverlayFontFaces()}${overlayStyles}

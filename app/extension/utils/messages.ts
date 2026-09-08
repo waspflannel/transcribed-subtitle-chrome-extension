@@ -155,9 +155,9 @@ export type BackgroundRequest =
       type: 'panel.clearLocalState';
       windowId?: number;
     }
-  | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
-  | { type: 'panel.getActiveCue'; tabId: number; youtubeVideoId: string; trackId: string }
-  | { type: 'panel.seekToCue'; youtubeVideoId: string; cueId: string; mode: 'jump' | 'replay'; windowId?: number }
+  | { type: 'content.activeCueChanged'; cueId: string | null; youtubeVideoId: string; trackId: string | null }
+  | { type: 'panel.getActiveCue'; tabId: number; youtubeVideoId: string; trackId: string; windowId?: number }
+  | { type: 'panel.seekToCue'; youtubeVideoId: string; trackId: string; cueId: string; mode: 'jump' | 'replay'; tabId?: number; windowId?: number }
   | { type: 'content.focusPanelTranscript' };
 
 export type ContentRequest =
@@ -173,11 +173,11 @@ export type ContentRequest =
       type: 'background.subtitleStateChanged';
       subtitleState: SubtitleState;
     }
-  | { type: 'background.seekToCue'; cueId: string; mode: 'jump' | 'replay' };
+  | { type: 'background.seekToCue'; youtubeVideoId: string; trackId: string; cueId: string; mode: 'jump' | 'replay' };
 
 export type PanelNotice =
-  | { type: 'background.activeCueChanged'; cueId: string | null; youtubeVideoId: string }
-  | { type: 'background.focusTranscript' };
+  | { type: 'background.activeCueChanged'; cueId: string | null; youtubeVideoId: string; trackId: string; tabId: number; windowId?: number }
+  | { type: 'background.focusTranscript'; windowId?: number };
 
 export type PanelRequest = Extract<BackgroundRequest, { type: `panel.${string}` }>;
 export type RuntimeMessage = BackgroundRequest | ContentRequest | PanelNotice;
@@ -189,7 +189,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
   switch (value.type) {
     case 'panel.getActiveCue':
-      return isNonNegativeInteger(value.tabId) && hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
+      return isNonNegativeInteger(value.tabId) && hasString(value, 'youtubeVideoId') && hasString(value, 'trackId')
+        && optionalNumber(value, 'windowId');
     case 'background.getActiveCue':
       return hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
     case 'content.getState':
@@ -250,14 +251,21 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
       return true;
 
     case 'content.activeCueChanged':
+      return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId')
+        && (!('trackId' in value) || value.trackId === null || hasString(value, 'trackId'));
     case 'background.activeCueChanged':
-      return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId');
+      return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId')
+        && (!('trackId' in value) || hasString(value, 'trackId'))
+        && (!('tabId' in value) || isNonNegativeInteger(value.tabId)) && optionalNumber(value, 'windowId');
 
     case 'panel.seekToCue':
     case 'background.seekToCue':
       return hasString(value, 'cueId')
-        && (value.type !== 'panel.seekToCue' || hasString(value, 'youtubeVideoId'))
+        && (value.type === 'background.seekToCue'
+          || (hasString(value, 'youtubeVideoId')
+            && (hasString(value, 'trackId') || !('tabId' in value))))
         && (value.mode === 'jump' || value.mode === 'replay')
+        && (value.type !== 'panel.seekToCue' || optionalNumber(value, 'tabId'))
         && optionalNumber(value, 'windowId');
 
     default:

@@ -40,10 +40,14 @@ export default defineContentScript({
     let activeVideo: HTMLVideoElement | null = null;
     let stopWebVttTrack: (() => void) | null = null;
     let stopVideoStateListeners: (() => void) | null = null;
+    let bindingError: string | null = null;
     let routeHydrateTimer: number | undefined;
     let videoBindRetryTimer: number | undefined;
     let videoBindRetriesLeft = 0;
-    let studyHoverPaused = false;
+    let studyHoverActive = false;
+    let studyFocusActive = false;
+    let studyPauseOwned = false;
+    let studyPauseRequested = false;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
@@ -62,11 +66,14 @@ export default defineContentScript({
     const overlay = new OverlayShell(document, {
       onCopyCue: (cue) => copyCueToClipboard(cue),
       onReplayCue: (cue) => replayCue(cue),
-      onStudyHoverEnd: () => resumeVideoAfterStudyHover(),
-      onTokenPreview: () => pauseVideoForStudy(),
-      onTokenPreviewEnd: () => resumeVideoAfterStudyHover(),
+      onRetryBinding: () => retryVideoBinding(),
+      onStudyHoverEnd: () => endStudyHover(),
+      onTokenPreview: () => beginStudyHover(),
+      onTokenPreviewEnd: () => endStudyHover(),
+      onTokenFocus: () => beginStudyFocus(),
+      onTokenBlur: () => endStudyFocus(),
       onTokenClick: (cue, token) => {
-        pauseVideoForStudy();
+        beginStudyFocus();
         void enrichLearningToken(cue, token);
       },
     });
@@ -137,6 +144,10 @@ export default defineContentScript({
 
         settings = nextSettings;
 
+        if (!settings.overlayVisible || !settings.pauseOnWordHover) {
+          releaseStudyPause();
+        }
+
         if (timingOffsetChanged && subtitleState.type === 'ready') {
           clearBoundWebVttTrack();
           videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
@@ -180,7 +191,10 @@ export default defineContentScript({
       }
 
       if (message.type === 'background.seekToCue') {
-        if (subtitleState.type === 'ready') {
+        const page = parseYoutubePage(window.location.href);
+        if (page.supported && page.videoId === message.youtubeVideoId
+          && subtitleState.type === 'ready' && subtitleState.track.youtubeVideoId === message.youtubeVideoId
+          && subtitleState.track.trackId === message.trackId) {
           const cue = subtitleState.track.cues.find((c) => c.cueId === message.cueId);
           if (cue) {
             if (message.mode === 'replay') {
@@ -252,7 +266,7 @@ export default defineContentScript({
 
         case 'toggle-transcript':
           void browser.runtime.sendMessage({ type: 'content.focusPanelTranscript' }).catch(() => {});
-          overlay.showActionStatus('Transcript is in the side panel.', 'info');
+          overlay.showActionStatus('Open the side panel for the transcript.', 'info');
           return;
 
         case 'copy-current-cue':
@@ -306,6 +320,7 @@ export default defineContentScript({
         activePartialCue,
         pendingTokenKeys,
         failedTokenKeys,
+        bindingError,
       });
       const page = parseYoutubePage(window.location.href);
       if (page.supported) {
@@ -313,7 +328,12 @@ export default defineContentScript({
         const identity = JSON.stringify([page.videoId, boundReadyTrackId, cueId]);
         if (identity !== lastBroadcastCue) {
           lastBroadcastCue = identity;
-          void browser.runtime.sendMessage({ type: 'content.activeCueChanged', youtubeVideoId: page.videoId, cueId }).catch(() => {});
+          void browser.runtime.sendMessage({
+            type: 'content.activeCueChanged',
+            youtubeVideoId: page.videoId,
+            trackId: boundReadyTrackId,
+            cueId,
+          }).catch(() => {});
         }
       }
     }
@@ -340,9 +360,9 @@ export default defineContentScript({
      * giving up (which used to leave the overlay empty until a refresh),
      * retry briefly while the current subtitle state stays unchanged.
      */
-    function scheduleVideoBindRetry(bind: () => void): void {
+    function scheduleVideoBindRetry(bind: () => void): boolean {
       if (disposed || videoBindRetriesLeft <= 0) {
-        return;
+        return false;
       }
 
       videoBindRetriesLeft -= 1;
@@ -361,6 +381,8 @@ export default defineContentScript({
 
         bind();
       }, VIDEO_BIND_RETRY_DELAY_MS);
+
+      return true;
     }
 
     function clearBoundWebVttTrack(): void {
@@ -373,13 +395,17 @@ export default defineContentScript({
         window.clearTimeout(videoBindRetryTimer);
         videoBindRetryTimer = undefined;
       }
+      releaseStudyPause();
+      studyHoverActive = false;
+      studyFocusActive = false;
+      studyPauseRequested = false;
       cueHold.clear();
+      bindingError = null;
       activeCue = null;
       activePartialCue = null;
       boundPartialTrackKey = null;
       boundReadyTrackId = null;
       activeVideo = null;
-      studyHoverPaused = false;
       pendingTokenKeys.clear();
       failedTokenKeys.clear();
     }
@@ -387,6 +413,20 @@ export default defineContentScript({
     function clearSubtitles(): void {
       clearBoundWebVttTrack();
       subtitleState = DEFAULT_SUBTITLE_STATE;
+      updateOverlay();
+    }
+
+    function retryVideoBinding(): void {
+      if (disposed) return;
+      const state = subtitleState;
+      if (state.type !== 'ready' && !(state.type === 'loading' && state.partialTrack)) return;
+      clearBoundWebVttTrack();
+      videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
+      if (state.type === 'ready') {
+        bindGeneratedSubtitles(state.track);
+      } else {
+        bindPartialSubtitles(state.partialTrack, partialTrackKey(state));
+      }
       updateOverlay();
     }
 
@@ -492,7 +532,9 @@ export default defineContentScript({
       const video = findActiveYoutubeVideo(document);
 
       if (!video) {
-        scheduleVideoBindRetry(() => bindPartialSubtitles(partialTrack, partialKey));
+        if (!scheduleVideoBindRetry(() => bindPartialSubtitles(partialTrack, partialKey))) {
+          bindingError = 'The video player is unavailable. Retry attachment when it is visible.';
+        }
         updateOverlay();
 
         return;
@@ -500,6 +542,8 @@ export default defineContentScript({
 
       activeVideo = video;
       boundPartialTrackKey = partialKey;
+      bindingError = null;
+      const bindingEpoch = stateEpoch;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
@@ -513,6 +557,18 @@ export default defineContentScript({
         onCueChange(change) {
           activePartialCue = change.activeCue;
           updateOverlay();
+        },
+        onTrackLoaded: () => {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+            bindingError = null;
+            updateOverlay();
+          }
+        },
+        onTrackLoadError: () => {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+            bindingError = 'The partial subtitle track could not load. Retry attachment.';
+            updateOverlay();
+          }
         },
         logger: webVttTrackLogger,
       });
@@ -534,7 +590,9 @@ export default defineContentScript({
 
       if (!video) {
         webVttTrackLogger.videoMissing(track);
-        scheduleVideoBindRetry(() => bindGeneratedSubtitles(track));
+        if (!scheduleVideoBindRetry(() => bindGeneratedSubtitles(track))) {
+          bindingError = 'The video player is unavailable. Retry attachment when it is visible.';
+        }
         updateOverlay();
 
         return;
@@ -542,6 +600,8 @@ export default defineContentScript({
 
       bindVideoStateListeners(video);
       boundReadyTrackId = track.trackId;
+      bindingError = null;
+      const bindingEpoch = stateEpoch;
 
       stopWebVttTrack = bindWebVttTrackToVideo({
         video,
@@ -561,6 +621,18 @@ export default defineContentScript({
           activeCue = next;
           updateOverlay();
         },
+        onTrackLoaded: () => {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
+            bindingError = null;
+            updateOverlay();
+          }
+        },
+        onTrackLoadError: () => {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
+            bindingError = 'The subtitle track could not load. Retry attachment.';
+            updateOverlay();
+          }
+        },
         logger: webVttTrackLogger,
       });
 
@@ -576,17 +648,22 @@ export default defineContentScript({
     function bindVideoStateListeners(video: HTMLVideoElement): void {
       activeVideo = video;
 
-      const clearStudyHoverPause = (): void => {
-        studyHoverPaused = false;
+      const handleVideoPause = (): void => {
+        if (!studyPauseRequested) studyPauseOwned = false;
+      };
+      const handleVideoPlay = (): void => {
+        if (!studyPauseRequested) studyPauseOwned = false;
       };
 
-      video.addEventListener('play', clearStudyHoverPause);
-      video.addEventListener('playing', clearStudyHoverPause);
+      video.addEventListener('pause', handleVideoPause);
+      video.addEventListener('play', handleVideoPlay);
+      video.addEventListener('playing', handleVideoPlay);
       video.addEventListener('seeked', handleSeeked);
 
       stopVideoStateListeners = () => {
-        video.removeEventListener('play', clearStudyHoverPause);
-        video.removeEventListener('playing', clearStudyHoverPause);
+        video.removeEventListener('pause', handleVideoPause);
+        video.removeEventListener('play', handleVideoPlay);
+        video.removeEventListener('playing', handleVideoPlay);
         video.removeEventListener('seeked', handleSeeked);
       };
     }
@@ -604,34 +681,68 @@ export default defineContentScript({
       updateOverlay();
     }
 
-    function pauseVideoForStudy(): void {
-      if (!settings.pauseOnWordHover || !activeVideo || activeVideo.paused) {
-        return;
-      }
-
-      studyHoverPaused = true;
-      activeVideo.pause();
+    function beginStudyHover(): void {
+      studyHoverActive = true;
+      pauseVideoForStudy();
     }
 
-    function resumeVideoAfterStudyHover(): void {
-      if (!studyHoverPaused || !activeVideo) {
+    function endStudyHover(): void {
+      studyHoverActive = false;
+      releaseStudyPauseWhenIdle();
+    }
+
+    function beginStudyFocus(): void {
+      studyFocusActive = true;
+      pauseVideoForStudy();
+    }
+
+    function endStudyFocus(): void {
+      studyFocusActive = false;
+      releaseStudyPauseWhenIdle();
+    }
+
+    function pauseVideoForStudy(): void {
+      if (!settings.pauseOnWordHover || !activeVideo || activeVideo.paused || studyPauseOwned) {
         return;
       }
 
-      studyHoverPaused = false;
+      studyPauseOwned = true;
+      cueHold.pause();
+      studyPauseRequested = true;
+      try {
+        activeVideo.pause();
+      } finally {
+        studyPauseRequested = false;
+      }
+    }
 
-      if (!activeVideo.paused) {
+    function releaseStudyPauseWhenIdle(): void {
+      if (studyHoverActive || studyFocusActive) {
+        return;
+      }
+
+      releaseStudyPause();
+    }
+
+    function releaseStudyPause(): void {
+      const shouldResume = studyPauseOwned;
+      studyPauseOwned = false;
+      cueHold.resume(activeCue, Boolean(activeVideo && !activeVideo.paused));
+
+      if (!shouldResume || !activeVideo || !activeVideo.paused) {
         return;
       }
 
       const playResult = activeVideo.play();
 
       if (playResult && typeof playResult.catch === 'function') {
-        playResult.catch((error: unknown) => {
+        playResult.then(() => cueHold.resume(activeCue, true)).catch((error: unknown) => {
           console.warn('extension.subtitle_study_resume_failed', {
             error: error instanceof Error ? error.message : 'Unknown resume error',
           });
         });
+      } else {
+        cueHold.resume(activeCue, true);
       }
     }
 
@@ -692,7 +803,6 @@ export default defineContentScript({
 
       activeVideo.currentTime = cueStartPlaybackSeconds(cue, settings.subtitleTimingOffsetSeconds);
       activeCue = cue;
-      studyHoverPaused = false;
       updateOverlay();
     }
 
@@ -707,7 +817,6 @@ export default defineContentScript({
 
       activeVideo.currentTime = cueStartPlaybackSeconds(sourceCue, settings.subtitleTimingOffsetSeconds);
       activeCue = sourceCue;
-      studyHoverPaused = false;
       updateOverlay();
       const playResult = activeVideo.play();
 

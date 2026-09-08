@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import { renderOverlayContent } from '../utils/overlay/overlay-render';
+import { overlayStyles } from '../utils/overlay/overlay-styles';
 import type { OverlayRenderState } from '../utils/overlay/types';
 import type { TrackResponse } from '../utils/contracts';
 
@@ -110,6 +111,19 @@ describe('renderOverlayContent', () => {
     expect(pinnedHtml).toContain('Usage note');
     expect(pinnedHtml).toContain('Common greeting.');
     expect(pinnedHtml).not.toContain('null');
+    expect(pinnedHtml).toContain('data-focus-key="cue-0001:0"');
+    expect(pinnedHtml).toContain('data-return-focus-key="cue-0001:0"');
+  });
+
+  it('keeps an action message visible during a silent gap', () => {
+    const state = readyState();
+    const html = renderOverlayContent({ ...state, activeCue: null }, {
+      pinnedTokenIndex: null,
+      actionStatus: { message: 'Open the side panel for the transcript.', tone: 'info' },
+    });
+
+    expect(html).toContain('Open the side panel for the transcript.');
+    expect(html).toContain('There is no subtitle cue at the current playback position.');
   });
 
   it('renders generation progress while the background job is running', () => {
@@ -155,6 +169,32 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('hola a todos');
     expect(html).not.toContain('class="translation');
     expect(html).not.toContain('class="cue-romanization');
+  });
+
+  it('makes a blurred partial source layer independently revealable', () => {
+    const html = renderOverlayContent({
+      ...partialLoadingState(),
+      settings: { ...DEFAULT_EXTENSION_SETTINGS, blurSourceWords: true },
+    });
+
+    expect(html).toContain('partial-source-layer token-text study-blur study-blur--token');
+    expect(html).toContain('tabindex="0" aria-label="Partial source text, focus to reveal blurred text"');
+  });
+
+  it('renders an actionable local attachment failure', () => {
+    const html = renderOverlayContent({ ...readyState(), bindingError: 'The subtitle track could not load.' });
+
+    expect(html).toContain('Subtitle display needs a retry');
+    expect(html).toContain('The subtitle track could not load.');
+    expect(html).toContain('data-retry-binding');
+  });
+
+  it('keeps top popovers below their token and scrollable within the viewport', () => {
+    expect(overlayStyles).toContain(':host([data-position="top"]) .token-popover');
+    expect(overlayStyles).toContain('top: calc(100% + 14px)');
+    expect(overlayStyles).toContain('max-height: min(60vh, 420px)');
+    expect(overlayStyles).toContain('overflow-y: auto');
+    expect(overlayStyles).toContain('var(--popover-shift, 0px)');
   });
 
   it('hides the partial translation when translation display is disabled', () => {

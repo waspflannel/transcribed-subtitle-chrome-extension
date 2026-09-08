@@ -336,6 +336,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R7. P1: Transcript Controls Can Follow Or Seek The Wrong Tab
 
+**Implementation Status: Fixed in code; focused protocol tests added; browser validation deferred.**
+
+**What Changed:** Active-cue notices now carry the source tab, window, video, and track identity, and panels ignore notices that do not belong to their displayed tab/window/track. Transcript seeks capture the displayed tab and window, validate the destination URL before delivery, and include track identity so the content script rejects a stale or duplicate-video destination. Video lookup also preserves the requested window when it has to resolve a legacy request. Panel state responses for window-scoped mutations keep the supplied window.
+
+**How To Test:**
+1. Open two generated videos, then two copies of the same video across one and two windows. Play each in turn. Expected: only the panel displaying the source tab highlights its cue; foreign notices leave its highlight and pending snapshot unchanged.
+2. Use Jump from each panel while switching focus during delivery. Expected: only the captured displayed tab seeks and plays, and a duplicate video in another tab/window does not move.
+3. Reopen the panel and invoke the transcript shortcut from a supported tab. Expected: the target window receives the focus request; a different window ignores it.
+4. Run `npm test -- tests/messages.test.ts`. Expected: the cue notice and exact-tab seek identity contracts pass. Browser and full-suite checks remain deferred.
+
+**Remaining Limits:** The panel entrypoint, real Chrome side-panel routing, player replacement, duplicate tabs/windows, and delayed browser message interleavings still need the planned manual browser session. Legacy callers without a target tab use the active tab within the requested window and cannot disambiguate an unscoped duplicate video.
+
 **Surface:** Background cue messages and panel transcript navigation.
 
 **Impact:** A hidden tab can move the visible highlight; Jump can start playback in another tab/window.
@@ -416,13 +428,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R11. P2: Panel Reopen And Extension Seeks Can Miss Active-Cue Updates
 
-**Implementation Status: INCOMPLETE / UNTESTED.** Draft preserved in its own commit for branch consolidation. R7 tab-notice guards, review and regression coverage remain pending; this checkpoint does not complete R11.
+**Implementation Status: Fixed in code; focused relay regression source added; browser validation deferred.** The saved draft is completed here after R7's identity guards were integrated.
 
 **What Changed:** Every overlay-state update publishes a changed video/track/cue identity independently of render deduplication, including jump/replay. Panel ready snapshots pull the current cue through `panel.getActiveCue {tabId,youtubeVideoId,trackId}` and `background.getActiveCue {youtubeVideoId,trackId}`. Responses echo identity plus `ok`, `cueId` and background-added `tabId`; newer notices/requests invalidate late pulls.
 
 **How To Test:**
 1. Pause mid-cue, close/reopen the panel and change tabs (including duplicate videos). Expected: an immediate current highlight from the explicitly targeted tab, without waiting for cuechange.
-2. Use Jump, replay, previous and next at zero/nonzero offset. Expected: each destination highlights immediately. Resolve an old pull after a newer cue notice/navigation; expected: no rollback. Limits: merge R7 notice/tab guards before its request-counter increment; no runtime tests/builds run.
+2. Use Jump, replay, previous and next at zero/nonzero offset. Expected: each destination highlights immediately. Resolve an old pull after a newer cue notice/navigation; expected: no rollback.
+3. Run `npm test -- tests/messages.test.ts tests/transcript-view.test.ts`. Expected: the identity contract and transcript relay source checks pass. Browser and full-suite checks remain deferred.
 
 **Surface:** Transcript highlighting and playback relay.
 
@@ -438,7 +451,9 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Smallest useful fix:** Pull the current cue from the target tab on connection/tab change and publish through a shared active-cue assignment path. Deduplicate against last broadcast identity, not just render state.
 
-**Acceptance:** Reopen while paused and perform every extension seek path. Correct highlighting appears immediately without waiting for the next natural cue transition or rebinding the track.
+**Acceptance:** Reopen while paused and perform every extension seek path. Correct highlighting appears immediately without waiting for the next natural cue transition or rebinding the track. Foreign tab notices do not invalidate the displayed tab's snapshot.
+
+**Remaining Limits:** The real side-panel lifecycle, browser cuechange timing, player replacement, duplicate tabs/windows, and delayed pull interleavings still need the planned manual browser session.
 
 ### R12. P2: Background Refresh Can Swallow Sign-In Feedback
 
@@ -460,6 +475,19 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R13. P2: Learning Interaction Can Lose Focus, Pause Ownership, And Feedback
 
+**Implementation Status: Fixed in code; focused cue-hold/render regression source added; browser validation deferred.**
+
+**What Changed:** Token buttons now keep cue-scoped focus keys, close actions return focus to the selected word, and hover/focus pause ownership is tracked independently so releasing one interaction cannot resume playback while the other remains active. Extension-owned pause is released during settings changes and teardown, manual play/pause clears ownership, and held-cue expiry is suspended while study owns the pause. Action feedback renders during silent gaps, and the transcript shortcut explains how to reach the closed side panel.
+
+**How To Test:**
+1. Open a word card with the keyboard, trigger a metadata refresh, then close it with the close button or Escape. Expected: focus returns to the same cue word.
+2. Hover a token, focus it, then end only the hover. Expected: playback remains paused until focus also ends. Manually pause while studying, then end study. Expected: the manually paused video stays paused.
+3. Enter a held cue's silent gap, start study before the hold expires, and release study after the original timeout. Expected: the held cue remains available during study and expiry resumes only after release.
+4. Hide or rebind the overlay while it owns a pause. Expected: playback ownership is released without resuming a video the user paused.
+5. Run `npm test -- tests/cue-hold.test.ts tests/overlay.test.ts`. Expected: focus keys, silent-gap feedback, and suspended cue-hold expiry pass. Browser and full-suite checks remain deferred.
+
+**Remaining Limits:** The actual Shadow DOM focus sequence, pointer/focus event ordering on YouTube, autoplay policy, and closed-panel opening behavior still need browser validation. Hold expiry is restarted with the configured hold duration after study release rather than preserving elapsed wall-clock time.
+
 **Surface:** Overlay word cards, source hover-pause, cue hold, transcript shortcut.
 
 **Impact:** Keyboard study loses its place; playback can resume while a word remains focused; a held cue can disappear during study; recovery/status feedback can be invisible.
@@ -477,6 +505,18 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Keyboard open/result/close returns to the correct word. Ending hover while focus remains does not resume. A held cue remains usable during study. Hiding/rebinding does not strand playback or resume a manually paused video. Closed-panel recovery is actionable during silence.
 
 ### R14. P2: Partial Captions And Local Binding Failures Have Unusable States
+
+**Implementation Status: Fixed in code; focused partial/render and WebVTT callback regression source added; browser validation deferred.**
+
+**What Changed:** Partial source text is a separately focusable blur layer that reveals with pointer or keyboard focus. WebVTT binding exposes load success/failure callbacks; the content script records track-load failures and exhausted player-binding retries as local attachment errors. The overlay shows the existing track's failure with a Retry attachment action, and retry clears the local error, reuses the current ready/partial track, and restores the short player-binding retry window.
+
+**How To Test:**
+1. Run `npm test -- tests/overlay.test.ts tests/webvtt-track.test.ts`. Expected: partial source reveal markup, actionable attachment error markup, and load/error callback checks pass.
+2. Enable source blur during partial delivery. Expected: source text, romanization, and translation layers reveal independently by pointer and keyboard focus.
+3. Force the hidden WebVTT track to emit an error. Expected: the overlay reports a local attachment problem with Retry attachment; selecting it binds the same track without a new generation request, and a subsequent load clears the error.
+4. Exhaust video-binding retries while no player is mounted, then mount the player and select retry. Expected: the terminal local error is actionable and the existing track attaches when the player is available.
+
+**Remaining Limits:** No real browser track-load failure, retry timing, assistive-technology focus, or YouTube player-mount journey was exercised. The retry action is local to the content script and cannot repair a malformed backend track; regeneration remains a separate action.
 
 **Surface:** Partial overlay and completed-track attachment.
 
@@ -671,6 +711,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R22. P2: Local Timing And Player Selection Have Concrete Edge Cases
 
+**Implementation Status: Fixed in code; focused cue-navigation and player-selection regression source added; browser validation deferred.**
+
+**What Changed:** Playback-to-source conversion preserves negative source time when applying a positive subtitle delay, while destination cue seeks retain their zero clamp. Video visibility now checks viewport intersection and computed visibility before preferring a playing element, so an offscreen player cannot outrank an onscreen paused player.
+
+**How To Test:**
+1. Run `npm test -- tests/cue-navigation.test.ts tests/youtube-video.test.ts`. Expected: a cue at source time zero stays inactive until its +5 second delay and Next selects cue one before that delay; destination starts remain clamped at zero.
+2. Expose an offscreen playing video and an onscreen paused video with positive dimensions. Expected: player selection chooses the onscreen video. Repeat with an element using `display:none` or `visibility:hidden`.
+3. Check a Shorts layout and a normal watch layout while resizing or scrolling. Expected: controls remain bound to the visible player; real browser geometry still needs the planned manual session.
+
+**Remaining Limits:** The selector still uses the first qualifying visible player when several visible players are present, and browser-specific viewport/layout behavior has not been exercised. No browser tests or full suite were run.
+
 **Surface:** Delayed captions, cue navigation, Shorts/multiple video elements.
 
 **Impact:** The first cue can appear before its configured delay or be skipped by Next; playback controls can bind to an offscreen video.
@@ -688,6 +739,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Before 5 seconds, active lookup returns null and Next selects cue one. After 5 seconds it becomes active. An onscreen paused player wins over an offscreen playing element.
 
 ### R23. P2: Overlay Accessibility And Popover Placement Have Recovery Gaps
+
+**Implementation Status: Fixed in code; focused editable-target and overlay-layout regression source added; browser validation deferred.**
+
+**What Changed:** Shortcut filtering now honors the native `isContentEditable` state and any `[contenteditable]` ancestor, including empty and `plaintext-only` values, while retaining native form and textbox checks. Top-position popovers flip below their token, all standard popovers clamp horizontally to the viewport, and long cards gain a bounded scrolling region so their close controls remain reachable.
+
+**How To Test:**
+1. Run `npm test -- tests/keyboard-shortcuts.test.ts tests/overlay.test.ts`. Expected: native editable targets are ignored by extension shortcuts and layout rules cover top placement, viewport shifting, and scrollable card height.
+2. Open a long word card on the first and last token at top and bottom positions, then repeat at compact position, narrow width, and zoom. Expected: card text and close control remain reachable; top cards open below the token and standard cards stay horizontally inside the viewport.
+3. Focus `contenteditable=""`, `contenteditable="plaintext-only"`, a nested descendant, and a role textbox. Expected: all extension shortcut chords leave editing untouched.
+
+**Remaining Limits:** Popover clamping runs after each rendered update and does not measure browser zoom/vertical collision beyond the top-position flip and bounded scroll. Browser and assistive-technology checks remain deferred.
 
 **Surface:** Top-position word cards and editable-page shortcut handling.
 

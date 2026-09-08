@@ -24,11 +24,22 @@ export function renderOverlayContent(
     }));
   }
 
+  if (state.bindingError) {
+    return renderFrame(renderBindingError(state.bindingError));
+  }
+
   if (state.subtitleState.type === 'ready') {
     const cue = state.activeCue;
 
     if (!cue) {
-      return renderFrame('');
+      return interaction.actionStatus
+        ? renderFrame(renderShell({
+            eyebrow: 'AI subtitles',
+            title: interaction.actionStatus.message,
+            detail: 'There is no subtitle cue at the current playback position.',
+            meta: [],
+          }))
+        : renderFrame('');
     }
 
     const cueRomanization =
@@ -131,9 +142,11 @@ function renderPartialRail(
       <div class="rail-main">
         <div class="token-area" dir="auto" lang="${
           sourceLanguage === 'auto' ? 'und' : escapeHtml(sourceLanguage)
-        }"><span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
-          cue.sourceText,
-        )}</span></div>
+        }"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${
+          settings.blurSourceWords
+            ? ' tabindex="0" aria-label="Partial source text, focus to reveal blurred text"'
+            : ''
+        }>${escapeHtml(cue.sourceText)}</span></div>
         ${cueRomanization}
         ${translation}
       </div>
@@ -163,7 +176,9 @@ function renderSourceLine(
 
       return `
         <span class="token-slot">
-          <button class="token-card" type="button" data-token-index="${token.index}" aria-pressed="${
+          <button class="token-card" type="button" data-token-index="${token.index}" data-focus-key="${escapeHtml(
+            `${cue.cueId}:${token.index}`,
+          )}" aria-pressed="${
             isPinned ? 'true' : 'false'
           }" aria-label="Study word: ${escapeHtml(token.text)}">
             <span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
@@ -205,7 +220,9 @@ function renderTokenInteraction(
       <div class="token-popover">
         <div class="token-popover-header">
           <span class="token-popover-title">${escapeHtml(token.text)}</span>
-          <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
+          <button class="icon-button" type="button" data-close-token-detail data-return-focus-key="${escapeHtml(
+            `${cue.cueId}:${token.index}`,
+          )}" aria-label="Close token detail">x</button>
         </div>
         <div class="detail">${escapeHtml(detail)}</div>
       </div>
@@ -227,7 +244,9 @@ function renderTokenInteraction(
     <div class="token-popover">
       <div class="token-popover-header">
         <span class="token-popover-title">${escapeHtml(token.text)}</span>
-        <button class="icon-button" type="button" data-close-token-detail aria-label="Close token detail">x</button>
+        <button class="icon-button" type="button" data-close-token-detail data-return-focus-key="${escapeHtml(
+          `${cue.cueId}:${token.index}`,
+        )}" aria-label="Close token detail">x</button>
       </div>
       <div class="token-fields">${rows}</div>
     </div>
@@ -342,6 +361,23 @@ function renderShell(input: { eyebrow: string; title: string; detail: string; me
         <div class="title">${escapeHtml(input.title)}</div>
         <div class="detail">${escapeHtml(input.detail)}</div>
         ${meta}
+      </div>
+    </section>
+  `;
+}
+
+function renderBindingError(detail: string): string {
+  return `
+    <section class="rail rail--message" role="alert">
+      <div class="rail-meta">
+        <span class="eyebrow">AI subtitles</span>
+      </div>
+      <div class="rail-main rail-main--message">
+        <div class="title">Subtitle display needs a retry</div>
+        <div class="detail">${escapeHtml(detail)}</div>
+      </div>
+      <div class="rail-controls">
+        <button class="study-control" type="button" data-retry-binding>Retry attachment</button>
       </div>
     </section>
   `;
