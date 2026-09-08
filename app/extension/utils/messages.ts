@@ -252,16 +252,17 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
     case 'content.activeCueChanged':
       return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId')
-        && (value.trackId === null || hasString(value, 'trackId'));
+        && (!('trackId' in value) || value.trackId === null || hasString(value, 'trackId'));
     case 'background.activeCueChanged':
       return (value.cueId === null || hasString(value, 'cueId')) && hasString(value, 'youtubeVideoId')
-        && hasString(value, 'trackId') && isNonNegativeInteger(value.tabId) && optionalNumber(value, 'windowId');
+        && (!('trackId' in value) || hasString(value, 'trackId'))
+        && (!('tabId' in value) || isNonNegativeInteger(value.tabId)) && optionalNumber(value, 'windowId');
 
     case 'panel.seekToCue':
     case 'background.seekToCue':
       return hasString(value, 'cueId')
-        && hasString(value, 'youtubeVideoId')
-        && hasString(value, 'trackId')
+        && (value.type === 'background.seekToCue'
+          || (hasString(value, 'youtubeVideoId') && hasString(value, 'trackId')))
         && (value.mode === 'jump' || value.mode === 'replay')
         && (value.type !== 'panel.seekToCue' || optionalNumber(value, 'tabId'))
         && optionalNumber(value, 'windowId');

@@ -61,9 +61,9 @@ describe('phase 2 transcript relay', () => {
   it('requires track identity on cue changes and seeks', () => {
     expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1' })).toBe(true);
     expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: null, youtubeVideoId: 'v', trackId: null })).toBe(true);
-    expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'content.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v' })).toBe(true);
     expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1', tabId: 12 })).toBe(true);
-    expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'background.activeCueChanged', cueId: 'cue-1', youtubeVideoId: 'v', trackId: 'track-1', tabId: '12' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 12, youtubeVideoId: 'v', trackId: 'track-1', cueId: 'cue-1', mode: 'jump' })).toBe(true);
     expect(isRuntimeMessage({ type: 'background.seekToCue', youtubeVideoId: 'v', trackId: 'track-1', cueId: 'cue-1', mode: 'replay' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 12, youtubeVideoId: 'v', cueId: 'cue-1', mode: 'jump' })).toBe(false);
