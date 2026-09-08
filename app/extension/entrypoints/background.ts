@@ -1084,7 +1084,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
       settings,
     });
 
-      await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
+    await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
   }
 
   return getPanelState({ syncBackend: true });
