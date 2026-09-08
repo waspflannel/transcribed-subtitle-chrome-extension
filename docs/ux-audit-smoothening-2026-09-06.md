@@ -247,6 +247,14 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R5. P1: Player Replacement And Fullscreen Lack Reliable Overlay Recovery
 
+**Implementation Status: UNTESTED.**
+
+**What Changed:** Same-track deduplication now requires the connected selected video. A disposed-safe one-second liveness check recovers delayed/replaced players after the initial retry window; scroll/resize/fullscreen refresh geometry. The existing host is reattached in the fullscreen subtree and positioned within the visible player rectangle, not the document rail.
+
+**How To Test:**
+1. Delay video mounting past ten seconds, replace a paused video, and remove the host. Expected: the existing track returns within a second with one host, one native track and one listener set, without generation.
+2. Switch normal/theater/fullscreen, scroll and resize with the panel docked. Expected: rail follows the player and hides without a player. Limits: one-second replacement latency; native video-only fullscreen cannot display sibling HTML; geometry and real YouTube behavior not runtime-tested.
+
 **Surface:** Overlay mounting and video binding.
 
 **Impact:** Captions can disappear, stay stale, sit outside the player, or seek a detached video.

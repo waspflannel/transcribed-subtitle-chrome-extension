@@ -97,6 +97,10 @@ export default defineContentScript({
     }
 
     window.addEventListener('keydown', handleKeyboardShortcut, true);
+    window.addEventListener('fullscreenchange', recoverPlayerBinding);
+    window.addEventListener('resize', recoverPlayerBinding);
+    window.addEventListener('scroll', recoverPlayerBinding, true);
+    const playerRecoveryTimer = window.setInterval(recoverPlayerBinding, 1000);
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
     void hydrateContentState();
 
@@ -114,6 +118,10 @@ export default defineContentScript({
       }
       window.removeEventListener('keydown', handleKeyboardShortcut, true);
       browser.runtime.onMessage.removeListener(handleRuntimeMessage);
+      window.clearInterval(playerRecoveryTimer);
+      window.removeEventListener('fullscreenchange', recoverPlayerBinding);
+      window.removeEventListener('resize', recoverPlayerBinding);
+      window.removeEventListener('scroll', recoverPlayerBinding, true);
       clearBoundWebVttTrack();
       overlay.unmount();
     });
@@ -298,6 +306,22 @@ export default defineContentScript({
       });
     }
 
+    function recoverPlayerBinding(): void {
+      if (disposed || !subtitleStateMatchesCurrentPage(subtitleState)) return;
+      if (subtitleState.type !== 'ready' && !(subtitleState.type === 'loading' && subtitleState.partialTrack)) {
+        updateOverlay();
+        return;
+      }
+      const video = findActiveYoutubeVideo(document);
+      if (video !== activeVideo || (activeVideo !== null && !activeVideo.isConnected)) {
+        applySubtitleState(subtitleState);
+      } else if (video && !stopWebVttTrack
+        && (subtitleState.type === 'ready' || (subtitleState.type === 'loading' && subtitleState.partialTrack))) {
+        applySubtitleState(subtitleState);
+      }
+      updateOverlay();
+    }
+
     /**
      * Right after navigation the target `<video>` element is often not
      * mounted yet, so the first bind attempt can find nothing. Instead of
@@ -371,6 +395,7 @@ export default defineContentScript({
       if (
         nextPartialKey !== null
         && nextPartialKey === boundPartialTrackKey
+        && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)
         && subtitleStateMatchesCurrentPage(nextSubtitleState)
       ) {
         subtitleState = nextSubtitleState;
@@ -386,6 +411,7 @@ export default defineContentScript({
       if (
         nextSubtitleState.type === 'ready'
         && boundReadyTrackId === nextSubtitleState.track.trackId
+        && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)
         && subtitleStateMatchesCurrentPage(nextSubtitleState)
       ) {
         return;
