@@ -462,6 +462,17 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R12. P2: Background Refresh Can Swallow Sign-In Feedback
 
+**Implementation Status: IMPLEMENTED / UNTESTED (2026-09-08).**
+
+**What Changed:** Account actions now have their own outcome/version guard while still blocking ordinary snapshot responses from applying during the action. A delayed refresh cannot overwrite sign-in/sign-out identity or feedback. Settings mutations report failures in the existing status banner and retain the last valid panel snapshot instead of rendering synthetic signed-out/no-video state; account controls remain owned by the account busy state.
+
+**How To Test:**
+1. Delay login, complete a newer ordinary refresh first, then resolve login success and failure in separate runs. Expected: the account feedback and disabled controls match the action result, and a stale refresh cannot replace the account identity.
+2. While a preference update is pending, force its request to fail. Expected: the existing account/video snapshot remains visible and the error appears in the status banner.
+3. Run the panel request-order and panel entrypoint focused checks when execution is authorized. Expected: older snapshot responses remain suppressed across mutation/action boundaries.
+
+**Limits:** The browser panel journey and delayed-message runtime checks were not run because extension dependencies are unavailable; this change covers local rendering/ordering only and does not alter backend auth.
+
 **Surface:** Account form and global panel rendering.
 
 **Impact:** The panel can say "Signing in" after a failed action, say "Signed in" beside stale anonymous state, or re-enable controls during a pending operation.

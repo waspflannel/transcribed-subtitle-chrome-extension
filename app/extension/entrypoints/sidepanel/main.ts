@@ -41,7 +41,7 @@ import {
 
 type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account' | 'correction' | 'quickfix' | 'cancel';
+type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 
 const {
@@ -161,6 +161,8 @@ let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
 let panelRequestState: PanelRequestOrder = panelRequestOrder();
+let accountActionVersion = 0;
+let accountActionsInFlight = 0;
 let lastProgressAnnouncement: string | null = null;
 
 /* Watch opens on the transcript; whole-track tasks each occupy one screen. */
@@ -675,7 +677,7 @@ function renderLyricsEditState(): void {
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  await sendPanelRequest({ type: 'panel.updateSettings', patch });
+  await sendPanelRequest({ type: 'panel.updateSettings', patch }, 'settings', 'mutation');
 }
 
 async function clearLocalState(): Promise<void> {
@@ -695,6 +697,8 @@ async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
         password: accountPasswordInput.value,
       },
       'account',
+      'mutation',
+      true,
     );
 
     accountPasswordInput.value = '';
@@ -711,7 +715,7 @@ async function logoutAccount(): Promise<void> {
   setAccountRequestBusy(true, 'Signing out...');
 
   try {
-    const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account');
+    const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account', 'mutation', true);
 
     if (signedOut) {
       showAccountFeedback('success', 'Signed out.');
@@ -725,6 +729,7 @@ async function sendPanelRequest(
   request: PanelRequest,
   errorTarget: RequestErrorTarget = 'global',
   kind: 'normal' | 'mutation' = 'normal',
+  accountAction = false,
 ): Promise<boolean> {
   const requestWithWindow = typeof panelWindowId === 'number'
     ? { ...request, windowId: panelWindowId }
@@ -733,7 +738,13 @@ async function sendPanelRequest(
   const isMutation = kind === 'mutation';
   const ordering = beginPanelRequest(panelRequestState, kind);
   panelRequestState = ordering.state;
-  const canApply = (): boolean => canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
+  const startedDuringAccountAction = accountActionsInFlight > 0;
+  const actionVersion = accountAction ? ++accountActionVersion : accountActionVersion;
+  if (accountAction) accountActionsInFlight += 1;
+  const canApply = (): boolean => accountAction
+    ? actionVersion === accountActionVersion
+    : !startedDuringAccountAction && accountActionsInFlight === 0
+      && canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
@@ -786,6 +797,7 @@ async function sendPanelRequest(
     if (isMutation) {
       panelRequestState = finishPanelRequest(panelRequestState);
     }
+    if (accountAction) accountActionsInFlight = Math.max(0, accountActionsInFlight - 1);
   }
 }
 
@@ -1285,6 +1297,13 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
 
   if (errorTarget === 'account') {
     showAccountFeedback('error', message);
+
+    return;
+  }
+
+  if (errorTarget === 'settings') {
+    statusBanner.hidden = false;
+    statusBanner.textContent = message;
 
     return;
   }
