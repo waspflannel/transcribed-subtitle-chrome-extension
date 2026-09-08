@@ -105,6 +105,7 @@ class SubtitleJobService
                 &$dispatchState,
                 &$previousJobCount,
             ): SubtitleJob {
+                User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
                 $job = $this->compatibleJobQuery($payload, $user, $processingVersion)
                     ->with('track')
                     ->lockForUpdate()
@@ -292,7 +293,8 @@ class SubtitleJobService
         $job->unsetRelation('track');
         // Stage jobs of the superseded run no-op on the run-id guard, so the
         // old run's audio workspace is reclaimed here.
-        SubtitleAudioWorkspace::delete((string) $job->run_id);
+        $oldRunId = (string) $job->run_id;
+        DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($oldRunId));
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],

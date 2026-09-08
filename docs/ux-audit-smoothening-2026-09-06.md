@@ -460,6 +460,15 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R16. P1: Failure/Delete Races Can Affect A Replacement Run's Credits
 
+**Status: implemented UNTESTED (2026-09-08).**
+
+**What Changed:** Added `SubtitleJobLock::current` for account-before-job locking. Failure commits status, reservation release and run-scoped artifact deletion together. Individual/bulk deletion re-read the owned current run under that lock and settle before deletion. Filesystem cleanup runs after commit with a captured run ID; reset no longer removes audio before commit. Completion and ledger locks use the same order; submission takes the account lock before compatibility to avoid reversing that order.
+
+**How To Test:**
+1. Run the added failure rollback and old-artifact cleanup regression source when execution is authorized. Expected: database cleanup failure rolls back both status and refund; A cleanup leaves B artifacts intact.
+2. On disposable Postgres, pause failure, completion, reset and both deletion paths at lock/commit boundaries and interleave another connection. Expected: exactly one settlement per run, no replacement reservation loss, and no reservation stranded by deletion.
+3. Kill the process before/after commit. Expected: pre-commit database work rolls back; post-commit credit settlement remains durable. Remaining limits: filesystem deletion and promotion are post-commit side effects, so a hard crash may require workspace cleanup/the scheduled admission sweep. In-flight provider calls cannot be interrupted. No suites, browser or runtime concurrency checks were executed.
+
 **Surface:** Backend failure, immediate retry, dashboard deletion.
 
 **Impact:** A replacement generation can lose its reservation/artifacts, or reserved minutes can remain held after the job is gone.
@@ -477,6 +486,15 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **Acceptance:** Pause failure/deletion at each boundary and interleave retry. Replacement reservations/artifacts remain intact, deleted jobs leave no active reservation, and interrupted failure handling is recoverable. Use disposable Postgres for real locking evidence.
 
 ### R17. P1: Some Pipeline Continuations Can Adopt A Retried Run
+
+**Status: implemented UNTESTED (2026-09-08).**
+
+**What Changed:** Merge, cached transcript and analysis-result continuations re-lock the captured run and expected stage before writing language/duration/artifacts or advancing stages. Batch publication follows the committed guarded transition. Duration settlement and provider-cost recording reject stale/terminal runs without refreshing their input into a replacement. Completion logging keeps its captured run.
+
+**How To Test:**
+1. Run `SubtitleContinuationRunTest` when authorized. Expected: replacing A during draft preparation on both merge and cache paths leaves B at preparing with unchanged duration/language/cost, no artifacts, no settlement and no analysis dispatch.
+2. Interleave Postgres connections before each guarded transaction, including analysis assembly and finalization. Expected: A never writes B; duplicate continuation claims at the same stage advance only once.
+3. Delay publication/provider completion across reset. Expected: published payloads retain A's run ID and workers reject stale A. Remaining limits: requests already in flight cannot be stopped, and provider-cost telemetry is an estimate, not a provider invoice. Post-commit publication is not a distributed transaction. Test source added only; no runtime, suite or browser execution.
 
 **Surface:** Transcript merge, cached-transcript continuation, provider-cost recording.
 

@@ -3,6 +3,7 @@
 namespace App\Services\Subtitles;
 
 use App\Models\SubtitleJob;
+use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Enums\Lab;
 
 final class SubtitleProviderCostRecorder
@@ -86,21 +87,27 @@ final class SubtitleProviderCostRecorder
     ): void {
         $costMicrousd = $billedUnits * $unitPriceMicrousd;
 
-        if ($costMicrousd > 0) {
-            SubtitleJob::query()
-                ->whereKey($job->id)
-                ->increment('estimated_provider_cost_microusd', $costMicrousd);
-        }
+        DB::transaction(function () use ($job, $stage, $provider, $model, $billingUnit, $billedUnits, $unitPriceMicrousd, $costMicrousd): void {
+            $job = SubtitleJobLock::current($job->id, $job->run_id);
 
-        $this->tracer->jobEvent($job->refresh(), 'provider.cost_estimated', [
-            'stage' => $stage,
-            'provider' => $provider,
-            'model' => $model,
-            'billing_unit' => $billingUnit,
-            'billed_units' => $billedUnits,
-            'unit_price_microusd' => $unitPriceMicrousd,
-            'cost_microusd' => $costMicrousd,
-            'generation_tier' => $job->generation_tier,
-        ]);
+            if ($job === null || $job->status !== 'running') {
+                return;
+            }
+
+            if ($costMicrousd > 0) {
+                $job->increment('estimated_provider_cost_microusd', $costMicrousd);
+            }
+
+            $this->tracer->jobEvent($job, 'provider.cost_estimated', [
+                'stage' => $stage,
+                'provider' => $provider,
+                'model' => $model,
+                'billing_unit' => $billingUnit,
+                'billed_units' => $billedUnits,
+                'unit_price_microusd' => $unitPriceMicrousd,
+                'cost_microusd' => $costMicrousd,
+                'generation_tier' => $job->generation_tier,
+            ]);
+        }, attempts: 5);
     }
 }

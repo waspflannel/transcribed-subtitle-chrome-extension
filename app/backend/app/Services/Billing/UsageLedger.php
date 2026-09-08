@@ -7,6 +7,7 @@ use App\Models\BillingUsageEvent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
+use App\Services\Subtitles\SubtitleJobLock;
 use App\Support\PostgresErrors;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
@@ -89,11 +90,7 @@ final class UsageLedger
     public function adjustReservationToActualDuration(SubtitleJob $job): void
     {
         DB::transaction(function () use ($job): void {
-            $lockedJob = SubtitleJob::query()
-                ->whereKey($job->id)
-                ->where('run_id', $job->run_id)
-                ->lockForUpdate()
-                ->first();
+            $lockedJob = SubtitleJobLock::current($job->id, $job->run_id);
 
             if (! $lockedJob instanceof SubtitleJob || $this->hasTerminalSettlement($lockedJob)) {
                 return;
@@ -320,11 +317,7 @@ final class UsageLedger
     private function settleReservation(SubtitleJob $job, ?SubtitleTrack $track, ?string $reason): void
     {
         DB::transaction(function () use ($job, $track, $reason): void {
-            $lockedJob = SubtitleJob::query()
-                ->whereKey($job->id)
-                ->where('run_id', $job->run_id)
-                ->lockForUpdate()
-                ->first();
+            $lockedJob = SubtitleJobLock::current($job->id, $job->run_id);
 
             if (! $lockedJob instanceof SubtitleJob) {
                 return;
