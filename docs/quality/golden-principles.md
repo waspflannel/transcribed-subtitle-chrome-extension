@@ -28,6 +28,13 @@ Promote repeated human feedback into enforceable rules.
 - Keep tests separate from business code, and remove scaffold tests that do not prove product behavior.
 - Prefer one clear product path before generalizing for hypothetical platforms, providers, states, or future review systems.
 
+## Async Ownership Rules
+
+- Capture the session, tab/video, track and operation that started asynchronous work. Revalidate the applicable identities immediately before publishing or clearing state, including failure paths.
+- Complete awaited guards before reading the latest state for a synchronous merge. An await between that read and its write can lose another response's update.
+- Put compare-and-clear operations inside the same serialized storage mutation as the clear. A separate read followed by a queued clear can remove a newer session or operation.
+- Test delayed native events and interleaved responses through the owning entrypoint. A synchronous mock or a helper-only assertion does not establish event ownership or integration behavior.
+
 ## Promotion Path
 
 When a rule matters repeatedly:
