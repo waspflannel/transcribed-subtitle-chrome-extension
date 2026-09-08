@@ -529,7 +529,7 @@ class SubtitleJobApiTest extends TestCase
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
 
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "first transcript segment\nsecond transcript segment",
         ]);
 
@@ -542,14 +542,14 @@ class SubtitleJobApiTest extends TestCase
     {
         LyricsAlignmentAgent::fake([
             ['isMatch' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'First lyric line'],
-                ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Second lyric line'],
+                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
+                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
             ]],
         ]);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $oldTrackId = $job->track->public_id;
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "First lyric line\nSecond lyric line",
         ])->assertAccepted();
 
@@ -750,7 +750,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('error.details.reason', 'stale_track');
 
         Queue::fake();
-        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
@@ -879,7 +879,7 @@ class SubtitleJobApiTest extends TestCase
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
@@ -898,7 +898,7 @@ class SubtitleJobApiTest extends TestCase
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
@@ -935,12 +935,12 @@ class SubtitleJobApiTest extends TestCase
             }
 
             return ['isMatch' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'First lyric line'],
-                ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Second lyric line'],
+                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
+                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
             ]];
         })->preventStrayPrompts();
 
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "First lyric line\nSecond lyric line",
         ])->assertAccepted();
         $queuedJob = new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0);
@@ -972,15 +972,15 @@ class SubtitleJobApiTest extends TestCase
     {
         LyricsAlignmentAgent::fake([
             ['isMatch' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'sourceText' => 'First lyric line'],
-                ['cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'Second lyric line'],
+                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
+                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
             ]],
         ]);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $oldTrackId = $job->track->public_id;
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "Chorus we sing the whole next section\nFirst lyric line\nSecond lyric line",
         ])->assertAccepted();
 
@@ -996,7 +996,7 @@ class SubtitleJobApiTest extends TestCase
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
@@ -1033,7 +1033,7 @@ class SubtitleJobApiTest extends TestCase
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
+        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
@@ -1061,28 +1061,28 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['lyrics' => '!!!'])
+            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => '!!!'])
             ->assertUnprocessable();
 
         $first = $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['lyrics' => 'first transcript segment second transcript segment'])
+            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertAccepted();
         $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['lyrics' => 'first transcript segment second transcript segment'])
+            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'lyrics_correction_in_progress');
 
         $job->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
         $job->track->lyricsCorrection()->update(['status' => 'failed', 'lyrics' => null]);
         $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['lyrics' => 'first transcript segment second transcript segment'])
+            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertStatus(402)
             ->assertJsonPath('error.code', 'payment_required');
 
         $job->user->forceFill(['billing_subscription_status' => 'active', 'billing_current_period_end' => now()->addDay()])->save();
         $job->track->update(['expires_at' => now()->subMinute()]);
         $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['lyrics' => 'first transcript segment second transcript segment'])
+            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertNotFound();
         $this->assertNotSame('', (string) $first->json('attemptId'));
     }

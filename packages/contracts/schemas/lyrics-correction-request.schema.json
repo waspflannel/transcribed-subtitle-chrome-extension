@@ -4,8 +4,13 @@
   "title": "LyricsCorrectionRequest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["lyrics"],
+  "required": ["expectedTrackId", "lyrics"],
   "properties": {
+    "expectedTrackId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identity of the track the learner intends to replace."
+    },
     "lyrics": {
       "type": "string",
       "minLength": 1,

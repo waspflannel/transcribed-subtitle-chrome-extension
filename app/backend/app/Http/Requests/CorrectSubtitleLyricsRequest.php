@@ -19,6 +19,7 @@ class CorrectSubtitleLyricsRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'expectedTrackId' => ['required', 'uuid'],
             'lyrics' => ['required', 'string', 'max:25000'],
         ];
     }

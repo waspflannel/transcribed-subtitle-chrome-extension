@@ -76,7 +76,7 @@ class FailStalledSubtitleJobsTest extends TestCase
         $this->assertSame('running', $stalled->status);
     }
 
-    public function test_it_fails_and_clears_stalled_lyrics_corrections(): void
+    public function test_it_fails_and_clears_lyrics_corrections_that_stall_again_after_recovery(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
         $track = SubtitleTrack::factory()->for($job, 'job')->create();
@@ -84,7 +84,7 @@ class FailStalledSubtitleJobsTest extends TestCase
             'attempt_id' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3030',
             'status' => 'running',
             'work_revision' => 3,
-            'work_state' => ['stage' => 'tokenizing', 'batchIndex' => 1, 'cues' => [['cueId' => 'cue-0001', 'sourceText' => 'private draft cue']]],
+            'work_state' => ['stage' => 'tokenizing', 'recoveryDispatched' => true, 'batchIndex' => 1, 'cues' => [['cueId' => 'cue-0001', 'sourceText' => 'private draft cue']]],
             'lyrics' => 'stalled private lyrics',
         ]);
         $correction->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
@@ -141,7 +141,7 @@ class FailStalledSubtitleJobsTest extends TestCase
             'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000032',
             'status' => 'running',
             'work_revision' => 3,
-            'work_state' => ['stage' => 'tokenizing'],
+            'work_state' => ['stage' => 'tokenizing', 'recoveryDispatched' => true],
             'lyrics' => 'stalled private lyrics',
         ]);
         $stalled->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
@@ -152,7 +152,7 @@ class FailStalledSubtitleJobsTest extends TestCase
             'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000033',
             'status' => 'running',
             'work_revision' => 4,
-            'work_state' => ['stage' => 'tokenizing'],
+            'work_state' => ['stage' => 'tokenizing', 'recoveryDispatched' => true],
             'lyrics' => 'revision private lyrics',
         ]);
         $revisionAdvanced->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
@@ -163,7 +163,7 @@ class FailStalledSubtitleJobsTest extends TestCase
             'attempt_id' => '018f9e2f-0d8c-7500-8000-000000000034',
             'status' => 'running',
             'work_revision' => 6,
-            'work_state' => ['stage' => 'tokenizing'],
+            'work_state' => ['stage' => 'tokenizing', 'recoveryDispatched' => true],
             'lyrics' => 'heartbeat private lyrics',
         ]);
         $heartbeatAdvanced->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();

@@ -128,7 +128,7 @@ class SubtitleJobController extends Controller
     ): JsonResponse {
         $job = $this->ownedJob($request, $jobId);
 
-        $correction = $corrections->submit($job, $this->extensionUser($request), $request->lyrics());
+        $correction = $corrections->submit($job, $this->extensionUser($request), $request->lyrics(), (string) $request->validated('expectedTrackId'));
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve(), 202);
     }

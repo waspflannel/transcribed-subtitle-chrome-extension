@@ -23,6 +23,20 @@ The current track stays active until a replacement succeeds. Neither workflow de
 
 ## Replace Full Lyrics
 
+### Reliability update (2026-09-07)
+
+The local text-processing model and example environment now use `gpt-6-astra`. When fast mode is enabled, OpenAI agents request high reasoning effort and `service_tier: fast`, including lyrics alignment and derived learning data. Fast processing carries a premium and does not guarantee latency. Audio transcription retains its existing provider and model.
+
+The POST requires `expectedTrackId`; stale identities return the existing conflict response. The correction retains its source track and job-run identities in encrypted work state and rechecks them, expiry, and entitlement before committing progress or publication.
+
+Recognized section headings and credits are removed before both alignment and exact-text validation. All remaining text must be consumed. Requests that exceed the maximum character capacity of the existing timing slots fail validation before queueing. Alignment retries receive the rejected validation reason, and safe diagnostics retain attempt, revision, stage, reason, and cue counts without lyrics or provider output.
+
+Alignment receives numbered authoritative text parts and returns inclusive end indices for existing timing slots. The server copies text from those parts, preserving repetitions and punctuation instead of asking the model to reproduce the lyrics. Boundaries must increase, consume every part, and produce cues within the 84-code-point limit. Long unspaced text uses grapheme boundaries. Song-match and completeness checks still apply before publication. Correction notices have 12px of vertical separation from neighboring controls.
+
+The existing stalled-job sweep recovers a missing delivery once per revision after the queue retry window and slack. A second stalled running unit fails safely; queued work waiting for worker capacity is preserved. Existing attempt locks and revision checks reject duplicate or cancelled deliveries.
+
+The panel shows terminal outcomes recovered after reopening, without requiring a locally observed transition. Explicit dismissal applies to that attempt during the panel session; navigation does not dismiss it. Status polling failures show automatic-retry feedback beside the last known state.
+
 ### Copy
 
 Rename **Use pasted lyrics** to **Replace full lyrics**.

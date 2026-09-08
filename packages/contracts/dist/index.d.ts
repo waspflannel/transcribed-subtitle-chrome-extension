@@ -331,6 +331,10 @@ export interface LearningToken {
 // Source: schemas/lyrics-correction-request.schema.json
 export interface LyricsCorrectionRequest {
   /**
+   * Identity of the track the learner intends to replace.
+   */
+  expectedTrackId: string;
+  /**
    * Complete pasted plain-text lyrics. The backend applies a Unicode character limit after validation.
    */
   lyrics: string;
@@ -338,11 +342,39 @@ export interface LyricsCorrectionRequest {
 
 // Source: schemas/lyrics-correction-status.schema.json
 export type LyricsCorrectionStatus =
-  | { attemptId: string; status: 'queued'; stage: 'queued'; updatedAt: string }
-  | { attemptId: string; status: 'running'; stage: 'aligning' | 'rebuilding' | 'romanizing' | 'enriching' | 'finalizing'; updatedAt: string }
-  | { attemptId: string; status: 'completed'; stage: 'completed'; updatedAt: string; track: TrackResponse }
-  | { attemptId: string; status: 'failed'; stage: 'failed'; updatedAt: string; errorCode: 'lyrics_incomplete' | 'lyrics_do_not_match' | 'lyrics_correction_failed'; message: string }
-  | { attemptId: string; status: 'cancelled'; stage: 'cancelled'; updatedAt: string };
+  | {
+      attemptId: string;
+      status: 'queued';
+      stage: 'queued';
+      updatedAt: string;
+    }
+  | {
+      attemptId: string;
+      status: 'running';
+      stage: 'aligning' | 'rebuilding' | 'romanizing' | 'enriching' | 'finalizing';
+      updatedAt: string;
+    }
+  | {
+      attemptId: string;
+      status: 'completed';
+      stage: 'completed';
+      updatedAt: string;
+      track: TrackResponse;
+    }
+  | {
+      attemptId: string;
+      status: 'failed';
+      stage: 'failed';
+      updatedAt: string;
+      errorCode: 'lyrics_incomplete' | 'lyrics_do_not_match' | 'lyrics_correction_failed';
+      message: string;
+    }
+  | {
+      attemptId: string;
+      status: 'cancelled';
+      stage: 'cancelled';
+      updatedAt: string;
+    };
 
 export interface TrackResponse {
   trackId: string;
@@ -2144,8 +2176,8 @@ export interface ErrorObject {
     | 'internal_error';
   message: string;
   details?: {
-    [k: string]: unknown;
     reason?: 'stale_track';
+    [k: string]: unknown;
   };
 }
 
@@ -2178,7 +2210,7 @@ export interface ErrorObject {
     | 'internal_error';
   message: string;
   details?: {
-    [k: string]: unknown;
     reason?: 'stale_track';
+    [k: string]: unknown;
   };
 }

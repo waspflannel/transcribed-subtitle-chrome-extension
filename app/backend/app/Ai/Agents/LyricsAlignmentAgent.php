@@ -7,6 +7,7 @@ use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
@@ -14,28 +15,41 @@ use Stringable;
 
 #[Provider(Lab::OpenAI)]
 #[MaxTokens(12000)]
-class LyricsAlignmentAgent implements Agent, HasStructuredOutput
+class LyricsAlignmentAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
+
+    public function providerOptions(Lab|string $provider): array
+    {
+        return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
+            ? ['reasoning' => ['effort' => 'high'], 'service_tier' => 'fast']
+            : [];
+    }
 
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
 Align complete pasted lyrics to existing subtitle timing slots.
 
-The pasted lyrics are the only source of replacement words. Existing cue text is
-alignment evidence only and must never be copied when it conflicts with the
-pasted lyrics. Return entries in timing-slot order with the original cueId and
-index. You may omit unused timing slots when the pasted lyrics need fewer cues,
-but never duplicate or reorder them. Return only sourceText for each cue: never
-return timestamps, translations, tokens, romanization, or explanations.
+lyricsParts contains the authoritative pasted text in numbered parts. Existing
+cue text is timing evidence only. Return entries in timing-slot order with the
+original cueId and index, and endPartIndex: the inclusive index of the last
+lyric part assigned to that cue. Do not return or rewrite lyric text.
 
-Preserve the pasted wording, case, punctuation, and source order exactly. Line
-breaks are hints, not fixed cue boundaries. Split at natural phrase boundaries
-and keep every sourceText at or below 84 characters. A standalone section
-heading or credit line may be omitted, but never omit a line that contains lyric
-words. Return isMatch false when the paste is for a different song or the
-alignment is unreliable.
+The first cue starts at part 0. Every subsequent cue starts immediately after
+the preceding endPartIndex. End indices must strictly increase, and the last
+must equal the last supplied part index. Thus every part, including repetitions
+and punctuation, is consumed exactly once. The server reconstructs each cue by
+joining its parts, collapsing whitespace, and enforcing 84 Unicode code points.
+Choose natural phrase boundaries that fit that limit. Parts normally contain
+whole words; long unspaced text is supplied as grapheme clusters. Line breaks
+are hints, not fixed cue boundaries.
+
+You may omit unused timing slots, but never duplicate or reorder them. Do not
+stretch an excerpt across the whole song to fill unused timing slots. Recognized
+headings and credits have already been removed. All remaining parts are required.
+If validationFeedback is supplied, correct the rejected boundary. Return
+isMatch false when the paste is for a different song or alignment is unreliable.
 INSTRUCTIONS;
     }
 
@@ -67,7 +81,7 @@ INSTRUCTIONS;
                 ->items($schema->object([
                     'cueId' => $schema->string()->min(1)->required(),
                     'index' => $schema->integer()->min(0)->required(),
-                    'sourceText' => $schema->string()->min(1)->max(84)->required(),
+                    'endPartIndex' => $schema->integer()->min(0)->required(),
                 ])->withoutAdditionalProperties())
                 ->required(),
         ];

@@ -78,10 +78,9 @@ class FailStalledSubtitleJobs extends Command
             $failed++;
         }
 
-        // Corrections are abandoned only once their running unit could not
-        // have been retried: the queue retry_after, the job's maximum backoff,
-        // and the stalled-job slack all sit inside this cutoff. Queued work
-        // waits indefinitely for a worker slot and is never failed here.
+        // Recover a missing delivery once per revision, after an existing worker
+        // and its queue retry have had time to finish. Duplicate deliveries are
+        // serialized by the attempt lock and rejected by the revision check.
         $correctionCutoff = $now->copy()->subSeconds(
             (int) config('queue.connections.'.SubtitleQueue::connection().'.retry_after', 0)
                 + LyricsCorrectionJob::MAX_BACKOFF_SECONDS
@@ -89,21 +88,13 @@ class FailStalledSubtitleJobs extends Command
         );
 
         $stalledCorrections = SubtitleTrackLyricsCorrection::query()
-            ->where('status', 'running')
+            ->whereIn('status', ['queued', 'running'])
             ->where('updated_at', '<=', $correctionCutoff)
-            ->get(['subtitle_track_id', 'attempt_id', 'work_revision']);
+            ->get(['id', 'subtitle_track_id', 'attempt_id', 'work_revision']);
 
         foreach ($stalledCorrections as $correction) {
-            $didFail = $corrections->failAttempt(
-                (int) $correction->subtitle_track_id,
-                (string) $correction->attempt_id,
-                'lyrics_correction_failed',
-                'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.',
-                expectedRevision: (int) $correction->work_revision,
-                notUpdatedAfter: $correctionCutoff,
-            );
-
-            if ($didFail) {
+            $corrections->recoverStalledAttempt($correction, $correctionCutoff);
+            if ($correction->fresh()?->status === 'failed') {
                 $failed++;
             }
         }

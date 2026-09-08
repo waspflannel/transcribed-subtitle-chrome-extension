@@ -339,6 +339,7 @@
       "post": {
         "operationId": "startLyricsCorrection",
         "summary": "Queue a correction from complete pasted plain-text lyrics.",
+        "description": "Requires expectedTrackId to match the current track. Rejects stale track identity and lyrics that cannot fit the existing timing slots before queueing.",
         "parameters": [
           {"$ref": "#/components/parameters/ExtensionInstallId"},
           {"$ref": "#/components/parameters/ExtensionAuthorization"},
