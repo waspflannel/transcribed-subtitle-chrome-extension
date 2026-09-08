@@ -9,9 +9,11 @@ use App\Models\SubtitleJobEvent;
 use App\Models\User;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
+use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Tests\TestCase;
 
 class SubtitleJobFailureHandlerTest extends TestCase
@@ -123,6 +125,27 @@ class SubtitleJobFailureHandlerTest extends TestCase
             'event' => 'job.failed',
         ]);
         $this->assertSame(0, (int) BillingUsageEvent::query()->where('subtitle_job_id', $job->id)->where('event_type', 'refund')->count());
+    }
+
+    public function test_cleanup_database_failure_rolls_back_status_and_settlement(): void
+    {
+        $user = $this->userWithActiveBilling();
+        $job = SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+        $ledger = app(UsageLedger::class);
+        $ledger->reserveForJob($job, $user, app(BillingPlanCatalog::class)->requirePlan('base'), 2);
+        $this->mock(SubtitleJobArtifactStore::class)
+            ->shouldReceive('deleteForJob')->once()->andThrow(new RuntimeException('cleanup failed'));
+
+        try {
+            app(SubtitleJobFailureHandler::class)->failJob($job->id, 'tokenizing', SubtitleProcessingException::enrichmentFailed(), $job->run_id);
+            $this->fail('Expected cleanup failure.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('cleanup failed', $exception->getMessage());
+        }
+
+        $this->assertSame('running', $job->refresh()->status);
+        $this->assertSame(2, $ledger->reservedMinutesForJob($job));
+        $this->assertDatabaseMissing('billing_usage_events', ['idempotency_key' => 'settlement:'.$job->id.':'.$job->run_id]);
     }
 
     private function userWithActiveBilling(): User

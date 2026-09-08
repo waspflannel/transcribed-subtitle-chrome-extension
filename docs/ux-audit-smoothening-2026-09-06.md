@@ -437,6 +437,15 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 ### R16. P1: Failure/Delete Races Can Affect A Replacement Run's Credits
 
+**Status: implemented UNTESTED (2026-09-08).**
+
+**What Changed:** Added `SubtitleJobLock::current` for account-before-job locking. Failure commits status, reservation release and run-scoped artifact deletion together. Individual/bulk deletion re-read the owned current run under that lock and settle before deletion. Filesystem cleanup runs after commit with a captured run ID; reset no longer removes audio before commit. Completion and ledger locks use the same order; submission takes the account lock before compatibility to avoid reversing that order.
+
+**How To Test:**
+1. Run the added failure rollback and old-artifact cleanup regression source when execution is authorized. Expected: database cleanup failure rolls back both status and refund; A cleanup leaves B artifacts intact.
+2. On disposable Postgres, pause failure, completion, reset and both deletion paths at lock/commit boundaries and interleave another connection. Expected: exactly one settlement per run, no replacement reservation loss, and no reservation stranded by deletion.
+3. Kill the process before/after commit. Expected: pre-commit database work rolls back; post-commit credit settlement remains durable. Remaining limits: filesystem deletion and promotion are post-commit side effects, so a hard crash may require workspace cleanup/the scheduled admission sweep. In-flight provider calls cannot be interrupted. No suites, browser or runtime concurrency checks were executed.
+
 **Surface:** Backend failure, immediate retry, dashboard deletion.
 
 **Impact:** A replacement generation can lose its reservation/artifacts, or reserved minutes can remain held after the job is gone.

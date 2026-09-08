@@ -304,11 +304,13 @@ class SubtitleJobArtifactStore
     {
         $artifactCount = SubtitleJobArtifact::query()
             ->where('subtitle_job_id', $job->id)
+            ->where('run_id', $job->run_id)
             ->count();
         $startedAtMs = $this->currentTimeMs();
 
         SubtitleJobArtifact::query()
             ->where('subtitle_job_id', $job->id)
+            ->where('run_id', $job->run_id)
             ->delete();
 
         $this->tracer->jobEvent($job, 'artifact.deleted', [

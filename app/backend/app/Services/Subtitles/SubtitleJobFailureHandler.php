@@ -7,6 +7,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\UsageLedger;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class SubtitleJobFailureHandler
@@ -38,27 +39,30 @@ class SubtitleJobFailureHandler
 
         [$errorCode, $errorMessage] = $this->resolveErrorPayload($exception);
 
-        $claimed = SubtitleJob::query()
-            ->whereKey($subtitleJobId)
-            ->where('run_id', $runId)
-            ->whereNotIn('status', ['completed', 'failed'])
-            ->update([
+        $job = DB::transaction(function () use ($subtitleJobId, $runId, $stage, $errorCode, $errorMessage): ?SubtitleJob {
+            $current = SubtitleJobLock::current($subtitleJobId, $runId);
+
+            if ($current === null || in_array($current->status, ['completed', 'failed'], true)) {
+                return null;
+            }
+
+            $current->update([
                 'status' => 'failed',
                 'stage' => $stage,
                 'error_code' => $errorCode,
                 'error_message' => $errorMessage,
             ]);
+            $this->usageLedger->releaseReservation($current, 'failure');
+            $this->artifacts->deleteForJob($current);
+            DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($runId));
 
-        if ($claimed !== 1) {
-            // Another callback already finalized this run, or the row was
-            // racingly transitioned to completed/failed. Only the winner
-            // proceeds to cleanup, logging, and telemetry.
+            return $current;
+        }, attempts: 5);
+
+        if ($job === null) {
             return;
         }
 
-        $job->refresh();
-
-        $this->cleanupReservedWork($job);
         $this->admission->promoteQueuedJobs($job->user_id);
 
         if ($exception instanceof BillingEntitlementException) {
@@ -104,12 +108,5 @@ class SubtitleJobFailureHandler
     ): void {
         $this->logger->processingFailed($job, $stage, $exception);
         $this->telemetry->recordJobFailed($job, $stage, $exception, $context);
-    }
-
-    private function cleanupReservedWork(SubtitleJob $job): void
-    {
-        $this->usageLedger->releaseReservation($job->load('user'), 'failure');
-        $this->artifacts->deleteForJob($job);
-        SubtitleAudioWorkspace::delete((string) $job->run_id);
     }
 }

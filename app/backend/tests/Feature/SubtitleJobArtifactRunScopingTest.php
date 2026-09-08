@@ -29,6 +29,21 @@ class SubtitleJobArtifactRunScopingTest extends TestCase
         $store->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES);
     }
 
+    public function test_old_cleanup_preserves_replacement_artifacts(): void
+    {
+        $store = app(SubtitleJobArtifactStore::class);
+        $job = SubtitleJob::factory()->create(['status' => 'running']);
+        $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
+        $old = clone $job;
+        $job->update(['run_id' => (string) Str::uuid()]);
+        $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $this->draftCues());
+
+        $store->deleteForJob($old);
+
+        $this->assertDatabaseMissing('subtitle_job_artifacts', ['subtitle_job_id' => $job->id, 'run_id' => $old->run_id]);
+        $this->assertSame($this->draftCues(), $store->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues);
+    }
+
     public function test_stale_run_batch_writes_are_rejected(): void
     {
         $store = app(SubtitleJobArtifactStore::class);

@@ -612,11 +612,7 @@ class SubtitleGenerationPipeline
 
     private function lockRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob
     {
-        $job = SubtitleJob::query()
-            ->with('track')
-            ->whereKey($subtitleJobId)
-            ->lockForUpdate()
-            ->first();
+        $job = SubtitleJobLock::current($subtitleJobId, $runId);
 
         if (
             ! $job instanceof SubtitleJob
