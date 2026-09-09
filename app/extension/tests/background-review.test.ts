@@ -23,16 +23,22 @@ function deferred<T>(): Deferred<T> {
 
 const storageMock = vi.hoisted(() => {
   const values = new Map<string, unknown>();
-  const blockedReads = new Map<string, Array<Promise<unknown>>>();
-  const blockedReadResolvers = new Map<string, Array<(value: unknown) => void>>();
+  const readCounts = new Map<string, number>();
+  const blockedReads = new Map<string, Array<{
+    readNumber: number;
+    promise: Promise<unknown>;
+    resolve: (value: unknown) => void;
+  }>>();
   const consumedBlockedReads = new Map<string, number>();
 
   const defineItem = vi.fn((key: string, options: { fallback: unknown }) => ({
     getValue: vi.fn(async () => {
-      const pending = blockedReads.get(key);
-      if (pending?.length) {
+      const readNumber = (readCounts.get(key) ?? 0) + 1;
+      readCounts.set(key, readNumber);
+      const pending = blockedReads.get(key)?.find((read) => read.readNumber === readNumber);
+      if (pending) {
         consumedBlockedReads.set(key, (consumedBlockedReads.get(key) ?? 0) + 1);
-        return pending.shift();
+        return pending.promise;
       }
 
       return values.has(key) ? values.get(key) : options.fallback;
@@ -48,27 +54,34 @@ const storageMock = vi.hoisted(() => {
   return {
     values,
     defineItem,
-    blockNextRead(key: string): Promise<unknown> {
-      const pending = deferred<unknown>();
+    blockReadAt(key: string, readNumber: number): Promise<unknown> {
+      let resolve!: (value: unknown) => void;
+      const promise = new Promise<unknown>((resolvePromise) => {
+        resolve = resolvePromise;
+      });
       const reads = blockedReads.get(key) ?? [];
-      const resolvers = blockedReadResolvers.get(key) ?? [];
-      reads.push(pending.promise);
-      resolvers.push(pending.resolve);
+      reads.push({ readNumber, promise, resolve });
       blockedReads.set(key, reads);
-      blockedReadResolvers.set(key, resolvers);
-      return pending.promise;
+
+      return promise;
     },
-    resolveNextRead(key: string, value: unknown): void {
-      const resolvers = blockedReadResolvers.get(key) ?? [];
-      resolvers.shift()?.(value);
+    resolveReadAt(key: string, readNumber: number, value: unknown): void {
+      const reads = blockedReads.get(key) ?? [];
+      const index = reads.findIndex((read) => read.readNumber === readNumber);
+      if (index < 0) return;
+      reads[index].resolve(value);
+      reads.splice(index, 1);
     },
     wasBlockedReadConsumed(key: string): boolean {
       return (consumedBlockedReads.get(key) ?? 0) > 0;
     },
+    readCount(key: string): number {
+      return readCounts.get(key) ?? 0;
+    },
     reset(): void {
       values.clear();
+      readCounts.clear();
       blockedReads.clear();
-      blockedReadResolvers.clear();
       consumedBlockedReads.clear();
       defineItem.mockClear();
     },
@@ -86,14 +99,14 @@ const apiMock = vi.hoisted(() => ({
 
 const browserMock = vi.hoisted(() => {
   const tabs = new Map<number, { id: number; windowId: number; url: string; active?: boolean }>();
-  const sentTabMessages: Array<{ tabId: number; message: unknown }> = [];
+  const sentTabMessages: Array<{ tabId: number; message: unknown; url?: string }> = [];
   const messageListeners: Array<(message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => unknown> = [];
   const connectListeners: Array<(port: unknown) => void> = [];
   const removedListeners: Array<(tabId: number) => void> = [];
   let activeTabId = 1;
 
   const tabsSendMessage = vi.fn(async (tabId: number, message: unknown) => {
-    sentTabMessages.push({ tabId, message });
+    sentTabMessages.push({ tabId, message, url: tabs.get(tabId)?.url });
     if ((message as { type?: string }).type === 'background.getPageSnapshot') {
       return { ok: true, videoDurationSeconds: 120 };
     }
@@ -399,17 +412,39 @@ describe('background entrypoint review regressions', () => {
     }, {});
     await waitFor(() => apiMock.cancelSubtitleJob.mock.calls.length === 1);
 
-    storageMock.blockNextRead('local:tabSubtitleOperations');
     const newerOperation = {
-      kind: 'generation', accountId: 'account-1', youtubeVideoId: VIDEO_B, jobId: 'job-b',
+      kind: 'generation', accountId: 'account-1', youtubeVideoId: VIDEO_B,
     };
-    storageMock.values.set('local:tabSubtitleOperations', { '1': newerOperation });
+    storageMock.blockReadAt('local:tabSubtitleOperations', 3);
     cancelRequest.resolve(job(VIDEO_A, 'job-a', 'cancelled'));
     await waitFor(() => storageMock.wasBlockedReadConsumed('local:tabSubtitleOperations'));
-    storageMock.resolveNextRead('local:tabSubtitleOperations', { '1': newerOperation });
+    expect(storageMock.readCount('local:tabSubtitleOperations')).toBe(3);
+
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
+    storageMock.values.set('local:activeTracksByVideoId', {
+      [VIDEO_B]: { accountId: 'account-1', track: track(VIDEO_B, 'job-b', 'track-b') },
+    });
+    storageMock.values.set('local:tabSubtitleOperations', { '1': newerOperation });
+    const stateWhileCleanupWaits = await dispatch(listener, { type: 'content.getState' }, sender(1));
+    expect(stateWhileCleanupWaits.subtitleState).toMatchObject({
+      type: 'ready',
+      track: { youtubeVideoId: VIDEO_B, jobId: 'job-b', trackId: 'track-b' },
+    });
+
+    storageMock.resolveReadAt('local:tabSubtitleOperations', 3, { '1': newerOperation });
     await cancellation;
 
     expect(storageMock.values.get('local:tabSubtitleOperations')).toEqual({ '1': newerOperation });
+    const finalState = await dispatch(listener, { type: 'content.getState' }, sender(1));
+    expect(finalState.subtitleState).toMatchObject({
+      type: 'ready',
+      track: { youtubeVideoId: VIDEO_B, jobId: 'job-b', trackId: 'track-b' },
+    });
+    expect(browserMock.sentTabMessages.filter(({ message, url }) =>
+      url?.includes(`v=${VIDEO_B}`)
+      && (message as { type?: string }).type === 'background.subtitleStateChanged'
+      && (message as { subtitleState?: { type?: string } }).subtitleState?.type === 'no-track',
+    )).toHaveLength(0);
   });
 
   it('publishes clear-local settings and no-track state to every owned tab', async () => {
