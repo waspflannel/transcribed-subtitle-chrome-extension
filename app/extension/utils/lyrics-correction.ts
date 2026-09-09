@@ -110,8 +110,11 @@ export async function syncLyricsCorrectionStatus(options: {
   states: Map<number, LyricsCorrectionTabState>;
   fetchStatus: () => Promise<LyricsCorrectionStatus>;
   onCurrentRequestError?: (error: unknown) => void;
+  canCommit?: () => boolean;
 }): Promise<LyricsCorrectionStatus | null> {
   const current = options.states.get(options.tabId) ?? lyricsCorrectionTabState();
+
+  if (options.canCommit && !options.canCommit()) return null;
 
   if (!options.syncBackend) {
     return current.jobId === options.jobId ? current.status : null;
@@ -123,6 +126,7 @@ export async function syncLyricsCorrectionStatus(options: {
     jobId: options.jobId,
     requestId,
   });
+  if (options.canCommit && !options.canCommit()) return null;
   options.states.set(options.tabId, started);
 
   let correction: LyricsCorrectionStatus;
@@ -132,7 +136,8 @@ export async function syncLyricsCorrectionStatus(options: {
   } catch (error) {
     const latest = options.states.get(options.tabId);
 
-    if (latest?.latestRequestId === requestId && latest.jobId === options.jobId) {
+    if (latest?.latestRequestId === requestId && latest.jobId === options.jobId
+      && (!options.canCommit || options.canCommit())) {
       options.states.set(options.tabId, {
         ...latest,
         syncError: 'Could not refresh replacement status. Showing the last known state; retrying automatically.',
@@ -145,7 +150,7 @@ export async function syncLyricsCorrectionStatus(options: {
 
   const latest = options.states.get(options.tabId);
 
-  if (!latest) {
+  if (!latest || (options.canCommit && !options.canCommit())) {
     return null;
   }
 

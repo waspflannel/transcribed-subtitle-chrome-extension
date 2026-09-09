@@ -15,16 +15,8 @@ const extensionSessionStorage = storage.defineItem<StoredExtensionSession | null
 });
 let sessionWriteQueue = Promise.resolve();
 
-export async function getStoredExtensionSession(now: Date = new Date()): Promise<StoredExtensionSession | null> {
-  const session = await extensionSessionStorage.getValue();
-
-  if (!isStoredExtensionSession(session) || Date.parse(session.expiresAt) <= now.getTime()) {
-    await extensionSessionStorage.removeValue();
-
-    return null;
-  }
-
-  return session;
+export async function getStoredExtensionSession(now?: Date): Promise<StoredExtensionSession | null> {
+  return enqueueSessionWrite(async () => readStoredExtensionSession(now ?? new Date()));
 }
 
 export async function storeExtensionSession(response: ExtensionAuthResponse): Promise<StoredExtensionSession> {
@@ -36,8 +28,7 @@ export async function storeExtensionSession(response: ExtensionAuthResponse): Pr
     account: response.account,
   };
 
-  const write = sessionWriteQueue.then(() => extensionSessionStorage.setValue(session));
-  sessionWriteQueue = write.then(() => undefined, () => undefined);
+  const write = enqueueSessionWrite(() => extensionSessionStorage.setValue(session));
   await write;
 
   return session;
@@ -47,8 +38,8 @@ export async function updateStoredAccount(
   account: AccountSummary,
   expectedSessionId?: string,
 ): Promise<StoredExtensionSession | null> {
-  const write = sessionWriteQueue.then(async () => {
-    const session = await getStoredExtensionSession();
+  return enqueueSessionWrite(async () => {
+    const session = await readStoredExtensionSession(new Date());
 
     if (!session || (expectedSessionId !== undefined && session.sessionId !== expectedSessionId)) {
       return null;
@@ -63,15 +54,45 @@ export async function updateStoredAccount(
 
     return nextSession;
   });
-  sessionWriteQueue = write.then(() => undefined, () => undefined);
-
-  return write;
 }
 
-export async function clearExtensionSession(): Promise<void> {
-  const clear = sessionWriteQueue.then(() => extensionSessionStorage.removeValue());
-  sessionWriteQueue = clear.then(() => undefined, () => undefined);
-  await clear;
+export async function clearExtensionSession(expectedSessionId?: string): Promise<boolean> {
+  return enqueueSessionWrite(async () => {
+    const session = await readStoredExtensionSession(new Date());
+
+    if (expectedSessionId !== undefined && session && session.sessionId !== expectedSessionId) {
+      return false;
+    }
+
+    await extensionSessionStorage.removeValue();
+
+    return true;
+  });
+}
+
+function enqueueSessionWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const queued = sessionWriteQueue.then(operation);
+  sessionWriteQueue = queued.then(() => undefined, () => undefined);
+
+  return queued;
+}
+
+async function readStoredExtensionSession(now: Date): Promise<StoredExtensionSession | null> {
+  const session = await extensionSessionStorage.getValue();
+
+  if (!isStoredExtensionSession(session)) {
+    await extensionSessionStorage.removeValue();
+
+    return null;
+  }
+
+  if (Date.parse(session.expiresAt) <= now.getTime()) {
+    await extensionSessionStorage.removeValue();
+
+    return null;
+  }
+
+  return session;
 }
 
 function isStoredExtensionSession(value: unknown): value is StoredExtensionSession {
