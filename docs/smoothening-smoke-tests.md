@@ -4,6 +4,8 @@ Current branch: `smoothening-fixes` in `C:/transcribed-subtitle-extension`. All 
 
 Load a fresh extension build from this checkout and run the matching backend. Each row is a user check, not a claimed browser pass. Use disposable records for cancellation/deletion/reset. Rows marked **controlled** require prepared local jobs or delayed/failing responses; normal clicking alone cannot prove those race conditions.
 
+User smoke failures reopened G1, G5 and R7. See the [follow-up fixes, retest steps and remaining Stripe setup](smoothening-smoke-followup-review.md) before retesting those rows.
+
 | ID | What changed / scope | Quick check and expected result |
 | --- | --- | --- |
 | G1 | Explicit generation cancellation | Cancel a queued job and a running job from Watch/History. Both stay Cancelled; no track reappears and the next waiting job can start. |
