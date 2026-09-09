@@ -253,6 +253,11 @@ describe('renderOverlayContent', () => {
     expect(focusEnds).toBe(0);
     expect(focusStarts).toBe(1);
 
+    const replay = content?.querySelector<HTMLButtonElement>('[data-study-control="replay"]');
+    expect(replay).toBeTruthy();
+    replay!.focus();
+    expect(focusEnds).toBe(1);
+
     const outside = document.createElement('button');
     document.body.append(outside);
     outside.focus();
@@ -265,7 +270,8 @@ describe('renderOverlayContent', () => {
     previewEnds = 0;
     focusEnds = 0;
     const nextCue = { ...readyState().activeCue!, cueId: 'cue-0002' };
-    shell.update(readyState(trackResponse({ cues: [nextCue] })));
+    const nextState = readyState(trackResponse({ cues: [nextCue] }));
+    shell.update(nextState);
     expect(previewEnds).toBe(1);
     expect(focusEnds).toBe(1);
 
