@@ -1694,6 +1694,10 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           )) {
           ensureRecoveredGenerationMonitor(activeTabId, pageStatus, installId, effectiveSession);
         }
+      } else if (!recoveryJob) {
+        // A ready state belongs to the current tab but has no matching pending
+        // operation; preserve it rather than clearing a newer track.
+        stateForRecovery = localState;
       } else if (recoveryJob.status === 'queued' || recoveryJob.status === 'running') {
         stateForRecovery = {
           type: 'loading',
