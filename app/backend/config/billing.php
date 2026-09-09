@@ -4,6 +4,7 @@ return [
     'stripe' => [
         'api_base_url' => env('STRIPE_API_BASE_URL', 'https://api.stripe.com/v1'),
         'secret' => env('STRIPE_SECRET'),
+        'portal_configuration' => env('STRIPE_BILLING_PORTAL_CONFIGURATION'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
         'webhook_tolerance_seconds' => (int) env('STRIPE_WEBHOOK_TOLERANCE_SECONDS', 300),
         'timeout_seconds' => (int) env('STRIPE_TIMEOUT_SECONDS', 15),

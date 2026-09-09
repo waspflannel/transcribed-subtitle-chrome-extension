@@ -32,6 +32,7 @@ class BillingAndUsageTest extends TestCase
         config([
             'billing.stripe.secret' => 'sk_test_123',
             'billing.plans.base.stripe_price_id' => 'price_base',
+            'billing.stripe.portal_configuration' => null,
         ]);
         Http::preventStrayRequests();
         Http::fake([
@@ -66,6 +67,35 @@ class BillingAndUsageTest extends TestCase
             ->actingAs($user->fresh())
             ->post(route('billing.portal'))
             ->assertRedirect('https://billing.stripe.test/session');
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/billing_portal/sessions'
+            && $request['customer'] === 'cus_123'
+            && ! isset($request['configuration'])
+            && $request['return_url'] === route('dashboard'));
+    }
+
+    public function test_billing_portal_uses_an_explicit_configuration_when_provided(): void
+    {
+        config([
+            'billing.stripe.secret' => 'sk_test_123',
+            'billing.stripe.portal_configuration' => 'bpc_test_subscription_management',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.stripe.com/v1/customers' => Http::response(['id' => 'cus_configured']),
+            'https://api.stripe.com/v1/billing_portal/sessions' => Http::response([
+                'id' => 'bps_configured',
+                'url' => 'https://billing.stripe.test/configured-session',
+            ]),
+        ]);
+
+        $this
+            ->actingAs(User::factory()->create())
+            ->post(route('billing.portal'))
+            ->assertRedirect('https://billing.stripe.test/configured-session');
+
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/billing_portal/sessions'
+            && $request['configuration'] === 'bpc_test_subscription_management');
     }
 
     public function test_checkout_requests_reuse_one_bounded_intent_and_rotate_after_expiry(): void
@@ -216,7 +246,7 @@ class BillingAndUsageTest extends TestCase
 
     public function test_dashboard_billing_box_shows_plain_manage_button_without_a_subscription(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_invoice_only']);
 
         $this
             ->actingAs($user)

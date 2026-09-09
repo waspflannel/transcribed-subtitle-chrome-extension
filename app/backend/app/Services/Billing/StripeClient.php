@@ -99,13 +99,21 @@ final class StripeClient
      */
     public function createBillingPortalSession(User $user, string $returnUrl): array
     {
+        $configuration = config('billing.stripe.portal_configuration');
+
         $customerId = $this->customerIdFor($user);
+        $payload = [
+            'customer' => $customerId,
+            'return_url' => $returnUrl,
+        ];
+
+        if (is_string($configuration) && trim($configuration) !== '') {
+            $payload['configuration'] = trim($configuration);
+        }
+
         $response = $this->request()
             ->asForm()
-            ->post('/billing_portal/sessions', [
-                'customer' => $customerId,
-                'return_url' => $returnUrl,
-            ])
+            ->post('/billing_portal/sessions', $payload)
             ->throw();
 
         return $this->sessionResponse($response->json());
