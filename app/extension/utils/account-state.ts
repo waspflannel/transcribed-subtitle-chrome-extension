@@ -57,7 +57,9 @@ export function stageTimeline(job: Pick<SubtitleJobHistoryItem, 'stage' | 'statu
   return GENERATION_STAGES.map((stage, index) => {
     let state: StageTimelineItem['state'] = 'pending';
 
-    if (job.status === 'completed' || index < currentIndex) {
+    if (job.status === 'queued') {
+      state = 'pending';
+    } else if (job.status === 'completed' || index < currentIndex) {
       state = 'done';
     } else if (index === currentIndex) {
       state = job.status === 'failed' ? 'failed' : 'current';
