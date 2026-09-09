@@ -317,6 +317,8 @@ class SubtitleJobService
         bool $includeTranslation,
         bool $startImmediately,
     ): SubtitleJob {
+        $createdAt = $startImmediately ? now() : $this->nextQueuedSubmissionAt($user);
+
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
             'user_id' => $user->id,
@@ -338,6 +340,7 @@ class SubtitleJobService
             'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
         ]);
+        $job->forceFill(['created_at' => $createdAt])->saveQuietly();
 
         $this->tracer->jobEvent($job, 'job.created', [
             'stage' => 'preparing',
@@ -372,22 +375,7 @@ class SubtitleJobService
         // old run's audio workspace is reclaimed here.
         $oldRunId = (string) $job->run_id;
         DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($oldRunId));
-
-        $createdAt = now();
-        $latestQueuedAt = SubtitleJob::query()
-            ->whereBelongsTo($user)
-            ->where('status', 'queued')
-            ->whereKeyNot($job->id)
-            ->max('created_at');
-
-        if ($latestQueuedAt !== null) {
-            $latestQueuedAt = Carbon::parse($latestQueuedAt);
-
-            // Keep a reset row behind waiting submissions when timestamps have second precision.
-            if ($latestQueuedAt->greaterThanOrEqualTo($createdAt->copy()->startOfSecond())) {
-                $createdAt = $latestQueuedAt->addSecond();
-            }
-        }
+        $createdAt = $startImmediately ? now() : $this->nextQueuedSubmissionAt($user);
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
@@ -418,6 +406,26 @@ class SubtitleJobService
             'generation_tier' => $job->generation_tier,
             'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
+    }
+
+    private function nextQueuedSubmissionAt(User $user): Carbon
+    {
+        $createdAt = now();
+        $latestQueuedAt = SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->where('status', 'queued')
+            ->max('created_at');
+
+        if ($latestQueuedAt === null) {
+            return $createdAt;
+        }
+
+        $latestQueuedAt = Carbon::parse($latestQueuedAt);
+
+        // Keep new and reset rows ordered behind waiting submissions at database precision.
+        return $latestQueuedAt->greaterThanOrEqualTo($createdAt->copy()->startOfSecond())
+            ? $latestQueuedAt->addSecond()
+            : $createdAt;
     }
 
     private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string
