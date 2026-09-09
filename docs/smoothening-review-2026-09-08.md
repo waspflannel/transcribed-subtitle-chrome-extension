@@ -37,4 +37,10 @@ Line references below describe `3791353`; final disposition and removal counts w
 
 Initial verdict: needs corrections before merge. The existing module boundaries are usable; a rewrite is unnecessary. The main risks are asynchronous ownership checks separated from the state they protect. Legacy compatibility branches and helper-only tests add apparent coverage without securing the current path. The assigned corrections favor direct guards and targeted regressions over a new state framework.
 
-Final rereview, automated evidence and remaining limitations are pending correction completion.
+## Correction disposition
+
+- CR8-CR11: addressed through `1bff7e7`. Rereview covered native pause event ownership, true held-cue expiry, keyboard focus through other rail controls, stable close focus, viewport constraints and deferred playback completion after a new study interaction. The content agent reports 33 focused tests and TypeScript compile passing, including the owning content entrypoint. These are automated DOM/mocked media checks, not browser evidence.
+- CR12-CR14 and the U2 duplicate query: addressed through `7a0d7f2`. Rereview covered the real dispatch-site throwing connector, stale worker after cancellation, cancellation support copy and consistent ordering of queued retries/new submissions at second precision. The backend agent reports 6 focused API tests/83 assertions, 5 billing/admission tests/18 assertions and the publication failure regression passing; earlier detail/failure-handler checks also passed. SQL lock behavior still needs runtime Postgres evidence.
+- CR1-CR7: panel correction report and rereview pending.
+
+Final integrated automated evidence and verdict remain pending panel completion.
