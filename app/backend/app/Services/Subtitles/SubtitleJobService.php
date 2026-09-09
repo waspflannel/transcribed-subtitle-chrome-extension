@@ -11,6 +11,7 @@ use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
 use App\Support\PostgresErrors;
 use App\Support\SubtitleProcessingVersion;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -202,6 +203,13 @@ class SubtitleJobService
             return $job;
         }
 
+        if ($job->status === 'queued'
+            && in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
+            $this->admission->promoteQueuedJobs($user->id);
+
+            return $job->refresh()->load('track');
+        }
+
         // Queued jobs are dispatched later by SubtitleJobAdmission when a
         // running slot frees up.
         if ($job->status === 'running'
@@ -365,6 +373,22 @@ class SubtitleJobService
         $oldRunId = (string) $job->run_id;
         DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($oldRunId));
 
+        $createdAt = now();
+        $latestQueuedAt = SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->where('status', 'queued')
+            ->whereKeyNot($job->id)
+            ->max('created_at');
+
+        if ($latestQueuedAt !== null) {
+            $latestQueuedAt = Carbon::parse($latestQueuedAt);
+
+            // Keep a reset row behind waiting submissions when timestamps have second precision.
+            if ($latestQueuedAt->greaterThanOrEqualTo($createdAt->copy()->startOfSecond())) {
+                $createdAt = $latestQueuedAt->addSecond();
+            }
+        }
+
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
             'user_id' => $user->id,
@@ -383,7 +407,7 @@ class SubtitleJobService
             'error_message' => null,
             'install_id' => $installId,
             'expires_at' => null,
-            'created_at' => now(),
+            'created_at' => $createdAt,
         ])->save();
 
         $this->tracer->jobEvent($job->refresh(), 'job.reset', [

@@ -58,9 +58,11 @@ final class BillingEntitlementService
             ->whereIn('status', ['running', 'queued'])
             ->when($excludeJobId !== null, fn ($query) => $query->whereKeyNot($excludeJobId))
             ->selectRaw("sum(case when status = 'running' then 1 else 0 end) as running_count")
+            ->selectRaw("sum(case when status = 'queued' then 1 else 0 end) as queued_count")
             ->selectRaw('count(*) as active_count')
             ->first();
         $runningJobs = (int) ($activeJobCounts->running_count ?? 0);
+        $queuedJobs = (int) ($activeJobCounts->queued_count ?? 0);
         $activeJobs = (int) ($activeJobCounts->active_count ?? 0);
 
         if ($activeJobs >= $submissionLimit) {
@@ -79,7 +81,7 @@ final class BillingEntitlementService
             planCode: (string) $plan['code'],
             generationTier: $generationTier,
             reservationMinutes: $reservationMinutes,
-            startImmediately: $runningJobs < $generationLimit,
+            startImmediately: $runningJobs < $generationLimit && $queuedJobs === 0,
         );
     }
 

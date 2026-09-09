@@ -383,13 +383,24 @@ class SubtitleJobApiTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $firstPayload)
             ->assertAccepted()
             ->assertJsonPath('jobId', $first->public_id)
-            ->assertJsonPath('status', 'running');
+            ->assertJsonPath('status', 'queued');
 
-        $this->assertSame('running', $first->fresh()->status);
+        $this->assertSame('queued', $first->fresh()->status);
         $this->assertSame($first->public_id, $retry->json('jobId'));
-        $this->assertSame('queued', $second->fresh()->status);
+        $this->assertSame('running', $second->fresh()->status);
         $this->assertSame(4, $ledger->reservedMinutesForJob($first->fresh()));
         $this->assertSame(2, $queue->pushes);
+
+        $second->fresh()->forceFill([
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+        ])->save();
+        $ledger->releaseReservation($second->fresh(), 'test');
+        app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
+
+        $this->assertSame('running', $first->fresh()->status);
+        $this->assertSame(3, $queue->pushes);
     }
 
     public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
