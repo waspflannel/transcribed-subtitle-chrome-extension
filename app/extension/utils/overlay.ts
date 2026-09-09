@@ -108,6 +108,8 @@ export class OverlayShell {
     const activeCueId = state.subtitleState.type === 'ready' ? state.activeCue?.cueId ?? null : null;
 
     if (activeCueId !== this.currentCueId) {
+      this.options.onTokenPreviewEnd?.();
+      this.options.onTokenBlur?.();
       this.currentCueId = activeCueId;
       this.pinnedTokenIndex = null;
       this.focusKeyAfterRender = null;
@@ -121,6 +123,8 @@ export class OverlayShell {
   }
 
   public unmount(): void {
+    this.options.onTokenPreviewEnd?.();
+    this.options.onTokenBlur?.();
     this.host?.remove();
     this.host = null;
     this.content = null;
@@ -196,15 +200,20 @@ export class OverlayShell {
       });
 
       button.addEventListener('focus', () => {
-        (this.options.onTokenFocus ?? this.options.onTokenPreview)?.();
+        this.options.onTokenFocus?.();
       });
 
-      button.addEventListener('blur', () => {
-        (this.options.onTokenBlur ?? this.options.onTokenPreviewEnd)?.();
+      button.addEventListener('blur', (event) => {
+        const shadowActiveElement = this.host?.shadowRoot?.activeElement;
+        if (
+          (event.relatedTarget && this.content?.contains(event.relatedTarget as Node))
+          || (shadowActiveElement && this.content?.contains(shadowActiveElement))
+          || (this.host !== null && this.documentRef.activeElement === this.host)
+        ) return;
+        this.options.onTokenBlur?.();
       });
 
       button.addEventListener('click', () => {
-        this.options.onTokenPreview?.();
         const cue = this.currentState?.activeCue;
         const token = cue?.tokens.find((candidate) => candidate.index === tokenIndex);
         const selectedTokenKey = cue && token ? tokenKey(cue.cueId, token.index) : null;
@@ -355,15 +364,24 @@ export class OverlayShell {
     if (!view || !this.content) return;
 
     for (const popover of this.content.querySelectorAll<HTMLElement>('.token-popover')) {
-      popover.style.setProperty('--popover-shift', '0px');
-      const rect = popover.getBoundingClientRect();
       const padding = 8;
+      const maxHeight = Math.max(0, Math.min(view.innerHeight * 0.6, view.innerHeight - padding * 2));
+      popover.style.maxHeight = `${maxHeight}px`;
+      popover.style.setProperty('--popover-shift', '0px');
+      popover.style.setProperty('--popover-shift-y', '0px');
+      const rect = popover.getBoundingClientRect();
       const shift = rect.left < padding
         ? padding - rect.left
         : rect.right > view.innerWidth - padding
           ? view.innerWidth - padding - rect.right
           : 0;
+      const shiftY = rect.top < padding
+        ? padding - rect.top
+        : rect.bottom > view.innerHeight - padding
+          ? view.innerHeight - padding - rect.bottom
+          : 0;
       if (shift !== 0) popover.style.setProperty('--popover-shift', `${shift}px`);
+      if (shiftY !== 0) popover.style.setProperty('--popover-shift-y', `${shiftY}px`);
     }
   }
 

@@ -57,6 +57,17 @@ describe('keyboard shortcuts', () => {
     expect(
       shortcutActionFromKeyboardEvent(
         keyboardEvent('r', {
+          path: [
+            { tagName: 'SPAN', isContentEditable: false },
+            { tagName: 'DIV', isContentEditable: true },
+          ],
+        }),
+        { enabled: true },
+      ),
+    ).toBe('replay-current-cue');
+    expect(
+      shortcutActionFromKeyboardEvent(
+        keyboardEvent('r', {
           path: [{ tagName: 'DIV', closest: () => ({}) }],
         }),
         { enabled: true },
