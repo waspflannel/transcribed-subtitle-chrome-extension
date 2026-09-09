@@ -1423,6 +1423,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
   if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
+  const resetTabIds = new Set(tabSubtitleStates.keys());
   tabSubtitleStates.clear();
   tabSubtitleStateOwners.clear();
   tabSubtitleStateSessions.clear();
@@ -1437,6 +1438,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
     return getPanelState({ syncBackend: false, windowId });
   }
   const activeTabId = activeTab?.id ?? null;
+  if (activeTabId !== null) resetTabIds.add(activeTabId);
   const settings = await getExtensionSettings();
   if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
     return getPanelState({ syncBackend: false, windowId });
@@ -1446,8 +1448,8 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
     activeTabId,
   });
 
-  if (activeTabId !== null) {
-    await sendTabMessage(activeTabId, {
+  for (const tabId of resetTabIds) {
+    await sendTabMessage(tabId, {
       type: 'background.settingsChanged',
       settings,
     });
@@ -1455,7 +1457,13 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
       return getPanelState({ syncBackend: false, windowId });
     }
 
-    await publishSubtitleState(activeTabId, DEFAULT_SUBTITLE_STATE);
+    await sendTabMessage(tabId, {
+      type: 'background.subtitleStateChanged',
+      subtitleState: DEFAULT_SUBTITLE_STATE,
+    });
+    if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
+      return getPanelState({ syncBackend: false, windowId });
+    }
   }
 
   return getPanelState({ syncBackend: true, windowId });
