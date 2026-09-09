@@ -1379,6 +1379,10 @@ async function readySubtitleStateForEnrichment(
 async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> {
   const resetVersion = ++localStateResetVersion;
   const mutationVersion = ++accountMutationVersion;
+  await setSubtitleRecoveryBlocked(true);
+  if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
+    return getPanelState({ syncBackend: false, windowId });
+  }
   await waitForExtensionSettingsWrites();
   if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
     return getPanelState({ syncBackend: false, windowId });
@@ -1399,10 +1403,6 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
     return getPanelState({ syncBackend: false, windowId });
   }
   await clearTabOperations();
-  if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
-    return getPanelState({ syncBackend: false, windowId });
-  }
-  await setSubtitleRecoveryBlocked(true);
   if (resetVersion !== localStateResetVersion || mutationVersion !== accountMutationVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
