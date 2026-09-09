@@ -421,6 +421,67 @@ describe('background entrypoint review regressions', () => {
     });
   });
 
+  it('does not let delayed content recovery overwrite a newer generation', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const listener = await loadBackground();
+    const historyRequest = deferred<any>();
+    const createRequest = deferred<any>();
+    const oldTrack = track(VIDEO_A, 'job-old', 'track-old');
+    const newTrack = track(VIDEO_A, 'job-new', 'track-new');
+
+    apiMock.listSubtitleJobs.mockReturnValue(historyRequest.promise);
+    apiMock.getSubtitleJob.mockImplementation(async (_installId: string, _authToken: string, jobId: string) => ({
+      ...job(VIDEO_A, jobId, 'running'),
+      status: 'completed' as const,
+      track: oldTrack,
+    }));
+    apiMock.createSubtitleJob.mockReturnValue(createRequest.promise);
+
+    const initialRecovery = dispatch(listener, { type: 'content.getState' }, sender(1));
+    await waitFor(() => apiMock.listSubtitleJobs.mock.calls.length === 1);
+
+    const generation = dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
+    const loadingState = await generation;
+    expect(loadingState.subtitleState).toMatchObject({
+      type: 'loading',
+      youtubeVideoId: VIDEO_A,
+      message: 'Preparing request...',
+    });
+
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
+    historyRequest.resolve({ jobs: [{ ...job(VIDEO_A, 'job-old'), status: 'completed' as const }] });
+    await initialRecovery;
+    const stateAfterNavigation = await dispatch(listener, { type: 'content.getState' }, sender(1));
+    expect(stateAfterNavigation.subtitleState).toEqual({ type: 'no-track' });
+
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const stateWhileCreateWaits = await dispatch(listener, { type: 'content.getState' }, sender(1));
+    expect(stateWhileCreateWaits.subtitleState).toMatchObject({
+      type: 'loading',
+      youtubeVideoId: VIDEO_A,
+      message: 'Preparing request...',
+    });
+    expect(storageMock.values.get('local:tabSubtitleOperations')).toEqual({
+      '1': { kind: 'generation', accountId: 'account-1', youtubeVideoId: VIDEO_A },
+    });
+    expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(1);
+
+    createRequest.resolve({
+      ...job(VIDEO_A, 'job-new'),
+      status: 'completed' as const,
+      track: newTrack,
+    });
+    await waitFor(() => (storageMock.values.get('local:activeTracksByVideoId') as Record<string, any> | undefined)?.[VIDEO_A]?.track.trackId === 'track-new');
+
+    const finalState = await dispatch(listener, { type: 'content.getState' }, sender(1));
+    expect(finalState.subtitleState).toMatchObject({
+      type: 'ready',
+      track: { youtubeVideoId: VIDEO_A, jobId: 'job-new', trackId: 'track-new' },
+    });
+  });
+
   it('does not let cancellation cleanup delete a newer same-tab persisted operation', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });

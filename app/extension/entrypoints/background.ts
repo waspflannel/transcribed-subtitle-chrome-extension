@@ -285,6 +285,9 @@ async function recoverSubtitleStateFromBackend(
   installId: string,
   session: StoredExtensionSession | null,
 ): Promise<SubtitleState> {
+  const originalOperation = tabOperations.get(tabId);
+  const originalState = tabSubtitleStates.get(tabId);
+
   if (!session) {
     return localState;
   }
@@ -301,39 +304,68 @@ async function recoverSubtitleStateFromBackend(
     resolveCompletedSubtitleJob(installId, session.plainTextToken, job, session.sessionId),
   );
 
-  if (!await isCurrentSession(session.sessionId) || await isSubtitleRecoveryBlocked()) return localState;
+  const isCurrentRecoveryOwner = async (): Promise<boolean> => {
+    if (!await isCurrentSession(session.sessionId) || await isSubtitleRecoveryBlocked()) return false;
+
+    const currentTab = await browser.tabs.get(tabId).catch(() => undefined);
+    const currentPage = parseYoutubePage(currentTab?.url ?? '');
+
+    return currentPage.supported
+      && currentPage.videoId === pageStatus.videoId
+      && tabOperations.get(tabId) === originalOperation
+      && tabSubtitleStates.get(tabId) === originalState;
+  };
+
+  if (!await isCurrentRecoveryOwner()) return localState;
 
   if (resolved.type === 'ready') {
-    await storeReadySubtitleState(tabId, resolved, session.account.id, session.sessionId);
-    if (!await isCurrentSession(session.sessionId)) return localState;
+    tabSubtitleStates.set(tabId, resolved);
+    tabSubtitleStateOwners.set(tabId, session.account.id);
+    tabSubtitleStateSessions.set(tabId, session.sessionId);
+
+    if (await isCurrentSession(session.sessionId)) {
+      await rememberActiveTrack(resolved.track, session.account.id);
+    }
+    if (!await isCurrentSession(session.sessionId)
+      && tabSubtitleStates.get(tabId) === resolved
+      && tabSubtitleStateSessions.get(tabId) === session.sessionId
+      && tabOperations.get(tabId) === originalOperation) {
+      tabSubtitleStates.delete(tabId);
+      tabSubtitleStateOwners.delete(tabId);
+      tabSubtitleStateSessions.delete(tabId);
+    }
 
     return resolved;
   }
 
   if (resolved.type === 'loading') {
+    let monitorRecoveredJob = false;
+    if (resolved.jobId && !tabGenerationInFlight.has(tabId)) {
+      const persistedOperation = await getTabOperation(tabId);
+      if (!await isCurrentRecoveryOwner()) return localState;
+      if (persistedOperation?.kind === 'generation' && persistedOperation.accountId === session.account.id
+        && persistedOperation.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId === resolved.jobId) {
+        monitorRecoveredJob = true;
+      } else if (!persistedOperation || persistedOperation.accountId !== session.account.id) {
+        if (persistedOperation) await clearTabOperationIfMatches(tabId, persistedOperation);
+        if (!await isCurrentRecoveryOwner()) return localState;
+        await setTabOperation(tabId, {
+          kind: 'generation',
+          accountId: session.account.id,
+          youtubeVideoId: pageStatus.videoId,
+          jobId: resolved.jobId,
+        });
+        if (!await isCurrentRecoveryOwner()) return localState;
+        monitorRecoveredJob = true;
+      }
+    }
+
+    if (!await isCurrentRecoveryOwner()) return localState;
+
     tabSubtitleStates.set(tabId, resolved);
     tabSubtitleStateOwners.set(tabId, session.account.id);
     tabSubtitleStateSessions.set(tabId, session.sessionId);
-
-    if (resolved.jobId && !tabGenerationInFlight.has(tabId) && await isCurrentSession(session.sessionId)) {
-      const persistedOperation = await getTabOperation(tabId);
-      if (!await isCurrentSession(session.sessionId)) return localState;
-      if (persistedOperation?.kind === 'generation' && persistedOperation.accountId === session.account.id
-        && persistedOperation.youtubeVideoId === pageStatus.videoId && persistedOperation.jobId === resolved.jobId) {
-        ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
-      } else if (!persistedOperation || persistedOperation.accountId !== session.account.id) {
-        if (persistedOperation) await clearTabOperationIfMatches(tabId, persistedOperation);
-        if (await isCurrentSession(session.sessionId)) {
-          await setTabOperation(tabId, {
-            kind: 'generation',
-            accountId: session.account.id,
-            youtubeVideoId: pageStatus.videoId,
-            jobId: resolved.jobId,
-          });
-          ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
-        }
-      }
-    }
+    if (monitorRecoveredJob) ensureRecoveredGenerationMonitor(tabId, pageStatus, installId, session);
 
     return resolved;
   }
@@ -1328,26 +1360,6 @@ async function activeReadyTrackMatches(
   return currentState.type === 'ready'
     && currentState.track.jobId === jobId
     && currentState.track.trackId === trackId;
-}
-
-async function storeReadySubtitleState(
-  tabId: number,
-  subtitleState: Extract<SubtitleState, { type: 'ready' }>,
-  accountId: string,
-  expectedSessionId: string,
-): Promise<void> {
-  if (!await isCurrentSession(expectedSessionId)) return;
-  tabSubtitleStates.set(tabId, subtitleState);
-  tabSubtitleStateOwners.set(tabId, accountId);
-  tabSubtitleStateSessions.set(tabId, expectedSessionId);
-  await rememberActiveTrack(subtitleState.track, accountId);
-  if (!await isCurrentSession(expectedSessionId)
-    && tabSubtitleStateSessions.get(tabId) === expectedSessionId
-    && tabSubtitleStates.get(tabId) === subtitleState) {
-    tabSubtitleStates.delete(tabId);
-    tabSubtitleStateOwners.delete(tabId);
-    tabSubtitleStateSessions.delete(tabId);
-  }
 }
 
 async function readySubtitleStateForEnrichment(
