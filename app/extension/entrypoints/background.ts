@@ -1633,7 +1633,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           const nextOperation = { ...operation, jobId: recoveryJob.jobId };
           recoveryClaimValid = await updateTabOperationIfMatches(activeTabId, operation, nextOperation);
           if (recoveryClaimValid) operation = nextOperation;
-        } else if (!recoveryJob && !history.error) {
+        } else if (!recoveryJob && !history.error && localState.type !== 'ready') {
           unknownSubmission = true;
           recoveryClaimValid = await isCurrentGenerationRecovery(
             activeTabId,
@@ -1670,7 +1670,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
         tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
         tabOperations.delete(activeTabId);
         tabGenerationInFlight.delete(activeTabId);
-      } else if (!recoveryJob) {
+      } else if (!recoveryJob && localState.type !== 'ready') {
         stateForRecovery = {
           type: 'loading',
           status: localState.type === 'loading' ? localState.status : 'running',
