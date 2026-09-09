@@ -20,6 +20,7 @@ export interface CueHoldOptions {
 export class CueHoldController {
   private timeout: number | null = null;
   private paused = false;
+  private holding = false;
 
   constructor(private readonly options: CueHoldOptions) {}
 
@@ -54,14 +55,19 @@ export class CueHoldController {
   /** Suspend expiry while study owns a playback pause; the held cue remains visible. */
   pause(): void {
     this.paused = true;
-    this.cancel();
+    if (this.timeout === null) return;
+
+    this.options.view.clearTimeout(this.timeout);
+    this.timeout = null;
   }
 
   /** Resume expiry after study releases its pause. */
   resume(current: SubtitleCue | null, isPlaying: boolean): void {
     this.paused = false;
 
-    if (current !== null && isPlaying) {
+    if (current === null) {
+      this.holding = false;
+    } else if (this.holding && isPlaying) {
       this.scheduleExpiry();
     }
   }
@@ -70,8 +76,10 @@ export class CueHoldController {
     if (this.timeout !== null) {
       return;
     }
+    this.holding = true;
     this.timeout = this.options.view.setTimeout(() => {
       this.timeout = null;
+      this.holding = false;
       this.options.onExpire();
     }, this.options.holdMs);
   }
@@ -82,5 +90,6 @@ export class CueHoldController {
     }
     this.options.view.clearTimeout(this.timeout);
     this.timeout = null;
+    this.holding = false;
   }
 }

@@ -47,7 +47,7 @@ export default defineContentScript({
     let studyHoverActive = false;
     let studyFocusActive = false;
     let studyPauseOwned = false;
-    let studyPauseRequested = false;
+    let studyPauseRequestVideo: HTMLVideoElement | null = null;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
@@ -398,7 +398,7 @@ export default defineContentScript({
       releaseStudyPause();
       studyHoverActive = false;
       studyFocusActive = false;
-      studyPauseRequested = false;
+      studyPauseRequestVideo = null;
       cueHold.clear();
       bindingError = null;
       activeCue = null;
@@ -651,10 +651,19 @@ export default defineContentScript({
       activeVideo = video;
 
       const handleVideoPause = (): void => {
-        if (!studyPauseRequested) studyPauseOwned = false;
+        if (studyPauseRequestVideo === video) {
+          studyPauseRequestVideo = null;
+          return;
+        }
+
+        studyPauseOwned = false;
       };
       const handleVideoPlay = (): void => {
-        if (!studyPauseRequested) studyPauseOwned = false;
+        if (studyPauseRequestVideo === video) {
+          studyPauseRequestVideo = null;
+        }
+
+        studyPauseOwned = false;
       };
 
       video.addEventListener('pause', handleVideoPause);
@@ -710,11 +719,13 @@ export default defineContentScript({
 
       studyPauseOwned = true;
       cueHold.pause();
-      studyPauseRequested = true;
+      const video = activeVideo;
+      studyPauseRequestVideo = video;
       try {
-        activeVideo.pause();
-      } finally {
-        studyPauseRequested = false;
+        video.pause();
+      } catch {
+        studyPauseRequestVideo = null;
+        studyPauseOwned = false;
       }
     }
 
@@ -728,6 +739,7 @@ export default defineContentScript({
 
     function releaseStudyPause(): void {
       const shouldResume = studyPauseOwned;
+      studyPauseRequestVideo = null;
       studyPauseOwned = false;
       cueHold.resume(activeCue, Boolean(activeVideo && !activeVideo.paused));
 
