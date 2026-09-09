@@ -196,6 +196,10 @@ export default defineContentScript({
         if (page.supported && page.videoId === message.youtubeVideoId
           && subtitleState.type === 'ready' && subtitleState.track.youtubeVideoId === message.youtubeVideoId
           && subtitleState.track.trackId === message.trackId) {
+          // The player can mount after the track state arrives. Refresh the
+          // binding at the delivery boundary so a panel jump never silently
+          // no-ops just because the initial bind raced YouTube's player.
+          recoverPlayerBinding();
           const cue = subtitleState.track.cues.find((c) => c.cueId === message.cueId);
           if (cue) {
             if (message.mode === 'replay') {

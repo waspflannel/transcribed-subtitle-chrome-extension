@@ -154,6 +154,60 @@ describe('content study pause ownership', () => {
     outside.remove();
     video.remove();
   });
+
+  it('binds a player that mounts after the track before handling a transcript jump', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    let invalidate: (() => void) | null = null;
+
+    (contentScript as { main: (ctx: { onInvalidated: (callback: () => void) => void }) => void }).main({
+      onInvalidated(callback) {
+        invalidate = callback;
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const onMessage = mocks.listeners[0];
+    expect(onMessage).toBeDefined();
+    onMessage({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState(500) }, {}, () => {});
+
+    const video = document.createElement('video');
+    setVideoRect(video);
+    let currentTime = 0;
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => currentTime,
+      set: (value: number) => { currentTime = value; },
+    });
+    video.play = vi.fn(() => Promise.resolve());
+    document.body.append(video);
+
+    onMessage({
+      type: 'background.seekToCue',
+      youtubeVideoId: 'video-1',
+      trackId: 'stale-track',
+      cueId: 'cue-1',
+      mode: 'jump',
+    }, {}, () => {});
+    expect(currentTime).toBe(0);
+    expect(video.play).not.toHaveBeenCalled();
+
+    const response = vi.fn();
+    onMessage({
+      type: 'background.seekToCue',
+      youtubeVideoId: 'video-1',
+      trackId: 'track-1',
+      cueId: 'cue-1',
+      mode: 'jump',
+    }, {}, response);
+
+    expect(currentTime).toBe(0.5);
+    expect(video.play).toHaveBeenCalledTimes(1);
+    expect(response).toHaveBeenCalledWith({ ok: true });
+
+    (invalidate as unknown as () => void)();
+    video.remove();
+  });
 });
 
 function flushPause(video: HTMLVideoElement, consume: () => void): void {
@@ -179,7 +233,7 @@ function setVideoRect(video: HTMLVideoElement): void {
   });
 }
 
-function readySubtitleState(): { type: 'ready'; track: TrackResponse } {
+function readySubtitleState(startMs = 0): { type: 'ready'; track: TrackResponse } {
   return {
     type: 'ready',
     track: {
@@ -195,7 +249,7 @@ function readySubtitleState(): { type: 'ready'; track: TrackResponse } {
         {
           cueId: 'cue-1',
           index: 0,
-          startMs: 0,
+          startMs,
           endMs: 2000,
           sourceText: 'hola',
           translatedText: 'Bonjour',
