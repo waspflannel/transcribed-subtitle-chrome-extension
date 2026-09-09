@@ -14,6 +14,10 @@ The SaaS website uses first-party Laravel structured logs for beta funnel analyt
 
 ## Logging
 
+- `backend.openai_response_received` records actual Responses API request settings, returned service tier, HTTP timing, provider processing time when supplied, input/output/reasoning token counts, `response_status`, and `incomplete_reason`. All agents request `medium` reasoning. Correlate `worker_pid` and timestamp with stage traces; `request_id` identifies the provider request. Missing fields remain null. No request/response bodies or authorization headers are logged. Fast mode is requested with `service_tier=fast`; the returned tier is the evidence of which tier served the request.
+
+- Generation analysis, tokenization, and enrichment allow one split of malformed multi-cue output (at most three calls per queue attempt). `output_token_limit` and `provider_quota_exhausted` are terminal reasons, not split or queue retry triggers. Real temporary rate limits keep the existing queue backoff. Cost estimates remain cue-based and do not measure actual reasoning-token spend; use response usage for that investigation.
+
 - Prefer structured logs.
 - Include request or operation identifiers when workflows span boundaries.
 - Log enough context to explain failures without leaking secrets.

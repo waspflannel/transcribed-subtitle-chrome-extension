@@ -63,7 +63,8 @@ let cachedPanelJobHistoryAccountId: string | undefined;
 let cachedPanelJobHistorySessionId: string | undefined;
 let localStateResetVersion = 0;
 let accountMutationVersion = 0;
-const JOB_POLL_INTERVAL_MS = 2000;
+const JOB_POLL_INTERVAL_MS = 5000;
+const PARTIAL_TRACK_POLL_INTERVAL_MS = 10000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
 
@@ -702,6 +703,7 @@ async function waitForCompletedSubtitleJob(
 ): Promise<JobResponse | null> {
   let job = initialJob;
   let partialTrack = (await getTabOperation(tabId))?.partialTrack;
+  let nextPartialTrackPollAt = 0;
 
   while (tabOperations.get(tabId) === operation) {
     if (isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
@@ -719,9 +721,11 @@ async function waitForCompletedSubtitleJob(
       return null;
     }
 
-    if (PARTIAL_TRACK_STAGES.has(job.stage)) {
-      partialTrack = (await fetchPartialTrack(installId, currentSession.plainTextToken, job)) ?? partialTrack;
-      if (partialTrack && tabOperations.get(tabId) === operation) {
+    if (PARTIAL_TRACK_STAGES.has(job.stage) && Date.now() >= nextPartialTrackPollAt) {
+      nextPartialTrackPollAt = Date.now() + PARTIAL_TRACK_POLL_INTERVAL_MS;
+      const refreshedTrack = await fetchPartialTrack(installId, currentSession.plainTextToken, job);
+      if (refreshedTrack && refreshedTrack.revision !== partialTrack?.revision && tabOperations.get(tabId) === operation) {
+        partialTrack = refreshedTrack;
         if (!await isCurrentSession(session.sessionId)) return null;
         const persistedOperation = await getTabOperation(tabId);
         if (tabOperations.get(tabId) === operation && persistedOperation?.kind === 'generation'

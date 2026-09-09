@@ -9,12 +9,106 @@ use App\Ai\Agents\CueTokenizationAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Tests\TestCase;
 
 class AiAgentInstructionTest extends TestCase
 {
+    public function test_response_diagnostics_handle_quota_errors_without_request_options(): void
+    {
+        config(['ai.providers.openai.url' => 'https://api.openai.com/v1']);
+        Http::fake(['api.openai.com/v1/responses' => Http::response([
+            'error' => ['code' => 'credit_balance_exhausted', 'message' => 'private-provider-detail'],
+        ], 429)]);
+        Log::spy();
+
+        Http::post('https://api.openai.com/v1/responses', ['input' => 'private-input']);
+
+        Log::shouldHaveReceived('info')->once()->with('backend.openai_response_received', \Mockery::on(function (array $context): bool {
+            $this->assertSame('credit_balance_exhausted', $context['error_code']);
+            $this->assertSame(429, $context['http_status']);
+            $this->assertNull($context['requested_service_tier']);
+            $this->assertNull($context['served_service_tier']);
+            $this->assertNull($context['reasoning_tokens']);
+            $this->assertStringNotContainsString('private-', json_encode($context));
+
+            return true;
+        }));
+    }
+
+    public function test_response_diagnostics_skip_streams_and_other_endpoints(): void
+    {
+        config(['ai.providers.openai.url' => 'https://api.openai.com/v1']);
+        Http::fake();
+        Log::spy();
+
+        Http::post('https://api.openai.com/v1/responses', ['stream' => true]);
+        Http::post('https://example.test/responses', ['model' => 'unrelated']);
+
+        Log::shouldNotHaveReceived('info');
+    }
+
+    public function test_fast_mode_reaches_http_and_response_diagnostics_exclude_content(): void
+    {
+        config([
+            'ai.providers.openai.key' => 'private-test-key',
+            'ai.providers.openai.url' => 'https://api.openai.com/v1',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['api.openai.com/v1/responses' => Http::response([
+            'id' => 'resp_test',
+            'status' => 'completed',
+            'model' => 'test-model',
+            'service_tier' => 'priority',
+            'output' => [[
+                'type' => 'message',
+                'role' => 'assistant',
+                'content' => [['type' => 'output_text', 'text' => '{"cues":[],"dialect":"private-output"}']],
+            ]],
+            'usage' => [
+                'input_tokens' => 200,
+                'input_tokens_details' => ['cached_tokens' => 100],
+                'output_tokens' => 150,
+                'output_tokens_details' => ['reasoning_tokens' => 120],
+            ],
+        ], 200, ['x-request-id' => 'req_test', 'openai-processing-ms' => '1234'])]);
+        Log::spy();
+
+        foreach ([
+            CueAnalysisAgent::class,
+            CueRomanizationAgent::class,
+            CueTokenizationAgent::class,
+            CueEnrichmentAgent::class,
+            EditedCueAgent::class,
+            LearningTokenCardAgent::class,
+            LyricsAlignmentAgent::class,
+        ] as $agentClass) {
+            $agentClass::make()->prompt('private-input');
+        }
+
+        Http::assertSentCount(7);
+        Http::assertNotSent(fn (Request $request): bool => $request['model'] !== 'gpt-5.6-luna'
+            || $request['service_tier'] !== 'fast'
+            || $request['reasoning']['effort'] !== 'medium');
+        Log::shouldHaveReceived('info')->times(7)->with('backend.openai_response_received', \Mockery::on(function (array $context): bool {
+            $this->assertSame('fast', $context['requested_service_tier']);
+            $this->assertSame('priority', $context['served_service_tier']);
+            $this->assertSame('completed', $context['response_status']);
+            $this->assertNull($context['incomplete_reason']);
+            $this->assertSame(120, $context['reasoning_tokens']);
+            $this->assertSame(150, $context['output_tokens']);
+            $this->assertSame(1234, $context['provider_processing_ms']);
+            $this->assertSame('req_test', $context['request_id']);
+            $this->assertStringNotContainsString('private-', json_encode($context));
+
+            return true;
+        }));
+    }
+
     public function test_subtitle_agents_leave_temperature_unset_for_model_compatibility(): void
     {
         foreach ([
@@ -43,16 +137,16 @@ class AiAgentInstructionTest extends TestCase
 
         foreach ($agentClasses as $agentClass) {
             $this->assertSame(
-                ['reasoning' => ['effort' => 'high'], 'service_tier' => 'fast'],
+                ['reasoning' => ['effort' => 'medium'], 'service_tier' => 'fast'],
                 (new $agentClass)->providerOptions(Lab::OpenAI),
             );
         }
 
-        config(['ai.providers.openai.provider_options' => ['reasoning' => ['effort' => 'high']]]);
+        config(['ai.providers.openai.provider_options' => ['reasoning' => ['effort' => 'medium']]]);
 
         foreach ($agentClasses as $agentClass) {
             $this->assertSame(
-                ['reasoning' => ['effort' => 'high']],
+                ['reasoning' => ['effort' => 'medium']],
                 (new $agentClass)->providerOptions(Lab::OpenAI),
             );
         }

@@ -18,6 +18,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Throwable;
 use Transliterator;
 
@@ -132,8 +133,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
-                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
+                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
+                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
@@ -177,7 +178,11 @@ class LaravelAiTranslationAnalysisProvider
                 );
 
                 return $this->tokenizedBatchResult($output, $batch);
-            } catch (SubtitleProcessingException) {
+            } catch (SubtitleProcessingException $exception) {
+                if ($exception->isTransient() || in_array($exception->context['reason'] ?? null, ['provider_quota_exhausted', 'output_token_limit'], true)) {
+                    throw $exception;
+                }
+
                 // fall through to deterministic fallback below
             }
         }
@@ -302,8 +307,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, beforeRetry: $beforeRetry);
-                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, beforeRetry: $beforeRetry);
+                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, splitInvalidBatches: false, beforeRetry: $beforeRetry);
+                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, splitInvalidBatches: false, beforeRetry: $beforeRetry);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
@@ -414,8 +419,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
-                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, beforeRetry: $beforeRetry);
+                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
+                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
 
                 return new CueAnalysisBatchResult(
                     $this->combinedResult($left->tokenized, $right->tokenized),
@@ -456,7 +461,11 @@ class LaravelAiTranslationAnalysisProvider
                 );
 
                 return $this->analyzedBatchResult($output, $batch);
-            } catch (SubtitleProcessingException) {
+            } catch (SubtitleProcessingException $exception) {
+                if ($exception->isTransient() || in_array($exception->context['reason'] ?? null, ['provider_quota_exhausted', 'output_token_limit'], true)) {
+                    throw $exception;
+                }
+
                 // fall through to deterministic fallback below
             }
         }
@@ -663,9 +672,17 @@ class LaravelAiTranslationAnalysisProvider
     private function promptAgent(string $agentClass, array $input): array
     {
         try {
-            return $agentClass::make()
-                ->prompt($this->encodeAgentInput($input))
-                ->toArray();
+            $response = $agentClass::make()->prompt($this->encodeAgentInput($input));
+
+            if ($response->steps->last()?->finishReason === FinishReason::Length) {
+                throw SubtitleProcessingException::enrichmentFailed('Subtitle AI output exceeded its token limit.', [
+                    'provider' => Lab::OpenAI->value,
+                    'agent' => $agentClass,
+                    'reason' => 'output_token_limit',
+                ]);
+            }
+
+            return $response->toArray();
         } catch (RateLimitedException $exception) {
             throw SubtitleProcessingException::rateLimited(
                 'Subtitle AI processing is temporarily rate limited.',

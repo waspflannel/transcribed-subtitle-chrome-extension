@@ -35,7 +35,7 @@ The hard input, maximum capacity, per-cue length, timing, authorization, expiry,
 
 ### Reliability update (2026-09-07)
 
-The local text-processing model and example environment now use `gpt-6-astra`. When fast mode is enabled, OpenAI agents request high reasoning effort and `service_tier: fast`, including lyrics alignment and derived learning data. Fast processing carries a premium and does not guarantee latency. Audio transcription retains its existing provider and model.
+The local text-processing model and example environment use `gpt-5.6-luna` with `xhigh` reasoning effort. Fast mode is enabled by default and sends `service_tier: fast`. This applies to tokenization, combined analysis and translation, romanization, word cards, quick fixes, and lyrics alignment. Fast processing carries a premium and does not guarantee latency. Audio transcription retains its existing provider and model.
 
 The POST requires `expectedTrackId`; stale identities return the existing conflict response. The correction retains its source track and job-run identities in encrypted work state and rechecks them, expiry, and entitlement before committing progress or publication.
 

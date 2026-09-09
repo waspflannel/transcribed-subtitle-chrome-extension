@@ -82,7 +82,7 @@ class DashboardController extends Controller
                 'videoId' => $job->youtube_video_id,
                 'href' => route('dashboard.jobs.show', ['jobId' => $job->public_id]),
                 'status' => (string) $job->status,
-                'stage' => (string) $job->stage,
+                'stage' => $job->stageLabel(),
                 'languagePair' => $this->languagePair($job),
                 'minutes' => $usage->billableMinutes($job->video_duration_seconds),
                 'updatedAt' => $job->updated_at->format('M j, Y H:i'),

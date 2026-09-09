@@ -19,6 +19,10 @@
 
 ## Expectations
 
+- The internal `tokenizing` generation stage is displayed as **Analyzing subtitles** in the extension and web dashboard. Tokenization, translation, and chained romanization share one progress band and one timeline step because their batches overlap; the timeline must not show translation and romanization as later sequential steps.
+
+- Generation status is polled every five seconds. Partial subtitles are fetched immediately when analysis starts and then at most every ten seconds, including after a failed fetch. Only changed partial revisions are stored again; completion and cancellation stop polling.
+
 - Dashboard connection listings filter both per-token and configured Sanctum expiration before taking three recent extension tokens. This is a token-status snapshot, not browser-presence detection; viewing it does not revoke tokens.
 
 - Dashboard and job-detail pages expose native GET "Refresh status" links and timestamped snapshot labels; they do not poll. Source videos are identified by stored IDs and canonical YouTube links. Dashboard Clear all shows the full owned-job count, including jobs outside the recent list/processing versions, and explains track and usage consequences before confirmation.

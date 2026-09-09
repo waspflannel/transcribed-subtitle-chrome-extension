@@ -3,6 +3,7 @@
 namespace App\Exceptions;
 
 use Exception;
+use Illuminate\Http\Client\RequestException;
 use Throwable;
 
 class SubtitleProcessingException extends Exception
@@ -70,6 +71,25 @@ class SubtitleProcessingException extends Exception
      */
     public static function rateLimited(string $message = 'Subtitle generation is temporarily rate limited.', array $context = [], ?Throwable $previous = null): self
     {
+        // The AI SDK wraps every HTTP 429 as a rate limit, including billing
+        // failures. Walk the cause chain so all provider callers classify it once.
+        for ($cause = $previous; $cause !== null; $cause = $cause->getPrevious()) {
+            if (! $cause instanceof RequestException) {
+                continue;
+            }
+
+            $code = $cause->response->json('error.code');
+            $quotaCodes = ['credit_balance_exhausted', 'insufficient_quota', 'organization_spend_limit_exceeded', 'project_spend_limit_exceeded', 'organization_usage_limit_exceeded'];
+
+            if (in_array($code, $quotaCodes, true) || $cause->response->json('error.type') === 'insufficient_quota') {
+                return self::enrichmentFailed('Subtitle AI provider quota is exhausted.', [
+                    ...$context,
+                    'reason' => 'provider_quota_exhausted',
+                    'provider_error_code' => in_array($code, $quotaCodes, true) ? $code : 'insufficient_quota',
+                ], $previous);
+            }
+        }
+
         return new self('rate_limited', $message, 429, $context, $previous);
     }
 

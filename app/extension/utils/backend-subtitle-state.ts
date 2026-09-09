@@ -99,7 +99,7 @@ export function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): 
       return 'Transcribing audio...';
 
     case 'tokenizing':
-      return 'Tokenizing subtitles...';
+      return 'Analyzing subtitles...';
 
     case 'romanizing':
       return 'Adding romanization...';

@@ -1,16 +1,14 @@
 import type { SubtitleJobHistoryItem } from './contracts';
 
-export const GENERATION_STAGES = [
+export const GENERATION_STAGES: readonly SubtitleJobHistoryItem['stage'][] = [
   'preparing',
   'acquiring-audio',
   'optimizing-audio',
   'transcribing',
   'tokenizing',
-  'romanizing',
-  'translating',
   'enriching',
   'finalizing',
-] as const satisfies readonly SubtitleJobHistoryItem['stage'][];
+];
 
 export interface GenerationProgress {
   percent: number;
@@ -60,7 +58,7 @@ export function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>):
       return 'Transcribing audio';
 
     case 'tokenizing':
-      return 'Tokenizing subtitles';
+      return 'Analyzing subtitles';
 
     case 'romanizing':
       return 'Adding romanization';

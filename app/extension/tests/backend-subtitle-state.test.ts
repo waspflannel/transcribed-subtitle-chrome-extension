@@ -67,7 +67,7 @@ describe('backend subtitle state helpers', () => {
       ]),
     ).resolves.toMatchObject({
       type: 'loading',
-      message: 'Tokenizing subtitles...',
+      message: 'Analyzing subtitles...',
       stage: 'tokenizing',
       progressPercent: 65,
     });

@@ -16,7 +16,9 @@ use GuzzleHttp\Psr7\Response as PsrResponse;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -1479,6 +1481,98 @@ class CueEnrichmentServiceTest extends TestCase
         }
 
         $this->fail('Expected provider failure to map to a subtitle processing exception.');
+    }
+
+    public function test_invalid_batches_cannot_split_more_than_once(): void
+    {
+        $cues = array_map(fn (int $index): array => [
+            ...$this->sourceCue('cue-'.$index, $index, 'hello'),
+            'translatedText' => 'hola',
+            'tokens' => [['index' => 0, 'text' => 'hello', 'normalizedText' => 'hello']],
+        ], range(0, 19));
+
+        foreach ([CueAnalysisAgent::class => 'analyzeBatch', CueTokenizationAgent::class => 'tokenizeBatch', CueEnrichmentAgent::class => 'enrichBatch'] as $agent => $method) {
+            $sizes = [];
+            $agent::fake(function (string $prompt) use (&$sizes, $cues): array {
+                $sizes[] = count(json_decode($prompt, true, 512, JSON_THROW_ON_ERROR)['cues']);
+
+                return ['dialect' => 'unknown', 'cues' => count($sizes) === 2 ? array_slice($cues, 0, 10) : []];
+            })->preventStrayPrompts();
+
+            $this->assertProviderFailureReason(fn () => $this->$method($cues, 'eng', 'spa'), 'cue_count_mismatch');
+            $this->assertSame([20, 10, 10], $sizes, $agent);
+        }
+    }
+
+    public function test_output_token_exhaustion_fails_without_splitting_or_reprompting(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response([
+            'id' => 'resp_limit',
+            'status' => 'incomplete',
+            'incomplete_details' => ['reason' => 'max_output_tokens'],
+            'model' => 'gpt-5.6-luna',
+            'output' => [],
+            'usage' => ['input_tokens' => 2000, 'output_tokens' => 9000, 'output_tokens_details' => ['reasoning_tokens' => 8249]],
+        ])]);
+
+        $cues = array_map(fn (int $index): array => $this->sourceCue('cue-'.$index, $index, 'hello'), range(0, 19));
+        $this->assertProviderFailureReason(fn () => $this->analyzeBatch($cues, 'eng', 'spa'), 'output_token_limit');
+        Http::assertSentCount(1);
+    }
+
+    #[DataProvider('quotaErrors')]
+    public function test_sdk_wrapped_quota_errors_are_terminal(string $code, string $type): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response(['error' => [
+            'code' => $code, 'type' => $type, 'message' => 'private-provider-message',
+        ]], 429)]);
+
+        try {
+            $this->analyzeBatch([$this->sourceCue('cue-1', 0, 'hello')], 'eng', 'spa');
+            $this->fail('Quota exhaustion must fail the batch.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_quota_exhausted', $exception->context['reason'] ?? null);
+            $this->assertFalse($exception->isTransient());
+            $this->assertStringNotContainsString('private-provider-message', $exception->getMessage().json_encode($exception->context));
+        }
+
+        Http::assertSentCount(1);
+    }
+
+    public static function quotaErrors(): array
+    {
+        return [
+            ['credit_balance_exhausted', 'billing_error'],
+            ['insufficient_quota', 'billing_error'],
+            ['organization_spend_limit_exceeded', 'billing_error'],
+            ['project_spend_limit_exceeded', 'billing_error'],
+            ['organization_usage_limit_exceeded', 'billing_error'],
+            ['unknown_billing_code', 'insufficient_quota'],
+        ];
+    }
+
+    public function test_quota_error_during_single_cue_reprompt_does_not_become_a_successful_fallback(): void
+    {
+        foreach ([CueAnalysisAgent::class => 'analyzeBatch', CueTokenizationAgent::class => 'tokenizeBatch'] as $agent => $method) {
+            $calls = 0;
+            $agent::fake(function () use (&$calls): array {
+                if (++$calls === 1) {
+                    return ['dialect' => 'unknown', 'cues' => []];
+                }
+
+                throw new RequestException(new Response(new PsrResponse(429, [], json_encode([
+                    'error' => ['code' => 'credit_balance_exhausted'],
+                ]))));
+            })->preventStrayPrompts();
+
+            $this->assertProviderFailureReason(
+                fn () => $this->$method([$this->sourceCue('cue-1', 0, 'hello')], 'eng', 'spa'),
+                'provider_quota_exhausted',
+            );
+            $this->assertSame(2, $calls);
+        }
     }
 
     private function provider(): LaravelAiTranslationAnalysisProvider

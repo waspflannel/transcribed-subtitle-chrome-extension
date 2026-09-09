@@ -73,6 +73,13 @@ class SubtitleJob extends Model
         return $this->detected_source_language ?: $this->source_language;
     }
 
+    public function stageLabel(): string
+    {
+        return $this->stage === 'tokenizing'
+            ? 'Analyzing subtitles'
+            : ucfirst(str_replace('-', ' ', (string) $this->stage));
+    }
+
     protected function casts(): array
     {
         return [

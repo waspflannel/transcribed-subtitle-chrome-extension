@@ -4,11 +4,14 @@ namespace App\Providers;
 
 use App\Services\Subtitles\SubtitleRuntimeTracer;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Client\Events\ResponseReceived;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -21,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         JsonResource::withoutWrapping();
         $this->registerSubtitleQueueTracing();
+        $this->registerOpenAiResponseTracing();
 
         RateLimiter::for('subtitle-api', function (Request $request): array {
             return [
@@ -52,6 +56,44 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(5)->by('extension-auth-email:'.$emailKey),
                 Limit::perMinute(20)->by('extension-auth-ip:'.$request->ip()),
             ];
+        });
+    }
+
+    private function registerOpenAiResponseTracing(): void
+    {
+        Event::listen(ResponseReceived::class, function (ResponseReceived $event): void {
+            $url = rtrim(config('ai.providers.openai.url') ?? 'https://api.openai.com/v1', '/').'/responses';
+
+            if ($event->request->url() !== $url || ($event->request['stream'] ?? false) === true) {
+                return;
+            }
+
+            $stats = $event->response->handlerStats();
+            $milliseconds = static fn (mixed $seconds): ?int => is_numeric($seconds) ? (int) round((float) $seconds * 1000) : null;
+
+            // Select diagnostics explicitly: never log request/response bodies,
+            // authorization headers, prompts, or generated text.
+            Log::info('backend.openai_response_received', [
+                'worker_pid' => getmypid() ?: null,
+                'request_id' => $event->response->header('x-request-id') ?: null,
+                'model' => $event->request['model'] ?? null,
+                'requested_service_tier' => $event->request['service_tier'] ?? null,
+                'served_service_tier' => $event->response->json('service_tier'),
+                'reasoning_effort' => data_get($event->request->data(), 'reasoning.effort'),
+                'http_status' => $event->response->status(),
+                'response_status' => $event->response->json('status'),
+                'incomplete_reason' => $event->response->json('incomplete_details.reason'),
+                'error_code' => $event->response->json('error.code'),
+                'duration_ms' => $milliseconds($stats['total_time'] ?? null),
+                'connect_ms' => $milliseconds($stats['connect_time'] ?? null),
+                'time_to_first_byte_ms' => $milliseconds($stats['starttransfer_time'] ?? null),
+                'provider_processing_ms' => is_numeric($event->response->header('openai-processing-ms'))
+                    ? (int) $event->response->header('openai-processing-ms') : null,
+                'input_tokens' => $event->response->json('usage.input_tokens'),
+                'cached_input_tokens' => $event->response->json('usage.input_tokens_details.cached_tokens'),
+                'output_tokens' => $event->response->json('usage.output_tokens'),
+                'reasoning_tokens' => $event->response->json('usage.output_tokens_details.reasoning_tokens'),
+            ]);
         });
     }
 

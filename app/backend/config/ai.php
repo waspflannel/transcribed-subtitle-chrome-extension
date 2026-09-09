@@ -22,7 +22,7 @@ return [
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL'),
             'provider_options' => [
-                'reasoning' => ['effort' => 'high'],
+                'reasoning' => ['effort' => 'medium'],
                 ...(env('OPENAI_FAST_MODE_ENABLED', true) ? ['service_tier' => 'fast'] : []),
             ],
             'models' => [

@@ -92,6 +92,7 @@ const apiMock = vi.hoisted(() => ({
   enrichLearningToken: vi.fn(),
   createSubtitleJob: vi.fn(),
   getSubtitleJob: vi.fn(),
+  getSubtitleJobPartialTrack: vi.fn(),
   cancelSubtitleJob: vi.fn(),
   listSubtitleJobs: vi.fn(async () => ({ jobs: [] })),
   getExtensionAccount: vi.fn(),
@@ -163,6 +164,7 @@ vi.mock('../utils/api', () => ({
     enrichLearningToken(...args: unknown[]) { return apiMock.enrichLearningToken(...args); }
     createSubtitleJob(...args: unknown[]) { return apiMock.createSubtitleJob(...args); }
     getSubtitleJob(...args: unknown[]) { return apiMock.getSubtitleJob(...args); }
+    getSubtitleJobPartialTrack(...args: unknown[]) { return apiMock.getSubtitleJobPartialTrack(...args); }
     cancelSubtitleJob(...args: unknown[]) { return apiMock.cancelSubtitleJob(...args); }
     listSubtitleJobs(...args: unknown[]) {
       return (apiMock.listSubtitleJobs as unknown as (...parameters: unknown[]) => unknown)(...args);
@@ -324,16 +326,57 @@ beforeEach(() => {
   apiMock.enrichLearningToken.mockReset();
   apiMock.createSubtitleJob.mockReset();
   apiMock.getSubtitleJob.mockReset();
+  apiMock.getSubtitleJobPartialTrack.mockReset();
   apiMock.cancelSubtitleJob.mockReset();
   apiMock.listSubtitleJobs.mockReset().mockResolvedValue({ jobs: [] });
   apiMock.getExtensionAccount.mockReset().mockResolvedValue({ account: account() });
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe('background entrypoint review regressions', () => {
+  it('polls status every five seconds and partial subtitles every ten seconds until completion', async () => {
+    vi.useFakeTimers();
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const runningJob = { ...job(VIDEO_A, 'job-poll'), stage: 'tokenizing' };
+    apiMock.createSubtitleJob.mockResolvedValue(runningJob);
+    apiMock.getSubtitleJob.mockResolvedValue(runningJob);
+    apiMock.getSubtitleJobPartialTrack.mockResolvedValue({
+      jobId: 'job-poll', youtubeVideoId: VIDEO_A, revision: 1, cues: track(VIDEO_A).cues,
+    });
+    const listener = await loadBackground();
+
+    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await waitFor(() => apiMock.getSubtitleJobPartialTrack.mock.calls.length === 1);
+    await waitFor(() => vi.getTimerCount() > 0);
+    // The initial panel response also reads status once to recover its view.
+    apiMock.getSubtitleJob.mockClear();
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(apiMock.getSubtitleJob).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(1);
+    expect(apiMock.getSubtitleJobPartialTrack).toHaveBeenCalledTimes(1);
+
+    apiMock.getSubtitleJobPartialTrack.mockResolvedValue({
+      jobId: 'job-poll', youtubeVideoId: VIDEO_A, revision: 2, cues: track(VIDEO_A).cues,
+    });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(2);
+    expect(apiMock.getSubtitleJobPartialTrack).toHaveBeenCalledTimes(2);
+    expect((storageMock.values.get('local:tabSubtitleOperations') as Record<string, any>)['1'].partialTrack.revision).toBe(2);
+
+    apiMock.getSubtitleJob.mockResolvedValue({ ...runningJob, status: 'completed', stage: 'completed', track: track(VIDEO_A, 'job-poll') });
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(3);
+    expect(apiMock.getSubtitleJobPartialTrack).toHaveBeenCalledTimes(2);
+    expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps concurrent content.enrichLearningToken metadata updates in the remembered and current track', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_ONE}` });

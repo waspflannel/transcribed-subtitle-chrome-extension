@@ -15,7 +15,7 @@
             </div>
         </div>
 
-        <x-ui.panel title="Status" description="{{ $job->status }} during {{ $job->stage }}">
+        <x-ui.panel title="Status" description="{{ $job->status }} during {{ $job->stageLabel() }}">
             <dl class="metric-grid detail-grid">
                 <div>
                     <dt>Source video</dt>
@@ -27,7 +27,7 @@
                 </div>
                 <div>
                     <dt>Stage</dt>
-                    <dd>{{ $job->stage }}</dd>
+                    <dd>{{ $job->stageLabel() }}</dd>
                 </div>
                 <div>
                     <dt>Progress</dt>

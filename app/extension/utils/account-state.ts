@@ -52,7 +52,9 @@ export function publicJobTelemetry(job: SubtitleJobHistoryItem): PublicJobTeleme
 }
 
 export function stageTimeline(job: Pick<SubtitleJobHistoryItem, 'stage' | 'status'>): StageTimelineItem[] {
-  const currentIndex = GENERATION_STAGES.indexOf(job.stage);
+  // Analysis, translation, and romanization overlap inside one batch.
+  const currentStage = job.stage === 'romanizing' || job.stage === 'translating' ? 'tokenizing' : job.stage;
+  const currentIndex = GENERATION_STAGES.indexOf(currentStage);
 
   return GENERATION_STAGES.map((stage, index) => {
     let state: StageTimelineItem['state'] = 'pending';

@@ -117,8 +117,6 @@ describe('account and job-history state helpers', () => {
       'current',
       'pending',
       'pending',
-      'pending',
-      'pending',
     ]);
     expect(stageTimeline(jobHistory({ status: 'failed', stage: 'transcribing' }))[3]).toMatchObject({
       stage: 'transcribing',
@@ -127,9 +125,20 @@ describe('account and job-history state helpers', () => {
     expect(formatJobTiming(jobHistory({ status: 'completed' }))).toBe('2m total');
   });
 
+  it('keeps overlapping analysis work in one current timeline step', () => {
+    for (const stage of ['tokenizing', 'romanizing', 'translating'] as const) {
+      const timeline = stageTimeline({ status: 'running', stage });
+      expect(timeline.filter((item) => item.state === 'current')).toEqual([
+        { stage: 'tokenizing', label: 'Analyzing subtitles', state: 'current' },
+      ]);
+      expect(timeline.map((item) => item.stage)).not.toContain('romanizing');
+      expect(timeline.map((item) => item.stage)).not.toContain('translating');
+    }
+  });
+
   it('keeps every stage pending while a job is queued', () => {
     expect(stageTimeline(jobHistory({ status: 'queued', stage: 'transcribing' })).map((item) => item.state)).toEqual(
-      Array(9).fill('pending'),
+      Array(7).fill('pending'),
     );
   });
 });
