@@ -847,11 +847,14 @@ async function enrichLearningTokenFromContent(
   }
 
   const track = trackWithLearningToken(freshState.track, response.cueId, response.token);
-
-  await storeReadySubtitleState(tabId, {
-    type: 'ready',
-    track,
-  }, accountId, sessionId);
+  // Keep the final read/merge/write synchronous. A second enrichment reply
+  // must see the first reply's token instead of merging both replies into the
+  // same pre-await snapshot.
+  const nextState: Extract<SubtitleState, { type: 'ready' }> = { type: 'ready', track };
+  tabSubtitleStates.set(tabId, nextState);
+  tabSubtitleStateOwners.set(tabId, accountId);
+  tabSubtitleStateSessions.set(tabId, sessionId);
+  if (await isCurrentSession(sessionId)) await rememberActiveTrack(track, accountId);
 
   return {
     ok: true,
