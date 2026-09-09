@@ -1,6 +1,6 @@
 # Smoothening manual checks
 
-Use the extension build from `C:/transcribed-subtitle-smoothening` on `codex/remaining-smoothening-fixes`. The original checkout is for the user's separate feature. This checklist records checks for the user to perform; no browser pass is claimed.
+Use a fresh extension build from `C:/transcribed-subtitle-extension` on the consolidated `smoothening-fixes` branch. See [the quick smoke tests](smoothening-smoke-tests.md) for every audit item in ID order. This checklist records checks for the user to perform; no browser pass is claimed.
 
 Use local fake providers and disposable test accounts for failure, cancellation, usage and queue scenarios. Backend automated tests cover deterministic fake-service behavior; production database locking and real provider timing require separate runtime evidence. Account A and B below are distinct test accounts. Video A and B are distinct videos unless a step explicitly asks for duplicate tabs.
 
