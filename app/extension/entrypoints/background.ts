@@ -2412,7 +2412,7 @@ async function isCurrentGenerationRecovery(
   pageStatus: SupportedYoutubePageInfo,
   sessionId: string,
   operation: symbol,
-  expectedPersistedOperation?: StoredTabOperation,
+  expectedPersistedOperation: StoredTabOperation | null = null,
 ): Promise<boolean> {
   if (tabOperations.get(tabId) !== operation) return false;
   const session = await getStoredExtensionSession();
@@ -2426,8 +2426,9 @@ async function isCurrentGenerationRecovery(
     && currentPage.supported
     && currentPage.videoId === pageStatus.videoId
     && tabOperations.get(tabId) === operation
-    && (expectedPersistedOperation === undefined
-      || JSON.stringify(persistedOperation) === JSON.stringify(expectedPersistedOperation));
+    && (expectedPersistedOperation === null
+      ? persistedOperation === null
+      : JSON.stringify(persistedOperation) === JSON.stringify(expectedPersistedOperation));
 }
 
 async function isCurrentSession(sessionId: string): Promise<boolean> {
