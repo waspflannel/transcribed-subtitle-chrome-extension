@@ -75,7 +75,7 @@ These findings are established by source inspection, not browser reproduction.
 
 **Evidence:** `app/extension/entrypoints/background.ts`; `app/extension/entrypoints/sidepanel/main.ts`; `app/extension/entrypoints/sidepanel/render/job-history.ts`; `app/backend/tests/Feature/SubtitleJobApiTest.php`; `app/backend/app/Http/Controllers/WebSubtitleJobController.php`; `docs/RELIABILITY.md:49-51`.
 
-**Confidence:** High, source-confirmed absence. No cancellation operation was executed.
+**Confidence:** High, source-confirmed and locally exercised for the backend cancellation route and stale worker guard; browser and live-provider paths remain untested.
 
 **Smallest useful fix:** Add owner-scoped cancellation for queued/running jobs and expose it in Watch and History. Reuse run guards, batch cancellation, reservation settlement, and admission. Keep cancellation distinct from deleting completed tracks.
 
@@ -96,12 +96,12 @@ These findings are established by source inspection, not browser reproduction.
 
 **How To Test:**
 1. Create one running and one queued owned generation, cancel the running job, then read both jobs. Expected: the first is \`cancelled\`, its reservation is zero and its refund/settlement is recorded once, and the queued job becomes \`running\` with one dispatch.
-2. Repeat the running-job cancellation and invoke its old worker failure callback. Expected: both calls are safe no-ops after the first terminal transition, the response remains \`cancelled\`, and no second refund or failure event is written.
+2. Repeat the running-job cancellation, invoke its old worker failure callback, and run the captured worker after cancellation. Expected: all calls are safe no-ops after the first terminal transition, the response remains \`cancelled\`, no provider call or artifact/track is written, and no second refund or failure event is written.
 3. Cancel a queued job before any worker handles it. Expected: it remains \`cancelled\`, no provider call is made, and no queue dispatch is published.
 4. In the extension, start a queued or running job and open Watch progress. Click `Cancel generation`. Expected: the button immediately reads `Cancelling…`; on success the panel removes the active progress state, shows that reserved minutes were released, and the video receives no late track. Switch to History and repeat with an older queued/running owned job. Expected: the exact card is busy during the request and then shows `Cancelled`, its captured stage and percent, and the cancellation message.
 5. Try a completed or failed card, a missing/foreign job, and a stale Watch tab/video identity. Expected: no generation POST or dashboard deletion is sent; the panel shows a meaningful error and leaves unrelated tracks and operations unchanged. Limits: external provider interruption cannot be claimed; only late persistence/publication safety is guaranteed. Browser and live-provider checks remain out of scope for this audit run.
 
-**Automated checks:** `npm run compile` and focused Vitest coverage for API cancellation request shape, canceled state reconciliation, runtime message validation, progress labels, and History cancellation rendering pass in `app/extension`.
+**Automated checks:** Focused backend PHPUnit coverage for owner/terminal responses, running-job stale worker no-op, and reservation settlement passes in `app/backend`. `npm run compile` and focused Vitest coverage for API cancellation request shape, canceled state reconciliation, runtime message validation, progress labels, and History cancellation rendering pass in `app/extension`.
 
 ### G2. P2: History Retry Does Not Reliably Retry The Selected Job
 
@@ -679,9 +679,9 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Expected versus actual:** Submission/promotion should either publish work or expose a stable recoverable failure and release reservation/capacity. Both publication sites occur after state commits without compensation. An immediate duplicate can reuse the non-stale preparing job instead of dispatching. With defaults, the stalled backstop can take roughly 17-22 minutes absent an intervening recovery path.
 
-**Evidence:** `app/backend/app/Services/Subtitles/SubtitleJobService.php:163-168,199-205`; `app/backend/app/Services/Subtitles/SubtitleJobAdmission.php:30-33,65-72`; `app/backend/config/subtitles.php:16,239,252`.
+**Evidence:** `app/backend/app/Services/Subtitles/SubtitleJobService.php:163-168,199-205`; `app/backend/app/Services/Subtitles/SubtitleJobAdmission.php:30-33,65-72`; `app/backend/config/subtitles.php:16,239,252`; `app/backend/tests/Feature/SubtitleJobApiTest.php`.
 
-**Confidence:** High, code-supported; Redis outage was not induced.
+**Confidence:** High, source-confirmed and locally exercised with an isolated throwing queue connector; Redis and worker services were not started.
 
 **Smallest useful fix:** Route publication exceptions through run-scoped failure/settlement at both dispatch sites. Do not leave promoted work without either publication or a terminal outcome.
 
@@ -692,7 +692,7 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 **How To Test:**
 1. Make the queue connection throw while \`SubtitleJobService::generate()\` publishes a newly admitted running job. Expected: the response contains one failed job with \`errorCode: queue_publication_failed\`, the reservation is refunded, and no slot remains occupied.
 2. Fill a tier's running slot, then make the queue connection throw while \`SubtitleJobAdmission\` promotes the oldest queued job. Expected: that promoted job is failed and refunded, the next queued job remains queued, and no second dispatch is attempted during the outage.
-3. Restore queue publication and submit the same payload again. Expected: the failed row is eligible for the existing stale/reset path and exactly one new run is published. Limits: queue publication was not induced here; no Redis or worker service may be started in this handoff.
+3. Restore queue publication and submit the same payload again. Expected: the failed row is eligible for the existing stale/reset path and exactly one new run is published. Limits: the checks use an isolated throwing connector rather than Redis; no live queue or worker service was started.
 
 ### R19. P2: Queue Admission And Timeout Decisions Can Be Stale Or Misordered
 
