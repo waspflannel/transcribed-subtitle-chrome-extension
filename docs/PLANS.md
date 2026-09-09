@@ -19,18 +19,18 @@ Use execution plans for work that crosses files, changes architecture, alters us
 
 Use `docs/exec-plans/templates/exec-plan-template.md`.
 
-## Current Phase Backlog
+## Work Modes
 
-The completed original implementation split is tracked in `docs/exec-plans/completed/00-phase-index.md`.
+The user can select **Brain / Worker** by saying "use brain / worker" when starting or continuing a plan. Follow the [runbook](work-modes/brain-worker.md) and record the mode in the plan. Keep its ordered chunk backlog, current packet, ownership, review evidence, and acceptance state in the owning plan or linked chunk notes. Only one top-level chunk may be active; completing a chunk does not authorize starting the next.
 
-Phase status:
+## Current Work
 
-- Phase 01: Project Scaffold And Contracts, completed in `docs/exec-plans/completed/phase-01-project-scaffold-and-contracts.md`
-- Phase 02: YouTube Extension Shell, completed in `docs/exec-plans/completed/phase-02-youtube-extension-shell.md`
-- Phase 03: Laravel Job API And Persistence, completed in `docs/exec-plans/completed/phase-03-laravel-job-api-and-persistence.md`
-- Phase 04: Audio Acquisition And Transcription Proof, completed in `docs/exec-plans/completed/phase-04-audio-acquisition-and-transcription-proof.md`
-- Phase 05: Generated Track And Overlay Sync, completed in `docs/exec-plans/completed/phase-05-generated-track-and-overlay-sync.md`
-- Phase 06: Translation And Learning Data, completed in `docs/exec-plans/completed/phase-06-translation-and-arabic-learning-data.md`
-- Phase 07: Hardening And Release Readiness, completed in `docs/exec-plans/completed/phase-07-hardening-and-release-readiness.md`
+- [Whole-project audit follow-up by topic](exec-plans/active/2026-09-09-whole-project-review/00-index.md): accounts, pipeline, learning, and operations.
+- [Current delivery and testing record](exec-plans/active/2026-09-09-whole-project-review/delivery-and-testing.md): awaiting user acceptance; the pipeline document retains the current slowdown investigation.
+- [Technical debt](exec-plans/tech-debt-tracker.md): remaining evidence and deferred requirements.
 
-No active implementation phase is open after Phase 07 closeout.
+## Documentation Retention
+
+The 2026-09-09 cleanup removed old execution plans and temporary handoff/review notes at the user's request. Their history remains in Git; historical evidence links use revision `5f3a92b7347072471b59bb2b956e23559ada1e6f`. Locally, use `git show <revision>:<path>` to read a removed file.
+
+Keep the current audit folder's four topic documents, combined delivery/testing record and index, along with architecture/design documents, product specs, standards, operations guidance, reusable prompts, templates and debt tracker. Update the existing topic or delivery record instead of creating overlapping follow-up files. Before pruning future completed plans, keep lasting decisions in the relevant current docs and outstanding requirements in the debt tracker. Deleting a plan does not mark its unfinished work complete.

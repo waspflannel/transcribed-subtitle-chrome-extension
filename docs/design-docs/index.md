@@ -7,7 +7,7 @@ Use this directory for durable decisions and design history.
 - `core-beliefs.md`: Agent-first operating principles for this project.
 - `../product-specs/index.md`: Current product workflow and first-release scope.
 - `../../ARCHITECTURE.md`: Current runtime architecture and validation targets.
-- `../exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`: Refactor record for selectable source and target languages.
+- [2026-05-11-many-to-many-language-refactor.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md): Refactor record for selectable source and target languages.
 
 ## Decision Records
 

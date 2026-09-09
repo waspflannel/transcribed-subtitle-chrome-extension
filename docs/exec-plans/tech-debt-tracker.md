@@ -2,6 +2,17 @@
 
 Track cleanup continuously. Prefer small, targeted follow-up plans over large periodic rewrites.
 
+## Requirements retained after the 2026-09-09 plan cleanup
+
+Removing old plans does not close their acceptance gates. The current [audit packages](active/2026-09-09-whole-project-review/00-index.md) own follow-up work; use [product scope](../product-specs/index.md), [lyrics editing](../product-specs/lyrics-editing.md), [release readiness](../product-specs/release-readiness.md) and the [operations runbook](../operations/production-hosting-and-ops.md) for durable requirements. Old evidence is available in Git at `5f3a92b7347072471b59bb2b956e23559ada1e6f`.
+
+- CJK/no-space quality: matched language fixtures and provider-backed linguistic comparisons remain unproven; preserve source spelling, spacing and coverage before tuning segmentation. Audit packages 02/07/08 own this evidence.
+- Editing and smoothening: user browser checks remain open for pasted-lyrics replacement, single-word learning refresh, simplified Watch editing, G1 cancellation recovery and R7 overlay behavior. G5 Stripe configuration/test-mode verification remains open. Packages 01/05/10/12 own these checks; old automated passes are not browser acceptance.
+- Production hardening: support address, approved legal copy, production domain/mail/provider settings, extension version/Store URL, secret rotation, deletion posture and proxy/TLS contract remain operator-owned gates. Stripe proof, staging deployment, rollback, backup restore, alerting and real Postgres/Redis/provider/browser evidence remain open under package 12 and TD-007/009/011/012.
+- Deferred learning features and beta/growth/public-launch scope remain in the product spec. Removing their roadmaps neither cancels those requirements nor authorizes implementation or launch.
+
+## Tracked debt
+
 | ID | Area | Issue | Impact | Proposed Fix | Status |
 | --- | --- | --- | --- | --- | --- |
 | TD-001 | Harness | Stack checks were missing before Phase 01. | Agents could not validate implementation work beyond docs. | Added contract, Laravel, and WXT checks to `scripts/agent/check.ps1`. | closed |
