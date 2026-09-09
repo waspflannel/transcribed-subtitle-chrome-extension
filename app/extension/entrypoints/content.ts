@@ -747,16 +747,24 @@ export default defineContentScript({
         return;
       }
 
-      const playResult = activeVideo.play();
+      const video = activeVideo;
+      const cue = activeCue;
+      const epoch = stateEpoch;
+      const playResult = video.play();
 
       if (playResult && typeof playResult.catch === 'function') {
-        playResult.then(() => cueHold.resume(activeCue, true)).catch((error: unknown) => {
+        playResult.then(() => {
+          if (activeVideo !== video || stateEpoch !== epoch || activeCue !== cue) return;
+          cueHold.resume(cue, true);
+        }).catch((error: unknown) => {
           console.warn('extension.subtitle_study_resume_failed', {
             error: error instanceof Error ? error.message : 'Unknown resume error',
           });
         });
       } else {
-        cueHold.resume(activeCue, true);
+        if (activeVideo === video && stateEpoch === epoch && activeCue === cue) {
+          cueHold.resume(cue, true);
+        }
       }
     }
 
