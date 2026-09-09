@@ -702,22 +702,22 @@ These paths require the stated conditions to reproduce. They are not confirmed a
 
 **Trigger:** Submit identical new work concurrently at the last slot/balance; retry an older job behind newer queued jobs; or advance progress between stalled selection and failure claim.
 
-**Expected versus actual:** Duplicate reuse should precede new admission charging, FIFO should follow current submission time, and a fresh heartbeat should invalidate a timeout decision. Compatibility lookup occurs before the account lock, so the second duplicate can fail entitlement checks before reaching unique-row reuse. FIFO orders by persistent row ID although retry refreshes creation time. The timeout claim checks run/status but not the timestamp/stage used to decide expiry.
+**Expected versus actual:** Duplicate reuse should precede new admission charging, FIFO should follow current submission time for both new and reset rows, and a fresh heartbeat should invalidate a timeout decision. Compatibility lookup and admission now run under the account lock. Queue ordering uses the current submission timestamp with a deterministic ID tie-breaker, including when a lower-ID retry shares a database timestamp with a new submission. The timeout claim checks the observed heartbeat and stage under the lock.
 
-**Evidence:** `app/backend/app/Services/Subtitles/SubtitleJobService.php:108-111,147-183,297-317`; `app/backend/app/Services/Billing/BillingEntitlementService.php:30-33,55-75`; `app/backend/app/Services/Subtitles/SubtitleJobAdmission.php:46-50`; `app/backend/app/Console/Commands/FailStalledSubtitleJobs.php:32-46,66-72`; `app/backend/app/Services/Subtitles/SubtitleJobFailureHandler.php:41-50`.
+**Evidence:** `app/backend/app/Services/Subtitles/SubtitleJobService.php:108-111,147-183,297-317,340-433`; `app/backend/app/Services/Billing/BillingEntitlementService.php:30-33,55-75`; `app/backend/app/Services/Subtitles/SubtitleJobAdmission.php:46-50`; `app/backend/app/Console/Commands/FailStalledSubtitleJobs.php:32-46,66-72`; `app/backend/app/Services/Subtitles/SubtitleJobFailureHandler.php:41-50`; `app/backend/tests/Feature/SubtitleJobApiTest.php`.
 
-**Confidence:** High, code-supported independent boundary defects grouped by queue control. No duplicate charge or false timeout was reproduced.
+**Confidence:** High, source-confirmed and locally exercised across duplicate/admission, fixed-clock FIFO, and timeout boundaries. Postgres lock interleavings were not run.
 
 **Smallest useful fix:** Perform compatibility/admission under a consistent account lock; order FIFO by current submission timestamp with ID tie-breaker; condition/recheck timeout under a lock against the observed heartbeat/stage.
 
 **Acceptance:** Concurrent identical requests return one job/reservation/dispatch at capacity; an earlier waiting submission precedes a later retry; a new heartbeat between selection and claim prevents failure. Lock tests require disposable Postgres.
 
-**What Changed:** The unique duplicate recovery path now reacquires the account lock before reading the compatible job, keeping duplicate reuse in the same lock order as admission and reservation. Queue promotion orders by the current submission timestamp with the row ID as a deterministic tie-breaker. Stalled failure claims carry the observed heartbeat and stage into the locked update, so a newer worker heartbeat causes the timeout claim to no-op.
+**What Changed:** The unique duplicate recovery path now reacquires the account lock before reading the compatible job, keeping duplicate reuse in the same lock order as admission and reservation. Queue promotion orders by the current submission timestamp with the row ID as a deterministic tie-breaker. New and reset queued rows advance past the latest waiting timestamp even when the database stores only seconds, so a lower-ID retry cannot overtake a newer submission. Stalled failure claims carry the observed heartbeat and stage into the locked update, so a newer worker heartbeat causes the timeout claim to no-op.
 
 **How To Test:**
 1. Submit the same payload concurrently at the generation limit. Expected: one compatible row, one reservation, and one published \`AcquireSubtitleAudio\` job; the duplicate path resolves the row only after the account lock.
-2. Create queued rows with an older retry timestamp on the higher row ID, then free a running slot. Expected: the older current submission is promoted first and the later submission remains queued.
-3. Let the stalled command select an expired running row, update its heartbeat before the locked failure claim, and run the command. Expected: the row remains running and the command does not count it as failed. Limits: lock interleavings require disposable Postgres; this handoff adds source-level tests without starting a database service.
+2. Create an older queued row, retry a lower-ID failed row, and submit a new row while holding the same clock second. Free one running slot at a time. Expected: the older queued row, retry, and new submission promote in submission order.
+3. Let the stalled command select an expired running row, update its heartbeat before the locked failure claim, and run the command. Expected: the row remains running and the command does not count it as failed. Limits: lock interleavings require disposable Postgres; these checks use isolated SQLite and do not start a database service.
 
 ### R20. P2: History Can Hide Work That Still Holds Capacity Or Minutes
 
