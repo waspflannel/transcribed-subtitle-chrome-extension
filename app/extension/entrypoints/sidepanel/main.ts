@@ -352,20 +352,21 @@ function connectPanel(): void {
 connectPanel();
 
 browser.runtime.onMessage.addListener((message) => {
-  if (!isRuntimeMessage(message)) return;
+  if (!isRuntimeMessage(message)) return false;
   if (message.type === 'background.activeCueChanged') {
-    if (panelWindowId !== undefined && message.windowId !== panelWindowId) return;
+    if (panelWindowId !== undefined && message.windowId !== panelWindowId) return false;
     if (latestState?.activeTabId !== message.tabId
       || latestState.subtitleState.type !== 'ready'
       || latestState.subtitleState.track.youtubeVideoId !== message.youtubeVideoId
-      || latestState.subtitleState.track.trackId !== message.trackId) return;
+      || latestState.subtitleState.track.trackId !== message.trackId) return false;
     cueSnapshotRequest += 1;
     transcriptView.setActiveCue(message.cueId);
   } else if (message.type === 'background.focusTranscript') {
-    if (panelWindowId !== undefined && message.windowId !== panelWindowId) return;
+    if (panelWindowId !== undefined && message.windowId !== panelWindowId) return false;
     showTab(tabButtons, panels, 'watch');
     transcriptView.focus();
   }
+  return false;
 });
 
 function scheduleNextBackendPoll(): void {
@@ -1184,9 +1185,9 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   const partial = loading && subtitleState.partialTrack !== undefined;
   const ready = subtitleState.type === 'ready';
   const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
-  const canCancelGeneration = loading
-    && subtitleState.jobId !== undefined
+  const generationInProgress = loading
     && (subtitleState.status === 'queued' || subtitleState.status === 'running');
+  const canCancelGeneration = generationInProgress && subtitleState.jobId !== undefined;
 
   watchUnsupported.hidden = supported;
   watchSignin.hidden = !supported || authenticated;
@@ -1202,8 +1203,8 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   transcriptStatus.hidden = watchScreen !== 'transcript';
   quickFixStatus.hidden = watchScreen !== 'transcript';
   watchReady.hidden = !ready && !partial;
-  cancelGenerationButton.hidden = !canCancelGeneration;
-  cancelGenerationButton.disabled = generationCancellationRequestBusy;
+  cancelGenerationButton.hidden = !generationInProgress;
+  cancelGenerationButton.disabled = generationCancellationRequestBusy || !canCancelGeneration;
   cancelGenerationButton.textContent = generationCancellationRequestBusy ? 'Cancelling…' : 'Cancel generation';
   if (canCancelGeneration) {
     cancelGenerationButton.dataset.jobId = subtitleState.jobId;

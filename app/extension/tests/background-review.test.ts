@@ -542,6 +542,40 @@ describe('background entrypoint review regressions', () => {
     )).toHaveLength(0);
   });
 
+  it('returns a response when the panel cancels its active generation', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const listener = await loadBackground();
+    const createRequest = deferred<any>();
+    const pollRequest = deferred<any>();
+    apiMock.createSubtitleJob.mockReturnValue(createRequest.promise);
+    apiMock.getSubtitleJob.mockReturnValue(pollRequest.promise);
+    apiMock.cancelSubtitleJob.mockResolvedValue(job(VIDEO_A, 'job-cancel', 'cancelled'));
+
+    const generation = dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
+    await generation;
+    createRequest.resolve(job(VIDEO_A, 'job-cancel'));
+    await waitFor(() => (storageMock.values.get('local:tabSubtitleOperations') as Record<string, any> | undefined)?.['1']?.jobId === 'job-cancel');
+
+    const response = await dispatch(listener, {
+      type: 'panel.cancelSubtitleJob',
+      tabId: 1,
+      youtubeVideoId: VIDEO_A,
+      jobId: 'job-cancel',
+      windowId: 1,
+    }, {});
+
+    expect(response).toMatchObject({
+      subtitleState: { type: 'no-track' },
+    });
+    expect(apiMock.cancelSubtitleJob).toHaveBeenCalledWith(
+      'install_0123456789abcdef0123456789abcdef',
+      'token-1',
+      'job-cancel',
+    );
+  });
+
   it('publishes clear-local settings and no-track state to every owned tab', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
