@@ -7,7 +7,7 @@ Last updated: 2026-09-06
 
 ## Goal
 
-Historical pre-commit work log. Individual commits are now authorized under `docs/exec-plans/active/2026-09-07-resolve-smoothening-ux-audit.md`. G3's manual GET refresh resolves its explicitly allowed minimum acceptance; no automatic polling is required. Earlier partial wording describes the absence of live updates, not an outstanding feature obligation.
+Historical pre-commit work log. Individual commits are now authorized under `docs/exec-plans/completed/2026-09-07-resolve-smoothening-ux-audit.md`. G3's manual GET refresh resolves its explicitly allowed minimum acceptance; no automatic polling is required. Earlier partial wording describes the absence of live updates, not an outstanding feature obligation.
 
 Mitigate G3 with visible manual GET refresh and snapshot labels. Fix G4's missing video identity and deletion scope using existing routes and confirmation handling.
 

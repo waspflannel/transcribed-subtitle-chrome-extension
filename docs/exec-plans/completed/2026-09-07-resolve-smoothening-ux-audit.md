@@ -1,11 +1,13 @@
 ﻿# Plan: Resolve smoothening UX audit
 
-Status: active
+Status: superseded by the remaining-fixes delivery plan
 Owner: agent
 Created: 2026-09-07
 Last updated: 2026-09-08
 
 ## Goal
+
+Current delivery is tracked in `2026-09-08-complete-remaining-smoothening-fixes.md` and root `handoff.md`. The constraints and checkpoints below are historical: the user later authorized separate worktrees and useful automated tests, retained browser testing, and requested Luna xhigh coding agents followed by coordinator reviews.
 
 Resolve every non-password finding in `docs/ux-audit-smoothening-2026-09-06.md`, one finding per commit on `smoothening-fixes`. Foundation and worker commits are consolidated; implementation remains incomplete. See root `handoff.md` for the current single-branch checkpoint and safe continuation instructions.
 

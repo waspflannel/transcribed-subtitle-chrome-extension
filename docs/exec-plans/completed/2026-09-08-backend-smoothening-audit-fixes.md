@@ -2,7 +2,7 @@
 
 Consolidation note (2026-09-08): R16/R17 are merged into `smoothening-fixes`. The child worktree/branch is retired; continue on the consolidated branch after coordinating access to the main checkout. See root `handoff.md`. R18/R19/R20/U2 remain pending; no application checks ran.
 
-Status: active
+Status: superseded by the remaining-fixes delivery plan
 Owner: agent
 Created: 2026-09-08
 Last updated: 2026-09-08
@@ -70,6 +70,8 @@ Evidence to capture:
 | 2026-09-08 | Plan created. |  |
 
 ## Completion Notes
+
+This historical assignment was continued under `2026-09-08-complete-remaining-smoothening-fixes.md`, including G1 cancellation and review corrections. The final integrated backend suite passed 439 tests/3,107 assertions at `375cfc8`; browser/provider/Postgres runtime checks remain with the user. Root `handoff.md` supersedes the old no-tests and retired-worktree instructions above.
 
 - What changed:
 - Validation results:

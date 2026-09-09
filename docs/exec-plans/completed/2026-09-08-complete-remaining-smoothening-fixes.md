@@ -1,6 +1,6 @@
 # Plan: Complete remaining smoothening fixes
 
-Status: active
+Status: complete; user manual validation pending
 Owner: coordinator with Luna xhigh coding agents
 Created: 2026-09-08
 Last updated: 2026-09-08
@@ -75,4 +75,12 @@ After these complete, assign G1 extension integration and any cross-branch resol
 
 ## Validation And Review
 
-Review corrections are in progress. See `docs/smoothening-review-2026-09-08.md` for the coordinator's findings. Browser testing belongs to the user. No live concurrency or provider behavior is claimed from source inspection or SQLite tests.
+All 19 included fixes are implemented, integrated and reviewed at `69c883b`. See `docs/smoothening-review-2026-09-08.md` for the coordinator's complete finding/disposition record and `docs/smoothening-manual-checklist.md` for per-fix user checks.
+
+- Luna xhigh agents completed the coding and correction assignments without progress inspections. Coordinator work was integration, source review, documentation and permitted automated validation.
+- Root harness passed at `375cfc8`: documentation/contracts, 439 backend tests/3,107 assertions, 218 extension tests, compile and build.
+- After the final extension-only content-recovery guard, integration validation at `69c883b` passed 219 extension tests in 30 files, compile and production build. Backend/contracts were unchanged.
+- Final documentation lint and whitespace checks precede the delivery commit. No browser validation, live providers, Postgres/Redis services, real-data migrations, dependency upgrades or pushes occurred.
+- Existing installed dependencies were copied into isolated worktrees; the backend used a dummy test-only environment with SQLite in memory.
+- No actionable code/Ponytail finding remains open. Manual/browser and runtime concurrency validation belong to the user and are not represented as completed.
+- The original checkout was not switched or edited by this delivery. The branch remains local in `C:/transcribed-subtitle-smoothening`.

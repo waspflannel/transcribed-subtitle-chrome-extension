@@ -2,7 +2,7 @@
 
 Consolidation note (2026-09-08): saved commits are merged into `smoothening-fixes`. The child worktree/branch is retired; continue on the consolidated branch after coordinating access to the main checkout. See root `handoff.md`. Original scope below is historical; remaining findings stay pending and untested.
 
-Status: active
+Status: superseded by the remaining-fixes delivery plan
 Owner: panel audit worker
 Created: 2026-09-08
 Last updated: 2026-09-08
@@ -33,4 +33,4 @@ Implement R1, R2, R3, R7, R8, R9, R12, R15, R21, U1, U3 with one commit per find
 
 ## Completion Notes
 
-Pending remaining findings. All new regression source is untested at user request.
+This historical assignment was continued and reviewed under `2026-09-08-complete-remaining-smoothening-fixes.md`. Use root `handoff.md`, the final review record and manual checklist for current locations, authorization and evidence. The original no-tests/single-checkout instructions above no longer apply.

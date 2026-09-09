@@ -2,7 +2,7 @@
 
 Baseline: lyrics merge `4a25575`. Initial integrated implementation reviewed at `3791353`.
 
-Status: correction assignments in progress. Code review and Ponytail review are source reviews; browser validation belongs to the user.
+Status: complete at `69c883b`. All findings below were addressed and rereviewed. Code review and Ponytail review are source reviews; browser validation belongs to the user.
 
 ## Code review findings
 
@@ -25,7 +25,7 @@ Status: correction assignments in progress. Code review and Ponytail review are 
 
 ## Ponytail review findings
 
-Line references below describe `3791353`; final disposition and removal counts will be recorded after integration.
+These historical findings describe `3791353`; all five cuts are now applied. Unused `isCurrentAccount` and `storeReadySubtitleState` helpers were also removed after their final callers changed. The surrounding correctness guards add necessary code, so this is not a claim that the whole branch has fewer lines.
 
 - `app/extension/entrypoints/background.ts:1705`: delete: first-matching-video tab lookup and legacy seek routing. Use the exact tab already supplied by the panel.
 - `app/extension/utils/messages.ts`: delete: incomplete-identity compatibility branches. Require the current message contract and update stale fixtures.
@@ -41,6 +41,17 @@ Initial verdict: needs corrections before merge. The existing module boundaries 
 
 - CR8-CR11: addressed through `1bff7e7`. Rereview covered native pause event ownership, true held-cue expiry, keyboard focus through other rail controls, stable close focus, viewport constraints and deferred playback completion after a new study interaction. The content agent reports 33 focused tests and TypeScript compile passing, including the owning content entrypoint. These are automated DOM/mocked media checks, not browser evidence.
 - CR12-CR14 and the U2 duplicate query: addressed through `7a0d7f2`. Rereview covered the real dispatch-site throwing connector, stale worker after cancellation, cancellation support copy and consistent ordering of queued retries/new submissions at second precision. The backend agent reports 6 focused API tests/83 assertions, 5 billing/admission tests/18 assertions and the publication failure regression passing; earlier detail/failure-handler checks also passed. SQL lock behavior still needs runtime Postgres evidence.
-- CR1-CR7: panel correction report and rereview pending.
+- CR1-CR7: addressed through `833f1c3`, including the follow-up guards in `cd2a00f`. Session storage compares and clears within its queue, recovery commits retain operation/page ownership, cancellation rereads state after awaited cleanup, reset broadcasts to all owned tabs and serializes the persistent recovery flag, and live submissions remain preparing until their POST resolves. Exact identities replace legacy routing. Partial Watch retains source/search/Copy and scroll position; queued stages remain pending. The independent runtime regressions first reproduced metadata loss, stale cancellation notifications and missing reset broadcasts, then passed with the fixes. Additional runtime tests cover a delayed POST and delayed old content history during newer generation/navigation.
 
-Final integrated automated evidence and verdict remain pending panel completion.
+## Final evidence and verdict
+
+- Root `scripts/agent/check.ps1` passed at `375cfc8`: documentation, contracts, 439 backend tests/3,107 assertions, 218 extension tests, TypeScript compile and Chrome production build.
+- The final extension-only correction at `69c883b` was rereviewed and validated in the integration worktree: 219 tests in 30 files, TypeScript compile and production build all passed. Backend/contracts did not change after the root harness pass.
+- Final documentation lint and Git whitespace checks passed before the delivery commit. No browser tests, live services or paid providers were used.
+- Browser behavior, production Postgres concurrency, real Redis outage ambiguity and external-provider timing still require the user's runtime validation. The manual checklist records these limits; passing fake-service/SQLite tests does not establish them.
+
+Overall quality: good to merge. The implementation uses the existing module, storage and run-ledger boundaries. The background entrypoint remains large, but named functions and explicit ownership guards keep the reviewed paths inspectable. No rewrite, new dependency or speculative state framework is needed for this scope.
+
+Complete improvement list: CR1-CR14 and the five Ponytail cuts above are resolved; no actionable review finding remains open. The early helper-only coverage and legacy fallbacks had the signs of rushed implementation. The corrected paths now have focused integration evidence and are maintainable within the existing architecture. This verdict covers code readiness; the user's manual validation remains pending.
+
+Final Ponytail verdict: Lean already. Ship.

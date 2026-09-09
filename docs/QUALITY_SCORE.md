@@ -15,6 +15,8 @@ Update this file when meaningful product, architecture, reliability, security, o
 
 ## Known Gaps
 
+- 2026-09-08 remaining smoothening delivery: all 19 included findings and code/Ponytail review corrections are implemented on `codex/remaining-smoothening-fixes`. The root harness passed 439 backend tests/3,107 assertions and contracts; final extension validation passed 219 tests, compile and build. See `smoothening-review-2026-09-08.md` and `smoothening-manual-checklist.md`. Browser behavior, runtime Postgres locks, Redis outage ambiguity and provider timing remain unverified by this delivery; the user owns manual validation.
+
 - 2026-09-08 partial-lyrics confirmation and AI merge: implementation and regression sources were updated and statically reviewed. Final tests, builds, and browser/provider checks are owned by the user at their explicit request; baseline results below do not validate this change.
 
 - 2026-09-06 Quick fix refresh validation: 26 focused backend/provider/contract tests passed (121 assertions), a live Japanese-to-English refresh returned translation, readings and meanings in 7.53 seconds, and extension tests/compile/build passed. The 2026-09-08 baseline harness passed all 412 backend tests (2,867 assertions) and 172 extension tests; those earlier cancellation failures no longer reproduce.

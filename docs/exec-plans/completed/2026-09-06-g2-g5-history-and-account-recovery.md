@@ -7,7 +7,7 @@ Last updated: 2026-09-07
 
 ## Goal
 
-Historical pre-commit work log. Current authorization is governed by `docs/exec-plans/active/2026-09-07-resolve-smoothening-ux-audit.md`: all password work is excluded, including remaining hints/minlength/tests, which have now been withdrawn. Earlier validation totals below are retained as historical evidence only. G2's navigation-only solution resolves the report's permitted minimal acceptance; G5/U4 retain non-password subsets only.
+Historical pre-commit work log. Current authorization is governed by `docs/exec-plans/completed/2026-09-07-resolve-smoothening-ux-audit.md`: all password work is excluded, including remaining hints/minlength/tests, which have now been withdrawn. Earlier validation totals below are retained as historical evidence only. G2's navigation-only solution resolves the report's permitted minimal acceptance; G5/U4 retain non-password subsets only.
 
 Mitigate misleading History Retry (G2) with navigation-only links and explicit review instructions. Partially mitigate G5 with account/billing navigation and honest preferences, plus password and connection-expiry clarity (U4). Recovery/verification UX additions were withdrawn at the user's request.
 

@@ -1,12 +1,12 @@
 # Smoothening UX Audit
 
-Consolidation checkpoint (2026-09-08): all foundation and worker commits, plus the unfinished R11 draft `eb6d384`, are now on `smoothening-fixes` in the main repository. Temporary audit worktrees/branches are retired; the lyrics checkout is left untouched. See [`../handoff.md`](../handoff.md) for commit mapping, safe branch-switch instructions and remaining work. All finding-local updates are included below. New code is untested at user request; password/verification work remains excluded.
+Delivery checkpoint (2026-09-08): all 19 remaining included fixes are implemented and reviewed at `69c883b` on `codex/remaining-smoothening-fixes` in `C:/transcribed-subtitle-smoothening`, including the lyrics merge `4a25575`. Validation passed: 439 backend tests (3,107 assertions), contract checks, and 219 extension tests plus compile and build. User browser validation remains pending. See the [handoff](../handoff.md), [final review](smoothening-review-2026-09-08.md), and [manual checklist](smoothening-manual-checklist.md). This delivery status supersedes historical pending and untested notes below; original audit observations remain baseline evidence. R24 and the password/verification portions of G5/U4 remain excluded.
 
 Date: 2026-09-06
 
 Baseline: `smoothening` at `4969225d80731fc3f5ad95d2a9a3f87b7d685487`.
 
-Original audit worktree (retired after consolidation): `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`. Current source: branch `smoothening-fixes` in `C:\transcribed-subtitle-extension`.
+Original audit worktree (retired after consolidation): `C:\Users\jaden\AppData\Local\Temp\opencode\smoothening-ux-audit`. Delivery source: branch `codex/remaining-smoothening-fixes` in `C:/transcribed-subtitle-smoothening`.
 
 Follow-up: the G3/G4 and G2/G5/U4 implementation and validation below were added after the read-only audit. Other findings and the original audit evidence remain baseline observations.
 
@@ -14,7 +14,7 @@ Follow-up: the G3/G4 and G2/G5/U4 implementation and validation below were added
 
 This documentation-only checkpoint preserves the original audit and historical evidence from the uncommitted worktree. It does not contain the implementation: following individual G3, G4, G2, G5, and U4 commits package that work with per-item status updates. Historical suite totals below are not claims about this checkpoint's code tree.
 
-- Branch: `audit/smoothening-fixes`, isolated audit worktree only. Overall plan: `docs/exec-plans/active/2026-09-07-resolve-smoothening-ux-audit.md`.
+- Branch: `audit/smoothening-fixes`, isolated audit worktree only. Overall plan: `docs/exec-plans/completed/2026-09-07-resolve-smoothening-ux-audit.md`.
 - User now authorizes every audit item except password-related work, one fix per commit. Foundation task stops after packaging existing changes; remaining batches are not started.
 - Explicit exclusions: R24; password recovery and email-verification portions of G5; password requirements/hints portion of U4. Our remaining register/reset hints, minlength attributes, and associated test were withdrawn before the first commit. Pre-existing auth routes, enforcement, password rules, and security are untouched.
 - G2's honest navigation-only action and G3's visible manual GET refresh are accepted scoped resolutions, not reasons to invent true retry or automatic polling. Browser validation remains deferred, and runtime limitations remain documented.
