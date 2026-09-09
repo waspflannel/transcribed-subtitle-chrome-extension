@@ -48,6 +48,7 @@ export default defineContentScript({
     let studyFocusActive = false;
     let studyPauseOwned = false;
     let studyPauseRequestVideo: HTMLVideoElement | null = null;
+    let studyPauseCycle = 0;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
@@ -693,6 +694,7 @@ export default defineContentScript({
     }
 
     function beginStudyHover(): void {
+      studyPauseCycle += 1;
       studyHoverActive = true;
       pauseVideoForStudy();
     }
@@ -703,6 +705,7 @@ export default defineContentScript({
     }
 
     function beginStudyFocus(): void {
+      studyPauseCycle += 1;
       studyFocusActive = true;
       pauseVideoForStudy();
     }
@@ -750,11 +753,20 @@ export default defineContentScript({
       const video = activeVideo;
       const cue = activeCue;
       const epoch = stateEpoch;
+      const cycle = studyPauseCycle;
       const playResult = video.play();
+      const canResumeHold = (): boolean =>
+        activeVideo === video
+        && stateEpoch === epoch
+        && activeCue === cue
+        && studyPauseCycle === cycle
+        && !studyPauseOwned
+        && !video.paused
+        && !video.ended;
 
       if (playResult && typeof playResult.catch === 'function') {
         playResult.then(() => {
-          if (activeVideo !== video || stateEpoch !== epoch || activeCue !== cue) return;
+          if (!canResumeHold()) return;
           cueHold.resume(cue, true);
         }).catch((error: unknown) => {
           console.warn('extension.subtitle_study_resume_failed', {
@@ -762,7 +774,7 @@ export default defineContentScript({
           });
         });
       } else {
-        if (activeVideo === video && stateEpoch === epoch && activeCue === cue) {
+        if (canResumeHold()) {
           cueHold.resume(cue, true);
         }
       }

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { SubtitleCue, TrackResponse } from '../utils/contracts';
@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     listeners,
+    cueChange: null as ((change: { activeCue: SubtitleCue | null }) => void) | null,
     sendMessage: vi.fn(async (message: { type?: string }) => {
       if (message.type === 'content.getState') {
         return { settings: DEFAULT_EXTENSION_SETTINGS, subtitleState: { type: 'no-track' } };
@@ -51,6 +52,7 @@ vi.mock('../utils/webvtt-track', () => ({
     track: { cues: SubtitleCue[] };
     onCueChange: (change: { activeCue: SubtitleCue | null }) => void;
   }) => {
+    mocks.cueChange = options.onCueChange;
     options.onCueChange({ activeCue: options.track.cues[0] ?? null });
     return vi.fn();
   }),
@@ -60,8 +62,16 @@ vi.mock('../utils/webvtt-track', () => ({
 describe('content study pause ownership', () => {
   beforeEach(() => {
     mocks.listeners.length = 0;
+    mocks.cueChange = null;
     mocks.sendMessage.mockClear();
     vi.stubGlobal('defineContentScript', (config: unknown) => config);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    document.body.innerHTML = '';
   });
 
   it('keeps queued own pause events, handles hover and focus overlap, and respects manual pause', async () => {
@@ -73,6 +83,7 @@ describe('content study pause ownership', () => {
     let pauseCalls = 0;
     let playCalls = 0;
     let queuedPauseEvents = 0;
+    const playResolvers: Array<() => void> = [];
     setVideoPaused(video, false);
     Object.defineProperty(video, 'ended', { configurable: true, value: false });
     video.pause = () => {
@@ -83,7 +94,7 @@ describe('content study pause ownership', () => {
     video.play = () => {
       playCalls += 1;
       setVideoPaused(video, false);
-      return Promise.resolve();
+      return new Promise<void>((resolve) => playResolvers.push(resolve));
     };
 
     let invalidate: (() => void) | null = null;
@@ -98,6 +109,8 @@ describe('content study pause ownership', () => {
     const onMessage = mocks.listeners[0];
     expect(onMessage).toBeDefined();
     onMessage({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState() }, {}, () => {});
+    expect(mocks.cueChange).toBeTruthy();
+    mocks.cueChange!({ activeCue: null });
 
     const token = document
       .querySelector('#tse-overlay-host')
@@ -116,12 +129,18 @@ describe('content study pause ownership', () => {
     const outside = document.createElement('button');
     document.body.append(outside);
     outside.focus();
-    await Promise.resolve();
     expect(playCalls).toBe(1);
+    expect(playResolvers).toHaveLength(1);
 
     token!.focus();
     expect(pauseCalls).toBe(2);
     flushPause(video, () => { queuedPauseEvents -= 1; });
+    expect(queuedPauseEvents).toBe(0);
+    playResolvers.shift()!();
+    await Promise.resolve();
+    vi.advanceTimersByTime(1800);
+    expect(document.querySelector('#tse-overlay-host')?.shadowRoot?.querySelector('[data-token-index]')).toBeTruthy();
+
     setVideoPaused(video, false);
     video.dispatchEvent(new Event('play'));
     setVideoPaused(video, true);
