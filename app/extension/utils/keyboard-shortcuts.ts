@@ -136,8 +136,9 @@ export function isEditableShortcutTarget(
   event: Pick<KeyboardEvent, 'target' | 'composedPath'>,
 ): boolean {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
+  const target = path.find((candidate) => isElementLike(candidate));
 
-  return path.some((candidate) => isElementLike(candidate) && isEditableElement(candidate));
+  return target !== undefined && (isEditableElement(target) || isRoleTextbox(target));
 }
 
 interface ElementLike {
@@ -147,7 +148,14 @@ interface ElementLike {
 }
 
 function isElementLike(value: unknown): value is ElementLike {
-  return typeof value === 'object' && value !== null;
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.tagName === 'string'
+    || 'isContentEditable' in candidate
+    || typeof candidate.closest === 'function';
 }
 
 function isEditableElement(element: ElementLike): boolean {
@@ -161,9 +169,9 @@ function isEditableElement(element: ElementLike): boolean {
     return true;
   }
 
-  if (element.closest?.('[contenteditable], [role="textbox"], [aria-multiline="true"]')) {
-    return true;
-  }
-
   return false;
+}
+
+function isRoleTextbox(element: ElementLike): boolean {
+  return Boolean(element.closest?.('[role="textbox"]'));
 }

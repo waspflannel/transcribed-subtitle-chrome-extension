@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+
+import { describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
+import { OverlayShell } from '../utils/overlay';
 import { renderOverlayContent } from '../utils/overlay/overlay-render';
 import { overlayStyles } from '../utils/overlay/overlay-styles';
 import type { OverlayRenderState } from '../utils/overlay/types';
 import type { TrackResponse } from '../utils/contracts';
+
+vi.mock('wxt/browser', () => ({ browser: { runtime: { getURL: () => '' } } }));
 
 describe('renderOverlayContent', () => {
   it('renders the active cue source text, translation, and token learning metadata', () => {
@@ -112,6 +117,7 @@ describe('renderOverlayContent', () => {
     expect(pinnedHtml).toContain('Common greeting.');
     expect(pinnedHtml).not.toContain('null');
     expect(pinnedHtml).toContain('data-focus-key="cue-0001:0"');
+    expect(pinnedHtml).toContain('data-focus-key="token-detail-close"');
     expect(pinnedHtml).toContain('data-return-focus-key="cue-0001:0"');
   });
 
@@ -195,6 +201,78 @@ describe('renderOverlayContent', () => {
     expect(overlayStyles).toContain('max-height: min(60vh, 420px)');
     expect(overlayStyles).toContain('overflow-y: auto');
     expect(overlayStyles).toContain('var(--popover-shift, 0px)');
+    expect(overlayStyles).toContain('var(--popover-shift-y, 0px)');
+  });
+
+  it('keeps study focus separate from pointer preview and restores focus from detail', () => {
+    const video = document.createElement('video');
+    video.getBoundingClientRect = () => ({
+      bottom: 400,
+      height: 300,
+      left: 100,
+      right: 700,
+      toJSON: () => ({}),
+      top: 100,
+      width: 600,
+      x: 100,
+      y: 100,
+    });
+    document.body.append(video);
+
+    let previewStarts = 0;
+    let previewEnds = 0;
+    let focusStarts = 0;
+    let focusEnds = 0;
+    const shell = new OverlayShell(document, {
+      onTokenPreview: () => { previewStarts += 1; },
+      onTokenPreviewEnd: () => { previewEnds += 1; },
+      onTokenFocus: () => { focusStarts += 1; },
+      onTokenBlur: () => { focusEnds += 1; },
+    });
+
+    shell.update(readyState());
+    previewEnds = 0;
+    focusEnds = 0;
+    const shadowRoot = document.querySelector('#tse-overlay-host')?.shadowRoot;
+    const token = shadowRoot?.querySelector<HTMLButtonElement>('[data-token-index]');
+    expect(token).toBeTruthy();
+
+    token!.dispatchEvent(new Event('pointerenter'));
+    expect(previewStarts).toBe(1);
+    token!.click();
+    expect(previewStarts).toBe(1);
+
+    const content = shadowRoot?.querySelector<HTMLElement>('[data-overlay-content]');
+    const currentToken = content?.querySelector<HTMLButtonElement>('[data-token-index]');
+    const close = content?.querySelector<HTMLButtonElement>('[data-close-token-detail]');
+    expect(close).toBeTruthy();
+
+    currentToken!.focus();
+    close!.focus();
+    currentToken!.dispatchEvent(new FocusEvent('blur', { relatedTarget: close }));
+    expect(focusEnds).toBe(0);
+    expect(focusStarts).toBe(1);
+
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    expect(focusEnds).toBe(1);
+    outside.remove();
+
+    close!.click();
+    expect(shadowRoot?.activeElement?.getAttribute('data-focus-key')).toBe('cue-0001:0');
+
+    previewEnds = 0;
+    focusEnds = 0;
+    const nextCue = { ...readyState().activeCue!, cueId: 'cue-0002' };
+    shell.update(readyState(trackResponse({ cues: [nextCue] })));
+    expect(previewEnds).toBe(1);
+    expect(focusEnds).toBe(1);
+
+    shell.unmount();
+    expect(previewEnds).toBe(2);
+    expect(focusEnds).toBe(2);
+    video.remove();
   });
 
   it('hides the partial translation when translation display is disabled', () => {

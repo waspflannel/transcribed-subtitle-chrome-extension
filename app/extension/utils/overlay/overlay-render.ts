@@ -220,7 +220,7 @@ function renderTokenInteraction(
       <div class="token-popover">
         <div class="token-popover-header">
           <span class="token-popover-title">${escapeHtml(token.text)}</span>
-          <button class="icon-button" type="button" data-close-token-detail data-return-focus-key="${escapeHtml(
+          <button class="icon-button" type="button" data-close-token-detail data-focus-key="token-detail-close" data-return-focus-key="${escapeHtml(
             `${cue.cueId}:${token.index}`,
           )}" aria-label="Close token detail">x</button>
         </div>
@@ -244,7 +244,7 @@ function renderTokenInteraction(
     <div class="token-popover">
       <div class="token-popover-header">
         <span class="token-popover-title">${escapeHtml(token.text)}</span>
-        <button class="icon-button" type="button" data-close-token-detail data-return-focus-key="${escapeHtml(
+        <button class="icon-button" type="button" data-close-token-detail data-focus-key="token-detail-close" data-return-focus-key="${escapeHtml(
           `${cue.cueId}:${token.index}`,
         )}" aria-label="Close token detail">x</button>
       </div>
