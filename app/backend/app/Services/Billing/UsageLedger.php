@@ -296,7 +296,7 @@ final class UsageLedger
 
         return [
             'estimatedMinutes' => $this->estimatedMinutes($job->video_duration_seconds),
-            'reservedMinutes' => $this->reservedMinutesForJob($job),
+            'reservedMinutes' => max(0, (int) $events->sum('reserved_minutes_delta')),
             'chargedMinutes' => max(0, (int) $events->sum('used_minutes_delta')),
             'releasedMinutes' => max(0, -((int) $events
                 ->where('event_type', 'refund')

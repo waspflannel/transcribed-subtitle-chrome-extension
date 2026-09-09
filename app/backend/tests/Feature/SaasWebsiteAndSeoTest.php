@@ -412,6 +412,27 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText('Auto detect to English');
     }
 
+    public function test_cancelled_job_detail_shows_cancellation_outcome(): void
+    {
+        $user = User::factory()->create();
+        $job = SubtitleJob::factory()->for($user)->create([
+            'status' => 'cancelled',
+            'stage' => 'acquiring-audio',
+            'error_code' => 'generation_cancelled',
+            'error_message' => 'Generation was cancelled. Reserved minutes were released.',
+        ]);
+
+        $this
+            ->actingAs($user)
+            ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
+            ->assertOk()
+            ->assertSeeText('Cancellation')
+            ->assertSeeText('Cancellation code')
+            ->assertSeeText('generation_cancelled')
+            ->assertSeeText('Reserved minutes were released.')
+            ->assertDontSeeText('Failure code');
+    }
+
     public function test_failed_unknown_duration_shows_estimate_and_settlement_separately(): void
     {
         $user = User::factory()->create([

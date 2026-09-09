@@ -77,10 +77,14 @@
         </x-ui.panel>
 
         @if (in_array($job->status, ['failed', 'cancelled'], true))
-            <x-ui.panel class="failure-panel" title="Failure" description="Share this stable failure code with support.">
+            <x-ui.panel
+                class="failure-panel"
+                title="{{ $job->status === 'cancelled' ? 'Cancellation' : 'Failure' }}"
+                description="{{ $job->status === 'cancelled' ? 'Generation was cancelled; share this outcome with support.' : 'Share this stable failure code with support.' }}"
+            >
                 <dl class="metric-grid">
                     <div>
-                        <dt>Failure code</dt>
+                        <dt>{{ $job->status === 'cancelled' ? 'Cancellation code' : 'Failure code' }}</dt>
                         <dd>{{ $job->error_code ?? 'unknown' }}</dd>
                     </div>
                     <div>

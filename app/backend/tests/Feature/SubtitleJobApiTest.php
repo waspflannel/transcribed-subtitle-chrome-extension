@@ -24,10 +24,12 @@ use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
+use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
@@ -40,6 +42,8 @@ use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Connectors\ConnectorInterface;
+use Illuminate\Queue\NullQueue;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -200,6 +204,14 @@ class SubtitleJobApiTest extends TestCase
             ->where('event_type', 'refund')
             ->count());
 
+        (new AcquireSubtitleAudio($running->id, (string) $running->run_id))
+            ->handle(app(SubtitleGenerationPipeline::class));
+
+        $this->assertSame(0, $this->audioSource->calls);
+        $this->assertDatabaseMissing('subtitle_job_artifacts', ['subtitle_job_id' => $running->id]);
+        $this->assertDatabaseMissing('subtitle_tracks', ['subtitle_job_id' => $running->id]);
+        $this->assertSame(0, $ledger->usageForJob($running->fresh())['chargedMinutes']);
+
         $this
             ->withExtensionAuth($installId, $user)
             ->deleteJson('/v1/subtitle-jobs/'.$running->public_id)
@@ -232,6 +244,152 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('cancelled', $job->fresh()->status);
         Queue::assertNothingPushed();
         $this->assertSame(0, $this->audioSource->calls);
+    }
+
+    public function test_generation_cancellation_is_owner_scoped_and_rejects_terminal_jobs(): void
+    {
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $ownerInstallId = $this->installId('o');
+        $intruderInstallId = $this->installId('i');
+        $ownedJob = SubtitleJob::factory()->for($owner)->create([
+            'install_id' => $ownerInstallId,
+            'status' => 'running',
+            'stage' => 'preparing',
+        ]);
+
+        $this
+            ->withExtensionAuth($intruderInstallId, $intruder)
+            ->deleteJson('/v1/subtitle-jobs/'.$ownedJob->public_id)
+            ->assertNotFound();
+
+        $this->assertSame('running', $ownedJob->fresh()->status);
+
+        $completedJob = SubtitleJob::factory()->for($owner)->create([
+            'install_id' => $ownerInstallId,
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+        ]);
+
+        $this
+            ->withExtensionAuth($ownerInstallId, $owner)
+            ->deleteJson('/v1/subtitle-jobs/'.$completedJob->public_id)
+            ->assertStatus(409)
+            ->assertJsonPath('error.code', 'generation_not_cancellable');
+    }
+
+    public function test_generation_publication_failure_settles_created_run_and_retry_dispatches_once(): void
+    {
+        $queue = $this->configureThrowingQueue();
+        $user = User::factory()->create();
+        $installId = $this->installId('p');
+        $payload = $this->validPayload(['youtubeVideoId' => 'pubfail0001']);
+
+        $failedResponse = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $payload)
+            ->assertAccepted()
+            ->assertJsonPath('status', 'failed')
+            ->assertJsonPath('errorCode', 'queue_publication_failed')
+            ->assertJsonPath('message', 'Generation could not be queued. Try again.');
+
+        $job = SubtitleJob::query()->where('public_id', $failedResponse->json('jobId'))->firstOrFail();
+        $ledger = app(UsageLedger::class);
+
+        $this->assertSame('failed', $job->status);
+        $this->assertSame(0, $ledger->reservedMinutesForJob($job));
+        $this->assertSame(0, (int) SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->where('status', 'running')
+            ->count());
+        $this->assertSame(1, $queue->pushes);
+
+        $failedRunId = $job->run_id;
+        $queue->shouldThrow = false;
+
+        $retryResponse = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $payload)
+            ->assertAccepted()
+            ->assertJsonPath('jobId', $job->public_id)
+            ->assertJsonPath('status', 'running');
+
+        $retryJob = $job->fresh();
+        $this->assertNotSame($failedRunId, $retryJob->run_id);
+        $this->assertSame($retryJob->public_id, $retryResponse->json('jobId'));
+        $this->assertSame(4, $ledger->reservedMinutesForJob($retryJob));
+        $this->assertSame(1, (int) SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->where('status', 'running')
+            ->count());
+        $this->assertSame(2, $queue->pushes);
+    }
+
+    public function test_promotion_publication_failure_settles_only_the_promoted_run_and_retry_dispatches_once(): void
+    {
+        $queue = $this->configureThrowingQueue();
+        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
+
+        $user = User::factory()->create();
+        $installId = $this->installId('m');
+        $this->withExtensionAuth($installId, $user);
+        $ledger = app(UsageLedger::class);
+        $plans = app(BillingPlanCatalog::class);
+        $period = $ledger->periodForUser($user);
+        $this->assertNotNull($period);
+        $running = SubtitleJob::factory()->for($user)->create([
+            'install_id' => $installId,
+            'status' => 'running',
+            'stage' => 'preparing',
+            'video_duration_seconds' => 213,
+        ]);
+        $ledger->reserveForJob($running, $user, $plans->requirePlan('base'), 4);
+        $firstPayload = $this->validPayload(['youtubeVideoId' => 'promofail01']);
+        $secondPayload = $this->validPayload(['youtubeVideoId' => 'promofail02']);
+
+        $firstResponse = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $firstPayload)
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued');
+        $secondResponse = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $secondPayload)
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued');
+        $first = SubtitleJob::query()->where('public_id', $firstResponse->json('jobId'))->firstOrFail();
+        $second = SubtitleJob::query()->where('public_id', $secondResponse->json('jobId'))->firstOrFail();
+
+        $running->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
+        $ledger->releaseReservation($running, 'test');
+
+        app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
+
+        $this->assertSame('failed', $first->fresh()->status);
+        $this->assertSame('queue_publication_failed', $first->fresh()->error_code);
+        $this->assertSame(0, $ledger->reservedMinutesForJob($first));
+        $this->assertSame('queued', $second->fresh()->status);
+        $this->assertSame(0, (int) SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->where('status', 'running')
+            ->count());
+        $this->assertSame(1, $queue->pushes);
+
+        $queue->shouldThrow = false;
+
+        $retry = $this
+            ->withExtensionAuth($installId, $user)
+            ->postJson('/v1/subtitle-jobs', $firstPayload)
+            ->assertAccepted()
+            ->assertJsonPath('jobId', $first->public_id)
+            ->assertJsonPath('status', 'running');
+
+        $this->assertSame('running', $first->fresh()->status);
+        $this->assertSame($first->public_id, $retry->json('jobId'));
+        $this->assertSame('queued', $second->fresh()->status);
+        $this->assertSame(4, $ledger->reservedMinutesForJob($first->fresh()));
+        $this->assertSame(2, $queue->pushes);
     }
 
     public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
@@ -2648,6 +2806,28 @@ class SubtitleJobApiTest extends TestCase
         ];
     }
 
+    private function configureThrowingQueue(): ThrowingSubtitleQueue
+    {
+        $queue = new ThrowingSubtitleQueue;
+        $connector = new class($queue) implements ConnectorInterface
+        {
+            public function __construct(private readonly ThrowingSubtitleQueue $queue) {}
+
+            public function connect(array $config): ThrowingSubtitleQueue
+            {
+                return $this->queue;
+            }
+        };
+        Queue::extend('throwing', fn (): ConnectorInterface => $connector);
+        config([
+            'queue.default' => 'throwing',
+            'queue.connections.throwing' => ['driver' => 'throwing'],
+            'subtitles.queue.connection' => 'throwing',
+        ]);
+
+        return $queue;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -2753,6 +2933,25 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, DB::table('jobs')->count(), Artisan::output());
     }
 }
+
+final class ThrowingSubtitleQueue extends NullQueue
+{
+    public bool $shouldThrow = true;
+
+    public int $pushes = 0;
+
+    public function push($job, $data = '', $queue = null)
+    {
+        $this->pushes++;
+
+        if ($this->shouldThrow) {
+            throw new \RuntimeException('Queue publication unavailable.');
+        }
+
+        return null;
+    }
+}
+
 class RecordingYouTubeAudioSource extends YouTubeAudioSource
 {
     public int $calls = 0;
