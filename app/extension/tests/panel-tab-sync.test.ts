@@ -28,11 +28,11 @@ describe('windowId validation on panel requests', () => {
   });
 
   it('accepts panel.seekToCue with a numeric windowId', () => {
-    expect(isRuntimeMessage({ type: 'panel.seekToCue', youtubeVideoId: 'v', cueId: 'c', mode: 'jump', windowId: 3 })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 1, youtubeVideoId: 'v', trackId: 'track', cueId: 'c', mode: 'jump', windowId: 3 })).toBe(true);
   });
 
   it('rejects panel.seekToCue with a non-numeric windowId', () => {
-    expect(isRuntimeMessage({ type: 'panel.seekToCue', youtubeVideoId: 'v', cueId: 'c', mode: 'jump', windowId: 'x' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.seekToCue', tabId: 1, youtubeVideoId: 'v', trackId: 'track', cueId: 'c', mode: 'jump', windowId: 'x' })).toBe(false);
   });
 });
 

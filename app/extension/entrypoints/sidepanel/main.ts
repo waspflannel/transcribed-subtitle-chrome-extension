@@ -767,6 +767,7 @@ async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
         type: 'panel.login',
         email: accountEmailInput.value,
         password: accountPasswordInput.value,
+        ...(typeof panelWindowId === 'number' ? { windowId: panelWindowId } : {}),
       },
       'account',
       'mutation',
@@ -811,11 +812,13 @@ async function sendPanelRequest(
   const ordering = beginPanelRequest(panelRequestState, kind);
   panelRequestState = ordering.state;
   const startedDuringAccountAction = accountActionsInFlight > 0;
+  const requestAccountId = latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null;
   const actionVersion = accountAction ? ++accountActionVersion : accountActionVersion;
   if (accountAction) accountActionsInFlight += 1;
   const canApply = (): boolean => accountAction
     ? actionVersion === accountActionVersion
     : !startedDuringAccountAction && accountActionsInFlight === 0
+      && (latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null) === requestAccountId
       && canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
@@ -950,11 +953,19 @@ function setLanguagesExpanded(expanded: boolean): void {
 }
 
 function showPanelState(state: PanelState): void {
+  const previousAccountId = latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null;
+  const nextAccountId = state.accountState.status === 'authenticated' ? state.accountState.id : null;
   const previousStateType = latestState?.subtitleState.type;
   const previousCorrectionStatus = latestState?.lyricsCorrection?.status;
   const previousTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
   const hadPartialConfirmation = partialLyricsConfirmation !== null;
   latestState = state;
+
+  if (previousAccountId !== nextAccountId) {
+    correctionCancelError.hidden = true;
+    correctionCancelError.textContent = '';
+    generationCancelFeedback = null;
+  }
 
   const pageStatus = state.pageStatus;
   const settings = state.settings;
@@ -1215,7 +1226,7 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
     progressPercent.textContent = `${progress.percent}%`;
     announceProgress(queued ? 'Queued' : 'Generating', progress.activityLabel);
     progressBar.style.width = `${progress.percent}%`;
-    progressStages.innerHTML = stageChecklistHtml(subtitleState.stage);
+    progressStages.innerHTML = stageChecklistHtml(subtitleState.stage, subtitleState.status ?? 'running');
     progressCopy.textContent = queued
       ? 'Waiting for a generation slot. You can close this panel — generation keeps going.'
       : 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
@@ -1254,8 +1265,11 @@ function lyricsCorrectionStageChecklistHtml(stage: LyricsCorrectionStatus['stage
   `).join('');
 }
 
-function stageChecklistHtml(stage: PanelState['jobHistory'][number]['stage']): string {
-  return stageTimeline({ stage, status: 'running' })
+function stageChecklistHtml(
+  stage: PanelState['jobHistory'][number]['stage'],
+  status: 'queued' | 'running',
+): string {
+  return stageTimeline({ stage, status })
     .map(
       (item) => `
         <li class="stage ${item.state}"${item.state === 'current' ? ' aria-current="step"' : ''}>
