@@ -11,6 +11,7 @@ use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
 use App\Support\PostgresErrors;
 use App\Support\SubtitleProcessingVersion;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -202,6 +203,13 @@ class SubtitleJobService
             return $job;
         }
 
+        if ($job->status === 'queued'
+            && in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
+            $this->admission->promoteQueuedJobs($user->id);
+
+            return $job->refresh()->load('track');
+        }
+
         // Queued jobs are dispatched later by SubtitleJobAdmission when a
         // running slot frees up.
         if ($job->status === 'running'
@@ -309,6 +317,8 @@ class SubtitleJobService
         bool $includeTranslation,
         bool $startImmediately,
     ): SubtitleJob {
+        $createdAt = $startImmediately ? now() : $this->nextQueuedSubmissionAt($user);
+
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
             'user_id' => $user->id,
@@ -330,6 +340,7 @@ class SubtitleJobService
             'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
         ]);
+        $job->forceFill(['created_at' => $createdAt])->saveQuietly();
 
         $this->tracer->jobEvent($job, 'job.created', [
             'stage' => 'preparing',
@@ -364,6 +375,7 @@ class SubtitleJobService
         // old run's audio workspace is reclaimed here.
         $oldRunId = (string) $job->run_id;
         DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($oldRunId));
+        $createdAt = $startImmediately ? now() : $this->nextQueuedSubmissionAt($user);
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
@@ -383,7 +395,7 @@ class SubtitleJobService
             'error_message' => null,
             'install_id' => $installId,
             'expires_at' => null,
-            'created_at' => now(),
+            'created_at' => $createdAt,
         ])->save();
 
         $this->tracer->jobEvent($job->refresh(), 'job.reset', [
@@ -394,6 +406,26 @@ class SubtitleJobService
             'generation_tier' => $job->generation_tier,
             'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
+    }
+
+    private function nextQueuedSubmissionAt(User $user): Carbon
+    {
+        $createdAt = now();
+        $latestQueuedAt = SubtitleJob::query()
+            ->whereBelongsTo($user)
+            ->where('status', 'queued')
+            ->max('created_at');
+
+        if ($latestQueuedAt === null) {
+            return $createdAt;
+        }
+
+        $latestQueuedAt = Carbon::parse($latestQueuedAt);
+
+        // Keep new and reset rows ordered behind waiting submissions at database precision.
+        return $latestQueuedAt->greaterThanOrEqualTo($createdAt->copy()->startOfSecond())
+            ? $latestQueuedAt->addSecond()
+            : $createdAt;
     }
 
     private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string

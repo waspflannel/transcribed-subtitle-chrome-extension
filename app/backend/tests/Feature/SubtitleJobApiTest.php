@@ -44,6 +44,7 @@ use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\NullQueue;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -383,13 +384,116 @@ class SubtitleJobApiTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $firstPayload)
             ->assertAccepted()
             ->assertJsonPath('jobId', $first->public_id)
-            ->assertJsonPath('status', 'running');
+            ->assertJsonPath('status', 'queued');
 
-        $this->assertSame('running', $first->fresh()->status);
+        $this->assertSame('queued', $first->fresh()->status);
         $this->assertSame($first->public_id, $retry->json('jobId'));
-        $this->assertSame('queued', $second->fresh()->status);
+        $this->assertSame('running', $second->fresh()->status);
         $this->assertSame(4, $ledger->reservedMinutesForJob($first->fresh()));
         $this->assertSame(2, $queue->pushes);
+
+        $second->fresh()->forceFill([
+            'status' => 'completed',
+            'stage' => 'finalizing',
+            'progress_percent' => 100,
+        ])->save();
+        $ledger->releaseReservation($second->fresh(), 'test');
+        app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
+
+        $this->assertSame('running', $first->fresh()->status);
+        $this->assertSame(3, $queue->pushes);
+    }
+
+    public function test_retry_and_new_submission_keep_fifo_within_one_clock_second(): void
+    {
+        config([
+            'subtitles.tiers.plans.base.generation_concurrency' => 1,
+            'subtitles.tiers.plans.base.submission_limit' => 5,
+        ]);
+        Queue::fake();
+        Carbon::setTestNow('2026-09-08 12:00:00');
+
+        try {
+            $user = User::factory()->create();
+            $installId = $this->installId('f');
+            $retryPayload = $this->validPayload(['youtubeVideoId' => 'retry000001']);
+            $oldQueuedPayload = $this->validPayload(['youtubeVideoId' => 'older000001']);
+            $newPayload = $this->validPayload(['youtubeVideoId' => 'newer000001']);
+            $processingVersion = SubtitleJobService::processingVersionFor(
+                $retryPayload['enrichmentMode'],
+                $retryPayload['includeRomanization'],
+                $retryPayload['includeTranslation'],
+            );
+
+            SubtitleJob::factory()->for($user)->create([
+                'install_id' => $installId,
+                'status' => 'running',
+                'stage' => 'preparing',
+            ]);
+            $failedLowId = SubtitleJob::factory()->for($user)->create([
+                'install_id' => $installId,
+                'youtube_video_id' => $retryPayload['youtubeVideoId'],
+                'youtube_url' => $retryPayload['youtubeUrl'],
+                'processing_version' => $processingVersion,
+                'include_romanization' => $retryPayload['includeRomanization'],
+                'status' => 'failed',
+                'stage' => 'acquiring-audio',
+                'error_code' => 'internal_error',
+            ]);
+            $olderQueued = SubtitleJob::factory()->for($user)->create([
+                'install_id' => $installId,
+                'youtube_video_id' => $oldQueuedPayload['youtubeVideoId'],
+                'youtube_url' => $oldQueuedPayload['youtubeUrl'],
+                'processing_version' => $processingVersion,
+                'include_romanization' => $oldQueuedPayload['includeRomanization'],
+                'status' => 'queued',
+                'progress_percent' => 0,
+            ]);
+
+            $this
+                ->withExtensionAuth($installId, $user)
+                ->postJson('/v1/subtitle-jobs', $retryPayload)
+                ->assertAccepted()
+                ->assertJsonPath('jobId', $failedLowId->public_id)
+                ->assertJsonPath('status', 'queued');
+
+            $newResponse = $this
+                ->withExtensionAuth($installId, $user)
+                ->postJson('/v1/subtitle-jobs', $newPayload)
+                ->assertAccepted()
+                ->assertJsonPath('status', 'queued');
+            $newQueued = SubtitleJob::query()->where('public_id', $newResponse->json('jobId'))->firstOrFail();
+
+            $this->assertTrue($failedLowId->id < $olderQueued->id);
+            $this->assertTrue($olderQueued->created_at->lt($failedLowId->fresh()->created_at));
+            $this->assertTrue($failedLowId->fresh()->created_at->lt($newQueued->created_at));
+
+            $blocker = SubtitleJob::query()
+                ->whereBelongsTo($user)
+                ->where('status', 'running')
+                ->firstOrFail();
+            $blocker->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
+            app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
+
+            $this->assertSame('running', $olderQueued->fresh()->status);
+            $this->assertSame('queued', $failedLowId->fresh()->status);
+            $this->assertSame('queued', $newQueued->fresh()->status);
+
+            $olderQueued->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
+            app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
+
+            $this->assertSame('running', $failedLowId->fresh()->status);
+            $this->assertSame('queued', $newQueued->fresh()->status);
+
+            $retryJob = $failedLowId->fresh();
+            $retryJob->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
+            app(UsageLedger::class)->releaseReservation($retryJob, 'test');
+            app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
+
+            $this->assertSame('running', $newQueued->fresh()->status);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
