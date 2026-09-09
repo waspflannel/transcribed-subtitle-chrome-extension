@@ -85,11 +85,10 @@ export class CueHoldController {
   }
 
   private cancel(): void {
-    if (this.timeout === null) {
-      return;
+    if (this.timeout !== null) {
+      this.options.view.clearTimeout(this.timeout);
+      this.timeout = null;
     }
-    this.options.view.clearTimeout(this.timeout);
-    this.timeout = null;
     this.holding = false;
   }
 }
