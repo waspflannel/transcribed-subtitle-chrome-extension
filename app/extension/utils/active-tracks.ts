@@ -127,6 +127,44 @@ export async function clearTabOperation(tabId: number): Promise<void> {
   await clear;
 }
 
+export async function clearTabOperationIfMatches(tabId: number, expected: StoredTabOperation): Promise<boolean> {
+  const clear = tabOperationsQueue.then(async () => {
+    const operations = await tabOperationsStorage.getValue();
+    const current = operations[String(tabId)];
+
+    if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
+
+    delete operations[String(tabId)];
+    await tabOperationsStorage.setValue(operations);
+
+    return true;
+  });
+  tabOperationsQueue = clear.then(() => undefined, () => undefined);
+
+  return clear;
+}
+
+export async function updateTabOperationIfMatches(
+  tabId: number,
+  expected: StoredTabOperation,
+  next: StoredTabOperation,
+): Promise<boolean> {
+  const update = tabOperationsQueue.then(async () => {
+    const operations = await tabOperationsStorage.getValue();
+    const current = operations[String(tabId)];
+
+    if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
+
+    operations[String(tabId)] = next;
+    await tabOperationsStorage.setValue(operations);
+
+    return true;
+  });
+  tabOperationsQueue = update.then(() => undefined, () => undefined);
+
+  return update;
+}
+
 export async function clearTabOperations(): Promise<void> {
   tabOperationsEpoch += 1;
   const clear = tabOperationsQueue.then(() => tabOperationsStorage.removeValue());

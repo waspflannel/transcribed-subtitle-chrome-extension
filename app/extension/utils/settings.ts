@@ -16,6 +16,10 @@ const installIdStorage = storage.defineItem<string | null>('local:installId', {
   fallback: null,
 });
 
+const subtitleRecoveryBlockedStorage = storage.defineItem<boolean>('local:subtitleRecoveryBlocked', {
+  fallback: false,
+});
+
 let settingsWriteQueue = Promise.resolve();
 let installIdWriteQueue = Promise.resolve();
 
@@ -50,6 +54,14 @@ export async function clearLocalExtensionState(): Promise<void> {
   settingsWriteQueue = clearSettings.then(() => undefined, () => undefined);
   installIdWriteQueue = clearInstallId.then(() => undefined, () => undefined);
   await Promise.all([clearSettings, clearInstallId]);
+}
+
+export function setSubtitleRecoveryBlocked(blocked: boolean): Promise<void> {
+  return subtitleRecoveryBlockedStorage.setValue(blocked);
+}
+
+export function isSubtitleRecoveryBlocked(): Promise<boolean> {
+  return subtitleRecoveryBlockedStorage.getValue();
 }
 
 export async function getOrCreateInstallId(): Promise<string> {

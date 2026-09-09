@@ -40,12 +40,14 @@ describe('panelPartialTranscriptListHtml', () => {
     { cueId: 'p1', index: 0, startMs: 0, endMs: 1000, sourceText: 'hola', translatedText: 'hello' },
   ];
 
-  it('renders readable source cues with safe navigation and no editing controls', () => {
+  it('renders readable source cues with copy only and no editing controls', () => {
     const html = panelPartialTranscriptListHtml({ cues: partialCues, activeCueId: 'p1', query: '' });
 
     expect(html).toContain('hola');
     expect(html).toContain('aria-current="true"');
-    expect(html).toContain('data-transcript-action="jump"');
+    expect(html).not.toContain('data-transcript-action="jump"');
+    expect(html).toContain('data-transcript-action="copy"');
+    expect(html).not.toContain('hello');
     expect(html).not.toContain('quick-fix');
   });
 });

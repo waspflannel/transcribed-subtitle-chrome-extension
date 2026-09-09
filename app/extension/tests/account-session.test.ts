@@ -81,6 +81,15 @@ describe('extension account session storage', () => {
     expect(await updateStoredAccount({ ...first.account, email: 'old@example.com' }, first.sessionId)).toBeNull();
     await expect(getStoredExtensionSession()).resolves.toEqual(second);
   });
+
+  it('does not clear a newer session through an older conditional logout', async () => {
+    const { clearExtensionSession, getStoredExtensionSession, storeExtensionSession } = await accountSession();
+    const first = await storeExtensionSession(authResponse());
+    const second = await storeExtensionSession({ ...authResponse(), account: { ...authResponse().account, id: '2' } });
+
+    await expect(clearExtensionSession(first.sessionId)).resolves.toBe(false);
+    await expect(getStoredExtensionSession()).resolves.toEqual(second);
+  });
 });
 
 async function accountSession(): Promise<typeof import('../utils/account-session')> {

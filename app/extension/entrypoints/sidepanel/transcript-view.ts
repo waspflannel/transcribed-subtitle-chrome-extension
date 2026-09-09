@@ -62,6 +62,7 @@ export function bindTranscriptView(dom: {
       : total === 0 ? '' : `${total} cues`;
     if (signature === renderedSignature) return;
     renderedSignature = signature;
+    const scrollTop = dom.transcriptList.scrollTop;
     dom.transcriptList.innerHTML = (partial ? partialTotal : total) === 0
       ? '<p class="transcript-empty muted">Generate subtitles to see the transcript.</p>'
       : partial ? panelPartialTranscriptListHtml({
@@ -80,6 +81,7 @@ export function bindTranscriptView(dom: {
           : null,
       });
     hydrateQuickFixEditor();
+    dom.transcriptList.scrollTop = scrollTop;
   }
 
   /** Restore the inline editor's live state after a rebuild; typing never rebuilds. */

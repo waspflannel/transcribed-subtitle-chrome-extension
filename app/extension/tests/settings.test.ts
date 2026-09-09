@@ -39,4 +39,14 @@ describe('extension settings writes', () => {
       showRomanization: false,
     });
   });
+
+  it('persists the clear-local recovery block until deliberate generation', async () => {
+    const { isSubtitleRecoveryBlocked, setSubtitleRecoveryBlocked } = await import('../utils/settings');
+
+    await expect(isSubtitleRecoveryBlocked()).resolves.toBe(false);
+    await setSubtitleRecoveryBlocked(true);
+    await expect(isSubtitleRecoveryBlocked()).resolves.toBe(true);
+    await setSubtitleRecoveryBlocked(false);
+    await expect(isSubtitleRecoveryBlocked()).resolves.toBe(false);
+  });
 });

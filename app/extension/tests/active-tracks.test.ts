@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 const storageState = vi.hoisted(() => ({ values: new Map<string, unknown>() }));
 
@@ -23,7 +23,12 @@ vi.mock('wxt/utils/storage', () => ({
 import type { TrackResponse } from '../utils/contracts';
 
 describe('account-scoped remembered tracks', () => {
-  beforeEach(() => storageState.values.clear());
+  beforeEach(() => {
+    storageState.values.clear();
+    vi.useFakeTimers({ now: new Date('2026-05-30T00:00:00Z') });
+  });
+
+  afterEach(() => vi.useRealTimers());
 
   it('does not return one account\'s track to another account', async () => {
     const { getRememberedTrack, rememberActiveTrack } = await import('../utils/active-tracks');
@@ -33,6 +38,19 @@ describe('account-scoped remembered tracks', () => {
 
     await expect(getRememberedTrack(track.youtubeVideoId, 'account-a')).resolves.toEqual(track);
     await expect(getRememberedTrack(track.youtubeVideoId, 'account-b')).resolves.toBeNull();
+  });
+
+  it('does not clear or update a newer tab operation through an old claim', async () => {
+    const { clearTabOperationIfMatches, getTabOperation, setTabOperation, updateTabOperationIfMatches } = await import('../utils/active-tracks');
+    const first = { kind: 'generation' as const, accountId: 'account-a', youtubeVideoId: 'video-1', jobId: 'job-a' };
+    const second = { kind: 'generation' as const, accountId: 'account-b', youtubeVideoId: 'video-2', jobId: 'job-b' };
+
+    await setTabOperation(7, first);
+    await setTabOperation(7, second);
+
+    await expect(updateTabOperationIfMatches(7, first, { ...first, partialTrack: undefined })).resolves.toBe(false);
+    await expect(clearTabOperationIfMatches(7, first)).resolves.toBe(false);
+    await expect(getTabOperation(7)).resolves.toEqual(second);
   });
 });
 

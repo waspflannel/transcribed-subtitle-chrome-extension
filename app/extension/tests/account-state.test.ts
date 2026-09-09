@@ -126,6 +126,12 @@ describe('account and job-history state helpers', () => {
     });
     expect(formatJobTiming(jobHistory({ status: 'completed' }))).toBe('2m total');
   });
+
+  it('keeps every stage pending while a job is queued', () => {
+    expect(stageTimeline(jobHistory({ status: 'queued', stage: 'transcribing' })).map((item) => item.state)).toEqual(
+      Array(9).fill('pending'),
+    );
+  });
 });
 
 function jobHistory(overrides: Partial<SubtitleJobHistoryItem & {

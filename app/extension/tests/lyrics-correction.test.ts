@@ -438,6 +438,28 @@ describe('syncLyricsCorrectionStatus', () => {
     expect(states.get(1)).toBe(currentJobB);
   });
 
+  it('does not commit a response after its session claim is revoked', async () => {
+    const states = new Map();
+    let resolveFetch: (value: LyricsCorrectionStatus) => void;
+    let canCommit = true;
+    const pending = syncLyricsCorrectionStatus({
+      tabId: 1,
+      jobId: 'job-a',
+      syncBackend: true,
+      states,
+      canCommit: () => canCommit,
+      fetchStatus: () => new Promise<LyricsCorrectionStatus>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    });
+
+    canCommit = false;
+    resolveFetch!(status('attempt-a', 'completed'));
+
+    expect(await pending).toBeNull();
+    expect(states.get(1)?.status).toBeNull();
+  });
+
   it('notifies the caller when the current request fails', async () => {
     const states = new Map();
     let rejectFetch: (reason?: unknown) => void;
