@@ -8,7 +8,7 @@ import {
   type StoredExtensionSession,
 } from '../utils/account-session';
 import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError } from '../utils/api';
-import { clearRememberedTracks, clearTabOperation, clearTabOperationIfMatches, clearTabOperations, forgetRememberedTrack, getRememberedTrack, getTabOperation, rememberActiveTrack, setTabOperation, updateTabOperationIfMatches } from '../utils/active-tracks';
+import { clearRememberedTracks, clearTabOperation, clearTabOperationIfMatches, clearTabOperations, forgetRememberedTrack, getRememberedTrack, getTabOperation, rememberActiveTrack, setTabOperation, updateTabOperationIfMatches, type StoredTabOperation } from '../utils/active-tracks';
 import type { JobResponse, LearningTokenResponse, LyricsCorrectionStatus, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   loadingMessageForStage,
@@ -1563,11 +1563,23 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
         tabSubtitleStateSessions.delete(activeTabId);
       }
     } else if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId) {
+      const recoveryOperation = operation;
+      const recoveryClaim = tabOperations.get(activeTabId) ?? Symbol('panel-recovery');
+      tabOperations.set(activeTabId, recoveryClaim);
       let recoveryJob: JobResponse | undefined;
       let terminalStatusMissing = false;
+      let unknownSubmission = false;
+      let recoveryClaimValid = true;
       if (operation.jobId) {
         try {
           recoveryJob = await subtitleApi.getSubtitleJob(installId, effectiveSession.plainTextToken, operation.jobId);
+          recoveryClaimValid = await isCurrentGenerationRecovery(
+            activeTabId,
+            pageStatus,
+            effectiveSession.sessionId,
+            recoveryClaim,
+            recoveryOperation,
+          );
         } catch (error) {
           if (isSessionInvalidError(error)) {
             await clearSessionIfInvalid(error, effectiveSession.sessionId);
@@ -1576,10 +1588,33 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
 
           if (error instanceof SubtitleApiError && error.code === 'not_found') {
             terminalStatusMissing = true;
-            if (await isCurrentSession(effectiveSession.sessionId)) {
-              await clearTabOperationIfMatches(activeTabId, operation);
-            }
             recoveryJob = undefined;
+            recoveryClaimValid = await isCurrentGenerationRecovery(
+              activeTabId,
+              pageStatus,
+              effectiveSession.sessionId,
+              recoveryClaim,
+              recoveryOperation,
+            );
+            if (recoveryClaimValid) {
+              recoveryClaimValid = await clearTabOperationIfMatches(activeTabId, recoveryOperation);
+              if (recoveryClaimValid) {
+                recoveryClaimValid = await isCurrentGenerationRecovery(
+                  activeTabId,
+                  pageStatus,
+                  effectiveSession.sessionId,
+                  recoveryClaim,
+                );
+              }
+            }
+          } else {
+            recoveryClaimValid = await isCurrentGenerationRecovery(
+              activeTabId,
+              pageStatus,
+              effectiveSession.sessionId,
+              recoveryClaim,
+              recoveryOperation,
+            );
           }
         }
       } else {
@@ -1588,23 +1623,53 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
         recoveryJob = historyJob
           ? { ...historyJob, createdAt: historyJob.startedAt, updatedAt: historyJob.lastUpdatedAt }
           : undefined;
-        if (recoveryJob && await isCurrentSession(effectiveSession.sessionId)) {
-          await updateTabOperationIfMatches(activeTabId, operation, { ...operation, jobId: recoveryJob.jobId });
+        if (recoveryJob && await isCurrentGenerationRecovery(
+          activeTabId,
+          pageStatus,
+          effectiveSession.sessionId,
+          recoveryClaim,
+          recoveryOperation,
+        )) {
+          const nextOperation = { ...operation, jobId: recoveryJob.jobId };
+          recoveryClaimValid = await updateTabOperationIfMatches(activeTabId, operation, nextOperation);
+          if (recoveryClaimValid) operation = nextOperation;
+        } else if (!recoveryJob && !history.error) {
+          unknownSubmission = true;
+          recoveryClaimValid = await isCurrentGenerationRecovery(
+            activeTabId,
+            pageStatus,
+            effectiveSession.sessionId,
+            recoveryClaim,
+            recoveryOperation,
+          );
+          if (recoveryClaimValid) {
+            recoveryClaimValid = await clearTabOperationIfMatches(activeTabId, recoveryOperation);
+            if (recoveryClaimValid) {
+              recoveryClaimValid = await isCurrentGenerationRecovery(
+                activeTabId,
+                pageStatus,
+                effectiveSession.sessionId,
+                recoveryClaim,
+              );
+            }
+          }
         }
       }
 
-      if (!recoveryJob && terminalStatusMissing) {
+      if (!recoveryJob && (terminalStatusMissing || unknownSubmission) && recoveryClaimValid) {
         stateForRecovery = {
           type: 'error',
-          jobId: operation.jobId,
+          ...(operation.jobId ? { jobId: operation.jobId } : {}),
           youtubeVideoId: pageStatus.videoId,
-          message: 'This generation is no longer available. Start a new generation if needed.',
+          message: terminalStatusMissing
+            ? 'This generation is no longer available. Start a new generation if needed.'
+            : 'Generation status is unavailable. Try Generate again.',
         };
-        if (await isCurrentSession(effectiveSession.sessionId)) {
-          tabSubtitleStates.set(activeTabId, stateForRecovery);
-          tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
-          tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
-        }
+        tabSubtitleStates.set(activeTabId, stateForRecovery);
+        tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
+        tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
+        tabOperations.delete(activeTabId);
+        tabGenerationInFlight.delete(activeTabId);
       } else if (!recoveryJob) {
         stateForRecovery = {
           type: 'loading',
@@ -1619,7 +1684,14 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           ...(localState.type === 'loading' && localState.lastUpdatedAt ? { lastUpdatedAt: localState.lastUpdatedAt } : {}),
           ...(operation.partialTrack ? { partialTrack: operation.partialTrack } : {}),
         };
-        if (operation.jobId && !terminalStatusMissing && await isCurrentSession(effectiveSession.sessionId)) {
+        if (operation.jobId && !terminalStatusMissing && recoveryClaimValid
+          && await isCurrentGenerationRecovery(
+            activeTabId,
+            pageStatus,
+            effectiveSession.sessionId,
+            recoveryClaim,
+            operation,
+          )) {
           ensureRecoveredGenerationMonitor(activeTabId, pageStatus, installId, effectiveSession);
         }
       } else if (recoveryJob.status === 'queued' || recoveryJob.status === 'running') {
@@ -1636,7 +1708,13 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           lastUpdatedAt: recoveryJob.updatedAt,
           ...(operation.partialTrack ? { partialTrack: operation.partialTrack } : {}),
         };
-        if (await isCurrentSession(effectiveSession.sessionId)) {
+        if (recoveryClaimValid && await isCurrentGenerationRecovery(
+          activeTabId,
+          pageStatus,
+          effectiveSession.sessionId,
+          recoveryClaim,
+          operation,
+        )) {
           tabSubtitleStates.set(activeTabId, stateForRecovery);
           tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
           tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
@@ -1644,17 +1722,51 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
         }
       } else if (recoveryJob.status === 'completed' && recoveryJob.track) {
         stateForRecovery = { type: 'ready', track: recoveryJob.track };
-        if (await isCurrentSession(effectiveSession.sessionId)) {
-          await storeReadySubtitleState(activeTabId, stateForRecovery, effectiveSession.account.id, effectiveSession.sessionId);
-          if (await isCurrentSession(effectiveSession.sessionId)) await clearTabOperationIfMatches(activeTabId, operation);
+        if (recoveryClaimValid && await isCurrentGenerationRecovery(
+          activeTabId,
+          pageStatus,
+          effectiveSession.sessionId,
+          recoveryClaim,
+          operation,
+        )) {
+          tabSubtitleStates.set(activeTabId, stateForRecovery);
+          tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
+          tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
+          if (await isCurrentSession(effectiveSession.sessionId)) {
+            await rememberActiveTrack(recoveryJob.track, effectiveSession.account.id);
+          }
+          if (await isCurrentGenerationRecovery(
+            activeTabId,
+            pageStatus,
+            effectiveSession.sessionId,
+            recoveryClaim,
+            operation,
+          )) {
+            await clearTabOperationIfMatches(activeTabId, operation);
+          }
         }
       } else if (recoveryJob.status === 'cancelled') {
         stateForRecovery = DEFAULT_SUBTITLE_STATE;
-        if (await isCurrentSession(effectiveSession.sessionId)) {
-          tabSubtitleStates.delete(activeTabId);
-          tabSubtitleStateOwners.delete(activeTabId);
-          tabSubtitleStateSessions.delete(activeTabId);
-          await clearTabOperationIfMatches(activeTabId, operation);
+        if (recoveryClaimValid && await isCurrentGenerationRecovery(
+          activeTabId,
+          pageStatus,
+          effectiveSession.sessionId,
+          recoveryClaim,
+          operation,
+        )) {
+          const cleared = await clearTabOperationIfMatches(activeTabId, operation);
+          if (cleared && await isCurrentGenerationRecovery(
+            activeTabId,
+            pageStatus,
+            effectiveSession.sessionId,
+            recoveryClaim,
+          )) {
+            tabSubtitleStates.delete(activeTabId);
+            tabSubtitleStateOwners.delete(activeTabId);
+            tabSubtitleStateSessions.delete(activeTabId);
+            tabOperations.delete(activeTabId);
+            tabGenerationInFlight.delete(activeTabId);
+          }
         }
       } else {
         stateForRecovery = {
@@ -1663,11 +1775,26 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           youtubeVideoId: pageStatus.videoId,
           message: publicSubtitleJobFailureMessage(recoveryJob),
         };
-        if (await isCurrentSession(effectiveSession.sessionId)) {
-          tabSubtitleStates.set(activeTabId, stateForRecovery);
-          tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
-          tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
-          await clearTabOperationIfMatches(activeTabId, operation);
+        if (recoveryClaimValid && await isCurrentGenerationRecovery(
+          activeTabId,
+          pageStatus,
+          effectiveSession.sessionId,
+          recoveryClaim,
+          operation,
+        )) {
+          const cleared = await clearTabOperationIfMatches(activeTabId, operation);
+          if (cleared && await isCurrentGenerationRecovery(
+            activeTabId,
+            pageStatus,
+            effectiveSession.sessionId,
+            recoveryClaim,
+          )) {
+            tabSubtitleStates.set(activeTabId, stateForRecovery);
+            tabSubtitleStateOwners.set(activeTabId, effectiveSession.account.id);
+            tabSubtitleStateSessions.set(activeTabId, effectiveSession.sessionId);
+            tabOperations.delete(activeTabId);
+            tabGenerationInFlight.delete(activeTabId);
+          }
         }
       }
     }
@@ -1682,8 +1809,16 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           youtubeVideoId: pageStatus.videoId,
           jobId: historyJob.jobId,
         };
+        const recoveredClaim = tabOperations.get(activeTabId) ?? Symbol('panel-history-recovery');
+        tabOperations.set(activeTabId, recoveredClaim);
         await setTabOperation(activeTabId, recoveredOperation);
-        if (await isCurrentSession(effectiveSession.sessionId) && !tabGenerationInFlight.has(activeTabId)) {
+        if (await isCurrentGenerationRecovery(
+          activeTabId,
+          pageStatus,
+          effectiveSession.sessionId,
+          recoveredClaim,
+          recoveredOperation,
+        ) && !tabGenerationInFlight.has(activeTabId)) {
           tabSubtitleStates.set(activeTabId, {
             type: 'loading',
             status: historyJob.status === 'queued' ? 'queued' : 'running',
@@ -1737,8 +1872,27 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
   }
 
   const currentSession = await getStoredExtensionSession();
-  if (options.retryOnSessionChange !== false && startingSessionId !== currentSession?.sessionId) {
+  const latestActiveTab = await getActiveTab(options.windowId);
+  const latestPageStatus = latestActiveTab ? parseYoutubePage(latestActiveTab.url ?? '') : undefined;
+  const pageChanged = latestActiveTab?.id !== activeTabId
+    || (pageStatus?.supported === true && (!latestPageStatus?.supported || latestPageStatus.videoId !== pageStatus.videoId));
+  if (options.retryOnSessionChange !== false && (startingSessionId !== currentSession?.sessionId || pageChanged)) {
     return getPanelState({ ...options, retryOnSessionChange: false });
+  }
+  if (startingSessionId !== currentSession?.sessionId || pageChanged) {
+    // The bounded retry also raced a session or navigation change. Return a
+    // redacted current snapshot instead of pairing old history/state with it.
+    return {
+      installId,
+      settings,
+      activeTabId: latestActiveTab?.id,
+      pageStatus: latestPageStatus,
+      pageTitle: latestActiveTab?.title,
+      accountState: currentSession ? accountStateFromSummary(currentSession.account) : anonymousAccountState(),
+      subtitleState: DEFAULT_SUBTITLE_STATE,
+      jobHistory: [],
+      lyricsCorrection: null,
+    };
   }
 
   return {
@@ -1868,8 +2022,9 @@ async function getPanelJobHistory(
   }
 
   const history = await listBackendJobHistory(installId, session.plainTextToken, session.sessionId);
+  const currentSession = await getStoredExtensionSession();
 
-  if (!history.sessionInvalid && !await isCurrentSession(session.sessionId)) {
+  if (currentSession?.sessionId !== session.sessionId && (!history.sessionInvalid || currentSession !== null)) {
     return { jobs: [], error: undefined, sessionInvalid: false };
   }
 
@@ -1886,7 +2041,7 @@ async function getPanelJobHistory(
       error: history.error,
       sessionInvalid: false,
     };
-  } else if (await isCurrentAccount(session.account.id)) {
+  } else if (await isCurrentSession(session.sessionId)) {
     cachedPanelJobHistory = history.jobs;
     cachedPanelJobHistoryError = history.error;
     cachedPanelJobHistoryAccountId = session.account.id;
@@ -2250,6 +2405,29 @@ function ensureRecoveredGenerationMonitor(
       }
     }
   }).catch(() => {});
+}
+
+async function isCurrentGenerationRecovery(
+  tabId: number,
+  pageStatus: SupportedYoutubePageInfo,
+  sessionId: string,
+  operation: symbol,
+  expectedPersistedOperation?: StoredTabOperation,
+): Promise<boolean> {
+  if (tabOperations.get(tabId) !== operation) return false;
+  const session = await getStoredExtensionSession();
+  const tab = await browser.tabs.get(tabId).catch(() => undefined);
+  const persistedOperation = await getTabOperation(tabId);
+  const currentSession = await getStoredExtensionSession();
+  const currentPage = parseYoutubePage(tab?.url ?? '');
+
+  return session?.sessionId === sessionId
+    && currentSession?.sessionId === sessionId
+    && currentPage.supported
+    && currentPage.videoId === pageStatus.videoId
+    && tabOperations.get(tabId) === operation
+    && (expectedPersistedOperation === undefined
+      || JSON.stringify(persistedOperation) === JSON.stringify(expectedPersistedOperation));
 }
 
 async function isCurrentSession(sessionId: string): Promise<boolean> {
