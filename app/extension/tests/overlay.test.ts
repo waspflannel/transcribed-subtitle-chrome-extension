@@ -253,9 +253,17 @@ describe('renderOverlayContent', () => {
     expect(focusEnds).toBe(0);
     expect(focusStarts).toBe(1);
 
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    expect(focusEnds).toBe(1);
+    outside.remove();
+
     close!.click();
     expect(shadowRoot?.activeElement?.getAttribute('data-focus-key')).toBe('cue-0001:0');
 
+    previewEnds = 0;
+    focusEnds = 0;
     const nextCue = { ...readyState().activeCue!, cueId: 'cue-0002' };
     shell.update(readyState(trackResponse({ cues: [nextCue] })));
     expect(previewEnds).toBe(1);

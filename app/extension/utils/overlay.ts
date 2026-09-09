@@ -188,6 +188,16 @@ export class OverlayShell {
       return;
     }
 
+    const handleFocusBlur = (event: FocusEvent): void => {
+      const shadowActiveElement = this.host?.shadowRoot?.activeElement;
+      if (
+        (event.relatedTarget && this.content?.contains(event.relatedTarget as Node))
+        || (shadowActiveElement && this.content?.contains(shadowActiveElement))
+        || (this.host !== null && this.documentRef.activeElement === this.host)
+      ) return;
+      this.options.onTokenBlur?.();
+    };
+
     for (const button of this.content.querySelectorAll<HTMLButtonElement>('[data-token-index]')) {
       const tokenIndex = Number(button.dataset.tokenIndex);
 
@@ -203,15 +213,7 @@ export class OverlayShell {
         this.options.onTokenFocus?.();
       });
 
-      button.addEventListener('blur', (event) => {
-        const shadowActiveElement = this.host?.shadowRoot?.activeElement;
-        if (
-          (event.relatedTarget && this.content?.contains(event.relatedTarget as Node))
-          || (shadowActiveElement && this.content?.contains(shadowActiveElement))
-          || (this.host !== null && this.documentRef.activeElement === this.host)
-        ) return;
-        this.options.onTokenBlur?.();
-      });
+      button.addEventListener('blur', handleFocusBlur);
 
       button.addEventListener('click', () => {
         const cue = this.currentState?.activeCue;
@@ -237,7 +239,9 @@ export class OverlayShell {
       });
     }
 
-    this.content.querySelector<HTMLButtonElement>('[data-close-token-detail]')?.addEventListener('click', () => {
+    const closeButton = this.content.querySelector<HTMLButtonElement>('[data-close-token-detail]');
+    closeButton?.addEventListener('blur', handleFocusBlur);
+    closeButton?.addEventListener('click', () => {
       this.focusKeyAfterRender = this.content?.querySelector<HTMLButtonElement>('[data-close-token-detail]')
         ?.dataset.returnFocusKey ?? null;
       this.pinnedTokenIndex = null;
