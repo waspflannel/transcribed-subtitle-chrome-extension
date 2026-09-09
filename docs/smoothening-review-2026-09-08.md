@@ -21,6 +21,7 @@ Status: correction assignments in progress. Code review and Ponytail review are 
 | CR11 | Accessibility / should improve | Editable ancestor fallback ignores native false islands; popover clamp handles only horizontal bounds. | Shortcuts can be suppressed in non-editable islands and controls can leave a short viewport. | Use native editability and constrain available vertical space as well as width. |
 | CR12 | Validation / should improve | Publication tests exercise the failure handler without throwing through actual dispatch sites; cancellation tests do not execute a stale pipeline path. | Passing helper tests do not establish the new integration behavior. | Focused dispatch-site failure tests and stale-worker-after-cancel tests with fake providers and isolated storage. |
 | CR13 | Support UI / should improve | Cancelled job detail labels its outcome as a failure. | A requested cancellation is misrepresented. | Use an outcome label appropriate to cancelled status. |
+| CR14 | Queue fairness / must fix | The new promotion-failure regression demonstrates that a later retry immediately takes the free slot while an earlier submission remains queued. | This violates R19's earlier-waiting-before-later-retry acceptance after publication failure. | Preserve waiting backlog priority when generation or retry sees an available slot; avoid recursive publication attempts during an outage. |
 
 ## Ponytail review findings
 
