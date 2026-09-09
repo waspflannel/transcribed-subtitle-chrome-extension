@@ -190,10 +190,16 @@ export class OverlayShell {
 
     const handleFocusBlur = (event: FocusEvent): void => {
       const shadowActiveElement = this.host?.shadowRoot?.activeElement;
+      const focusRemainsWithinStudyControls = (target: EventTarget | null): boolean => {
+        if (!(target instanceof Element)) return false;
+        const control = target.closest('[data-token-index], [data-close-token-detail]');
+        return control !== null && this.content?.contains(control) === true;
+      };
+
       if (
-        (event.relatedTarget && this.content?.contains(event.relatedTarget as Node))
-        || (shadowActiveElement && this.content?.contains(shadowActiveElement))
-        || (this.host !== null && this.documentRef.activeElement === this.host)
+        focusRemainsWithinStudyControls(event.relatedTarget)
+        || (event.relatedTarget === null && focusRemainsWithinStudyControls(shadowActiveElement ?? null))
+        || (event.relatedTarget === null && focusRemainsWithinStudyControls(this.content?.querySelector(':focus') ?? null))
       ) return;
       this.options.onTokenBlur?.();
     };
