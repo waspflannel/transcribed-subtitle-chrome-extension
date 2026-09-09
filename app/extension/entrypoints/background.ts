@@ -1633,7 +1633,8 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
           const nextOperation = { ...operation, jobId: recoveryJob.jobId };
           recoveryClaimValid = await updateTabOperationIfMatches(activeTabId, operation, nextOperation);
           if (recoveryClaimValid) operation = nextOperation;
-        } else if (!recoveryJob && !history.error && localState.type !== 'ready') {
+        } else if (!recoveryJob && !history.error && localState.type !== 'ready'
+          && !tabGenerationInFlight.has(activeTabId)) {
           unknownSubmission = true;
           recoveryClaimValid = await isCurrentGenerationRecovery(
             activeTabId,
@@ -2439,12 +2440,6 @@ async function isCurrentSession(sessionId: string): Promise<boolean> {
   const session = await getStoredExtensionSession();
 
   return session?.sessionId === sessionId;
-}
-
-async function isCurrentAccount(accountId: string): Promise<boolean> {
-  const session = await getStoredExtensionSession();
-
-  return session?.account.id === accountId;
 }
 
 function assertNever(value: never): never {
