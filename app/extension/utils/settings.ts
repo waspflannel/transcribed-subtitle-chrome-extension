@@ -22,6 +22,7 @@ const subtitleRecoveryBlockedStorage = storage.defineItem<boolean>('local:subtit
 
 let settingsWriteQueue = Promise.resolve();
 let installIdWriteQueue = Promise.resolve();
+let subtitleRecoveryBlockedWriteQueue = Promise.resolve();
 
 export async function getExtensionSettings(): Promise<ExtensionSettings> {
   return createExtensionSettingsFromPartial(await settingsStorage.getValue());
@@ -57,7 +58,10 @@ export async function clearLocalExtensionState(): Promise<void> {
 }
 
 export function setSubtitleRecoveryBlocked(blocked: boolean): Promise<void> {
-  return subtitleRecoveryBlockedStorage.setValue(blocked);
+  const write = subtitleRecoveryBlockedWriteQueue.then(() => subtitleRecoveryBlockedStorage.setValue(blocked));
+  subtitleRecoveryBlockedWriteQueue = write.then(() => undefined, () => undefined);
+
+  return write;
 }
 
 export function isSubtitleRecoveryBlocked(): Promise<boolean> {
