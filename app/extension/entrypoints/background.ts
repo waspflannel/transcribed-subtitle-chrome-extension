@@ -1065,54 +1065,49 @@ async function clearCancelledGenerationState(
   operation: symbol,
 ): Promise<void> {
   if (!await isCurrentSession(sessionId)) return;
-  const currentOperation = await getTabOperation(tabId);
-  if (tabOperations.get(tabId) !== operation || !await isCurrentSession(sessionId)) return;
-  const operationMatches = currentOperation?.kind === 'generation'
+  let currentOperation = await getTabOperation(tabId);
+  if (!await isCurrentSession(sessionId) || tabOperations.get(tabId) !== operation) return;
+  const operationMatches = currentOperation === null || (currentOperation.kind === 'generation'
     && currentOperation.accountId === accountId
     && currentOperation.youtubeVideoId === youtubeVideoId
-    && currentOperation.jobId === jobId;
+    && currentOperation.jobId === jobId);
   const currentState = tabSubtitleStates.get(tabId);
-  const stateMatches = (currentState?.type === 'loading'
-    && currentState.youtubeVideoId === youtubeVideoId
-    && currentState.jobId === jobId
-    && tabSubtitleStateOwners.get(tabId) === accountId
-    && tabSubtitleStateSessions.get(tabId) === sessionId)
-    || (currentState?.type === 'ready'
-      && currentState.track.youtubeVideoId === youtubeVideoId
-      && currentState.track.jobId === jobId
-      && tabSubtitleStateOwners.get(tabId) === accountId
-      && tabSubtitleStateSessions.get(tabId) === sessionId);
+  const stateMatches = isCancelledGenerationState(currentState, tabId, youtubeVideoId, jobId, accountId, sessionId);
 
-  if (!operationMatches || tabOperations.get(tabId) !== operation) return;
+  // A missing persisted operation is safe to recover when the in-memory state
+  // still names this cancelled job. A different persisted operation belongs to
+  // a newer request and must stop the cleanup.
+  if (!operationMatches) return;
 
-  if (stateMatches && currentState?.type === 'ready' && currentState.track.jobId === jobId) {
+  if (stateMatches && currentState?.type === 'ready') {
     if (!await isCurrentSession(sessionId)) return;
     await forgetRememberedTrack(youtubeVideoId, currentState.track.trackId, accountId);
   }
 
+  if (!await isCurrentSession(sessionId) || tabOperations.get(tabId) !== operation) return;
+  currentOperation = await getTabOperation(tabId);
+  if (currentOperation && !(currentOperation.kind === 'generation'
+    && currentOperation.accountId === accountId
+    && currentOperation.youtubeVideoId === youtubeVideoId
+    && currentOperation.jobId === jobId)) return;
+  if (currentOperation && !await clearTabOperationIfMatches(tabId, currentOperation)) return;
+
+  // All storage/browser awaits are complete. Only now inspect the live claim
+  // and state, so a newer same-tab operation cannot be deleted by this one.
+  const finalOperation = await getTabOperation(tabId);
+  const finalSession = await getStoredExtensionSession();
   const ownsClaim = tabOperations.get(tabId) === operation;
   const latestState = tabSubtitleStates.get(tabId);
-  const stateStillMatches = (latestState?.type === 'loading'
-    && latestState.youtubeVideoId === youtubeVideoId
-    && latestState.jobId === jobId
-    && tabSubtitleStateOwners.get(tabId) === accountId
-    && tabSubtitleStateSessions.get(tabId) === sessionId)
-    || (latestState?.type === 'ready'
-      && latestState.track.youtubeVideoId === youtubeVideoId
-      && latestState.track.jobId === jobId
-      && tabSubtitleStateOwners.get(tabId) === accountId
-      && tabSubtitleStateSessions.get(tabId) === sessionId);
-  if (ownsClaim && await isCurrentSession(sessionId)) {
-    tabOperations.delete(tabId);
-    if (currentOperation) await clearTabOperationIfMatches(tabId, currentOperation);
-  }
+  const stateStillMatches = isCancelledGenerationState(latestState, tabId, youtubeVideoId, jobId, accountId, sessionId);
+  if (finalSession?.sessionId !== sessionId || finalOperation !== null || !ownsClaim) return;
 
-  if (tabGenerationCancellationInFlight.get(tabId)?.operation === operation) {
+  tabOperations.delete(tabId);
+  tabGenerationInFlight.delete(tabId);
+  if (isGenerationCancellationClaim(tabId, jobId, operation)) {
     tabGenerationCancellationInFlight.delete(tabId);
   }
 
-  if (stateMatches && stateStillMatches && ownsClaim) {
-    tabGenerationInFlight.delete(tabId);
+  if (stateStillMatches) {
     tabSubtitleStates.delete(tabId);
     tabSubtitleStateOwners.delete(tabId);
     tabSubtitleStateSessions.delete(tabId);
@@ -1121,6 +1116,25 @@ async function clearCancelledGenerationState(
       subtitleState: DEFAULT_SUBTITLE_STATE,
     });
   }
+}
+
+function isCancelledGenerationState(
+  state: SubtitleState | undefined,
+  tabId: number,
+  youtubeVideoId: string,
+  jobId: string,
+  accountId: string,
+  sessionId: string,
+): boolean {
+  const ownsState = tabSubtitleStateOwners.get(tabId) === accountId
+    && tabSubtitleStateSessions.get(tabId) === sessionId;
+
+  return ownsState && ((state?.type === 'loading'
+    && state.youtubeVideoId === youtubeVideoId
+    && state.jobId === jobId)
+    || (state?.type === 'ready'
+      && state.track.youtubeVideoId === youtubeVideoId
+      && state.track.jobId === jobId));
 }
 
 async function cancelLyricsCorrectionFromPanel(
