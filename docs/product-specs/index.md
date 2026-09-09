@@ -26,8 +26,8 @@ Recommended format:
 ## Current Baseline
 
 - Current architecture: `../../ARCHITECTURE.md`
-- Many-to-many language refactor record: `../exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`
-- Phase index: `../exec-plans/completed/00-phase-index.md`
+- Many-to-many language refactor record: [2026-05-11-many-to-many-language-refactor.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md)
+- Phase index: [00-phase-index.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/completed/00-phase-index.md)
 
 The `docs/history/revamped-design-document.md` and `docs/history/detailed-design-document.md` files are historical pre-refactor notes. They do not override the current source-language plus target-language workflow.
 
@@ -60,4 +60,9 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 
 ## Deferred Learning Upgrades
 
-The first release does not include a vocabulary review system, sentence mining, Anki export, listening/speaking practice, or AI current-line coaching. These are now accepted as post-first-release product work and are tracked in `../exec-plans/active/00-learning-upgrade/`.
+The first release does not include a vocabulary review system, sentence mining, Anki export, listening/speaking practice, or AI current-line coaching. These remain accepted post-first-release product work; their old implementation plans were removed on 2026-09-09. Requirements are retained below.
+
+- Saved words and sentences: account-owned, idempotent saves with source/target languages and cue/video identity; filtering, learning states, deletion, safe CSV export and explicit AnkiConnect export with recoverable failures.
+- Listening and speaking: cue auto-pause, repeat, AB loops and listen-then-reveal must preserve subtitle timing and keyboard access. Recording requires an explicit action, permission, cancellation and bounded clips; backend scoring must validate ownership/input and delete temporary audio on success or failure.
+- Current-line coaching: fixed, structured modes with bounded cue context, account/track/cue ownership, safe errors and versioned response reuse. Keep coaching separate from token enrichment, translation and practice.
+- Beta and public launch: onboarding/support, approved legal and pricing copy, truthful marketing, feedback handling and release evidence remain required. Growth work and public launch follow beta findings and an explicit launch decision.

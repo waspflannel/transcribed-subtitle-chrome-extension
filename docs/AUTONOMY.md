@@ -9,7 +9,7 @@ When **Brain / Worker** is selected, its [runbook](work-modes/brain-worker.md) n
 Level 7: agents make focused changes, validate locally, reproduce bugs, prove fixes with
 screenshots/logs/traces, open reviewable PRs with the evidence template, and handle review
 feedback (see the R1-R6 review/follow-up cycle in
-`docs/exec-plans/completed/2026-06-21-extension-and-backend-hardening.md` for a worked example).
+[2026-06-21-extension-and-backend-hardening.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/completed/2026-06-21-extension-and-backend-hardening.md) for a worked example).
 
 Blocked from Level 8 (recover from CI failures) because no CI is configured yet — see TD-002 in
 `docs/exec-plans/tech-debt-tracker.md` and the "CI not configured" gap in `docs/QUALITY_SCORE.md`.

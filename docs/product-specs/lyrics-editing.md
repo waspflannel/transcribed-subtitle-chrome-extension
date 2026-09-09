@@ -3,7 +3,7 @@
 Status: proposed
 Owner: product
 Created: 2026-08-16
-Implementation status: Quick fix AI refresh supersedes the original provider-free design as of 2026-09-06. Older builder/reviewer instructions below are historical; current work is tracked in `../exec-plans/active/2026-09-06-refresh-learning-data-after-a-single-word-edit.md`.
+Implementation status: Quick fix AI refresh supersedes the original provider-free design as of 2026-09-06. Older builder/reviewer instructions below are historical; current work is tracked in [Learning and editing](../exec-plans/active/2026-09-09-whole-project-review/learning-and-editing.md).
 
 ## Problem
 
@@ -225,7 +225,7 @@ Before editing, read only the relevant parts of:
 - `docs/SECURITY.md`
 - `docs/references/project-guardrails.md`
 - `docs/references/boost-skill-routing.md`
-- `docs/exec-plans/active/2026-08-13-pasted-lyrics-transcript-correction.md`
+- [2026-08-13-pasted-lyrics-transcript-correction.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/active/2026-08-13-pasted-lyrics-transcript-correction.md)
 - Existing lyrics-correction contracts, service, job, resource, background state, side-panel UI, and focused tests
 
 Trace the current POST, GET, polling, continuation, final publication, clicked-token enrichment, and track-publication paths before changing them. Reuse those paths rather than creating parallel infrastructure.

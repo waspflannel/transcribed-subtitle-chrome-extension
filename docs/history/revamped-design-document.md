@@ -6,7 +6,7 @@ Created: 2026-04-28
 
 This is a historical pre-refactor note, not the active product baseline.
 
-The current product is a language-to-language YouTube subtitle app where users choose the subtitle/source language or Auto detect and choose the translation/target language for word cards. Current behavior is governed by `docs/product-specs/index.md`, `ARCHITECTURE.md`, and `docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md`.
+The current product is a language-to-language YouTube subtitle app where users choose the subtitle/source language or Auto detect and choose the translation/target language for word cards. Current behavior is governed by `docs/product-specs/index.md`, `ARCHITECTURE.md`, and [2026-05-11-many-to-many-language-refactor.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/completed/2026-05-11-many-to-many-language-refactor.md).
 
 The Arabic-to-English framing below is retained only as old design history and must not be treated as the active product direction.
 
