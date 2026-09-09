@@ -308,22 +308,22 @@ class WebSubtitleJobDeletionTest extends TestCase
             ->assertSee('aria-label="Delete job '.$visibleJob->public_id.' for video '.$visibleJob->youtube_video_id.'"', false)
             ->assertSee('href="https://www.youtube.com/watch?v='.$visibleJob->youtube_video_id.'"', false)
             ->assertDontSee('https://example.test/not-the-source', false)
-            ->assertDontSee($oldJob->public_id)
+            ->assertSee($oldJob->public_id)
             ->assertDontSee($otherJob->public_id);
     }
 
-    public function test_dashboard_can_clear_owned_jobs_even_when_all_are_hidden_by_version(): void
+    public function test_dashboard_exposes_owned_jobs_even_when_processing_version_is_old(): void
     {
         $user = User::factory()->create();
-        SubtitleJob::factory()->for($user)->create(['processing_version' => 'old-version']);
+        $oldJob = SubtitleJob::factory()->for($user)->create(['processing_version' => 'old-version']);
         SubtitleJob::factory()->create();
 
         $this->actingAs($user)->get(route('dashboard', absolute: false))
             ->assertOk()
             ->assertViewHas('totalJobs', 1)
-            ->assertViewHas('recentJobs', fn ($jobs): bool => $jobs->isEmpty())
+            ->assertViewHas('recentJobs', fn ($jobs): bool => $jobs->count() === 1)
             ->assertSeeText('Clear all jobs (1)')
-            ->assertSeeText('No recent jobs to display.')
+            ->assertSee($oldJob->public_id)
             ->assertDontSeeText('No subtitle jobs yet.');
     }
 
