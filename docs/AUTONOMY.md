@@ -4,6 +4,8 @@ Use this file to track how much of the development loop agents can safely comple
 
 ## Current Level
 
+When **Brain / Worker** is selected, its [runbook](work-modes/brain-worker.md) narrows the permissions below: agents run non-UI checks only, the user owns browser/desktop UI acceptance, and each chunk requires user acceptance and approval before merge.
+
 Level 7: agents make focused changes, validate locally, reproduce bugs, prove fixes with
 screenshots/logs/traces, open reviewable PRs with the evidence template, and handle review
 feedback (see the R1-R6 review/follow-up cycle in

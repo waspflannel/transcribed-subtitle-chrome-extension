@@ -6,6 +6,7 @@ This repository is designed for agentic development. Keep this file short; it is
 
 - Product intent: `docs/product-specs/index.md`
 - How to use this harness: `docs/USING_AGENT_HARNESS.md`
+- Work mode: when the user says "use brain / worker" (or "brain/worker"), read and follow `docs/work-modes/brain-worker.md` for that plan.
 - Architecture map: `ARCHITECTURE.md`
 - Design principles: `docs/DESIGN.md`
 - Frontend expectations: `docs/FRONTEND.md`

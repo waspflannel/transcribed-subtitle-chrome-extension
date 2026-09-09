@@ -19,6 +19,10 @@ Use execution plans for work that crosses files, changes architecture, alters us
 
 Use `docs/exec-plans/templates/exec-plan-template.md`.
 
+## Work Modes
+
+The user can select **Brain / Worker** by saying "use brain / worker" when starting or continuing a plan. Follow the [runbook](work-modes/brain-worker.md) and record the mode in the plan. Keep its ordered chunk backlog, current packet, ownership, review evidence, and acceptance state in the owning plan or linked chunk notes. Only one top-level chunk may be active; completing a chunk does not authorize starting the next.
+
 ## Current Phase Backlog
 
 The completed original implementation split is tracked in `docs/exec-plans/completed/00-phase-index.md`.

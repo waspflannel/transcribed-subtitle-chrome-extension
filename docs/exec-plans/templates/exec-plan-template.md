@@ -2,6 +2,7 @@
 
 Status: active
 Owner: agent
+Work mode: standard (if the user selects Brain / Worker, follow `docs/work-modes/brain-worker.md` and add its chunk backlog and packet notes)
 Created: YYYY-MM-DD
 Last updated: YYYY-MM-DD
 

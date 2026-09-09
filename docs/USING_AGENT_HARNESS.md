@@ -50,6 +50,8 @@ The plan is not ceremony. It is durable context for later agents.
 
 ## During Implementation
 
+When the user says **"use brain / worker"**, apply the [Brain / Worker runbook](work-modes/brain-worker.md). Record the selected mode in the owning plan. It defines chunk sequencing, worker packets, review, and user acceptance; it stays selected for that plan across sessions until the user changes it.
+
 Use this loop:
 
 1. Read `AGENTS.md`.
