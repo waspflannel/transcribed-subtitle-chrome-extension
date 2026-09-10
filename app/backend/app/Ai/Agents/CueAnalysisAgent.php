@@ -16,7 +16,7 @@ use Stringable;
 /**
  * Chooses source tokens and supplies requested translation and romanization.
  */
-#[MaxTokens(9000)]
+#[MaxTokens(18000)]
 class CueAnalysisAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
