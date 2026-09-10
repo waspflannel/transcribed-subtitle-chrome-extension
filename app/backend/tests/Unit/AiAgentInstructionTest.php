@@ -93,7 +93,7 @@ class AiAgentInstructionTest extends TestCase
         Http::assertSentCount(7);
         Http::assertNotSent(fn (Request $request): bool => $request['model'] !== 'gpt-5.6-luna'
             || $request['service_tier'] !== 'fast'
-            || $request['reasoning']['effort'] !== 'medium');
+            || $request['reasoning']['effort'] !== 'low');
         Log::shouldHaveReceived('info')->times(7)->with('backend.openai_response_received', \Mockery::on(function (array $context): bool {
             $this->assertSame('fast', $context['requested_service_tier']);
             $this->assertSame('priority', $context['served_service_tier']);
@@ -137,16 +137,16 @@ class AiAgentInstructionTest extends TestCase
 
         foreach ($agentClasses as $agentClass) {
             $this->assertSame(
-                ['reasoning' => ['effort' => 'medium'], 'service_tier' => 'fast'],
+                ['reasoning' => ['effort' => 'low'], 'service_tier' => 'fast'],
                 (new $agentClass)->providerOptions(Lab::OpenAI),
             );
         }
 
-        config(['ai.providers.openai.provider_options' => ['reasoning' => ['effort' => 'medium']]]);
+        config(['ai.providers.openai.provider_options' => ['reasoning' => ['effort' => 'low']]]);
 
         foreach ($agentClasses as $agentClass) {
             $this->assertSame(
-                ['reasoning' => ['effort' => 'medium']],
+                ['reasoning' => ['effort' => 'low']],
                 (new $agentClass)->providerOptions(Lab::OpenAI),
             );
         }

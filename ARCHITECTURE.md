@@ -8,7 +8,7 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 
 ## Current State
 
-- Transcription ingestion mode is pinned on the job: `upload` is the default; opt-in `youtube_url` validates public/non-live video metadata and duration before Scribe fetches the canonical video URL. Both routes converge on the same chunk artifacts and merge/analysis continuation. Optional vocabulary hints are normalized and included in job reuse identity; transcript-cache variants include ingestion mode and hints, and hinted entries are additionally scoped to the owner. All AI reasoning remains medium.
+- Transcription ingestion mode is pinned on the job: `upload` is the default; opt-in `youtube_url` validates public/non-live video metadata and duration before Scribe fetches the canonical video URL. Both routes converge on the same chunk artifacts and merge/analysis continuation. Optional vocabulary hints are normalized and included in job reuse identity; transcript-cache variants include ingestion mode and hints, and hinted entries are additionally scoped to the owner. All OpenAI agents use low reasoning effort through the shared provider configuration.
 - Missing requested cue translations remain empty and are labelled unavailable in the transcript. Valid translations survive tokenization fallback. New output uses job tokenizer version v10 and transcript-cache version v3.
 
 - Application code lives in `app/backend` and `app/extension`.

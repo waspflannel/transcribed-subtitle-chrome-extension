@@ -14,7 +14,7 @@ This is the single backlog for generation from source acquisition through audio 
 Status: selected code implemented and validated locally — 2026-09-10; live comparisons deferred
 Owner: current agent
 
-The user selected boundary reconciliation (1), language-aware and honest fallback output (2), run-scoped timing and actual queue publication timing (3), direct YouTube ingestion (5), retained transcription quality signals and improved language selection (6), and optional vocabulary hints (7). The user then added combined analysis and romanization (4), explicitly excluding lower-reasoning experiments. All agents retain medium reasoning.
+The user selected boundary reconciliation (1), language-aware and honest fallback output (2), run-scoped timing and actual queue publication timing (3), direct YouTube ingestion (5), retained transcription quality signals and improved language selection (6), and optional vocabulary hints (7). The user then added combined analysis and romanization (4), explicitly excluding lower-reasoning experiments. The initial delivery retained medium reasoning. The later user-requested switch to low is recorded below.
 
 Delivery order:
 
@@ -25,7 +25,7 @@ Delivery order:
 5. Add optional user vocabulary hints from extension through validated requests, stored jobs, provider requests and cache identity. Never log the hints or reuse a transcript generated with different hints.
 6. Add explicitly selected direct YouTube URL ingestion with existing public/non-live/duration admission checks and distinct cache identity. Preserve local chunked ingestion until a bounded real-video comparison establishes suitable defaults.
 
-Acceptance: focused regressions, contract checks, complete agent check, source-fidelity review, no changed reasoning settings, no raw content in diagnostics, and documented cache invalidation and remaining live-evaluation evidence. No provider-backed experiments, deployment or runtime reconfiguration are started by this implementation. Paid comparisons need a concrete bounded sample before their final approval step.
+Acceptance: focused regressions, contract checks, complete agent check, source-fidelity review, reasoning settings matching the current user instruction, no raw content in diagnostics, and documented cache invalidation and remaining live-evaluation evidence. No provider-backed experiments, deployment or runtime reconfiguration are started by this implementation. Paid comparisons need a concrete bounded sample before their final approval step.
 
 Baseline: current main `b454e99` reproduces duplicate/missing boundary words and single-word English fallback splitting into letters. An isolated two-run metrics probe mixes old timings with current costs. Full baseline check passed with test-process `OPENAI_FAST_MODE_ENABLED=true`: 452 backend tests, 224 extension tests, contracts, TypeScript and build. Without that test setting, two preexisting instruction tests assume the local fast-mode toggle is true.
 
@@ -35,7 +35,7 @@ Skills: phased-implementation-v2, ponytail, code-review, Laravel best practices,
 
 - Recovered and reviewed the conservative boundary reconciliation from `07682be`, with regressions for dropped/duplicated overlap words, legitimate repetitions, conflicting sequence order, punctuation/untimed glue and non-overlap. Only unique equal-text matches with positive temporal overlap are reconciled. Touching/disjoint words remain ambiguous and are preserved through ownership rules.
 - Language-aware fallback keeps single spaced-language words intact and no-space grapheme clusters intact. Independent valid translations survive rejected tokenization; absent translations are explicitly empty through final enrichment, contracts, response guards and UI.
-- Metrics exclude old run events. Chained cue jobs read Laravel queue publication timestamps; test-only fast-mode configuration is pinned so local `.env` does not alter instruction tests. Reasoning remains medium everywhere.
+- Metrics exclude old run events. Chained cue jobs read Laravel queue publication timestamps; test-only fast-mode configuration is pinned so local `.env` does not alter instruction tests. The initial delivery retained medium reasoning everywhere.
 - Cue analysis returns tokens, requested translations and requested readings in one response; deterministic ICU readings remain local. New generation dispatches no separate romanization job. Existing romanization provider support is still used for lyrics correction.
 - Scribe parsing retains bounded language probability and finite word logprob values, accepts paired null timing, and logs only aggregate quality data with job/run IDs. Auto language uses owned speech duration weighted by available confidence across chunks; supported equal-weight ties retain first occurrence. Explicit requested language remains authoritative. No selective extra ASR call is enabled.
 - Optional vocabulary hints are validated across API/contracts/extension (20 terms, five words and 49 characters each), normalized for reuse, and sent as repeated multipart keyterms. Hinted transcript caches are isolated by owner and options. Cost estimates include the documented 20% keyterm surcharge; hint text is never logged. Input clears on submission and video/account changes.
@@ -46,6 +46,14 @@ Skills: phased-implementation-v2, ponytail, code-review, Laravel best practices,
 - Git handoff: the user requested grouped local commits on `codex/subtitle-pipeline-quality`: `47ad810` records run metrics and queue waits; `01d5cc9` adds Scribe boundary handling and provider input support; `b2870d8` combines cue analysis and preserves fallback translations; `ec98e49` adds vocabulary hints and optional YouTube URL ingestion. A final documentation commit records validation and rollout guidance. No push/PR was requested. The consolidated plan remains active for the wider backlog and explicitly deferred live evidence.
 
 Residual evidence: measured latency/recognition wins, combined-response reading quality on reference audio, direct-URL reliability near the duration limit, and calibrated selective retranscription remain open in the debt tracker. Implementation does not establish those claims.
+
+### Follow-up: low reasoning effort (2026-09-10)
+
+After the five grouped commits were pushed to origin, the user requested changing reasoning effort from medium to low. The shared OpenAI provider configuration now sends `reasoning.effort: low` for all seven AI agents, including combined analysis, tokenization, readings, word cards and lyrics editing. Model IDs and Fast mode are unchanged. This supersedes the initial medium-effort constraint without adding a provider experiment.
+
+Applied OpenAI Docs, Ponytail, Laravel best practices, Laravel AI SDK and subtitle-pipeline guidance: retain the existing shared provider-options path and update the existing HTTP/agent-option assertions. [OpenAI reasoning documentation](https://developers.openai.com/api/docs/guides/reasoning#reasoning-effort) and [Laravel provider-options documentation](https://github.com/laravel/docs/blob/13.x/ai-sdk.md#provider-options) confirm the option shape.
+
+Validation: `AiAgentInstructionTest` passed (10 tests, 132 assertions), confirming low effort reaches all seven agents' HTTP requests and provider options with Fast mode enabled or disabled. `pint --dirty --format agent` and the full `scripts/agent/check.ps1` passed (484 backend tests, 3327 assertions; 227 extension tests; contracts, compile and build). No live provider calls or worker restarts occurred; latency and output-quality effects remain unmeasured.
 
 ## Current state and intended outcome
 

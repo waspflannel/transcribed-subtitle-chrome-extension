@@ -2,7 +2,7 @@
 
 ## Subtitle pipeline evaluation follow-up (2026-09-10)
 
-The selected pipeline implementation is covered by offline regressions. Still open: compare upload versus direct YouTube ingestion on representative reference audio; assess combined-analysis reading quality; calibrate language/logprob signals before enabling any selective second ASR pass. Keep medium reasoning and upload default. Ambiguous repeated boundary words with no positive temporal overlap remain conservative; do not globally deduplicate them. Paid comparisons require a bounded sample and cost cap before execution. See the active [pipeline plan](active/2026-09-09-whole-project-review/pipeline-speed-quality-and-reliability.md).
+The selected pipeline implementation is covered by offline regressions. Still open: compare upload versus direct YouTube ingestion on representative reference audio; assess combined-analysis reading quality; calibrate language/logprob signals before enabling any selective second ASR pass. Use the user-requested low reasoning effort and keep upload as the default. Ambiguous repeated boundary words with no positive temporal overlap remain conservative; do not globally deduplicate them. Paid comparisons require a bounded sample and cost cap before execution. See the active [pipeline plan](active/2026-09-09-whole-project-review/pipeline-speed-quality-and-reliability.md).
 
 Track cleanup continuously. Prefer small, targeted follow-up plans over large periodic rewrites.
 
