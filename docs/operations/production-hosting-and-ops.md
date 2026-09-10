@@ -234,3 +234,15 @@ Vocabulary hints add the [documented Scribe keyterm surcharge](https://elevenlab
 - Logs/traces exclude generated content and credentials.
 - Database and Redis are not publicly reachable unless provider controls enforce source restrictions.
 - Backups are encrypted or protected by the provider's managed storage controls.
+
+## Backend text provider selection
+
+Set `AI_PROVIDER=openai` (the default) or `AI_PROVIDER=cerebras` in the backend environment. This selects tokenization, merged analysis, romanization, word cards and lyrics correction. Speech-to-text still uses ElevenLabs.
+
+For Cerebras, set `CEREBRAS_API_KEY` in secret storage and `CEREBRAS_MODEL=gpt-oss-120b`. The default endpoint is `https://api.cerebras.ai/v1`; `CEREBRAS_URL` can override it. Optional `CEREBRAS_TOKENIZATION_MODEL`, `CEREBRAS_ANALYSIS_MODEL`, `CEREBRAS_ROMANIZATION_MODEL` and `CEREBRAS_ENRICHMENT_MODEL` override the shared model. Omit unused overrides rather than setting them to empty strings. See the [Cerebras quickstart](https://inference-docs.cerebras.ai/quickstart) and [structured output documentation](https://inference-docs.cerebras.ai/capabilities/structured-outputs).
+
+For OpenAI, `OPENAI_MODEL` defaults to Luna. Existing `OPENAI_*_MODEL` task overrides take precedence, including those already present in deployed environments. OpenAI reasoning/Fast options apply only to OpenAI. The installed Laravel AI SDK uses its Chat Completions transport registered under the Cerebras identity; no Cerebras-specific dependency is required.
+
+Set optional `CEREBRAS_{TOKENIZATION,TRANSLATION,ROMANIZATION,ENRICHMENT}_MICROUSD_PER_CUE` and `CEREBRAS_ALIGNMENT_MICROUSD_PER_CALL` for cost estimates. Their zero defaults mean no estimate is configured; OpenAI rates are never applied to Cerebras.
+
+Apply changes during a drained queue window, rebuild cached configuration (`php artisan config:cache`) and restart workers (`php artisan queue:restart`). Calls resolve current configuration; jobs do not pin a provider/model snapshot. Existing completed tracks and saved word cards remain reusable. New word-card cache entries include provider and model. Use a fresh generation when comparing providers. The readiness command checks the selected provider under `providers.ai` / `aiKeyConfigured`; tokenization evaluations use the selected provider and accept the existing `--model` override.

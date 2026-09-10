@@ -8,6 +8,8 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 
 ## Current State
 
+- Backend text agents select OpenAI or Cerebras through `AI_PROVIDER`, with provider-specific default and per-task models in `config/ai.php`. Cost records and workflow diagnostics follow that selection; word-card cache keys include provider/model. OpenAI remains the deployment default. Existing saved tracks remain reusable. See the production runbook for configuration and worker restarts.
+
 - Transcription ingestion mode is pinned on the job: `upload` is the default; opt-in `youtube_url` validates public/non-live video metadata and duration before Scribe fetches the canonical video URL. Both routes converge on the same chunk artifacts and merge/analysis continuation. Optional vocabulary hints are normalized and included in job reuse identity; transcript-cache variants include ingestion mode and hints, and hinted entries are additionally scoped to the owner. All OpenAI agents use low reasoning effort through the shared provider configuration.
 - Missing requested cue translations remain empty and are labelled unavailable in the transcript. Valid translations survive tokenization fallback. New output uses job tokenizer version v10 and transcript-cache version v3.
 
