@@ -32,6 +32,7 @@ class ExtensionAuthApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('account.status', 'authenticated')
             ->assertJsonPath('account.email', 'learner@example.com')
+            ->assertJsonPath('account.aiModel', 'gpt-5.6-luna')
             ->assertJsonPath('token.tokenType', 'Bearer')
             ->assertJsonStructure(['token' => ['plainTextToken', 'expiresAt', 'abilities']]);
 
@@ -46,12 +47,15 @@ class ExtensionAuthApiTest extends TestCase
         $this->assertSame(app(ExtensionTokenIssuer::class)->tokenName($this->installId()), $accessToken->name);
         $this->assertNotNull($accessToken->expires_at);
 
+        config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.analysis.default' => 'gpt-oss-120b']);
+
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())
             ->withHeader('Authorization', 'Bearer '.$plainTextToken)
             ->getJson('/v1/extension-auth/account')
             ->assertOk()
             ->assertJsonPath('account.id', (string) $user->id)
+            ->assertJsonPath('account.aiModel', 'gpt-oss-120b')
             ->assertJsonMissingPath('token');
     }
 

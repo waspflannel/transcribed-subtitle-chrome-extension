@@ -22,6 +22,7 @@ export function anonymousAccountState(): AccountState {
 export function accountStateFromSummary(account: AccountSummary): AccountState {
   return {
     status: 'authenticated',
+    aiModel: account.aiModel,
     id: account.id,
     email: account.email,
     name: account.name,

@@ -21,6 +21,10 @@
     "upgradeAvailable"
   ],
   "properties": {
+    "aiModel": {
+      "type": "string",
+      "description": "Currently configured backend analysis model; not the provenance of saved tracks."
+    },
     "status": {
       "type": "string",
       "const": "authenticated"

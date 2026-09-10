@@ -12,6 +12,7 @@ export interface AnonymousAccountState {
 }
 
 export interface AuthenticatedAccountState {
+  aiModel?: string;
   status: 'authenticated';
   id: string;
   email: string;

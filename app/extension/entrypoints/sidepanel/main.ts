@@ -138,6 +138,7 @@ const {
   accountStatus,
   accountPlan,
   accountSpeed,
+  accountModel,
   accountLoginForm,
   accountEmailInput,
   accountPasswordInput,
@@ -1368,6 +1369,8 @@ function renderAccount(accountState: AccountState, settings: ExtensionSettings):
   accountStatus.textContent = authenticated ? accountState.email : 'Account';
   accountPlan.textContent = authenticated ? accountState.planName : 'Available after sign-in';
   accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Available after sign-in';
+  accountModel.hidden = !authenticated;
+  accountModel.textContent = authenticated ? `Model: ${accountState.aiModel || 'Unavailable'}` : '';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;
