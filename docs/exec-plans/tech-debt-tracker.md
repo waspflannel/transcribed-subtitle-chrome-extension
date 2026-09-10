@@ -6,6 +6,10 @@ The selected pipeline implementation is covered by offline regressions. Still op
 
 Track cleanup continuously. Prefer small, targeted follow-up plans over large periodic rewrites.
 
+## Partial-lyrics confirmation recovery (2026-09-10)
+
+For `Y_vB-3R_BYc`, attempt `cbb0be40-c969-47cb-a872-433877a9f929` ended at alignment with `lyrics_incomplete` and preserved the existing 69-cue track. The user saw the terminal message asking them to paste again instead of the partial-merge confirmation. Code inspection shows that confirmation requires the matching in-memory draft, attempt, track and video; the exact cause of the missing or mismatched panel state has not been reproduced. Partial merging remains supported after explicit confirmation, but this attempt never reached it. Reproduce the panel handoff and recovery after reopening, then restore a clear route to confirmation while preserving draft and track identity checks. This issue remains open after the pipeline branch merge; the Punjabi long-cue fix and local Fast mode change do not resolve it.
+
 ## Requirements retained after the 2026-09-09 plan cleanup
 
 Removing old plans does not close their acceptance gates. The current [audit packages](active/2026-09-09-whole-project-review/00-index.md) own follow-up work; use [product scope](../product-specs/index.md), [lyrics editing](../product-specs/lyrics-editing.md), [release readiness](../product-specs/release-readiness.md) and the [operations runbook](../operations/production-hosting-and-ops.md) for durable requirements. Old evidence is available in Git at `5f3a92b7347072471b59bb2b956e23559ada1e6f`.

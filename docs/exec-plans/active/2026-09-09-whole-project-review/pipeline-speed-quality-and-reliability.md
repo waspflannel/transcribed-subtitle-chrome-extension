@@ -55,6 +55,10 @@ Applied OpenAI Docs, Ponytail, Laravel best practices, Laravel AI SDK and subtit
 
 Validation: `AiAgentInstructionTest` passed (10 tests, 132 assertions), confirming low effort reaches all seven agents' HTTP requests and provider options with Fast mode enabled or disabled. `pint --dirty --format agent` and the full `scripts/agent/check.ps1` passed (484 backend tests, 3327 assertions; 227 extension tests; contracts, compile and build). No live provider calls or worker restarts occurred; latency and output-quality effects remain unmeasured.
 
+### Follow-up: local Fast mode (2026-09-10)
+
+The user requested enabling Fast mode. Set the existing local `OPENAI_FAST_MODE_ENABLED` flag to `true`; the tracked default and example environment already enable it. Restarted the backend and all 31 workers after confirming no active generation or correction attempts. Effective provider options now contain `service_tier: fast` and `reasoning.effort: low`, with `gpt-5.6-luna` unchanged. All 32 runtime processes are alive and backend health returns HTTP 200. This is local runtime activation; no production setting or provider-backed latency claim is implied. Local environment files remain untracked.
+
 ## Current state and intended outcome
 
 The goal is fast usable subtitles and high-quality completed output, with bounded cost and reliable recovery. The prior code delivery corrected source-validation prerequisites, request budgets and narrow chunk-boundary behavior; it did not adopt faster models, new scheduling or audio enhancement. Its [delivery and testing record](delivery-and-testing.md) remains open for user acceptance. The slowdown investigation below includes newer diagnostic work; do not mistake the old reviewed commit for the entire current working tree.
