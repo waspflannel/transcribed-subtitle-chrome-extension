@@ -2,6 +2,7 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\SubtitlePromptRules;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Contracts\Agent;
@@ -16,6 +17,8 @@ class LearningTokenCardAgent implements Agent, HasProviderOptions, HasStructured
 {
     use Promptable;
 
+    public function __construct(public readonly ?string $sourceLanguage = null) {}
+
     public function providerOptions(Lab|string $provider): array
     {
         return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
@@ -25,13 +28,13 @@ class LearningTokenCardAgent implements Agent, HasProviderOptions, HasStructured
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-Create one concise learner card for one clicked subtitle token.
-
-Return exactly one token object for requestedToken. The returned token text must match requestedToken.text exactly. Include short gloss or translation metadata for the target language. Add lemma, root, partOfSpeech, romanization, or usageNote only when useful.
-
-For non-Latin source text, include romanization when helpful. For Latin-script languages, omit romanization unless it helps pronunciation. Use learner-standard romanization when applicable, such as Hepburn for Japanese and pinyin for Mandarin. Include only metadata that helps a learner understand the token in context. Return only data that matches the structured output schema.
-INSTRUCTIONS;
+        return implode("\n\n", [
+            'Create one concise learner card for one clicked subtitle token. Return exactly one token object for requestedToken. Copy requestedToken.index exactly; do not renumber it to zero. requestedToken.text is authoritative: explain that exact word or phrase without splitting or rewriting it. The server restores token text; do not echo it.',
+            SubtitlePromptRules::TEXT_IS_DATA,
+            SubtitlePromptRules::WORD_CARD,
+            'Preserve an existing non-empty requestedToken.romanization. Otherwise generate romanization for a token containing non-Latin letters, and return null for a Latin-only token.',
+            SubtitlePromptRules::romanization($this->sourceLanguage),
+        ]);
     }
 
     public function model(): string
@@ -49,7 +52,6 @@ INSTRUCTIONS;
         return [
             'token' => $schema->object([
                 'index' => $schema->integer()->min(0)->required(),
-                'text' => $schema->string()->min(1)->required(),
                 'lemma' => $schema->string()->min(1)->nullable()->required(),
                 'root' => $schema->string()->min(1)->nullable()->required(),
                 'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),

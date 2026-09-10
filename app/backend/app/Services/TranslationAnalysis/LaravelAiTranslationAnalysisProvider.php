@@ -55,12 +55,6 @@ class LaravelAiTranslationAnalysisProvider
             : $cue['sourceText'];
         $refreshed = $this->validatedEnrichedCueResult($output, [$cue], $includeRomanization)->cues[0];
 
-        foreach ($refreshed['tokens'] as $token) {
-            if (! isset($token['translation'], $token['gloss'])) {
-                $this->failInvalidOutput('missing_edited_token_meaning');
-            }
-        }
-
         if ($includeRomanization) {
             foreach ([$refreshed, ...$refreshed['tokens']] as $item) {
                 $text = $item['sourceText'] ?? $item['text'];
@@ -107,10 +101,11 @@ class LaravelAiTranslationAnalysisProvider
         bool $allowReprompt,
         bool $splitInvalidBatches = true,
         ?Closure $beforeRetry = null,
+        array $validationFeedback = [],
     ): CueEnrichmentResult {
         $output = $this->promptAgent(
             CueTokenizationAgent::class,
-            $this->tokenizationInput($batch, $sourceLanguage, $allCues),
+            [...$this->tokenizationInput($batch, $sourceLanguage, $allCues), ...($validationFeedback === [] ? [] : ['validationFeedback' => $validationFeedback])],
         );
 
         $cueCount = count($batch);
@@ -118,6 +113,7 @@ class LaravelAiTranslationAnalysisProvider
         try {
             return $this->tokenizedBatchResult($output, $batch);
         } catch (SubtitleProcessingException $exception) {
+            $feedback = Arr::only($exception->context, ['reason', 'field']);
             if ($splitInvalidBatches && $this->shouldRetryTokenizationBatch($exception, $cueCount)) {
                 $beforeRetry?->__invoke();
                 $reason = $exception->context['reason'] ?? 'unknown';
@@ -132,8 +128,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
-                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
+                $left = $this->tokenizeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, validationFeedback: $feedback);
+                $right = $this->tokenizeBatch(array_slice($batch, $splitAt), $sourceLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, validationFeedback: $feedback);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
@@ -142,7 +138,7 @@ class LaravelAiTranslationAnalysisProvider
             }
 
             if ($cueCount <= 1) {
-                return $this->tokenizeSingleCueWithFallback($batch, $sourceLanguage, $allCues, $allowReprompt, $beforeRetry);
+                return $this->tokenizeSingleCueWithFallback($batch, $sourceLanguage, $allCues, $allowReprompt, $beforeRetry, $feedback);
             }
 
             throw $exception;
@@ -167,13 +163,14 @@ class LaravelAiTranslationAnalysisProvider
         array $allCues,
         bool $allowReprompt,
         ?Closure $beforeRetry = null,
+        array $validationFeedback = [],
     ): CueEnrichmentResult {
         if ($allowReprompt) {
             $beforeRetry?->__invoke();
             try {
                 $output = $this->promptAgent(
                     CueTokenizationAgent::class,
-                    $this->tokenizationInput($batch, $sourceLanguage, $allCues),
+                    [...$this->tokenizationInput($batch, $sourceLanguage, $allCues), 'validationFeedback' => $validationFeedback],
                 );
 
                 return $this->tokenizedBatchResult($output, $batch);
@@ -283,10 +280,11 @@ class LaravelAiTranslationAnalysisProvider
         bool $includeRomanization,
         bool $splitInvalidBatches = true,
         ?Closure $beforeRetry = null,
+        array $validationFeedback = [],
     ): CueEnrichmentResult {
         $output = $this->promptAgent(
             CueEnrichmentAgent::class,
-            $this->cueEnrichmentInput($batch, $sourceLanguage, $targetLanguage, $includeRomanization),
+            [...$this->cueEnrichmentInput($batch, $sourceLanguage, $targetLanguage, $includeRomanization), ...($validationFeedback === [] ? [] : ['validationFeedback' => $validationFeedback])],
         );
 
         $cueCount = count($batch);
@@ -294,6 +292,7 @@ class LaravelAiTranslationAnalysisProvider
         try {
             return $this->validatedEnrichedCueResult($output, $batch, $includeRomanization);
         } catch (SubtitleProcessingException $exception) {
+            $feedback = Arr::only($exception->context, ['reason', 'field']);
             if ($splitInvalidBatches && $this->shouldRetryEnrichmentBatch($exception, $cueCount)) {
                 $beforeRetry?->__invoke();
                 $reason = $exception->context['reason'] ?? 'unknown';
@@ -309,8 +308,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, splitInvalidBatches: false, beforeRetry: $beforeRetry);
-                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, splitInvalidBatches: false, beforeRetry: $beforeRetry);
+                $left = $this->enrichBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, splitInvalidBatches: false, beforeRetry: $beforeRetry, validationFeedback: $feedback);
+                $right = $this->enrichBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $includeRomanization, splitInvalidBatches: false, beforeRetry: $beforeRetry, validationFeedback: $feedback);
 
                 return new CueEnrichmentResult(
                     [...$left->cues, ...$right->cues],
@@ -354,6 +353,7 @@ class LaravelAiTranslationAnalysisProvider
             'token_count_mismatch',
             'invalid_token',
             'token_identity_mismatch',
+            'missing_token_meaning',
         ], true);
     }
 
@@ -407,10 +407,11 @@ class LaravelAiTranslationAnalysisProvider
         ?Closure $beforeRetry = null,
         bool $includeTranslation = true,
         bool $includeRomanization = false,
+        array $validationFeedback = [],
     ): CueAnalysisBatchResult {
         $output = $this->promptAgent(
             CueAnalysisAgent::class,
-            $this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues, $includeTranslation, $includeRomanization),
+            [...$this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues, $includeTranslation, $includeRomanization), ...($validationFeedback === [] ? [] : ['validationFeedback' => $validationFeedback])],
         );
 
         $cueCount = count($batch);
@@ -418,6 +419,7 @@ class LaravelAiTranslationAnalysisProvider
         try {
             return $this->analyzedBatchResult($output, $batch, $includeTranslation, $includeRomanization);
         } catch (SubtitleProcessingException $exception) {
+            $feedback = Arr::only($exception->context, ['reason', 'field']);
             if ($splitInvalidBatches && $this->shouldRetryTokenizationBatch($exception, $cueCount)) {
                 $beforeRetry?->__invoke();
                 $reason = $exception->context['reason'] ?? 'unknown';
@@ -433,8 +435,8 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, includeTranslation: $includeTranslation, includeRomanization: $includeRomanization);
-                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, includeTranslation: $includeTranslation, includeRomanization: $includeRomanization);
+                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, includeTranslation: $includeTranslation, includeRomanization: $includeRomanization, validationFeedback: $feedback);
+                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, includeTranslation: $includeTranslation, includeRomanization: $includeRomanization, validationFeedback: $feedback);
 
                 return new CueAnalysisBatchResult(
                     $this->combinedResult($left->tokenized, $right->tokenized),
@@ -444,7 +446,7 @@ class LaravelAiTranslationAnalysisProvider
             }
 
             if ($cueCount <= 1) {
-                return $this->analyzeSingleCueWithFallback($batch, $sourceLanguage, $targetLanguage, $allCues, $allowReprompt, $beforeRetry, $output, $includeTranslation, $includeRomanization);
+                return $this->analyzeSingleCueWithFallback($batch, $sourceLanguage, $targetLanguage, $allCues, $allowReprompt, $beforeRetry, $output, $includeTranslation, $includeRomanization, $feedback);
             }
 
             throw $exception;
@@ -468,6 +470,7 @@ class LaravelAiTranslationAnalysisProvider
         array $initialOutput = [],
         bool $includeTranslation = true,
         bool $includeRomanization = false,
+        array $validationFeedback = [],
     ): CueAnalysisBatchResult {
         $translation = $this->singleCueTranslation($initialOutput, $batch[0]);
 
@@ -476,7 +479,7 @@ class LaravelAiTranslationAnalysisProvider
             try {
                 $output = $this->promptAgent(
                     CueAnalysisAgent::class,
-                    $this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues, $includeTranslation, $includeRomanization),
+                    [...$this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues, $includeTranslation, $includeRomanization), 'validationFeedback' => $validationFeedback],
                 );
                 $translation = $this->singleCueTranslation($output, $batch[0]) ?? $translation;
                 if ($translation !== null && is_array($output['cues'][0] ?? null)) {
@@ -530,7 +533,7 @@ class LaravelAiTranslationAnalysisProvider
     {
         try {
             $cue = $this->validatedOutputCues($output, [$sourceCue])[0];
-            $this->validateCueIdentity($sourceCue, $cue, 0, validateSourceText: false);
+            $this->validateCueIdentity($sourceCue, $cue, 0);
 
             return $this->cleanString($cue['translatedText'] ?? null);
         } catch (SubtitleProcessingException) {
@@ -720,8 +723,9 @@ class LaravelAiTranslationAnalysisProvider
                 ? CueAnalysisAgent::make(
                     includeTranslation: $input['includeTranslation'] ?? true,
                     includeRomanization: $input['includeRomanization'] ?? false,
+                    sourceLanguage: $input['sourceLanguage'],
                 )
-                : $agentClass::make();
+                : $agentClass::make(sourceLanguage: $input['sourceLanguage']);
             $response = $agent->prompt($this->encodeAgentInput($input));
 
             if ($response->steps->last()?->finishReason === FinishReason::Length) {
@@ -803,6 +807,8 @@ class LaravelAiTranslationAnalysisProvider
             'invalid_token_index',
             'invalid_token_text',
             'token_text_not_in_source',
+            'uncovered_source_text',
+            'invalid_token_boundary',
         ], true);
     }
 
@@ -824,10 +830,7 @@ class LaravelAiTranslationAnalysisProvider
         return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
-            'cues' => array_map(
-                fn (array $cue): array => $this->tokenizationCueInput($cue, $allCues),
-                $sourceCues,
-            ),
+            ...$this->tokenizationContext($sourceCues, $allCues),
         ];
     }
 
@@ -836,16 +839,34 @@ class LaravelAiTranslationAnalysisProvider
      * @param  array<int, array<string, mixed>>  $allCues
      * @return array<string, mixed>
      */
-    private function tokenizationCueInput(array $cue, array $allCues): array
+    private function tokenizationContext(array $sourceCues, array $allCues): array
     {
-        $position = $this->cuePosition($cue, $allCues);
-        $previousCue = $position > 0 ? $allCues[$position - 1] : null;
-        $nextCue = $allCues[$position + 1] ?? null;
+        $allCues = array_values($allCues);
+        $batchIds = array_fill_keys(array_column($sourceCues, 'cueId'), true);
+        $context = [];
+        $cues = [];
+        foreach ($sourceCues as $cue) {
+            $position = $this->cuePosition($cue, $allCues);
+            $cues[] = $this->sourceCueInput($cue);
+            foreach ([$position - 1, $position + 1] as $neighbor) {
+                if (isset($allCues[$neighbor]) && ! isset($batchIds[$allCues[$neighbor]['cueId']])) {
+                    $context[$neighbor] = $this->sourceCueInput($allCues[$neighbor]);
+                }
+            }
+        }
+        ksort($context);
 
         return [
-            ...Arr::only($cue, ['cueId', 'index', 'startMs', 'endMs', 'sourceText']),
-            'previousCueText' => $previousCue === null ? null : (string) $previousCue['sourceText'],
-            'nextCueText' => $nextCue === null ? null : (string) $nextCue['sourceText'],
+            'cues' => $cues,
+            'contextCues' => array_values($context),
+        ];
+    }
+
+    private function sourceCueInput(array $cue): array
+    {
+        return [
+            ...Arr::only($cue, ['cueId', 'index']),
+            'sourceText' => SubtitleText::canonicalComparable((string) $cue['sourceText']),
         ];
     }
 
@@ -886,7 +907,7 @@ class LaravelAiTranslationAnalysisProvider
                 fn (array $cue): array => [
                     ...Arr::only($cue, ['cueId', 'index', 'sourceText', 'translatedText', 'romanization']),
                     'tokens' => array_map(
-                        fn (array $token): array => Arr::only($token, ['index', 'text', 'normalizedText', 'romanization']),
+                        fn (array $token): array => Arr::only($token, ['index', 'text', 'romanization']),
                         array_values($cue['tokens']),
                     ),
                 ],
@@ -915,10 +936,7 @@ class LaravelAiTranslationAnalysisProvider
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
             'targetLanguageName' => LanguageCatalog::label($targetLanguage),
-            'cues' => array_map(
-                fn (array $cue): array => $this->tokenizationCueInput($cue, $allCues),
-                $sourceCues,
-            ),
+            ...$this->tokenizationContext($sourceCues, $allCues),
         ];
     }
 
@@ -931,8 +949,6 @@ class LaravelAiTranslationAnalysisProvider
         return [
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
-            'targetLanguage' => $sourceLanguage,
-            'targetLanguageName' => LanguageCatalog::label($sourceLanguage),
             'cues' => array_map(
                 fn (array $cue): array => [
                     ...Arr::only($cue, ['cueId', 'index', 'sourceText']),
@@ -958,8 +974,8 @@ class LaravelAiTranslationAnalysisProvider
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
             'targetLanguageName' => LanguageCatalog::label($targetLanguage),
-            'cue' => Arr::only($cue, ['cueId', 'index', 'sourceText', 'romanization']),
-            'requestedToken' => Arr::only($token, ['index', 'text', 'normalizedText', 'romanization']),
+            'cue' => Arr::only($cue, ['cueId', 'index', 'sourceText', 'translatedText', 'romanization']),
+            'requestedToken' => Arr::only($token, ['index', 'text', 'romanization']),
         ];
     }
 
@@ -987,7 +1003,7 @@ class LaravelAiTranslationAnalysisProvider
      */
     private function validatedTokenizedCue(array $sourceCue, array $outputCue, int $position): array
     {
-        $this->validateCueIdentity($sourceCue, $outputCue, $position, validateSourceText: false);
+        $this->validateCueIdentity($sourceCue, $outputCue, $position);
 
         return [
             ...$sourceCue,
@@ -1035,7 +1051,7 @@ class LaravelAiTranslationAnalysisProvider
             ];
 
             $romanization = $this->cleanString($sourceCue['romanization'] ?? null)
-                ?? $this->cleanString($outputCue['romanization'] ?? null);
+                ?? (SubtitleText::hasNonLatinCues([$sourceCue]) ? $this->cleanString($outputCue['romanization'] ?? null) : null);
 
             if ($includeRomanization && $romanization !== null) {
                 $enrichedCue['romanization'] = $romanization;
@@ -1198,26 +1214,15 @@ class LaravelAiTranslationAnalysisProvider
      * @param  array<string, mixed>  $sourceCue
      * @param  array<string, mixed>  $outputCue
      */
-    private function validateCueIdentity(
-        array $sourceCue,
-        array $outputCue,
-        int $position,
-        bool $validateSourceText = true,
-    ): void {
-        foreach (['cueId', ...($validateSourceText ? ['sourceText'] : [])] as $field) {
+    private function validateCueIdentity(array $sourceCue, array $outputCue, int $position): void
+    {
+        foreach (['cueId', 'index'] as $field) {
             if (($outputCue[$field] ?? null) !== $sourceCue[$field]) {
                 $this->failInvalidOutput('cue_identity_mismatch', [
                     'cue_position' => $position,
                     'field' => $field,
                 ]);
             }
-        }
-
-        if (($outputCue['index'] ?? null) !== $sourceCue['index']) {
-            $this->failInvalidOutput('cue_identity_mismatch', [
-                'cue_position' => $position,
-                'field' => 'index',
-            ]);
         }
     }
 
@@ -1275,7 +1280,7 @@ class LaravelAiTranslationAnalysisProvider
             $sourceIndex = $sourceToken['index'];
             $sourceText = $this->cleanString($sourceToken['text']);
 
-            if (($outputToken['index'] ?? null) !== $sourceIndex || ($outputToken['text'] ?? null) !== $sourceText) {
+            if (($outputToken['index'] ?? null) !== $sourceIndex) {
                 $this->failInvalidOutput('token_identity_mismatch', [
                     'cue_index' => $cueIndex,
                     'token_position' => $position,
@@ -1288,16 +1293,10 @@ class LaravelAiTranslationAnalysisProvider
                 'normalizedText' => $sourceToken['normalizedText'],
             ];
 
-            foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'usageNote'] as $field) {
-                $value = $this->cleanString($outputToken[$field] ?? null);
-
-                if ($value !== null) {
-                    $token[$field] = $value;
-                }
-            }
+            $token = [...$token, ...$this->learningMetadata($outputToken, $sourceIndex)];
 
             $romanization = $this->cleanString($sourceToken['romanization'] ?? null)
-                ?? $this->cleanString($outputToken['romanization'] ?? null);
+                ?? (preg_match('/(?!\p{Latin})\p{L}/u', $sourceText) === 1 ? $this->cleanString($outputToken['romanization'] ?? null) : null);
 
             if ($includeRomanization && $romanization !== null) {
                 $token['romanization'] = $romanization;
@@ -1316,7 +1315,7 @@ class LaravelAiTranslationAnalysisProvider
      */
     private function validatedLearningToken(array $outputToken, array $sourceToken, string $tokenText): array
     {
-        if (($outputToken['text'] ?? null) !== $tokenText || ($outputToken['index'] ?? null) !== $sourceToken['index']) {
+        if (($outputToken['index'] ?? null) !== $sourceToken['index']) {
             $this->failInvalidOutput('token_identity_mismatch');
         }
 
@@ -1326,15 +1325,35 @@ class LaravelAiTranslationAnalysisProvider
             'normalizedText' => $sourceToken['normalizedText'],
         ];
 
-        foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'romanization', 'usageNote'] as $field) {
-            $value = $this->cleanString($outputToken[$field] ?? null);
-
-            if ($value !== null) {
-                $token[$field] = $value;
-            }
+        $token = [...$token, ...$this->learningMetadata($outputToken, $sourceToken['index'])];
+        $existingReading = $this->cleanString($sourceToken['romanization'] ?? null)
+            ?? (preg_match('/(?!\p{Latin})\p{L}/u', $tokenText) === 1 ? $this->cleanString($outputToken['romanization'] ?? null) : null);
+        if ($existingReading !== null) {
+            $token['romanization'] = $existingReading;
         }
 
         return $token;
+    }
+
+    private function learningMetadata(array $outputToken, int $index): array
+    {
+        $metadata = [];
+        foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'usageNote'] as $field) {
+            $value = $this->cleanString($outputToken[$field] ?? null);
+            if ($value !== null) {
+                $metadata[$field] = $value;
+            }
+        }
+        if (! isset($metadata['translation']) && ! isset($metadata['gloss'])) {
+            $this->failInvalidOutput('missing_token_meaning', ['token_index' => $index]);
+        }
+        foreach (['root' => 'lemma', 'gloss' => 'translation'] as $optional => $primary) {
+            if (isset($metadata[$optional], $metadata[$primary]) && mb_strtolower($metadata[$optional]) === mb_strtolower($metadata[$primary])) {
+                unset($metadata[$optional]);
+            }
+        }
+
+        return $metadata;
     }
 
     /**

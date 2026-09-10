@@ -8,6 +8,7 @@ use App\Ai\Agents\CueRomanizationAgent;
 use App\Ai\Agents\CueTokenizationAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\CueAnalysisBatchResult;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -280,8 +281,9 @@ class CueEnrichmentServiceTest extends TestCase
         CueTokenizationAgent::assertPrompted(
             fn ($prompt): bool => $prompt->model === (string) config('ai.providers.openai.models.tokenization.default')
                 && $this->promptInputHasNoInstructions($prompt)
-                && data_get($this->promptInput($prompt), 'cues.0.nextCueText') === 'good morning'
-                && data_get($this->promptInput($prompt), 'cues.1.previousCueText') === 'Hola amiga',
+                && data_get($this->promptInput($prompt), 'cues.0.sourceText') === 'Hola amiga'
+                && data_get($this->promptInput($prompt), 'cues.1.sourceText') === 'good morning'
+                && $this->promptInput($prompt)['contextCues'] === [],
         );
     }
 
@@ -563,7 +565,7 @@ class CueEnrichmentServiceTest extends TestCase
         ], array_column($result->cues[0]['tokens'], 'text'));
 
         CueTokenizationAgent::assertPrompted(
-            fn ($prompt): bool => $prompt->contains($sourceText)
+            fn ($prompt): bool => $prompt->contains(SubtitleText::canonicalComparable($sourceText))
                 && $this->promptInputHasNoInstructions($prompt)
                 && ! $prompt->contains('tokenizationText')
                 && ! $prompt->contains('sourceStart')
@@ -639,7 +641,7 @@ class CueEnrichmentServiceTest extends TestCase
 
         $this->assertSame('castilian', $result->sourceDialect);
         $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
-        $this->assertSame('hola a todos', $result->cues[0]['romanization']);
+        $this->assertArrayNotHasKey('romanization', $result->cues[0]);
         $this->assertSame(['hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
         $this->assertSame('hello', $result->cues[0]['tokens'][0]['gloss']);
 
@@ -710,8 +712,8 @@ class CueEnrichmentServiceTest extends TestCase
                         'translatedText' => 'hola a todos',
                         'romanization' => 'hola a todos',
                         'tokens' => [
-                            ['index' => 0, 'text' => 'hola', 'romanization' => 'o-la'],
-                            ['index' => 1, 'text' => 'a todos', 'romanization' => 'a to-dos'],
+                            ['index' => 0, 'gloss' => 'salut', 'romanization' => 'o-la'],
+                            ['index' => 1, 'gloss' => 'à tous', 'romanization' => 'a to-dos'],
                         ],
                     ],
                 ],
@@ -869,13 +871,9 @@ class CueEnrichmentServiceTest extends TestCase
             return $this->promptInputHasNoInstructions($prompt)
                 && data_get($input, 'sourceLanguage') === 'ara'
                 && data_get($input, 'targetLanguage') === 'eng'
-                && array_key_exists('previousCueText', $input['cues'][0])
-                && data_get($input, 'cues.0.previousCueText') === null
-                && data_get($input, 'cues.0.nextCueText') === 'ambiguous idiom'
-                && data_get($input, 'cues.1.previousCueText') === 'the song begins'
-                && data_get($input, 'cues.1.nextCueText') === 'the crowd answers'
-                && data_get($input, 'cues.2.previousCueText') === 'ambiguous idiom'
-                && data_get($input, 'cues.2.nextCueText') === null
+                && $input['contextCues'] === []
+                && array_column($input['cues'], 'sourceText') === ['the song begins', 'ambiguous idiom', 'the crowd answers']
+                && ! array_key_exists('previousCueText', $input['cues'][0])
                 && ! array_key_exists('tokens', $input['cues'][1]);
         });
     }
@@ -1056,8 +1054,8 @@ class CueEnrichmentServiceTest extends TestCase
                         'sourceText' => 'hola a todos',
                         'translatedText' => 'hola a todos',
                         'tokens' => [
-                            ['index' => 0, 'text' => 'hola'],
-                            ['index' => 1, 'text' => 'a todos'],
+                            ['index' => 0, 'gloss' => 'salut'],
+                            ['index' => 1, 'gloss' => 'à tous'],
                         ],
                     ],
                 ],
@@ -1116,7 +1114,7 @@ class CueEnrichmentServiceTest extends TestCase
         CueRomanizationAgent::assertPrompted(
             fn ($prompt): bool => $this->promptInputHasNoInstructions($prompt)
                 && data_get($this->promptInput($prompt), 'sourceLanguage') === 'jpn'
-                && data_get($this->promptInput($prompt), 'targetLanguage') === 'jpn'
+                && ! array_key_exists('targetLanguage', $this->promptInput($prompt))
                 && data_get($this->promptInput($prompt), 'cues.0.tokens.2.text') === '日本語',
         );
     }
@@ -1408,9 +1406,9 @@ class CueEnrichmentServiceTest extends TestCase
                     'root' => null,
                     'partOfSpeech' => null,
                     'translation' => null,
-                    'gloss' => 'hello',
+                    'gloss' => 'こんにちは',
                     'romanization' => null,
-                    'usageNote' => 'Common greeting.',
+                    'usageNote' => '一般的な挨拶。',
                 ],
             ],
         ])->preventStrayPrompts();
@@ -1427,8 +1425,8 @@ class CueEnrichmentServiceTest extends TestCase
             'text' => 'Hola',
             'normalizedText' => 'hola',
             'lemma' => 'hola',
-            'gloss' => 'hello',
-            'usageNote' => 'Common greeting.',
+            'gloss' => 'こんにちは',
+            'usageNote' => '一般的な挨拶。',
         ], $token);
 
         LearningTokenCardAgent::assertPrompted(
@@ -1569,7 +1567,7 @@ class CueEnrichmentServiceTest extends TestCase
         $cues = array_map(fn (int $index): array => [
             ...$this->sourceCue('cue-'.$index, $index, 'hello'),
             'translatedText' => 'hola',
-            'tokens' => [['index' => 0, 'text' => 'hello', 'normalizedText' => 'hello']],
+            'tokens' => [['index' => 0, 'text' => 'hello', 'normalizedText' => 'hello', 'gloss' => 'hola']],
         ], range(0, 19));
 
         foreach ([CueAnalysisAgent::class => 'analyzeBatch', CueTokenizationAgent::class => 'tokenizeBatch', CueEnrichmentAgent::class => 'enrichBatch'] as $agent => $method) {
@@ -1652,6 +1650,98 @@ class CueEnrichmentServiceTest extends TestCase
                 fn () => $this->$method([$this->sourceCue('cue-1', 0, 'hello')], 'eng', 'spa'),
                 'provider_quota_exhausted',
             );
+            $this->assertSame(2, $calls);
+        }
+    }
+
+    public function test_annotation_only_cards_keep_nonzero_indexes_and_source_text(): void
+    {
+        $cue = [...$this->sourceCue('cue-1', 0, 'take the train'), 'translatedText' => 'prends le train'];
+        $sourceToken = ['index' => 2, 'text' => 'train', 'normalizedText' => 'train'];
+        LearningTokenCardAgent::fake([['token' => ['index' => 2, 'translation' => 'train']]])->preventStrayPrompts();
+
+        $result = $this->provider()->enrichToken($cue, $sourceToken, 'eng', 'fra');
+        $this->assertSame([...$sourceToken, 'translation' => 'train'], $result);
+        LearningTokenCardAgent::assertPrompted(fn ($prompt): bool => data_get($this->promptInput($prompt), 'cue.translatedText') === 'prends le train');
+
+        LearningTokenCardAgent::fake([['token' => ['index' => 0, 'translation' => 'train']]])->preventStrayPrompts();
+        $this->assertProviderFailureReason(fn () => $this->provider()->enrichToken($cue, $sourceToken, 'eng', 'fra'), 'token_identity_mismatch');
+    }
+
+    public function test_cards_require_a_meaning_and_accept_an_honest_uncertainty_gloss(): void
+    {
+        $cue = $this->sourceCue('cue-1', 0, 'unclear');
+        $token = ['index' => 0, 'text' => 'unclear', 'normalizedText' => 'unclear'];
+        LearningTokenCardAgent::fake([['token' => ['index' => 0, 'lemma' => 'unclear', 'translation' => null, 'gloss' => null]]])->preventStrayPrompts();
+        $this->assertProviderFailureReason(fn () => $this->provider()->enrichToken($cue, $token, 'eng', 'fra'), 'missing_token_meaning');
+
+        LearningTokenCardAgent::fake([['token' => ['index' => 0, 'gloss' => 'Sens indéterminable dans ce contexte.']]])->preventStrayPrompts();
+        $this->assertSame('Sens indéterminable dans ce contexte.', $this->provider()->enrichToken($cue, $token, 'eng', 'fra')['gloss']);
+    }
+
+    public function test_clicked_card_preserves_the_existing_contextual_reading(): void
+    {
+        LearningTokenCardAgent::fake([['token' => ['index' => 3, 'translation' => 'today', 'romanization' => 'konnichi']]])->preventStrayPrompts();
+        $result = $this->provider()->enrichToken(
+            $this->sourceCue('cue-1', 0, '今日'),
+            ['index' => 3, 'text' => '今日', 'normalizedText' => '今日', 'romanization' => 'kyō'],
+            'jpn', 'eng',
+        );
+        $this->assertSame('kyō', $result['romanization']);
+    }
+
+    public function test_card_cleaning_removes_duplicate_fields_and_target_readings_for_latin_source(): void
+    {
+        LearningTokenCardAgent::fake([['token' => [
+            'index' => 0, 'translation' => '猫', 'gloss' => '猫', 'lemma' => 'cat', 'root' => 'cat', 'romanization' => 'neko',
+        ]]])->preventStrayPrompts();
+        $result = $this->provider()->enrichToken(
+            $this->sourceCue('cue-1', 0, 'cat'),
+            ['index' => 0, 'text' => 'cat', 'normalizedText' => 'cat'],
+            'eng', 'jpn',
+        );
+        $this->assertSame(['index' => 0, 'text' => 'cat', 'normalizedText' => 'cat', 'lemma' => 'cat', 'translation' => '猫'], $result);
+    }
+
+    public function test_compact_enrichment_reconstructs_text_and_accepts_translation_without_duplicate_gloss(): void
+    {
+        CueEnrichmentAgent::fake([['cues' => [[
+            'cueId' => 'cue-0001', 'index' => 0,
+            'tokens' => [['index' => 0, 'translation' => 'salut'], ['index' => 1, 'translation' => 'à tous']],
+        ]]]])->preventStrayPrompts();
+        $result = $this->enrichBatch($this->tokenizedSourceCues(), 'spa', 'fra', false);
+        $this->assertSame('hola a todos', $result->cues[0]['sourceText']);
+        $this->assertSame(['hola', 'a todos'], array_column($result->cues[0]['tokens'], 'text'));
+        $this->assertSame(['salut', 'à tous'], array_column($result->cues[0]['tokens'], 'translation'));
+    }
+
+    public function test_context_is_sent_once_and_coverage_retry_receives_the_rejection_reason(): void
+    {
+        $all = [
+            $this->sourceCue('before', 0, 'Yesterday'),
+            $this->sourceCue('current', 1, 'I do not agree'),
+            $this->sourceCue('after', 2, 'Neither do I'),
+        ];
+        foreach ([CueTokenizationAgent::class, CueAnalysisAgent::class] as $agent) {
+            $calls = 0;
+            $agent::fake(function (string $prompt) use (&$calls): array {
+                $input = json_decode($prompt, true, 512, JSON_THROW_ON_ERROR);
+                $this->assertSame(['before', 'after'], array_column($input['contextCues'], 'cueId'));
+                $this->assertCount(1, $input['cues']);
+                $this->assertArrayNotHasKey('previousCueText', $input['cues'][0]);
+                if (++$calls === 2) {
+                    $this->assertSame('uncovered_source_text', $input['validationFeedback']['reason']);
+                }
+
+                return ['cues' => [[
+                    'cueId' => 'current', 'index' => 1, 'translatedText' => "Je ne suis pas d'accord",
+                    'tokens' => $this->generatedTokens('I do not agree', $calls === 1 ? ['I', 'agree'] : ['I', 'do', 'not', 'agree']),
+                ]]];
+            })->preventStrayPrompts();
+            $result = $agent === CueTokenizationAgent::class
+                ? $this->provider()->tokenizeCueBatch([$all[1]], $all, 'eng')
+                : $this->provider()->analyzeCueBatch([$all[1]], $all, 'eng', 'fra')->tokenized;
+            $this->assertSame(['I', 'do', 'not', 'agree'], array_column($result->cues[0]['tokens'], 'text'));
             $this->assertSame(2, $calls);
         }
     }

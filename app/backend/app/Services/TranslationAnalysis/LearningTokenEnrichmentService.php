@@ -149,7 +149,7 @@ class LearningTokenEnrichmentService
      */
     private function hasLearningMetadata(array $token): bool
     {
-        foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'usageNote'] as $field) {
+        foreach (['translation', 'gloss'] as $field) {
             if (is_string($token[$field] ?? null) && trim($token[$field]) !== '') {
                 return true;
             }
@@ -169,7 +169,9 @@ class LearningTokenEnrichmentService
             'detectedSourceLanguage' => $track->detected_source_language,
             'targetLanguage' => $track->target_language,
             'token' => $token['normalizedText'],
+            'tokenIndex' => $token['index'],
             'context' => $cue['sourceText'],
+            'translation' => $cue['translatedText'] ?? null,
             'provider' => config('ai.default'),
             'model' => $this->enrichmentModel(),
             'version' => SubtitleProcessingVersion::LEARNING_TOKEN_CACHE,
@@ -206,6 +208,10 @@ class LearningTokenEnrichmentService
 
         foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'romanization', 'usageNote'] as $field) {
             $value = is_string($enrichedToken[$field] ?? null) ? trim($enrichedToken[$field]) : '';
+
+            if ($field === 'romanization' && is_string($existingToken[$field] ?? null) && trim($existingToken[$field]) !== '') {
+                $value = trim($existingToken[$field]);
+            }
 
             if ($value === '' && is_string($existingToken[$field] ?? null)) {
                 $value = trim($existingToken[$field]);

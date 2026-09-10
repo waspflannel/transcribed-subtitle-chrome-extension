@@ -9,7 +9,9 @@ use App\Ai\Agents\CueTokenizationAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
+use App\Ai\SubtitlePromptRules;
 use Illuminate\Http\Client\Request;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
@@ -202,73 +204,92 @@ class AiAgentInstructionTest extends TestCase
         }
     }
 
-    public function test_tokenization_agent_owns_stable_token_boundary_rules(): void
+    public function test_segmentation_agents_share_coverage_and_only_relevant_language_examples(): void
     {
-        $instructions = (new CueTokenizationAgent)->instructions();
+        foreach (['jpn' => 'Japanese examples:', 'cmn' => 'Chinese examples:', 'tha' => 'Thai example:'] as $language => $example) {
+            foreach ([new CueTokenizationAgent($language), new CueAnalysisAgent(sourceLanguage: $language)] as $agent) {
+                $instructions = $agent->instructions();
+                $this->assertStringContainsString(SubtitlePromptRules::segmentation($language), $instructions);
+                $this->assertStringContainsString($example, $instructions);
+                $this->assertStringContainsString('exactly once, in order', $instructions);
+                $this->assertStringContainsString('exact contiguous substring', $instructions);
+                $this->assertStringContainsString('Preserve source casing', $instructions);
+            }
+        }
 
-        $this->assertStringContainsString('Return one tokenized cue for each input cue in the same order.', $instructions);
-        $this->assertStringContainsString('Do not return punctuation-only tokens.', $instructions);
-        $this->assertStringContainsString('Do not censor profanity', $instructions);
-        $this->assertStringContainsString('transcription artifacts', $instructions);
-        $this->assertStringContainsString('Every token must begin and end on a word boundary of the source language.', $instructions);
-
-        $this->assertStringContainsString('Orphan fragment', $instructions);
-        $this->assertStringContainsString('never strand a single kana that is part of a neighboring content word.', $instructions);
-        $this->assertStringContainsString('Truncated word', $instructions);
-        $this->assertStringContainsString('Sokuon', $instructions);
-        $this->assertStringContainsString('Never drop a leading character to emit うて.', $instructions);
-
-        $this->assertStringContainsString('Mandarin examples:', $instructions);
-        $this->assertStringContainsString('Split 我喜欢学习中文 as 我 / 喜欢 / 学习 / 中文', $instructions);
-        $this->assertStringContainsString('Thai examples:', $instructions);
-        $this->assertStringContainsString('Split ผมชอบกินข้าว as ผม / ชอบ / กิน / ข้าว', $instructions);
+        $english = (new CueTokenizationAgent('eng'))->instructions();
+        $this->assertStringNotContainsString('Japanese examples:', $english);
+        $this->assertStringNotContainsString('Chinese examples:', $english);
+        $this->assertStringNotContainsString('Thai example:', $english);
+        $this->assertSame(SubtitlePromptRules::segmentation('ja'), SubtitlePromptRules::segmentation('jpn'));
     }
 
-    public function test_romanization_agent_owns_stable_romanization_rules(): void
+    public function test_analysis_instructions_only_include_requested_operations(): void
     {
-        $instructions = (new CueRomanizationAgent)->instructions();
+        $tokensOnly = (new CueAnalysisAgent(false, false, 'jpn'))->instructions();
+        $translated = (new CueAnalysisAgent(true, false, 'jpn'))->instructions();
+        $romanized = (new CueAnalysisAgent(false, true, 'jpn'))->instructions();
 
-        $this->assertStringContainsString('Do not translate, retokenize', $instructions);
-        $this->assertStringContainsString('Preserve cueId and cue index exactly.', $instructions);
-        $this->assertStringContainsString('return the same index', $instructions);
-        $this->assertStringContainsString('Do not echo the token text.', $instructions);
-        $this->assertStringContainsString('Hepburn for Japanese and pinyin for Mandarin', $instructions);
+        $this->assertStringNotContainsString(SubtitlePromptRules::TRANSLATION, $tokensOnly);
+        $this->assertStringContainsString(SubtitlePromptRules::TRANSLATION, $translated);
+        $this->assertStringNotContainsString('modified Hepburn', $translated);
+        $this->assertStringContainsString('modified Hepburn', $romanized);
+        $this->assertStringContainsString('copy their text into the required romanization field', $romanized);
+        $this->assertStringContainsString('contextCues', $translated);
+        $this->assertStringNotContainsString('previousCueText', $translated);
     }
 
-    public function test_analysis_agent_owns_stable_tokenization_and_translation_rules(): void
+    public function test_subtitle_agents_treat_text_as_data_and_share_pronunciation_standards(): void
     {
-        $instructions = (new CueAnalysisAgent)->instructions();
+        foreach ([new CueTokenizationAgent, new CueAnalysisAgent, new CueRomanizationAgent, new CueEnrichmentAgent, new LearningTokenCardAgent, new EditedCueAgent] as $agent) {
+            $this->assertStringContainsString(SubtitlePromptRules::TEXT_IS_DATA, $agent->instructions());
+        }
 
-        $this->assertStringContainsString('Return one analyzed cue for each input cue in the same order.', $instructions);
-        $this->assertStringContainsString('Do not return punctuation-only tokens.', $instructions);
-        $this->assertStringContainsString('Do not censor profanity', $instructions);
-        $this->assertStringContainsString('transcription artifacts', $instructions);
-        $this->assertStringContainsString('Every token must begin and end on a word boundary of the source language.', $instructions);
-        $this->assertStringContainsString('Orphan fragment', $instructions);
-        $this->assertStringContainsString('Sokuon', $instructions);
-        $this->assertStringContainsString('Mandarin examples:', $instructions);
-        $this->assertStringContainsString('Thai examples:', $instructions);
-        $this->assertStringContainsString('Translate the intended subtitle meaning', $instructions);
-        $this->assertStringContainsString('colloquial, dialectal, romanized, poetic, musical, slang, or idiomatic text', $instructions);
-        $this->assertStringContainsString('Use previousCueText and nextCueText', $instructions);
+        foreach (['jpn' => 'macrons', 'cmn' => 'tone marks', 'yue' => 'Jyutping', 'kor' => 'Revised Romanization'] as $language => $convention) {
+            foreach ([new CueAnalysisAgent(false, true, $language), new CueRomanizationAgent($language), new CueEnrichmentAgent($language), new LearningTokenCardAgent($language), new EditedCueAgent($language)] as $agent) {
+                $this->assertStringContainsString($convention, $agent->instructions());
+                $this->assertStringContainsString(SubtitlePromptRules::romanization($language), $agent->instructions());
+            }
+        }
     }
 
-    public function test_enrichment_agent_owns_stable_learning_metadata_rules(): void
+    public function test_card_agents_share_meaning_requirements_and_keep_edit_rules_separate(): void
     {
-        $instructions = (new CueEnrichmentAgent)->instructions();
+        foreach ([new CueEnrichmentAgent, new LearningTokenCardAgent, new EditedCueAgent] as $agent) {
+            $this->assertStringContainsString(SubtitlePromptRules::WORD_CARD, $agent->instructions());
+            $this->assertStringContainsString('Every token must have a non-empty translation or gloss.', $agent->instructions());
+            $this->assertStringContainsString('Return null for unused metadata fields.', $agent->instructions());
+        }
 
-        $this->assertStringContainsString('Return one enriched cue for each input cue in the same order.', $instructions);
-        $this->assertStringContainsString('Return exactly one token for each input token in the same order.', $instructions);
-        $this->assertStringContainsString('The cue translation is owned by the server and is NOT part of your output', $instructions);
-        $this->assertStringContainsString('Obey includeRomanization from the input.', $instructions);
+        $this->assertStringContainsString('Copy requestedToken.index exactly; do not renumber it to zero.', (new LearningTokenCardAgent)->instructions());
+        $this->assertStringContainsString('preserve supplied non-empty readings exactly', (new CueEnrichmentAgent)->instructions());
+        $this->assertStringContainsString('regenerate fresh readings', (new EditedCueAgent)->instructions());
+        $this->assertStringContainsString('a replacement phrase stays one token', (new EditedCueAgent)->instructions());
     }
 
-    public function test_learning_token_card_agent_owns_stable_card_rules(): void
+    public function test_compact_card_schemas_keep_identity_and_nullable_meanings_without_echoing_source(): void
     {
-        $instructions = (new LearningTokenCardAgent)->instructions();
+        $factory = new JsonSchemaTypeFactory;
 
-        $this->assertStringContainsString('Return exactly one token object for requestedToken.', $instructions);
-        $this->assertStringContainsString('requestedToken.text exactly', $instructions);
-        $this->assertStringContainsString('For Latin-script languages, omit romanization unless it helps pronunciation.', $instructions);
+        foreach ([new CueEnrichmentAgent, new EditedCueAgent] as $agent) {
+            $schema = $agent->schema($factory);
+            $cue = $schema['cues']->toArray()['items'];
+            $this->assertArrayNotHasKey('sourceText', $cue['properties']);
+            $this->assertContains('cueId', $cue['required']);
+            $this->assertContains('index', $cue['required']);
+            $this->assertFalse($cue['additionalProperties']);
+            $token = $cue['properties']['tokens']['items'];
+            $this->assertArrayNotHasKey('text', $token['properties']);
+            $this->assertContains('index', $token['required']);
+            $this->assertSame(['string', 'null'], $token['properties']['translation']['type']);
+            $this->assertSame(['string', 'null'], $token['properties']['gloss']['type']);
+            $this->assertFalse($token['additionalProperties']);
+        }
+
+        $token = (new LearningTokenCardAgent)->schema($factory)['token']->toArray();
+        $this->assertArrayNotHasKey('text', $token['properties']);
+        $this->assertContains('index', $token['required']);
+        $this->assertSame(0, $token['properties']['index']['minimum']);
+        $this->assertFalse($token['additionalProperties']);
     }
 }

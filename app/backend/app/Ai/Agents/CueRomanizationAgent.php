@@ -2,6 +2,7 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\SubtitlePromptRules;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Contracts\Agent;
@@ -16,6 +17,8 @@ class CueRomanizationAgent implements Agent, HasProviderOptions, HasStructuredOu
 {
     use Promptable;
 
+    public function __construct(public readonly ?string $sourceLanguage = null) {}
+
     public function providerOptions(Lab|string $provider): array
     {
         return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
@@ -25,13 +28,11 @@ class CueRomanizationAgent implements Agent, HasProviderOptions, HasStructuredOu
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-Romanize finalized, pre-tokenized subtitle cues written in non-Latin scripts.
-
-Return one cue for each input cue in the same order. Do not translate, retokenize, explain grammar, or create learner-card metadata. Preserve cueId and cue index exactly. You receive pre-tokenized tokens (index + text); for each token, return the same index with a readable learner-standard Latin-script romanization. Do not echo the token text.
-
-Fill cue romanization and every token romanization with readable learner-standard Latin-script pronunciation, such as Hepburn for Japanese and pinyin for Mandarin. Use "unknown" for dialect when it cannot be detected. Return only data that matches the structured output schema.
-INSTRUCTIONS;
+        return implode("\n\n", [
+            'Romanize finalized, pre-tokenized subtitle cues. Return one cue for each input cue in the same order. Do not translate, retokenize, explain grammar, or create learner-card metadata. Preserve cueId and cue index exactly. For every supplied token, return the same index and a non-empty romanization. Do not echo the token text. Fill whole-cue romanization too. For tokens containing only Latin letters, digits, or symbols, copy their text into the required romanization field. Use "unknown" for dialect when uncertain.',
+            SubtitlePromptRules::TEXT_IS_DATA,
+            SubtitlePromptRules::romanization($this->sourceLanguage),
+        ]);
     }
 
     public function model(): string

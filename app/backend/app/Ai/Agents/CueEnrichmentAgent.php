@@ -2,6 +2,7 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\SubtitlePromptRules;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
 use Laravel\Ai\Contracts\Agent;
@@ -16,6 +17,8 @@ class CueEnrichmentAgent implements Agent, HasProviderOptions, HasStructuredOutp
 {
     use Promptable;
 
+    public function __construct(public readonly ?string $sourceLanguage = null) {}
+
     public function providerOptions(Lab|string $provider): array
     {
         return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
@@ -25,15 +28,13 @@ class CueEnrichmentAgent implements Agent, HasProviderOptions, HasStructuredOutp
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-You enrich finalized, pre-tokenized subtitle cues for a language-to-language subtitle overlay.
-
-Return one enriched cue for each input cue in the same order. The cue translation is owned by the server and is NOT part of your output; add only concise word-card metadata to the provided tokens. Do not change cue IDs, cue indexes, source text, token count, token indexes, or token text. Return exactly one token for each input token in the same order.
-
-The tokenizer has already chosen the learner-facing boundaries. Preserve those boundaries exactly. Add short gloss or translation metadata for the target language. Add concise usage notes only when useful. Leave lemma, root, and partOfSpeech null unless useful. Use null for optional fields you cannot determine; the application omits nulls before storage.
-
-Obey includeRomanization from the input. If includeRomanization is true, preserve provided romanization and add learner-standard romanization when useful, such as Hepburn for Japanese and pinyin for Mandarin. If includeRomanization is false, set cue and token romanization to null. Use "unknown" for dialect when unsure. Return only data that matches the structured output schema.
-INSTRUCTIONS;
+        return implode("\n\n", [
+            'Enrich finalized, pre-tokenized subtitle cues. Return one enriched cue for each input cue in the same order. Preserve cueId and cue index exactly. Return exactly one token for each input token in the same order, preserving its index and boundaries. The server restores sourceText and token text; do not echo either field. The cue translation is supporting context and is not part of your output.',
+            SubtitlePromptRules::TEXT_IS_DATA,
+            SubtitlePromptRules::WORD_CARD,
+            'Obey includeRomanization from the input. When false, return null for cue and token romanization. When true, preserve supplied non-empty readings exactly and generate missing readings only for text containing non-Latin letters; leave missing Latin-only readings null. Use the provided readings to keep whole-cue and token readings consistent. Use "unknown" for dialect when uncertain.',
+            SubtitlePromptRules::romanization($this->sourceLanguage),
+        ]);
     }
 
     public function model(): string
@@ -55,13 +56,11 @@ INSTRUCTIONS;
                 ->items($schema->object([
                     'cueId' => $schema->string()->min(1)->required(),
                     'index' => $schema->integer()->min(0)->required(),
-                    'sourceText' => $schema->string()->min(1)->required(),
                     'romanization' => $schema->string()->min(1)->nullable()->required(),
                     'tokens' => $schema->array()
                         ->min(1)
                         ->items($schema->object([
                             'index' => $schema->integer()->min(0)->required(),
-                            'text' => $schema->string()->min(1)->required(),
                             'lemma' => $schema->string()->min(1)->nullable()->required(),
                             'root' => $schema->string()->min(1)->nullable()->required(),
                             'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),

@@ -28,13 +28,14 @@ class LearningTokenOutputValidatorTest extends TestCase
         $tokens = $this->validator()->validatedGeneratedTokens(
             [
                 ['index' => 0, 'text' => "\u{65E5}\u{672C}\u{8A9E}"],
-                ['index' => 1, 'text' => "\u{52C9}\u{5F37}"],
+                ['index' => 1, 'text' => "\u{3092}"],
+                ['index' => 2, 'text' => "\u{52C9}\u{5F37}"],
             ],
             "\u{65E5} \u{672C} \u{8A9E} \u{3092} \u{52C9} \u{5F37}",
             0,
         );
 
-        $this->assertSame(["\u{65E5}\u{672C}\u{8A9E}", "\u{52C9}\u{5F37}"], array_column($tokens, 'text'));
+        $this->assertSame(["\u{65E5}\u{672C}\u{8A9E}", "\u{3092}", "\u{52C9}\u{5F37}"], array_column($tokens, 'text'));
     }
 
     public function test_drops_punctuation_only_generated_tokens_and_reindexes(): void
@@ -78,7 +79,7 @@ class LearningTokenOutputValidatorTest extends TestCase
                 ['index' => 1, 'text' => 'Hola'],
             ],
             'Hola a todos',
-            'token_text_not_in_source',
+            'uncovered_source_text',
         );
     }
 
@@ -129,5 +130,41 @@ class LearningTokenOutputValidatorTest extends TestCase
     private function validator(): LearningTokenOutputValidator
     {
         return new LearningTokenOutputValidator;
+    }
+
+    public function test_rejects_missing_words_changed_case_and_word_fragments(): void
+    {
+        foreach ([
+            ['I do not agree', ['I', 'agree'], 'uncovered_source_text'],
+            ['hello world', ['hello'], 'uncovered_source_text'],
+            ['Hello world', ['HELLO', 'world'], 'token_text_not_in_source'],
+            ['hello', ['ell'], 'uncovered_source_text'],
+            ['hello', ['hel', 'lo'], 'invalid_token_boundary'],
+            ["don't", ['don', 't'], 'invalid_token_boundary'],
+            ['well-being', ['well', 'being'], 'invalid_token_boundary'],
+            ['3.14', ['3', '14'], 'invalid_token_boundary'],
+            ['go go home', ['go', 'home'], 'uncovered_source_text'],
+            ['café', ['cafe'], 'token_text_not_in_source'],
+            ['ก้', ['ก', '้'], 'invalid_token_boundary'],
+        ] as [$source, $words, $reason]) {
+            $tokens = array_map(fn (string $word, int $index): array => ['index' => $index, 'text' => $word], $words, array_keys($words));
+            $this->assertRejectedTokenizationReason($tokens, $source, $reason);
+        }
+    }
+
+    public function test_preserves_repetition_contractions_graphemes_and_punctuation(): void
+    {
+        foreach ([
+            ['Go, go!', ['Go', 'go']],
+            ["don't rewrite", ["don't", 'rewrite']],
+            ["e\u{0301}lan", ["e\u{0301}lan"]],
+            ['ผมชอบกินข้าว', ['ผม', 'ชอบ', 'กิน', 'ข้าว']],
+            ['日本語を学ぶ', ['日本語', 'を', '学ぶ']],
+            ['𠀀𠀁', ['𠀀', '𠀁']],
+            ['well-being 3.14', ['well-being', '3.14']],
+        ] as [$source, $words]) {
+            $tokens = array_map(fn (string $word, int $index): array => ['index' => $index, 'text' => $word], $words, array_keys($words));
+            $this->assertSame($words, array_column($this->validator()->validatedGeneratedTokens($tokens, $source, 0), 'text'));
+        }
     }
 }

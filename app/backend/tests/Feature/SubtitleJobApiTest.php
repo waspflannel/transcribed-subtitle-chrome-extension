@@ -997,7 +997,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('cues.0.sourceText', 'updated transcript segment')
             ->assertJsonPath('cues.0.translatedText', 'updated transcript segment')
-            ->assertJsonPath('cues.0.romanization', 'refreshed pronunciation')
+            ->assertJsonMissingPath('cues.0.romanization')
             ->assertJsonPath('cues.0.tokens.0.gloss', 'new gloss')
             ->assertJsonPath('cues.0.tokens.0.translation', 'new meaning')
             ->assertJsonPath('cues.0.tokens.0.text', 'updated')
@@ -1027,9 +1027,9 @@ class SubtitleJobApiTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('cues.0.sourceText', 'new phrase transcript segment')
             ->assertJsonPath('cues.0.translatedText', 'Refreshed translation')
-            ->assertJsonPath('cues.0.romanization', 'refreshed pronunciation')
+            ->assertJsonMissingPath('cues.0.romanization')
             ->assertJsonPath('cues.0.tokens.0.text', 'new phrase')
-            ->assertJsonPath('cues.0.tokens.0.romanization', 'new reading')
+            ->assertJsonMissingPath('cues.0.tokens.0.romanization')
             ->assertJsonPath('cues.0.tokens.0.translation', 'new meaning')
             ->assertJsonPath('cues.0.tokens.0.gloss', 'new gloss')
             ->assertJsonCount(count($cue['tokens']), 'cues.0.tokens');
@@ -2598,6 +2598,12 @@ class SubtitleJobApiTest extends TestCase
             'cueId' => 'cue-0001',
             'tokenIndex' => 0,
         ];
+
+        $track = SubtitleTrack::where('public_id', $payload['trackId'])->firstOrFail();
+        $cues = $track->cues;
+        $cues[0]['tokens'][0]['lemma'] = 'first';
+        $cues[0]['tokens'][0]['partOfSpeech'] = 'adjective';
+        $track->update(['cues' => $cues]);
 
         $this
             ->withExtensionAuth($this->installId())

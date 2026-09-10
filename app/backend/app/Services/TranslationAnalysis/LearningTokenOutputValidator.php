@@ -21,8 +21,11 @@ class LearningTokenOutputValidator
         }
 
         $validated = [];
-        $sourceComparable = $this->comparableText($sourceText);
+        $sourceComparable = SubtitleText::canonicalComparable($sourceText);
         $searchOffset = 0;
+        preg_match_all('/\X/u', $sourceComparable, $graphemes, PREG_OFFSET_CAPTURE);
+        $boundaries = array_fill_keys(array_column($graphemes[0], 1), true);
+        $boundaries[strlen($sourceComparable)] = true;
 
         foreach (array_values($tokens) as $position => $token) {
             if (! is_array($token)) {
@@ -52,7 +55,7 @@ class LearningTokenOutputValidator
                 continue;
             }
 
-            $tokenComparable = $this->comparableText($text);
+            $tokenComparable = $text;
 
             if ($tokenComparable === '') {
                 $this->failInvalidOutput('invalid_token_text', [
@@ -61,7 +64,7 @@ class LearningTokenOutputValidator
                 ]);
             }
 
-            $sourcePosition = mb_strpos($sourceComparable, $tokenComparable, $searchOffset, 'UTF-8');
+            $sourcePosition = strpos($sourceComparable, $tokenComparable, $searchOffset);
 
             if ($sourcePosition === false) {
                 $this->failInvalidOutput('token_text_not_in_source', [
@@ -70,7 +73,18 @@ class LearningTokenOutputValidator
                 ]);
             }
 
-            $searchOffset = $sourcePosition + mb_strlen($tokenComparable, 'UTF-8');
+            if ($this->isLexicalTokenText(substr($sourceComparable, $searchOffset, $sourcePosition - $searchOffset))) {
+                $this->failInvalidOutput('uncovered_source_text', ['cue_index' => $cueIndex, 'token_position' => $position]);
+            }
+
+            $end = $sourcePosition + strlen($tokenComparable);
+            foreach ([$sourcePosition, $end] as $boundary) {
+                if (! isset($boundaries[$boundary]) || $this->isInsideSpacedWord($sourceComparable, $boundary)) {
+                    $this->failInvalidOutput('invalid_token_boundary', ['cue_index' => $cueIndex, 'token_position' => $position]);
+                }
+            }
+
+            $searchOffset = $end;
             $validated[] = [
                 'index' => count($validated),
                 'text' => $text,
@@ -80,6 +94,10 @@ class LearningTokenOutputValidator
 
         if ($validated === []) {
             $this->failInvalidOutput('empty_tokens', ['cue_index' => $cueIndex]);
+        }
+
+        if ($this->isLexicalTokenText(substr($sourceComparable, $searchOffset))) {
+            $this->failInvalidOutput('uncovered_source_text', ['cue_index' => $cueIndex]);
         }
 
         return $validated;
@@ -94,9 +112,20 @@ class LearningTokenOutputValidator
             : strtolower($normalized);
     }
 
-    private function comparableText(string $text): string
+    private function isInsideSpacedWord(string $text, int $offset): bool
     {
-        return $this->normalizeTokenText($text);
+        $left = mb_substr(substr($text, 0, $offset), -1, 1, 'UTF-8');
+        $right = mb_substr(substr($text, $offset), 0, 1, 'UTF-8');
+
+        if ($left === '' || $right === '' || preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\p{Thai}\p{Lao}\p{Khmer}\p{Myanmar}]/u', $left.$right) === 1) {
+            return false;
+        }
+
+        $internalPunctuation = '/(?:[\p{L}\p{N}][\x{0027}\x{2019}\p{Pd}][\p{L}\p{N}]|\p{N}[.,:\/\x{066B}\x{066C}]\p{N})/u';
+
+        return preg_match('/[\p{L}\p{N}\p{M}][\p{L}\p{N}\p{M}]/u', $left.$right) === 1
+            || preg_match($internalPunctuation, mb_substr(substr($text, 0, $offset), -2, 2, 'UTF-8').$right) === 1
+            || preg_match($internalPunctuation, $left.mb_substr(substr($text, $offset), 0, 2, 'UTF-8')) === 1;
     }
 
     private function isLexicalTokenText(string $text): bool
