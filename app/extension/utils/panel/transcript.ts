@@ -72,7 +72,7 @@ export function panelPartialTranscriptListHtml(input: {
 
 function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings, quickFixMode: boolean, editingCueId: string | null, quickFixEditing: QuickFixEditing | null): string {
   const tr = settings.showTranslation && cue.translatedText.trim() !== cue.sourceText.trim()
-    ? `<div class="cg">${escapeHtml(cue.translatedText)}</div>` : '';
+    ? `<div class="cg">${escapeHtml(cue.translatedText || 'Translation unavailable')}</div>` : '';
   return `
     <article class="cue${active ? ' on' : ''}" role="listitem" aria-current="${active ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
       <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>

@@ -684,6 +684,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**
@@ -1374,6 +1377,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**
@@ -2063,6 +2069,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**
@@ -2116,6 +2125,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**

@@ -14,15 +14,18 @@ use Laravel\Ai\Promptable;
 use Stringable;
 
 /**
- * Tokenizes and translates a cue batch in a single LLM call. One call does the
- * work of the former separate tokenization and translation calls, halving the
- * batched round trips and concurrency-slot contention per job.
+ * Chooses source tokens and supplies requested translation and romanization.
  */
 #[Provider(Lab::OpenAI)]
 #[MaxTokens(9000)]
 class CueAnalysisAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
+
+    public function __construct(
+        public readonly bool $includeTranslation = true,
+        public readonly bool $includeRomanization = false,
+    ) {}
 
     public function providerOptions(Lab|string $provider): array
     {
@@ -33,10 +36,10 @@ class CueAnalysisAgent implements Agent, HasProviderOptions, HasStructuredOutput
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
+        $instructions = <<<'INSTRUCTIONS'
 Tokenize and translate finalized transcript cues for a language-learning subtitle overlay.
 
-Return one analyzed cue for each input cue in the same order. Preserve cueId and cue index exactly. Each output cue carries source-language token boundaries and a translation of the cue into the requested target language. Do not romanize, explain grammar, or create learner-card metadata.
+Return one analyzed cue for each input cue in the same order. Preserve cueId and cue index exactly. Each output cue carries source-language token boundaries. Translate only when includeTranslation is true. Romanize only when includeRomanization is true. Do not explain grammar or create learner-card metadata.
 
 Tokenization rules:
 
@@ -66,7 +69,7 @@ Thai examples:
 
 English-like example: do not return "go to the store today" as one token. Words or short fixed expressions are acceptable.
 
-Translation rules:
+Translation rules (only when includeTranslation is true):
 
 Return a natural non-empty translatedText for each cue in the requested target language. Translate the intended subtitle meaning, not isolated word labels or dictionary glosses. For colloquial, dialectal, romanized, poetic, musical, slang, or idiomatic text, preserve the speaker's intent, tone, and implied meaning in natural target-language subtitle phrasing. Use previousCueText and nextCueText when provided to resolve ambiguous words or phrases. If a literal reading conflicts with the surrounding subtitle or lyric context, choose the contextual meaning.
 
@@ -74,6 +77,12 @@ Use "unknown" for dialect when it cannot be detected.
 
 Prefer token boundaries a beginner can tap for a useful word card. Return only data that matches the structured output schema.
 INSTRUCTIONS;
+
+        if ($this->includeRomanization) {
+            $instructions .= "\nRomanization rules:\nAfter choosing the source token boundaries, return readable learner-standard Latin-script pronunciation for the whole cue and for each of those exact tokens. Use Hepburn for Japanese and pinyin for Mandarin. Use cue and neighboring context to resolve ambiguous readings. Do not change source text or token boundaries to fit a romanization.\n";
+        }
+
+        return $instructions;
     }
 
     public function model(): string
@@ -98,22 +107,32 @@ INSTRUCTIONS;
 
     public function schema(JsonSchema $schema): array
     {
+        $token = [
+            'index' => $schema->integer()->min(0)->required(),
+            'text' => $schema->string()->min(1)->required(),
+        ];
+        $cue = [
+            'cueId' => $schema->string()->min(1)->required(),
+            'index' => $schema->integer()->min(0)->required(),
+        ];
+
+        if ($this->includeTranslation) {
+            $cue['translatedText'] = $schema->string()->min(1)->required();
+        }
+
+        if ($this->includeRomanization) {
+            $cue['romanization'] = $schema->string()->min(1)->required();
+            $token['romanization'] = $schema->string()->min(1)->required();
+        }
+
+        $cue['tokens'] = $schema->array()->min(1)
+            ->items($schema->object($token)->withoutAdditionalProperties())->required();
+
         return [
             'dialect' => $schema->string()->min(1)->required(),
             'cues' => $schema->array()
                 ->min(1)
-                ->items($schema->object([
-                    'cueId' => $schema->string()->min(1)->required(),
-                    'index' => $schema->integer()->min(0)->required(),
-                    'translatedText' => $schema->string()->min(1)->required(),
-                    'tokens' => $schema->array()
-                        ->min(1)
-                        ->items($schema->object([
-                            'index' => $schema->integer()->min(0)->required(),
-                            'text' => $schema->string()->min(1)->required(),
-                        ])->withoutAdditionalProperties())
-                        ->required(),
-                ])->withoutAdditionalProperties())
+                ->items($schema->object($cue)->withoutAdditionalProperties())
                 ->required(),
         ];
     }

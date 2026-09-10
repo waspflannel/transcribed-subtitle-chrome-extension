@@ -91,13 +91,20 @@ class TimestampedSubtitleTrackGenerator
                 $this->failInvalidEnrichedCue('invalid_enriched_cue', ['cue_position' => $position]);
             }
 
-            foreach (['cueId', 'sourceText', 'translatedText'] as $field) {
+            foreach (['cueId', 'sourceText'] as $field) {
                 if (! is_string($cue[$field] ?? null) || trim($cue[$field]) === '') {
                     $this->failInvalidEnrichedCue('invalid_enriched_cue', [
                         'cue_position' => $position,
                         'field' => $field,
                     ]);
                 }
+            }
+
+            if (! is_string($cue['translatedText'] ?? null)) {
+                $this->failInvalidEnrichedCue('invalid_enriched_cue', [
+                    'cue_position' => $position,
+                    'field' => 'translatedText',
+                ]);
             }
 
             foreach (['index', 'startMs', 'endMs'] as $field) {

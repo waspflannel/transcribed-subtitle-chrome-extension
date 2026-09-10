@@ -6,7 +6,6 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\OptimizeSubtitleAudio;
-use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
@@ -18,6 +17,7 @@ use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
+use App\Services\Text\SubtitleText;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
@@ -396,9 +396,7 @@ class SubtitleGenerationPipeline
         $tokenized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TOKENIZED_CUES);
         $this->logger->tokenizationCompleted($job, $tokenized);
 
-        // Romanization now runs chained after each tokenize batch inside the
-        // analysis batch, so its cues are already written by the time this
-        // continuation fires -- no separate romanization batch or queue hop.
+        // Analysis writes romanization alongside tokens and translation.
         $base = $tokenized;
 
         if ($this->shouldRomanize($job)) {
@@ -506,18 +504,9 @@ class SubtitleGenerationPipeline
         $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
 
         for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            // One merged tokenize+translate call per batch when translation is
-            // requested; tokenize-only otherwise. Romanization only needs its
-            // own batch's tokenized output, so chain Romanize(N) directly after
-            // the analysis job. The batch completes once every member -- chains
-            // included -- finishes.
-            $analysisJob = $translationRequested
+            $jobs[] = $translationRequested || $romanize
                 ? new AnalyzeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)
                 : new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
-
-            $jobs[] = $romanize
-                ? [$analysisJob, new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)]
-                : $analysisJob;
         }
 
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
@@ -675,12 +664,6 @@ class SubtitleGenerationPipeline
         return $job->include_translation && ! $this->isSameLanguageGeneration($job);
     }
 
-    /**
-     * Decide romanization once, at analysis-batch dispatch time, so Romanize(N)
-     * can be chained onto Tokenize(N). The draft cues carry the same sourceText
-     * as the tokenized cues, so the decision is identical whether it reads draft
-     * or tokenized output -- and the draft artifact exists before tokenization.
-     */
     private function shouldRomanize(SubtitleJob $job): bool
     {
         if (! $job->include_romanization) {
@@ -689,26 +672,7 @@ class SubtitleGenerationPipeline
 
         $draftCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
 
-        return $this->shouldRomanizeTranscript($draftCues);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    private function shouldRomanizeTranscript(array $cues): bool
-    {
-        foreach ($cues as $cue) {
-            if (is_string($cue['sourceText'] ?? null) && $this->containsNonLatinLetter($cue['sourceText'])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function containsNonLatinLetter(string $text): bool
-    {
-        return preg_match('/(?!\p{Latin})\p{L}/u', $text) === 1;
+        return SubtitleText::hasNonLatinCues($draftCues);
     }
 
     private function recordDetectedSourceLanguage(

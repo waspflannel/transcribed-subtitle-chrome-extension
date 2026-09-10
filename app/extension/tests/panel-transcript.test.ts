@@ -19,6 +19,12 @@ describe('filterTranscriptCues', () => {
 });
 
 describe('panelTranscriptListHtml', () => {
+  it('labels a missing requested translation without duplicating source text', () => {
+    const html = panelTranscriptListHtml({ cues: [{ ...cues[0], translatedText: '' }], activeCueId: null, query: '', settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true } });
+    expect(html).toContain('Translation unavailable');
+    const hidden = panelTranscriptListHtml({ cues: [{ ...cues[0], translatedText: '' }], activeCueId: null, query: '', settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: false } });
+    expect(hidden).not.toContain('Translation unavailable');
+  });
   it('renders rows with timecode, source, and the active-cue marker', () => {
     const html = panelTranscriptListHtml({ cues, activeCueId: 'c2', query: '', settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true } });
     expect(html).toContain('data-cue-id="c1"');

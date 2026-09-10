@@ -15,6 +15,18 @@ namespace App\Services\Text;
  */
 final class SubtitleText
 {
+    /** @param array<int, array<string, mixed>> $cues */
+    public static function hasNonLatinCues(array $cues): bool
+    {
+        foreach ($cues as $cue) {
+            if (preg_match('/(?!\p{Latin})\p{L}/u', (string) ($cue['sourceText'] ?? '')) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function collapseWhitespace(string $text): string
     {
         return trim((string) preg_replace('/\s+/u', ' ', $text));

@@ -4,6 +4,7 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Throwable;
@@ -38,9 +39,7 @@ class SubtitleCueBatchProcessor
     }
 
     /**
-     * One merged tokenize+translate call per batch. Runs under the tokenizing
-     * stage and writes both batch artifacts, so downstream assembly is
-     * identical to the former two-call path.
+     * One analysis call produces tokens and requested translations/readings.
      */
     public function analyzeCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
     {
@@ -55,11 +54,16 @@ class SubtitleCueBatchProcessor
 
         try {
             $startedAtMs = $this->telemetry->currentTimeMs();
+            $includeTranslation = $job->include_translation && $job->effectiveSourceLanguage() !== $job->target_language;
+            $allCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
+            $includeRomanization = $job->include_romanization && SubtitleText::hasNonLatinCues($allCues);
             $result = $this->translationAnalysis->analyzeCueBatch(
                 batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex),
-                allCues: $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues,
+                allCues: $allCues,
                 sourceLanguage: $job->effectiveSourceLanguage(),
                 targetLanguage: $job->target_language,
+                includeTranslation: $includeTranslation,
+                includeRomanization: $includeRomanization,
             );
 
             $job = $this->loadRunningJob($subtitleJobId, $runId);
@@ -70,7 +74,11 @@ class SubtitleCueBatchProcessor
 
             $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TOKENIZED_CUES, $batchIndex, $result->tokenized);
             $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::TRANSLATED_CUES, $batchIndex, $result->translated);
-            $this->costs->recordAnalyzedCueBatch($job, count($result->tokenized->cues));
+            if ($result->romanized !== null) {
+                $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ROMANIZED_CUES, $batchIndex, $result->romanized);
+            }
+            $this->costs->recordAnalyzedCueBatch($job, count($result->tokenized->cues), $includeTranslation,
+                $includeRomanization && ! $this->translationAnalysis->usesDeterministicRomanization($job->effectiveSourceLanguage()));
             $this->telemetry->recordStageCompleted($job, 'tokenizing', $startedAtMs, $batchIndex);
         } catch (Throwable $exception) {
             if (! ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {

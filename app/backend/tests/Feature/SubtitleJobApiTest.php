@@ -1608,7 +1608,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'nonlatin001',
             'status' => 'failed',
-            'stage' => 'romanizing',
+            'stage' => 'tokenizing',
         ]);
     }
 
@@ -1723,7 +1723,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'jpnfail0001',
             'status' => 'failed',
-            'stage' => 'romanizing',
+            'stage' => 'tokenizing',
         ]);
     }
 
@@ -1770,7 +1770,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('subtitle_jobs', [
             'youtube_video_id' => 'jpnfail0002',
             'status' => 'failed',
-            'stage' => 'romanizing',
+            'stage' => 'tokenizing',
         ]);
     }
 

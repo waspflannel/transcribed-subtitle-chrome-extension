@@ -254,7 +254,7 @@ function renderTokenInteraction(
 }
 
 function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): string {
-  if (!settings.showTranslation || cue.translatedText.trim() === cue.sourceText.trim()) {
+  if (!settings.showTranslation || cue.translatedText.trim() === '' || cue.translatedText.trim() === cue.sourceText.trim()) {
     return '';
   }
 

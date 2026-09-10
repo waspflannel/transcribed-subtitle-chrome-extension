@@ -74,6 +74,10 @@ for (const [schemaFile, fixtureFile] of fixtures) {
 
 const lyricsCorrectionStatus = ajv.getSchema('lyrics-correction-status.schema.json');
 
+const unavailableTranslation = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-track-response.json'), 'utf8'));
+unavailableTranslation.cues[0].translatedText = '';
+if (!ajv.getSchema('track-response.schema.json')(unavailableTranslation)) throw new Error('Unavailable translation was rejected.');
+
 const invalidLyricsCorrectionFixtures = [
   'invalid-lyrics-correction-queued-aligning.json',
   'invalid-lyrics-correction-running-queued.json',
