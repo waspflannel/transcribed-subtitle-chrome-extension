@@ -23,6 +23,7 @@ use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitlePipelineTelemetry;
+use App\Services\Subtitles\SubtitleProviderCostRecorder;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -56,6 +57,23 @@ class SubtitleRuntimeTracingTest extends TestCase
             'subtitles.tiers.default' => 'base',
             'subtitles.tiers.concurrency_cache_store' => 'subtitle_concurrency_test',
         ]);
+    }
+
+    public function test_cerebras_costs_use_its_model_and_rates(): void
+    {
+        config([
+            'ai.default' => 'cerebras',
+            'ai.providers.cerebras.models.analysis.default' => 'cerebras-analysis',
+            'subtitles.costs.cerebras_tokenization_microusd_per_cue' => 3,
+            'subtitles.costs.openai_tokenization_microusd_per_cue' => 999,
+        ]);
+        $job = SubtitleJob::factory()->create(['status' => 'running', 'run_id' => (string) Str::uuid()]);
+        app(SubtitleProviderCostRecorder::class)->recordAnalyzedCueBatch($job, 2, false);
+        $event = SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->firstOrFail();
+        $this->assertSame('cerebras', $event->context['provider']);
+        $this->assertSame('cerebras-analysis', $event->context['model']);
+        $this->assertSame(6, $event->context['cost_microusd']);
+        $this->assertSame(6, $job->fresh()->estimated_provider_cost_microusd);
     }
 
     public function test_queue_hooks_emit_processing_processed_and_stale_run_events(): void

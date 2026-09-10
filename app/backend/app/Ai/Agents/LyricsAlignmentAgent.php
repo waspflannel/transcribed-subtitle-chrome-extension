@@ -5,7 +5,6 @@ namespace App\Ai\Agents;
 use App\Exceptions\SubtitleProcessingException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -13,7 +12,6 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::OpenAI)]
 #[MaxTokens(12000)]
 class LyricsAlignmentAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
@@ -90,11 +88,11 @@ INSTRUCTIONS;
 
     public function model(): string
     {
-        $model = trim((string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default'));
+        $model = trim((string) config('ai.providers.'.config('ai.default').'.models.analysis.default'));
 
         if ($model === '') {
             throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.', [
-                'provider' => Lab::OpenAI->value,
+                'provider' => config('ai.default'),
                 'adapter' => 'laravel-ai-sdk',
                 'model_key' => 'analysis.default',
             ]);

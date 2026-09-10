@@ -13,11 +13,61 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
+use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Tests\TestCase;
 
 class AiAgentInstructionTest extends TestCase
 {
+    public function test_every_agent_routes_to_cerebras_with_its_task_model_and_strict_schema(): void
+    {
+        config([
+            'ai.default' => 'cerebras',
+            'ai.providers.cerebras.key' => 'cerebras-test-key',
+            'ai.providers.cerebras.url' => 'https://api.cerebras.test/v1',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['api.cerebras.test/v1/chat/completions' => Http::response([
+            'id' => 'chat-test',
+            'model' => 'cerebras-test',
+            'choices' => [['message' => ['role' => 'assistant', 'content' => '{"cues":[],"dialect":"unknown"}'], 'finish_reason' => 'stop']],
+            'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5, 'total_tokens' => 15],
+        ])]);
+
+        foreach ([
+            CueAnalysisAgent::class => 'analysis',
+            CueTokenizationAgent::class => 'tokenization',
+            CueRomanizationAgent::class => 'romanization',
+            CueEnrichmentAgent::class => 'enrichment',
+            EditedCueAgent::class => 'enrichment',
+            LearningTokenCardAgent::class => 'enrichment',
+            LyricsAlignmentAgent::class => 'analysis',
+        ] as $agentClass => $purpose) {
+            config(["ai.providers.cerebras.models.{$purpose}.default" => $purpose.'-test']);
+            $response = $agentClass::make()->prompt('Synthetic test cue');
+            $this->assertSame([], $response['cues']);
+            $this->assertSame('cerebras', $response->meta->provider);
+            Http::assertSent(fn (Request $request): bool => $request['model'] === $purpose.'-test');
+        }
+
+        Http::assertSentCount(7);
+        Http::assertNotSent(fn (Request $request): bool => ! $request->hasHeader('Authorization', 'Bearer cerebras-test-key')
+            || $request['response_format']['type'] !== 'json_schema'
+            || $request['response_format']['json_schema']['strict'] !== true
+            || isset($request['reasoning']) || isset($request['service_tier']));
+    }
+
+    public function test_cerebras_rate_limits_keep_provider_identity(): void
+    {
+        config(['ai.default' => 'cerebras', 'ai.providers.cerebras.key' => 'test-key']);
+        Http::preventStrayRequests();
+        Http::fake(['api.cerebras.ai/v1/chat/completions' => Http::response([], 429)]);
+
+        $this->expectException(RateLimitedException::class);
+        $this->expectExceptionMessage('cerebras');
+        CueAnalysisAgent::make()->prompt('Synthetic test cue');
+    }
+
     public function test_response_diagnostics_handle_quota_errors_without_request_options(): void
     {
         config(['ai.providers.openai.url' => 'https://api.openai.com/v1']);

@@ -4,7 +4,6 @@ namespace App\Ai\Agents;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -12,7 +11,6 @@ use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 use Stringable;
 
-#[Provider(Lab::OpenAI)]
 #[MaxTokens(5000)]
 class CueTokenizationAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
@@ -64,7 +62,7 @@ INSTRUCTIONS;
 
     public function model(): string
     {
-        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.tokenization.default');
+        return (string) config('ai.providers.'.config('ai.default').'.models.tokenization.default');
     }
 
     public function timeout(): int

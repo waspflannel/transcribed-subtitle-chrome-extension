@@ -110,7 +110,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.enrichment_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('enrichment'),
             'source_language' => $job->source_language,
@@ -124,7 +124,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.tokenization_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
             'source_language' => $job->source_language,
@@ -137,7 +137,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.tokenization_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('tokenization'),
             'source_language' => $job->source_language,
@@ -151,7 +151,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.enrichment_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('enrichment'),
             'source_language' => $job->source_language,
@@ -166,7 +166,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.romanization_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('romanization'),
             'cue_count' => $cueCount,
@@ -178,7 +178,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.romanization_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('romanization'),
             'cue_count' => count($enrichment->cues),
@@ -190,7 +190,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.translation_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('analysis'),
             'source_language' => $job->source_language,
@@ -204,7 +204,7 @@ class SubtitleWorkflowLogger
         Log::info('backend.translation_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
             'model' => $this->openAiModel('analysis'),
             'source_language' => $job->source_language,
@@ -299,7 +299,7 @@ class SubtitleWorkflowLogger
 
     private function openAiModel(string $purpose): string
     {
-        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.'.$purpose.'.default');
+        return (string) config('ai.providers.'.config('ai.default').'.models.'.$purpose.'.default');
     }
 
     private function tokenCount(CueEnrichmentResult $enrichment): int

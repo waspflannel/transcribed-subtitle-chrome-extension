@@ -11,7 +11,6 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
-use Laravel\Ai\Enums\Lab;
 use Throwable;
 
 #[Signature('subtitles:eval-tokenization {--lang=all : Language code (jpn, cmn, tha, or all)} {--model= : Override the tokenization model for this run} {--json : Output machine-readable JSON} {--out= : Write JSON results to this path}')]
@@ -30,8 +29,8 @@ class EvalTokenization extends Command
      */
     public function handle(): int
     {
-        if (! $this->openAiKeyConfigured()) {
-            $this->components->error('OPENAI_API_KEY is not configured. The eval harness makes live tokenization calls and cannot run without it.');
+        if (! $this->providerKeyConfigured()) {
+            $this->components->error('The selected AI provider key is not configured. The eval harness makes live tokenization calls and cannot run without it.');
 
             return self::FAILURE;
         }
@@ -77,9 +76,9 @@ class EvalTokenization extends Command
         return self::SUCCESS;
     }
 
-    private function openAiKeyConfigured(): bool
+    private function providerKeyConfigured(): bool
     {
-        return is_string(config('ai.providers.openai.key')) && trim((string) config('ai.providers.openai.key')) !== '';
+        return is_string(config('ai.providers.'.config('ai.default').'.key')) && trim((string) config('ai.providers.'.config('ai.default').'.key')) !== '';
     }
 
     private function applyModelOverride(): ?string
@@ -90,7 +89,7 @@ class EvalTokenization extends Command
             return null;
         }
 
-        config()->set('ai.providers.'.Lab::OpenAI->value.'.models.tokenization.default', $model);
+        config()->set('ai.providers.'.config('ai.default').'.models.tokenization.default', $model);
 
         return $model;
     }
@@ -244,7 +243,7 @@ class EvalTokenization extends Command
     private function payload(array $results, ?string $model): array
     {
         return [
-            'model' => $model ?? (string) config('ai.providers.'.Lab::OpenAI->value.'.models.tokenization.default'),
+            'model' => $model ?? (string) config('ai.providers.'.config('ai.default').'.models.tokenization.default'),
             'languages' => array_map(
                 fn (array $result): array => $this->languagePayload($result),
                 $results,

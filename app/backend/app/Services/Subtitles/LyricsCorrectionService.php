@@ -22,7 +22,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
 
@@ -986,7 +985,7 @@ final class LyricsCorrectionService
             throw SubtitleProcessingException::rateLimited(
                 'Subtitle AI processing is temporarily rate limited.',
                 [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'adapter' => 'laravel-ai-sdk',
                     'agent' => LyricsAlignmentAgent::class,
                     'exception' => $exception::class,
@@ -997,7 +996,7 @@ final class LyricsCorrectionService
             throw $exception;
         } catch (Throwable $exception) {
             $context = [
-                'provider' => Lab::OpenAI->value,
+                'provider' => config('ai.default'),
                 'adapter' => 'laravel-ai-sdk',
                 'agent' => LyricsAlignmentAgent::class,
                 'exception' => $exception::class,

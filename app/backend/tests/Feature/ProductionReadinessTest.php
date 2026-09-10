@@ -10,6 +10,15 @@ use Tests\TestCase;
 
 class ProductionReadinessTest extends TestCase
 {
+    public function test_cerebras_readiness_does_not_require_an_openai_key(): void
+    {
+        $this->configureSafeProductionRuntime();
+        $this->fakeHealthyConnectivity();
+        config(['ai.default' => 'cerebras', 'ai.providers.openai.key' => '', 'ai.providers.cerebras.key' => 'test-key']);
+        $this->assertSame(0, Artisan::call('ops:production-check', ['--json' => true]));
+        $this->assertStringNotContainsString('test-key', Artisan::output());
+    }
+
     public function test_production_readiness_check_passes_for_safe_beta_configuration(): void
     {
         $this->configureSafeProductionRuntime();
@@ -22,7 +31,7 @@ class ProductionReadinessTest extends TestCase
 
         $this->assertTrue($payload['ok']);
         $this->assertSame('https://api.example.test', $payload['summary']['appUrl']);
-        $this->assertTrue($payload['summary']['openaiKeyConfigured']);
+        $this->assertTrue($payload['summary']['aiKeyConfigured']);
         $this->assertTrue($payload['summary']['databaseReachable']);
         $this->assertTrue($payload['summary']['queueRedisReachable']);
         $this->assertTrue($payload['summary']['concurrencyRedisReachable']);
@@ -57,7 +66,7 @@ class ProductionReadinessTest extends TestCase
         $this->assertFalse($payload['ok']);
         $this->assertContains('APP_DEBUG must be false.', $payload['problems']);
         $this->assertContains('APP_URL must use HTTPS.', $payload['problems']);
-        $this->assertContains('OPENAI_API_KEY must be configured in the environment.', $payload['problems']);
+        $this->assertContains('The selected AI provider API key must be configured in the environment.', $payload['problems']);
         $this->assertContains('Queue retry_after must be greater than the subtitle worker timeout.', $payload['problems']);
         $this->assertContains('FFMPEG_BINARY must be configured.', $payload['problems']);
         $this->assertContains('MAIL_MAILER must use a configured production transport, not log or array.', $payload['problems']);
