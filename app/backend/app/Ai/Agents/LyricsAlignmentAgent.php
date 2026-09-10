@@ -19,6 +19,8 @@ class LyricsAlignmentAgent implements Agent, HasProviderOptions, HasStructuredOu
 {
     use Promptable;
 
+    public function __construct(private readonly bool $allowPartial = false) {}
+
     public function providerOptions(Lab|string $provider): array
     {
         return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
@@ -44,12 +46,15 @@ and allowPartial is false, also return cues as an empty array.
 
 lyricsParts contains the authoritative pasted text in numbered parts. Existing
 cue text is timing and fallback evidence only. Return entries in timing-slot
-order with the original cueId and index.
+order with the original cueId. The server derives each cue's index from its ID.
+Never return an entry with
+empty segments; omit that slot for a complete replacement instead.
 
 For a complete replacement, every returned entry must contain only pasted
-segments. A pasted segment uses the global numbered lyric parts. Its
-startPartIndex must equal the next unconsumed global part and its
-endPartIndex must be greater than or equal to it. The final pasted segment must
+segments. A pasted segment uses the global numbered lyric parts. Choose only
+its endPartIndex: the server starts it at the next unconsumed global part and
+joins the authoritative text without adding separators. Each endPartIndex
+must be strictly greater than the preceding one. The final pasted segment must
 end at the last supplied part. Thus every part, including repetitions and
 punctuation, is consumed exactly once.
 
@@ -57,6 +62,7 @@ When allowPartial is true and isComplete is false, return every existing timing
 slot exactly once in timing order. Each entry contains one or more ordered
 segments with source "pasted" or "existing". Pasted segments use the same
 global sequential boundaries and consume every supplied part exactly once.
+In this partial-enabled mode also supply startPartIndex and separator.
 Existing segments use that cue's numbered existingParts, with increasing
 non-overlapping local boundaries. Together, existing segments must preserve
 every uncovered existing part. `separator` is either "" or " " and is placed
@@ -66,9 +72,11 @@ use "" for unspaced text or " " when words need separation.
 Do not invent, rewrite, or duplicate either source. At least one cue should use
 each source.
 
-The server reconstructs pasted cues by joining their parts, collapsing
-whitespace, and enforcing 84 Unicode code points. Choose natural phrase
-boundaries that fit that limit. Parts normally contain whole words; long pasted
+The server reconstructs pasted cues by joining their parts and collapsing
+whitespace. Choose natural phrase boundaries within the existing timing slots.
+The server splits text longer than 84 Unicode code points into shorter cues
+inside the same timing slot; never omit required text just to meet that limit.
+Parts normally contain whole words; long pasted
 unspaced text and existing unspaced non-Latin cues use grapheme clusters.
 Line breaks are hints, not fixed cue boundaries.
 
@@ -108,13 +116,12 @@ INSTRUCTIONS;
             'cues' => $schema->array()
                 ->items($schema->object([
                     'cueId' => $schema->string()->min(1)->required(),
-                    'index' => $schema->integer()->min(0)->required(),
                     'segments' => $schema->array()
                         ->items($schema->object([
-                            'source' => $schema->string()->enum(['pasted', 'existing'])->required(),
-                            'startPartIndex' => $schema->integer()->min(0)->required(),
+                            'source' => $schema->string()->enum($this->allowPartial ? ['pasted', 'existing'] : ['pasted'])->required(),
+                            ...($this->allowPartial ? ['startPartIndex' => $schema->integer()->min(0)->required()] : []),
                             'endPartIndex' => $schema->integer()->min(0)->required(),
-                            'separator' => $schema->string()->enum(['', ' '])->required(),
+                            ...($this->allowPartial ? ['separator' => $schema->string()->enum(['', ' '])->required()] : []),
                         ])->withoutAdditionalProperties())
                         ->required(),
                 ])->withoutAdditionalProperties())

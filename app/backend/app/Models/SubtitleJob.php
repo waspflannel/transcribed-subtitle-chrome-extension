@@ -29,6 +29,9 @@ class SubtitleJob extends Model
         'enrichment_mode',
         'include_romanization',
         'include_translation',
+        'vocabulary_hints',
+        'transcription_ingestion_mode',
+        'transcription_options_hash',
         'status',
         'stage',
         'progress_percent',
@@ -89,6 +92,7 @@ class SubtitleJob extends Model
             'include_translation' => 'boolean',
             'progress_percent' => 'integer',
             'video_duration_seconds' => 'integer',
+            'vocabulary_hints' => 'array',
         ];
     }
 }

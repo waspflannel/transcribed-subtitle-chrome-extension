@@ -16,6 +16,9 @@ final class SubtitleProviderCostRecorder
     {
         $billedMinutes = max(1, (int) ceil(max(1, (float) $audioDurationSeconds) / 60));
         $unitPrice = max(0, (int) config('subtitles.costs.elevenlabs_scribe_microusd_per_minute', 0));
+        if (($job->vocabulary_hints ?? []) !== []) {
+            $unitPrice = (int) ceil($unitPrice * 1.2);
+        }
 
         $this->record(
             job: $job,
@@ -29,15 +32,21 @@ final class SubtitleProviderCostRecorder
     }
 
     /**
-     * One merged analysis call does both the tokenization and translation
-     * work, so record both per-stage cost rows against the analysis model to
-     * keep per-stage cost telemetry comparable with the former two-call path.
+     * Record configured feature estimates against the shared analysis model.
+     * These rows are estimates, not separate provider requests or actual usage.
      */
-    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount): void
+    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false): void
     {
         $model = (string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default');
 
-        foreach (['tokenizing' => 'tokenization', 'translating' => 'translation'] as $stage => $purpose) {
+        $stages = ['tokenizing' => 'tokenization'];
+        if ($includeTranslation) {
+            $stages['translating'] = 'translation';
+        }
+        if ($includeRomanization) {
+            $stages['romanizing'] = 'romanization';
+        }
+        foreach ($stages as $stage => $purpose) {
             $this->record(
                 job: $job,
                 stage: $stage,

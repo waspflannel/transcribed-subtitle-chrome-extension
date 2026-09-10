@@ -245,7 +245,7 @@ function guardSubtitleCue(value: unknown): SubtitleCue {
   requiredNumber(cue, 'startMs');
   requiredNumber(cue, 'endMs');
   requiredString(cue, 'sourceText');
-  requiredString(cue, 'translatedText');
+  requiredString(cue, 'translatedText', true);
   optionalString(cue, 'romanization');
   tokens.forEach(guardLearningToken);
 
@@ -295,8 +295,8 @@ function nonEmptyArray(value: unknown, label: string): unknown[] {
   return values;
 }
 
-function requiredString(value: Record<string, unknown>, key: string): void {
-  if (typeof value[key] !== 'string' || value[key] === '') {
+function requiredString(value: Record<string, unknown>, key: string, allowEmpty = false): void {
+  if (typeof value[key] !== 'string' || (!allowEmpty && value[key] === '')) {
     throw invalid(`Backend response field ${key} must be a non-empty string.`);
   }
 }

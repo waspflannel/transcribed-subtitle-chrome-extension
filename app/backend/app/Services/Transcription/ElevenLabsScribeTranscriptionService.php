@@ -5,8 +5,10 @@ namespace App\Services\Transcription;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Languages\LanguageCatalog;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Laravel\Ai\Enums\Lab;
 use Throwable;
 
@@ -34,16 +36,32 @@ class ElevenLabsScribeTranscriptionService
      *
      * @return array<string, mixed>
      */
-    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, array $vocabularyHints = []): array
+    {
+        $this->assertSupportedAudioMime($audio);
+
+        return $this->transcribeSource($audio, $sourceLanguage, $vocabularyHints);
+    }
+
+    /** @return array<string, mixed> */
+    public function transcribeYouTube(string $videoId, string $sourceLanguage, array $vocabularyHints = []): array
+    {
+        if (preg_match('/^[A-Za-z0-9_-]{11}$/', $videoId) !== 1) {
+            throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_video_id']);
+        }
+
+        return $this->transcribeSource('https://www.youtube.com/watch?v='.$videoId, $sourceLanguage, $vocabularyHints);
+    }
+
+    /** @return array<string, mixed> */
+    private function transcribeSource(TemporaryAudioFile|string $audio, string $sourceLanguage, array $vocabularyHints): array
     {
         $provider = Lab::ElevenLabs;
         ['apiKey' => $apiKey, 'model' => $model] = $this->transcriptionConfig($provider);
 
-        $this->assertSupportedAudioMime($audio);
-
         try {
             return $this->validatedTranscriptionPayload(
-                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model),
+                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model, $vocabularyHints),
                 $provider,
                 $model,
             );
@@ -73,13 +91,29 @@ class ElevenLabsScribeTranscriptionService
         array $chunks,
         string $sourceLanguage,
         ?int $durationSeconds,
+        ?string $jobId = null,
+        ?string $runId = null,
     ): TimestampedTranscript {
         $provider = Lab::ElevenLabs;
         ['model' => $model] = $this->transcriptionConfig($provider);
 
         try {
+            $payload = $this->chunkMerger->merge($chunks);
+            $scores = array_column(array_filter($payload['words'], fn (array $word): bool => $word['type'] === 'word'), 'logprob');
+            Log::info('backend.transcription_quality', [
+                'job_id' => $jobId,
+                'run_id' => $runId,
+                'chunk_count' => count($chunks),
+                'detected_language' => $payload['language_code'] ?? null,
+                'chunk_languages' => array_map(fn (array $chunk): ?string => LanguageCatalog::normalizeCode($chunk['payload']['language_code'] ?? null), $chunks),
+                'chunk_language_probabilities' => array_map(fn (array $chunk): mixed => $chunk['payload']['language_probability'] ?? null, $chunks),
+                'scored_word_count' => count($scores),
+                'mean_word_logprob' => $scores === [] ? null : round(array_sum($scores) / count($scores), 4),
+                'min_word_logprob' => $scores === [] ? null : min($scores),
+            ]);
+
             return $this->normalizer->normalize(
-                payload: $this->chunkMerger->merge($chunks),
+                payload: $payload,
                 requestedSourceLanguage: $sourceLanguage,
                 durationSeconds: $durationSeconds,
             );
@@ -165,6 +199,15 @@ class ElevenLabsScribeTranscriptionService
                 'text' => $word['text'],
                 'type' => $word['type'],
             ];
+            $logprob = $word['logprob'] ?? null;
+            if (is_numeric($logprob) && is_finite((float) $logprob) && (float) $logprob <= 0) {
+                $normalized['logprob'] = (float) $logprob;
+            }
+
+            // Scribe permits paired null timings for untimed words/events.
+            if (($word['start'] ?? null) === null && ($word['end'] ?? null) === null) {
+                unset($word['start'], $word['end']);
+            }
             $hasStart = array_key_exists('start', $word);
             $hasEnd = array_key_exists('end', $word);
 
@@ -194,6 +237,11 @@ class ElevenLabsScribeTranscriptionService
 
         if (is_string($language) && trim($language) !== '') {
             $normalizedPayload['language_code'] = trim($language);
+        }
+
+        $probability = $payload['language_probability'] ?? null;
+        if (is_numeric($probability) && is_finite((float) $probability) && $probability >= 0 && $probability <= 1) {
+            $normalizedPayload['language_probability'] = (float) $probability;
         }
 
         return $normalizedPayload;
@@ -248,24 +296,31 @@ class ElevenLabsScribeTranscriptionService
     }
 
     private function sendTranscriptionRequest(
-        TemporaryAudioFile $audio,
+        TemporaryAudioFile|string $audio,
         string $sourceLanguage,
         Lab $provider,
         string $apiKey,
         string $model,
+        array $vocabularyHints,
     ): Response {
         $payload = $this->transcriptionRequestPayload($sourceLanguage, $model);
+        foreach ($vocabularyHints as $hint) {
+            $payload[] = ['name' => 'keyterms', 'contents' => $hint];
+        }
+        $request = Http::withHeaders(['xi-api-key' => $apiKey])
+            ->timeout((int) config('subtitles.transcription.timeout_seconds'));
+        if (is_string($audio)) {
+            return $request->asMultipart()->post($this->transcriptionUrl($provider), [...$payload, 'source_url' => $audio]);
+        }
         $stream = $this->openAudioStream($audio);
 
         try {
-            return Http::withHeaders(['xi-api-key' => $apiKey])
-                ->timeout((int) config('subtitles.transcription.timeout_seconds'))
-                ->attach(
-                    'file',
-                    $stream,
-                    $this->audioFilename($audio),
-                    ['Content-Type' => $audio->mimeType],
-                )
+            return $request->attach(
+                'file',
+                $stream,
+                $this->audioFilename($audio),
+                ['Content-Type' => $audio->mimeType],
+            )
                 ->post($this->transcriptionUrl($provider), $payload);
         } finally {
             fclose($stream);

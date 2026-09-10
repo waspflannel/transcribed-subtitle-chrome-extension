@@ -29,6 +29,7 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
+import { parseVocabularyHints } from '../../utils/vocabulary-hints';
 import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
 import type { LyricsCorrectionStatus } from '../../utils/contracts';
 import {
@@ -93,6 +94,7 @@ const {
   pairTargetCode,
   pairTargetName,
   generateButton,
+  vocabularyHintsInput,
   generateNote,
   clearStateButton,
   resetTimingButton,
@@ -191,6 +193,7 @@ collapseButton.addEventListener('click', () => {
   window.close();
 });
 generateButton.addEventListener('click', () => void generateSubtitles());
+vocabularyHintsInput.addEventListener('input', () => vocabularyHintsInput.setCustomValidity(''));
 lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
 lyricsCorrectionTextarea.addEventListener('input', () => {
   /* Editing the paste after Continue drops back out of the confirmation step. */
@@ -444,8 +447,15 @@ async function generateSubtitles(): Promise<void> {
   generateButton.textContent = 'Starting...';
 
   try {
-    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
-    if (applied) openWatchScreen('transcript');
+    const vocabularyHints = parseVocabularyHints(vocabularyHintsInput.value);
+    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles', vocabularyHints }, 'global', 'mutation');
+    if (applied) {
+      vocabularyHintsInput.value = '';
+      openWatchScreen('transcript');
+    }
+  } catch (error) {
+    vocabularyHintsInput.setCustomValidity(error instanceof Error ? error.message : 'Check the vocabulary hints.');
+    vocabularyHintsInput.reportValidity();
   } finally {
     generationRequestBusy = false;
     if (latestState) showPanelState(latestState);
@@ -960,6 +970,12 @@ function showPanelState(state: PanelState): void {
   const previousCorrectionStatus = latestState?.lyricsCorrection?.status;
   const previousTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
   const hadPartialConfirmation = partialLyricsConfirmation !== null;
+  const previousVideoId = latestState?.pageStatus?.supported ? latestState.pageStatus.videoId : null;
+  const nextVideoId = state.pageStatus?.supported ? state.pageStatus.videoId : null;
+  if (previousAccountId !== nextAccountId || previousVideoId !== nextVideoId) {
+    vocabularyHintsInput.value = '';
+    vocabularyHintsInput.setCustomValidity('');
+  }
   latestState = state;
 
   if (previousAccountId !== nextAccountId) {

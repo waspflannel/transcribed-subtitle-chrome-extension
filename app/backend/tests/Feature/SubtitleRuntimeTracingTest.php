@@ -714,6 +714,58 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame(50, $metrics['groups'][0]['costPerGeneratedMinuteMicrousd']);
     }
 
+    public function test_generation_metrics_exclude_events_from_previous_runs(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'status' => 'completed',
+            'video_duration_seconds' => 120,
+            'estimated_provider_cost_microusd' => 100,
+        ]);
+
+        foreach ([(string) Str::uuid() => [300000, 90000], $job->run_id => [20000, 1000]] as $runId => [$duration, $wait]) {
+            foreach (['job.completed' => ['duration_ms' => $duration], 'queue.wait_observed' => ['wait_ms' => $wait]] as $event => $timing) {
+                SubtitleJobEvent::query()->create([
+                    'subtitle_job_id' => $job->id,
+                    'public_job_id' => $job->public_id,
+                    'run_id' => $runId,
+                    'event' => $event,
+                    ...$timing,
+                ]);
+            }
+        }
+
+        $this->assertSame(0, Artisan::call('subtitles:metrics', ['--json' => true]));
+        $metrics = json_decode(Artisan::output(), true);
+        $this->assertSame(20000, $metrics['groups'][0]['p95DurationMs']);
+        $this->assertSame(1000, $metrics['groups'][0]['p95QueueWaitMs']);
+        $this->assertSame(0, $metrics['groups'][0]['budgetExceededCount']);
+        $this->assertSame(100, $metrics['summary']['totalCostMicrousd']);
+    }
+
+    public function test_chained_job_measures_wait_from_its_own_queue_publication(): void
+    {
+        $job = SubtitleJob::factory()->create(['stage' => 'tokenizing']);
+        app(SubtitleJobArtifactStore::class)->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+
+        // Simulate planning a chain long before the predecessor completes.
+        $successor = new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id, $this->currentTimeMs() - 90000);
+        Bus::chain([
+            new TokenizeSubtitleCueBatch($job->id, 0, (string) Str::uuid()),
+            $successor,
+        ])->onConnection('database')->onQueue(SubtitleQueue::batchName())->dispatch();
+
+        $this->assertSame(0, Artisan::call('queue:work', [
+            '--queue' => SubtitleQueue::batchName(),
+            '--stop-when-empty' => true,
+            '--sleep' => 0,
+        ]));
+
+        $wait = SubtitleJobEvent::query()->where('subtitle_job_id', $job->id)
+            ->where('run_id', $job->run_id)->where('event', 'queue.wait_observed')->sole();
+        $this->assertLessThan(10000, $wait->wait_ms);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+    }
+
     public function test_pruning_expired_jobs_removes_related_trace_events(): void
     {
         $job = SubtitleJob::factory()->create([

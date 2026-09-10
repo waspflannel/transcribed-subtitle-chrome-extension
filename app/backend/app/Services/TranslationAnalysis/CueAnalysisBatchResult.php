@@ -3,13 +3,13 @@
 namespace App\Services\TranslationAnalysis;
 
 /**
- * Output of one merged tokenize+translate call: the same two artifacts the
- * former separate calls produced, so downstream batch assembly is unchanged.
+ * Analysis artifacts share validated cue identities and source token boundaries.
  */
 final class CueAnalysisBatchResult
 {
     public function __construct(
         public readonly CueEnrichmentResult $tokenized,
         public readonly CueEnrichmentResult $translated,
+        public readonly ?CueEnrichmentResult $romanized = null,
     ) {}
 }

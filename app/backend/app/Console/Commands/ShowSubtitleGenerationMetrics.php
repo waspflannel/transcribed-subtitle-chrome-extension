@@ -84,7 +84,8 @@ class ShowSubtitleGenerationMetrics extends Command
      */
     private function metricsRow(SubtitleJob $job): ?array
     {
-        $completed = $job->events->firstWhere('event', 'job.completed');
+        $events = $job->events->where('run_id', $job->run_id);
+        $completed = $events->firstWhere('event', 'job.completed');
 
         if (! $completed instanceof SubtitleJobEvent || ! is_int($completed->duration_ms)) {
             return null;
@@ -94,7 +95,7 @@ class ShowSubtitleGenerationMetrics extends Command
         $tier = SubtitleTier::normalize($job->generation_tier);
         $bucket = SubtitleTier::budgetBucket($job->video_duration_seconds);
         $budgetMs = SubtitleTier::budgetSeconds($tier, $job->video_duration_seconds) * 1000;
-        $queueWaits = $job->events
+        $queueWaits = $events
             ->where('event', 'queue.wait_observed')
             ->pluck('wait_ms')
             ->filter(fn (mixed $value): bool => is_int($value))

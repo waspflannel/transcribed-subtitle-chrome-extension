@@ -18,7 +18,9 @@ use Throwable;
 
 /**
  * Third generation stage, fanned out per chunk: uploads one audio chunk to
- * Scribe and stores the raw word payload as a job artifact. The batch
+ * Scribe and stores its allowlisted word payload as a job artifact. A null
+ * audio file represents one whole-video URL ingestion, guarded by job mode.
+ * The batch
  * completion dispatches MergeSubtitleTranscript once every chunk landed.
  */
 class TranscribeSubtitleAudioChunk implements ShouldQueue
@@ -43,7 +45,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
         public readonly int $chunkIndex,
         public readonly int $chunkCount,
         public readonly string $runId,
-        public readonly TemporaryAudioFile $chunkAudio,
+        public readonly ?TemporaryAudioFile $chunkAudio,
         public readonly float $audioStartSeconds,
         public readonly float $nominalStartSeconds,
         public readonly ?float $nominalEndSeconds,

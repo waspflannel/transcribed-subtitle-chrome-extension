@@ -1,11 +1,23 @@
 # Learning and editing
 
 Created: 2026-09-09
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 Use the [index](00-index.md) for shared execution rules, ownership and the old-number map. Historical package numbers below identify audit evidence; they are sections of these consolidated documents, not separate work plans. This consolidation does not authorize new implementation or experiments.
 
 This document owns user-facing learning semantics, degraded output, useful word cards and correction/recovery behavior. Generation performance and loaded-extension delivery/lifecycle checks belong to [the pipeline](pipeline-speed-quality-and-reliability.md); existing reviews and manual acceptance live in [Delivery and testing](delivery-and-testing.md).
+
+## Punjabi lyrics replacement failure (2026-09-10)
+
+The user reported a failed full replacement for `M8vDwlHigJA`. Attempt `5cd85fa2-430c-4022-8e61-961cd9400307` failed in alignment: the first successful HTTP response was rejected with `cue_identity_mismatch`; its retry was rejected with `invalid_cue_text`. The existing 50-cue track was preserved. Both calls used low reasoning. This establishes malformed alignment output, not a provider outage or proof that low reasoning caused it.
+
+Scope: split overlong reconstructed text on word or grapheme boundaries into cues of at most 84 code points. Subdivide only that original timing slot in proportion to text length, preserving its endpoints and neighboring slots; internal split times are estimates, not word-level acoustic alignment. Keep exact pasted-text consumption, partial-confirmation policy, attempt guards and atomic publication. Clarify copying timing-slot identity and omitting unused slots, and record only numeric rejection details. Use the existing Laravel AI provider and low reasoning; no new retry loop or model experiment. Regression coverage uses synthetic Punjabi and Thai text; the user's full lyrics are not committed or logged.
+
+Evidence: an initial attempt to supply calculated boundary limits still produced 89- and 99-character cues in live retry `6561800c-ddf0-4f80-819a-b0e068a86065`. Removed that prompt-only approach and moved wrapping into server code. Retry `16859d21-5c27-4e92-b058-dabc5cbcb847` then exposed redundant separator/start-index errors. Full-replacement output now identifies the timing cue and each pasted segment's end index; the server owns consecutive start indexes, separators and cue indexes. Partial-enabled alignment retains the explicit source ranges/separators it needs. Reversed, repeated, missing and out-of-range ending boundaries still fail, so source consumption remains exact.
+
+All 54 correction tests pass (237 assertions), including the smaller full-replacement response, full replacement after partial permission, Punjabi exact text, no second alignment call for wrapping, preserved timing endpoints, Thai graphemes, and rejection when a slot cannot contain positive-duration pieces. The 10 AI instruction/provider tests also pass (132 assertions). Formatting passes. The full repository check passes: contracts, 487 backend tests (3,346 assertions), 227 extension tests, TypeScript compile and extension build. Backend and all 31 workers were restarted with this fix; health returns HTTP 200.
+
+Live attempt `ae3e4202-9f6e-462c-a30b-7832b5381c83` passed alignment on its first call and completed publication to track `ca77fabc-e356-425c-ba26-725f15134825`. The existing bounded analysis retries handled malformed derived batches. Verified all pasted non-whitespace characters in order, 52 nonempty cues at most 84 code points, unique IDs and sequential indexes, positive non-overlapping durations, and coverage of all 50 original timing slots with exact endpoints. Two slots were subdivided contiguously. Every cue has translation and romanization fields; this verifies presence, not linguistic accuracy. Expiry is unchanged and encrypted correction input/work state are cleared. The local backend is running the fix; production deployment and user playback acceptance are not claimed.
 
 ## Learning quality and editing
 

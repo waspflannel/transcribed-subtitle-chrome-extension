@@ -149,9 +149,11 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         string $targetLanguage,
         bool $splitInvalidBatches = true,
         ?\Closure $beforeRetry = null,
+        bool $includeTranslation = true,
+        bool $includeRomanization = false,
     ): CueAnalysisBatchResult {
         $this->tokenizationCalls++;
-        $this->translationCalls++;
+        $this->translationCalls += (int) $includeTranslation;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
 
@@ -161,7 +163,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
             throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
         }
 
-        if ($this->tokenizationShouldFail || $this->translationShouldFail) {
+        if ($this->tokenizationShouldFail || ($includeTranslation && $this->translationShouldFail)) {
             throw SubtitleProcessingException::enrichmentFailed();
         }
 
@@ -181,13 +183,18 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                 array_map(
                     fn (array $cue): array => [
                         ...$cue,
-                        'translatedText' => 'Translated '.$cue['sourceText'],
+                        'translatedText' => $includeTranslation ? 'Translated '.$cue['sourceText'] : $cue['sourceText'],
                     ],
                     $batch,
                 ),
                 'unknown',
             ),
         );
+
+        if ($includeRomanization) {
+            $result = new CueAnalysisBatchResult($result->tokenized, $result->translated,
+                $this->romanizeCueBatch($result->tokenized->cues, $sourceLanguage));
+        }
 
         if ($this->beforeTokenizationResult !== null) {
             ($this->beforeTokenizationResult)();

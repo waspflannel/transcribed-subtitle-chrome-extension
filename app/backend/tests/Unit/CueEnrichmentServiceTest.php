@@ -24,6 +24,64 @@ use Tests\TestCase;
 
 class CueEnrichmentServiceTest extends TestCase
 {
+    public function test_analysis_returns_translation_and_readings_from_one_prompt(): void
+    {
+        $source = $this->sourceCue('cue-0001', 0, 'مرحبا');
+        CueAnalysisAgent::fake([['dialect' => 'unknown', 'cues' => [[
+            'cueId' => 'cue-0001', 'index' => 0, 'translatedText' => 'Hello',
+            'romanization' => 'marhaban',
+            'tokens' => [['index' => 0, 'text' => 'مرحبا', 'romanization' => 'marhaban']],
+        ]]]])->preventStrayPrompts();
+        CueRomanizationAgent::fake()->preventStrayPrompts();
+
+        $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch(
+            [$source], [$source], 'ara', 'eng', includeRomanization: true);
+
+        $this->assertSame('Hello', $result->translated->cues[0]['translatedText']);
+        $this->assertSame('مرحبا', $result->romanized->cues[0]['tokens'][0]['text']);
+        $this->assertSame('marhaban', $result->romanized->cues[0]['tokens'][0]['romanization']);
+        $this->assertSame($source['startMs'], $result->romanized->cues[0]['startMs']);
+        CueAnalysisAgent::assertPrompted(fn ($prompt): bool => $this->promptInput($prompt)['includeTranslation']
+            && $this->promptInput($prompt)['includeRomanization']);
+        CueRomanizationAgent::assertNeverPrompted();
+    }
+
+    public function test_analysis_uses_local_readings_and_omits_disabled_translation(): void
+    {
+        $source = $this->sourceCue('cue-0001', 0, 'Привет');
+        CueAnalysisAgent::fake([['dialect' => 'unknown', 'cues' => [[
+            'cueId' => 'cue-0001', 'index' => 0,
+            'tokens' => [['index' => 0, 'text' => 'Привет']],
+        ]]]])->preventStrayPrompts();
+        CueRomanizationAgent::fake()->preventStrayPrompts();
+
+        $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch(
+            [$source], [$source], 'rus', 'eng', includeTranslation: false, includeRomanization: true);
+
+        $this->assertSame('Привет', $result->translated->cues[0]['translatedText']);
+        $this->assertNotEmpty($result->romanized->cues[0]['tokens'][0]['romanization']);
+        CueAnalysisAgent::assertPrompted(fn ($prompt): bool => ! $this->promptInput($prompt)['includeTranslation']
+            && ! $this->promptInput($prompt)['includeRomanization']);
+        CueRomanizationAgent::assertNeverPrompted();
+    }
+
+    public function test_combined_analysis_fallback_drops_readings_for_invalid_token_boundaries(): void
+    {
+        $source = $this->sourceCue('cue-0001', 0, 'مرحبا');
+        $output = ['dialect' => 'unknown', 'cues' => [[
+            'cueId' => 'cue-0001', 'index' => 0, 'translatedText' => 'Hello',
+            'romanization' => 'wrong', 'tokens' => [['index' => 0, 'text' => 'missing', 'romanization' => 'wrong']],
+        ]]];
+        CueAnalysisAgent::fake([$output, $output])->preventStrayPrompts();
+
+        $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch(
+            [$source], [$source], 'ara', 'eng', includeRomanization: true);
+
+        $this->assertSame('Hello', $result->translated->cues[0]['translatedText']);
+        $this->assertSame('مرحبا', $result->romanized->cues[0]['tokens'][0]['text']);
+        $this->assertArrayNotHasKey('romanization', $result->romanized->cues[0]['tokens'][0]);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -110,6 +168,33 @@ class CueEnrichmentServiceTest extends TestCase
         // Grapheme-cluster split: a base character keeps its vowel and tone
         // marks instead of stranding each combining mark as its own token.
         $this->assertSame(['ที่', 'รั', 'ก'], array_column($result->cues[0]['tokens'], 'text'));
+    }
+
+    public function test_single_word_in_a_spaced_language_remains_one_fallback_token(): void
+    {
+        CueTokenizationAgent::fake([
+            ['dialect' => 'unknown', 'cues' => []],
+            ['dialect' => 'unknown', 'cues' => []],
+        ])->preventStrayPrompts();
+
+        $result = $this->tokenizeBatch([$this->sourceCue('cue-0001', 0, 'Hello!')], 'eng');
+
+        $this->assertSame(['Hello!'], array_column($result->cues[0]['tokens'], 'text'));
+    }
+
+    public function test_analysis_fallback_never_uses_a_different_cues_translation(): void
+    {
+        CueAnalysisAgent::fake([
+            ['dialect' => 'unknown', 'cues' => []],
+            ['dialect' => 'unknown', 'cues' => [[
+                'cueId' => 'wrong-cue', 'index' => 0, 'translatedText' => 'wrong translation', 'tokens' => [],
+            ]]],
+        ])->preventStrayPrompts();
+
+        $result = $this->analyzeBatch([$this->sourceCue('cue-0001', 0, 'Hello!')], 'eng', 'spa');
+
+        $this->assertSame('', $result->translated->cues[0]['translatedText']);
+        $this->assertSame(['Hello!'], array_column($result->tokenized->cues[0]['tokens'], 'text'));
     }
 
     public function test_tokenization_validation_failure_recovers_when_reprompt_succeeds(): void
@@ -795,7 +880,7 @@ class CueEnrichmentServiceTest extends TestCase
         });
     }
 
-    public function test_analysis_degrades_empty_translated_text_to_source_text(): void
+    public function test_analysis_marks_empty_translation_unavailable_without_discarding_tokens(): void
     {
         CueAnalysisAgent::fake([
             [
@@ -813,9 +898,7 @@ class CueEnrichmentServiceTest extends TestCase
 
         $result = $this->analyzeBatch([$this->sourceCue('cue-0001', 0, 'hola a todos')], 'spa', 'fra');
 
-        // A blank translation degrades to the source text without discarding
-        // the validated tokens from the same output.
-        $this->assertSame('hola a todos', $result->translated->cues[0]['translatedText']);
+        $this->assertSame('', $result->translated->cues[0]['translatedText']);
         $this->assertSame(['hola', 'a todos'], array_column($result->tokenized->cues[0]['tokens'], 'text'));
     }
 
@@ -879,7 +962,7 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame(['cue-0001', 'cue-0002'], array_column($result->translated->cues, 'cueId'));
     }
 
-    public function test_analysis_degrades_single_invalid_cue_to_deterministic_tokens_and_source_text(): void
+    public function test_analysis_preserves_translation_when_tokenization_falls_back(): void
     {
         $sourceText = 'Hola a todos';
         $invalidCue = [
@@ -899,7 +982,7 @@ class CueEnrichmentServiceTest extends TestCase
 
         $this->assertSame(['Hola', 'a', 'todos'], array_column($result->tokenized->cues[0]['tokens'], 'text'));
         $this->assertSame($sourceText, $result->tokenized->cues[0]['translatedText']);
-        $this->assertSame($sourceText, $result->translated->cues[0]['translatedText']);
+        $this->assertSame('hello everyone', $result->translated->cues[0]['translatedText']);
     }
 
     public function test_analysis_requires_configured_model(): void
@@ -961,7 +1044,7 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
     }
 
-    public function test_full_enrichment_falls_back_to_source_text_when_translation_missing(): void
+    public function test_full_enrichment_keeps_missing_translation_unavailable(): void
     {
         CueEnrichmentAgent::fake([
             [
@@ -986,9 +1069,7 @@ class CueEnrichmentServiceTest extends TestCase
 
         $result = $this->enrichBatch($cues, 'spa', 'fra');
 
-        // A cue missing its translation degrades to the source text instead of
-        // failing the job.
-        $this->assertSame('hola a todos', $result->cues[0]['translatedText']);
+        $this->assertSame('', $result->cues[0]['translatedText']);
     }
 
     public function test_romanizes_transcript_first_non_latin_cues_without_changing_tokens(): void

@@ -102,6 +102,42 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertTrue($requestMatched);
     }
 
+    public function test_url_ingestion_sends_only_a_canonical_youtube_url_and_repeated_keyterms(): void
+    {
+        Http::fake(['api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload())]);
+        $this->service()->transcribeYouTube('dQw4w9WgXcQ', 'auto', ['ElevenLabs', 'Marie Curie']);
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+            && str_contains($request->body(), 'name="source_url"')
+            && substr_count($request->body(), 'name="keyterms"') === 2
+            && str_contains($request->body(), 'Marie Curie')
+            && ! str_contains($request->body(), 'name="file"')
+            && ! str_contains($request->body(), 'name="language_code"'));
+        Process::assertNothingRan();
+    }
+
+    public function test_upload_keeps_keyterms_and_allowlisted_quality_fields(): void
+    {
+        $response = $this->sampleScribePayload();
+        $response['words'][0]['logprob'] = -0.4;
+        $response['words'][1]['logprob'] = 2;
+        $response['words'][1]['start'] = null;
+        $response['words'][1]['end'] = null;
+        Http::fake(function (Request $request) use ($response) {
+            $this->assertStringContainsString('name="file"', $request->body());
+            $this->assertStringContainsString('name="keyterms"', $request->body());
+            $this->assertStringNotContainsString('name="source_url"', $request->body());
+
+            return Http::response($response);
+        });
+        $payload = $this->service()->transcribeChunk($this->audio, 'spa', ['Marie Curie']);
+
+        $this->assertSame(-0.4, $payload['words'][0]['logprob']);
+        $this->assertArrayNotHasKey('logprob', $payload['words'][1]);
+        $this->assertArrayNotHasKey('start', $payload['words'][1]);
+    }
+
     public function test_it_passes_catalog_language_codes_directly_to_scribe(): void
     {
         $requestMatched = false;
@@ -147,10 +183,10 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
         $payload = $this->service()->transcribeChunk($this->audio, 'spa');
 
-        $this->assertSame(['words', 'language_code'], array_keys($payload));
+        $this->assertSame(['words', 'language_code', 'language_probability'], array_keys($payload));
         $this->assertSame(['text', 'type', 'start', 'end'], array_keys($payload['words'][0]));
         $this->assertArrayNotHasKey('speaker_id', $payload['words'][0]);
-        $this->assertArrayNotHasKey('language_probability', $payload);
+        $this->assertSame($this->sampleScribePayload()['language_probability'], $payload['language_probability']);
         $this->assertArrayNotHasKey('text', $payload);
     }
 

@@ -869,7 +869,8 @@ select option {
   gap: 8px;
 }
 
-.lyrics-correction-form textarea {
+.lyrics-correction-form textarea,
+.vocabulary-hints textarea {
   background: var(--night);
   border: 1.5px solid var(--line);
   color: var(--text);
@@ -877,6 +878,22 @@ select option {
   padding: 9px;
   resize: vertical;
   width: 100%;
+}
+
+.vocabulary-hints summary {
+  cursor: pointer;
+}
+
+.vocabulary-hints label {
+  display: block;
+  margin: 12px 0 6px;
+}
+
+.vocabulary-hints textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
 }
 
 .lyrics-correction-form textarea:disabled {

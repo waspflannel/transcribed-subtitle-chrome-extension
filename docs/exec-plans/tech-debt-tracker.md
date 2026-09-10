@@ -1,6 +1,14 @@
 # Technical Debt Tracker
 
+## Subtitle pipeline evaluation follow-up (2026-09-10)
+
+The selected pipeline implementation is covered by offline regressions. Still open: compare upload versus direct YouTube ingestion on representative reference audio; assess combined-analysis reading quality; calibrate language/logprob signals before enabling any selective second ASR pass. Use the user-requested low reasoning effort and keep upload as the default. Ambiguous repeated boundary words with no positive temporal overlap remain conservative; do not globally deduplicate them. Paid comparisons require a bounded sample and cost cap before execution. See the active [pipeline plan](active/2026-09-09-whole-project-review/pipeline-speed-quality-and-reliability.md).
+
 Track cleanup continuously. Prefer small, targeted follow-up plans over large periodic rewrites.
+
+## Partial-lyrics confirmation recovery (2026-09-10)
+
+For `Y_vB-3R_BYc`, attempt `cbb0be40-c969-47cb-a872-433877a9f929` ended at alignment with `lyrics_incomplete` and preserved the existing 69-cue track. The user saw the terminal message asking them to paste again instead of the partial-merge confirmation. Code inspection shows that confirmation requires the matching in-memory draft, attempt, track and video; the exact cause of the missing or mismatched panel state has not been reproduced. Partial merging remains supported after explicit confirmation, but this attempt never reached it. Reproduce the panel handoff and recovery after reopening, then restore a clear route to confirmation while preserving draft and track identity checks. This issue remains open after the pipeline branch merge; the Punjabi long-cue fix and local Fast mode change do not resolve it.
 
 ## Requirements retained after the 2026-09-09 plan cleanup
 

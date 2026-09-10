@@ -23,6 +23,8 @@
 
 ## Failure Handling
 
+Lyrics replacement wraps overlong aligned text server-side instead of spending another AI request solely to satisfy the 84-code-point cue limit. Word/grapheme boundaries preserve the text, and proportional subdivision stays inside the original timing slot with positive, contiguous durations. Other timing slots are unchanged. Full replacements return cue IDs and pasted segment ends; consecutive starts, separators and cue indexes are derived by the server. Partial-enabled replacements keep explicit mixed-source ranges. Unrelated lyrics, invalid source references, missing pasted text and stale attempts still fail before publication.
+
 For each critical workflow, define:
 
 - Expected failures.

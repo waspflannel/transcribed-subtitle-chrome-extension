@@ -19,6 +19,12 @@ export interface AccountSummary {
 // Source: schemas/create-subtitle-job-request.schema.json
 export interface CreateSubtitleJobRequest {
   /**
+   * Optional names or terms for this generation only. Each term has at most five words and 49 characters.
+   *
+   * @maxItems 20
+   */
+  vocabularyHints?: string[];
+  /**
    * Canonical 11-character YouTube video ID.
    */
   youtubeVideoId: string;
@@ -684,6 +690,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**
@@ -1374,6 +1383,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**
@@ -2063,6 +2075,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**
@@ -2116,6 +2131,9 @@ export interface SubtitleCue {
   startMs: number;
   endMs: number;
   sourceText: string;
+  /**
+   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
+   */
   translatedText: string;
   romanization?: string;
   /**

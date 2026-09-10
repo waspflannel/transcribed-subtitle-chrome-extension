@@ -32,7 +32,7 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
 
     public int $timeout = 300;
 
-    public readonly int $queuedAtMs;
+    public int $queuedAtMs;
 
     public function __construct(
         public readonly int $subtitleJobId,
@@ -68,6 +68,14 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
 
     public function handle(SubtitleCueBatchProcessor $processor): void
     {
+        // Chained jobs get their queue payload only after their predecessor
+        // finishes. Constructor time includes dependency work, not queue wait.
+        $publishedAt = $this->job?->payload()['createdAt'] ?? null;
+
+        if (is_numeric($publishedAt)) {
+            $this->queuedAtMs = (int) round((float) $publishedAt * 1000);
+        }
+
         try {
             $this->process($processor);
         } catch (Throwable $exception) {

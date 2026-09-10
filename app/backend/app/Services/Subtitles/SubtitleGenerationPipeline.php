@@ -6,7 +6,6 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\OptimizeSubtitleAudio;
-use App\Jobs\RomanizeSubtitleCueBatch;
 use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
@@ -18,6 +17,7 @@ use App\Services\Audio\YouTubeAudioSource;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\UsageLedger;
 use App\Services\Languages\LanguageCatalog;
+use App\Services\Text\SubtitleText;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
@@ -66,7 +66,8 @@ class SubtitleGenerationPipeline
         try {
             // A cached transcript for this video makes acquire, optimize, and
             // transcribe unnecessary -- roughly 45% of a job's wall time.
-            $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language);
+            $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language,
+                $job->vocabulary_hints ?? [], $job->transcription_ingestion_mode, $job->user_id);
 
             if ($cached !== null) {
                 $stage = 'transcribing';
@@ -79,6 +80,11 @@ class SubtitleGenerationPipeline
             $this->logger->audioAcquisitionStarted($job);
 
             $audioStartedAtMs = $this->telemetry->currentTimeMs();
+            if ($job->transcription_ingestion_mode === 'youtube_url') {
+                $this->dispatchUrlTranscription($job, $audioStartedAtMs);
+
+                return;
+            }
             $audio = $this->audioSource->acquire(
                 youtubeUrl: $job->youtube_url,
                 requestDurationSeconds: $job->video_duration_seconds,
@@ -115,6 +121,29 @@ class SubtitleGenerationPipeline
 
             throw $exception;
         }
+    }
+
+    private function dispatchUrlTranscription(SubtitleJob $job, int $startedAtMs): void
+    {
+        $duration = $this->audioSource->validatedDuration(
+            'https://www.youtube.com/watch?v='.$job->youtube_video_id, $job->video_duration_seconds);
+
+        DB::transaction(function () use ($job, $duration, $startedAtMs): void {
+            $currentJob = $this->lockRunningJob($job->id, $job->run_id);
+            if ($currentJob === null) {
+                return;
+            }
+            $currentJob->update(['video_duration_seconds' => $duration]);
+            $currentJob->load('user');
+            $this->billing->syncJobReservationToActualDuration($currentJob);
+            $this->telemetry->recordStageCompleted($currentJob, 'acquiring-audio', $startedAtMs);
+            $this->markJobRunning($currentJob, 'transcribing', 50);
+            $this->logger->transcriptionStarted($currentJob);
+            $this->telemetry->recordStageStarted($currentJob, 'transcribing');
+            $transcribingStartedAtMs = $this->telemetry->currentTimeMs();
+            $chunks = [new TranscribeSubtitleAudioChunk($currentJob->id, 0, 1, $currentJob->run_id, null, 0.0, 0.0, null)];
+            DB::afterCommit(fn () => $this->batchDispatcher->dispatchTranscription($currentJob, $chunks, $transcribingStartedAtMs));
+        }, attempts: 5);
     }
 
     /**
@@ -230,7 +259,7 @@ class SubtitleGenerationPipeline
         string $runId,
         int $chunkIndex,
         int $chunkCount,
-        TemporaryAudioFile $chunkAudio,
+        ?TemporaryAudioFile $chunkAudio,
         float $audioStartSeconds,
         float $nominalStartSeconds,
         ?float $nominalEndSeconds,
@@ -244,7 +273,15 @@ class SubtitleGenerationPipeline
 
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
-        $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
+        if ($chunkAudio === null) {
+            if ($job->transcription_ingestion_mode !== 'youtube_url' || $chunkIndex !== 0 || $chunkCount !== 1
+                || $audioStartSeconds !== 0.0 || $nominalStartSeconds !== 0.0 || $nominalEndSeconds !== null) {
+                throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_url_transcription_chunk']);
+            }
+            $payload = $this->transcriptionService->transcribeYouTube($job->youtube_video_id, $job->source_language, $job->vocabulary_hints ?? []);
+        } else {
+            $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language, $job->vocabulary_hints ?? []);
+        }
 
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -291,6 +328,8 @@ class SubtitleGenerationPipeline
                 chunks: $this->artifacts->transcriptChunks($job),
                 sourceLanguage: $job->source_language,
                 durationSeconds: $durationSeconds,
+                jobId: $job->public_id,
+                runId: $job->run_id,
             );
 
             $draftCues = $this->tracks->draftCues($transcript);
@@ -311,6 +350,9 @@ class SubtitleGenerationPipeline
                     requestedSourceLanguage: $job->source_language,
                     transcript: $transcript,
                     audioDurationSeconds: $durationSeconds,
+                    vocabularyHints: $job->vocabulary_hints ?? [],
+                    ingestionMode: $job->transcription_ingestion_mode,
+                    userId: $job->user_id,
                 );
                 $this->artifacts->putTranscript($job, $transcript);
                 $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
@@ -394,9 +436,7 @@ class SubtitleGenerationPipeline
         $tokenized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TOKENIZED_CUES);
         $this->logger->tokenizationCompleted($job, $tokenized);
 
-        // Romanization now runs chained after each tokenize batch inside the
-        // analysis batch, so its cues are already written by the time this
-        // continuation fires -- no separate romanization batch or queue hop.
+        // Analysis writes romanization alongside tokens and translation.
         $base = $tokenized;
 
         if ($this->shouldRomanize($job)) {
@@ -504,18 +544,9 @@ class SubtitleGenerationPipeline
         $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
 
         for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            // One merged tokenize+translate call per batch when translation is
-            // requested; tokenize-only otherwise. Romanization only needs its
-            // own batch's tokenized output, so chain Romanize(N) directly after
-            // the analysis job. The batch completes once every member -- chains
-            // included -- finishes.
-            $analysisJob = $translationRequested
+            $jobs[] = $translationRequested || $romanize
                 ? new AnalyzeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)
                 : new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
-
-            $jobs[] = $romanize
-                ? [$analysisJob, new RomanizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)]
-                : $analysisJob;
         }
 
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
@@ -673,12 +704,6 @@ class SubtitleGenerationPipeline
         return $job->include_translation && ! $this->isSameLanguageGeneration($job);
     }
 
-    /**
-     * Decide romanization once, at analysis-batch dispatch time, so Romanize(N)
-     * can be chained onto Tokenize(N). The draft cues carry the same sourceText
-     * as the tokenized cues, so the decision is identical whether it reads draft
-     * or tokenized output -- and the draft artifact exists before tokenization.
-     */
     private function shouldRomanize(SubtitleJob $job): bool
     {
         if (! $job->include_romanization) {
@@ -687,26 +712,7 @@ class SubtitleGenerationPipeline
 
         $draftCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
 
-        return $this->shouldRomanizeTranscript($draftCues);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     */
-    private function shouldRomanizeTranscript(array $cues): bool
-    {
-        foreach ($cues as $cue) {
-            if (is_string($cue['sourceText'] ?? null) && $this->containsNonLatinLetter($cue['sourceText'])) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function containsNonLatinLetter(string $text): bool
-    {
-        return preg_match('/(?!\p{Latin})\p{L}/u', $text) === 1;
+        return SubtitleText::hasNonLatinCues($draftCues);
     }
 
     private function recordDetectedSourceLanguage(

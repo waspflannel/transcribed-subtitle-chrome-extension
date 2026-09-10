@@ -1046,6 +1046,82 @@ class LyricsCorrectionContinuationTest extends TestCase
         ))->once();
     }
 
+    public function test_overlong_punjabi_alignment_splits_inside_original_timing_without_another_ai_call(): void
+    {
+        $queue = $this->completedTrackWithCues(3, fn (): string => 'Timing evidence only');
+        $lyrics = trim(str_repeat('ਕਿਤਾਬ ', 30));
+        $calls = 0;
+        LyricsAlignmentAgent::fake(function ($prompt) use (&$calls): array {
+            $calls++;
+            $input = json_decode($prompt, true);
+
+            return ['isMatch' => true, 'isComplete' => true, 'cues' => array_map(
+                fn (array $range, int $index): array => [
+                    'cueId' => $input['cues'][$index]['cueId'],
+                    'segments' => [['source' => 'pasted', 'endPartIndex' => $range[1]]],
+                ],
+                [[0, 19], [20, 29]],
+                [0, 1],
+            )];
+        })->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], [$lyrics]);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $cues = $row->track->cues;
+        $this->assertSame('completed', $row->status);
+        $this->assertSame(1, $calls);
+        $this->assertSame($lyrics, implode(' ', array_column($cues, 'sourceText')));
+        $this->assertSame([83, 35, 59], array_map(fn (array $cue): int => mb_strlen($cue['sourceText'], 'UTF-8'), $cues));
+        $this->assertSame(0, $cues[0]['startMs']);
+        $this->assertGreaterThan(0, $cues[0]['endMs']);
+        $this->assertSame($cues[0]['endMs'], $cues[1]['startMs']);
+        $this->assertLessThan(4000, $cues[1]['startMs']);
+        $this->assertSame(4000, $cues[1]['endMs']);
+        $this->assertSame(4000, $cues[2]['startMs']);
+        $this->assertSame(8000, $cues[2]['endMs']);
+        $this->assertSame([0, 1, 2], array_column($cues, 'index'));
+        $this->assertCount(3, array_unique(array_column($cues, 'cueId')));
+    }
+
+    public function test_overlong_alignment_with_insufficient_time_preserves_original_track(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (): string => 'Timing evidence only');
+        $originalCues = $queue['job']->track->cues;
+        $originalCues[0]['endMs'] = 1;
+        $queue['job']->track->update(['cues' => $originalCues]);
+        LyricsAlignmentAgent::fake(fn (): array => ['isMatch' => true, 'isComplete' => true, 'cues' => [
+            ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 119, 'separator' => '']]],
+        ]])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], [str_repeat('字', 120)]);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('failed', $row->status);
+        $this->assertSame($originalCues, $row->track->cues);
+        $this->assertNull($row->lyrics);
+        $this->assertNull($row->work_state);
+    }
+
+    public function test_complete_alignment_derives_starts_even_when_partial_replacement_is_allowed(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        $alignment = $queue['alignmentCues'];
+        foreach ($alignment as &$cue) {
+            unset($cue['index']);
+            $cue['segments'][0]['startPartIndex'] = 999;
+            $cue['segments'][0]['separator'] = ' ';
+        }
+        unset($cue);
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $alignment]])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts'], allowPartial: true);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $row->status);
+        $this->assertSame($queue['texts'], array_column($row->track->cues, 'sourceText'));
+    }
+
     public function test_alignment_copies_every_hindi_word_and_punctuation_from_the_paste(): void
     {
         $queue = $this->completedTrackWithCues(2, fn (): string => 'Timing evidence only');
@@ -1082,14 +1158,13 @@ class LyricsCorrectionContinuationTest extends TestCase
         $grapheme = 'ก้';
         $lyrics = str_repeat($grapheme, 60);
         LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => [
-            ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 29, 'separator' => '']]],
-            ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 30, 'endPartIndex' => 59, 'separator' => '']]],
+            ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 59, 'separator' => '']]],
         ]]])->preventStrayPrompts();
         $response = $this->submitLyrics($queue['job'], [$lyrics]);
         $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->assertSame('completed', $row->status);
-        $this->assertSame([str_repeat($grapheme, 30), str_repeat($grapheme, 30)], array_column($row->track->cues, 'sourceText'));
+        $this->assertSame([str_repeat($grapheme, 42), str_repeat($grapheme, 18)], array_column($row->track->cues, 'sourceText'));
     }
 
     public function test_submission_requires_current_track_identity_and_rejects_impossible_capacity(): void
@@ -1108,7 +1183,7 @@ class LyricsCorrectionContinuationTest extends TestCase
     {
         foreach (['entitlement', 'expiry', 'track', 'run'] as $change) {
             $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
-        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]])->preventStrayPrompts();
+            LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]])->preventStrayPrompts();
             $response = $this->submitLyrics($queue['job'], $queue['texts']);
             $service = app(LyricsCorrectionService::class);
             $track = $queue['job']->track;

@@ -13,18 +13,10 @@ class YouTubeAudioSource
 {
     public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory): TemporaryAudioFile
     {
-        $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
-
-        if ($requestDurationSeconds !== null && $requestDurationSeconds > $maxDurationSeconds) {
-            throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
-        }
-
         File::ensureDirectoryExists($workDirectory, 0700);
 
         try {
-            $metadata = $this->metadata($youtubeUrl);
-            $durationSeconds = $this->durationSeconds($metadata, $maxDurationSeconds);
-            $this->assertSupportedVideo($metadata);
+            $durationSeconds = $this->validatedDuration($youtubeUrl, $requestDurationSeconds);
 
             $realPath = $this->downloadAudio($youtubeUrl, $workDirectory);
             $sizeBytes = File::size($realPath);
@@ -52,6 +44,19 @@ class YouTubeAudioSource
                 previous: $exception,
             );
         }
+    }
+
+    public function validatedDuration(string $youtubeUrl, ?int $requestDurationSeconds): int
+    {
+        $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
+        if ($requestDurationSeconds !== null && $requestDurationSeconds > $maxDurationSeconds) {
+            throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
+        }
+        $metadata = $this->metadata($youtubeUrl);
+        $duration = $this->durationSeconds($metadata, $maxDurationSeconds);
+        $this->assertSupportedVideo($metadata);
+
+        return $duration;
     }
 
     /**

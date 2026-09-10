@@ -205,7 +205,7 @@ class LaravelAiTranslationAnalysisProvider
             [
                 ...$sourceCue,
                 'translatedText' => $sourceText,
-                'tokens' => $this->deterministicTokens($sourceText),
+                'tokens' => $this->deterministicTokens($sourceText, $sourceLanguage),
             ],
         ], 'unknown');
     }
@@ -213,9 +213,12 @@ class LaravelAiTranslationAnalysisProvider
     /**
      * @return array<int, array{index: int, text: string, normalizedText: string}>
      */
-    private function deterministicTokens(string $sourceText): array
+    private function deterministicTokens(string $sourceText, string $sourceLanguage): array
     {
-        if (preg_match('/\s/u', $sourceText) === 1) {
+        $noSpaceScript = in_array($sourceLanguage, ['jpn', 'cmn', 'yue', 'tha', 'lao', 'khm', 'mya'], true)
+            && preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Thai}\p{Lao}\p{Khmer}\p{Myanmar}]/u', $sourceText) === 1;
+
+        if (! $noSpaceScript || preg_match('/\s/u', $sourceText) === 1) {
             $pieces = preg_split('/\s+/u', $sourceText) ?: [];
         } else {
             // No-space script: split on grapheme clusters, not code points, so a
@@ -356,8 +359,7 @@ class LaravelAiTranslationAnalysisProvider
     }
 
     /**
-     * Tokenizes and translates a cue batch with one merged LLM call, producing
-     * the same two artifacts the former separate calls wrote.
+     * Choose tokens and add requested translations/readings with one AI call.
      *
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
@@ -369,6 +371,8 @@ class LaravelAiTranslationAnalysisProvider
         string $targetLanguage,
         bool $splitInvalidBatches = true,
         ?Closure $beforeRetry = null,
+        bool $includeTranslation = true,
+        bool $includeRomanization = false,
     ): CueAnalysisBatchResult {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
@@ -378,7 +382,16 @@ class LaravelAiTranslationAnalysisProvider
             $this->failInvalidOutput('empty_context_cues');
         }
 
-        return $this->analyzeBatch($batch, $sourceLanguage, $targetLanguage, $allCues, allowReprompt: true, splitInvalidBatches: $splitInvalidBatches, beforeRetry: $beforeRetry);
+        $transliterator = $includeRomanization ? $this->deterministicTransliterator($sourceLanguage) : null;
+        $result = $this->analyzeBatch($batch, $sourceLanguage, $targetLanguage, $allCues,
+            allowReprompt: true, splitInvalidBatches: $splitInvalidBatches, beforeRetry: $beforeRetry,
+            includeTranslation: $includeTranslation, includeRomanization: $includeRomanization && $transliterator === null);
+
+        return $transliterator === null ? $result : new CueAnalysisBatchResult(
+            $result->tokenized,
+            $result->translated,
+            $this->deterministicallyRomanizedResult($result->tokenized->cues, $transliterator),
+        );
     }
 
     /**
@@ -393,16 +406,18 @@ class LaravelAiTranslationAnalysisProvider
         bool $allowReprompt,
         bool $splitInvalidBatches = true,
         ?Closure $beforeRetry = null,
+        bool $includeTranslation = true,
+        bool $includeRomanization = false,
     ): CueAnalysisBatchResult {
         $output = $this->promptAgent(
             CueAnalysisAgent::class,
-            $this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues),
+            $this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues, $includeTranslation, $includeRomanization),
         );
 
         $cueCount = count($batch);
 
         try {
-            return $this->analyzedBatchResult($output, $batch);
+            return $this->analyzedBatchResult($output, $batch, $includeTranslation, $includeRomanization);
         } catch (SubtitleProcessingException $exception) {
             if ($splitInvalidBatches && $this->shouldRetryTokenizationBatch($exception, $cueCount)) {
                 $beforeRetry?->__invoke();
@@ -419,17 +434,18 @@ class LaravelAiTranslationAnalysisProvider
                 ]);
 
                 $splitAt = intdiv($cueCount, 2);
-                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
-                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry);
+                $left = $this->analyzeBatch(array_slice($batch, 0, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, includeTranslation: $includeTranslation, includeRomanization: $includeRomanization);
+                $right = $this->analyzeBatch(array_slice($batch, $splitAt), $sourceLanguage, $targetLanguage, $allCues, allowReprompt: false, splitInvalidBatches: false, beforeRetry: $beforeRetry, includeTranslation: $includeTranslation, includeRomanization: $includeRomanization);
 
                 return new CueAnalysisBatchResult(
                     $this->combinedResult($left->tokenized, $right->tokenized),
                     $this->combinedResult($left->translated, $right->translated),
+                    $includeRomanization ? $this->combinedResult($left->romanized, $right->romanized) : null,
                 );
             }
 
             if ($cueCount <= 1) {
-                return $this->analyzeSingleCueWithFallback($batch, $sourceLanguage, $targetLanguage, $allCues, $allowReprompt, $beforeRetry);
+                return $this->analyzeSingleCueWithFallback($batch, $sourceLanguage, $targetLanguage, $allCues, $allowReprompt, $beforeRetry, $output, $includeTranslation, $includeRomanization);
             }
 
             throw $exception;
@@ -437,9 +453,8 @@ class LaravelAiTranslationAnalysisProvider
     }
 
     /**
-     * Mirrors tokenizeSingleCueWithFallback: a single pathological cue degrades
-     * to deterministic tokens and its source text as translation instead of
-     * failing the whole job.
+     * Preserve any valid translation when single-cue tokenization fails.
+     * Readings for rejected token boundaries cannot annotate fallback tokens.
      *
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
@@ -451,16 +466,25 @@ class LaravelAiTranslationAnalysisProvider
         array $allCues,
         bool $allowReprompt,
         ?Closure $beforeRetry = null,
+        array $initialOutput = [],
+        bool $includeTranslation = true,
+        bool $includeRomanization = false,
     ): CueAnalysisBatchResult {
+        $translation = $this->singleCueTranslation($initialOutput, $batch[0]);
+
         if ($allowReprompt) {
             $beforeRetry?->__invoke();
             try {
                 $output = $this->promptAgent(
                     CueAnalysisAgent::class,
-                    $this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues),
+                    $this->analysisInput($batch, $sourceLanguage, $targetLanguage, $allCues, $includeTranslation, $includeRomanization),
                 );
+                $translation = $this->singleCueTranslation($output, $batch[0]) ?? $translation;
+                if ($translation !== null && is_array($output['cues'][0] ?? null)) {
+                    $output['cues'][0]['translatedText'] = $translation;
+                }
 
-                return $this->analyzedBatchResult($output, $batch);
+                return $this->analyzedBatchResult($output, $batch, $includeTranslation, $includeRomanization);
             } catch (SubtitleProcessingException $exception) {
                 if ($exception->isTransient() || in_array($exception->context['reason'] ?? null, ['provider_quota_exhausted', 'output_token_limit'], true)) {
                     throw $exception;
@@ -483,28 +507,43 @@ class LaravelAiTranslationAnalysisProvider
         $sourceCue = $batch[0];
         $sourceText = (string) $sourceCue['sourceText'];
 
+        $tokenized = new CueEnrichmentResult([
+            [
+                ...$sourceCue,
+                'translatedText' => $sourceText,
+                'tokens' => $this->deterministicTokens($sourceText, $sourceLanguage),
+            ],
+        ], 'unknown');
+
         return new CueAnalysisBatchResult(
+            $tokenized,
             new CueEnrichmentResult([
                 [
                     ...$sourceCue,
-                    'translatedText' => $sourceText,
-                    'tokens' => $this->deterministicTokens($sourceText),
+                    'translatedText' => $includeTranslation ? ($translation ?? '') : $sourceText,
                 ],
             ], 'unknown'),
-            new CueEnrichmentResult([
-                [
-                    ...$sourceCue,
-                    'translatedText' => $sourceText,
-                ],
-            ], 'unknown'),
+            $includeRomanization ? $tokenized : null,
         );
+    }
+
+    private function singleCueTranslation(array $output, array $sourceCue): ?string
+    {
+        try {
+            $cue = $this->validatedOutputCues($output, [$sourceCue])[0];
+            $this->validateCueIdentity($sourceCue, $cue, 0, validateSourceText: false);
+
+            return $this->cleanString($cue['translatedText'] ?? null);
+        } catch (SubtitleProcessingException) {
+            return null;
+        }
     }
 
     /**
      * @param  array<string, mixed>  $output
      * @param  array<int, array<string, mixed>>  $sourceCues
      */
-    private function analyzedBatchResult(array $output, array $sourceCues): CueAnalysisBatchResult
+    private function analyzedBatchResult(array $output, array $sourceCues, bool $includeTranslation = true, bool $includeRomanization = false): CueAnalysisBatchResult
     {
         $dialect = $this->cleanString($output['dialect'] ?? null) ?? 'unknown';
         $outputCues = $this->validatedOutputCues($output, $sourceCues);
@@ -515,19 +554,20 @@ class LaravelAiTranslationAnalysisProvider
             $outputCue = $outputCues[$position];
             $tokenizedCues[] = $this->validatedTokenizedCue($sourceCue, $outputCue, $position);
 
-            // Translation stays an optional enrichment: an empty or missing
-            // translation degrades to the source text rather than discarding
-            // the validated tokens in the same output.
+            // An empty translation explicitly means unavailable; it must not
+            // masquerade as a successful translation of the source text.
             $translatedCues[] = [
                 ...$sourceCue,
-                'translatedText' => $this->cleanString($outputCue['translatedText'] ?? null)
-                    ?? (string) $sourceCue['sourceText'],
+                'translatedText' => $includeTranslation
+                    ? ($this->cleanString($outputCue['translatedText'] ?? null) ?? '')
+                    : (string) $sourceCue['sourceText'],
             ];
         }
 
         return new CueAnalysisBatchResult(
             new CueEnrichmentResult($tokenizedCues, $dialect),
             new CueEnrichmentResult($translatedCues, $dialect),
+            $includeRomanization ? $this->romanizedResult($output, $tokenizedCues) : null,
         );
     }
 
@@ -565,6 +605,11 @@ class LaravelAiTranslationAnalysisProvider
             ),
             $batch,
         );
+    }
+
+    public function usesDeterministicRomanization(string $sourceLanguage): bool
+    {
+        return $this->deterministicTransliterator($sourceLanguage) !== null;
     }
 
     private function deterministicTransliterator(string $sourceLanguage): ?Transliterator
@@ -672,7 +717,13 @@ class LaravelAiTranslationAnalysisProvider
     private function promptAgent(string $agentClass, array $input): array
     {
         try {
-            $response = $agentClass::make()->prompt($this->encodeAgentInput($input));
+            $agent = $agentClass === CueAnalysisAgent::class
+                ? CueAnalysisAgent::make(
+                    includeTranslation: $input['includeTranslation'] ?? true,
+                    includeRomanization: $input['includeRomanization'] ?? false,
+                )
+                : $agentClass::make();
+            $response = $agent->prompt($this->encodeAgentInput($input));
 
             if ($response->steps->last()?->finishReason === FinishReason::Length) {
                 throw SubtitleProcessingException::enrichmentFailed('Subtitle AI output exceeded its token limit.', [
@@ -855,8 +906,12 @@ class LaravelAiTranslationAnalysisProvider
         string $sourceLanguage,
         string $targetLanguage,
         array $allCues,
+        bool $includeTranslation = true,
+        bool $includeRomanization = false,
     ): array {
         return [
+            'includeTranslation' => $includeTranslation,
+            'includeRomanization' => $includeRomanization,
             'sourceLanguage' => $sourceLanguage,
             'sourceLanguageName' => LanguageCatalog::label($sourceLanguage),
             'targetLanguage' => $targetLanguage,
@@ -963,8 +1018,7 @@ class LaravelAiTranslationAnalysisProvider
             // Enrichment cannot change cue translation; the server owns it. We
             // copy the source cue's translation unconditionally rather than
             // validating an echo of data we already hold.
-            $sourceTranslatedText = $this->cleanString($sourceCue['translatedText'] ?? null)
-                ?? (string) $sourceCue['sourceText'];
+            $sourceTranslatedText = $this->cleanString($sourceCue['translatedText'] ?? null) ?? '';
 
             $enrichedCue = [
                 'cueId' => $sourceCue['cueId'],
@@ -1033,8 +1087,8 @@ class LaravelAiTranslationAnalysisProvider
 
             $cue = [
                 ...$sourceCue,
-                'translatedText' => $this->cleanString($sourceCue['translatedText'] ?? null)
-                    ?? (string) $sourceCue['sourceText'],
+                'translatedText' => is_string($sourceCue['translatedText'] ?? null)
+                    ? $sourceCue['translatedText'] : (string) $sourceCue['sourceText'],
             ];
 
             $cueRomanization = $this->cleanString($outputCue['romanization'] ?? null);
