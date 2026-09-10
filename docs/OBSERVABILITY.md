@@ -54,6 +54,10 @@ Define metrics for:
 
 `php artisan subtitles:metrics --json` groups completed jobs by generation tier and video-duration bucket, reporting completed count, p50/p95 generation duration, p95 queue wait, configured budget, budget misses, estimated provider cost, and cost per generated minute. The command reads only subtitle job rows and sanitized trace events.
 
+Metrics select events from each job's current `run_id`. Cue batch queue wait starts at Laravel's own queue publication timestamp, including for successors in a chain. That timestamp has second precision; a retried payload retains its original publication time, so its wait can include its earlier attempts and backoff. It is not pure broker residence time across retries.
+
+`backend.transcription_quality` logs job/run IDs, normalized chunk language codes, bounded language probabilities, and the count/mean/minimum of available word log probabilities. No words, hints or provider payloads are logged. These are diagnostic signals, not measured transcription accuracy or automatic retry thresholds. `backend.transcription_started` also records ingestion mode and hint count. Combined analysis emits one stage duration; configured per-feature costs remain estimates, with no LLM romanization cost for local ICU readings. Hinted transcription estimates include the provider's documented 20% surcharge.
+
 ## Traces
 
 Subtitle workflow traces are persisted in `subtitle_job_events` and mirrored into structured logs. Trace context is scalar and sanitized only; it must not include transcripts, cue text, token text, prompts, translations, romanization, raw provider payloads, raw audio paths, provider secrets, or install IDs.

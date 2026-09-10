@@ -215,6 +215,14 @@ Run this before production:
 - Run `subtitles:prune-expired --no-ansi`.
 - Build extension ZIP with the staging API URL and verify the manifest host permission.
 
+## Subtitle pipeline rollout (September 2026)
+
+The subtitle changes require migration `2026_09_10_000000_add_transcription_options_to_subtitle_jobs.php`. Drain active generation work, deploy/migrate, and restart workers through the normal release procedure; existing worker payloads must not mix the old separate romanization stage with the combined stage. The job output version is tokenizer v10 and transcript cache version is v3. Old rows expire through existing retention.
+
+`SUBTITLE_TRANSCRIPTION_INGESTION_MODE=upload` remains the default. The opt-in `youtube_url` route validates public/non-live metadata and duration with yt-dlp, then sends a canonical YouTube URL to Scribe through the existing single-chunk queue/merge path. It skips local download/FLAC preparation and does not automatically issue a second upload request if URL ingestion fails. Mode is pinned on each job. Compare representative videos before changing the default; fewer local steps do not establish a latency or recognition-quality gain.
+
+Vocabulary hints add the [documented Scribe keyterm surcharge](https://elevenlabs.io/docs/api-reference/speech-to-text/convert); provider cost estimates include 20% when hints are present. Customer minute accounting is unchanged. Medium AI reasoning remains unchanged, and no confidence-triggered transcription retries are enabled. A code rollback can leave the additive columns in place; dropping the migration's unique-key extension can fail if multiple hint/mode variants exist, so do not discard user jobs to force it.
+
 ## Security Checklist
 
 - `APP_DEBUG=false`.

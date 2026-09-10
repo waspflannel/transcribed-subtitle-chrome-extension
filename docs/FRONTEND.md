@@ -19,7 +19,9 @@
 
 ## Expectations
 
-- The internal `tokenizing` generation stage is displayed as **Analyzing subtitles** in the extension and web dashboard. Tokenization, translation, and chained romanization share one progress band and one timeline step because their batches overlap; the timeline must not show translation and romanization as later sequential steps.
+- Generation offers optional names/vocabulary for that video only: up to 20 terms, each at most five words and 49 characters. Inputs clear after submission or video/account changes and are not saved as global preferences. A completed cue with `translatedText: ""` means requested translation was unavailable; the transcript labels this and the overlay hides the empty line. Disabled/same-language translation still retains source text.
+
+- The internal `tokenizing` generation stage is displayed as **Analyzing subtitles** in the extension and web dashboard. Tokenization, translation, and requested romanization share one analysis response, progress band, and timeline step; the timeline must not show translation and romanization as later sequential steps.
 
 - Generation status is polled every five seconds. Partial subtitles are fetched immediately when analysis starts and then at most every ten seconds, including after a failed fetch. Only changed partial revisions are stored again; completion and cancellation stop polling.
 

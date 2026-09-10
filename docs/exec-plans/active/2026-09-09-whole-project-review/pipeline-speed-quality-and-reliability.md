@@ -1,13 +1,51 @@
 # Pipeline speed, quality and reliability
 
-Branch context: this is a preserved record on a documentation-only branch; [the index explains which application revisions the evidence describes](00-index.md#cleanup-branch-preservation).
+Branch context: selected implementation below is on `codex/subtitle-pipeline-quality`, based on main `b454e99`. Historical records below predate this implementation; [the index explains their application revisions](00-index.md#cleanup-branch-preservation).
 
 Created: 2026-09-09
-Last updated: 2026-09-09
+Last updated: 2026-09-10
 
 Use the [index](00-index.md) for shared execution rules, ownership and the old-number map. Historical package numbers below identify audit evidence; they are sections of these consolidated documents, not separate work plans. This consolidation does not authorize new implementation or experiments.
 
 This is the single backlog for generation from source acquisition through audio preparation, transcription, learning analysis, romanization, caching and browser delivery. It combines former 02, 03, 04, 06, 07, 08, 09, 10 and 11, plus the current slowdown investigation.
+
+## Selected implementation: audit items 1–7
+
+Status: selected code implemented and validated locally — 2026-09-10; live comparisons deferred
+Owner: current agent
+
+The user selected boundary reconciliation (1), language-aware and honest fallback output (2), run-scoped timing and actual queue publication timing (3), direct YouTube ingestion (5), retained transcription quality signals and improved language selection (6), and optional vocabulary hints (7). The user then added combined analysis and romanization (4), explicitly excluding lower-reasoning experiments. All agents retain medium reasoning.
+
+Delivery order:
+
+1. Correct metrics and their regression tests; pin test-only fast-mode configuration so the suite is independent of local settings.
+2. Review preserved boundary commit `07682be`, recover applicable code/tests, and repair language-aware fallback and missing-translation representation through the contracts and extension.
+3. Combine analysis and requested romanization in one validated response. Keep deterministic transliteration local and preserve source/token identity, same-language and translation-disabled behavior.
+4. Carry allowlisted word log probabilities and language confidence through transcription, select automatic language from meaningful evidence across chunks, and expose sanitized quality diagnostics. Selective retranscription requires calibrated reference evidence before activation.
+5. Add optional user vocabulary hints from extension through validated requests, stored jobs, provider requests and cache identity. Never log the hints or reuse a transcript generated with different hints.
+6. Add explicitly selected direct YouTube URL ingestion with existing public/non-live/duration admission checks and distinct cache identity. Preserve local chunked ingestion until a bounded real-video comparison establishes suitable defaults.
+
+Acceptance: focused regressions, contract checks, complete agent check, source-fidelity review, no changed reasoning settings, no raw content in diagnostics, and documented cache invalidation and remaining live-evaluation evidence. No provider-backed experiments, deployment or runtime reconfiguration are started by this implementation. Paid comparisons need a concrete bounded sample before their final approval step.
+
+Baseline: current main `b454e99` reproduces duplicate/missing boundary words and single-word English fallback splitting into letters. An isolated two-run metrics probe mixes old timings with current costs. Full baseline check passed with test-process `OPENAI_FAST_MODE_ENABLED=true`: 452 backend tests, 224 extension tests, contracts, TypeScript and build. Without that test setting, two preexisting instruction tests assume the local fast-mode toggle is true.
+
+Skills: phased-implementation-v2, ponytail, code-review, Laravel best practices, Laravel AI SDK, subtitle-pipeline and Laravel security. Use existing framework queue payload metadata where possible and keep provider-specific requests inside the present provider boundary. Existing historical delivery notes below do not imply those fixes are present in this checkout.
+
+### Implementation and validation record
+
+- Recovered and reviewed the conservative boundary reconciliation from `07682be`, with regressions for dropped/duplicated overlap words, legitimate repetitions, conflicting sequence order, punctuation/untimed glue and non-overlap. Only unique equal-text matches with positive temporal overlap are reconciled. Touching/disjoint words remain ambiguous and are preserved through ownership rules.
+- Language-aware fallback keeps single spaced-language words intact and no-space grapheme clusters intact. Independent valid translations survive rejected tokenization; absent translations are explicitly empty through final enrichment, contracts, response guards and UI.
+- Metrics exclude old run events. Chained cue jobs read Laravel queue publication timestamps; test-only fast-mode configuration is pinned so local `.env` does not alter instruction tests. Reasoning remains medium everywhere.
+- Cue analysis returns tokens, requested translations and requested readings in one response; deterministic ICU readings remain local. New generation dispatches no separate romanization job. Existing romanization provider support is still used for lyrics correction.
+- Scribe parsing retains bounded language probability and finite word logprob values, accepts paired null timing, and logs only aggregate quality data with job/run IDs. Auto language uses owned speech duration weighted by available confidence across chunks; supported equal-weight ties retain first occurrence. Explicit requested language remains authoritative. No selective extra ASR call is enabled.
+- Optional vocabulary hints are validated across API/contracts/extension (20 terms, five words and 49 characters each), normalized for reuse, and sent as repeated multipart keyterms. Hinted transcript caches are isolated by owner and options. Cost estimates include the documented 20% keyterm surcharge; hint text is never logged. Input clears on submission and video/account changes.
+- `youtube_url` is an opt-in mode pinned at job creation, with metadata/duration admission, canonical URL generation, guarded single-chunk dispatch, common merge continuation and distinct cache identity. Upload remains default; failures do not silently issue a second billed transcription. Migration and worker-drain rollout are documented in the operations runbook.
+- Validation: `scripts/agent/check.ps1` and `scripts/agent/verify-pr.ps1` passed: **484 backend tests (3327 assertions), 227 extension tests**, contract validation/type generation, TypeScript compile and extension build. `pint --dirty --format=agent` and `git diff --check` passed. Existing extension test stderr includes an unrelated JSDOM `window` diagnostic in transcript-view testing; the suite has no failing tests.
+- Browser: built panel with mocked browser messaging, 380×900 viewport. Invalid hints sent no generation request; valid hints were transmitted exactly and cleared; switching video cleared input; no horizontal overflow or browser errors. [Screenshot](evidence/vocabulary-hints.png). This verifies panel behavior, not a real YouTube/provider run.
+- Review: checked current-run identity, queue publication semantics, source/token fidelity, same-language and feature flags, hint validation/owner isolation, canonical URL policy, cancellation guards, disabled-by-default direct mode and rollout compatibility. No provider-backed calls, live migration, deployment, worker restart, or reasoning change occurred.
+- Git handoff: the user requested grouped local commits on `codex/subtitle-pipeline-quality`: `47ad810` records run metrics and queue waits; `01d5cc9` adds Scribe boundary handling and provider input support; `b2870d8` combines cue analysis and preserves fallback translations; `ec98e49` adds vocabulary hints and optional YouTube URL ingestion. A final documentation commit records validation and rollout guidance. No push/PR was requested. The consolidated plan remains active for the wider backlog and explicitly deferred live evidence.
+
+Residual evidence: measured latency/recognition wins, combined-response reading quality on reference audio, direct-URL reliability near the duration limit, and calibrated selective retranscription remain open in the debt tracker. Implementation does not establish those claims.
 
 ## Current state and intended outcome
 
