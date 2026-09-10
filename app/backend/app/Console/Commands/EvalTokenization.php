@@ -14,7 +14,7 @@ use Illuminate\Support\Arr;
 use Throwable;
 
 #[Signature('subtitles:eval-tokenization {--lang=all : Language code (jpn, cmn, tha, or all)} {--model= : Override the tokenization model for this run} {--json : Output machine-readable JSON} {--out= : Write JSON results to this path}')]
-#[Description('Score the tokenization agent against CJK gold fixtures using boundary/word F1 and failure-mode attribution.')]
+#[Description('Score final tokenization pipeline output, including retries/fallbacks, against CJK gold fixtures. Use subtitles:eval-agents for held-out first-response evidence.')]
 class EvalTokenization extends Command
 {
     private const FIXTURE_DIR = 'tests/Fixtures/tokenization';
@@ -243,6 +243,7 @@ class EvalTokenization extends Command
     private function payload(array $results, ?string $model): array
     {
         return [
+            'scope' => 'Final pipeline segmentation, including retries and deterministic fallback. These legacy fixtures include prompt examples. Use subtitles:eval-agents for held-out first-response and semantic-review evidence.',
             'model' => $model ?? (string) config('ai.providers.'.config('ai.default').'.models.tokenization.default'),
             'languages' => array_map(
                 fn (array $result): array => $this->languagePayload($result),

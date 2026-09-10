@@ -4,6 +4,8 @@ Update this file when meaningful product, architecture, reliability, security, o
 
 ## Summary
 
+2026-09-10 AI prompt refresh: shared source-data and language rules, complete source coverage, compact card annotations, required contextual meanings, preserved source readings, deduplicated context, and corrective retries have regression coverage. A nine-case Cerebras smoke completed with all first-response contract checks passing; timings are descriptive, and bilingual semantic review remains required. `subtitles:eval-agents` now exposes raw first replies, pipeline recovery, token usage and latency across all seven agents. Grades are unchanged.
+
 September 2026 pipeline update: conservative overlap reconciliation, language-aware fallback, explicit missing translations, current-run metrics, combined analysis/readings, optional vocabulary hints, and opt-in YouTube URL ingestion have offline regression coverage. Actual speed/recognition gains and calibrated selective retranscription remain unverified; grades are unchanged.
 
 | Area | Grade | Notes | Next Action |
