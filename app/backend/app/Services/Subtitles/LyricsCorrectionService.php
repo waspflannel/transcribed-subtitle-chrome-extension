@@ -933,6 +933,7 @@ final class LyricsCorrectionService
                     'reason' => $reason,
                     'source_cue_count' => count($sourceCues),
                     'aligned_cue_count' => is_array($output['cues'] ?? null) ? count($output['cues']) : 0,
+                    ...Arr::only($exception->context, ['cue_position', 'segment_position', 'character_count', 'start_part_index', 'next_part_index', 'part_count']),
                 ]);
                 if ($exception->isTransient() || in_array($exception->publicCode, ['lyrics_do_not_match', 'lyrics_incomplete'], true)) {
                     throw $exception;
@@ -944,8 +945,8 @@ final class LyricsCorrectionService
                     ...$exception->context,
                     'reason' => $reason,
                     'instruction' => $allowPartial
-                        ? 'Correct the rejected structure. For a complete replacement use only pasted segments. For a partial replacement return every existing cue once, mark each segment pasted or existing, consume every numbered pasted part exactly once, preserve uncovered existing parts, and keep each reconstructed cue at or below 84 characters. Use an empty separator for the first or same-source segment and only an empty separator or one space at a source switch.'
-                        : 'Correct the rejected structure. Use only pasted segments, consume every numbered part exactly once, and keep each reconstructed cue at or below 84 characters. Use an empty separator for the first or same-source segment and only an empty separator or one space at a source switch.',
+                        ? 'Correct the rejected structure. For a complete replacement use only pasted segments. For a partial replacement return every existing cue once, mark each segment pasted or existing, consume every numbered pasted part exactly once, and preserve uncovered existing parts. The server splits long text within its timing slot. Use an empty separator for the first or same-source segment and only an empty separator or one space at a source switch.'
+                        : 'Correct the rejected structure. Copy the original cueId and use only pasted segments with strictly increasing endPartIndex values, ending at the final supplied part. The server derives start indexes and separators, consumes every numbered part exactly once, and splits long text within its timing slot.',
                 ];
             }
         }
@@ -978,7 +979,7 @@ final class LyricsCorrectionService
     private function promptAlignment(array $input): array
     {
         try {
-            return LyricsAlignmentAgent::make()
+            return LyricsAlignmentAgent::make(allowPartial: (bool) $input['allowPartial'])
                 ->prompt(json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE))
                 ->toArray();
         } catch (RateLimitedException $exception) {
@@ -1036,6 +1037,30 @@ final class LyricsCorrectionService
                 $exception,
             );
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitAlignedText(string $text): array
+    {
+        $chunks = [];
+        $current = '';
+        foreach ($this->lyricsParts($text) as $part) {
+            if (mb_strlen(SubtitleText::collapseWhitespace($current.$part), 'UTF-8') > 84) {
+                if ($current === '' || mb_strlen(SubtitleText::collapseWhitespace($part), 'UTF-8') > 84) {
+                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'unsplittable_lyric_part']);
+                }
+                $chunks[] = SubtitleText::collapseWhitespace($current);
+                $current = '';
+            }
+            $current .= $part;
+        }
+        if (SubtitleText::collapseWhitespace($current) !== '') {
+            $chunks[] = SubtitleText::collapseWhitespace($current);
+        }
+
+        return $chunks;
     }
 
     /** @return list<string> */
@@ -1128,10 +1153,9 @@ final class LyricsCorrectionService
             if (! is_array($sourceCue)
                 || ! is_int($sourcePosition)
                 || $sourcePosition <= $previousSourcePosition
-                || ($outputCue['index'] ?? null) !== ($sourceCue['index'] ?? null)
                 || ! is_array($segments)
                 || $segments === []) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'cue_identity_mismatch']);
+                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'cue_identity_mismatch', 'cue_position' => $position]);
             }
 
             $existingParts = $this->existingLyricsParts((string) ($sourceCue['sourceText'] ?? ''));
@@ -1142,17 +1166,17 @@ final class LyricsCorrectionService
             foreach (array_values($segments) as $segmentPosition => $segment) {
                 if (! is_array($segment)
                     || ! in_array($segment['source'] ?? null, ['pasted', 'existing'], true)
-                    || ! is_int($segment['startPartIndex'] ?? null)
                     || ! is_int($segment['endPartIndex'] ?? null)
-                    || ! is_string($segment['separator'] ?? null)
-                    || ! in_array($segment['separator'], ['', ' '], true)) {
+                    || (! $isComplete && (! is_int($segment['startPartIndex'] ?? null)
+                        || ! is_string($segment['separator'] ?? null)
+                        || ! in_array($segment['separator'], ['', ' '], true)))) {
                     throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_source_segment', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
                 }
 
                 $segmentSource = $segment['source'];
-                $segmentStart = $segment['startPartIndex'];
+                $segmentStart = $isComplete ? $pastedCursor : $segment['startPartIndex'];
                 $segmentEnd = $segment['endPartIndex'];
-                $separator = $segment['separator'];
+                $separator = $isComplete ? '' : $segment['separator'];
 
                 if (($segmentPosition === 0 || $previousSegmentSource === $segmentSource) && $separator !== '') {
                     throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_segment_separator', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
@@ -1198,20 +1222,35 @@ final class LyricsCorrectionService
 
             $length = mb_strlen($text, 'UTF-8');
 
-            if ($text === '' || $length > 84) {
+            if ($text === '') {
                 throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_text', 'cue_position' => $position, 'character_count' => $length]);
             }
 
             $previousSourcePosition = $sourcePosition;
-            $draft[] = [
-                'cueId' => sprintf('lyrics-%s-%04d', substr(str_replace('-', '', $attemptId), 0, 8), $position + 1),
-                'index' => $position,
-                'startMs' => (int) $sourceCue['startMs'],
-                'endMs' => (int) $sourceCue['endMs'],
-                'sourceText' => $text,
-                'translatedText' => $text,
-                'tokens' => [],
-            ];
+            $chunks = $length <= 84 ? [$text] : $this->splitAlignedText($text);
+            $lengths = array_map(fn (string $chunk): int => mb_strlen($chunk, 'UTF-8'), $chunks);
+            $totalLength = array_sum($lengths);
+            $consumedLength = 0;
+            $start = (int) $sourceCue['startMs'];
+            $duration = (int) $sourceCue['endMs'] - $start;
+            foreach ($chunks as $chunkIndex => $chunk) {
+                $consumedLength += $lengths[$chunkIndex];
+                $end = (int) $sourceCue['startMs'] + intdiv($duration * $consumedLength, $totalLength);
+                if ($start < 0 || $end <= $start) {
+                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_timing', 'cue_position' => $position]);
+                }
+                $draftIndex = count($draft);
+                $draft[] = [
+                    'cueId' => sprintf('lyrics-%s-%04d', substr(str_replace('-', '', $attemptId), 0, 8), $draftIndex + 1),
+                    'index' => $draftIndex,
+                    'startMs' => $start,
+                    'endMs' => $end,
+                    'sourceText' => $chunk,
+                    'translatedText' => $chunk,
+                    'tokens' => [],
+                ];
+                $start = $end;
+            }
         }
 
         if ($pastedCursor !== count($parts)) {

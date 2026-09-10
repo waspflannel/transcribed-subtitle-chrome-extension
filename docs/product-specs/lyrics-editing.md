@@ -23,6 +23,12 @@ The current track stays active until a replacement succeeds. Neither workflow de
 
 ## Replace Full Lyrics
 
+### Long aligned text (2026-09-10)
+
+An otherwise valid alignment must not fail only because one reconstructed timing slot contains more than 84 Unicode code points. The server wraps it into shorter cues at word boundaries, or grapheme boundaries for an overlong unspaced part, without deleting text. It divides that slot's duration in proportion to text length, preserves its original start/end and all neighboring slots, and rejects any split that cannot retain positive durations. These internal times are estimates; this does not add acoustic alignment. Identity, exact source consumption, match/completeness, cancellation and atomic publication checks still apply.
+
+For complete replacements, alignment returns the original cue ID and each pasted segment's ending part index. The server derives consecutive starts, separators and cue indexes. Confirmed partial replacements still supply explicit source ranges and separators so uncovered existing text can be preserved.
+
 ### Partial-lyrics confirmation update (2026-09-08)
 
 The alignment AI assesses whether the paste belongs to the song and whether it appears complete. Unrelated lyrics remain a hard rejection, including when the user permits partial merging. Completeness is an AI assessment against the existing transcript, not audio verification. The former 60% slot and 80% timeline thresholds no longer reject replacements.
