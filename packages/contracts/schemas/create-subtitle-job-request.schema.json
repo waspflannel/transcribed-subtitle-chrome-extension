@@ -14,6 +14,17 @@
     "includeTranslation"
   ],
   "properties": {
+    "vocabularyHints": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Optional names or terms for this generation only. Each term has at most five words and 49 characters.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 49,
+        "pattern": "^[^<>{}\\[\\]\\\\\\s]+(?:\\s+[^<>{}\\[\\]\\\\\\s]+){0,4}$"
+      }
+    },
     "youtubeVideoId": {
       "type": "string",
       "description": "Canonical 11-character YouTube video ID.",

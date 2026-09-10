@@ -82,6 +82,9 @@ class SubtitleRuntimeTracer
         'translations',
         'user_id',
         'youtube_url',
+        'vocabularyHints',
+        'vocabulary_hints',
+        'keyterms',
     ];
 
     /**

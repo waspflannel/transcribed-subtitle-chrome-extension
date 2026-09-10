@@ -39,6 +39,8 @@ for (const schemaFile of schemaFiles) {
     bannerComment: '',
     cwd: schemasDir,
     enableConstEnums: false,
+    // Request limits are enforced by schema validation; callers build ordinary arrays.
+    ignoreMinAndMaxItems: schemaFile === 'create-subtitle-job-request.schema.json',
     style: {
       singleQuote: true,
       semi: true,

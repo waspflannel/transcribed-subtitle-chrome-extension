@@ -37,6 +37,19 @@ class YouTubeAudioSourceTest extends TestCase
         return $this->tempDirectory.DIRECTORY_SEPARATOR.'run-'.(string) Str::uuid();
     }
 
+    public function test_metadata_only_validation_rejects_live_videos_without_download(): void
+    {
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) {
+            $this->assertContains('--skip-download', $process->command);
+
+            return Process::result(json_encode(['duration' => 42, 'availability' => 'public', 'is_live' => true]));
+        });
+
+        $this->expectException(SubtitleProcessingException::class);
+        (new YouTubeAudioSource)->validatedDuration('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
+    }
+
     public function test_it_acquires_audio_from_public_video_metadata(): void
     {
         $processEnvironments = [];

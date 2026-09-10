@@ -18,4 +18,11 @@ final class SubtitleProcessingVersion
     {
         return $model.':'.self::TRANSCRIPT_CACHE;
     }
+
+    /** @param array<int, string> $hints */
+    public static function transcriptionOptionsHash(array $hints, string $mode): string
+    {
+        return $hints === [] && $mode === 'upload'
+            ? '' : hash('sha256', json_encode([$mode, $hints], JSON_THROW_ON_ERROR));
+    }
 }

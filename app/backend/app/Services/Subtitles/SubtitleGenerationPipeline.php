@@ -66,7 +66,8 @@ class SubtitleGenerationPipeline
         try {
             // A cached transcript for this video makes acquire, optimize, and
             // transcribe unnecessary -- roughly 45% of a job's wall time.
-            $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language);
+            $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language,
+                $job->vocabulary_hints ?? [], $job->transcription_ingestion_mode, $job->user_id);
 
             if ($cached !== null) {
                 $stage = 'transcribing';
@@ -79,6 +80,11 @@ class SubtitleGenerationPipeline
             $this->logger->audioAcquisitionStarted($job);
 
             $audioStartedAtMs = $this->telemetry->currentTimeMs();
+            if ($job->transcription_ingestion_mode === 'youtube_url') {
+                $this->dispatchUrlTranscription($job, $audioStartedAtMs);
+
+                return;
+            }
             $audio = $this->audioSource->acquire(
                 youtubeUrl: $job->youtube_url,
                 requestDurationSeconds: $job->video_duration_seconds,
@@ -115,6 +121,29 @@ class SubtitleGenerationPipeline
 
             throw $exception;
         }
+    }
+
+    private function dispatchUrlTranscription(SubtitleJob $job, int $startedAtMs): void
+    {
+        $duration = $this->audioSource->validatedDuration(
+            'https://www.youtube.com/watch?v='.$job->youtube_video_id, $job->video_duration_seconds);
+
+        DB::transaction(function () use ($job, $duration, $startedAtMs): void {
+            $currentJob = $this->lockRunningJob($job->id, $job->run_id);
+            if ($currentJob === null) {
+                return;
+            }
+            $currentJob->update(['video_duration_seconds' => $duration]);
+            $currentJob->load('user');
+            $this->billing->syncJobReservationToActualDuration($currentJob);
+            $this->telemetry->recordStageCompleted($currentJob, 'acquiring-audio', $startedAtMs);
+            $this->markJobRunning($currentJob, 'transcribing', 50);
+            $this->logger->transcriptionStarted($currentJob);
+            $this->telemetry->recordStageStarted($currentJob, 'transcribing');
+            $transcribingStartedAtMs = $this->telemetry->currentTimeMs();
+            $chunks = [new TranscribeSubtitleAudioChunk($currentJob->id, 0, 1, $currentJob->run_id, null, 0.0, 0.0, null)];
+            DB::afterCommit(fn () => $this->batchDispatcher->dispatchTranscription($currentJob, $chunks, $transcribingStartedAtMs));
+        }, attempts: 5);
     }
 
     /**
@@ -230,7 +259,7 @@ class SubtitleGenerationPipeline
         string $runId,
         int $chunkIndex,
         int $chunkCount,
-        TemporaryAudioFile $chunkAudio,
+        ?TemporaryAudioFile $chunkAudio,
         float $audioStartSeconds,
         float $nominalStartSeconds,
         ?float $nominalEndSeconds,
@@ -244,7 +273,15 @@ class SubtitleGenerationPipeline
 
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
-        $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
+        if ($chunkAudio === null) {
+            if ($job->transcription_ingestion_mode !== 'youtube_url' || $chunkIndex !== 0 || $chunkCount !== 1
+                || $audioStartSeconds !== 0.0 || $nominalStartSeconds !== 0.0 || $nominalEndSeconds !== null) {
+                throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_url_transcription_chunk']);
+            }
+            $payload = $this->transcriptionService->transcribeYouTube($job->youtube_video_id, $job->source_language, $job->vocabulary_hints ?? []);
+        } else {
+            $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language, $job->vocabulary_hints ?? []);
+        }
 
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -313,6 +350,9 @@ class SubtitleGenerationPipeline
                     requestedSourceLanguage: $job->source_language,
                     transcript: $transcript,
                     audioDurationSeconds: $durationSeconds,
+                    vocabularyHints: $job->vocabulary_hints ?? [],
+                    ingestionMode: $job->transcription_ingestion_mode,
+                    userId: $job->user_id,
                 );
                 $this->artifacts->putTranscript($job, $transcript);
                 $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);

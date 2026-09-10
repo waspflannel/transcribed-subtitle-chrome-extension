@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
+use App\Services\Text\SubtitleText;
 use App\Support\PostgresErrors;
 use App\Support\SubtitleProcessingVersion;
 use Carbon\Carbon;
@@ -91,6 +92,18 @@ class SubtitleJobService
         string $installId,
         ?string $generationTier = null,
     ): SubtitleJob {
+        $hints = array_values(array_unique(array_map(
+            fn (string $hint): string => SubtitleText::collapseWhitespace($hint),
+            $payload['vocabularyHints'] ?? [],
+        )));
+        sort($hints, SORT_STRING);
+        $mode = (string) config('subtitles.transcription.ingestion_mode', 'upload');
+        if (! in_array($mode, ['upload', 'youtube_url'], true)) {
+            throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
+        }
+        $payload['vocabularyHints'] = $hints;
+        $payload['transcriptionIngestionMode'] = $mode;
+        $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($hints, $mode);
         $enrichmentMode = $payload['enrichmentMode'];
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
@@ -300,6 +313,7 @@ class SubtitleJobService
             ->where('youtube_video_id', $payload['youtubeVideoId'])
             ->where('source_language', $payload['sourceLanguage'])
             ->where('target_language', $payload['targetLanguage'])
+            ->where('transcription_options_hash', $payload['transcriptionOptionsHash'])
             ->where('processing_version', $processingVersion);
     }
 
@@ -330,6 +344,9 @@ class SubtitleJobService
             'detected_source_language' => null,
             'target_language' => $payload['targetLanguage'],
             'processing_version' => $processingVersion,
+            'vocabulary_hints' => $payload['vocabularyHints'],
+            'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
+            'transcription_options_hash' => $payload['transcriptionOptionsHash'],
             'generation_tier' => $generationTier,
             'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,

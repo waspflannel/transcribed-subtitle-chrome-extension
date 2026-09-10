@@ -31,6 +31,8 @@ class CreateSubtitleJobRequest extends FormRequest
             'enrichmentMode' => ['required', 'string', Rule::in(['on_demand', 'full'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
+            'vocabularyHints' => ['sometimes', 'array', 'list', 'max:20'],
+            'vocabularyHints.*' => ['required', 'string', 'max:49', 'regex:/^[^<>\{\}\[\]\\\\\s]+(?:\s+[^<>\{\}\[\]\\\\\s]+){0,4}$/u'],
         ];
     }
 
@@ -53,6 +55,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'enrichmentMode' => $validated['enrichmentMode'],
             'includeRomanization' => $this->boolean('includeRomanization'),
             'includeTranslation' => $this->boolean('includeTranslation'),
+            'vocabularyHints' => $validated['vocabularyHints'] ?? [],
         ];
 
         if (array_key_exists('videoDurationSeconds', $validated)) {

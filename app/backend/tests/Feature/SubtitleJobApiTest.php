@@ -39,6 +39,7 @@ use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
+use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,6 +59,63 @@ use Tests\TestCase;
 class SubtitleJobApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_vocabulary_hints_are_validated_normalized_and_isolate_job_and_transcript_reuse(): void
+    {
+        config(['subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000]);
+        $payload = $this->validPayload(['youtubeVideoId' => 'hintstest01', 'vocabularyHints' => ['Marie Curie', 'ElevenLabs', 'Marie Curie']]);
+        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $this->assertSame(['ElevenLabs', 'Marie Curie'], SubtitleJob::query()->firstOrFail()->vocabulary_hints);
+        $this->assertSame(['ElevenLabs', 'Marie Curie'], $this->transcriptionService->lastHints);
+        $transcriptionCost = SubtitleJobEvent::query()->where('event', 'provider.cost_estimated')->where('stage', 'transcribing')->firstOrFail();
+        $this->assertSame(1200, $transcriptionCost->context['unit_price_microusd']);
+        $this->assertStringNotContainsString('Marie Curie', json_encode($transcriptionCost->context));
+        $payload['vocabularyHints'] = ['ElevenLabs', 'Marie Curie'];
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $this->assertSame(1, $this->transcriptionService->chunkCalls);
+        $payload['vocabularyHints'] = ['another name'];
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $this->assertSame(2, $this->transcriptionService->chunkCalls);
+        $this->assertSame(2, SubtitleJob::count());
+
+        foreach ([[str_repeat('a', 50)], ['one two three four five six'], ['bad\\term'], ['<term>'], array_fill(0, 21, 'term')] as $invalid) {
+            $this->postJson('/v1/subtitle-jobs', [...$payload, 'vocabularyHints' => $invalid])->assertUnprocessable();
+        }
+    }
+
+    public function test_url_mode_validates_metadata_and_completes_without_download_or_encoding(): void
+    {
+        config(['subtitles.transcription.ingestion_mode' => 'youtube_url']);
+        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+
+        $this->assertSame(1, $this->audioSource->metadataCalls);
+        $this->assertSame(0, $this->audioSource->calls);
+        $this->assertSame(0, $this->transcriptionService->prepareCalls);
+        $this->assertSame(1, $this->transcriptionService->urlCalls);
+        $this->assertSame('completed', SubtitleJob::query()->firstOrFail()->status);
+    }
+
+    public function test_url_mode_stops_before_provider_call_when_metadata_is_rejected(): void
+    {
+        config(['subtitles.transcription.ingestion_mode' => 'youtube_url']);
+        $this->audioSource->rejectMetadata = true;
+        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload());
+
+        $this->assertSame(0, $this->transcriptionService->urlCalls);
+        $this->assertSame('failed', SubtitleJob::query()->firstOrFail()->status);
+    }
+
+    public function test_hinted_transcript_cache_is_scoped_to_owner_and_ingestion_mode(): void
+    {
+        $cache = app(VideoTranscriptCache::class);
+        $transcript = $this->transcriptionService->transcriptFromChunkPayloads([], 'spa', 42);
+        $cache->store('dQw4w9WgXcQ', 'spa', $transcript, 42, ['Marie Curie'], 'upload', 1);
+
+        $this->assertNotNull($cache->find('dQw4w9WgXcQ', 'spa', ['Marie Curie'], 'upload', 1));
+        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa', ['Marie Curie'], 'upload', 2));
+        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa', ['Marie Curie'], 'youtube_url', 1));
+        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa'));
+    }
 
     private RecordingYouTubeAudioSource $audioSource;
 
@@ -3058,6 +3116,20 @@ final class ThrowingSubtitleQueue extends NullQueue
 
 class RecordingYouTubeAudioSource extends YouTubeAudioSource
 {
+    public int $metadataCalls = 0;
+
+    public bool $rejectMetadata = false;
+
+    public function validatedDuration(string $youtubeUrl, ?int $requestDurationSeconds): int
+    {
+        $this->metadataCalls++;
+        if ($this->rejectMetadata) {
+            throw SubtitleProcessingException::audioUnavailable('Only public YouTube videos are supported.');
+        }
+
+        return 42;
+    }
+
     public int $calls = 0;
 
     public ?string $lastAudioPath = null;
@@ -3092,6 +3164,18 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
 class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 {
+    public int $urlCalls = 0;
+
+    public array $lastHints = [];
+
+    public function transcribeYouTube(string $videoId, string $sourceLanguage, array $vocabularyHints = []): array
+    {
+        $this->urlCalls++;
+        $this->lastHints = $vocabularyHints;
+
+        return ['words' => [], 'language_code' => $sourceLanguage];
+    }
+
     public function __construct()
     {
         parent::__construct(
@@ -3128,6 +3212,7 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 
     public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, array $vocabularyHints = []): array
     {
+        $this->lastHints = $vocabularyHints;
         $this->chunkCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->beforeTranscriptionResult?->__invoke($audio);

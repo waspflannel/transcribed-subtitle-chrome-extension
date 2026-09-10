@@ -168,6 +168,8 @@ return [
     ],
 
     'transcription' => [
+        // Compare with upload on representative audio before changing the default.
+        'ingestion_mode' => env('SUBTITLE_TRANSCRIPTION_INGESTION_MODE', 'upload'),
         'timeout_seconds' => (int) env('ELEVENLABS_TRANSCRIPTION_TIMEOUT_SECONDS', 600),
         // Long audio is split into overlapping chunks transcribed in
         // parallel, dropping the transcribing ceiling from the full audio
