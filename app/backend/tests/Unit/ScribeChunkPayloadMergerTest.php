@@ -87,6 +87,439 @@ class ScribeChunkPayloadMergerTest extends TestCase
         $this->assertSame(100.8, $merged['words'][0]['end']);
     }
 
+    public function test_reconciles_disagreeing_boundary_timestamps_when_both_midpoints_survive(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [$this->word('frontera.', 99.4, 100.2)],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('frontera.', 1.8, 2.6)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertCount(1, $merged['words']);
+        $this->assertSame('frontera.', $merged['words'][0]['text']);
+        $this->assertSame(99.4, $merged['words'][0]['start']);
+        $this->assertSame(100.2, $merged['words'][0]['end']);
+    }
+
+    public function test_reconciles_disagreeing_boundary_timestamps_when_both_midpoints_are_dropped(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [$this->word('frontera.', 99.8, 100.6)],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('frontera.', 1.4, 2.2)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertCount(1, $merged['words']);
+        $this->assertSame(99.8, $merged['words'][0]['start']);
+        $this->assertSame(100.6, $merged['words'][0]['end']);
+    }
+
+    public function test_keeps_repeated_boundary_lyrics_at_distinct_times(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [$this->word('yeah', 99.6, 99.9)],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('yeah', 2.0, 2.3)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['yeah', 'yeah'], array_column($merged['words'], 'text'));
+        $this->assertSame([99.6, 100.0], array_column($merged['words'], 'start'));
+    }
+
+    public function test_matches_repeated_boundary_lyrics_one_to_one_in_order(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('la', 99.0, 99.5),
+                    $this->word('la', 99.8, 100.3),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('la', 1.1, 1.6),
+                    $this->word('la', 1.9, 2.4),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertCount(2, $merged['words']);
+        $this->assertSame(['la', 'la'], array_column($merged['words'], 'text'));
+        $this->assertSame([99.0, 99.9], array_column($merged['words'], 'start'));
+    }
+
+    public function test_does_not_reconcile_unmatched_text_by_timing_alone(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [$this->word('izquierda', 99.0, 99.4)],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('derecha', 1.0, 1.4)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['izquierda'], array_column($merged['words'], 'text'));
+    }
+
+    public function test_reconciled_boundary_word_keeps_its_selected_untimed_attachment(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    ['text' => 'izquierda-glue', 'type' => 'word'],
+                    $this->word('frontera.', 99.8, 100.6),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    ['text' => 'derecha-glue', 'type' => 'word'],
+                    $this->word('frontera.', 1.4, 2.2),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['izquierda-glue', 'frontera.'], array_column($merged['words'], 'text'));
+    }
+
+    public function test_matches_the_overlapping_occurrence_when_a_repeat_is_nearby(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('la', 99.8, 99.95),
+                    $this->word('la', 100.05, 100.2),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('la', 2.06, 2.21)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['la', 'la'], array_column($merged['words'], 'text'));
+        $this->assertSame([99.8, 100.06], array_column($merged['words'], 'start'));
+    }
+
+    public function test_places_matched_winners_at_their_canonical_occurrence_positions(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('first', 99.8, 100.4),
+                    $this->word('second', 99.95, 100.2),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('first', 1.85, 2.4),
+                    $this->word('second', 1.96, 2.02),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['first', 'second'], array_column($merged['words'], 'text'));
+        $this->assertSame([99.85, 99.95], array_column($merged['words'], 'start'));
+    }
+
+    public function test_keeps_unmatched_neighbors_and_selected_attachments_in_order(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('before', 98.0, 98.2),
+                    $this->word('first', 99.8, 100.4),
+                    ['text' => 'left-second-glue', 'type' => 'word'],
+                    $this->word('second', 99.95, 100.2),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    ['text' => 'right-first-glue', 'type' => 'word'],
+                    $this->word('first', 1.85, 2.4),
+                    $this->word('second', 1.96, 2.02),
+                    $this->word('after', 2.5, 2.8),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(
+            ['before', 'right-first-glue', 'first', 'left-second-glue', 'second', 'after'],
+            array_column($merged['words'], 'text'),
+        );
+    }
+
+    public function test_keeps_a_right_side_predecessor_before_a_matched_word(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [$this->word('second', 100.4, 100.8)],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('first', 2.1, 2.3),
+                    $this->word('second', 2.4, 2.8),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['first', 'second'], array_column($merged['words'], 'text'));
+        $this->assertSame([100.1, 100.4], array_column($merged['words'], 'start'));
+    }
+
+    public function test_keeps_right_side_words_interleaved_between_matched_anchors(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('first', 99.8, 100.3),
+                    $this->word('second', 100.6, 100.9),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('first', 1.8, 2.3),
+                    $this->word('middle', 2.35, 2.55),
+                    $this->word('second', 2.6, 2.9),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(
+            ['first', 'middle', 'second'],
+            array_column($merged['words'], 'text'),
+        );
+    }
+
+    public function test_keeps_ambiguous_overlapping_repeats_with_midpoint_ownership(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('la', 99.0, 99.8),
+                    $this->word('la', 99.3, 99.9),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('la', 1.4, 1.7)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['la', 'la'], array_column($merged['words'], 'text'));
+        $this->assertSame([99.0, 99.3], array_column($merged['words'], 'start'));
+    }
+
+    public function test_keeps_crossing_matches_in_existing_source_order(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('first', 99.8, 100.3),
+                    $this->word('second', 99.9, 100.4),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('second', 1.9, 2.2),
+                    $this->word('first', 1.8, 2.3),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['second', 'first'], array_column($merged['words'], 'text'));
+    }
+
+    public function test_keeps_words_that_only_touch_at_the_boundary(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [$this->word('touch', 99.6, 100.0)],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [$this->word('touch', 2.0, 2.3)],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertCount(2, $merged['words']);
+        $this->assertSame([99.6, 100.0], array_column($merged['words'], 'start'));
+    }
+
+    public function test_keeps_dense_repeats_when_one_chunk_has_an_extra_occurrence(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('la', 99.0, 99.5),
+                    $this->word('la', 99.55, 99.9),
+                    $this->word('la', 100.0, 100.35),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('la', 1.1, 1.55),
+                    $this->word('la', 2.1, 2.45),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['la', 'la', 'la'], array_column($merged['words'], 'text'));
+        $this->assertSame([99.0, 99.55, 100.1], array_column($merged['words'], 'start'));
+    }
+
+    public function test_reconciles_each_adjacent_boundary_in_order(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('uno', 1.0, 1.4),
+                    $this->word('primero', 99.4, 100.2),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: 100.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('primero', 1.8, 2.6),
+                    $this->word('medio', 50.0, 50.4),
+                    $this->word('segundo', 101.8, 102.6),
+                ],
+                audioStart: 98.0,
+                nominalStart: 100.0,
+                nominalEnd: 200.0,
+            ),
+            $this->chunk(
+                words: [
+                    $this->word('segundo', 1.4, 2.2),
+                    $this->word('fin', 3.0, 3.4),
+                ],
+                audioStart: 198.0,
+                nominalStart: 200.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(
+            ['uno', 'primero', 'medio', 'segundo', 'fin'],
+            array_column($merged['words'], 'text'),
+        );
+    }
+
+    public function test_preserves_single_chunk_word_order_when_timestamps_disagree(): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(
+                words: [
+                    $this->word('first', 1.1, 1.4),
+                    $this->word('second', 1.0, 1.5),
+                ],
+                audioStart: 0.0,
+                nominalStart: 0.0,
+                nominalEnd: null,
+            ),
+        ]);
+
+        $this->assertSame(['first', 'second'], array_column($merged['words'], 'text'));
+    }
+
     public function test_untimed_words_travel_with_their_following_timed_word(): void
     {
         $keptUntimed = ['text' => 'glued', 'type' => 'word'];
@@ -127,9 +560,9 @@ class ScribeChunkPayloadMergerTest extends TestCase
         $this->assertSame(['final', 'trailing-glue'], array_column($merged['words'], 'text'));
     }
 
-    public function test_language_code_comes_from_the_first_chunk_only(): void
+    public function test_language_ties_keep_the_first_supported_chunk_language(): void
     {
-        // Per-chunk detection can disagree; the first chunk is canonical.
+        // Identical speech duration breaks ties by original chunk order.
         $merged = $this->merger()->merge([
             $this->chunk(
                 words: [$this->word('uno', 0.5, 0.9)],
@@ -147,7 +580,23 @@ class ScribeChunkPayloadMergerTest extends TestCase
             ),
         ]);
 
-        $this->assertSame('es', $merged['language_code']);
+        $this->assertSame('spa', $merged['language_code']);
+    }
+
+    public function test_language_selection_uses_confidence_weighted_owned_speech_across_chunks(): void
+    {
+        $intro = $this->chunk([$this->word('intro', 0.0, 1.0)], 0.0, 0.0, 100.0, 'eng');
+        $intro['payload']['language_probability'] = 0.9;
+        $main = $this->chunk([
+            $this->word('overlap', 0.0, 1.0), $this->word('speech', 2.0, 12.0),
+        ], 98.0, 100.0, null, 'es');
+        $main['payload']['language_probability'] = 0.8;
+
+        $this->assertSame('spa', $this->merger()->merge([$intro, $main])['language_code']);
+        $main['payload']['language_probability'] = 0.01;
+        $this->assertSame('eng', $this->merger()->merge([$intro, $main])['language_code']);
+        $intro['payload']['language_code'] = 'unsupported-private-text';
+        $this->assertSame('spa', $this->merger()->merge([$intro, $main])['language_code']);
     }
 
     public function test_non_word_tokens_are_dropped(): void

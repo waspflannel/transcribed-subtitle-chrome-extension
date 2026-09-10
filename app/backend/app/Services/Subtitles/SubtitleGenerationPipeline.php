@@ -291,6 +291,8 @@ class SubtitleGenerationPipeline
                 chunks: $this->artifacts->transcriptChunks($job),
                 sourceLanguage: $job->source_language,
                 durationSeconds: $durationSeconds,
+                jobId: $job->public_id,
+                runId: $job->run_id,
             );
 
             $draftCues = $this->tracks->draftCues($transcript);

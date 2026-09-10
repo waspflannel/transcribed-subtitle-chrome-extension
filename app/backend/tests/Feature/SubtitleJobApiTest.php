@@ -1929,7 +1929,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('cached_video_transcripts', [
             'youtube_video_id' => 'cachehit001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v2',
+            'transcription_model' => 'scribe-test:transcript-chunks-v3',
             'audio_duration_seconds' => 42,
         ]);
 
@@ -1998,7 +1998,7 @@ class SubtitleJobApiTest extends TestCase
         CachedVideoTranscript::create([
             'youtube_video_id' => 'cacheexp001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v2',
+            'transcription_model' => 'scribe-test:transcript-chunks-v3',
             'audio_duration_seconds' => 999,
             'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
             'expires_at' => now()->subDay(),
@@ -3126,7 +3126,7 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
         return $audio;
     }
 
-    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, array $vocabularyHints = []): array
     {
         $this->chunkCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
@@ -3143,6 +3143,8 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
         array $chunks,
         string $sourceLanguage,
         ?int $durationSeconds,
+        ?string $jobId = null,
+        ?string $runId = null,
     ): TimestampedTranscript {
         if ($this->transcript !== null) {
             return $this->transcript;

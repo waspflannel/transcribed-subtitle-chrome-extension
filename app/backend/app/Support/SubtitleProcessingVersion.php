@@ -10,7 +10,7 @@ final class SubtitleProcessingVersion
 {
     public const JOB = 'scribe-v2-tokenizer-v9-async-';
 
-    public const TRANSCRIPT_CACHE = 'transcript-chunks-v2';
+    public const TRANSCRIPT_CACHE = 'transcript-chunks-v3';
 
     public const LEARNING_TOKEN_CACHE = 'learning-token-v8';
 
