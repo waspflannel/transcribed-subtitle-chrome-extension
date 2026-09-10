@@ -28,6 +28,30 @@ class LyricsAlignmentAgent implements Agent, HasProviderOptions, HasStructuredOu
 
     public function instructions(): Stringable|string
     {
+        $modeInstructions = $this->allowPartial ? <<<'INSTRUCTIONS'
+Partial replacement is enabled. Always supply startPartIndex and separator for
+every segment, even when isComplete is true. For a complete replacement use
+only pasted segments, set startPartIndex to the next unconsumed global part
+(initially 0), and set separator to "". The server derives these values again.
+
+When isComplete is false, return every existing timing slot exactly once in
+timing order. Use ordered segments with source "pasted" or "existing". Pasted
+segments start at the next unconsumed global lyric part across all cues.
+Existing segments use that cue's authoritative existingParts, whose numbering
+restarts at 0 in each cue, with increasing non-overlapping boundaries. Preserve
+every existing part outside the portion replaced by pasted text. At least one
+segment must use each source; both sources may occur in the same cue.
+Unspaced non-Latin existingParts use grapheme clusters, including for short cues.
+
+separator is "" or " " and is placed before its segment. Use "" for the first
+segment of each cue and consecutive segments from the same source. At source
+switches use "" for unspaced text or " " when words need separation.
+INSTRUCTIONS : <<<'INSTRUCTIONS'
+Only complete replacement is enabled. When isComplete is false, return cues
+as an empty array. Each segment contains only source "pasted" and endPartIndex.
+Do not return startPartIndex or separator; the server derives them.
+INSTRUCTIONS;
+
         return <<<'INSTRUCTIONS'
 Assess pasted lyrics against the existing subtitle timing slots, then align them.
 
@@ -39,43 +63,30 @@ isMatch must be false only when the pasted lyrics are clearly for an unrelated
 song. isComplete must be true only when the pasted lyrics cover the complete
 song. A short excerpt from the same song is a match but isComplete false.
 Never use isMatch false for incomplete or uncertain alignment.
-When isMatch is false, return cues as an empty array. When isComplete is false
-and allowPartial is false, also return cues as an empty array.
+When isMatch is false, return cues as an empty array.
 
-lyricsParts contains the authoritative pasted text in numbered parts. Existing
-cue text is timing and fallback evidence only. Return entries in timing-slot
+lyricsParts contains the authoritative pasted text in numbered parts. Use
+existing cue text to assess correspondence with timing slots. Return entries in timing-slot
 order with the original cueId. The server derives each cue's index from its ID.
-Never return an entry with
-empty segments; omit that slot for a complete replacement instead.
+Never return an entry with empty segments; omit that slot for a complete
+replacement instead.
 
-For a complete replacement, every returned entry must contain only pasted
-segments. A pasted segment uses the global numbered lyric parts. Choose only
-its endPartIndex: the server starts it at the next unconsumed global part and
-joins the authoritative text without adding separators. Each endPartIndex
-must be strictly greater than the preceding one. The final pasted segment must
-end at the last supplied part. Thus every part, including repetitions and
+All part indexes are zero-based and endPartIndex is inclusive. Pasted segments
+consume the global lyricsParts in order across all cues, starting at part 0.
+For example, with parts 0, 1, 2, 3, consecutive pasted segments ending at 1 and
+3 consume parts 0 through 1 and 2 through 3, with no gap or overlap.
+Each pasted endPartIndex must be strictly greater than the preceding pasted
+endPartIndex. The final pasted segment must end at the last supplied part.
+Thus every part, including repetitions and
 punctuation, is consumed exactly once.
 
-When allowPartial is true and isComplete is false, return every existing timing
-slot exactly once in timing order. Each entry contains one or more ordered
-segments with source "pasted" or "existing". Pasted segments use the same
-global sequential boundaries and consume every supplied part exactly once.
-In this partial-enabled mode also supply startPartIndex and separator.
-Existing segments use that cue's numbered existingParts, with increasing
-non-overlapping local boundaries. Together, existing segments must preserve
-every uncovered existing part. `separator` is either "" or " " and is placed
-before that segment only to keep word boundaries natural. Use "" for the first
-segment and consecutive segments from the same source. At source switches,
-use "" for unspaced text or " " when words need separation.
-Do not invent, rewrite, or duplicate either source. At least one cue should use
-each source.
+Do not invent, rewrite, or duplicate either source.
 
 The server reconstructs pasted cues by joining their parts and collapsing
 whitespace. Choose natural phrase boundaries within the existing timing slots.
 The server splits text longer than 84 Unicode code points into shorter cues
 inside the same timing slot; never omit required text just to meet that limit.
-Parts normally contain whole words; long pasted
-unspaced text and existing unspaced non-Latin cues use grapheme clusters.
+Parts normally contain whole words; long unspaced text uses grapheme clusters.
 Line breaks are hints, not fixed cue boundaries.
 
 For a complete replacement you may omit unused timing slots, but never
@@ -83,7 +94,7 @@ duplicate or reorder them. Do not stretch an excerpt across the whole song to
 fill unused timing slots. Recognized headings and credits have already been
 removed. All remaining parts are required. If validationFeedback is supplied,
 correct the rejected structure while preserving the source rules above.
-INSTRUCTIONS;
+INSTRUCTIONS."\n\n".$modeInstructions;
     }
 
     public function model(): string

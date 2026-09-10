@@ -269,6 +269,31 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(['First lyric line', 'Second lyric line'], array_column($row->track->cues, 'sourceText'));
     }
 
+    public function test_alignment_only_sends_existing_parts_when_partial_replacement_is_enabled(): void
+    {
+        foreach ([false, true] as $allowPartial) {
+            $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+            $input = null;
+            LyricsAlignmentAgent::fake(function ($prompt) use (&$input, $queue): array {
+                $input = json_decode($prompt, true, flags: JSON_THROW_ON_ERROR);
+
+                return ['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']];
+            })->preventStrayPrompts();
+            $response = $this->submitLyrics($queue['job'], $queue['texts'], $allowPartial);
+            $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+
+            $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+            $this->assertSame($allowPartial, $input['allowPartial']);
+            $this->assertSame($allowPartial, array_key_exists('existingParts', $input));
+            $this->assertSame($queue['texts'], array_column($input['cues'], 'sourceText'));
+            if ($allowPartial) {
+                $this->assertSame('cue-0001', $input['existingParts'][0]['cueId']);
+                $this->assertSame([0, 1, 2], array_column($input['existingParts'][0]['parts'], 'index'));
+                $this->assertSame($queue['texts'][0], implode('', array_column($input['existingParts'][0]['parts'], 'text')));
+            }
+        }
+    }
+
     public function test_incomplete_alignment_requires_confirmation_then_merges_with_existing_cues(): void
     {
         $queue = $this->completedTrackWithCues(3, fn (int $position): string => 'Lyrics line '.($position + 1));
@@ -1019,6 +1044,8 @@ class LyricsCorrectionContinuationTest extends TestCase
 
         $this->assertSame("Private line 1\nPrivate line 2", implode('', array_column($prompts[0]['lyricsParts'], 'text')));
         $this->assertSame('cue_identity_mismatch', $prompts[1]['validationFeedback']['reason']);
+        $this->assertArrayNotHasKey('existingParts', $prompts[1]);
+        $this->assertStringContainsString('zero-based inclusive', $prompts[1]['validationFeedback']['instruction']);
         $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
         Log::shouldHaveReceived('warning')->with('backend.lyrics_alignment_rejected', \Mockery::on(fn (array $context): bool => $context['reason'] === 'cue_identity_mismatch'
             && $context['attempt_id'] === $response->json('attemptId')

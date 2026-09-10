@@ -893,7 +893,11 @@ final class LyricsCorrectionService
                 array_values($sourceCues),
             ),
             'lyricsParts' => array_map(fn (string $text, int $index): array => ['index' => $index, 'text' => $text], $parts, array_keys($parts)),
-            'existingParts' => array_map(
+            'allowPartial' => $allowPartial,
+        ];
+
+        if ($allowPartial) {
+            $input['existingParts'] = array_map(
                 function (array $cue): array {
                     $cueParts = $this->existingLyricsParts((string) ($cue['sourceText'] ?? ''));
 
@@ -907,9 +911,8 @@ final class LyricsCorrectionService
                     ];
                 },
                 array_values($sourceCues),
-            ),
-            'allowPartial' => $allowPartial,
-        ];
+            );
+        }
 
         for ($attempt = 0; $attempt < 2; $attempt++) {
             $this->ensureCorrectionCurrent($correction);
@@ -944,8 +947,8 @@ final class LyricsCorrectionService
                     ...$exception->context,
                     'reason' => $reason,
                     'instruction' => $allowPartial
-                        ? 'Correct the rejected structure. For a complete replacement use only pasted segments. For a partial replacement return every existing cue once, mark each segment pasted or existing, consume every numbered pasted part exactly once, and preserve uncovered existing parts. The server splits long text within its timing slot. Use an empty separator for the first or same-source segment and only an empty separator or one space at a source switch.'
-                        : 'Correct the rejected structure. Copy the original cueId and use only pasted segments with strictly increasing endPartIndex values, ending at the final supplied part. The server derives start indexes and separators, consumes every numbered part exactly once, and splits long text within its timing slot.',
+                        ? 'Correct the rejected structure using zero-based inclusive part indexes. Always supply startPartIndex and separator, including for a complete replacement: use the next unconsumed pasted part and an empty separator. Complete replacements use only pasted segments. Partial replacements return every existing cue once, consume every pasted part once, and preserve uncovered existing parts. Use an empty separator for the first or same-source segment and only an empty separator or one space at a source switch.'
+                        : 'Correct the rejected structure. Copy the original cueId and return only source pasted and endPartIndex in each segment. Use zero-based inclusive, strictly increasing endPartIndex values, ending at the final supplied part. The server derives start indexes and separators, consumes every numbered part exactly once, and splits long text within its timing slot.',
                 ];
             }
         }

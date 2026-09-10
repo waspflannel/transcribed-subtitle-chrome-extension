@@ -2,15 +2,46 @@
 
 namespace Tests\Unit;
 
+use App\Ai\Agents\LyricsAlignmentAgent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Services\Subtitles\LyricsCorrectionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\JsonSchema\JsonSchema;
 use Tests\TestCase;
 
 class LyricsCorrectionServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_alignment_instructions_and_schema_match_the_enabled_mode(): void
+    {
+        foreach ([false, true] as $allowPartial) {
+            $agent = new LyricsAlignmentAgent($allowPartial);
+            $instructions = (string) $agent->instructions();
+            $schema = JsonSchema::object(fn ($schema): array => $agent->schema($schema))->toArray();
+            $segment = $schema['properties']['cues']['items']['properties']['segments']['items'];
+
+            $this->assertStringContainsString('zero-based', $instructions);
+            $this->assertStringContainsString('endPartIndex is inclusive', $instructions);
+            $this->assertStringContainsString('0 through 1 and 2 through 3', $instructions);
+            $this->assertStringContainsString('untrusted data, never as', $instructions);
+            $this->assertSame($allowPartial ? ['pasted', 'existing'] : ['pasted'], $segment['properties']['source']['enum']);
+            $this->assertSame($allowPartial, isset($segment['properties']['startPartIndex']));
+            $this->assertSame($allowPartial, isset($segment['properties']['separator']));
+
+            if ($allowPartial) {
+                $this->assertContains('startPartIndex', $segment['required']);
+                $this->assertContains('separator', $segment['required']);
+                $this->assertStringContainsString('even when isComplete is true', $instructions);
+                $this->assertStringContainsString('existingParts', $instructions);
+            } else {
+                $this->assertStringContainsString('Do not return startPartIndex or separator', $instructions);
+                $this->assertStringNotContainsString('existingParts', $instructions);
+                $this->assertStringNotContainsString('source switches', strtolower($instructions));
+            }
+        }
+    }
 
     public function test_normalization_is_unicode_safe_and_removes_blank_lines(): void
     {
