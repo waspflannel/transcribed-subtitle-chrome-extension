@@ -116,6 +116,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
         $this->transcribe($job, 0);
         Http::assertSentCount(3);
+        $this->assertSame(3, $job->events()->where('event', 'provider.transcription_chunk_completed')->count());
         $this->assertCount($batchCount, $this->analysisInputs);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);

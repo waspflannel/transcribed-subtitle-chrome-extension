@@ -54,7 +54,7 @@ Define metrics for:
 - Error rates.
 - Background task health, if applicable.
 
-`php artisan subtitles:metrics --json` groups completed jobs by generation tier and video-duration bucket, reporting completed count, p50/p95 generation duration, p95 queue wait, configured budget, budget misses, estimated provider cost, and cost per generated minute. The command reads only subtitle job rows and sanitized trace events.
+`php artisan subtitles:metrics --json` groups completed jobs by generation tier, video-duration bucket, provider/model, processing version and transcript-cache hit, reporting completed count, first source/annotated cue sample counts and p50/p95 latency, p50/p95 generation duration, p95 queue wait, configured budget, budget misses, estimated provider cost, and cost per generated minute. The command reads only subtitle job rows and sanitized trace events.
 
 Metrics select events from each job's current `run_id`. Cue batch queue wait starts at Laravel's own queue publication timestamp, including for successors in a chain. That timestamp has second precision; a retried payload retains its original publication time, so its wait can include its earlier attempts and backoff. It is not pure broker residence time across retries.
 
@@ -72,3 +72,5 @@ Subtitle workflow traces are persisted in `subtitle_job_events` and mirrored int
 - Per-worktree ephemeral observability stack when the app needs it.
 
 Analysis progress uses persisted results against the entire current draft batch plan. Early analysis does not jump the overall percentage to 90 while audio is still transcribing. Preview coverage is a conservative video timestamp; a completed later batch cannot fill a gap left by an unfinished earlier batch.
+
+`provider.transcription_chunk_completed` records each successful transcription call, including upload and response validation, with chunk index, input bytes and elapsed milliseconds. It excludes prefix assembly and queue wait. Parallel request durations overlap; do not add them together to estimate total wall time. First-cue metrics are null when historical traces lack the event, rather than being reported as instant delivery.

@@ -786,6 +786,9 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame(300000, $metrics['groups'][0]['p95DurationMs']);
         $this->assertSame(1200, $metrics['groups'][0]['p95QueueWaitMs']);
         $this->assertSame(50, $metrics['groups'][0]['costPerGeneratedMinuteMicrousd']);
+        $this->assertNull($metrics['groups'][0]['p50FirstCueMs']);
+        $this->assertNull($metrics['groups'][0]['p50FirstAnnotatedCueMs']);
+        $this->assertSame(0, $metrics['groups'][0]['firstAnnotatedCueSampleCount']);
     }
 
     public function test_generation_metrics_exclude_events_from_previous_runs(): void
@@ -797,7 +800,10 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
 
         foreach ([(string) Str::uuid() => [300000, 90000], $job->run_id => [20000, 1000]] as $runId => [$duration, $wait]) {
-            foreach (['job.completed' => ['duration_ms' => $duration], 'queue.wait_observed' => ['wait_ms' => $wait]] as $event => $timing) {
+            foreach (['job.completed' => ['duration_ms' => $duration], 'queue.wait_observed' => ['wait_ms' => $wait],
+                'delivery.first_cue_available' => ['duration_ms' => intdiv($duration, 2)],
+                'delivery.first_annotated_cue_available' => ['duration_ms' => intdiv($duration, 2) + 1000],
+            ] as $event => $timing) {
                 SubtitleJobEvent::query()->create([
                     'subtitle_job_id' => $job->id,
                     'public_job_id' => $job->public_id,
@@ -814,6 +820,27 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame(1000, $metrics['groups'][0]['p95QueueWaitMs']);
         $this->assertSame(0, $metrics['groups'][0]['budgetExceededCount']);
         $this->assertSame(100, $metrics['summary']['totalCostMicrousd']);
+        $this->assertSame(10000, $metrics['groups'][0]['p50FirstCueMs']);
+        $this->assertSame(11000, $metrics['groups'][0]['p95FirstAnnotatedCueMs']);
+        $this->assertSame(1, $metrics['groups'][0]['firstAnnotatedCueSampleCount']);
+    }
+
+    public function test_metrics_separate_provider_model_and_cached_transcripts(): void
+    {
+        foreach ([['openai', 'model-a', false], ['openai', 'model-b', false], ['cerebras', 'model-b', false], ['openai', 'model-a', true]] as [$provider, $model, $cached]) {
+            $job = SubtitleJob::factory()->create(['status' => 'completed', 'ai_provider' => $provider, 'ai_model' => $model, 'video_duration_seconds' => 120]);
+            foreach ($cached ? ['job.completed', 'transcript.cache_hit'] : ['job.completed'] as $event) {
+                SubtitleJobEvent::query()->create([
+                    'subtitle_job_id' => $job->id, 'public_job_id' => $job->public_id,
+                    'run_id' => $job->run_id, 'event' => $event, 'duration_ms' => 20000,
+                ]);
+            }
+        }
+        Artisan::call('subtitles:metrics', ['--json' => true]);
+        $metrics = json_decode(Artisan::output(), true);
+        $this->assertSame(4, $metrics['summary']['completedJobCount']);
+        $this->assertCount(4, $metrics['groups']);
+        $this->assertSame(1, collect($metrics['groups'])->where('transcriptCacheHit', true)->count());
     }
 
     public function test_chained_job_measures_wait_from_its_own_queue_publication(): void

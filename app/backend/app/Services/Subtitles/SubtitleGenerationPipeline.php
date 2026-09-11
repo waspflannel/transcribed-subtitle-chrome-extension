@@ -289,6 +289,7 @@ class SubtitleGenerationPipeline
 
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
+        $requestStartedAtMs = $this->telemetry->currentTimeMs();
         if ($chunkAudio === null) {
             if ($job->transcription_ingestion_mode !== 'youtube_url' || $chunkIndex !== 0 || $chunkCount !== 1
                 || $audioStartSeconds !== 0.0 || $nominalStartSeconds !== 0.0 || $nominalEndSeconds !== null) {
@@ -299,6 +300,7 @@ class SubtitleGenerationPipeline
             $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language, $job->vocabulary_hints ?? []);
         }
 
+        $this->telemetry->recordTranscriptionChunkCompleted($job, $chunkIndex, $requestStartedAtMs, $chunkAudio?->sizeBytes);
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
         if ($job === null) {

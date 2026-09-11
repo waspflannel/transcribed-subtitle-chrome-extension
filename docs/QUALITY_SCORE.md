@@ -4,7 +4,9 @@ Update this file when meaningful product, architecture, reliability, security, o
 
 ## Summary
 
-September 11: the extension selects Luna/Cerebras per generation, pins provider and exact model through processing and later cards/corrections, isolates model results and shares Scribe transcripts. Selector validation passed 505 backend tests / 3,997 assertions, 231 extension tests, contracts, compile and build. Local migration is applied; one worker restart and extension reload remain user-operated. Prior recovery included one combined analysis result, model-trusting validation, fixed draft previews, queue/polling improvements and guarded audio/batch experiments. Layered source-matching repairs, substitute tokens, ICU readings and hybrid routing were removed. Offline tests validate contracts and concurrency; new live speed/quality gains remain unverified. Grades are unchanged.
+September 11: progressive generation publishes stable source cues and analyzes them while later audio chunks are still transcribing. The branch reuses validated YouTube metadata, prioritizes the opening 20-second chunk, limits opening playback analysis to roughly 10 seconds of cues, combines status and preview delivery, and removes worker sleep beyond Redis blocking. Metrics distinguish first source/annotated cues, provider/model, processing version and cache hits. Validation passed 522 backend tests / 4,127 assertions, 242 extension tests, contracts, compile and build. Local Postgres/Redis readiness and HTTP health passed after restarting the backend and workers; reload the extension to load the new build. Live speed, transcription boundaries, language detection and playback continuity still need provider-backed comparison. Grades are unchanged.
+
+The earlier provider selector pins Luna/Cerebras and the exact model per generation while sharing compatible Scribe transcripts. Recovery retained one combined analysis result, model-trusting validation and fixed draft previews; layered source-matching repairs, substitute tokens, ICU readings and hybrid routing were removed.
 
 | Area | Grade | Notes | Next Action |
 | --- | --- | --- | --- |

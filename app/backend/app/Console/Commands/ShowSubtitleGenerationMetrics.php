@@ -8,6 +8,7 @@ use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 #[Signature('subtitles:metrics {--days=7 : Completed jobs to include by created-at window} {--json : Output machine-readable JSON}')]
@@ -32,7 +33,7 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values();
 
         $groups = $rows
-            ->groupBy(fn (array $row): string => $row['tier'].'|'.$row['durationBucket'])
+            ->groupBy(fn (array $row): string => json_encode(Arr::only($row, ['tier', 'durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit'])))
             ->map(fn (Collection $group): array => $this->groupMetrics($group))
             ->sortBy(['tier', 'durationBucket'])
             ->values();
@@ -60,12 +61,16 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values()
             ->all());
         $this->table(
-            ['tier', 'bucket', 'jobs', 'p50_ms', 'p95_ms', 'p95_wait_ms', 'budget_ms', 'over_budget', 'cost_per_min_microusd'],
+            ['tier', 'bucket', 'model', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms', 'budget_ms', 'over_budget', 'cost_per_min_microusd'],
             $groups
                 ->map(fn (array $group): array => [
                     $group['tier'],
                     $group['durationBucket'],
+                    $group['aiProvider'].'/'.$group['aiModel'],
+                    $group['transcriptCacheHit'] ? 'yes' : 'no',
                     $group['completedJobCount'],
+                    $group['p50FirstCueMs'] ?? 'n/a',
+                    $group['p50FirstAnnotatedCueMs'] ?? 'n/a',
                     $group['p50DurationMs'],
                     $group['p95DurationMs'],
                     $group['p95QueueWaitMs'],
@@ -104,6 +109,12 @@ class ShowSubtitleGenerationMetrics extends Command
         return [
             'tier' => $tier,
             'durationBucket' => $bucket,
+            'aiProvider' => $job->ai_provider,
+            'aiModel' => $job->ai_model,
+            'processingVersion' => $job->processing_version,
+            'transcriptCacheHit' => $events->contains('event', 'transcript.cache_hit'),
+            'firstCueMs' => $events->firstWhere('event', 'delivery.first_cue_available')?->duration_ms,
+            'firstAnnotatedCueMs' => $events->firstWhere('event', 'delivery.first_annotated_cue_available')?->duration_ms,
             'durationMs' => $completed->duration_ms,
             'queueWaitMs' => $queueWaits->max() ?? 0,
             'budgetMs' => $budgetMs,
@@ -122,8 +133,13 @@ class ShowSubtitleGenerationMetrics extends Command
         $first = $group->first();
 
         return [
-            'tier' => $first['tier'],
-            'durationBucket' => $first['durationBucket'],
+            ...Arr::only($first, ['tier', 'durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit']),
+            'firstCueSampleCount' => $group->whereNotNull('firstCueMs')->count(),
+            'firstAnnotatedCueSampleCount' => $group->whereNotNull('firstAnnotatedCueMs')->count(),
+            'p50FirstCueMs' => $this->percentile($group->pluck('firstCueMs'), 50),
+            'p95FirstCueMs' => $this->percentile($group->pluck('firstCueMs'), 95),
+            'p50FirstAnnotatedCueMs' => $this->percentile($group->pluck('firstAnnotatedCueMs'), 50),
+            'p95FirstAnnotatedCueMs' => $this->percentile($group->pluck('firstAnnotatedCueMs'), 95),
             'completedJobCount' => $group->count(),
             'p50DurationMs' => $this->percentile($group->pluck('durationMs'), 50),
             'p95DurationMs' => $this->percentile($group->pluck('durationMs'), 95),
@@ -137,7 +153,7 @@ class ShowSubtitleGenerationMetrics extends Command
     /**
      * @param  Collection<int, mixed>  $values
      */
-    private function percentile(Collection $values, int $percentile): int
+    private function percentile(Collection $values, int $percentile): ?int
     {
         $sorted = $values
             ->filter(fn (mixed $value): bool => is_int($value) || is_float($value))
@@ -145,7 +161,7 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values();
 
         if ($sorted->isEmpty()) {
-            return 0;
+            return null;
         }
 
         $index = (int) ceil(($percentile / 100) * $sorted->count()) - 1;
