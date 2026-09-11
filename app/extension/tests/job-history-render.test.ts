@@ -52,7 +52,7 @@ describe('renderJobHistory links', () => {
     const state: PanelState = {
       ...stateWithJob(),
       pageStatus: parseYoutubePage(`https://www.youtube.com/watch?v=${activeVideoId}`),
-      settings: { ...DEFAULT_EXTENSION_SETTINGS, sourceLanguage: 'spa', targetLanguage: 'fra' },
+      settings: { ...DEFAULT_EXTENSION_SETTINGS, sourceLanguage: 'spa', targetLanguage: 'fra', aiProvider: 'cerebras' },
       jobHistory: [
         makeJob({ ...failed, sourceLanguage: 'jpn', includeTranslation: true }),
         makeJob({ ...failed, sourceLanguage: 'kor', enrichmentMode: 'full', youtubeVideoId: 'other000001', youtubeUrl: 'https://www.youtube.com/watch?v=other000001' }),
@@ -69,6 +69,8 @@ describe('renderJobHistory links', () => {
       expect(link.rel).toContain('noopener');
     }
     expect(jobsList.querySelector('button, form, [data-action]')).toBeNull();
+    expect(jobsList.textContent).toContain('Luna');
+    expect(jobsList.textContent).not.toContain('Cerebras');
     expect(jobsList.textContent).not.toContain('Retry');
     expect(jobsList.textContent).toContain("This job's options are not restored.");
     expect(jobsList.textContent).toContain('review Watch settings');

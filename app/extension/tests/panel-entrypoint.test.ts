@@ -54,7 +54,7 @@ it('imports the real panel entrypoint and attaches synchronization without a lex
   dom.window.close();
 });
 
-it('shows the main generation cancel action while the job id is still being created', async () => {
+it('cancels generation and saves the model selected for the next generation', async () => {
   vi.resetModules();
   vi.useFakeTimers();
   const dom = new JSDOM(markup);
@@ -114,8 +114,9 @@ it('shows the main generation cancel action while the job id is still being crea
   const cancellationResponse = new Promise<PanelState>((resolve) => {
     resolveCancellation = resolve;
   });
-  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string }) => {
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; patch?: Partial<PanelState['settings']> }) => {
     if (request?.type === 'panel.cancelSubtitleJob') return cancellationResponse;
+    if (request?.type === 'panel.updateSettings') responseState = { ...responseState, settings: { ...responseState.settings, ...request.patch } };
     return structuredClone(responseState);
   });
 
@@ -126,7 +127,7 @@ it('shows the main generation cancel action while the job id is still being crea
   expect(cancelButton?.hidden).toBe(false);
   expect(cancelButton?.disabled).toBe(true);
   expect(cancelButton?.textContent).toBe('Cancel generation');
-  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Model: gpt-oss-120b');
+  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Luna');
   expect(dom.window.document.querySelector<HTMLElement>('[data-account-model]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-panel="watch"]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-progress]')?.hidden).toBe(false);
@@ -161,6 +162,17 @@ it('shows the main generation cancel action while the job id is still being crea
   await vi.advanceTimersByTimeAsync(0);
   expect(cancelButton?.hidden).toBe(true);
   expect(dom.window.document.querySelector<HTMLElement>('[data-progress]')?.hidden).toBe(true);
+
+  responseState = { ...preparingState, subtitleState: { type: 'no-track' } };
+  const selector = dom.window.document.querySelector<HTMLSelectElement>('select[name="aiProvider"]')!;
+  expect(selector.disabled).toBe(false);
+  expect(selector.value).toBe('openai');
+  selector.value = 'cerebras';
+  selector.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' } }));
+  expect(selector.value).toBe('cerebras');
+  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Cerebras');
 
   dom.window.close();
 });

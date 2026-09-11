@@ -104,6 +104,7 @@ const {
   targetLanguageSelected,
   sourceLanguageList,
   targetLanguageList,
+  aiProviderSelect,
   overlayPositionSelect,
   captionFontSizeSelect,
   captionDensitySelect,
@@ -265,6 +266,10 @@ overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 captionFontSizeSelect.addEventListener('change', handleCaptionFontSizeChange);
 captionDensitySelect.addEventListener('change', handleCaptionDensityChange);
 captionContrastThemeSelect.addEventListener('change', handleCaptionContrastThemeChange);
+aiProviderSelect.addEventListener('change', () => {
+  const aiProvider = aiProviderSelect.value;
+  if (aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
+});
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 showRomanizationInput.addEventListener('change', () =>
   void updateSettings({ showRomanization: showRomanizationInput.checked }),
@@ -1075,6 +1080,7 @@ function showPanelState(state: PanelState): void {
   renderLanguagePair(settings);
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
+  aiProviderSelect.value = settings.aiProvider;
   overlayPositionSelect.value = settings.overlayPosition;
   captionFontSizeSelect.value = settings.captionFontSize;
   captionDensitySelect.value = settings.captionDensity;
@@ -1370,7 +1376,7 @@ function renderAccount(accountState: AccountState, settings: ExtensionSettings):
   accountPlan.textContent = authenticated ? accountState.planName : 'Available after sign-in';
   accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Available after sign-in';
   accountModel.hidden = !authenticated;
-  accountModel.textContent = authenticated ? `Model: ${accountState.aiModel || 'Unavailable'}` : '';
+  accountModel.textContent = authenticated ? `Next generation: ${settings.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna'}` : '';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;
@@ -1518,6 +1524,7 @@ function setSettingsDisabled(disabled: boolean): void {
     button.disabled = disabled;
   }
   overlayVisibleInput.disabled = disabled;
+  aiProviderSelect.disabled = disabled;
   overlayPositionSelect.disabled = disabled;
   captionFontSizeSelect.disabled = disabled;
   captionDensitySelect.disabled = disabled;

@@ -413,7 +413,7 @@ describe('background entrypoint review regressions', () => {
     expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(1);
   });
 
-  it('shares the polling budget across active tabs', async () => {
+  it('switches providers between active jobs while sharing the polling budget', async () => {
     vi.useFakeTimers();
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
@@ -429,9 +429,11 @@ describe('background entrypoint review regressions', () => {
     const listener = await loadBackground();
     await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
     await waitFor(() => apiMock.getSubtitleJobPartialTrack.mock.calls.length === 1);
+    await dispatch(listener, { type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' }, windowId: 1 }, {});
     browserMock.setActiveTab(2);
     await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
     await waitFor(() => apiMock.getSubtitleJobPartialTrack.mock.calls.length === 2);
+    expect(apiMock.createSubtitleJob.mock.calls.map((call) => call[2].aiProvider)).toEqual(['openai', 'cerebras']);
     await waitFor(() => vi.getTimerCount() === 2);
     apiMock.getSubtitleJob.mockClear();
     apiMock.getSubtitleJobPartialTrack.mockClear();

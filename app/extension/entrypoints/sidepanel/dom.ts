@@ -57,6 +57,7 @@ export interface PanelDom {
   targetLanguageSelected: HTMLElement;
   sourceLanguageList: HTMLElement;
   targetLanguageList: HTMLElement;
+  aiProviderSelect: HTMLSelectElement;
   overlayPositionSelect: HTMLSelectElement;
   captionFontSizeSelect: HTMLSelectElement;
   captionDensitySelect: HTMLSelectElement;
@@ -162,6 +163,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     targetLanguageSelected: query(root, '[data-target-language-selected]', HTMLElement),
     sourceLanguageList: query(root, '[data-source-language-list]', HTMLElement),
     targetLanguageList: query(root, '[data-target-language-list]', HTMLElement),
+    aiProviderSelect: query(root, 'select[name="aiProvider"]', HTMLSelectElement),
     overlayPositionSelect: query(root, 'select[name="overlayPosition"]', HTMLSelectElement),
     captionFontSizeSelect: query(root, 'select[name="captionFontSize"]', HTMLSelectElement),
     captionDensitySelect: query(root, 'select[name="captionDensity"]', HTMLSelectElement),

@@ -9,6 +9,12 @@ import {
 } from '../utils/settings-model';
 
 describe('settings model', () => {
+  it('defaults to Luna, remembers Cerebras, and rejects unknown providers', () => {
+    expect(createExtensionSettingsFromPartial(undefined).aiProvider).toBe('openai');
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'cerebras' }).aiProvider).toBe('cerebras');
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'hybrid' as never }).aiProvider).toBe('openai');
+  });
+
   it('uses safe defaults for missing or invalid settings', () => {
     expect(
       createExtensionSettingsFromPartial({

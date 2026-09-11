@@ -1,3 +1,5 @@
+import type { CreateSubtitleJobRequest } from '@transcribed-subtitle-extension/contracts';
+
 import {
   DEFAULT_SOURCE_LANGUAGE,
   DEFAULT_TARGET_LANGUAGE,
@@ -13,6 +15,7 @@ export type CaptionDensity = 'compact' | 'comfortable';
 export type CaptionContrastTheme = 'default' | 'high';
 
 export interface ExtensionSettings {
+  aiProvider: NonNullable<CreateSubtitleJobRequest['aiProvider']>;
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;
   overlayVisible: boolean;
@@ -35,6 +38,7 @@ export const MIN_SUBTITLE_TIMING_OFFSET_SECONDS = -10;
 export const MAX_SUBTITLE_TIMING_OFFSET_SECONDS = 10;
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
+  aiProvider: 'openai',
   sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
   overlayVisible: true,
@@ -57,6 +61,10 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
   const settings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
   const sourceLanguage = normalizeSourceLanguage(value?.sourceLanguage);
   const targetLanguage = normalizeTargetLanguage(value?.targetLanguage);
+
+  if (value?.aiProvider === 'openai' || value?.aiProvider === 'cerebras') {
+    settings.aiProvider = value.aiProvider;
+  }
 
   if (sourceLanguage) {
     settings.sourceLanguage = sourceLanguage;

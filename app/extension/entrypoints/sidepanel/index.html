@@ -90,6 +90,17 @@
               </div>
             </div>
 
+            <div class="card">
+              <label class="row">
+                <span class="row-key">AI model</span>
+                <select name="aiProvider" aria-describedby="ai-provider-help" disabled>
+                  <option value="openai">Luna</option>
+                  <option value="cerebras">Cerebras</option>
+                </select>
+              </label>
+              <p id="ai-provider-help" class="microcopy">Applies to your next generation. Running jobs keep their selected model.</p>
+            </div>
+
             <details class="card vocabulary-hints">
               <summary>Names and vocabulary (optional)</summary>
               <label for="vocabulary-hints">Terms to recognize in this video</label>
