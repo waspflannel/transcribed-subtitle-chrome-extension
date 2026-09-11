@@ -190,6 +190,12 @@ class SubtitleJobArtifactStore
      */
     public function cueBatch(SubtitleJob $job, string $artifactType, int $batchIndex): array
     {
+        return $this->cueBatchWithContext($job, $artifactType, $batchIndex)['batch'];
+    }
+
+    /** Read the immutable batch bounds and two neighbouring cues on each side once. */
+    public function cueBatchWithContext(SubtitleJob $job, string $artifactType, int $batchIndex): array
+    {
         $payload = $this->payload($job, $artifactType);
         $cues = $payload['cues'] ?? null;
 
@@ -211,7 +217,12 @@ class SubtitleJobArtifactStore
             $this->failMissingArtifact($artifactType);
         }
 
-        return $batch;
+        $contextStart = max(0, $start - 2);
+
+        return [
+            'batch' => $batch,
+            'context' => array_slice($cues, $contextStart, $end + 3 - $contextStart),
+        ];
     }
 
     public function cueBatchResult(SubtitleJob $job, string $artifactType, int $batchIndex): CueEnrichmentResult
@@ -418,7 +429,8 @@ class SubtitleJobArtifactStore
             // Close the current batch before adding a cue that would push it
             // past the character budget or the max cue count -- but never emit
             // an empty batch, so a single over-budget cue forms its own batch.
-            if ($size > 0 && ($chars + $length > $charBudget || $size >= $maxCues)) {
+            if ($size > 0 && ($chars + $length > $charBudget || $size >= $maxCues
+                || $this->exceedsBatchDuration($cues[$start], $cue))) {
                 $plan[] = [$start, $index - 1];
                 $start = $index;
                 $chars = 0;
@@ -431,6 +443,14 @@ class SubtitleJobArtifactStore
 
         return config('subtitles.enrichment.balanced_batches', false)
             ? $this->balancedPlan($cues, $plan, $job) : $plan;
+    }
+
+    private function exceedsBatchDuration(array $firstCue, array $lastCue): bool
+    {
+        $seconds = (int) config(($firstCue['index'] ?? -1) === 0
+            ? 'subtitles.enrichment.first_batch_seconds' : 'subtitles.enrichment.batch_seconds', 0);
+
+        return $seconds > 0 && ($lastCue['endMs'] ?? 0) - ($firstCue['startMs'] ?? 0) > $seconds * 1000;
     }
 
     /** Balance estimated response work without adding calls or raising input limits. */
@@ -450,13 +470,14 @@ class SubtitleJobArtifactStore
                 + ($job?->include_translation ? mb_strlen($text) : 0)
                 + ($job?->include_romanization ? 4 * $nonLatin : 0);
         }, $cues);
-        $partition = function (int $budget) use ($weights, $lengths): array {
+        $partition = function (int $budget) use ($weights, $lengths, $cues): array {
             $result = [];
             $start = $chars = $work = 0;
             foreach ($weights as $index => $weight) {
                 if ($index > $start && ($work + $weight > $budget
                     || $chars + $lengths[$index] > $this->batchCharBudget()
-                    || $index - $start >= $this->maxCuesPerBatch())) {
+                    || $index - $start >= $this->maxCuesPerBatch()
+                    || $this->exceedsBatchDuration($cues[$start], $cues[$index]))) {
                     $result[] = [$start, $index - 1];
                     $start = $index;
                     $chars = $work = 0;

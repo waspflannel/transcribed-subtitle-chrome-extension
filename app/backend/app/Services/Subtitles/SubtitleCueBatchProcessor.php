@@ -35,12 +35,11 @@ class SubtitleCueBatchProcessor
         try {
             $startedAtMs = $this->telemetry->currentTimeMs();
             $includeTranslation = $job->include_translation && $job->effectiveSourceLanguage() !== $job->target_language;
-            $allCues = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES)->cues;
-            $includeRomanization = $job->include_romanization && SubtitleText::hasNonLatinCues($allCues);
-            $batch = $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex);
+            ['batch' => $batch, 'context' => $context] = $this->artifacts->cueBatchWithContext($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex);
+            $includeRomanization = $job->include_romanization && SubtitleText::hasNonLatinCues($batch);
             $result = $this->translationAnalysis->analyzeCueBatch(
                 batch: $batch,
-                allCues: $allCues,
+                allCues: $context,
                 sourceLanguage: $job->effectiveSourceLanguage(),
                 targetLanguage: $job->target_language,
                 includeTranslation: $includeTranslation,

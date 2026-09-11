@@ -168,7 +168,9 @@ return [
     ],
 
     'enrichment' => [
-        'balanced_batches' => (bool) env('SUBTITLE_BALANCED_BATCHES', false),
+        'first_batch_seconds' => (int) env('SUBTITLE_ANALYSIS_FIRST_BATCH_SECONDS', 10),
+        'batch_seconds' => (int) env('SUBTITLE_ANALYSIS_BATCH_SECONDS', 30),
+        'balanced_batches' => (bool) env('SUBTITLE_BALANCED_BATCHES', true),
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
         // Character-based batch sizing packs cues greedily up to this many
         // cumulative sourceText characters, capped at cue_batch_max_cues.

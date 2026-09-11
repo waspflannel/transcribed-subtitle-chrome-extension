@@ -14,6 +14,37 @@ class SubtitleJobArtifactBatchPlanTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_analysis_batches_bound_playback_duration_and_keep_nearby_context(): void
+    {
+        config([
+            'subtitles.enrichment.first_batch_seconds' => 10,
+            'subtitles.enrichment.batch_seconds' => 30,
+            'subtitles.enrichment.cue_batch_char_budget' => 10000,
+            'subtitles.enrichment.cue_batch_max_cues' => 100,
+        ]);
+        $cues = $this->cues(25, 5);
+        foreach ($cues as $index => &$cue) {
+            $cue['index'] = $index;
+            $cue['startMs'] = $index * 4000;
+            $cue['endMs'] = ($index + 1) * 4000;
+        }
+        unset($cue);
+        $store = app(SubtitleJobArtifactStore::class);
+        $job = $this->runningJob();
+        foreach ([false, true] as $balanced) {
+            config(['subtitles.enrichment.balanced_batches' => $balanced]);
+            $plan = $store->batchPlan($cues);
+            $this->assertSame([0, 1], $plan[0]);
+            foreach ($plan as $position => [$start, $end]) {
+                $this->assertLessThanOrEqual($position === 0 ? 10000 : 30000, $cues[$end]['endMs'] - $cues[$start]['startMs']);
+            }
+            $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+            ['batch' => $batch, 'context' => $context] = $store->cueBatchWithContext($job, SubtitleJobArtifactStore::DRAFT_CUES, 1);
+            $this->assertSame(array_slice($cues, $plan[1][0], $plan[1][1] - $plan[1][0] + 1), $batch);
+            $this->assertSame(array_slice($cues, 0, $plan[1][1] + 3), $context);
+        }
+    }
+
     public function test_cues_are_packed_by_character_budget(): void
     {
         config([
