@@ -176,6 +176,38 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         Bus::assertDispatchedTimes(FinalizeSubtitleJob::class, 1);
     }
 
+    #[TestWith([false])]
+    #[TestWith([true])]
+    public function test_untimed_chunk_tail_waits_until_its_cue_is_stable(bool $silentTail): void
+    {
+        $job = $this->job();
+        $this->transcribe($job, 0, ['language_code' => 'eng', 'words' => [
+            ['text' => 'Earlier.', 'start' => 0.5, 'end' => 1, 'type' => 'word'],
+            ['text' => 'Hello.', 'start' => 2, 'end' => 3, 'type' => 'word'],
+            ['text' => 'Again.', 'start' => 3, 'end' => 3, 'type' => 'word'],
+        ]]);
+        $opening = $this->preview($job);
+        $this->assertSame(['Earlier.'], array_column($opening['cues'], 'sourceText'));
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
+
+        $this->transcribe($job, 1, ['words' => $silentTail ? [] : [
+            ['text' => 'There.', 'start' => 2, 'end' => 3, 'type' => 'word'],
+        ]]);
+        $this->transcribe($job, 2, ['words' => []]);
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+        $this->assertSame('tokenizing', $job->fresh()->stage);
+        $store = app(SubtitleJobArtifactStore::class);
+        foreach ($store->pendingAnalysisIndexes($job) as $index) {
+            app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, $index, $job->run_id);
+        }
+        $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
+        $this->assertSame('completed', $job->fresh()->status);
+        $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ['Earlier.', 'Hello.', 'Again. There.'],
+            array_column($job->fresh()->track->cues, 'sourceText'));
+    }
+
     public function test_final_merge_requeues_an_early_analysis_dispatch_lost_after_commit(): void
     {
         $job = $this->job();

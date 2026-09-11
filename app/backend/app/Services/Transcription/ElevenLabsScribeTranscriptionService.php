@@ -158,6 +158,20 @@ class ElevenLabsScribeTranscriptionService
             }
         }
         $payload = $this->chunkMerger->merge($chunks);
+        // Trailing untimed words attach to the last timed word until another
+        // chunk supplies a following word. That final cue is not stable yet.
+        $untimedTail = false;
+        foreach (array_reverse($payload['words']) as $word) {
+            if (! is_numeric($word['start'] ?? null) || ! is_numeric($word['end'] ?? null)) {
+                $untimedTail = true;
+
+                continue;
+            }
+            if ($untimedTail) {
+                $safeEnd = min($safeEnd, (float) $word['start']);
+            }
+            break;
+        }
         if ($safeEnd <= 0 || ! array_filter($payload['words'], fn (array $word): bool => is_numeric($word['start'] ?? null) && is_numeric($word['end'] ?? null)) || ($sourceLanguage === 'auto'
             && LanguageCatalog::normalizeCode($payload['language_code'] ?? null) === null)) {
             return null;
