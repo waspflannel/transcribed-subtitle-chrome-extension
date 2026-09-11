@@ -9,8 +9,8 @@ use App\Models\SubtitleJobEvent;
 use App\Models\User;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
-use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobAdmission;
+use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -43,7 +43,14 @@ class SubtitleJobFailureHandlerTest extends TestCase
         $this->assertGreaterThan(0, $ledger->reservedMinutesForJob($job));
 
         $handler = app(SubtitleJobFailureHandler::class);
-        $exception = SubtitleProcessingException::enrichmentFailed();
+        $exception = SubtitleProcessingException::enrichmentFailed(context: [
+            'reason' => 'token_text_not_in_source',
+            'cue_index' => 12,
+            'token_position' => 3,
+            'prompt' => 'private prompt',
+            'tokens' => [['text' => 'private generated token']],
+            'provider_payload' => ['private' => 'response'],
+        ]);
 
         $handler->failJob($job->id, 'tokenizing', $exception, $job->run_id);
         $handler->failJob($job->id, 'tokenizing', $exception, $job->run_id);
@@ -64,6 +71,11 @@ class SubtitleJobFailureHandlerTest extends TestCase
             ->where('event', 'job.failed')
             ->count();
         $this->assertSame(1, $failureTelemetryCount, 'Only the winning callback should emit failure telemetry.');
+        $failure = SubtitleJobEvent::query()->where('subtitle_job_id', $job->id)->where('event', 'job.failed')->firstOrFail();
+        $this->assertSame('token_text_not_in_source', $failure->context['reason']);
+        $this->assertSame(12, $failure->context['cue_index']);
+        $this->assertSame(3, $failure->context['token_position']);
+        $this->assertStringNotContainsString('private', json_encode($failure->context));
 
         $reservedMinutes = $ledger->reservedMinutesForJob($job);
         $this->assertSame(0, $reservedMinutes, 'Reservation should be fully released after failure.');

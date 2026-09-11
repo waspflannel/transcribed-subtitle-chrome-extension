@@ -148,13 +148,15 @@ class SubtitleWorkflowLoggerTest extends TestCase
                 fn (array $context): bool => $context['job_id'] === $job->public_id
                     && $context['youtube_video_id'] === 'dQw4w9WgXcQ'
                     && $context['error_code'] === 'transcription_failed'
+                    && $context['cue_index'] === 12
+                    && $context['token_position'] === 3
                     && $context['reason'] === 'provider_error',
             ));
 
         $this->logger()->processingFailed(
             $job,
             'transcription',
-            SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'provider_error']),
+            SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'provider_error', 'cue_index' => 12, 'token_position' => 3]),
         );
     }
 

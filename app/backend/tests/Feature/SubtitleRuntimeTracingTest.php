@@ -11,8 +11,6 @@ use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
-use App\Jobs\RomanizeSubtitleCueBatch;
-use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
@@ -64,7 +62,7 @@ class SubtitleRuntimeTracingTest extends TestCase
     {
         config([
             'ai.default' => 'cerebras',
-            'ai.providers.cerebras.models.analysis.default' => 'cerebras-analysis',
+            'ai.providers.cerebras.models.text.default' => 'cerebras-analysis',
             'subtitles.costs.cerebras_tokenization_microusd_per_cue' => 3,
             'subtitles.costs.openai_tokenization_microusd_per_cue' => 999,
         ]);
@@ -85,7 +83,7 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
         $staleRunId = (string) Str::uuid();
 
-        TokenizeSubtitleCueBatch::dispatch($job->id, 0, $staleRunId)
+        AnalyzeSubtitleCueBatch::dispatch($job->id, 0, $staleRunId)
             ->onConnection(SubtitleQueue::connection())
             ->onQueue(SubtitleQueue::batchName());
 
@@ -131,8 +129,8 @@ class SubtitleRuntimeTracingTest extends TestCase
         // Stale-run batch jobs no-op successfully, which still advances the
         // Laravel batch and fires the progress callback with the real run id.
         app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
-            new TokenizeSubtitleCueBatch($job->id, 0, $staleRunId),
-            new TokenizeSubtitleCueBatch($job->id, 1, $staleRunId),
+            new AnalyzeSubtitleCueBatch($job->id, 0, $staleRunId),
+            new AnalyzeSubtitleCueBatch($job->id, 1, $staleRunId),
         ]);
 
         Artisan::call('queue:work', [
@@ -160,12 +158,9 @@ class SubtitleRuntimeTracingTest extends TestCase
         Bus::fake();
 
         app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
-            new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id),
-            [
-                new TokenizeSubtitleCueBatch($job->id, 1, $job->run_id),
-                new RomanizeSubtitleCueBatch($job->id, 1, $job->run_id),
-            ],
-            new TokenizeSubtitleCueBatch($job->id, 2, $job->run_id),
+            new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id),
+            new AnalyzeSubtitleCueBatch($job->id, 1, $job->run_id),
+            new AnalyzeSubtitleCueBatch($job->id, 2, $job->run_id),
         ]);
 
         Bus::assertBatched(function ($batch): bool {
@@ -177,22 +172,16 @@ class SubtitleRuntimeTracingTest extends TestCase
 
             [$firstChain, $secondChain] = $members;
 
-            // Round-robin partition: [T0, T2] and [T1 -> R1] with the
-            // existing analyze -> romanize chain flattened in order.
+            // Round-robin partition: [A0, A2] and A1.
             return is_array($firstChain)
                 && array_map('get_class', $firstChain) === [
-                    TokenizeSubtitleCueBatch::class,
-                    TokenizeSubtitleCueBatch::class,
+                    AnalyzeSubtitleCueBatch::class,
+                    AnalyzeSubtitleCueBatch::class,
                 ]
                 && $firstChain[0]->batchIndex === 0
                 && $firstChain[1]->batchIndex === 2
-                && is_array($secondChain)
-                && array_map('get_class', $secondChain) === [
-                    TokenizeSubtitleCueBatch::class,
-                    RomanizeSubtitleCueBatch::class,
-                ]
-                && $secondChain[0]->batchIndex === 1
-                && $secondChain[1]->batchIndex === 1;
+                && $secondChain instanceof AnalyzeSubtitleCueBatch
+                && $secondChain->batchIndex === 1;
         });
     }
 
@@ -206,16 +195,16 @@ class SubtitleRuntimeTracingTest extends TestCase
         Bus::fake();
 
         app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
-            new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id),
-            new TokenizeSubtitleCueBatch($job->id, 1, $job->run_id),
+            new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id),
+            new AnalyzeSubtitleCueBatch($job->id, 1, $job->run_id),
         ]);
 
         Bus::assertBatched(function ($batch): bool {
             $members = $batch->jobs->all();
 
             return count($members) === 2
-                && $members[0] instanceof TokenizeSubtitleCueBatch
-                && $members[1] instanceof TokenizeSubtitleCueBatch;
+                && $members[0] instanceof AnalyzeSubtitleCueBatch
+                && $members[1] instanceof AnalyzeSubtitleCueBatch;
         });
     }
 
@@ -227,7 +216,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             $this->sampleCue(),
         ]);
 
-        app(SubtitleCueBatchProcessor::class)->tokenizeCueBatch(
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch(
             $job->id,
             0,
             $job->run_id,
@@ -650,9 +639,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             new FinalizeSubtitleJob(1, false, $runId),
         ];
         $cueBatchJobs = [
-            new TokenizeSubtitleCueBatch(1, 0, $runId),
             new AnalyzeSubtitleCueBatch(1, 0, $runId),
-            new RomanizeSubtitleCueBatch(1, 0, $runId),
             new EnrichSubtitleCueBatch(1, 0, $runId),
         ];
 
@@ -829,9 +816,9 @@ class SubtitleRuntimeTracingTest extends TestCase
         app(SubtitleJobArtifactStore::class)->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
 
         // Simulate planning a chain long before the predecessor completes.
-        $successor = new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id, $this->currentTimeMs() - 90000);
+        $successor = new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id, $this->currentTimeMs() - 90000);
         Bus::chain([
-            new TokenizeSubtitleCueBatch($job->id, 0, (string) Str::uuid()),
+            new AnalyzeSubtitleCueBatch($job->id, 0, (string) Str::uuid()),
             $successor,
         ])->onConnection('database')->onQueue(SubtitleQueue::batchName())->dispatch();
 
@@ -905,7 +892,7 @@ class TraceRecordingTranslationAnalysisProvider extends LaravelAiTranslationAnal
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage, bool $splitInvalidBatches = true, ?\Closure $beforeRetry = null): CueEnrichmentResult
+    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
 

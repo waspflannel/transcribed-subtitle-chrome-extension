@@ -18,11 +18,7 @@ class SubtitleJobArtifactStore
 
     public const DRAFT_CUES = 'draft_cues';
 
-    public const TOKENIZED_CUES = 'tokenized_cues';
-
-    public const TRANSLATED_CUES = 'translated_cues';
-
-    public const ROMANIZED_CUES = 'romanized_cues';
+    public const ANALYZED_CUES = 'analyzed_cues';
 
     public const MERGED_CUES = 'merged_cues';
 
@@ -163,8 +159,15 @@ class SubtitleJobArtifactStore
         $this->put($job, $artifactType, [
             'cues' => $cues,
             'sourceDialect' => $sourceDialect,
-            'batchPlan' => $this->batchPlan($cues),
+            'batchPlan' => $this->batchPlan($cues, $job),
         ]);
+    }
+
+    public function hasArtifact(SubtitleJob $job, string $artifactType, int $batchIndex = 0): bool
+    {
+        return SubtitleJobArtifact::query()->where('subtitle_job_id', $job->id)
+            ->where('run_id', $job->run_id)->where('artifact_type', $artifactType)
+            ->where('batch_index', $batchIndex)->exists();
     }
 
     public function cueCollection(SubtitleJob $job, string $artifactType): CueEnrichmentResult
@@ -271,7 +274,9 @@ class SubtitleJobArtifactStore
             ->orderBy('batch_index')
             ->get();
 
-        if ($artifacts->isEmpty()) {
+        $sourceType = $artifactType === self::ANALYZED_CUES ? self::DRAFT_CUES : self::MERGED_CUES;
+        $expectedCount = $this->batchCount($job, $sourceType);
+        if ($artifacts->pluck('batch_index')->all() !== range(0, $expectedCount - 1)) {
             $this->failMissingArtifact($artifactType);
         }
 
@@ -386,14 +391,12 @@ class SubtitleJobArtifactStore
 
     /**
      * Group cues into batches by cumulative sourceText length rather than a
-     * fixed cue count. Fewer, size-uniform batches cut per-call overhead and
-     * queue contention at identical token cost, and bound content-length
-     * outliers.
+     * fixed cue count, while retaining a maximum cue count per request.
      *
      * @param  array<int, array<string, mixed>>  $cues
      * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
-    public function batchPlan(array $cues): array
+    public function batchPlan(array $cues, ?SubtitleJob $job = null): array
     {
         $count = count($cues);
 
@@ -426,7 +429,57 @@ class SubtitleJobArtifactStore
 
         $plan[] = [$start, $count - 1];
 
-        return $plan;
+        return config('subtitles.enrichment.balanced_batches', false)
+            ? $this->balancedPlan($cues, $plan, $job) : $plan;
+    }
+
+    /** Balance estimated response work without adding calls or raising input limits. */
+    private function balancedPlan(array $cues, array $baseline, ?SubtitleJob $job): array
+    {
+        if (count($baseline) < 2) {
+            return $baseline;
+        }
+
+        $lengths = array_map(fn (array $cue): int => mb_strlen(is_string($cue['sourceText'] ?? null) ? $cue['sourceText'] : ''), $cues);
+        $weights = array_map(function (array $cue) use ($job): int {
+            $text = is_string($cue['sourceText'] ?? null) ? $cue['sourceText'] : '';
+            $nonLatin = preg_match_all('/[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\p{Thai}\p{Lao}]/u', $text);
+            $words = preg_match_all('/[\p{L}\p{N}]+/u', $text);
+
+            return 32 + mb_strlen($text) + 24 * max($words, (int) ceil($nonLatin / 2))
+                + ($job?->include_translation ? mb_strlen($text) : 0)
+                + ($job?->include_romanization ? 4 * $nonLatin : 0);
+        }, $cues);
+        $partition = function (int $budget) use ($weights, $lengths): array {
+            $result = [];
+            $start = $chars = $work = 0;
+            foreach ($weights as $index => $weight) {
+                if ($index > $start && ($work + $weight > $budget
+                    || $chars + $lengths[$index] > $this->batchCharBudget()
+                    || $index - $start >= $this->maxCuesPerBatch())) {
+                    $result[] = [$start, $index - 1];
+                    $start = $index;
+                    $chars = $work = 0;
+                }
+                $chars += $lengths[$index];
+                $work += $weight;
+            }
+            $result[] = [$start, count($weights) - 1];
+
+            return $result;
+        };
+        $low = max($weights);
+        $high = array_sum($weights);
+        while ($low < $high) {
+            $mid = intdiv($low + $high, 2);
+            if (count($partition($mid)) <= count($baseline)) {
+                $high = $mid;
+            } else {
+                $low = $mid + 1;
+            }
+        }
+
+        return $partition($low);
     }
 
     /**

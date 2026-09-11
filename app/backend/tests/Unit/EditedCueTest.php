@@ -34,13 +34,31 @@ class EditedCueTest extends TestCase
         $this->assertSame('猫です', $cue['translatedText']);
         $this->assertArrayNotHasKey('romanization', $cue);
         $this->assertArrayNotHasKey('romanization', $cue['tokens'][0]);
-        $this->assertSame('cat', $cue['tokens'][0]['gloss']);
+        $this->assertSame('cat', $cue['tokens'][0]['translation']);
     }
 
     public function test_same_language_uses_source_for_the_line_translation(): void
     {
         EditedCueAgent::fake([$this->agentOutput()]);
         $this->assertSame('猫です', $this->refresh(target: 'jpn')['translatedText']);
+    }
+
+    public function test_edited_card_accepts_gloss_without_translation_and_allows_optional_latin_source_readings(): void
+    {
+        EditedCueAgent::fake([[
+            'dialect' => 'unknown', 'translatedText' => '猫',
+            'cues' => [[
+                'cueId' => 'edit', 'index' => 0, 'romanization' => 'neko',
+                'tokens' => [['index' => 0, 'translation' => null, 'gloss' => '猫', 'romanization' => 'neko']],
+            ]],
+        ]])->preventStrayPrompts();
+        $cue = app(LaravelAiTranslationAnalysisProvider::class)->refreshEditedCue([
+            'cueId' => 'edit', 'index' => 0, 'startMs' => 0, 'endMs' => 1000,
+            'sourceText' => 'cat', 'tokens' => [['index' => 0, 'text' => 'cat', 'normalizedText' => 'cat']],
+        ], 'eng', 'jpn', true, true);
+        $this->assertSame('猫', $cue['tokens'][0]['gloss']);
+        $this->assertSame('neko', $cue['romanization']);
+        $this->assertSame('neko', $cue['tokens'][0]['romanization']);
     }
 
     #[DataProvider('invalidOutputs')]
@@ -60,9 +78,8 @@ class EditedCueTest extends TestCase
             'missing translation' => ['translatedText', null],
             'missing cue reading' => ['cues.0.romanization', null],
             'missing token reading' => ['cues.0.tokens.0.romanization', null],
-            'missing meaning' => ['cues.0.tokens.0.gloss', null],
-            'missing word translation' => ['cues.0.tokens.0.translation', null],
-            'rewritten token' => ['cues.0.tokens.0.text', '犬'],
+            'missing meaning' => ['cues.0.tokens.0', ['index' => 0, 'romanization' => 'neko']],
+            'wrong token index' => ['cues.0.tokens.0.index', 3],
             'retokenized cue' => ['cues.0.tokens', []],
             'wrong cue' => ['cues.0.cueId', 'other-cue'],
         ];

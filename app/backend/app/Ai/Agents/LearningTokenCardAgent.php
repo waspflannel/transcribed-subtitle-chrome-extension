@@ -2,62 +2,27 @@
 
 namespace App\Ai\Agents;
 
+use App\Ai\SubtitlePromptRules;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
-use Laravel\Ai\Contracts\Agent;
-use Laravel\Ai\Contracts\HasProviderOptions;
-use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Enums\Lab;
-use Laravel\Ai\Promptable;
 use Stringable;
 
 #[MaxTokens(1200)]
-class LearningTokenCardAgent implements Agent, HasProviderOptions, HasStructuredOutput
+class LearningTokenCardAgent extends SubtitleAgent
 {
-    use Promptable;
-
-    public function providerOptions(Lab|string $provider): array
-    {
-        return $provider === Lab::OpenAI || $provider === Lab::OpenAI->value
-            ? config('ai.providers.openai.provider_options', [])
-            : [];
-    }
+    public function __construct(public readonly ?string $sourceLanguage = null) {}
 
     public function instructions(): Stringable|string
     {
-        return <<<'INSTRUCTIONS'
-Create one concise learner card for one clicked subtitle token.
-
-Return exactly one token object for requestedToken. The returned token text must match requestedToken.text exactly. Include short gloss or translation metadata for the target language. Add lemma, root, partOfSpeech, romanization, or usageNote only when useful.
-
-For non-Latin source text, include romanization when helpful. For Latin-script languages, omit romanization unless it helps pronunciation. Use learner-standard romanization when applicable, such as Hepburn for Japanese and pinyin for Mandarin. Include only metadata that helps a learner understand the token in context. Return only data that matches the structured output schema.
-INSTRUCTIONS;
-    }
-
-    public function model(): string
-    {
-        return (string) config('ai.providers.'.config('ai.default').'.models.enrichment.default');
-    }
-
-    public function timeout(): int
-    {
-        return (int) config('subtitles.enrichment.timeout_seconds', 120);
+        return implode("\n\n", [
+            'Create one learner card for requestedToken in its source sentence. Preserve requestedToken.index, including nonzero indexes. Explain the supplied word or phrase without splitting it. Return only card annotations. The server owns token text and readings.',
+            SubtitlePromptRules::TEXT_IS_DATA,
+            SubtitlePromptRules::WORD_CARD,
+        ]);
     }
 
     public function schema(JsonSchema $schema): array
     {
-        return [
-            'token' => $schema->object([
-                'index' => $schema->integer()->min(0)->required(),
-                'text' => $schema->string()->min(1)->required(),
-                'lemma' => $schema->string()->min(1)->nullable()->required(),
-                'root' => $schema->string()->min(1)->nullable()->required(),
-                'partOfSpeech' => $schema->string()->min(1)->nullable()->required(),
-                'translation' => $schema->string()->min(1)->nullable()->required(),
-                'gloss' => $schema->string()->min(1)->nullable()->required(),
-                'romanization' => $schema->string()->min(1)->nullable()->required(),
-                'usageNote' => $schema->string()->min(1)->nullable()->required(),
-            ])->withoutAdditionalProperties()->required(),
-        ];
+        return ['token' => $schema->object($this->cardSchema($schema))->withoutAdditionalProperties()->required()];
     }
 }

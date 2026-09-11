@@ -57,14 +57,14 @@ class SubtitleJobArtifactRunScopingTest extends TestCase
         $job->forceFill(['run_id' => (string) Str::uuid()])->save();
         $store->putCueBatchResult(
             $staleJob,
-            SubtitleJobArtifactStore::TOKENIZED_CUES,
+            SubtitleJobArtifactStore::ANALYZED_CUES,
             0,
             new CueEnrichmentResult($this->draftCues(), 'unknown'),
         );
 
         $this->assertDatabaseMissing('subtitle_job_artifacts', [
             'subtitle_job_id' => $job->id,
-            'artifact_type' => SubtitleJobArtifactStore::TOKENIZED_CUES,
+            'artifact_type' => SubtitleJobArtifactStore::ANALYZED_CUES,
         ]);
     }
 

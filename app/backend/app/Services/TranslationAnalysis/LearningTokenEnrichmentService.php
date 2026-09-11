@@ -2,8 +2,8 @@
 
 namespace App\Services\TranslationAnalysis;
 
+use App\Ai\SubtitleModel;
 use App\Exceptions\BillingEntitlementException;
-use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
@@ -149,7 +149,7 @@ class LearningTokenEnrichmentService
      */
     private function hasLearningMetadata(array $token): bool
     {
-        foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'usageNote'] as $field) {
+        foreach (['translation', 'gloss'] as $field) {
             if (is_string($token[$field] ?? null) && trim($token[$field]) !== '') {
                 return true;
             }
@@ -169,26 +169,13 @@ class LearningTokenEnrichmentService
             'detectedSourceLanguage' => $track->detected_source_language,
             'targetLanguage' => $track->target_language,
             'token' => $token['normalizedText'],
+            'tokenIndex' => $token['index'],
             'context' => $cue['sourceText'],
-            'provider' => config('ai.default'),
-            'model' => $this->enrichmentModel(),
+            'translation' => $cue['translatedText'] ?? null,
+            'provider' => SubtitleModel::provider(),
+            'model' => SubtitleModel::model(),
             'version' => SubtitleProcessingVersion::LEARNING_TOKEN_CACHE,
         ], JSON_THROW_ON_ERROR));
-    }
-
-    private function enrichmentModel(): string
-    {
-        $model = config('ai.providers.'.config('ai.default').'.models.enrichment.default');
-
-        if (! is_string($model) || trim($model) === '') {
-            throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.', [
-                'provider' => config('ai.default'),
-                'adapter' => 'laravel-ai-sdk',
-                'model_key' => 'enrichment.default',
-            ]);
-        }
-
-        return trim($model);
     }
 
     /**
@@ -206,6 +193,10 @@ class LearningTokenEnrichmentService
 
         foreach (['lemma', 'root', 'partOfSpeech', 'translation', 'gloss', 'romanization', 'usageNote'] as $field) {
             $value = is_string($enrichedToken[$field] ?? null) ? trim($enrichedToken[$field]) : '';
+
+            if ($field === 'romanization' && is_string($existingToken[$field] ?? null) && trim($existingToken[$field]) !== '') {
+                $value = trim($existingToken[$field]);
+            }
 
             if ($value === '' && is_string($existingToken[$field] ?? null)) {
                 $value = trim($existingToken[$field]);

@@ -111,32 +111,6 @@ return [
         'slow_stage_ms' => (int) env('SUBTITLE_TRACE_SLOW_STAGE_MS', 120000),
     ],
 
-    'romanization' => [
-        // Languages whose scripts have a reliable algorithmic transliteration
-        // are romanized deterministically with PHP intl instead of an LLM call,
-        // turning the romanizing stage into a ~0ms transform with zero provider
-        // cost. ICU output is not always the product-preferred scheme (notably
-        // it does NOT apply Korean Revised-Romanization sound changes -- 신라
-        // becomes "sinla", not "silla"), so this list is a per-language quality
-        // gate: add a language only after validating ICU output against the LLM
-        // romanizations on sample jobs. Seeded with the scientifically-safe
-        // Cyrillic and Greek scripts; Japanese/Chinese and unvocalized Arabic
-        // stay on the LLM because their readings are ambiguous.
-        //
-        // Keyed by normalized (ISO 639-3) source language code; values are ICU
-        // Transliterator ids.
-        'deterministic_enabled' => (bool) env('SUBTITLE_DETERMINISTIC_ROMANIZATION_ENABLED', true),
-        'deterministic' => [
-            'rus' => 'Cyrillic-Latin; Latin-ASCII',
-            'ukr' => 'Cyrillic-Latin; Latin-ASCII',
-            'bel' => 'Cyrillic-Latin; Latin-ASCII',
-            'bul' => 'Cyrillic-Latin; Latin-ASCII',
-            'mkd' => 'Cyrillic-Latin; Latin-ASCII',
-            'srp' => 'Cyrillic-Latin; Latin-ASCII',
-            'ell' => 'Greek-Latin; Latin-ASCII',
-        ],
-    ],
-
     'costs' => [
         'elevenlabs_scribe_microusd_per_minute' => (int) env('ELEVENLABS_SCRIBE_MICROUSD_PER_MINUTE', 0),
         'cerebras_alignment_microusd_per_call' => (int) env('CEREBRAS_ALIGNMENT_MICROUSD_PER_CALL', 0),
@@ -152,6 +126,7 @@ return [
     ],
 
     'youtube' => [
+        'reuse_metadata' => (bool) env('SUBTITLE_YOUTUBE_REUSE_METADATA', false),
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
         'metadata_timeout_seconds' => (int) env('YOUTUBE_METADATA_TIMEOUT_SECONDS', 60),
         'download_timeout_seconds' => (int) env('YOUTUBE_AUDIO_DOWNLOAD_TIMEOUT_SECONDS', 600),
@@ -159,6 +134,7 @@ return [
     ],
 
     'audio_preparation' => [
+        'direct_chunks' => (bool) env('SUBTITLE_AUDIO_DIRECT_CHUNKS', false),
         'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
         'ffmpeg_timeout_seconds' => (int) env('SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS', 600),
     ],
@@ -192,12 +168,13 @@ return [
     ],
 
     'enrichment' => [
+        'balanced_batches' => (bool) env('SUBTITLE_BALANCED_BATCHES', false),
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
         // Character-based batch sizing packs cues greedily up to this many
         // cumulative sourceText characters, capped at cue_batch_max_cues.
         // Fewer, size-uniform batches cut per-call overhead and queue
         // contention at identical token cost, and bound content-length
-        // outliers. Tune the budget against the reprompt/split-retry rate --
+        // outliers. Tune the budget against the invalid-response rate --
         // larger batches mean more output per call.
         'cue_batch_char_budget' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_CHAR_BUDGET', 1000),
         'cue_batch_max_cues' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_MAX_CUES', 20),

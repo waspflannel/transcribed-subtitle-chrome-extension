@@ -7,6 +7,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
@@ -64,8 +65,11 @@ class ContractResponseValidationTest extends TestCase
         );
 
         app(SubtitleJobArtifactStore::class)->putCueCollection($runningJob, SubtitleJobArtifactStore::DRAFT_CUES, [
-            ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first transcript segment', 'translatedText' => '', 'tokens' => []],
+            ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first transcript segment', 'translatedText' => 'first transcript segment', 'tokens' => []],
         ]);
+
+        app(SubtitleJobArtifactStore::class)->putCueBatchResult($runningJob, SubtitleJobArtifactStore::ANALYZED_CUES, 0,
+            new CueEnrichmentResult(app(SubtitleJobArtifactStore::class)->cueCollection($runningJob, SubtitleJobArtifactStore::DRAFT_CUES)->cues, 'unknown'));
 
         $this->assertResponseMatchesSchema(
             $this

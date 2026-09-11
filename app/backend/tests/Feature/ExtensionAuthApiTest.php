@@ -47,7 +47,7 @@ class ExtensionAuthApiTest extends TestCase
         $this->assertSame(app(ExtensionTokenIssuer::class)->tokenName($this->installId()), $accessToken->name);
         $this->assertNotNull($accessToken->expires_at);
 
-        config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.analysis.default' => 'gpt-oss-120b']);
+        config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.text.default' => 'gpt-oss-120b']);
 
         $this
             ->withHeader('X-Extension-Install-Id', $this->installId())

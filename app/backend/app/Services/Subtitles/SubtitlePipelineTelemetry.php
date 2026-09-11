@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use Illuminate\Bus\Batch;
@@ -70,14 +71,12 @@ class SubtitlePipelineTelemetry
     }
 
     /**
-     * Time-to-first-cue: the moment draft cues are written they become
-     * servable through the partial-track endpoint, so this duration is the
-     * backend's first-cue availability metric.
+     * First-cue availability begins when source-only draft cues are stored.
      */
     public function recordFirstCueAvailable(SubtitleJob $job): void
     {
         $this->tracer->jobEvent($job, 'delivery.first_cue_available', [
-            'stage' => 'transcribing',
+            'stage' => $job->stage,
             'status' => $job->status,
             'duration_ms' => (int) abs(now()->diffInMilliseconds($job->created_at)),
         ]);
@@ -130,6 +129,7 @@ class SubtitlePipelineTelemetry
             'worker_pid' => getmypid() ?: null,
             'last_successful_event' => $lastSuccessfulEvent?->event,
             'last_successful_stage' => $lastSuccessfulEvent?->stage,
+            ...($exception instanceof SubtitleProcessingException ? $this->logger->sanitizedFailureContext($exception->context) : []),
             ...$context,
         ], 'error');
     }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
 use App\Exceptions\SubtitleProcessingException;
@@ -10,8 +11,6 @@ use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\LyricsCorrectionJob;
 use App\Jobs\OptimizeSubtitleAudio;
-use App\Jobs\RomanizeSubtitleCueBatch;
-use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
@@ -21,6 +20,7 @@ use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Models\User;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
+use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
@@ -55,6 +55,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
@@ -700,7 +701,6 @@ class SubtitleJobApiTest extends TestCase
         // One merged tokenize+translate job per batch replaces the former
         // separate tokenize and translate jobs.
         $this->assertStringContainsString(addslashes(AnalyzeSubtitleCueBatch::class), $payloads);
-        $this->assertStringNotContainsString(addslashes(TokenizeSubtitleCueBatch::class), $payloads);
         $this->assertSame(1, DB::table('jobs')->where('queue', SubtitleQueue::batchName())->count());
     }
 
@@ -709,9 +709,81 @@ class SubtitleJobApiTest extends TestCase
         $job = $this->runningSubtitleJob('tokenizing');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
 
-        $this->dispatchCancelledBatch(new TokenizeSubtitleCueBatch($job->id, 0, $job->run_id));
+        $this->dispatchCancelledBatch(new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_luna_annotations_preserve_source_cues_in_the_final_track_and_webvtt(): void
+    {
+        $this->app->forgetInstance(LaravelAiTranslationAnalysisProvider::class);
+        CueAnalysisAgent::fake([['dialect' => 'unknown', 'cues' => array_map(fn (string $prefix, int $index): array => [
+            'cueId' => sprintf('cue-%04d', $index + 1), 'index' => $index,
+            'tokens' => array_map(fn (string $text, int $i): array => ['index' => $i, 'text' => $text],
+                [$prefix, 'transcript', 'segment'], range(0, 2)),
+        ], ['first', 'second'], [0, 1])]])->preventStrayPrompts();
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())
+            ->assertOk()->assertJsonCount(2, 'track.cues')
+            ->assertJsonPath('track.cues.0.startMs', 500)->assertJsonPath('track.cues.1.endMs', 4000)
+            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
+            ->assertJsonPath('track.cues.1.tokens.0.text', 'second');
+        $track = SubtitleTrack::where('public_id', $response->json('track.trackId'))->firstOrFail();
+        $this->assertStringContainsString('first transcript segment', $track->web_vtt);
+        $this->assertStringContainsString('second transcript segment', $track->web_vtt);
+        $this->assertStringNotContainsString('first transcript segment second', $track->web_vtt);
+    }
+
+    public function test_completed_analysis_batch_is_not_prompted_again_on_redelivery(): void
+    {
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+        $processor = app(SubtitleCueBatchProcessor::class);
+        $processor->analyzeCueBatch($job->id, 0, $job->run_id);
+        $processor->analyzeCueBatch($job->id, 0, $job->run_id);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertDatabaseCount('subtitle_tracks', 0);
+        $this->assertTrue($this->artifacts()->hasArtifact($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0));
+    }
+
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_malformed_analysis_gets_one_identical_retry_without_substitute_tokens(bool $retrySucceeds): void
+    {
+        $this->app->forgetInstance(LaravelAiTranslationAnalysisProvider::class);
+        $job = $this->runningSubtitleJob('tokenizing');
+        $cue = $this->sampleCue();
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$cue]);
+        $prompts = [];
+        CueAnalysisAgent::fake(function (string $prompt) use ($cue, $retrySucceeds, &$prompts): array {
+            $prompts[] = $prompt;
+
+            return ['dialect' => 'unknown', 'cues' => [[
+                ...$cue,
+                'translatedText' => 'Meaning',
+                'romanization' => 'Reading',
+                'tokens' => count($prompts) === 2 && $retrySucceeds ? [['index' => 0, 'text' => $cue['sourceText'], 'romanization' => 'Reading']] : [],
+            ]]];
+        })->preventStrayPrompts();
+
+        try {
+            app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertFalse($retrySucceeds);
+            $this->assertSame('enrichment_failed', $exception->publicCode);
+        }
+
+        $this->assertCount(2, $prompts);
+        $this->assertSame($prompts[0], $prompts[1]);
+        if (! $retrySucceeds) {
+            $this->assertFalse($this->artifacts()->hasArtifact($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0));
+
+            return;
+        }
+        $this->assertTrue($this->artifacts()->hasArtifact($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0));
+        $this->assertSame('running', $job->fresh()->status);
+        $stored = $this->artifacts()->cueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0)->cues[0];
+        $this->assertSame($cue['sourceText'], $stored['sourceText']);
+        $this->assertNotContains('invented', array_column($stored['tokens'], 'text'));
     }
 
     public function test_cancelled_analysis_batch_skips_provider_calls(): void
@@ -725,19 +797,55 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
     }
 
-    public function test_cancelled_romanization_batch_skips_provider_calls(): void
+    #[DataProvider('inactiveAnalysisRuns')]
+    public function test_late_invalid_analysis_cannot_change_a_stopped_or_replaced_run(string $status, bool $replaceRun, bool $multipleCues): void
     {
-        $job = $this->runningSubtitleJob('romanizing');
-        $this->artifacts()->putCueBatchResult(
-            $job,
-            SubtitleJobArtifactStore::TOKENIZED_CUES,
-            0,
-            new CueEnrichmentResult([$this->sampleCue()], 'unknown'),
-        );
+        $this->app->forgetInstance(LaravelAiTranslationAnalysisProvider::class);
+        $job = $this->runningSubtitleJob('tokenizing');
+        $runId = $job->run_id;
+        $nextRunId = $replaceRun ? (string) Str::uuid() : $runId;
+        $cues = [$this->sampleCue()];
+        if ($multipleCues) {
+            $cues[] = [...$this->sampleCue(), 'cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'hello'];
+        }
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+        $calls = 0;
+        CueAnalysisAgent::fake(function () use ($job, $status, $nextRunId, $cues, &$calls): array {
+            $calls++;
+            $job->forceFill([
+                'status' => $status,
+                'run_id' => $nextRunId,
+                'error_code' => $status === 'failed' ? 'sibling_batch_failed' : null,
+            ])->save();
 
-        $this->dispatchCancelledBatch(new RomanizeSubtitleCueBatch($job->id, 0, $job->run_id));
+            return ['dialect' => 'unknown', 'cues' => array_map(fn (array $cue): array => [
+                ...$cue,
+                'tokens' => $cue['index'] === 0 ? [] : [['index' => 0, 'text' => $cue['sourceText']]],
+            ], $cues)];
+        })->preventStrayPrompts();
 
-        $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $runId);
+
+        $this->assertSame(1, $calls);
+        $this->assertSame($status, $job->fresh()->status);
+        $this->assertSame($nextRunId, $job->fresh()->run_id);
+        $this->assertSame($status === 'failed' ? 'sibling_batch_failed' : null, $job->fresh()->error_code);
+        $this->assertSame(0, DB::table('subtitle_job_artifacts')->where('subtitle_job_id', $job->id)->whereIn('artifact_type', [
+            SubtitleJobArtifactStore::ANALYZED_CUES,
+        ])->count());
+        $this->assertSame(0, SubtitleJobEvent::query()->where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->count());
+    }
+
+    public static function inactiveAnalysisRuns(): array
+    {
+        return [
+            'cancelled single cue' => ['cancelled', false, false],
+            'cancelled subset' => ['cancelled', false, true],
+            'sibling failed single cue' => ['failed', false, false],
+            'sibling failed subset' => ['failed', false, true],
+            'run replaced single cue' => ['running', true, false],
+            'run replaced subset' => ['running', true, true],
+        ];
     }
 
     public function test_cancelled_enrichment_batch_skips_provider_calls(): void
@@ -816,6 +924,30 @@ class SubtitleJobApiTest extends TestCase
         Queue::assertNotPushed(OptimizeSubtitleAudio::class);
     }
 
+    #[TestWith(['audio/mp4', 0])]
+    #[TestWith(['audio/webm', 1])]
+    public function test_direct_chunk_experiment_keeps_webm_on_the_normalized_path(string $mimeType, int $prepareCalls): void
+    {
+        config([
+            'subtitles.audio_preparation.direct_chunks' => true,
+            'subtitles.transcription.chunking.min_audio_seconds' => 240,
+            'subtitles.transcription.chunking.target_seconds' => 120,
+            'ai.providers.elevenlabs.key' => 'fake-key',
+        ]);
+        Bus::fake();
+        $job = $this->runningSubtitleJob('optimizing-audio');
+        $audio = new TemporaryAudioFile('unused-source', 'unused-directory', 300, 1, $mimeType);
+        $this->partialMock(ScribeAudioChunker::class, function ($mock) use ($audio): void {
+            $mock->shouldReceive('split')->once()->andReturn([$audio, $audio, $audio]);
+        });
+
+        app(SubtitleGenerationPipeline::class)->optimizeAudioAndDispatchTranscription($job->id, $job->run_id, $audio);
+
+        $this->assertSame($prepareCalls, $this->transcriptionService->prepareCalls);
+        $this->assertSame('transcribing', $job->fresh()->stage);
+        $this->assertSame(0, $this->transcriptionService->chunkCalls);
+    }
+
     public function test_audio_preparation_return_does_not_resurrect_a_failed_job_or_dispatch_chunks(): void
     {
         Bus::fake();
@@ -888,7 +1020,7 @@ class SubtitleJobApiTest extends TestCase
             );
         };
 
-        app(SubtitleCueBatchProcessor::class)->tokenizeCueBatch($job->id, 0, $job->run_id);
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
 
         $this->assertDatabaseMissing('subtitle_job_artifacts', [
             'subtitle_job_id' => $job->id,
@@ -1127,39 +1259,6 @@ class SubtitleJobApiTest extends TestCase
             'expectedTrackId' => $track->public_id, 'text' => 'updated',
         ])->assertStatus(402);
         EditedCueAgent::assertNeverPrompted();
-    }
-
-    #[DataProvider('correctedTokenEdits')]
-    public function test_quick_fix_handles_model_tokens_that_differ_from_the_transcript(
-        string $sourceText, array $tokenTexts, int $tokenIndex, string $replacement, string $expectedText,
-    ): void {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
-        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
-        $cue = $job->track->cues[0];
-        $cue['sourceText'] = $sourceText;
-        $cue['tokens'] = array_map(fn (string $text, int $index): array => [
-            'index' => $index, 'text' => $text, 'normalizedText' => mb_strtolower($text),
-        ], $tokenTexts, array_keys($tokenTexts));
-        $job->track->update(['cues' => [$cue]]);
-
-        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/'.$tokenIndex, [
-            'expectedTrackId' => $job->track->public_id, 'text' => $replacement,
-        ])->assertOk()
-            ->assertJsonPath('cues.0.sourceText', $expectedText)
-            ->assertJsonPath('cues.0.tokens.'.$tokenIndex.'.text', $replacement);
-        $this->assertStringContainsString($expectedText, $job->track->fresh()->web_vtt);
-    }
-
-    public static function correctedTokenEdits(): array
-    {
-        return [
-            'mixed script correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 1, 'يديه', 'غصن يديه النجسة'],
-            'token after correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 2, 'الجديدة', 'غصن يدينو الجديدة'],
-            'misleading repetition' => ['their there', ['there', 'there'], 0, 'here', 'here there'],
-            'exact punctuation' => ['hello, world!', ['hello', 'world'], 1, 'everyone', 'hello, everyone!'],
-            'attached punctuation' => ['helo world!', ['hello', 'world!'], 0, 'hi', 'hi world!'],
-            'no-space script' => ['日夲語勉強', ['日本語', '勉強'], 1, '学習', '日本語学習'],
-        ];
     }
 
     public function test_quick_fix_uses_the_selected_repeated_token_occurrence(): void
@@ -1469,7 +1568,7 @@ class SubtitleJobApiTest extends TestCase
 
         $job = new LyricsCorrectionJob(1, 1, (string) Str::uuid(), 0);
 
-        $this->assertSame(300, $job->timeout);
+        $this->assertSame(180, $job->timeout);
         $this->assertLessThan(config('subtitles.queue.worker_timeout_seconds'), $job->timeout);
         $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
     }
@@ -1881,7 +1980,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->translationCalls);
         $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
-        $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
+        $this->assertSame(['eng', 'eng'], $this->translationAnalysis->targetLanguages);
     }
 
     public function test_full_enrichment_with_translation_runs_both_ai_steps(): void
@@ -2194,7 +2293,7 @@ class SubtitleJobApiTest extends TestCase
             language: 'jpn',
             durationSeconds: 2.0,
             segments: [new TimestampedTranscriptSegment(0.5, 2.1, 'konnichiwa')],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nkonnichiwa\n",
+            webVtt: "WEBVTT\n\ncue-0001\n00:00:00.500 --> 00:00:02.100\nkonnichiwa\n",
         );
 
         $response = $this
@@ -2337,53 +2436,38 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->audioSource->calls);
     }
 
-    public function test_partial_track_serves_available_cues_while_running(): void
+    public function test_partial_tracks_preview_source_then_overlay_out_of_order_analysis_with_stable_indexes(): void
     {
+        config(['subtitles.enrichment.cue_batch_max_cues' => 1]);
         $user = User::factory()->create();
-        $job = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
-            'status' => 'running',
-            'stage' => 'tokenizing',
-            'progress_percent' => 65,
-        ]);
+        $job = SubtitleJob::factory()->create(['user_id' => $user->id, 'status' => 'running', 'stage' => 'tokenizing']);
         $installId = $this->installId();
-
-        // Nothing to serve before transcription lands.
-        $this->withExtensionAuth($installId, $user)
-            ->getJson("/v1/subtitle-jobs/{$job->public_id}/partial-track")
-            ->assertNotFound();
-
-        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [
-            ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first transcript segment', 'translatedText' => '', 'tokens' => []],
-            ['cueId' => 'cue-0002', 'index' => 1, 'startMs' => 2400, 'endMs' => 4000, 'sourceText' => 'second transcript segment', 'translatedText' => '', 'tokens' => []],
-        ]);
-
-        $this->withExtensionAuth($installId, $user)
-            ->getJson("/v1/subtitle-jobs/{$job->public_id}/partial-track")
-            ->assertOk()
-            ->assertJsonPath('jobId', $job->public_id)
-            ->assertJsonPath('youtubeVideoId', $job->youtube_video_id)
-            ->assertJsonPath('revision', 1)
-            ->assertJsonPath('cues.0.sourceText', 'first transcript segment')
+        $url = "/v1/subtitle-jobs/{$job->public_id}/partial-track";
+        $cues = [
+            ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first part', 'translatedText' => 'First translation', 'tokens' => [['index' => 0, 'text' => 'first']]],
+            ['cueId' => 'cue-0002', 'index' => 1, 'startMs' => 2400, 'endMs' => 4000, 'sourceText' => 'second part', 'translatedText' => 'Second translation', 'romanization' => 'second', 'tokens' => [['index' => 0, 'text' => 'second']]],
+        ];
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertNotFound();
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
+            ->assertJsonPath('revision', 1)->assertJsonCount(2, 'cues')
+            ->assertJsonMissingPath('cues.0.translatedText')->assertJsonMissingPath('cues.0.tokens');
+        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1, new CueEnrichmentResult([$cues[1]], 'unknown'));
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
+            ->assertJsonPath('revision', 2)->assertJsonCount(2, 'cues')
             ->assertJsonMissingPath('cues.0.translatedText')
-            ->assertJsonMissingPath('cues.0.tokens');
-
-        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::TRANSLATED_CUES, 0, new CueEnrichmentResult([
-            ['cueId' => 'cue-0001', 'index' => 0, 'translatedText' => 'Translated first transcript segment'],
-        ], 'unknown'));
-        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ROMANIZED_CUES, 0, new CueEnrichmentResult([
-            ['cueId' => 'cue-0001', 'index' => 0, 'romanization' => 'ro-man-ized'],
-        ], 'unknown'));
-
-        // Batches that landed patch their cues in; untouched cues stay
-        // source-only. The revision counts consumed artifacts.
-        $this->withExtensionAuth($installId, $user)
-            ->getJson("/v1/subtitle-jobs/{$job->public_id}/partial-track")
-            ->assertOk()
-            ->assertJsonPath('revision', 3)
-            ->assertJsonPath('cues.0.translatedText', 'Translated first transcript segment')
-            ->assertJsonPath('cues.0.romanization', 'ro-man-ized')
-            ->assertJsonMissingPath('cues.1.translatedText');
+            ->assertJsonPath('cues.1.translatedText', 'Second translation');
+        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
+            ->assertJsonPath('revision', 3)->assertJsonCount(2, 'cues')
+            ->assertJsonPath('cues.1.cueId', 'cue-0002')->assertJsonPath('cues.1.index', 1)
+            ->assertJsonPath('cues.0.translatedText', 'First translation')
+            ->assertJsonPath('cues.1.romanization', 'second')->assertJsonMissingPath('cues.0.tokens');
+        $merged = $this->artifacts()->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES)->cues;
+        $this->assertSame([0, 1], array_column($merged, 'index'));
+        $this->assertSame(['cue-0001', 'cue-0002'], array_column($merged, 'cueId'));
+        $job->update(['run_id' => (string) Str::uuid()]);
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertNotFound();
     }
 
     public function test_partial_track_is_not_served_for_completed_jobs_or_other_users(): void
@@ -2605,6 +2689,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_word_card_cache_is_separate_for_each_provider_even_with_the_same_model(): void
     {
+        config(['ai.default' => 'openai', 'ai.providers.openai.models.text.default' => 'same-model', 'ai.providers.cerebras.models.text.default' => 'same-model']);
         $response = $this->withExtensionAuth($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $payload = ['trackId' => $response->json('track.trackId'), 'cueId' => 'cue-0001', 'tokenIndex' => 0];
@@ -2614,7 +2699,6 @@ class SubtitleJobApiTest extends TestCase
         $track->refresh()->update(['cues' => $originalCues]);
         config([
             'ai.default' => 'cerebras',
-            'ai.providers.cerebras.models.enrichment.default' => config('ai.providers.openai.models.enrichment.default'),
         ]);
         $this->withExtensionAuth($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
         $this->assertSame(2, $this->translationAnalysis->tokenCalls);
@@ -2632,6 +2716,12 @@ class SubtitleJobApiTest extends TestCase
             'cueId' => 'cue-0001',
             'tokenIndex' => 0,
         ];
+
+        $track = SubtitleTrack::where('public_id', $payload['trackId'])->firstOrFail();
+        $cues = $track->cues;
+        $cues[0]['tokens'][0]['lemma'] = 'first';
+        $cues[0]['tokens'][0]['partOfSpeech'] = 'adjective';
+        $track->update(['cues' => $cues]);
 
         $this
             ->withExtensionAuth($this->installId())
@@ -3080,7 +3170,7 @@ class SubtitleJobApiTest extends TestCase
 
     private function sampleWebVtt(): string
     {
-        return "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n";
+        return "WEBVTT\n\ncue-0001\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\ncue-0002\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n";
     }
 
     private function runningSubtitleJob(string $stage): SubtitleJob
@@ -3293,7 +3383,40 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
                 new TimestampedTranscriptSegment(0.5, 2.1, 'first transcript segment'),
                 new TimestampedTranscriptSegment(2.4, 4.0, 'second transcript segment'),
             ],
-            webVtt: "WEBVTT\n\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n",
+            webVtt: "WEBVTT\n\ncue-0001\n00:00:00.500 --> 00:00:02.100\nfirst transcript segment\n\ncue-0002\n00:00:02.400 --> 00:00:04.000\nsecond transcript segment\n",
         );
+    }
+
+    #[DataProvider('correctedTokenEdits')]
+    public function test_quick_fix_handles_model_tokens_that_differ_from_the_transcript(
+        string $sourceText, array $tokenTexts, int $tokenIndex, string $replacement, string $expectedText,
+    ): void {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+        $cue['sourceText'] = $sourceText;
+        $cue['tokens'] = array_map(fn (string $text, int $index): array => [
+            'index' => $index, 'text' => $text, 'normalizedText' => mb_strtolower($text),
+        ], $tokenTexts, array_keys($tokenTexts));
+        $job->track->update(['cues' => [$cue]]);
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/'.$tokenIndex, [
+            'expectedTrackId' => $job->track->public_id, 'text' => $replacement,
+        ])->assertOk()
+            ->assertJsonPath('cues.0.sourceText', $expectedText)
+            ->assertJsonPath('cues.0.tokens.'.$tokenIndex.'.text', $replacement);
+        $this->assertStringContainsString($expectedText, $job->track->fresh()->web_vtt);
+    }
+
+    public static function correctedTokenEdits(): array
+    {
+        return [
+            'mixed script correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 1, 'يديه', 'غصن يديه النجسة'],
+            'token after correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 2, 'الجديدة', 'غصن يدينو الجديدة'],
+            'misleading repetition' => ['their there', ['there', 'there'], 0, 'here', 'here there'],
+            'exact punctuation' => ['hello, world!', ['hello', 'world'], 1, 'everyone', 'hello, everyone!'],
+            'attached punctuation' => ['helo world!', ['hello', 'world!'], 0, 'hi', 'hi world!'],
+            'no-space script' => ['日夲語勉強', ['日本語', '勉強'], 1, '学習', '日本語学習'],
+        ];
     }
 }

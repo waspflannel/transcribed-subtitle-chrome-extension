@@ -9,8 +9,6 @@ use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
-use App\Jobs\RomanizeSubtitleCueBatch;
-use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
@@ -99,8 +97,6 @@ class SubtitleRuntimeTracer
         FinalizeSubtitleJob::class,
         PrepareSubtitleCuesAfterAnalysisBatches::class,
         AnalyzeSubtitleCueBatch::class,
-        RomanizeSubtitleCueBatch::class,
-        TokenizeSubtitleCueBatch::class,
     ];
 
     /**

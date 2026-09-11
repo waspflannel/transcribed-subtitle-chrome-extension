@@ -12,9 +12,10 @@ use Illuminate\Support\Str;
 
 class TimestampedSubtitleTrackGenerator
 {
-    public function generate(SubtitleJob $job, TimestampedTranscript $transcript, CueEnrichmentResult $enrichment): SubtitleTrack
+    public function generate(SubtitleJob $job, CueEnrichmentResult $enrichment): SubtitleTrack
     {
         $generatedAt = now();
+        $cues = $this->validatedEnrichedCues($enrichment->cues);
 
         return SubtitleTrack::create([
             'public_id' => (string) Str::uuid(),
@@ -26,8 +27,8 @@ class TimestampedSubtitleTrackGenerator
             'processing_version' => $job->processing_version,
             'generated_at' => $generatedAt,
             'expires_at' => $generatedAt->copy()->addDays(30),
-            'web_vtt' => $this->validatedWebVtt($transcript),
-            'cues' => $this->validatedEnrichedCues($enrichment->cues),
+            'web_vtt' => SubtitleWebVttFormatter::fromCues($cues),
+            'cues' => $cues,
         ]);
     }
 
@@ -59,21 +60,6 @@ class TimestampedSubtitleTrackGenerator
         }
 
         return $cues;
-    }
-
-    private function validatedWebVtt(TimestampedTranscript $transcript): string
-    {
-        $webVtt = trim($transcript->webVtt);
-
-        if ($webVtt === '' || ! str_starts_with($webVtt, 'WEBVTT')) {
-            $this->failInvalidCue('invalid_web_vtt');
-        }
-
-        if ($transcript->segments === []) {
-            $this->failInvalidCue('empty_cue_output');
-        }
-
-        return $webVtt."\n";
     }
 
     /**

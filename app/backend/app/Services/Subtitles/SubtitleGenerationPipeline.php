@@ -6,7 +6,6 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\OptimizeSubtitleAudio;
-use App\Jobs\TokenizeSubtitleCueBatch;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
@@ -174,7 +173,15 @@ class SubtitleGenerationPipeline
             $this->telemetry->recordStageStarted($job, 'optimizing-audio');
 
             $audioOptimizationStartedAtMs = $this->telemetry->currentTimeMs();
-            $preparedAudio = $this->transcriptionService->prepareAudio($audio);
+            // Direct seeking shifts WebM/Opus audio by its codec delay. Keep
+            // that source on the whole-file normalization path.
+            $directChunks = config('subtitles.audio_preparation.direct_chunks', false)
+                && $audio->mimeType === 'audio/mp4'
+                && $this->chunker->plan($audio->durationSeconds) !== [];
+            if ($directChunks) {
+                $this->transcriptionService->assertAudioCanBePrepared($audio);
+            }
+            $preparedAudio = $directChunks ? $audio : $this->transcriptionService->prepareAudio($audio);
             $stage = 'transcribing';
             $chunkPlan = $this->chunker->plan($preparedAudio->durationSeconds);
             $chunks = $chunkPlan === []
@@ -357,7 +364,7 @@ class SubtitleGenerationPipeline
                 $this->artifacts->putTranscript($job, $transcript);
                 $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
                 $this->telemetry->recordFirstCueAvailable($job);
-                $this->dispatchTokenizationAndTranslationBatches($job);
+                $this->dispatchAnalysisBatches($job);
             }, attempts: 5);
         } catch (Throwable $exception) {
             $this->failureHandler->failJob($subtitleJobId, 'transcribing', $exception, $runId);
@@ -416,7 +423,7 @@ class SubtitleGenerationPipeline
             $this->artifacts->putTranscript($job, $transcript);
             $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
             $this->telemetry->recordFirstCueAvailable($job);
-            $this->dispatchTokenizationAndTranslationBatches($job);
+            $this->dispatchAnalysisBatches($job);
         }, attempts: 5);
     }
 
@@ -433,26 +440,9 @@ class SubtitleGenerationPipeline
         $this->telemetry->recordStageStarted($job, $stage);
         $startedAtMs = $this->telemetry->currentTimeMs();
 
-        $tokenized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TOKENIZED_CUES);
-        $this->logger->tokenizationCompleted($job, $tokenized);
-
-        // Analysis writes romanization alongside tokens and translation.
-        $base = $tokenized;
-
-        if ($this->shouldRomanize($job)) {
-            $romanized = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ROMANIZED_CUES);
-            $this->logger->romanizationCompleted($job, $romanized);
-            $base = $romanized;
-        }
-
-        $translated = null;
-
-        if ($this->translationRequested($job)) {
-            $translated = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::TRANSLATED_CUES);
-            $this->logger->translationCompleted($job, $translated);
-        }
-
-        $this->storeMergedCuesAndContinue($job, $base, $translated);
+        $analyzed = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
+        $this->logger->tokenizationCompleted($job, $analyzed);
+        $this->storeMergedCuesAndContinue($job, $analyzed);
         $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
     }
 
@@ -481,7 +471,7 @@ class SubtitleGenerationPipeline
             $this->logger->enrichmentCompleted($job, $enrichment);
         }
 
-        $track = DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $enrichment) {
+        $track = DB::transaction(function () use ($subtitleJobId, $runId, $enrichment) {
             $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
 
             if (! $currentJob instanceof SubtitleJob) {
@@ -490,7 +480,7 @@ class SubtitleGenerationPipeline
 
             $this->markJobRunning($currentJob, 'finalizing', 95);
             $currentJob->track()->delete();
-            $track = $this->tracks->generate($currentJob, $transcript, $enrichment);
+            $track = $this->tracks->generate($currentJob, $enrichment);
             $currentJob->update([
                 'status' => 'completed',
                 'stage' => 'finalizing',
@@ -523,7 +513,7 @@ class SubtitleGenerationPipeline
         $this->admission->promoteQueuedJobs($job->user_id);
     }
 
-    private function dispatchTokenizationAndTranslationBatches(SubtitleJob $job): void
+    private function dispatchAnalysisBatches(SubtitleJob $job): void
     {
         $this->markJobRunning($job, 'tokenizing', 65);
         $cueCount = $this->artifacts->cueCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
@@ -542,11 +532,8 @@ class SubtitleGenerationPipeline
 
         $jobs = [];
         $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
-
         for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            $jobs[] = $translationRequested || $romanize
-                ? new AnalyzeSubtitleCueBatch($job->id, $batchIndex, $job->run_id)
-                : new TokenizeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
+            $jobs[] = new AnalyzeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
         }
 
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
@@ -570,10 +557,8 @@ class SubtitleGenerationPipeline
 
     private function storeMergedCuesAndContinue(
         SubtitleJob $job,
-        CueEnrichmentResult $base,
-        ?CueEnrichmentResult $translated,
+        CueEnrichmentResult $merged,
     ): void {
-        $merged = $this->mergeTranslatedText($base, $translated);
         DB::transaction(function () use ($job, $merged): void {
             $job = $this->lockRunningJob($job->id, $job->run_id);
 
@@ -597,40 +582,6 @@ class SubtitleGenerationPipeline
             $this->markJobRunning($job, 'finalizing', 95);
             DB::afterCommit(fn () => $this->batchDispatcher->dispatchMergedCueTrackFinalization($job));
         }, attempts: 5);
-    }
-
-    private function mergeTranslatedText(
-        CueEnrichmentResult $base,
-        ?CueEnrichmentResult $translated,
-    ): CueEnrichmentResult {
-        if ($translated === null) {
-            return $base;
-        }
-
-        $translatedById = [];
-
-        foreach ($translated->cues as $cue) {
-            if (! is_string($cue['cueId'] ?? null) || ! is_string($cue['translatedText'] ?? null)) {
-                $this->failIncompleteState('translated_cue_identity');
-            }
-
-            $translatedById[$cue['cueId']] = $cue['translatedText'];
-        }
-
-        $merged = array_map(function (array $cue) use ($translatedById): array {
-            $cueId = $cue['cueId'] ?? null;
-
-            if (! is_string($cueId) || ! array_key_exists($cueId, $translatedById)) {
-                $this->failIncompleteState('missing_translated_cue');
-            }
-
-            return [
-                ...$cue,
-                'translatedText' => $translatedById[$cueId],
-            ];
-        }, $base->cues);
-
-        return new CueEnrichmentResult($merged, $base->sourceDialect);
     }
 
     private function loadRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob

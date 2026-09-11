@@ -1,0 +1,88 @@
+{
+  "sourceCues": [
+    {
+      "cueId": "cue-0061",
+      "index": 60,
+      "startMs": 150260,
+      "endMs": 155940,
+      "sourceText": "وطنيزي الاحلام يا وطني.كانت",
+      "translatedText": "",
+      "tokens": []
+    },
+    {
+      "cueId": "cue-0062",
+      "index": 61,
+      "startMs": 156080,
+      "endMs": 157700,
+      "sourceText": "ايام ياوطني.",
+      "translatedText": "",
+      "tokens": []
+    }
+  ],
+  "response": {
+    "dialect": "unknown",
+    "cues": [
+      {
+        "index": 60,
+        "translatedText": "My homeland is like dreams, my homeland. They were",
+        "romanization": "waṭanī zay al-aḥlām yā waṭanī. kānat",
+        "tokens": [
+          {
+            "index": 0,
+            "text": "وطني",
+            "romanization": "waṭanī"
+          },
+          {
+            "index": 1,
+            "text": "زي",
+            "romanization": "zay"
+          },
+          {
+            "index": 2,
+            "text": "الاحلام",
+            "romanization": "al-aḥlām"
+          },
+          {
+            "index": 3,
+            "text": "يا",
+            "romanization": "yā"
+          },
+          {
+            "index": 4,
+            "text": "وطني",
+            "romanization": "waṭanī"
+          },
+          {
+            "index": 5,
+            "text": "كانت",
+            "romanization": "kānat"
+          }
+        ],
+        "cueId": "cue-0061"
+      },
+      {
+        "index": 61,
+        "translatedText": "days, my homeland.",
+        "romanization": "ayyām yā waṭanī.",
+        "tokens": [
+          {
+            "index": 0,
+            "text": "ايام",
+            "romanization": "ayyām"
+          },
+          {
+            "index": 1,
+            "text": "يا",
+            "romanization": "yā"
+          },
+          {
+            "index": 2,
+            "text": "وطني",
+            "romanization": "waṭanī"
+          }
+        ],
+        "cueId": "cue-0062"
+      }
+    ]
+  }
+}

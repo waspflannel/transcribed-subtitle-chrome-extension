@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
@@ -19,6 +20,7 @@ class SubtitleWorkflowLogger
         'adapter',
         'attempt',
         'batch_index',
+        'cue_index',
         'duration_seconds',
         'max_duration_seconds',
         'model',
@@ -29,6 +31,7 @@ class SubtitleWorkflowLogger
         'queue_family',
         'reason',
         'status',
+        'token_position',
     ];
 
     public function jobCreated(SubtitleJob $job): void
@@ -110,9 +113,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.enrichment_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('enrichment'),
+            'model' => $this->aiModel('enrichment'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => $cueCount,
@@ -124,9 +127,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.tokenization_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('tokenization'),
+            'model' => $this->aiModel('tokenization'),
             'source_language' => $job->source_language,
             'cue_count' => $cueCount,
         ]);
@@ -137,9 +140,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.tokenization_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('tokenization'),
+            'model' => $this->aiModel('tokenization'),
             'source_language' => $job->source_language,
             'cue_count' => count($enrichment->cues),
             'token_count' => $this->tokenCount($enrichment),
@@ -151,9 +154,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.enrichment_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('enrichment'),
+            'model' => $this->aiModel('enrichment'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => count($enrichment->cues),
@@ -166,9 +169,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.romanization_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('romanization'),
+            'model' => $this->aiModel('romanization'),
             'cue_count' => $cueCount,
         ]);
     }
@@ -178,9 +181,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.romanization_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('romanization'),
+            'model' => $this->aiModel('romanization'),
             'cue_count' => count($enrichment->cues),
         ]);
     }
@@ -190,9 +193,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.translation_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('analysis'),
+            'model' => $this->aiModel('analysis'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => $cueCount,
@@ -204,9 +207,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.translation_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => config('ai.default'),
+            'provider' => SubtitleModel::provider(),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('analysis'),
+            'model' => $this->aiModel('analysis'),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => count($enrichment->cues),
@@ -297,9 +300,9 @@ class SubtitleWorkflowLogger
         ]);
     }
 
-    private function openAiModel(string $purpose): string
+    private function aiModel(string $purpose): string
     {
-        return (string) config('ai.providers.'.config('ai.default').'.models.'.$purpose.'.default');
+        return SubtitleModel::model($purpose === 'enrichment' ? 'cards' : 'analysis');
     }
 
     private function tokenCount(CueEnrichmentResult $enrichment): int
@@ -330,7 +333,7 @@ class SubtitleWorkflowLogger
      * @param  array<string, mixed>  $context
      * @return array<string, int|float|bool|string>
      */
-    private function sanitizedFailureContext(array $context): array
+    public function sanitizedFailureContext(array $context): array
     {
         $safeContext = [];
 

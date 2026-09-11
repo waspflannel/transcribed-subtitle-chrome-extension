@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Ai\SubtitleModel;
 use App\Models\SubtitleJob;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Enums\Lab;
@@ -35,9 +36,9 @@ final class SubtitleProviderCostRecorder
      * Record configured feature estimates against the shared analysis model.
      * These rows are estimates, not separate provider requests or actual usage.
      */
-    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false): void
+    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false, string $requiredStatus = 'running'): void
     {
-        $model = (string) config('ai.providers.'.config('ai.default').'.models.analysis.default');
+        $model = SubtitleModel::model();
 
         $stages = ['tokenizing' => 'tokenization'];
         if ($includeTranslation) {
@@ -50,29 +51,30 @@ final class SubtitleProviderCostRecorder
             $this->record(
                 job: $job,
                 stage: $stage,
-                provider: config('ai.default'),
+                provider: SubtitleModel::provider(),
                 model: $model,
                 billingUnit: 'cue',
                 billedUnits: max(0, $cueCount),
-                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.config('ai.default')."_{$purpose}_microusd_per_cue", 0)),
+                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.SubtitleModel::provider()."_{$purpose}_microusd_per_cue", 0)),
+                requiredStatus: $requiredStatus,
             );
         }
     }
 
     /**
      * One structured alignment call resolves the whole pasted-lyrics prompt,
-     * so record it as a single per-call unit against the analysis model.
+     * so record it as a single per-call unit against the alignment model.
      */
     public function recordCorrectionAlignment(SubtitleJob $job): void
     {
         $this->record(
             job: $job,
             stage: 'aligning',
-            provider: config('ai.default'),
-            model: (string) config('ai.providers.'.config('ai.default').'.models.analysis.default'),
+            provider: SubtitleModel::provider(),
+            model: SubtitleModel::model(),
             billingUnit: 'alignment_call',
             billedUnits: 1,
-            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.config('ai.default').'_alignment_microusd_per_call', 0)),
+            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.SubtitleModel::provider().'_alignment_microusd_per_call', 0)),
             requiredStatus: 'completed',
         );
     }
@@ -80,8 +82,6 @@ final class SubtitleProviderCostRecorder
     public function recordCueBatch(SubtitleJob $job, string $stage, int $cueCount, string $requiredStatus = 'running'): void
     {
         $purpose = match ($stage) {
-            'tokenizing' => 'tokenization',
-            'romanizing' => 'romanization',
             'enriching' => 'enrichment',
             default => null,
         };
@@ -90,13 +90,13 @@ final class SubtitleProviderCostRecorder
             return;
         }
 
-        $unitPrice = max(0, (int) config('subtitles.costs.'.config('ai.default')."_{$purpose}_microusd_per_cue", 0));
+        $unitPrice = max(0, (int) config('subtitles.costs.'.SubtitleModel::provider()."_{$purpose}_microusd_per_cue", 0));
 
         $this->record(
             job: $job,
             stage: $stage,
-            provider: config('ai.default'),
-            model: (string) config('ai.providers.'.config('ai.default').".models.{$purpose}.default"),
+            provider: SubtitleModel::provider(),
+            model: SubtitleModel::model(),
             billingUnit: 'cue',
             billedUnits: max(0, $cueCount),
             unitPriceMicrousd: $unitPrice,

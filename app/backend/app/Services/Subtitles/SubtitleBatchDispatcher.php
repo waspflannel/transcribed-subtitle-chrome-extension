@@ -14,8 +14,7 @@ use Throwable;
 class SubtitleBatchDispatcher
 {
     /**
-     * @param  array<int, object|array<int, object>>  $jobs  batch members; an
-     *                                                       array member is dispatched as a chain
+     * @param  array<int, object>  $jobs
      */
     public function dispatchAnalysis(SubtitleJob $job, array $jobs): void
     {
@@ -68,11 +67,9 @@ class SubtitleBatchDispatcher
      * Partition AI batch members into at most batch_concurrency chains so the
      * queue only ever holds work this job is allowed to run: a chain link is
      * enqueued when its predecessor finishes, instead of enqueueing every
-     * member up front and rejecting the over-cap ones at pop time. Members
-     * that are already chains (analyze -> romanize) are flattened into the
-     * partition chain, preserving their relative order.
+     * member up front and rejecting the over-cap ones at pop time.
      *
-     * @param  array<int, object|array<int, object>>  $jobs
+     * @param  array<int, object>  $jobs
      * @return array<int, object|array<int, object>>
      */
     private function windowedBatchMembers(SubtitleJob $job, array $jobs): array
@@ -89,11 +86,7 @@ class SubtitleBatchDispatcher
         foreach ($jobs as $index => $member) {
             $slot = $index % $window;
 
-            if (is_array($member)) {
-                array_push($chains[$slot], ...array_values($member));
-            } else {
-                $chains[$slot][] = $member;
-            }
+            $chains[$slot][] = $member;
         }
 
         return array_map(

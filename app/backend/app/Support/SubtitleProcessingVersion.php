@@ -8,11 +8,11 @@ namespace App\Support;
  */
 final class SubtitleProcessingVersion
 {
-    public const JOB = 'scribe-v2-tokenizer-v11-async-';
+    public const JOB = 'scribe-v2-analysis-v12-async-';
 
     public const TRANSCRIPT_CACHE = 'transcript-chunks-v3';
 
-    public const LEARNING_TOKEN_CACHE = 'learning-token-v8';
+    public const LEARNING_TOKEN_CACHE = 'learning-token-v9';
 
     public static function transcriptCacheModel(string $model): string
     {

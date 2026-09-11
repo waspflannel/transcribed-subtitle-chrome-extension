@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
-use App\Services\TranslationAnalysis\CueAnalysisBatchResult;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -39,8 +38,6 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
     public ?\Closure $beforeTokenResult = null;
 
-    public ?\Closure $beforeRetry = null;
-
     /**
      * @var array<int, string>
      */
@@ -55,50 +52,10 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function tokenizeCueBatch(array $batch, array $allCues, string $sourceLanguage, bool $splitInvalidBatches = true, ?\Closure $beforeRetry = null): CueEnrichmentResult
-    {
-        $this->tokenizationCalls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-
-        if (count($batch) > $this->invalidBatchAboveCueCount && $this->invalidBatchAboveCueCount > 0) {
-            ($this->beforeRetry)?->__invoke();
-            $beforeRetry?->__invoke();
-            throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
-        }
-
-        if ($this->tokenizationShouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        $result = new CueEnrichmentResult(
-            array_map(
-                fn (array $cue): array => [
-                    ...$cue,
-                    'translatedText' => (string) $cue['sourceText'],
-                    'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
-                ],
-                $batch,
-            ),
-            'unknown',
-        );
-
-        if ($this->beforeTokenizationResult !== null) {
-            ($this->beforeTokenizationResult)();
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
     public function enrichCueBatch(
         array $batch,
         string $sourceLanguage,
         string $targetLanguage,
-        bool $includeRomanization = true,
-        bool $splitInvalidBatches = true,
-        ?\Closure $beforeRetry = null,
     ): CueEnrichmentResult {
         $this->calls++;
         $this->sourceLanguages[] = $sourceLanguage;
@@ -110,7 +67,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
 
         return new CueEnrichmentResult(
             array_map(
-                function (array $cue) use ($includeRomanization): array {
+                function (array $cue): array {
                     $enrichedCue = [
                         ...$cue,
                         'translatedText' => (string) ($cue['translatedText'] ?? $cue['sourceText']),
@@ -118,7 +75,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                             fn (array $token): array => [
                                 ...$token,
                                 'gloss' => $this->glossForToken((string) $token['text']),
-                                ...($includeRomanization && is_string($token['romanization'] ?? null)
+                                ...(is_string($token['romanization'] ?? null)
                                     ? ['romanization' => $token['romanization']]
                                     : []),
                             ],
@@ -126,7 +83,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                         ),
                     ];
 
-                    if ($includeRomanization && is_string($cue['romanization'] ?? null)) {
+                    if (is_string($cue['romanization'] ?? null)) {
                         $enrichedCue['romanization'] = $cue['romanization'];
                     }
 
@@ -147,66 +104,37 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         array $allCues,
         string $sourceLanguage,
         string $targetLanguage,
-        bool $splitInvalidBatches = true,
-        ?\Closure $beforeRetry = null,
         bool $includeTranslation = true,
         bool $includeRomanization = false,
-    ): CueAnalysisBatchResult {
+        ?\Closure $beforeRetry = null,
+    ): CueEnrichmentResult {
         $this->tokenizationCalls++;
         $this->translationCalls += (int) $includeTranslation;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
-
-        if (count($batch) > $this->invalidBatchAboveCueCount && $this->invalidBatchAboveCueCount > 0) {
-            ($this->beforeRetry)?->__invoke();
-            $beforeRetry?->__invoke();
-            throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'cue_count_mismatch']);
+        if ($this->tokenizationShouldFail || ($includeTranslation && $this->translationShouldFail)
+            || ($this->invalidBatchAboveCueCount > 0 && count($batch) > $this->invalidBatchAboveCueCount)) {
+            throw SubtitleProcessingException::enrichmentFailed(context: ['reason' => 'invalid_tokens']);
         }
-
-        if ($this->tokenizationShouldFail || ($includeTranslation && $this->translationShouldFail)) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        $result = new CueAnalysisBatchResult(
-            new CueEnrichmentResult(
-                array_map(
-                    fn (array $cue): array => [
-                        ...$cue,
-                        'translatedText' => (string) $cue['sourceText'],
-                        'tokens' => $this->tokenizeCue((string) $cue['sourceText'], $sourceLanguage),
-                    ],
-                    $batch,
-                ),
-                'unknown',
-            ),
-            new CueEnrichmentResult(
-                array_map(
-                    fn (array $cue): array => [
-                        ...$cue,
-                        'translatedText' => $includeTranslation ? 'Translated '.$cue['sourceText'] : $cue['sourceText'],
-                    ],
-                    $batch,
-                ),
-                'unknown',
-            ),
-        );
-
+        $cues = array_map(fn (array $cue): array => [
+            ...$cue,
+            'translatedText' => $includeTranslation ? 'Translated '.$cue['sourceText'] : $cue['sourceText'],
+            'tokens' => $this->tokenizeCue($cue['sourceText'], $sourceLanguage),
+        ], $batch);
         if ($includeRomanization) {
-            $result = new CueAnalysisBatchResult($result->tokenized, $result->translated,
-                $this->romanizeCueBatch($result->tokenized->cues, $sourceLanguage));
+            $readings = $this->fakeReadings($cues, $sourceLanguage)->cues;
+            foreach ($cues as $index => &$cue) {
+                $cue['romanization'] = $readings[$index]['romanization'];
+                $cue['tokens'] = $readings[$index]['tokens'];
+            }
+            unset($cue);
         }
+        ($this->beforeTokenizationResult)?->__invoke();
 
-        if ($this->beforeTokenizationResult !== null) {
-            ($this->beforeTokenizationResult)();
-        }
-
-        return $result;
+        return new CueEnrichmentResult($cues, 'unknown');
     }
 
-    /**
-     * @param  array<int, array<string, mixed>>  $batch
-     */
-    public function romanizeCueBatch(array $batch, string $sourceLanguage): CueEnrichmentResult
+    private function fakeReadings(array $batch, string $sourceLanguage): CueEnrichmentResult
     {
         $this->romanizationCalls++;
 

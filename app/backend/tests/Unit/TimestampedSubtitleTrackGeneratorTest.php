@@ -55,13 +55,10 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         $this->assertTrue($track->expires_at->isSameSecond(Carbon::parse('2026-06-01 12:00:00')));
     }
 
-    public function test_rejects_transcripts_without_webvtt(): void
+    public function test_webvtt_is_built_from_analyzed_cues_without_requiring_transcript_webvtt(): void
     {
-        $this->assertInvalidTranscriptReason(
-            'invalid_web_vtt',
-            [new TimestampedTranscriptSegment(0.0, 2.0, 'source text')],
-            '',
-        );
+        $track = $this->generateTrack([new TimestampedTranscriptSegment(0.0, 2.0, 'source text')], '');
+        $this->assertStringContainsString("00:00:00.000 --> 00:00:02.000\nsource text", $track->web_vtt);
     }
 
     public function test_rejects_enriched_cues_without_tokens(): void
@@ -72,7 +69,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
             language: 'spa',
             durationSeconds: 2.0,
             segments: [new TimestampedTranscriptSegment(0.0, 2.0, 'Hola a todos')],
-            webVtt: "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nHola a todos\n",
+            webVtt: "WEBVTT\n\ncue-0001\n00:00:00.000 --> 00:00:02.000\nHola a todos\n",
         );
         $draftCues = $generator->draftCues($transcript);
         $enrichedCues = [[
@@ -82,7 +79,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         ]];
 
         try {
-            $generator->generate($job, $transcript, new CueEnrichmentResult($enrichedCues, 'unknown'));
+            $generator->generate($job, new CueEnrichmentResult($enrichedCues, 'unknown'));
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('empty_tokens', $exception->context['reason'] ?? null);
@@ -144,7 +141,6 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
 
         return $generator->generate(
             $job,
-            $transcript,
             new CueEnrichmentResult($enrichedCues, 'unknown'),
         );
     }
@@ -168,6 +164,6 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
 
     private function sampleWebVtt(): string
     {
-        return "WEBVTT\n\n00:00:00.000 --> 00:00:00.800\nfirst segment\n\n00:00:00.850 --> 00:00:02.000\nsecond segment\n\n00:00:03.000 --> 00:00:05.000\nthird segment\n";
+        return "WEBVTT\n\ncue-0001\n00:00:00.000 --> 00:00:00.800\nfirst segment\n\ncue-0002\n00:00:00.850 --> 00:00:02.000\nsecond segment\n\ncue-0003\n00:00:03.000 --> 00:00:05.000\nthird segment\n";
     }
 }
