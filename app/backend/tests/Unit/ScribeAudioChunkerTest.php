@@ -71,6 +71,7 @@ class ScribeAudioChunkerTest extends TestCase
         Process::fake(function (PendingProcess $process) {
             $command = $process->command;
             $this->assertIsArray($command);
+            $this->assertLessThan(array_search('-i', $command, true), array_search('-ss', $command, true));
             File::put($command[array_key_last($command)], 'chunk-flac');
 
             return Process::result();
@@ -103,5 +104,37 @@ class ScribeAudioChunkerTest extends TestCase
     private function chunker(): ScribeAudioChunker
     {
         return new ScribeAudioChunker;
+    }
+
+    public function test_raw_source_chunks_are_normalized_directly_to_mono_16khz_flac(): void
+    {
+        $directory = storage_path('framework/testing/scribe-audio-chunker/'.(string) Str::uuid());
+        File::ensureDirectoryExists($directory);
+        $path = $directory.DIRECTORY_SEPARATOR.'source.m4a';
+        File::put($path, 'raw-source');
+        $audio = new TemporaryAudioFile($path, $directory, 300, File::size($path), 'audio/mp4');
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) use ($path) {
+            $command = $process->command;
+            $this->assertSame($path, $command[array_search('-i', $command, true) + 1]);
+            $this->assertLessThan(array_search('-i', $command, true), array_search('-ss', $command, true));
+            $this->assertSame('1', $command[array_search('-ac', $command, true) + 1]);
+            $this->assertSame('16000', $command[array_search('-ar', $command, true) + 1]);
+            $this->assertSame('flac', $command[array_search('-c:a', $command, true) + 1]);
+            File::put($command[array_key_last($command)], 'chunk-flac');
+
+            return Process::result();
+        });
+
+        try {
+            $chunks = $this->chunker()->split($audio, $this->chunker()->plan(300));
+
+            $this->assertCount(3, $chunks);
+            $this->assertSame([102, 104, 102], array_column($chunks, 'durationSeconds'));
+            $this->assertFileDoesNotExist($directory.DIRECTORY_SEPARATOR.'scribe-ready.flac');
+            Process::assertRanTimes(fn (): bool => true, 3);
+        } finally {
+            File::deleteDirectory($directory);
+        }
     }
 }

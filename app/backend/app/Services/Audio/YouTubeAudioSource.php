@@ -16,9 +16,9 @@ class YouTubeAudioSource
         File::ensureDirectoryExists($workDirectory, 0700);
 
         try {
-            $durationSeconds = $this->validatedDuration($youtubeUrl, $requestDurationSeconds);
+            [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
 
-            $realPath = $this->downloadAudio($youtubeUrl, $workDirectory);
+            $realPath = $this->downloadAudio($youtubeUrl, $workDirectory, $metadata);
             $sizeBytes = File::size($realPath);
 
             if ($sizeBytes < 1) {
@@ -48,6 +48,12 @@ class YouTubeAudioSource
 
     public function validatedDuration(string $youtubeUrl, ?int $requestDurationSeconds): int
     {
+        return $this->validatedMetadata($youtubeUrl, $requestDurationSeconds)[1];
+    }
+
+    /** @return array{array<string, mixed>, int} */
+    private function validatedMetadata(string $youtubeUrl, ?int $requestDurationSeconds): array
+    {
         $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
         if ($requestDurationSeconds !== null && $requestDurationSeconds > $maxDurationSeconds) {
             throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
@@ -56,7 +62,7 @@ class YouTubeAudioSource
         $duration = $this->durationSeconds($metadata, $maxDurationSeconds);
         $this->assertSupportedVideo($metadata);
 
-        return $duration;
+        return [$metadata, $duration];
     }
 
     /**
@@ -138,22 +144,41 @@ class YouTubeAudioSource
         }
     }
 
-    private function downloadAudio(string $url, string $workDirectory): string
+    /** @param array<string, mixed> $metadata */
+    private function downloadAudio(string $url, string $workDirectory, array $metadata): string
     {
-        $result = $this->runProcess([
-            (string) config('subtitles.youtube.binary'),
-            '--no-playlist',
-            '--no-warnings',
-            '--format',
-            'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
-            '--paths',
-            $workDirectory,
-            '--output',
-            '%(id)s.%(ext)s',
-            '--print',
-            'after_move:filepath',
-            $url,
-        ], (int) config('subtitles.youtube.download_timeout_seconds'));
+        $metadataPath = null;
+        $sourceArguments = [$url];
+
+        if (config('subtitles.youtube.reuse_metadata', false)) {
+            $metadataPath = $workDirectory.DIRECTORY_SEPARATOR.'youtube-info.json';
+            // yt-dlp retries extraction through webpage_url on download failure.
+            // This snapshot is valid only for the already validated acquisition.
+            unset($metadata['webpage_url']);
+            File::put($metadataPath, json_encode($metadata, JSON_THROW_ON_ERROR));
+            $sourceArguments = ['--load-info-json', $metadataPath];
+        }
+
+        try {
+            $result = $this->runProcess([
+                (string) config('subtitles.youtube.binary'),
+                '--no-playlist',
+                '--no-warnings',
+                '--format',
+                'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
+                '--paths',
+                $workDirectory,
+                '--output',
+                '%(id)s.%(ext)s',
+                '--print',
+                'after_move:filepath',
+                ...$sourceArguments,
+            ], (int) config('subtitles.youtube.download_timeout_seconds'));
+        } finally {
+            if ($metadataPath !== null) {
+                File::delete($metadataPath);
+            }
+        }
 
         if ($result->failed()) {
             $this->throwProcessFailure($result, 'download');

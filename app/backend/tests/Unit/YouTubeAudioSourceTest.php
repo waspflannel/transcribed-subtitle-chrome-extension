@@ -22,6 +22,7 @@ class YouTubeAudioSourceTest extends TestCase
         config([
             'subtitles.youtube.temp_directory' => $this->tempDirectory,
             'subtitles.max_video_duration_seconds' => 3600,
+            'subtitles.youtube.reuse_metadata' => false,
         ]);
     }
 
@@ -109,6 +110,81 @@ class YouTubeAudioSourceTest extends TestCase
             $this->fail('Expected audio acquisition to reject private video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_unavailable', $exception->publicCode);
+        }
+    }
+
+    public function test_it_downloads_from_validated_metadata_without_a_reextraction_fallback(): void
+    {
+        config(['subtitles.youtube.reuse_metadata' => true]);
+        $directory = $this->workDirectory();
+        $url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) use ($directory, $url) {
+            if (in_array('--dump-single-json', $process->command, true)) {
+                return Process::result(json_encode([
+                    'duration' => 42.3,
+                    'availability' => 'public',
+                    'is_live' => false,
+                    'webpage_url' => $url,
+                    'formats' => [['format_id' => 'audio', 'url' => 'https://media.example.test/audio']],
+                ]));
+            }
+
+            $infoIndex = array_search('--load-info-json', $process->command, true);
+            $this->assertNotFalse($infoIndex);
+            $this->assertNotContains($url, $process->command);
+            $metadata = json_decode(File::get($process->command[$infoIndex + 1]), true);
+            $this->assertArrayNotHasKey('webpage_url', $metadata);
+            $this->assertSame('audio', $metadata['formats'][0]['format_id']);
+            $this->assertSame(42.3, $metadata['duration']);
+            $path = $directory.DIRECTORY_SEPARATOR.'dQw4w9WgXcQ.m4a';
+            File::put($path, 'fake-audio');
+
+            return Process::result($path);
+        });
+
+        $audio = (new YouTubeAudioSource)->acquire($url, 42, $directory);
+
+        $this->assertSame(43, $audio->durationSeconds);
+        $this->assertFileDoesNotExist($directory.DIRECTORY_SEPARATOR.'youtube-info.json');
+        Process::assertRanTimes(fn (): bool => true, 2);
+    }
+
+    public function test_metadata_download_failure_is_not_retried_and_cleans_the_snapshot(): void
+    {
+        config(['subtitles.youtube.reuse_metadata' => true]);
+        $directory = $this->workDirectory();
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) {
+            if (in_array('--dump-single-json', $process->command, true)) {
+                return Process::result(json_encode(['duration' => 42, 'availability' => 'public', 'is_live' => false]));
+            }
+
+            return Process::result(errorOutput: 'Media URL expired.', exitCode: 1);
+        });
+
+        try {
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $directory);
+            $this->fail('Expected the expired media URL to fail without retrying.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('download', $exception->context['stage']);
+            $this->assertDirectoryDoesNotExist($directory);
+            Process::assertRanTimes(fn (): bool => true, 2);
+        }
+    }
+
+    public function test_metadata_reuse_still_rejects_live_video_before_downloading(): void
+    {
+        config(['subtitles.youtube.reuse_metadata' => true]);
+        Process::preventStrayProcesses();
+        Process::fake(['*' => Process::result(json_encode(['duration' => 42, 'availability' => 'public', 'is_live' => true]))]);
+
+        try {
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
+            $this->fail('Expected live video to be rejected before downloading.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('audio_unavailable', $exception->publicCode);
+            Process::assertRanTimes(fn (): bool => true, 1);
         }
     }
 

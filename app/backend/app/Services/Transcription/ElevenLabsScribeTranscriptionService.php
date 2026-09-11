@@ -22,10 +22,15 @@ class ElevenLabsScribeTranscriptionService
 
     public function prepareAudio(TemporaryAudioFile $audio): TemporaryAudioFile
     {
-        $this->transcriptionConfig(Lab::ElevenLabs);
-        $this->assertSupportedAudioMime($audio);
+        $this->assertAudioCanBePrepared($audio);
 
         return $this->audioPreparer->prepare($audio);
+    }
+
+    public function assertAudioCanBePrepared(TemporaryAudioFile $audio): void
+    {
+        $this->transcriptionConfig(Lab::ElevenLabs);
+        $this->assertSupportedAudioMime($audio);
     }
 
     /**

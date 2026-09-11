@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Process;
 use Throwable;
 
 /**
- * Splits Scribe-prepared audio into fixed-interval chunks with symmetric
+ * Splits source or Scribe-prepared audio into fixed-interval chunks with symmetric
  * overlap so long videos can be transcribed in parallel. Every chunk hears
  * `overlap_seconds` past each nominal boundary on both sides, so a word cut
  * by one chunk edge is heard whole by its neighbour; the merger keeps each
@@ -72,7 +72,6 @@ class ScribeAudioChunker
 
         foreach ($plan as $index => $bounds) {
             $chunkPath = $audio->directory.DIRECTORY_SEPARATOR.sprintf('transcribe-chunk-%03d.flac', $index);
-
             $this->runFfmpeg([
                 $this->ffmpegBinary(),
                 '-hide_banner',
@@ -84,6 +83,11 @@ class ScribeAudioChunker
                 $this->formatSeconds($bounds['audioEnd'] - $bounds['audioStart']),
                 '-i',
                 $audio->path,
+                '-vn',
+                '-ac',
+                '1',
+                '-ar',
+                '16000',
                 '-c:a',
                 'flac',
                 $chunkPath,
