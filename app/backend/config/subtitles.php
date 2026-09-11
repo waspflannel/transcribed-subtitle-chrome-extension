@@ -159,7 +159,7 @@ return [
         // midpoint. max_chunks bounds concurrent Scribe uploads -- chunks
         // grow beyond target_seconds for very long videos instead.
         'chunking' => [
-            'first_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS', 20),
+            'first_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS', 40),
             'min_audio_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MIN_AUDIO_SECONDS', 45),
             'target_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS', 60),
             'overlap_seconds' => (float) env('SUBTITLE_TRANSCRIPTION_CHUNK_OVERLAP_SECONDS', 2.0),
@@ -168,7 +168,7 @@ return [
     ],
 
     'enrichment' => [
-        'first_batch_seconds' => (int) env('SUBTITLE_ANALYSIS_FIRST_BATCH_SECONDS', 10),
+        'first_batch_seconds' => (int) env('SUBTITLE_ANALYSIS_FIRST_BATCH_SECONDS', 30),
         'batch_seconds' => (int) env('SUBTITLE_ANALYSIS_BATCH_SECONDS', 30),
         'balanced_batches' => (bool) env('SUBTITLE_BALANCED_BATCHES', true),
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),

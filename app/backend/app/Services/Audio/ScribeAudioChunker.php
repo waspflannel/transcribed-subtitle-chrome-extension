@@ -34,7 +34,7 @@ class ScribeAudioChunker
             return [];
         }
 
-        $firstSeconds = max(0, (int) config('subtitles.transcription.chunking.first_seconds', 20));
+        $firstSeconds = max(0, (int) config('subtitles.transcription.chunking.first_seconds', 40));
         $firstSeconds = min($firstSeconds, $targetSeconds, $durationSeconds / 2);
         $chunkCount = min($maxChunks, $firstSeconds > 0
             ? 1 + (int) ceil(($durationSeconds - $firstSeconds) / $targetSeconds)
