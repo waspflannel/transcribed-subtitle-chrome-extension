@@ -5,6 +5,7 @@ namespace App\Services\Audio;
 use App\Exceptions\SubtitleProcessingException;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use Throwable;
@@ -18,7 +19,7 @@ class YouTubeAudioSource
         try {
             [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
 
-            $realPath = $this->downloadAudio($youtubeUrl, $workDirectory, $metadata);
+            $realPath = $this->downloadAudio($workDirectory, $metadata);
             $sizeBytes = File::size($realPath);
 
             if ($sizeBytes < 1) {
@@ -77,7 +78,7 @@ class YouTubeAudioSource
             '--no-playlist',
             '--skip-download',
             $url,
-        ], (int) config('subtitles.youtube.metadata_timeout_seconds'));
+        ], (int) config('subtitles.youtube.metadata_timeout_seconds'), 'metadata');
 
         if ($result->failed()) {
             $this->throwProcessFailure($result, 'metadata');
@@ -145,19 +146,13 @@ class YouTubeAudioSource
     }
 
     /** @param array<string, mixed> $metadata */
-    private function downloadAudio(string $url, string $workDirectory, array $metadata): string
+    private function downloadAudio(string $workDirectory, array $metadata): string
     {
-        $metadataPath = null;
-        $sourceArguments = [$url];
-
-        if (config('subtitles.youtube.reuse_metadata', false)) {
-            $metadataPath = $workDirectory.DIRECTORY_SEPARATOR.'youtube-info.json';
-            // yt-dlp retries extraction through webpage_url on download failure.
-            // This snapshot is valid only for the already validated acquisition.
-            unset($metadata['webpage_url']);
-            File::put($metadataPath, json_encode($metadata, JSON_THROW_ON_ERROR));
-            $sourceArguments = ['--load-info-json', $metadataPath];
-        }
+        $metadataPath = $workDirectory.DIRECTORY_SEPARATOR.'youtube-info.json';
+        // Reuse this run's validated extraction. A silent re-extraction on
+        // failure could bypass the public/non-live checks above.
+        unset($metadata['webpage_url']);
+        File::put($metadataPath, json_encode($metadata, JSON_THROW_ON_ERROR));
 
         try {
             $result = $this->runProcess([
@@ -172,12 +167,11 @@ class YouTubeAudioSource
                 '%(id)s.%(ext)s',
                 '--print',
                 'after_move:filepath',
-                ...$sourceArguments,
-            ], (int) config('subtitles.youtube.download_timeout_seconds'));
+                '--load-info-json',
+                $metadataPath,
+            ], (int) config('subtitles.youtube.download_timeout_seconds'), 'download');
         } finally {
-            if ($metadataPath !== null) {
-                File::delete($metadataPath);
-            }
+            File::delete($metadataPath);
         }
 
         if ($result->failed()) {
@@ -207,8 +201,9 @@ class YouTubeAudioSource
     /**
      * @param  array<int, string>  $command
      */
-    private function runProcess(array $command, int $timeoutSeconds): ProcessResult
+    private function runProcess(array $command, int $timeoutSeconds, string $stage): ProcessResult
     {
+        $started = hrtime(true);
         try {
             return Process::timeout($timeoutSeconds)
                 ->env($this->processEnvironment())
@@ -219,6 +214,12 @@ class YouTubeAudioSource
                 ['exception' => $exception::class],
                 $exception,
             );
+        } finally {
+            Log::info('backend.youtube_request_finished', [
+                'stage' => $stage,
+                'worker_pid' => getmypid(),
+                'duration_ms' => (int) round((hrtime(true) - $started) / 1_000_000),
+            ]);
         }
     }
 

@@ -126,7 +126,6 @@ return [
     ],
 
     'youtube' => [
-        'reuse_metadata' => (bool) env('SUBTITLE_YOUTUBE_REUSE_METADATA', false),
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
         'metadata_timeout_seconds' => (int) env('YOUTUBE_METADATA_TIMEOUT_SECONDS', 60),
         'download_timeout_seconds' => (int) env('YOUTUBE_AUDIO_DOWNLOAD_TIMEOUT_SECONDS', 600),

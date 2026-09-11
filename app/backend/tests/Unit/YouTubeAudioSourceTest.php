@@ -22,7 +22,6 @@ class YouTubeAudioSourceTest extends TestCase
         config([
             'subtitles.youtube.temp_directory' => $this->tempDirectory,
             'subtitles.max_video_duration_seconds' => 3600,
-            'subtitles.youtube.reuse_metadata' => false,
         ]);
     }
 
@@ -115,7 +114,6 @@ class YouTubeAudioSourceTest extends TestCase
 
     public function test_it_downloads_from_validated_metadata_without_a_reextraction_fallback(): void
     {
-        config(['subtitles.youtube.reuse_metadata' => true]);
         $directory = $this->workDirectory();
         $url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
         Process::preventStrayProcesses();
@@ -152,7 +150,6 @@ class YouTubeAudioSourceTest extends TestCase
 
     public function test_metadata_download_failure_is_not_retried_and_cleans_the_snapshot(): void
     {
-        config(['subtitles.youtube.reuse_metadata' => true]);
         $directory = $this->workDirectory();
         Process::preventStrayProcesses();
         Process::fake(function (PendingProcess $process) {
@@ -175,7 +172,6 @@ class YouTubeAudioSourceTest extends TestCase
 
     public function test_metadata_reuse_still_rejects_live_video_before_downloading(): void
     {
-        config(['subtitles.youtube.reuse_metadata' => true]);
         Process::preventStrayProcesses();
         Process::fake(['*' => Process::result(json_encode(['duration' => 42, 'availability' => 'public', 'is_live' => true]))]);
 

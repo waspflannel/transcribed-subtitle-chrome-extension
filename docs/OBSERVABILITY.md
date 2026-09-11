@@ -14,6 +14,8 @@ The SaaS website uses first-party Laravel structured logs for beta funnel analyt
 
 ## Logging
 
+- `backend.youtube_request_finished` separates metadata extraction and audio download duration by worker PID. It never logs metadata, media URLs or audio paths.
+
 - `backend.openai_response_received` records actual Responses API request settings, returned service tier, HTTP timing, provider processing time when supplied, input/output/reasoning token counts, `response_status`, and `incomplete_reason`. All agents request `medium` reasoning. Correlate `worker_pid` and timestamp with stage traces; `request_id` identifies the provider request. Missing fields remain null. No request/response bodies or authorization headers are logged. Fast mode is requested with `service_tier=fast`; the returned tier is the evidence of which tier served the request.
 
 - Generation allows one identical retry of malformed analysis while the run is active. It never splits batches or fabricates fallback tokens. Corrections and cards use one response. `output_token_limit` and `provider_quota_exhausted` are terminal; temporary rate limits keep queue backoff. Cost rows estimate enabled features and do not represent separate requests or actual reasoning-token spend.
