@@ -48,10 +48,6 @@ Route::prefix('v1')
                     ->name('subtitle-jobs.cancel')
                     ->middleware('throttle:subtitle-api');
 
-                Route::get('/subtitle-jobs/{jobId}/partial-track', [SubtitleJobController::class, 'partialTrack'])
-                    ->name('subtitle-jobs.partial-track')
-                    ->middleware('throttle:subtitle-status-api');
-
                 Route::post('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'correctLyrics'])
                     ->name('subtitle-jobs.lyrics.store')
                     ->middleware('throttle:subtitle-api');

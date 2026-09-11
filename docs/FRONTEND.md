@@ -27,7 +27,7 @@
 
 - The internal `tokenizing` generation stage is displayed as **Analyzing subtitles** in the extension and web dashboard. Tokenization, translation, and requested romanization share one analysis response, progress band, and timeline step; the timeline must not show translation and romanization as later sequential steps.
 
-- Running generation status starts at a two-second polling interval and backs off to five seconds while stage/progress are unchanged; queued jobs use five seconds. Partial subtitles are fetched starting during transcription so experimental early drafts can appear, then two seconds after a changed revision, backing off to ten seconds when unchanged or after a failed fetch. Each loop also waits at least two seconds per active tab operation to share the status rate limit across tabs (about 60 combined status/partial requests per minute at sustained maximum activity, plus initial reads). Only changed partial revisions are stored again; completion and cancellation stop polling.
+- Running generation status includes available preview cues. Poll running jobs once per second and queued jobs or failed requests every five seconds. Each loop waits at least one second per active tab operation to share the status rate limit (about 60 requests per minute across active tabs, plus initial reads). Only changed preview revisions are stored again; completion and cancellation stop polling.
 
 - Dashboard connection listings filter both per-token and configured Sanctum expiration before taking three recent extension tokens. This is a token-status snapshot, not browser-presence detection; viewing it does not revoke tokens.
 

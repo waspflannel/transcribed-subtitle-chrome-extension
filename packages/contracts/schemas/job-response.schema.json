@@ -411,6 +411,10 @@
       "minLength": 1,
       "maxLength": 128,
       "description": "Exact text model saved on this job."
+    },
+    "partialTrack": {
+      "$ref": "partial-track-response.schema.json",
+      "description": "Available source cues and completed annotations, delivered with running job status."
     }
   },
   "allOf": [
@@ -522,6 +526,20 @@
           "required": [
             "track"
           ]
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "partialTrack"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "running"
+          }
         }
       }
     }

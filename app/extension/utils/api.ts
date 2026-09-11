@@ -11,7 +11,6 @@ import type {
   LyricsCorrectionCancelRequest,
   LyricsCorrectionStatus,
   QuickFixTokenRequest,
-  PartialTrackResponse,
   SubtitleJobHistoryResponse,
   TrackResponse,
 } from './contracts';
@@ -23,7 +22,6 @@ import {
   guardLearningTokenResponse,
   guardLyricsCorrectionStatus,
   guardOkResponse,
-  guardPartialTrackResponse,
   guardSubtitleJobHistoryResponse,
   guardTrackResponse,
 } from './api-response-guards';
@@ -99,23 +97,6 @@ export class SubtitleApiClient {
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
       authToken,
     }, guardJobResponse);
-  }
-
-  public async getSubtitleJobPartialTrack(
-    installId: string,
-    authToken: string,
-    jobId: string,
-  ): Promise<PartialTrackResponse> {
-    return this.request<PartialTrackResponse>(
-      `subtitle-jobs/${encodeURIComponent(jobId)}/partial-track`,
-      installId,
-      {
-        method: 'GET',
-        timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
-        authToken,
-      },
-      guardPartialTrackResponse,
-    );
   }
 
   public async listSubtitleJobs(installId: string, authToken: string, youtubeVideoId?: string): Promise<SubtitleJobHistoryResponse> {

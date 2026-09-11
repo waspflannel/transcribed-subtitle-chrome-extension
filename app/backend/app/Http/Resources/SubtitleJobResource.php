@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Http\Resources\Concerns\ValidatesSubtitleResourceFields;
 use App\Models\SubtitleJob;
+use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use LogicException;
@@ -66,6 +67,13 @@ class SubtitleJobResource extends JsonResource
 
         if (is_string($this->detected_source_language) && $this->detected_source_language !== '') {
             $resource['detectedSourceLanguage'] = $this->detected_source_language;
+        }
+
+        if ($status === 'running') {
+            $partial = app(SubtitlePartialTrackAssembler::class)->assemble($this->resource);
+            if ($partial !== null) {
+                $resource['partialTrack'] = $partial;
+            }
         }
 
         if ($hasReadyTrack) {

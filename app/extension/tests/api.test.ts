@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { guardJobResponse } from '../utils/api-response-guards';
 import { SubtitleApiClient, SubtitleApiError, publicSubtitleErrorMessage } from '../utils/api';
 import type {
   CreateSubtitleJobRequest,
@@ -14,6 +15,21 @@ const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('SubtitleApiClient', () => {
+  it('rejects malformed previews and previews belonging to another job or video', () => {
+    const job = {
+      jobId: 'job-1', youtubeVideoId: 'dQw4w9WgXcQ', status: 'running', stage: 'transcribing',
+      sourceLanguage: 'eng', targetLanguage: 'fra', aiProvider: 'openai', aiModel: 'gpt-5.6-luna',
+      enrichmentMode: 'on_demand', includeRomanization: false, includeTranslation: true,
+      progressPercent: 50, createdAt: '2026-09-11T00:00:00Z', updatedAt: '2026-09-11T00:00:00Z',
+    };
+    const partialTrack = { jobId: job.jobId, youtubeVideoId: job.youtubeVideoId, revision: 1, cues: trackResponse().cues };
+    expect(guardJobResponse({ ...job, partialTrack }).partialTrack).toEqual(partialTrack);
+    for (const patch of [{ jobId: 'another-job' }, { youtubeVideoId: 'another-id1' }, { cues: [] }]) {
+      expect(() => guardJobResponse({ ...job, partialTrack: { ...partialTrack, ...patch } })).toThrow();
+    }
+    expect(() => guardJobResponse({ ...job, status: 'cancelled', partialTrack })).toThrow();
+  });
+
   it('requests saved generations for one video without creating a job', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ jobs: [] })));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);

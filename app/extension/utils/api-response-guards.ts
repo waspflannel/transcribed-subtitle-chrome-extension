@@ -56,6 +56,13 @@ export function guardJobResponse(value: unknown): JobResponse {
   optionalString(response, 'message');
   optionalString(response, 'errorCode');
 
+  if (response.partialTrack !== undefined) {
+    const partial = guardPartialTrackResponse(response.partialTrack);
+    if (response.status !== 'running' || partial.jobId !== response.jobId || partial.youtubeVideoId !== response.youtubeVideoId) {
+      throw invalid('Partial track does not belong to the running job');
+    }
+  }
+
   if ('track' in response && response.track !== undefined) {
     guardTrackResponse(response.track);
   }

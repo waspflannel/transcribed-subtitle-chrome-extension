@@ -6,7 +6,7 @@ param(
     [string]$QueueConnection = "redis",
     [int]$WorkerTimeoutSeconds = 1200,
     [int]$StopWaitSeconds = 1260,
-    [int]$SleepSeconds = 1,
+    [int]$SleepSeconds = 0,
     [int]$Tries = 0,
     [int]$MemoryMb = 256,
     [int]$MaxTimeSeconds = 3600,

@@ -2503,32 +2503,32 @@ class SubtitleJobApiTest extends TestCase
         $user = User::factory()->create();
         $job = SubtitleJob::factory()->create(['user_id' => $user->id, 'status' => 'running', 'stage' => 'tokenizing']);
         $installId = $this->installId();
-        $url = "/v1/subtitle-jobs/{$job->public_id}/partial-track";
+        $url = "/v1/subtitle-jobs/{$job->public_id}";
         $cues = [
             ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first part', 'translatedText' => 'First translation', 'tokens' => [['index' => 0, 'text' => 'first']]],
             ['cueId' => 'cue-0002', 'index' => 1, 'startMs' => 2400, 'endMs' => 4000, 'sourceText' => 'second part', 'translatedText' => 'Second translation', 'romanization' => 'second', 'tokens' => [['index' => 0, 'text' => 'second']]],
         ];
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertNotFound();
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()->assertJsonMissingPath('partialTrack');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
         $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
-            ->assertJsonPath('revision', 1)->assertJsonCount(2, 'cues')
-            ->assertJsonMissingPath('cues.0.translatedText')->assertJsonMissingPath('cues.0.tokens');
+            ->assertJsonPath('partialTrack.revision', 1)->assertJsonCount(2, 'partialTrack.cues')
+            ->assertJsonMissingPath('partialTrack.cues.0.translatedText')->assertJsonMissingPath('partialTrack.cues.0.tokens');
         $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1, new CueEnrichmentResult([$cues[1]], 'unknown'));
         $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
-            ->assertJsonPath('revision', 2)->assertJsonCount(2, 'cues')
-            ->assertJsonMissingPath('cues.0.translatedText')
-            ->assertJsonPath('cues.1.translatedText', 'Second translation');
+            ->assertJsonPath('partialTrack.revision', 2)->assertJsonCount(2, 'partialTrack.cues')
+            ->assertJsonMissingPath('partialTrack.cues.0.translatedText')
+            ->assertJsonPath('partialTrack.cues.1.translatedText', 'Second translation');
         $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
         $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
-            ->assertJsonPath('revision', 3)->assertJsonCount(2, 'cues')
-            ->assertJsonPath('cues.1.cueId', 'cue-0002')->assertJsonPath('cues.1.index', 1)
-            ->assertJsonPath('cues.0.translatedText', 'First translation')
-            ->assertJsonPath('cues.1.romanization', 'second')->assertJsonMissingPath('cues.0.tokens');
+            ->assertJsonPath('partialTrack.revision', 3)->assertJsonCount(2, 'partialTrack.cues')
+            ->assertJsonPath('partialTrack.cues.1.cueId', 'cue-0002')->assertJsonPath('partialTrack.cues.1.index', 1)
+            ->assertJsonPath('partialTrack.cues.0.translatedText', 'First translation')
+            ->assertJsonPath('partialTrack.cues.1.romanization', 'second')->assertJsonMissingPath('partialTrack.cues.0.tokens');
         $merged = $this->artifacts()->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES)->cues;
         $this->assertSame([0, 1], array_column($merged, 'index'));
         $this->assertSame(['cue-0001', 'cue-0002'], array_column($merged, 'cueId'));
         $job->update(['run_id' => (string) Str::uuid()]);
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertNotFound();
+        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()->assertJsonMissingPath('partialTrack');
     }
 
     public function test_partial_track_is_not_served_for_completed_jobs_or_other_users(): void
@@ -2540,8 +2540,8 @@ class SubtitleJobApiTest extends TestCase
 
         $this
             ->withExtensionAuth($this->installId())
-            ->getJson('/v1/subtitle-jobs/'.$completedResponse->json('jobId').'/partial-track')
-            ->assertNotFound();
+            ->getJson('/v1/subtitle-jobs/'.$completedResponse->json('jobId'))
+            ->assertOk()->assertJsonMissingPath('partialTrack');
 
         $otherUsersJob = SubtitleJob::factory()->create([
             'user_id' => User::factory()->create()->id,
@@ -2553,7 +2553,7 @@ class SubtitleJobApiTest extends TestCase
 
         $this
             ->withExtensionAuth($this->installId('b'))
-            ->getJson("/v1/subtitle-jobs/{$otherUsersJob->public_id}/partial-track")
+            ->getJson("/v1/subtitle-jobs/{$otherUsersJob->public_id}")
             ->assertNotFound();
     }
 

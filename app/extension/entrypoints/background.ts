@@ -64,8 +64,7 @@ let cachedPanelJobHistorySessionId: string | undefined;
 let localStateResetVersion = 0;
 let accountMutationVersion = 0;
 const JOB_POLL_INTERVAL_MS = 5000;
-const PARTIAL_TRACK_POLL_INTERVAL_MS = 10000;
-const ACTIVE_JOB_POLL_INTERVAL_MS = 2000;
+const ACTIVE_JOB_POLL_INTERVAL_MS = 1000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
 
@@ -700,14 +699,6 @@ async function generateSubtitlesForTab(
 }
 
 // Chunked transcription may publish a stable draft before analysis starts.
-const PARTIAL_TRACK_STAGES = new Set<JobResponse['stage']>([
-  'transcribing',
-  'tokenizing',
-  'romanizing',
-  'translating',
-  'enriching',
-  'finalizing',
-]);
 
 async function waitForCompletedSubtitleJob(
   tabId: number,
@@ -719,9 +710,7 @@ async function waitForCompletedSubtitleJob(
 ): Promise<JobResponse | null> {
   let job = initialJob;
   let partialTrack = (await getTabOperation(tabId))?.partialTrack;
-  let nextPartialTrackPollAt = 0;
   let jobPollInterval = job.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
-  let partialPollInterval = ACTIVE_JOB_POLL_INTERVAL_MS;
 
   while (tabOperations.get(tabId) === operation) {
     if (isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
@@ -739,14 +728,13 @@ async function waitForCompletedSubtitleJob(
       return null;
     }
 
-    if (PARTIAL_TRACK_STAGES.has(job.stage) && Date.now() >= nextPartialTrackPollAt) {
-      const refreshedTrack = await fetchPartialTrack(installId, currentSession.plainTextToken, job);
-      const revisionChanged = refreshedTrack && refreshedTrack.revision !== partialTrack?.revision;
-      partialPollInterval = revisionChanged ? ACTIVE_JOB_POLL_INTERVAL_MS
-        : refreshedTrack ? Math.min(partialPollInterval * 2, PARTIAL_TRACK_POLL_INTERVAL_MS)
-          : PARTIAL_TRACK_POLL_INTERVAL_MS;
-      nextPartialTrackPollAt = Date.now() + Math.max(partialPollInterval, minimumActivePollInterval());
-      if (refreshedTrack && revisionChanged && tabOperations.get(tabId) === operation) {
+    if (job.partialTrack) {
+      const refreshedTrack: PartialSubtitleTrack = {
+        ...job.partialTrack,
+        sourceLanguage: job.detectedSourceLanguage ?? job.sourceLanguage,
+      };
+      const revisionChanged = refreshedTrack.revision !== partialTrack?.revision;
+      if (revisionChanged && tabOperations.get(tabId) === operation) {
         jobPollInterval = ACTIVE_JOB_POLL_INTERVAL_MS;
         partialTrack = refreshedTrack;
         if (!await isCurrentSession(session.sessionId)) return null;
@@ -787,10 +775,7 @@ async function waitForCompletedSubtitleJob(
 
     try {
       const refreshedJob = await subtitleApi.getSubtitleJob(installId, refreshedSession.plainTextToken, job.jobId);
-      const progressChanged = refreshedJob.status !== job.status || refreshedJob.stage !== job.stage
-        || refreshedJob.progressPercent !== job.progressPercent;
-      jobPollInterval = refreshedJob.status === 'queued' ? JOB_POLL_INTERVAL_MS
-        : progressChanged ? ACTIVE_JOB_POLL_INTERVAL_MS : Math.min(jobPollInterval * 2, JOB_POLL_INTERVAL_MS);
+      jobPollInterval = refreshedJob.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
       job = refreshedJob;
     } catch (error) {
       jobPollInterval = JOB_POLL_INTERVAL_MS;
@@ -830,34 +815,8 @@ async function waitForCompletedSubtitleJob(
 }
 
 function minimumActivePollInterval(): number {
-  // Status and partial requests share one install limit across active tabs.
+  // One status request per second across active tabs leaves rate-limit headroom.
   return ACTIVE_JOB_POLL_INTERVAL_MS * Math.max(1, tabOperations.size);
-}
-
-async function fetchPartialTrack(
-  installId: string,
-  authToken: string,
-  job: JobResponse,
-): Promise<PartialSubtitleTrack | undefined> {
-  try {
-    const response = await subtitleApi.getSubtitleJobPartialTrack(installId, authToken, job.jobId);
-
-    if (response.jobId !== job.jobId || response.youtubeVideoId !== job.youtubeVideoId) return undefined;
-
-    return {
-      jobId: response.jobId,
-      youtubeVideoId: response.youtubeVideoId,
-      // The overlay needs the effective language for srclang/lang; the job
-      // poll already carries it, so the partial contract does not.
-      sourceLanguage: job.detectedSourceLanguage ?? job.sourceLanguage,
-      revision: response.revision,
-      cues: response.cues,
-    };
-  } catch {
-    // 404 until transcription lands; any fetch error just means no partial
-    // update this poll. The last fetched partial track stays bound.
-    return undefined;
-  }
 }
 
 function delay(milliseconds: number): Promise<void> {

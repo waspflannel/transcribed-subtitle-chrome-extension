@@ -242,3 +242,5 @@ Vocabulary hints add the [documented Scribe keyterm surcharge](https://elevenlab
 - Logs/traces exclude generated content and credentials.
 - Database and Redis are not publicly reachable unless provider controls enforce source restrictions.
 - Backups are encrypted or protected by the provider's managed storage controls.
+
+Worker launchers default to `--sleep=0`. Redis keeps its one-second blocking pop, which waits for ready work without an additional idle sleep and revisits delayed jobs promptly.

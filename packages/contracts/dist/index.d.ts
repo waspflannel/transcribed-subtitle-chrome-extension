@@ -1101,6 +1101,7 @@ export type JobResponse = {
    * Exact text model saved on this job.
    */
   aiModel: string;
+  partialTrack?: PartialTrackResponse;
 };
 
 export interface TrackResponse {
@@ -1428,6 +1429,30 @@ export interface LearningToken {
   gloss?: string;
   romanization?: string;
   usageNote?: string;
+}
+/**
+ * Available source cues and completed annotations, delivered with running job status.
+ */
+export interface PartialTrackResponse {
+  jobId: string;
+  youtubeVideoId: string;
+  /**
+   * Count of pipeline artifacts merged into these cues. Monotonically increasing for a given run; re-render when it changes.
+   */
+  revision: number;
+  /**
+   * @minItems 1
+   */
+  cues: [PartialSubtitleCue, ...PartialSubtitleCue[]];
+}
+export interface PartialSubtitleCue {
+  cueId: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  sourceText: string;
+  translatedText?: string;
+  romanization?: string;
 }
 
 // Source: schemas/subtitle-job-history-response.schema.json

@@ -6,7 +6,7 @@ param(
     [int]$WorkerTimeoutSeconds = 1200,
     [int]$WorkerMaxTimeSeconds = 0,
     [int]$WorkerMemoryMb = 256,
-    [int]$WorkerSleepSeconds = 1,
+    [int]$WorkerSleepSeconds = 0,
     [int]$WorkerTries = 0,
     [int]$GracefulWorkerShutdownSeconds = 5,
     [switch]$SkipDocker,
