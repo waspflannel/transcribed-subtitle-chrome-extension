@@ -65,6 +65,7 @@ let localStateResetVersion = 0;
 let accountMutationVersion = 0;
 const JOB_POLL_INTERVAL_MS = 5000;
 const PARTIAL_TRACK_POLL_INTERVAL_MS = 10000;
+const ACTIVE_JOB_POLL_INTERVAL_MS = 2000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
 
@@ -685,9 +686,9 @@ async function generateSubtitlesForTab(
   }
 }
 
-// Stages at which the backend can already serve partial cues: draft cues
-// exist once transcription lands, right before the tokenizing stage starts.
+// Chunked transcription may publish a stable draft before analysis starts.
 const PARTIAL_TRACK_STAGES = new Set<JobResponse['stage']>([
+  'transcribing',
   'tokenizing',
   'romanizing',
   'translating',
@@ -706,6 +707,8 @@ async function waitForCompletedSubtitleJob(
   let job = initialJob;
   let partialTrack = (await getTabOperation(tabId))?.partialTrack;
   let nextPartialTrackPollAt = 0;
+  let jobPollInterval = job.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
+  let partialPollInterval = ACTIVE_JOB_POLL_INTERVAL_MS;
 
   while (tabOperations.get(tabId) === operation) {
     if (isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
@@ -724,9 +727,14 @@ async function waitForCompletedSubtitleJob(
     }
 
     if (PARTIAL_TRACK_STAGES.has(job.stage) && Date.now() >= nextPartialTrackPollAt) {
-      nextPartialTrackPollAt = Date.now() + PARTIAL_TRACK_POLL_INTERVAL_MS;
       const refreshedTrack = await fetchPartialTrack(installId, currentSession.plainTextToken, job);
-      if (refreshedTrack && refreshedTrack.revision !== partialTrack?.revision && tabOperations.get(tabId) === operation) {
+      const revisionChanged = refreshedTrack && refreshedTrack.revision !== partialTrack?.revision;
+      partialPollInterval = revisionChanged ? ACTIVE_JOB_POLL_INTERVAL_MS
+        : refreshedTrack ? Math.min(partialPollInterval * 2, PARTIAL_TRACK_POLL_INTERVAL_MS)
+          : PARTIAL_TRACK_POLL_INTERVAL_MS;
+      nextPartialTrackPollAt = Date.now() + Math.max(partialPollInterval, minimumActivePollInterval());
+      if (refreshedTrack && revisionChanged && tabOperations.get(tabId) === operation) {
+        jobPollInterval = ACTIVE_JOB_POLL_INTERVAL_MS;
         partialTrack = refreshedTrack;
         if (!await isCurrentSession(session.sessionId)) return null;
         const persistedOperation = await getTabOperation(tabId);
@@ -759,14 +767,20 @@ async function waitForCompletedSubtitleJob(
       }, session.account.id, session.sessionId);
     }
 
-    await delay(JOB_POLL_INTERVAL_MS);
+    await delay(Math.max(jobPollInterval, minimumActivePollInterval()));
     if (tabOperations.get(tabId) !== operation || isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
     const refreshedSession = await getStoredExtensionSession();
     if (!refreshedSession || refreshedSession.account.id !== session.account.id || refreshedSession.sessionId !== session.sessionId) return null;
 
     try {
-      job = await subtitleApi.getSubtitleJob(installId, refreshedSession.plainTextToken, job.jobId);
+      const refreshedJob = await subtitleApi.getSubtitleJob(installId, refreshedSession.plainTextToken, job.jobId);
+      const progressChanged = refreshedJob.status !== job.status || refreshedJob.stage !== job.stage
+        || refreshedJob.progressPercent !== job.progressPercent;
+      jobPollInterval = refreshedJob.status === 'queued' ? JOB_POLL_INTERVAL_MS
+        : progressChanged ? ACTIVE_JOB_POLL_INTERVAL_MS : Math.min(jobPollInterval * 2, JOB_POLL_INTERVAL_MS);
+      job = refreshedJob;
     } catch (error) {
+      jobPollInterval = JOB_POLL_INTERVAL_MS;
       if (isSessionInvalidError(error)) {
         await clearSessionIfInvalid(error, refreshedSession.sessionId);
 
@@ -800,6 +814,11 @@ async function waitForCompletedSubtitleJob(
   }
 
   return null;
+}
+
+function minimumActivePollInterval(): number {
+  // Status and partial requests share one install limit across active tabs.
+  return ACTIVE_JOB_POLL_INTERVAL_MS * Math.max(1, tabOperations.size);
 }
 
 async function fetchPartialTrack(

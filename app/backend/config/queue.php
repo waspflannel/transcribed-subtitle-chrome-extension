@@ -26,7 +26,8 @@ return [
             'connection' => env('REDIS_QUEUE_CONNECTION', 'queue'),
             'queue' => env('REDIS_QUEUE', env('SUBTITLE_QUEUE', 'subtitle-generation-base')),
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1260),
-            'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 5),
+            // Revisit delayed jobs promptly without busy-polling an idle queue.
+            'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 1),
             'after_commit' => false,
         ],
 

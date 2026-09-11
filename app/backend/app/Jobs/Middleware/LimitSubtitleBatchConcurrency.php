@@ -55,10 +55,8 @@ final class LimitSubtitleBatchConcurrency
     }
 
     /**
-     * Claim attempts never wait on the lock: a busy lock means another worker
-     * for the same user is mid-claim, and the caller's release-with-jitter
-     * retry is cheaper than serializing every worker in the pool behind one
-     * user's lock key.
+     * Briefly wait for another worker's bookkeeping before delaying the job.
+     * The lock only protects permit updates; provider work happens outside it.
      *
      * @return array{claimed: bool, token: string|null, delay_reason: string|null, observed_active_count: int|null}
      */
@@ -69,25 +67,26 @@ final class LimitSubtitleBatchConcurrency
         $token = null;
         $activeCount = null;
 
-        $lockAcquired = $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
-            ->get(function () use ($cache, $counterKey, $limit, &$claimed, &$token, &$activeCount): void {
-                $slots = $this->evictExpired($this->readSlots($cache, $counterKey));
-                $activeCount = count($slots);
+        try {
+            $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
+                ->betweenBlockedAttemptsSleepFor(10)
+                ->block(1, function () use ($cache, $counterKey, $limit, &$claimed, &$token, &$activeCount): void {
+                    $slots = $this->evictExpired($this->readSlots($cache, $counterKey));
+                    $activeCount = count($slots);
 
-                if ($activeCount >= $limit) {
-                    return;
-                }
+                    if ($activeCount >= $limit) {
+                        return;
+                    }
 
-                $token = (string) Str::uuid();
-                $slots[] = [
-                    'token' => $token,
-                    'expiresAt' => time() + SubtitleTier::concurrencyCounterSeconds(),
-                ];
-                $this->writeSlots($cache, $counterKey, $slots);
-                $claimed = true;
-            });
-
-        if ($lockAcquired === false) {
+                    $token = (string) Str::uuid();
+                    $slots[] = [
+                        'token' => $token,
+                        'expiresAt' => time() + SubtitleTier::concurrencyCounterSeconds(),
+                    ];
+                    $this->writeSlots($cache, $counterKey, $slots);
+                    $claimed = true;
+                });
+        } catch (LockTimeoutException) {
             return [
                 'claimed' => false,
                 'token' => null,
@@ -110,6 +109,7 @@ final class LimitSubtitleBatchConcurrency
 
         try {
             $cache->lock($counterKey.':lock', SubtitleTier::concurrencyLockSeconds())
+                ->betweenBlockedAttemptsSleepFor(10)
                 ->block(1, function () use ($cache, $counterKey, $token): void {
                     $slots = $this->readSlots($cache, $counterKey);
 

@@ -32,6 +32,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -322,6 +323,68 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame(7, $event->context['release_delay_seconds']);
         $this->assertArrayNotHasKey('user_id', $event->context);
         $this->assertArrayNotHasKey('install_id', $event->context);
+    }
+
+    public function test_batch_concurrency_claim_waits_for_brief_lock_contention_without_requeuing(): void
+    {
+        $cache = Cache::store('subtitle_concurrency_test');
+        $counterKey = 'brief-lock-contention';
+        $otherWorkerLock = $cache->lock($counterKey.':lock', 10);
+        $this->assertTrue($otherWorkerLock->get());
+        Sleep::fake(syncWithCarbon: true);
+        Sleep::whenFakingSleep(fn () => $otherWorkerLock->release());
+        $middleware = app(LimitSubtitleBatchConcurrency::class);
+
+        $claim = (new \ReflectionMethod($middleware, 'claimSlot'))->invoke($middleware, $counterKey, 1);
+
+        $this->assertTrue($claim['claimed']);
+        $this->assertNull($claim['delay_reason']);
+        $this->assertSame(0, $claim['observed_active_count']);
+        Sleep::assertSleptTimes(1);
+        (new \ReflectionMethod($middleware, 'releaseSlot'))->invoke($middleware, $counterKey, $claim['token']);
+        $this->assertNull($cache->get($counterKey));
+    }
+
+    public function test_batch_concurrency_claim_stops_waiting_for_a_stuck_lock_without_creating_a_slot(): void
+    {
+        $cache = Cache::store('subtitle_concurrency_test');
+        $counterKey = 'stuck-lock-contention';
+        $otherWorkerLock = $cache->lock($counterKey.':lock', 10);
+        $this->assertTrue($otherWorkerLock->get());
+        Sleep::fake(syncWithCarbon: true);
+        $started = now();
+        $middleware = app(LimitSubtitleBatchConcurrency::class);
+
+        $claim = (new \ReflectionMethod($middleware, 'claimSlot'))->invoke($middleware, $counterKey, 1);
+
+        $this->assertFalse($claim['claimed']);
+        $this->assertSame('lock_busy', $claim['delay_reason']);
+        $this->assertNull($claim['token']);
+        $this->assertNull($cache->get($counterKey));
+        $this->assertGreaterThanOrEqual(900, $started->diffInMilliseconds(now()));
+        $this->assertLessThanOrEqual(1000, $started->diffInMilliseconds(now()));
+        $this->assertTrue($otherWorkerLock->release());
+    }
+
+    public function test_batch_concurrency_middleware_releases_its_slot_when_processing_throws(): void
+    {
+        $job = SubtitleJob::factory()->create(['generation_tier' => 'base']);
+        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
+        $queuedJob = new class($job->id)
+        {
+            public function __construct(public readonly int $subtitleJobId) {}
+        };
+
+        try {
+            app(LimitSubtitleBatchConcurrency::class)->handle($queuedJob, function (): never {
+                throw new \RuntimeException('Fake provider failure');
+            });
+            $this->fail('Expected the processing failure to propagate.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Fake provider failure', $exception->getMessage());
+        }
+
+        $this->assertNull(Cache::store('subtitle_concurrency_test')->get($counterKey));
     }
 
     public function test_batch_concurrency_middleware_claims_and_releases_configured_store_slot(): void
