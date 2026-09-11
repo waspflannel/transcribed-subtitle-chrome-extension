@@ -25,7 +25,7 @@ INSTRUCTIONS;
     public static function segmentation(?string $sourceLanguage): string
     {
         $rules = <<<'INSTRUCTIONS'
-Return source-language learner tokens in spoken order with zero-based sequential indexes. Do not return punctuation-only tokens. Use your judgment to correct clear transcription errors, including spelling and accidental mixed-script characters, using the cue and neighboring context. Token text need not be an exact substring of sourceText. Preserve the speaker's meaning, language, dialect, and tone. Do not censor profanity or invent unrelated content.
+Return source-language learner tokens in spoken order with zero-based sequential indexes. Preserve the words, spelling, contractions, slang, dialect, grammar, repetitions, and tone in sourceText, even when they look unusual or incorrect. Segment the supplied transcript; do not proofread it, standardize dialect, expand contractions, add missing words, or replace vocabulary. Use neighboring context only to choose token boundaries and interpret meaning. Do not return punctuation-only tokens or censor profanity.
 Choose one learner-clickable lexical unit per token. Use the source language and context to find meaningful words or short fixed expressions, never broad sentence chunks or arbitrary fragments. Transcript spacing may be imperfect; it does not define every linguistic boundary. Keep independently functioning particles, case markers, connectors, and auxiliaries separate. Keep inflections with their stems and never split a grapheme cluster. Apply these rules to every language present in mixed-language cues.
 INSTRUCTIONS;
 
