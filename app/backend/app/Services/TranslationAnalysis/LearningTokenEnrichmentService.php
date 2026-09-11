@@ -53,7 +53,7 @@ class LearningTokenEnrichmentService
             fn (): array => $this->translationAnalysis->enrichToken(
                 cue: $cue,
                 token: $token,
-                sourceLanguage: $track->effectiveSourceLanguage(),
+                sourceLanguage: $track->source_language,
                 targetLanguage: $track->target_language,
                 selection: SubtitleModel::forJob($track->job),
             ),

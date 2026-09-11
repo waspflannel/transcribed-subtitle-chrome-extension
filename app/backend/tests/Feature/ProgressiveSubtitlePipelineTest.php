@@ -6,6 +6,7 @@ use App\Ai\Agents\CueAnalysisAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Models\BillingUsageEvent;
+use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobArtifact;
 use App\Services\Audio\SubtitleAudioWorkspace;
@@ -99,7 +100,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->transcribe($job, 2);
         $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
         $this->assertSame('tokenizing', $job->fresh()->stage);
-        $this->assertSame('spa', $job->fresh()->detected_source_language);
+        $this->assertSame('eng', $job->fresh()->detected_source_language);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         Bus::assertNotDispatched(FinalizeSubtitleJob::class);
 
@@ -148,6 +149,41 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertSame($preview, $this->preview($job));
         Http::assertSentCount(2);
         Bus::assertBatchCount(1);
+    }
+
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_english_intro_does_not_disable_punjabi_translation(bool $translate): void
+    {
+        $job = $this->job();
+        $job->update(['source_language' => 'auto', 'target_language' => 'eng', 'include_translation' => $translate]);
+        $this->transcribe($job, 0, ['language_code' => 'eng', 'words' => [
+            ['text' => 'Hello.', 'start' => 0.5, 'end' => 1, 'type' => 'word'],
+        ]]);
+        $this->assertSame('eng', $job->fresh()->detected_source_language);
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
+        $this->assertSame($translate, $this->analysisInputs[0]['includeTranslation']);
+        $this->assertSame('auto', $this->analysisInputs[0]['sourceLanguage']);
+        $opening = $this->preview($job)['cues'];
+
+        $this->transcribe($job, 1, ['language_code' => 'pan', 'words' => [
+            ['text' => 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ.', 'start' => 2, 'end' => 10, 'type' => 'word'],
+        ]]);
+        $this->transcribe($job, 2, ['words' => []]);
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+        $this->assertSame('pan', $job->fresh()->detected_source_language);
+        $this->assertSame('pan', CachedVideoTranscript::query()->firstOrFail()->payload['language']);
+        foreach (app(SubtitleJobArtifactStore::class)->pendingAnalysisIndexes($job) as $index) {
+            app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, $index, $job->run_id);
+        }
+        $this->assertSame($opening, array_slice($this->preview($job)['cues'], 0, 1));
+        $this->assertSame($translate ? 'Meaning 1' : 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ.', $this->preview($job)['cues'][1]['translatedText']);
+        foreach ($this->analysisInputs as $input) {
+            $this->assertSame('auto', $input['sourceLanguage']);
+            $this->assertSame($translate, $input['includeTranslation']);
+        }
+        Http::assertSentCount(3);
     }
 
     public function test_silent_opening_chunk_does_not_fail_the_video(): void

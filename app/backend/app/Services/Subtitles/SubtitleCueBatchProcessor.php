@@ -34,13 +34,13 @@ class SubtitleCueBatchProcessor
 
         try {
             $startedAtMs = $this->telemetry->currentTimeMs();
-            $includeTranslation = $job->include_translation && $job->effectiveSourceLanguage() !== $job->target_language;
+            $includeTranslation = $job->include_translation && $job->source_language !== $job->target_language;
             ['batch' => $batch, 'context' => $context] = $this->artifacts->cueBatchWithContext($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex);
             $includeRomanization = $job->include_romanization && SubtitleText::hasNonLatinCues($batch);
             $result = $this->translationAnalysis->analyzeCueBatch(
                 batch: $batch,
                 allCues: $context,
-                sourceLanguage: $job->effectiveSourceLanguage(),
+                sourceLanguage: $job->source_language,
                 targetLanguage: $job->target_language,
                 includeTranslation: $includeTranslation,
                 includeRomanization: $includeRomanization,
@@ -96,7 +96,7 @@ class SubtitleCueBatchProcessor
             process: function (SubtitleJob $job, int $batchIndex): CueEnrichmentResult {
                 return $this->translationAnalysis->enrichCueBatch(
                     batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::MERGED_CUES, $batchIndex),
-                    sourceLanguage: $job->effectiveSourceLanguage(),
+                    sourceLanguage: $job->source_language,
                     targetLanguage: $job->target_language,
                     selection: SubtitleModel::forJob($job),
                 );

@@ -329,14 +329,14 @@ class SubtitleGenerationPipeline
             }
             $transcript = $this->transcriptionService->stableTranscriptPrefix(
                 $this->artifacts->transcriptChunks($job, contiguousPrefix: true),
-                $job->effectiveSourceLanguage(),
+                $job->source_language,
                 (int) $job->video_duration_seconds,
             );
             if ($transcript === null || $transcript->segments === []) {
                 return;
             }
-            // Pin auto detection before the first analysis request. Later
-            // chunks must not change the language of already published cues.
+            // This label describes the available audio prefix. AI requests keep
+            // the requested language so an intro cannot lock later cues.
             $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
             $indexes = $this->artifacts->appendDraftCues($job, $this->tracks->draftCues($transcript));
             if ($indexes === []) {
@@ -375,7 +375,7 @@ class SubtitleGenerationPipeline
             $durationSeconds = (int) $job->video_duration_seconds;
             $transcript = $this->transcriptionService->transcriptFromChunkPayloads(
                 chunks: $this->artifacts->transcriptChunks($job),
-                sourceLanguage: $job->effectiveSourceLanguage(),
+                sourceLanguage: $job->source_language,
                 durationSeconds: $durationSeconds,
                 jobId: $job->public_id,
                 runId: $job->run_id,
@@ -742,7 +742,7 @@ class SubtitleGenerationPipeline
 
     private function isSameLanguageGeneration(SubtitleJob $job): bool
     {
-        return $job->effectiveSourceLanguage() === $job->target_language;
+        return $job->source_language === $job->target_language;
     }
 
     private function markJobRunning(SubtitleJob $job, string $stage, int $progressPercent): void

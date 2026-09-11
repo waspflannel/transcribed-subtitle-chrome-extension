@@ -1214,6 +1214,7 @@ class SubtitleJobApiTest extends TestCase
             'includeTranslation' => true,
         ]))->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $job->update(['detected_source_language' => 'eng']);
         $track = $job->track;
         $cue = $track->cues[0];
 
@@ -1712,7 +1713,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
         $this->assertSame(0, $this->translationAnalysis->calls);
-        $this->assertSame(['spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['auto'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng'], $this->translationAnalysis->targetLanguages);
     }
 
@@ -2041,7 +2042,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->calls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->translationCalls);
-        $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['auto', 'auto'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng', 'eng'], $this->translationAnalysis->targetLanguages);
     }
 
@@ -2062,7 +2063,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->calls);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
-        $this->assertSame(['spa', 'spa'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['auto', 'auto'], $this->translationAnalysis->sourceLanguages);
         $this->assertSame(['eng', 'eng'], $this->translationAnalysis->targetLanguages);
     }
 
@@ -2124,6 +2125,45 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
 
+    #[TestWith(['full'])]
+    #[TestWith(['on_demand'])]
+    public function test_auto_detected_english_still_translates_and_enriches_other_languages(string $enrichmentMode): void
+    {
+        $sourceText = 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ';
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'eng',
+            durationSeconds: 4.0,
+            segments: [
+                new TimestampedTranscriptSegment(0.0, 2.0, 'Hello there'),
+                new TimestampedTranscriptSegment(2.0, 4.0, $sourceText),
+            ],
+            webVtt: "WEBVTT\n\n",
+        );
+
+        $response = $this->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'sourceLanguage' => 'auto',
+                'targetLanguage' => 'eng',
+                'enrichmentMode' => $enrichmentMode,
+                'includeTranslation' => true,
+            ]))->assertOk()
+            ->assertJsonPath('detectedSourceLanguage', 'eng')
+            ->assertJsonPath('track.cues.1.translatedText', 'Translated '.$sourceText);
+
+        $this->assertSame(1, $this->translationAnalysis->translationCalls);
+        if ($enrichmentMode === 'on_demand') {
+            $this->postJson('/v1/learning-tokens', [
+                'trackId' => $response->json('track.trackId'),
+                'cueId' => $response->json('track.cues.1.cueId'),
+                'tokenIndex' => 0,
+            ])->assertOk();
+        }
+
+        $this->assertSame($enrichmentMode === 'full' ? 1 : 0, $this->translationAnalysis->calls);
+        $this->assertSame($enrichmentMode === 'on_demand' ? 1 : 0, $this->translationAnalysis->tokenCalls);
+        $this->assertSame(['auto', 'auto'], $this->translationAnalysis->sourceLanguages);
+    }
+
     public function test_full_enrichment_and_on_demand_tracks_are_cached_separately(): void
     {
         $onDemandResponse = $this
@@ -2182,7 +2222,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('cached_video_transcripts', [
             'youtube_video_id' => 'cachehit001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v4-progressive',
+            'transcription_model' => 'scribe-test:transcript-chunks-v5-mixed-language',
             'audio_duration_seconds' => 42,
         ]);
 
@@ -2251,7 +2291,7 @@ class SubtitleJobApiTest extends TestCase
         CachedVideoTranscript::create([
             'youtube_video_id' => 'cacheexp001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v4-progressive',
+            'transcription_model' => 'scribe-test:transcript-chunks-v5-mixed-language',
             'audio_duration_seconds' => 999,
             'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
             'expires_at' => now()->subDay(),

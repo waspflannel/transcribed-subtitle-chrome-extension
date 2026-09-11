@@ -22,6 +22,12 @@
 - Add a startup smoke check to `scripts/agent/check.ps1`.
 - Generation performance budgets are internal telemetry gates, not user-visible promises: base short/medium/near-limit p95 targets are 4/10/30 minutes, plus 3/7/22 minutes, and pro 2/5/15 minutes.
 
+## Automatic Language Detection
+
+- Detected language describes the available audio, not every cue. Progressive detection may change; final detection uses confidence-weighted owned speech across all chunks.
+- AI requests retain `source_language=auto` and infer each cue/token language from its text. Automatic generation, lyric corrections and word cards must not skip translation or full enrichment because the detected language matches the target. The explicit same-language optimization remains.
+- Updating detected metadata must not change published cue text or timing. No separate language-detection request is needed.
+
 ## Failure Handling
 
 Lyrics replacement wraps overlong aligned text server-side instead of spending another AI request solely to satisfy the 84-code-point cue limit. Word/grapheme boundaries preserve the text, and proportional subdivision stays inside the original timing slot with positive, contiguous durations. Other timing slots are unchanged. Full replacements return cue IDs and pasted segment ends; consecutive starts, separators and cue indexes are derived by the server. Partial-enabled replacements keep explicit mixed-source ranges. Unrelated lyrics, invalid source references, missing pasted text and stale attempts still fail before publication.

@@ -286,7 +286,7 @@ final class LyricsCorrectionService
         // Provider work must not hold database locks or publish a half-finished edit.
         $updatedCue = $this->translationAnalysis->refreshEditedCue(
             $updatedCue,
-            $job->effectiveSourceLanguage(),
+            $job->source_language,
             $job->target_language,
             $job->include_translation,
             $job->include_romanization,
@@ -550,7 +550,7 @@ final class LyricsCorrectionService
             job: $job,
             sourceCues: $track->cues,
             lyrics: $lyrics,
-            sourceLanguage: $job->effectiveSourceLanguage(),
+            sourceLanguage: $job->source_language,
             attemptId: $correction->attempt_id,
             allowPartial: (bool) ($correction->work_state['allowPartial'] ?? false),
         );
@@ -614,12 +614,12 @@ final class LyricsCorrectionService
         $this->ensureCorrectionCurrent($correction);
         $result = match ($stage) {
             'analyzing' => $this->translationAnalysis->analyzeCueBatch(
-                $batch, $cues, $job->effectiveSourceLanguage(), $job->target_language,
+                $batch, $cues, $job->source_language, $job->target_language,
                 includeTranslation: $this->translationRequested($job),
                 includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
                 selection: SubtitleModel::forJob($job),
             ),
-            'enriching' => $this->translationAnalysis->enrichCueBatch($batch, $job->effectiveSourceLanguage(), $job->target_language, SubtitleModel::forJob($job)),
+            'enriching' => $this->translationAnalysis->enrichCueBatch($batch, $job->source_language, $job->target_language, SubtitleModel::forJob($job)),
             default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
         };
         $this->ensureCorrectionCurrent($correction);
@@ -1149,12 +1149,12 @@ final class LyricsCorrectionService
 
     private function translationRequested(SubtitleJob $job): bool
     {
-        return $job->include_translation && $job->effectiveSourceLanguage() !== $job->target_language;
+        return $job->include_translation && $job->source_language !== $job->target_language;
     }
 
     private function fullEnrichmentRequested(SubtitleJob $job): bool
     {
-        return $job->enrichment_mode === 'full' && $job->effectiveSourceLanguage() !== $job->target_language;
+        return $job->enrichment_mode === 'full' && $job->source_language !== $job->target_language;
     }
 
     private function containsNonLatin(array $cues): bool

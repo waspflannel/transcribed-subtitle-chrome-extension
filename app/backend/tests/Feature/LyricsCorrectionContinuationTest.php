@@ -844,6 +844,30 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame('Translated Lyrics line 1', $row->track->cues[0]['translatedText']);
     }
 
+    public function test_auto_correction_translates_and_enriches_punjabi_despite_english_detection(): void
+    {
+        $texts = ['Hello there', 'ਸਤ ਸ੍ਰੀ ਅਕਾਲ'];
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => $texts[$position], [
+            'source_language' => 'auto',
+            'detected_source_language' => 'eng',
+            'target_language' => 'eng',
+            'include_translation' => true,
+            'include_romanization' => false,
+            'enrichment_mode' => 'full',
+        ]);
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
+        $response = $this->submitLyrics($queue['job'], $texts);
+
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $row->status);
+        $this->assertSame('Translated '.$texts[1], $row->track->cues[1]['translatedText']);
+        $this->assertSame(1, $this->translationAnalysis->translationCalls);
+        $this->assertSame(1, $this->translationAnalysis->calls);
+        $this->assertSame(['auto', 'auto'], $this->translationAnalysis->sourceLanguages);
+    }
+
     public function test_non_latin_correction_rebuilds_romanization(): void
     {
         $texts = ['مرحبا بالعالم', 'أهلا وسهلا'];
