@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\Subtitles\SubtitleRuntimeTracer;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Events\ResponseReceived;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -16,12 +17,16 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Providers\GroqProvider;
 use LogicException;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        Ai::extend('cerebras', fn ($app, array $config): GroqProvider => new GroqProvider($config, $app->make(Dispatcher::class)));
+
         JsonResource::withoutWrapping();
         $this->registerSubtitleQueueTracing();
         $this->registerOpenAiResponseTracing();

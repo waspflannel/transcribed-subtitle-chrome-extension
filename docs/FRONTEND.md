@@ -48,3 +48,5 @@
 - Keep the transcript stationary during playback and editing. Do not reintroduce active-cue auto-scroll or place the correction input between source words. Whole-track forms must replace the transcript surface instead of expanding above it.
 
 - New extension generation requests always use on-demand word cards. The upfront full-track option and its stored setting are removed; clicking a word still loads its card.
+
+- The signed-in Account tab shows the backend-configured analysis model as muted text at the bottom. It refreshes with the account summary and describes current configuration, not the model that produced an existing saved track. Older backend responses without model metadata show Model: Unavailable.

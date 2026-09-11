@@ -53,7 +53,7 @@ class ExtensionAuthController extends Controller
         $analytics->extensionConnected($user, $request->extensionInstallId(), $account);
 
         return response()->json([
-            'account' => $account,
+            'account' => [...$account, 'aiModel' => (string) config('ai.providers.'.config('ai.default').'.models.analysis.default')],
             'token' => [
                 'plainTextToken' => $issuedToken->plainTextToken,
                 'tokenType' => 'Bearer',
@@ -66,7 +66,10 @@ class ExtensionAuthController extends Controller
     public function account(Request $request, BillingEntitlementService $billing): JsonResponse
     {
         return response()->json([
-            'account' => $billing->accountSummary($this->extensionUser($request)),
+            'account' => [
+                ...$billing->accountSummary($this->extensionUser($request)),
+                'aiModel' => (string) config('ai.providers.'.config('ai.default').'.models.analysis.default'),
+            ],
         ]);
     }
 

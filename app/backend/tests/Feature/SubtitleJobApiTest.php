@@ -2603,6 +2603,23 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('error.code', 'rate_limited');
     }
 
+    public function test_word_card_cache_is_separate_for_each_provider_even_with_the_same_model(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $payload = ['trackId' => $response->json('track.trackId'), 'cueId' => 'cue-0001', 'tokenIndex' => 0];
+        $track = SubtitleTrack::where('public_id', $payload['trackId'])->firstOrFail();
+        $originalCues = $track->cues;
+        $this->withExtensionAuth($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $track->refresh()->update(['cues' => $originalCues]);
+        config([
+            'ai.default' => 'cerebras',
+            'ai.providers.cerebras.models.enrichment.default' => config('ai.providers.openai.models.enrichment.default'),
+        ]);
+        $this->withExtensionAuth($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $this->assertSame(2, $this->translationAnalysis->tokenCalls);
+    }
+
     public function test_learning_token_enrichment_updates_track_and_skips_duplicate_provider_calls(): void
     {
         $jobResponse = $this

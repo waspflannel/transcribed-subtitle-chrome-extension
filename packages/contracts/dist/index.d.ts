@@ -1,5 +1,9 @@
 // Source: schemas/account-summary.schema.json
 export interface AccountSummary {
+  /**
+   * Currently configured backend analysis model; not the provenance of saved tracks.
+   */
+  aiModel?: string;
   status: 'authenticated';
   id: string;
   email: string;
@@ -268,6 +272,10 @@ export interface ExtensionAuthResponse {
   };
 }
 export interface AccountSummary {
+  /**
+   * Currently configured backend analysis model; not the provenance of saved tracks.
+   */
+  aiModel?: string;
   status: 'authenticated';
   id: string;
   email: string;
@@ -289,6 +297,10 @@ export interface ExtensionAccountResponse {
   account: AccountSummary;
 }
 export interface AccountSummary {
+  /**
+   * Currently configured backend analysis model; not the provenance of saved tracks.
+   */
+  aiModel?: string;
   status: 'authenticated';
   id: string;
   email: string;

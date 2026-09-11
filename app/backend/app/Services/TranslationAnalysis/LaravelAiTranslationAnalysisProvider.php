@@ -16,7 +16,6 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Exceptions\RateLimitedException;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Throwable;
@@ -124,9 +123,9 @@ class LaravelAiTranslationAnalysisProvider
                 $reason = $exception->context['reason'] ?? 'unknown';
 
                 Log::info('backend.tokenization_batch_retried', [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'adapter' => 'laravel-ai-sdk',
-                    'model' => $this->openAiModel('tokenization'),
+                    'model' => $this->aiModel('tokenization'),
                     'source_language' => $sourceLanguage,
                     'cue_count' => $cueCount,
                     'reason' => is_string($reason) ? $reason : 'unknown',
@@ -190,9 +189,9 @@ class LaravelAiTranslationAnalysisProvider
         $reason = 'invalid_single_cue_tokenization';
 
         Log::info('backend.tokenization_fallback', [
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('tokenization'),
+            'model' => $this->aiModel('tokenization'),
             'source_language' => $sourceLanguage,
             'cue_index' => $batch[0]['index'] ?? null,
             'reason' => $reason,
@@ -300,9 +299,9 @@ class LaravelAiTranslationAnalysisProvider
                 $reason = $exception->context['reason'] ?? 'unknown';
 
                 Log::info('backend.enrichment_batch_retried', [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'adapter' => 'laravel-ai-sdk',
-                    'model' => $this->openAiModel('enrichment'),
+                    'model' => $this->aiModel('enrichment'),
                     'source_language' => $sourceLanguage,
                     'target_language' => $targetLanguage,
                     'cue_count' => $cueCount,
@@ -321,9 +320,9 @@ class LaravelAiTranslationAnalysisProvider
 
             if ($cueCount <= 1) {
                 Log::info('backend.enrichment_fallback', [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'adapter' => 'laravel-ai-sdk',
-                    'model' => $this->openAiModel('enrichment'),
+                    'model' => $this->aiModel('enrichment'),
                     'source_language' => $sourceLanguage,
                     'target_language' => $targetLanguage,
                     'cue_index' => $batch[0]['index'] ?? null,
@@ -424,9 +423,9 @@ class LaravelAiTranslationAnalysisProvider
                 $reason = $exception->context['reason'] ?? 'unknown';
 
                 Log::info('backend.analysis_batch_retried', [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'adapter' => 'laravel-ai-sdk',
-                    'model' => $this->openAiModel('analysis'),
+                    'model' => $this->aiModel('analysis'),
                     'source_language' => $sourceLanguage,
                     'target_language' => $targetLanguage,
                     'cue_count' => $cueCount,
@@ -495,9 +494,9 @@ class LaravelAiTranslationAnalysisProvider
         }
 
         Log::info('backend.analysis_fallback', [
-            'provider' => Lab::OpenAI->value,
+            'provider' => config('ai.default'),
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->openAiModel('analysis'),
+            'model' => $this->aiModel('analysis'),
             'source_language' => $sourceLanguage,
             'target_language' => $targetLanguage,
             'cue_index' => $batch[0]['index'] ?? null,
@@ -727,7 +726,7 @@ class LaravelAiTranslationAnalysisProvider
 
             if ($response->steps->last()?->finishReason === FinishReason::Length) {
                 throw SubtitleProcessingException::enrichmentFailed('Subtitle AI output exceeded its token limit.', [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'agent' => $agentClass,
                     'reason' => 'output_token_limit',
                 ]);
@@ -738,7 +737,7 @@ class LaravelAiTranslationAnalysisProvider
             throw SubtitleProcessingException::rateLimited(
                 'Subtitle AI processing is temporarily rate limited.',
                 [
-                    'provider' => Lab::OpenAI->value,
+                    'provider' => config('ai.default'),
                     'adapter' => 'laravel-ai-sdk',
                     'agent' => $agentClass,
                     'exception' => $exception::class,
@@ -749,7 +748,7 @@ class LaravelAiTranslationAnalysisProvider
             throw $exception;
         } catch (Throwable $exception) {
             $context = [
-                'provider' => Lab::OpenAI->value,
+                'provider' => config('ai.default'),
                 'adapter' => 'laravel-ai-sdk',
                 'agent' => $agentClass,
                 'exception' => $exception::class,
@@ -806,9 +805,9 @@ class LaravelAiTranslationAnalysisProvider
         ], true);
     }
 
-    private function openAiModel(string $purpose): string
+    private function aiModel(string $purpose): string
     {
-        return (string) config('ai.providers.'.Lab::OpenAI->value.'.models.'.$purpose.'.default');
+        return (string) config('ai.providers.'.config('ai.default').'.models.'.$purpose.'.default');
     }
 
     /**

@@ -90,6 +90,7 @@ export interface PanelDom {
   accountStatus: HTMLElement;
   accountPlan: HTMLElement;
   accountSpeed: HTMLElement;
+  accountModel: HTMLElement;
   accountLoginForm: HTMLFormElement;
   accountEmailInput: HTMLInputElement;
   accountPasswordInput: HTMLInputElement;
@@ -195,6 +196,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     accountStatus: query(root, '[data-account-status]', HTMLElement),
     accountPlan: query(root, '[data-account-plan]', HTMLElement),
     accountSpeed: query(root, '[data-account-speed]', HTMLElement),
+    accountModel: query(root, '[data-account-model]', HTMLElement),
     accountLoginForm: query(root, '[data-account-login-form]', HTMLFormElement),
     accountEmailInput: query(root, 'input[name="accountEmail"]', HTMLInputElement),
     accountPasswordInput: query(root, 'input[name="accountPassword"]', HTMLInputElement),

@@ -161,6 +161,7 @@ function guardAccountSummary(value: unknown): AccountSummary {
   const account = record(value, 'account summary');
 
   literal(account, 'status', 'authenticated');
+  optionalString(account, 'aiModel');
   requiredString(account, 'id');
   requiredString(account, 'email');
   requiredString(account, 'name');

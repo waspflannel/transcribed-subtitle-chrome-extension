@@ -4,11 +4,8 @@ namespace App\Ai\Agents;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
-use Laravel\Ai\Attributes\Provider;
-use Laravel\Ai\Enums\Lab;
 use Stringable;
 
-#[Provider(Lab::OpenAI)]
 #[MaxTokens(4000)]
 class EditedCueAgent extends CueEnrichmentAgent
 {

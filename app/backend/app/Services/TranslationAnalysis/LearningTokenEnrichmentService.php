@@ -170,6 +170,7 @@ class LearningTokenEnrichmentService
             'targetLanguage' => $track->target_language,
             'token' => $token['normalizedText'],
             'context' => $cue['sourceText'],
+            'provider' => config('ai.default'),
             'model' => $this->enrichmentModel(),
             'version' => SubtitleProcessingVersion::LEARNING_TOKEN_CACHE,
         ], JSON_THROW_ON_ERROR));
@@ -177,11 +178,11 @@ class LearningTokenEnrichmentService
 
     private function enrichmentModel(): string
     {
-        $model = config('ai.providers.openai.models.enrichment.default');
+        $model = config('ai.providers.'.config('ai.default').'.models.enrichment.default');
 
         if (! is_string($model) || trim($model) === '') {
             throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.', [
-                'provider' => 'openai',
+                'provider' => config('ai.default'),
                 'adapter' => 'laravel-ai-sdk',
                 'model_key' => 'enrichment.default',
             ]);

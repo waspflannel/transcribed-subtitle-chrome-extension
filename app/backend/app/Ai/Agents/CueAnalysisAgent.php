@@ -5,7 +5,6 @@ namespace App\Ai\Agents;
 use App\Exceptions\SubtitleProcessingException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\MaxTokens;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
@@ -16,7 +15,6 @@ use Stringable;
 /**
  * Chooses source tokens and supplies requested translation and romanization.
  */
-#[Provider(Lab::OpenAI)]
 #[MaxTokens(9000)]
 class CueAnalysisAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
@@ -87,11 +85,11 @@ INSTRUCTIONS;
 
     public function model(): string
     {
-        $model = config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default');
+        $model = config('ai.providers.'.config('ai.default').'.models.analysis.default');
 
         if (! is_string($model) || trim($model) === '') {
             throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.', [
-                'provider' => Lab::OpenAI->value,
+                'provider' => config('ai.default'),
                 'adapter' => 'laravel-ai-sdk',
                 'model_key' => 'analysis.default',
             ]);

@@ -73,6 +73,7 @@ it('shows the main generation cancel action while the job id is still being crea
       status: 'authenticated',
       id: 'account-1',
       email: 'learner@example.test',
+      aiModel: 'gpt-oss-120b',
       name: 'Learner',
       emailVerified: true,
       planName: 'Starter',
@@ -125,6 +126,8 @@ it('shows the main generation cancel action while the job id is still being crea
   expect(cancelButton?.hidden).toBe(false);
   expect(cancelButton?.disabled).toBe(true);
   expect(cancelButton?.textContent).toBe('Cancel generation');
+  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Model: gpt-oss-120b');
+  expect(dom.window.document.querySelector<HTMLElement>('[data-account-model]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-panel="watch"]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-progress]')?.hidden).toBe(false);
 

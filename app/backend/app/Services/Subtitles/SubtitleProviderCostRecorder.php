@@ -37,7 +37,7 @@ final class SubtitleProviderCostRecorder
      */
     public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false): void
     {
-        $model = (string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default');
+        $model = (string) config('ai.providers.'.config('ai.default').'.models.analysis.default');
 
         $stages = ['tokenizing' => 'tokenization'];
         if ($includeTranslation) {
@@ -50,11 +50,11 @@ final class SubtitleProviderCostRecorder
             $this->record(
                 job: $job,
                 stage: $stage,
-                provider: Lab::OpenAI->value,
+                provider: config('ai.default'),
                 model: $model,
                 billingUnit: 'cue',
                 billedUnits: max(0, $cueCount),
-                unitPriceMicrousd: max(0, (int) config("subtitles.costs.openai_{$purpose}_microusd_per_cue", 0)),
+                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.config('ai.default')."_{$purpose}_microusd_per_cue", 0)),
             );
         }
     }
@@ -68,11 +68,11 @@ final class SubtitleProviderCostRecorder
         $this->record(
             job: $job,
             stage: 'aligning',
-            provider: Lab::OpenAI->value,
-            model: (string) config('ai.providers.'.Lab::OpenAI->value.'.models.analysis.default'),
+            provider: config('ai.default'),
+            model: (string) config('ai.providers.'.config('ai.default').'.models.analysis.default'),
             billingUnit: 'alignment_call',
             billedUnits: 1,
-            unitPriceMicrousd: max(0, (int) config('subtitles.costs.openai_alignment_microusd_per_call', 0)),
+            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.config('ai.default').'_alignment_microusd_per_call', 0)),
             requiredStatus: 'completed',
         );
     }
@@ -90,13 +90,13 @@ final class SubtitleProviderCostRecorder
             return;
         }
 
-        $unitPrice = max(0, (int) config("subtitles.costs.openai_{$purpose}_microusd_per_cue", 0));
+        $unitPrice = max(0, (int) config('subtitles.costs.'.config('ai.default')."_{$purpose}_microusd_per_cue", 0));
 
         $this->record(
             job: $job,
             stage: $stage,
-            provider: Lab::OpenAI->value,
-            model: (string) config('ai.providers.'.Lab::OpenAI->value.".models.{$purpose}.default"),
+            provider: config('ai.default'),
+            model: (string) config('ai.providers.'.config('ai.default').".models.{$purpose}.default"),
             billingUnit: 'cue',
             billedUnits: max(0, $cueCount),
             unitPriceMicrousd: $unitPrice,
