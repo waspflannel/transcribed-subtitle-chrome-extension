@@ -19,6 +19,7 @@
 
 ## Expectations
 
+- Watch generation includes an AI model select with Luna (default) and Cerebras. The selection is saved in extension settings and captured when Generate is pressed; changing it leaves running jobs and saved tracks on their original model. Jobs display their saved provider, and Account displays the next generation selection.
 - Generation offers optional names/vocabulary for that video only: up to 20 terms, each at most five words and 49 characters. Inputs clear after submission or video/account changes and are not saved as global preferences. A completed cue with `translatedText: ""` means requested translation was unavailable; the transcript labels this and the overlay hides the empty line. Disabled/same-language translation still retains source text.
 
 - The internal `tokenizing` generation stage is displayed as **Analyzing subtitles** in the extension and web dashboard. Tokenization, translation, and requested romanization share one analysis response, progress band, and timeline step; the timeline must not show translation and romanization as later sequential steps.
