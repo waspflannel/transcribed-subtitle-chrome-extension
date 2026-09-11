@@ -130,6 +130,13 @@
 
           <!-- Ready: the transcript is the landing state. -->
           <div class="watch-ready" data-watch-ready hidden>
+              <label class="generation-picker">
+                Saved generation
+                <select data-generation-select aria-describedby="generation-status" disabled></select>
+              </label>
+              <p id="generation-status" class="microcopy" data-generation-status role="status"></p>
+              <button type="button" class="link-button" data-generation-refresh>Refresh saved generations</button>
+
             <div class="ready-toolbar">
               <label class="search-field">
                 <input type="search" data-transcript-search placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" />

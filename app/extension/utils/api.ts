@@ -118,8 +118,8 @@ export class SubtitleApiClient {
     );
   }
 
-  public async listSubtitleJobs(installId: string, authToken: string): Promise<SubtitleJobHistoryResponse> {
-    return this.request<SubtitleJobHistoryResponse>('subtitle-jobs', installId, {
+  public async listSubtitleJobs(installId: string, authToken: string, youtubeVideoId?: string): Promise<SubtitleJobHistoryResponse> {
+    return this.request<SubtitleJobHistoryResponse>(youtubeVideoId ? `subtitle-jobs?youtubeVideoId=${encodeURIComponent(youtubeVideoId)}` : 'subtitle-jobs', installId, {
       method: 'GET',
       timeoutMs: JOB_HISTORY_TIMEOUT_MS,
       authToken,

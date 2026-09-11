@@ -180,6 +180,17 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
     case 'panel.updateSettings':
       return updateSettingsFromPanel(message.patch, message.windowId);
 
+    case 'panel.listGenerations': {
+      const session = await getStoredExtensionSession();
+      if (!session) throw new Error('Sign in to view saved generations.');
+      const response = await subtitleApi.listSubtitleJobs(await getOrCreateInstallId(), session.plainTextToken, message.youtubeVideoId);
+      if (!await isCurrentSession(session.sessionId)) throw new Error('Your account changed. Refresh the panel.');
+      return response;
+    }
+
+    case 'panel.selectGeneration':
+      return selectGenerationFromPanel(message);
+
     case 'panel.generateSubtitles':
       return generateSubtitlesFromPanel(message.windowId, message.vocabularyHints ?? []);
 
@@ -1358,6 +1369,59 @@ async function recoverExactJobAfterStaleTrack(
   } catch {
     // The original stale-track error remains the user-visible result.
   }
+}
+
+async function selectGenerationFromPanel(
+  message: Extract<BackgroundRequest, { type: 'panel.selectGeneration' }>,
+): Promise<PanelState> {
+  const tab = await getActiveTab(message.windowId);
+  const session = await getStoredExtensionSession();
+  if (!session || tab?.id !== message.tabId) throw new Error('The active tab or account changed. Refresh the panel.');
+  const tabId = message.tabId;
+  if (tabGenerationInFlight.has(tabId) || tabCorrectionMutationInFlight.has(tabId)) {
+    throw new Error('Wait for the current subtitle operation to finish before switching.');
+  }
+  const claim = Symbol('select-generation');
+  const resetVersion = localStateResetVersion;
+  tabCorrectionMutationInFlight.set(tabId, claim);
+  const stillCurrent = async (): Promise<boolean> => {
+    const activeTab = await getActiveTab(message.windowId);
+    const matches = activeTab?.id === tabId
+      && await activeReadyTrackMatches(tabId, message.youtubeVideoId, message.currentJobId, message.trackId, session.account.id, session.sessionId);
+    return matches && resetVersion === localStateResetVersion && tabCorrectionMutationInFlight.get(tabId) === claim;
+  };
+  try {
+    if (!await stillCurrent()) throw new Error('The active transcript changed. Refresh the panel.');
+    const installId = await getOrCreateInstallId();
+    try {
+      const correction = await subtitleApi.getLyricsCorrectionStatus(installId, session.plainTextToken, message.currentJobId);
+      if (correction.status === 'queued' || correction.status === 'running') {
+        throw new Error('Wait for the lyrics replacement to finish before switching.');
+      }
+    } catch (error) {
+      if (!(error instanceof SubtitleApiError && error.code === 'not_found')) throw error;
+    }
+    const job = await subtitleApi.getSubtitleJob(installId, session.plainTextToken, message.jobId);
+    if (job.jobId !== message.jobId || job.status !== 'completed' || !job.track
+      || job.track.youtubeVideoId !== message.youtubeVideoId || job.track.jobId !== message.jobId
+      || Date.parse(job.track.expiresAt) <= Date.now()) {
+      throw new Error('This saved generation is no longer available.');
+    }
+    if (!await stillCurrent()) throw new Error('The active transcript changed. Refresh the panel.');
+    const state: SubtitleState = { type: 'ready', track: job.track };
+    tombstoneLyricsCorrectionState(tabId);
+    tabSubtitleStates.set(tabId, state);
+    tabSubtitleStateOwners.set(tabId, session.account.id);
+    tabSubtitleStateSessions.set(tabId, session.sessionId);
+    await rememberActiveTrack(job.track, session.account.id);
+    if (await activeReadyTrackMatches(tabId, message.youtubeVideoId, job.jobId, job.track.trackId, session.account.id, session.sessionId)
+      && resetVersion === localStateResetVersion && tabCorrectionMutationInFlight.get(tabId) === claim) {
+      await sendTabMessage(tabId, { type: 'background.subtitleStateChanged', subtitleState: state });
+    }
+  } finally {
+    if (tabCorrectionMutationInFlight.get(tabId) === claim) tabCorrectionMutationInFlight.delete(tabId);
+  }
+  return getPanelState({ syncBackend: false, windowId: message.windowId });
 }
 
 async function activeReadyTrackMatches(

@@ -1,4 +1,5 @@
 import './style.css';
+import { bindSavedGenerations } from './saved-generations';
 
 import { browser } from 'wxt/browser';
 
@@ -42,7 +43,7 @@ import {
 
 type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-cancel';
+type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-cancel' | 'generation-selection';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 type GenerationCancelFeedback = { kind: 'success' | 'error'; message: string };
 
@@ -266,6 +267,14 @@ overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 captionFontSizeSelect.addEventListener('change', handleCaptionFontSizeChange);
 captionDensitySelect.addEventListener('change', handleCaptionDensityChange);
 captionContrastThemeSelect.addEventListener('change', handleCaptionContrastThemeChange);
+const savedGenerations = bindSavedGenerations(
+  document.querySelector<HTMLSelectElement>('[data-generation-select]')!,
+  document.querySelector<HTMLElement>('[data-generation-status]')!,
+  document.querySelector<HTMLButtonElement>('[data-generation-refresh]')!,
+  request => sendPanelRequest(request, 'generation-selection', 'mutation'),
+  () => panelWindowId,
+);
+
 aiProviderSelect.addEventListener('change', () => {
   const aiProvider = aiProviderSelect.value;
   if (aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
@@ -983,6 +992,7 @@ function showPanelState(state: PanelState): void {
     vocabularyHintsInput.setCustomValidity('');
   }
   latestState = state;
+  savedGenerations.render(state);
 
   if (previousAccountId !== nextAccountId) {
     correctionCancelError.hidden = true;
@@ -1019,6 +1029,9 @@ function showPanelState(state: PanelState): void {
     partialLyricsConfirmation = null;
     pendingLyricsCorrection = null;
   } else if (nextTrackId !== previousTrackId) {
+    clearQuickFixSelection();
+    quickFixNotice = null;
+    lyricsCorrectionTextarea.value = '';
     /* A refreshed track invalidates any permission to retry the old paste. */
     lyricsReplaceConfirm = false;
     partialLyricsConfirmation = null;
@@ -1440,6 +1453,11 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
     : error instanceof Error
       ? error.message
       : 'Unable to load extension state';
+
+  if (errorTarget === 'generation-selection') {
+    savedGenerations.showError(message);
+    return;
+  }
 
   if (errorTarget === 'account') {
     showAccountFeedback('error', message);

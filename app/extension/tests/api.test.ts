@@ -14,6 +14,13 @@ const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('SubtitleApiClient', () => {
+  it('requests saved generations for one video without creating a job', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ jobs: [] })));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+    await client.listSubtitleJobs(installId, authToken, 'dQw4w9WgXcQ');
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/v1/subtitle-jobs?youtubeVideoId=dQw4w9WgXcQ', expect.objectContaining({ method: 'GET' }));
+  });
+
   it('keeps the timeout active while a response body is still streaming', async () => {
     vi.useFakeTimers();
     try {

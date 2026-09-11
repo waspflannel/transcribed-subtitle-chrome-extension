@@ -1745,3 +1745,14 @@ output {
 .tok-editor-hint {
   flex-basis: 100%;
 }
+
+.generation-picker {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.generation-picker select { width: 100%; min-width: 0; }
+[data-generation-refresh] { margin-bottom: 12px; }

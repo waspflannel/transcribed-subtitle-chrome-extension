@@ -92,6 +92,7 @@ const apiMock = vi.hoisted(() => ({
   enrichLearningToken: vi.fn(),
   createSubtitleJob: vi.fn(),
   getSubtitleJob: vi.fn(),
+  getLyricsCorrectionStatus: vi.fn(),
   getSubtitleJobPartialTrack: vi.fn(),
   cancelSubtitleJob: vi.fn(),
   listSubtitleJobs: vi.fn(async () => ({ jobs: [] })),
@@ -163,6 +164,7 @@ vi.mock('../utils/api', () => ({
   SubtitleApiClient: class {
     enrichLearningToken(...args: unknown[]) { return apiMock.enrichLearningToken(...args); }
     createSubtitleJob(...args: unknown[]) { return apiMock.createSubtitleJob(...args); }
+    getLyricsCorrectionStatus(...args: unknown[]) { return apiMock.getLyricsCorrectionStatus(...args); }
     getSubtitleJob(...args: unknown[]) { return apiMock.getSubtitleJob(...args); }
     getSubtitleJobPartialTrack(...args: unknown[]) { return apiMock.getSubtitleJobPartialTrack(...args); }
     cancelSubtitleJob(...args: unknown[]) { return apiMock.cancelSubtitleJob(...args); }
@@ -326,6 +328,7 @@ beforeEach(() => {
   apiMock.enrichLearningToken.mockReset();
   apiMock.createSubtitleJob.mockReset();
   apiMock.getSubtitleJob.mockReset();
+  apiMock.getLyricsCorrectionStatus.mockReset().mockResolvedValue({ status: 'completed' });
   apiMock.getSubtitleJobPartialTrack.mockReset();
   apiMock.cancelSubtitleJob.mockReset();
   apiMock.listSubtitleJobs.mockReset().mockResolvedValue({ jobs: [] });
@@ -708,5 +711,56 @@ describe('background entrypoint review regressions', () => {
       .sort((left, right) => left - right);
     expect(byType('background.settingsChanged')).toEqual([1, 2]);
     expect(byType('background.subtitleStateChanged')).toEqual([1, 2]);
+  });
+});
+
+
+describe('saved generation selection', () => {
+  async function setup() {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const original = track(VIDEO_A, 'luna-job', 'luna-track');
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { accountId: 'account-1', track: original } });
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'content.getState' }, sender(1));
+    const request = { type: 'panel.selectGeneration', jobId: 'cerebras-job', currentJobId: original.jobId,
+      trackId: original.trackId, youtubeVideoId: VIDEO_A, tabId: 1, windowId: 1 };
+    return { listener, request, original };
+  }
+
+  it('loads the selected job, remembers it, and switches the overlay without generating', async () => {
+    const { listener, request } = await setup();
+    const selected = track(VIDEO_A, 'cerebras-job', 'cerebras-track');
+    apiMock.getSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, selected.jobId), status: 'completed', track: selected });
+    const response = await dispatch(listener, request, {});
+    expect(response).toMatchObject({ subtitleState: { type: 'ready', track: selected } });
+    expect(storageMock.values.get('local:activeTracksByVideoId')).toMatchObject({ [VIDEO_A]: { track: selected } });
+    expect(browserMock.sentTabMessages).toContainEqual(expect.objectContaining({ tabId: 1,
+      message: { type: 'background.subtitleStateChanged', subtitleState: { type: 'ready', track: selected } } }));
+    expect(apiMock.createSubtitleJob).not.toHaveBeenCalled();
+    expect((await dispatch(listener, { type: 'content.getState' }, sender(1)))).toMatchObject({ subtitleState: { track: selected } });
+  });
+
+  it.each(['navigation', 'account', 'clear', 'failure'])('keeps a delayed selection from overwriting state after %s', async (change) => {
+    const { listener, request, original } = await setup();
+    const pending = deferred<unknown>();
+    apiMock.getSubtitleJob.mockReturnValue(pending.promise);
+    const result = dispatch(listener, request, {});
+    await waitFor(() => apiMock.getSubtitleJob.mock.calls.length > 0);
+    if (change === 'navigation') browserMock.tabs.get(1)!.url = `https://www.youtube.com/watch?v=${VIDEO_B}`;
+    if (change === 'account') storageMock.values.set('local:extensionSession', { ...session(), sessionId: 'other-session' });
+    if (change === 'clear') await dispatch(listener, { type: 'panel.clearLocalState', windowId: 1 }, {});
+    if (change === 'failure') pending.reject(new Error('Unavailable'));
+    else pending.resolve({ ...job(VIDEO_A, 'cerebras-job'), status: 'completed', track: track(VIDEO_A, 'cerebras-job', 'cerebras-track') });
+    expect(await result).toMatchObject({ ok: false });
+    expect(browserMock.sentTabMessages.some(({ message }) => JSON.stringify(message).includes('cerebras-track'))).toBe(false);
+    if (change !== 'clear') expect(storageMock.values.get('local:activeTracksByVideoId')).toMatchObject({ [VIDEO_A]: { track: original } });
+  });
+
+  it('blocks switching during lyrics replacement', async () => {
+    const { listener, request } = await setup();
+    apiMock.getLyricsCorrectionStatus.mockResolvedValue({ status: 'running' });
+    expect(await dispatch(listener, request, {})).toMatchObject({ ok: false });
+    expect(apiMock.getSubtitleJob).not.toHaveBeenCalled();
   });
 });

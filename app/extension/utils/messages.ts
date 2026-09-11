@@ -91,6 +91,8 @@ export interface PanelState {
 }
 
 export type BackgroundRequest =
+  | { type: 'panel.listGenerations'; youtubeVideoId: string; windowId?: number }
+  | { type: 'panel.selectGeneration'; jobId: string; currentJobId: string; trackId: string; youtubeVideoId: string; tabId: number; windowId?: number }
   | {
       type: 'content.getState';
     }
@@ -250,6 +252,12 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'panel.getState':
       return optionalBoolean(value, 'syncBackend') && optionalNumber(value, 'windowId');
 
+    case 'panel.listGenerations':
+      return hasString(value, 'youtubeVideoId') && optionalNumber(value, 'windowId');
+    case 'panel.selectGeneration':
+      return hasString(value, 'jobId') && hasString(value, 'currentJobId') && hasString(value, 'trackId')
+        && hasString(value, 'youtubeVideoId') && isNonNegativeInteger(value.tabId) && optionalNumber(value, 'windowId');
+
     case 'panel.updateSettings':
     case 'content.updateSettings':
       return isRecord(value.patch) && optionalNumber(value, 'windowId');
@@ -298,6 +306,8 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'content.enrichLearningToken':
     case 'content.activeCueChanged':
     case 'content.focusPanelTranscript':
+    case 'panel.listGenerations':
+    case 'panel.selectGeneration':
     case 'panel.getState':
     case 'panel.updateSettings':
     case 'panel.generateSubtitles':
