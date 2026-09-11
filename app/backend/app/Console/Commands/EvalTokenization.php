@@ -13,8 +13,8 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Throwable;
 
-#[Signature('subtitles:eval-tokenization {--lang=all : Language code (jpn, cmn, tha, or all)} {--model= : Override the tokenization model for this run} {--json : Output machine-readable JSON} {--out= : Write JSON results to this path}')]
-#[Description('Score the tokenization agent against CJK gold fixtures using boundary/word F1 and failure-mode attribution.')]
+#[Signature('subtitles:eval-tokenization {--lang=all : Language code (jpn, cmn, tha, or all)} {--model= : Override the analysis model for this run} {--json : Output machine-readable JSON} {--out= : Write JSON results to this path}')]
+#[Description('Score final tokenization pipeline output, from one analysis response, against CJK gold fixtures. Use subtitles:eval-agents for held-out first-response evidence.')]
 class EvalTokenization extends Command
 {
     private const FIXTURE_DIR = 'tests/Fixtures/tokenization';
@@ -41,25 +41,31 @@ class EvalTokenization extends Command
             return self::FAILURE;
         }
 
-        $model = $this->applyModelOverride();
-        $provider = $this->laravel->make(LaravelAiTranslationAnalysisProvider::class);
-        $this->metric = new TokenizationBoundaryMetric(new LearningTokenOutputValidator);
+        $originalModel = config('ai.providers.'.config('ai.default').'.models.text.default');
+        try {
+            $model = $this->applyModelOverride();
+            $provider = $this->laravel->make(LaravelAiTranslationAnalysisProvider::class);
+            $this->metric = new TokenizationBoundaryMetric(new LearningTokenOutputValidator);
 
-        $results = [];
+            $results = [];
 
-        foreach ($languages as $lang) {
-            $fixtures = $this->loadFixtures($lang);
+            foreach ($languages as $lang) {
+                $fixtures = $this->loadFixtures($lang);
 
-            if ($fixtures === []) {
-                $this->components->warn("No fixtures found for [{$lang}].");
+                if ($fixtures === []) {
+                    $this->components->warn("No fixtures found for [{$lang}].");
 
-                continue;
+                    continue;
+                }
+
+                $results[$lang] = $this->scoreLanguage($provider, $lang, $fixtures);
             }
 
-            $results[$lang] = $this->scoreLanguage($provider, $lang, $fixtures);
+            $payload = $this->payload($results, $model);
+        } finally {
+            config(['ai.providers.'.config('ai.default').'.models.text.default' => $originalModel]);
         }
-
-        $payload = $this->payload($results, $model);
+        $status = collect($results)->flatMap(fn (array $result): array => $result['cues'])->contains(fn (array $cue): bool => $cue['status'] !== 'scored') ? self::FAILURE : self::SUCCESS;
 
         if (is_string($this->option('out'))) {
             $this->writeJsonFile($this->option('out'), $payload);
@@ -68,12 +74,12 @@ class EvalTokenization extends Command
         if ($this->option('json')) {
             $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 
-            return self::SUCCESS;
+            return $status;
         }
 
         $this->renderTables($payload);
 
-        return self::SUCCESS;
+        return $status;
     }
 
     private function providerKeyConfigured(): bool
@@ -89,7 +95,7 @@ class EvalTokenization extends Command
             return null;
         }
 
-        config()->set('ai.providers.'.config('ai.default').'.models.tokenization.default', $model);
+        config()->set('ai.providers.'.config('ai.default').'.models.text.default', $model);
 
         return $model;
     }
@@ -222,11 +228,11 @@ class EvalTokenization extends Command
             'cueId' => $cueId,
             'index' => 0,
             'startMs' => 0,
-            'endMs' => 0,
+            'endMs' => 1000,
             'sourceText' => $sourceText,
         ];
 
-        $result = $provider->tokenizeCueBatch([$cue], [$cue], $lang);
+        $result = $provider->analyzeCueBatch([$cue], [$cue], $lang, $lang, false, false);
         $cues = $result->cues;
         $tokens = $cues[0]['tokens'] ?? [];
 
@@ -243,7 +249,8 @@ class EvalTokenization extends Command
     private function payload(array $results, ?string $model): array
     {
         return [
-            'model' => $model ?? (string) config('ai.providers.'.config('ai.default').'.models.tokenization.default'),
+            'scope' => 'Single-response segmentation. These legacy fixtures were formerly used as prompt examples. Use subtitles:eval-agents for held-out first-response and semantic-review evidence.',
+            'model' => $model ?? (string) config('ai.providers.'.config('ai.default').'.models.text.default'),
             'languages' => array_map(
                 fn (array $result): array => $this->languagePayload($result),
                 $results,
