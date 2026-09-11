@@ -219,28 +219,13 @@ final class LyricsCorrectionService
 
             $cue = $cues[$cuePosition];
             $tokens = is_array($cue['tokens'] ?? null) ? array_values($cue['tokens']) : [];
-            $span = $this->tokenSpan((string) ($cue['sourceText'] ?? ''), $tokens, $tokenIndex);
-
-            if ($span === null) {
+            if (! in_array($tokenIndex, array_column($tokens, 'index'), true)) {
                 abort(404);
             }
 
             $replacement = SubtitleText::collapseWhitespace($payload['text']);
             $sourceText = (string) $cue['sourceText'];
-            $updatedSourceText = mb_substr($sourceText, 0, $span[0], 'UTF-8')
-                .$replacement
-                .mb_substr($sourceText, $span[1], null, 'UTF-8');
-
-            if (SubtitleText::collapseWhitespace($updatedSourceText) === '') {
-                throw new SubtitleProcessingException('validation_failed', 'Replacement text must leave a non-empty subtitle line.', 422);
-            }
-
-            if (mb_strlen($updatedSourceText, 'UTF-8') > 84) {
-                throw ValidationException::withMessages([
-                    'text' => ['Replacement text makes this subtitle line longer than 84 characters.'],
-                ]);
-            }
-
+            $span = $this->tokenSpan($sourceText, $tokens, $tokenIndex);
             $updatedTokens = [];
             $replacementNormalizedText = $this->tokenValidator->normalizeTokenText($replacement);
 
@@ -266,6 +251,23 @@ final class LyricsCorrectionService
                     'text' => $token['index'] === $tokenIndex ? $replacement : $token['text'],
                     'normalizedText' => $normalizedText,
                 ];
+            }
+
+            // Corrected model tokens may no longer align with the transcript.
+            $updatedSourceText = $span === null
+                ? SubtitleText::canonicalComparable(implode(' ', array_column($updatedTokens, 'text')))
+                : mb_substr($sourceText, 0, $span[0], 'UTF-8')
+                    .$replacement
+                    .mb_substr($sourceText, $span[1], null, 'UTF-8');
+
+            if (SubtitleText::collapseWhitespace($updatedSourceText) === '') {
+                throw new SubtitleProcessingException('validation_failed', 'Replacement text must leave a non-empty subtitle line.', 422);
+            }
+
+            if (mb_strlen($updatedSourceText, 'UTF-8') > 84) {
+                throw ValidationException::withMessages([
+                    'text' => ['Replacement text makes this subtitle line longer than 84 characters.'],
+                ]);
             }
 
             $updatedCue = [
@@ -1311,6 +1313,7 @@ final class LyricsCorrectionService
     private function tokenSpan(string $sourceText, array $tokens, int $targetIndex): ?array
     {
         $cursor = 0;
+        $targetSpan = null;
 
         foreach ($tokens as $token) {
             if (! is_array($token) || ! is_int($token['index'] ?? null) || ! is_string($token['text'] ?? null)) {
@@ -1320,18 +1323,20 @@ final class LyricsCorrectionService
             $tokenText = $this->tokenValidator->normalizeTokenText($token['text']);
             $span = $this->findComparableSpan($sourceText, $tokenText, $cursor);
 
-            if ($span === null) {
+            if ($span === null || preg_match('/[\p{L}\p{N}\p{M}]/u', mb_substr($sourceText, $cursor, $span[0] - $cursor, 'UTF-8')) === 1) {
                 return null;
             }
 
             if ($token['index'] === $targetIndex) {
-                return $span;
+                $targetSpan = $span;
             }
 
             $cursor = $span[1];
         }
 
-        return null;
+        return preg_match('/[\p{L}\p{N}\p{M}]/u', mb_substr($sourceText, $cursor, null, 'UTF-8')) === 1
+            ? null
+            : $targetSpan;
     }
 
     /**

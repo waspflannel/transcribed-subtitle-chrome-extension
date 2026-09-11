@@ -803,7 +803,6 @@ class LaravelAiTranslationAnalysisProvider
             'invalid_token',
             'invalid_token_index',
             'invalid_token_text',
-            'token_text_not_in_source',
         ], true);
     }
 
@@ -995,7 +994,6 @@ class LaravelAiTranslationAnalysisProvider
             'translatedText' => (string) $sourceCue['sourceText'],
             'tokens' => $this->tokenValidator->validatedGeneratedTokens(
                 $outputCue['tokens'] ?? null,
-                (string) $sourceCue['sourceText'],
                 (int) $sourceCue['index'],
             ),
         ];

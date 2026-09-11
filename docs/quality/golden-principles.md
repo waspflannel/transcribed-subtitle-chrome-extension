@@ -6,6 +6,7 @@ Promote repeated human feedback into enforceable rules.
 
 - Prefer shared utilities over repeated local helpers.
 - Validate data at boundaries or rely on typed SDKs.
+- Trust the subtitle model's wording and segmentation. Validate structure, cue/token identity, and usable lexical text; do not reject corrections because tokens differ from the transcript.
 - Keep dependency directions explicit.
 - Keep logs structured.
 - Keep files small enough to review and reason about.

@@ -43,9 +43,9 @@ Return one analyzed cue for each input cue in the same order. Preserve cueId and
 
 Tokenization rules:
 
-Return only source-language token boundaries. Token text must preserve source characters in source order. Token indexes must be zero-based and sequential within each cue. Do not return punctuation-only tokens.
+Return source-language learner tokens in spoken order. Token indexes must be zero-based and sequential within each cue. Do not return punctuation-only tokens.
 
-Each token text must be copied from a contiguous substring of sourceText after the previous token. Do not censor profanity, normalize apostrophes or dashes, expand contractions, correct spelling, rewrite slang, or replace transcript words with safer wording. If a source word is offensive or malformed, copy the source characters exactly.
+Use your judgment to correct clear transcription errors, including spelling and accidental mixed-script characters, using the cue and neighboring context. Token text does not need to be an exact substring of sourceText. Preserve the speaker's meaning, language, dialect, and tone. Do not censor profanity or invent unrelated content.
 
 Use the language's normal learner segmentation. Prefer one learner-clickable lexical unit per token. For space-delimited text, keep natural learner words or short fixed phrases. For no-space scripts, choose meaningful words or short phrases rather than individual characters or arbitrary chunks. If the transcript inserted spaces between individual characters in a no-space script, treat those spaces as transcription artifacts and group the underlying source characters into learner units.
 

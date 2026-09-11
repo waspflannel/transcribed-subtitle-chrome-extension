@@ -24,6 +24,44 @@ use Tests\TestCase;
 
 class CueEnrichmentServiceTest extends TestCase
 {
+    public function test_generation_trusts_corrected_token_text_without_retrying(): void
+    {
+        $source = $this->sourceCue('cue-0012', 11, 'حلفوا غصن يديנו النجسة.');
+        $tokens = array_map(fn (string $text, int $index): array => [
+            'index' => $index, 'text' => $text, 'romanization' => 'reading-'.$index,
+        ], ['حلفوا', 'غصن', 'يدينو', 'النجسة'], range(0, 3));
+        $output = ['dialect' => 'unknown', 'cues' => [[
+            'cueId' => $source['cueId'], 'index' => $source['index'],
+            'translatedText' => 'Corrected translation', 'romanization' => 'cue reading',
+            'tokens' => $tokens,
+        ]]];
+
+        foreach ([CueAnalysisAgent::class, CueTokenizationAgent::class] as $agent) {
+            $calls = 0;
+            $agent::fake(function () use (&$calls, $output): array {
+                $calls++;
+
+                return $output;
+            })->preventStrayPrompts();
+
+            if ($agent === CueAnalysisAgent::class) {
+                $analysis = $this->provider()->analyzeCueBatch(
+                    [$source], [$source], 'ara', 'eng', includeRomanization: true,
+                );
+                $cue = $analysis->romanized->cues[0];
+                $this->assertSame('reading-2', $cue['tokens'][2]['romanization']);
+                $this->assertSame('Corrected translation', $analysis->translated->cues[0]['translatedText']);
+            } else {
+                $cue = $this->tokenizeBatch([$source], 'ara')->cues[0];
+            }
+
+            $this->assertSame(1, $calls);
+            $this->assertSame(array_column($tokens, 'text'), array_column($cue['tokens'], 'text'));
+            $this->assertSame($source['sourceText'], $cue['sourceText']);
+            $this->assertSame($source['startMs'], $cue['startMs']);
+        }
+    }
+
     public function test_analysis_returns_translation_and_readings_from_one_prompt(): void
     {
         $source = $this->sourceCue('cue-0001', 0, 'مرحبا');
@@ -65,12 +103,12 @@ class CueEnrichmentServiceTest extends TestCase
         CueRomanizationAgent::assertNeverPrompted();
     }
 
-    public function test_combined_analysis_fallback_drops_readings_for_invalid_token_boundaries(): void
+    public function test_combined_analysis_fallback_drops_readings_for_unusable_tokens(): void
     {
         $source = $this->sourceCue('cue-0001', 0, 'مرحبا');
         $output = ['dialect' => 'unknown', 'cues' => [[
             'cueId' => 'cue-0001', 'index' => 0, 'translatedText' => 'Hello',
-            'romanization' => 'wrong', 'tokens' => [['index' => 0, 'text' => 'missing', 'romanization' => 'wrong']],
+            'romanization' => 'wrong', 'tokens' => [['index' => 0, 'text' => '...', 'romanization' => 'wrong']],
         ]]];
         CueAnalysisAgent::fake([$output, $output])->preventStrayPrompts();
 
@@ -127,7 +165,7 @@ class CueEnrichmentServiceTest extends TestCase
         $invalidCue = [
             'cueId' => 'cue-0001',
             'index' => 0,
-            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+            'tokens' => [],
         ];
 
         // First attempt and one re-prompt both return invalid output.
@@ -152,7 +190,7 @@ class CueEnrichmentServiceTest extends TestCase
         $invalidCue = [
             'cueId' => 'cue-0001',
             'index' => 0,
-            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+            'tokens' => [],
         ];
 
         // First attempt and one re-prompt both return invalid output.
@@ -203,7 +241,7 @@ class CueEnrichmentServiceTest extends TestCase
         $invalidCue = [
             'cueId' => 'cue-0001',
             'index' => 0,
-            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+            'tokens' => [],
         ];
         $validCue = [
             'cueId' => 'cue-0001',
@@ -241,7 +279,7 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
-                        'tokens' => $this->generatedTokens($failedSourceText, ['evening']),
+                        'tokens' => [],
                     ],
                 ],
             ],
@@ -261,7 +299,7 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
-                        'tokens' => $this->generatedTokens($failedSourceText, ['evening']),
+                        'tokens' => [],
                     ],
                 ],
             ],
@@ -302,7 +340,7 @@ class CueEnrichmentServiceTest extends TestCase
                     [
                         'cueId' => 'cue-0002',
                         'index' => 1,
-                        'tokens' => $this->generatedTokens($secondSourceText, ['good', 'evening']),
+                        'tokens' => [],
                     ],
                 ],
             ],
@@ -921,7 +959,7 @@ class CueEnrichmentServiceTest extends TestCase
                         'cueId' => 'cue-0002',
                         'index' => 1,
                         'translatedText' => 'buenos dias',
-                        'tokens' => $this->generatedTokens($secondSourceText, ['good', 'evening']),
+                        'tokens' => [],
                     ],
                 ],
             ],
@@ -969,7 +1007,7 @@ class CueEnrichmentServiceTest extends TestCase
             'cueId' => 'cue-0001',
             'index' => 0,
             'translatedText' => 'hello everyone',
-            'tokens' => $this->generatedTokens($sourceText, ['missing']),
+            'tokens' => [],
         ];
 
         // First attempt and one re-prompt both return invalid tokens.

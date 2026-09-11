@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class LearningTokenOutputValidatorTest extends TestCase
@@ -15,7 +16,6 @@ class LearningTokenOutputValidatorTest extends TestCase
                 ['index' => 0, 'text' => 'Hola'],
                 ['index' => 1, 'text' => 'a todos'],
             ],
-            'Hola a todos',
             0,
         );
 
@@ -30,7 +30,6 @@ class LearningTokenOutputValidatorTest extends TestCase
                 ['index' => 0, 'text' => "\u{65E5}\u{672C}\u{8A9E}"],
                 ['index' => 1, 'text' => "\u{52C9}\u{5F37}"],
             ],
-            "\u{65E5} \u{672C} \u{8A9E} \u{3092} \u{52C9} \u{5F37}",
             0,
         );
 
@@ -45,7 +44,6 @@ class LearningTokenOutputValidatorTest extends TestCase
                 ['index' => 1, 'text' => ','],
                 ['index' => 2, 'text' => 'world'],
             ],
-            'hello, world',
             0,
         );
 
@@ -63,23 +61,23 @@ class LearningTokenOutputValidatorTest extends TestCase
                 ['index' => 3, 'text' => 'New York'],
                 ['index' => 4, 'text' => 'now'],
             ],
-            'I live in New York now',
             0,
         );
 
         $this->assertSame(['I', 'live', 'in', 'New York', 'now'], array_column($tokens, 'text'));
     }
 
-    public function test_rejects_out_of_order_generated_tokens(): void
+    public function test_preserves_model_wording_and_order(): void
     {
-        $this->assertRejectedTokenizationReason(
+        $tokens = $this->validator()->validatedGeneratedTokens(
             [
                 ['index' => 0, 'text' => 'todos'],
                 ['index' => 1, 'text' => 'Hola'],
             ],
-            'Hola a todos',
-            'token_text_not_in_source',
+            0,
         );
+
+        $this->assertSame(['todos', 'Hola'], array_column($tokens, 'text'));
     }
 
     public function test_rejects_non_sequential_generated_token_indexes(): void
@@ -88,14 +86,13 @@ class LearningTokenOutputValidatorTest extends TestCase
             [
                 ['index' => 1, 'text' => 'Hola'],
             ],
-            'Hola a todos',
             'invalid_token_index',
         );
     }
 
     public function test_rejects_empty_generated_token_output(): void
     {
-        $this->assertRejectedTokenizationReason([], 'Hola a todos', 'empty_tokens');
+        $this->assertRejectedTokenizationReason([], 'empty_tokens');
     }
 
     public function test_rejects_empty_generated_token_text(): void
@@ -104,18 +101,34 @@ class LearningTokenOutputValidatorTest extends TestCase
             [
                 ['index' => 0, 'text' => ' '],
             ],
-            'Hola a todos',
             'invalid_token_text',
         );
     }
 
-    /**
-     * @param  array<int, array<string, mixed>>  $tokens
-     */
-    private function assertRejectedTokenizationReason(array $tokens, string $sourceText, string $reason): void
+    #[DataProvider('unusableTokens')]
+    public function test_rejects_malformed_or_non_lexical_output(mixed $tokens, string $reason): void
+    {
+        $this->assertRejectedTokenizationReason($tokens, $reason);
+    }
+
+    public static function unusableTokens(): array
+    {
+        return [
+            'missing array' => [null, 'invalid_tokens'],
+            'string array' => ['hello', 'invalid_tokens'],
+            'scalar token' => [['hello'], 'invalid_token'],
+            'missing text' => [[['index' => 0]], 'invalid_token_text'],
+            'non-string text' => [[['index' => 0, 'text' => 123]], 'invalid_token_text'],
+            'punctuation only' => [[['index' => 0, 'text' => '...?!']], 'empty_tokens'],
+            'symbols only' => [[['index' => 0, 'text' => '🎵']], 'empty_tokens'],
+            'combining marks only' => [[['index' => 0, 'text' => "\u{064E}\u{0651}"]], 'empty_tokens'],
+        ];
+    }
+
+    private function assertRejectedTokenizationReason(mixed $tokens, string $reason): void
     {
         try {
-            $this->validator()->validatedGeneratedTokens($tokens, $sourceText, 0);
+            $this->validator()->validatedGeneratedTokens($tokens, 0);
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame($reason, $exception->context['reason'] ?? null);

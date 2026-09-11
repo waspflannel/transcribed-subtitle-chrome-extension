@@ -54,6 +54,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SubtitleJobApiTest extends TestCase
@@ -1126,6 +1127,39 @@ class SubtitleJobApiTest extends TestCase
             'expectedTrackId' => $track->public_id, 'text' => 'updated',
         ])->assertStatus(402);
         EditedCueAgent::assertNeverPrompted();
+    }
+
+    #[DataProvider('correctedTokenEdits')]
+    public function test_quick_fix_handles_model_tokens_that_differ_from_the_transcript(
+        string $sourceText, array $tokenTexts, int $tokenIndex, string $replacement, string $expectedText,
+    ): void {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $cue = $job->track->cues[0];
+        $cue['sourceText'] = $sourceText;
+        $cue['tokens'] = array_map(fn (string $text, int $index): array => [
+            'index' => $index, 'text' => $text, 'normalizedText' => mb_strtolower($text),
+        ], $tokenTexts, array_keys($tokenTexts));
+        $job->track->update(['cues' => [$cue]]);
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/'.$tokenIndex, [
+            'expectedTrackId' => $job->track->public_id, 'text' => $replacement,
+        ])->assertOk()
+            ->assertJsonPath('cues.0.sourceText', $expectedText)
+            ->assertJsonPath('cues.0.tokens.'.$tokenIndex.'.text', $replacement);
+        $this->assertStringContainsString($expectedText, $job->track->fresh()->web_vtt);
+    }
+
+    public static function correctedTokenEdits(): array
+    {
+        return [
+            'mixed script correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 1, 'يديه', 'غصن يديه النجسة'],
+            'token after correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 2, 'الجديدة', 'غصن يدينو الجديدة'],
+            'misleading repetition' => ['their there', ['there', 'there'], 0, 'here', 'here there'],
+            'exact punctuation' => ['hello, world!', ['hello', 'world'], 1, 'everyone', 'hello, everyone!'],
+            'attached punctuation' => ['helo world!', ['hello', 'world!'], 0, 'hi', 'hi world!'],
+            'no-space script' => ['日夲語勉強', ['日本語', '勉強'], 1, '学習', '日本語学習'],
+        ];
     }
 
     public function test_quick_fix_uses_the_selected_repeated_token_occurrence(): void

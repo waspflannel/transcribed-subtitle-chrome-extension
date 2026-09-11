@@ -43,7 +43,7 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 - Selectable translation/target language, defaulting to English.
 - Optional cue-level subtitle translation into the selected translation/target language.
 - Word-card metadata in the selected target language on demand, or for the full track when explicitly enabled.
-- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural/source-order validation, same-agent split retry for invalid multi-cue batches, and visible generation failure when a single cue remains unreliable.
+- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural validation that accepts model corrections to the transcript, same-agent split retry for invalid multi-cue batches, and visible generation failure when a single cue remains unreliable.
 - Optional non-Latin-script romanization when the user enables romanization, with visible generation failure when enabled romanization output is invalid.
 - Synchronized in-page overlay.
 - Local study controls for blurring token cards, full cue romanization, and translation, revealing token text plus token romanization per token on token hover/focus/pin while revealing full cue romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying/copying the active cue, navigating cues with keyboard shortcuts, and inspecting/searching the generated Transcript view in the side panel.

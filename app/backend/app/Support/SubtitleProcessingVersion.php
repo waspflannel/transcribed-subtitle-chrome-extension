@@ -8,7 +8,7 @@ namespace App\Support;
  */
 final class SubtitleProcessingVersion
 {
-    public const JOB = 'scribe-v2-tokenizer-v10-async-';
+    public const JOB = 'scribe-v2-tokenizer-v11-async-';
 
     public const TRANSCRIPT_CACHE = 'transcript-chunks-v3';
 

@@ -10,7 +10,7 @@ class LearningTokenOutputValidator
     /**
      * @return array<int, array{index: int, text: string, normalizedText: string}>
      */
-    public function validatedGeneratedTokens(mixed $tokens, string $sourceText, int $cueIndex): array
+    public function validatedGeneratedTokens(mixed $tokens, int $cueIndex): array
     {
         if (! is_array($tokens)) {
             $this->failInvalidOutput('invalid_tokens', ['cue_index' => $cueIndex]);
@@ -21,8 +21,6 @@ class LearningTokenOutputValidator
         }
 
         $validated = [];
-        $sourceComparable = $this->comparableText($sourceText);
-        $searchOffset = 0;
 
         foreach (array_values($tokens) as $position => $token) {
             if (! is_array($token)) {
@@ -52,25 +50,6 @@ class LearningTokenOutputValidator
                 continue;
             }
 
-            $tokenComparable = $this->comparableText($text);
-
-            if ($tokenComparable === '') {
-                $this->failInvalidOutput('invalid_token_text', [
-                    'cue_index' => $cueIndex,
-                    'token_position' => $position,
-                ]);
-            }
-
-            $sourcePosition = mb_strpos($sourceComparable, $tokenComparable, $searchOffset, 'UTF-8');
-
-            if ($sourcePosition === false) {
-                $this->failInvalidOutput('token_text_not_in_source', [
-                    'cue_index' => $cueIndex,
-                    'token_position' => $position,
-                ]);
-            }
-
-            $searchOffset = $sourcePosition + mb_strlen($tokenComparable, 'UTF-8');
             $validated[] = [
                 'index' => count($validated),
                 'text' => $text,
@@ -94,14 +73,9 @@ class LearningTokenOutputValidator
             : strtolower($normalized);
     }
 
-    private function comparableText(string $text): string
-    {
-        return $this->normalizeTokenText($text);
-    }
-
     private function isLexicalTokenText(string $text): bool
     {
-        return preg_match('/[\p{L}\p{N}\p{M}]/u', $text) === 1;
+        return preg_match('/[\p{L}\p{N}]/u', $text) === 1;
     }
 
     private function cleanString(mixed $value): ?string

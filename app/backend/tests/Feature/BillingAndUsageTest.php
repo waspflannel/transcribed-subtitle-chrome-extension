@@ -1054,7 +1054,7 @@ class BillingAndUsageTest extends TestCase
             'youtube_url' => $payload['youtubeUrl'],
             'source_language' => $payload['sourceLanguage'],
             'target_language' => $payload['targetLanguage'],
-            'processing_version' => 'scribe-v2-tokenizer-v10-async-on-demand-romanized',
+            'processing_version' => 'scribe-v2-tokenizer-v11-async-on-demand-romanized',
             'enrichment_mode' => 'on_demand',
             'include_romanization' => true,
             'include_translation' => false,
