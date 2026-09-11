@@ -62,6 +62,58 @@ class SubtitleJobApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_provider_and_exact_model_separate_jobs_but_share_transcription(): void
+    {
+        config(['ai.providers.openai.models.text.default' => 'luna-original', 'ai.providers.cerebras.models.text.default' => 'cerebras-original']);
+        $payload = $this->validPayload(['aiProvider' => 'openai', 'enrichmentMode' => 'full']);
+        $luna = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk()
+            ->assertJsonPath('aiProvider', 'openai')->assertJsonPath('aiModel', 'luna-original');
+        $cerebras = $this->postJson('/v1/subtitle-jobs', [...$payload, 'aiProvider' => 'cerebras'])->assertOk()
+            ->assertJsonPath('aiProvider', 'cerebras')->assertJsonPath('aiModel', 'cerebras-original');
+        $this->assertNotSame($luna->json('jobId'), $cerebras->json('jobId'));
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $luna->json('jobId'));
+        $this->postJson('/v1/subtitle-jobs', [...$payload, 'aiProvider' => 'cerebras'])->assertOk()->assertJsonPath('jobId', $cerebras->json('jobId'));
+        $this->assertSame([['openai', 'luna-original'], ['openai', 'luna-original'], ['cerebras', 'cerebras-original'], ['cerebras', 'cerebras-original']], $this->translationAnalysis->selections);
+
+        config(['ai.default' => 'cerebras', 'ai.providers.openai.models.text.default' => 'luna-updated']);
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('aiModel', 'luna-updated');
+        $this->assertSame(3, SubtitleJob::count());
+        $this->assertSame(1, $this->transcriptionService->chunkCalls);
+        $this->getJson('/v1/subtitle-jobs/'.$luna->json('jobId'))->assertOk()->assertJsonPath('aiModel', 'luna-original');
+        $this->getJson('/v1/subtitle-jobs')->assertOk()->assertJsonCount(3, 'jobs');
+    }
+
+    public function test_queued_job_keeps_its_model_after_configuration_changes(): void
+    {
+        config(['subtitles.queue.connection' => 'database', 'ai.providers.cerebras.models.text.default' => 'pinned-model']);
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras', 'enrichmentMode' => 'full']))->assertAccepted();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-model', 'subtitles.queue.connection' => 'sync']);
+        (new AcquireSubtitleAudio($job->id, $job->run_id))->handle(app(SubtitleGenerationPipeline::class));
+        $this->assertSame('completed', $job->refresh()->status);
+        $this->assertSame([['cerebras', 'pinned-model'], ['cerebras', 'pinned-model']], $this->translationAnalysis->selections);
+        $costs = $job->events()->where('event', 'provider.cost_estimated')->where('stage', '!=', 'transcribing')->get();
+        $this->assertNotEmpty($costs);
+        foreach ($costs as $cost) {
+            $this->assertSame('cerebras', $cost->context['provider']);
+            $this->assertSame('pinned-model', $cost->context['model']);
+        }
+    }
+
+    public function test_invalid_or_unconfigured_provider_cannot_create_jobs_or_reserve_usage(): void
+    {
+        $this->withExtensionAuth($this->installId());
+        $usageCount = BillingUsageEvent::count();
+        foreach (['hybrid', 'unknown', null, 123] as $provider) {
+            $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => $provider]))->assertUnprocessable();
+        }
+        config(['ai.providers.cerebras.key' => '']);
+        $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertUnprocessable();
+        $this->assertSame(0, SubtitleJob::count());
+        $this->assertSame(0, $this->audioSource->calls);
+        $this->assertSame($usageCount, BillingUsageEvent::count());
+    }
+
     public function test_vocabulary_hints_are_validated_normalized_and_isolate_job_and_transcript_reuse(): void
     {
         config(['subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000]);
@@ -1085,6 +1137,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_correction_rebuilds_track_atomically_and_clears_lyrics(): void
     {
+        config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.text.default' => 'saved-cerebras']);
         LyricsAlignmentAgent::fake([
             ['isMatch' => true, 'isComplete' => true, 'cues' => [
                 ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
@@ -1093,6 +1146,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-cerebras']);
         $oldTrackId = $job->track->public_id;
         $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "First lyric line\nSecond lyric line",
@@ -1107,12 +1161,18 @@ class SubtitleJobApiTest extends TestCase
         $this->assertStringContainsString('First lyric line', $job->track->web_vtt);
         $this->assertNull($job->track->lyricsCorrection->lyrics);
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'cerebras' && $prompt->model === 'saved-cerebras');
+        foreach ($this->translationAnalysis->selections as $selection) {
+            $this->assertSame(['cerebras', 'saved-cerebras'], $selection);
+        }
     }
 
     public function test_quick_fix_replaces_one_token_and_refreshes_derived_cue_data(): void
     {
+        config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.text.default' => 'saved-cerebras']);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
+        config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-cerebras']);
         $oldTrackId = $job->track->public_id;
         $oldCueId = $job->track->cues[0]['cueId'];
         $oldGeneratedAt = $job->track->generated_at->toJSON();
@@ -1144,6 +1204,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame($unchangedCue, $job->track->cues[1]);
         $this->assertSame($ledgerCount, BillingUsageEvent::count());
         $this->assertSame($tokenizationCalls, $this->translationAnalysis->tokenizationCalls);
+        EditedCueAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'cerebras' && $prompt->model === 'saved-cerebras');
     }
 
     public function test_quick_fix_refreshes_translation_and_preserves_a_replacement_phrase(): void
@@ -2701,7 +2762,11 @@ class SubtitleJobApiTest extends TestCase
             'ai.default' => 'cerebras',
         ]);
         $this->withExtensionAuth($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $this->assertSame(1, $this->translationAnalysis->tokenCalls);
+        $other = $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertOk();
+        $this->postJson('/v1/learning-tokens', [...$payload, 'trackId' => $other->json('track.trackId')])->assertOk();
         $this->assertSame(2, $this->translationAnalysis->tokenCalls);
+        $this->assertSame(['cerebras', 'same-model'], end($this->translationAnalysis->selections));
     }
 
     public function test_learning_token_enrichment_updates_track_and_skips_duplicate_provider_calls(): void

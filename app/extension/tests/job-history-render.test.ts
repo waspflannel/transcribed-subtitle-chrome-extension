@@ -23,6 +23,8 @@ function makeJob(overrides: Partial<SubtitleJobHistoryItem> = {}): SubtitleJobHi
     sourceLanguage: 'auto',
     detectedSourceLanguage: 'spa',
     targetLanguage: 'eng',
+    aiProvider: 'openai',
+    aiModel: 'gpt-5.6-luna',
     enrichmentMode: 'on_demand',
     includeRomanization: true,
     includeTranslation: false,

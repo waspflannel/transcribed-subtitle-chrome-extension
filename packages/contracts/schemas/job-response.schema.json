@@ -16,7 +16,9 @@
     "stage",
     "progressPercent",
     "createdAt",
-    "updatedAt"
+    "updatedAt",
+    "aiProvider",
+    "aiModel"
   ],
   "properties": {
     "jobId": {
@@ -395,6 +397,20 @@
     },
     "errorCode": {
       "$ref": "error-object.schema.json#/properties/code"
+    },
+    "aiProvider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "cerebras"
+      ],
+      "description": "AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model."
+    },
+    "aiModel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Exact text model saved on this job."
     }
   },
   "allOf": [

@@ -6,6 +6,7 @@ use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
@@ -30,13 +31,15 @@ class LaravelAiTranslationAnalysisProvider
         bool $includeTranslation = true,
         bool $includeRomanization = false,
         ?Closure $beforeRetry = null,
+        ?SubtitleModel $selection = null,
     ): CueEnrichmentResult {
         if ($batch === [] || $allCues === []) {
             $this->failInvalidOutput('empty_source_cues');
         }
 
+        $selection ??= SubtitleModel::configured();
         $input = $this->analysisInput($batch, $allCues, $sourceLanguage, $targetLanguage, $includeTranslation, $includeRomanization);
-        $output = $this->promptAgent(CueAnalysisAgent::class, $input);
+        $output = $this->promptAgent(CueAnalysisAgent::class, $input, $selection);
         try {
             return $this->validatedAnalysis($output, $batch, $includeTranslation, $includeRomanization);
         } catch (SubtitleProcessingException $exception) {
@@ -45,14 +48,14 @@ class LaravelAiTranslationAnalysisProvider
                 throw $exception;
             }
             Log::info('backend.analysis_batch_retried', [
-                'provider' => config('ai.default'),
-                'model' => (new CueAnalysisAgent)->model(),
+                'provider' => $selection->provider,
+                'model' => $selection->model,
                 'cue_count' => count($batch),
                 'reason' => $exception->context['reason'] ?? 'invalid_output',
             ]);
         }
 
-        return $this->validatedAnalysis($this->promptAgent(CueAnalysisAgent::class, $input), $batch, $includeTranslation, $includeRomanization);
+        return $this->validatedAnalysis($this->promptAgent(CueAnalysisAgent::class, $input, $selection), $batch, $includeTranslation, $includeRomanization);
     }
 
     public function validatedAnalysis(array $output, array $sourceCues, bool $includeTranslation, bool $includeRomanization): CueEnrichmentResult
@@ -118,34 +121,34 @@ class LaravelAiTranslationAnalysisProvider
         ];
     }
 
-    public function enrichCueBatch(array $batch, string $sourceLanguage, string $targetLanguage): CueEnrichmentResult
+    public function enrichCueBatch(array $batch, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null): CueEnrichmentResult
     {
         if ($batch === []) {
             $this->failInvalidOutput('empty_source_cues');
         }
-        $output = $this->promptAgent(CueEnrichmentAgent::class, $this->cardInput($batch, $sourceLanguage, $targetLanguage));
+        $output = $this->promptAgent(CueEnrichmentAgent::class, $this->cardInput($batch, $sourceLanguage, $targetLanguage), $selection);
 
         return $this->validatedCards($output, $batch);
     }
 
-    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage): array
+    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null): array
     {
         $output = $this->promptAgent(LearningTokenCardAgent::class, [
             ...$this->languages($sourceLanguage, $targetLanguage),
             'cue' => Arr::only($cue, ['sourceText', 'translatedText']),
             'requestedToken' => Arr::only($token, ['index', 'text']),
-        ]);
+        ], $selection);
 
         return $this->validatedCardToken($output['token'] ?? null, $token);
     }
 
-    public function refreshEditedCue(array $cue, string $sourceLanguage, string $targetLanguage, bool $includeTranslation, bool $includeRomanization): array
+    public function refreshEditedCue(array $cue, string $sourceLanguage, string $targetLanguage, bool $includeTranslation, bool $includeRomanization, ?SubtitleModel $selection = null): array
     {
         $output = $this->promptAgent(EditedCueAgent::class, [
             ...$this->cardInput([$cue], $sourceLanguage, $targetLanguage),
             'includeTranslation' => $includeTranslation,
             'includeRomanization' => $includeRomanization,
-        ]);
+        ], $selection);
 
         return $this->validatedEditedCue($output, $cue, $sourceLanguage, $targetLanguage, $includeTranslation, $includeRomanization);
     }
@@ -272,8 +275,9 @@ class LaravelAiTranslationAnalysisProvider
         );
     }
 
-    private function promptAgent(string $agentClass, array $input): array
+    private function promptAgent(string $agentClass, array $input, ?SubtitleModel $selection): array
     {
+        $selection ??= SubtitleModel::configured();
         try {
             $agent = $agentClass === CueAnalysisAgent::class
                 ? CueAnalysisAgent::make(
@@ -282,11 +286,15 @@ class LaravelAiTranslationAnalysisProvider
                     includeRomanization: $input['includeRomanization'] ?? false,
                 )
                 : $agentClass::make(sourceLanguage: $input['sourceLanguage']);
-            $response = $agent->prompt(json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+            $response = $agent->prompt(
+                json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+                provider: $selection->provider,
+                model: $selection->model,
+            );
 
             if ($response->steps->last()?->finishReason === FinishReason::Length) {
                 throw SubtitleProcessingException::enrichmentFailed('Subtitle AI output exceeded its token limit.', [
-                    'provider' => config('ai.default'),
+                    'provider' => $selection->provider,
                     'agent' => $agentClass,
                     'reason' => 'output_token_limit',
                 ]);
@@ -297,7 +305,7 @@ class LaravelAiTranslationAnalysisProvider
             throw SubtitleProcessingException::rateLimited(
                 'Subtitle AI processing is temporarily rate limited.',
                 [
-                    'provider' => config('ai.default'),
+                    'provider' => $selection->provider,
                     'adapter' => 'laravel-ai-sdk',
                     'agent' => $agentClass,
                     'exception' => $exception::class,
@@ -308,7 +316,7 @@ class LaravelAiTranslationAnalysisProvider
             throw $exception;
         } catch (Throwable $exception) {
             $context = [
-                'provider' => config('ai.default'),
+                'provider' => $selection->provider,
                 'adapter' => 'laravel-ai-sdk',
                 'agent' => $agentClass,
                 'exception' => $exception::class,

@@ -28,6 +28,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
+            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
             'enrichmentMode' => ['required', 'string', Rule::in(['on_demand', 'full'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
@@ -42,7 +43,7 @@ class CreateSubtitleJobRequest extends FormRequest
     }
 
     /**
-     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, enrichmentMode: string, includeRomanization: bool, includeTranslation: bool}
+     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, enrichmentMode: string, includeRomanization: bool, includeTranslation: bool}
      */
     public function subtitlePayload(): array
     {
@@ -58,6 +59,10 @@ class CreateSubtitleJobRequest extends FormRequest
             'vocabularyHints' => $validated['vocabularyHints'] ?? [],
         ];
 
+        if (isset($validated['aiProvider'])) {
+            $payload['aiProvider'] = $validated['aiProvider'];
+        }
+
         if (array_key_exists('videoDurationSeconds', $validated)) {
             $payload['videoDurationSeconds'] = $validated['videoDurationSeconds'];
         }
@@ -72,6 +77,16 @@ class CreateSubtitleJobRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
+                $provider = $this->input('aiProvider', config('ai.default'));
+                if (in_array($provider, ['openai', 'cerebras'], true)) {
+                    $key = config("ai.providers.{$provider}.key");
+                    $model = config("ai.providers.{$provider}.models.text.default");
+                    if (! is_string($key) || trim($key) === '' || ! is_string($model) || trim($model) === '') {
+                        $label = $provider === 'cerebras' ? 'Cerebras' : 'Luna';
+                        $validator->errors()->add('aiProvider', "{$label} is not configured on the backend.");
+                    }
+                }
+
                 $url = $this->input('youtubeUrl');
 
                 if (! is_string($url) || $url === '') {

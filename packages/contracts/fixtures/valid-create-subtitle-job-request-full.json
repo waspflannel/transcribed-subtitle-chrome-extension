@@ -6,5 +6,6 @@
   "targetLanguage": "fra",
   "enrichmentMode": "full",
   "includeRomanization": true,
-  "includeTranslation": true
+  "includeTranslation": true,
+  "aiProvider": "cerebras"
 }

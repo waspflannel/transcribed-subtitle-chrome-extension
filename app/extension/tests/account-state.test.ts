@@ -163,6 +163,8 @@ function jobHistory(overrides: Partial<SubtitleJobHistoryItem & {
     sourceLanguage: 'auto',
     detectedSourceLanguage: 'spa',
     targetLanguage: 'eng',
+    aiProvider: 'openai',
+    aiModel: 'gpt-5.6-luna',
     ...overrides,
     enrichmentMode: overrides.enrichmentMode ?? 'on_demand',
     includeRomanization: overrides.includeRomanization ?? true,

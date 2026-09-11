@@ -255,6 +255,14 @@
     "includeTranslation": {
       "type": "boolean",
       "description": "When true, backend translates cue text into the selected target language. When false, translatedText remains the source text."
+    },
+    "aiProvider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "cerebras"
+      ],
+      "description": "AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model."
     }
   }
 }

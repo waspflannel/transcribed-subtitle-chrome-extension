@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -13,6 +14,9 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     {
         parent::__construct(new LearningTokenOutputValidator);
     }
+
+    /** @var array<int, array{?string, ?string}> */
+    public array $selections = [];
 
     public int $calls = 0;
 
@@ -56,7 +60,9 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         array $batch,
         string $sourceLanguage,
         string $targetLanguage,
+        ?SubtitleModel $selection = null,
     ): CueEnrichmentResult {
+        $this->selections[] = [$selection?->provider, $selection?->model];
         $this->calls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;
@@ -107,7 +113,9 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         bool $includeTranslation = true,
         bool $includeRomanization = false,
         ?\Closure $beforeRetry = null,
+        ?SubtitleModel $selection = null,
     ): CueEnrichmentResult {
+        $this->selections[] = [$selection?->provider, $selection?->model];
         $this->tokenizationCalls++;
         $this->translationCalls += (int) $includeTranslation;
         $this->sourceLanguages[] = $sourceLanguage;
@@ -167,8 +175,9 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
      * @param  array<string, mixed>  $token
      * @return array<string, mixed>
      */
-    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage): array
+    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null): array
     {
+        $this->selections[] = [$selection?->provider, $selection?->model];
         $this->tokenCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->targetLanguages[] = $targetLanguage;

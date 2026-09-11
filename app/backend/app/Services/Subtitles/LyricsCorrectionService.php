@@ -290,6 +290,7 @@ final class LyricsCorrectionService
             $job->target_language,
             $job->include_translation,
             $job->include_romanization,
+            selection: SubtitleModel::forJob($job),
         );
 
         return DB::transaction(function () use ($job, $payload, $cuePosition, $updatedCue): SubtitleTrack {
@@ -616,8 +617,9 @@ final class LyricsCorrectionService
                 $batch, $cues, $job->effectiveSourceLanguage(), $job->target_language,
                 includeTranslation: $this->translationRequested($job),
                 includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
+                selection: SubtitleModel::forJob($job),
             ),
-            'enriching' => $this->translationAnalysis->enrichCueBatch($batch, $job->effectiveSourceLanguage(), $job->target_language),
+            'enriching' => $this->translationAnalysis->enrichCueBatch($batch, $job->effectiveSourceLanguage(), $job->target_language, SubtitleModel::forJob($job)),
             default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
         };
         $this->ensureCorrectionCurrent($correction);
@@ -801,7 +803,7 @@ final class LyricsCorrectionService
 
         $this->ensureCorrectionCurrent($correction);
         $this->requireActivePlan($job);
-        $output = $this->promptAlignment($input);
+        $output = $this->promptAlignment($input, SubtitleModel::forJob($job));
         $this->costs->recordCorrectionAlignment($job);
         $this->ensureCorrectionCurrent($correction);
 
@@ -830,11 +832,15 @@ final class LyricsCorrectionService
         }
     }
 
-    private function promptAlignment(array $input): array
+    private function promptAlignment(array $input, SubtitleModel $selection): array
     {
         try {
             $response = LyricsAlignmentAgent::make(allowPartial: (bool) $input['allowPartial'])
-                ->prompt(json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
+                ->prompt(
+                    json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+                    provider: $selection->provider,
+                    model: $selection->model,
+                );
             if ($response->steps->last()?->finishReason === FinishReason::Length) {
                 throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'output_token_limit']);
             }
@@ -844,7 +850,7 @@ final class LyricsCorrectionService
             throw SubtitleProcessingException::rateLimited(
                 'Subtitle AI processing is temporarily rate limited.',
                 [
-                    'provider' => SubtitleModel::provider(),
+                    'provider' => $selection->provider,
                     'adapter' => 'laravel-ai-sdk',
                     'agent' => LyricsAlignmentAgent::class,
                     'exception' => $exception::class,
@@ -855,7 +861,7 @@ final class LyricsCorrectionService
             throw $exception;
         } catch (Throwable $exception) {
             $context = [
-                'provider' => SubtitleModel::provider(),
+                'provider' => $selection->provider,
                 'adapter' => 'laravel-ai-sdk',
                 'agent' => LyricsAlignmentAgent::class,
                 'exception' => $exception::class,

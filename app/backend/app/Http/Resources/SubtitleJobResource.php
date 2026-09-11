@@ -48,6 +48,8 @@ class SubtitleJobResource extends JsonResource
             'youtubeVideoId' => $this->youtube_video_id,
             'sourceLanguage' => $this->source_language,
             'targetLanguage' => $this->target_language,
+            'aiProvider' => $this->ai_provider,
+            'aiModel' => $this->ai_model,
             'enrichmentMode' => $enrichmentMode,
             'includeRomanization' => $includeRomanization,
             'includeTranslation' => $includeTranslation,

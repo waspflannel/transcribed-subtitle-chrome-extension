@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
@@ -892,7 +893,7 @@ class TraceRecordingTranslationAnalysisProvider extends LaravelAiTranslationAnal
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null): CueEnrichmentResult
+    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null, ?SubtitleModel $selection = null): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
 

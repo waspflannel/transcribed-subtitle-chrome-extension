@@ -55,6 +55,7 @@ class LearningTokenEnrichmentService
                 token: $token,
                 sourceLanguage: $track->effectiveSourceLanguage(),
                 targetLanguage: $track->target_language,
+                selection: SubtitleModel::forJob($track->job),
             ),
         );
 
@@ -172,8 +173,8 @@ class LearningTokenEnrichmentService
             'tokenIndex' => $token['index'],
             'context' => $cue['sourceText'],
             'translation' => $cue['translatedText'] ?? null,
-            'provider' => SubtitleModel::provider(),
-            'model' => SubtitleModel::model(),
+            'provider' => $track->job->ai_provider,
+            'model' => $track->job->ai_model,
             'version' => SubtitleProcessingVersion::LEARNING_TOKEN_CACHE,
         ], JSON_THROW_ON_ERROR));
     }

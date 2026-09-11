@@ -4,13 +4,16 @@ namespace Tests\Unit;
 
 use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\CueEnrichmentAgent;
+use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Events\PromptingAgent;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class CueEnrichmentServiceTest extends TestCase
@@ -23,6 +26,30 @@ class CueEnrichmentServiceTest extends TestCase
         Event::listen(PromptingAgent::class, function (): void {
             $this->promptCount++;
         });
+    }
+
+    #[TestWith(['openai', 'cerebras'])]
+    #[TestWith(['cerebras', 'openai'])]
+    public function test_explicit_selection_routes_every_text_operation_without_changing_the_default(string $provider, string $default): void
+    {
+        config(['ai.default' => $default, "ai.providers.{$provider}.models.text.default" => 'different-current-model']);
+        $selection = new SubtitleModel($provider, 'saved-model');
+        $cue = [...$this->part(0, 'Hello'), 'translatedText' => 'Hello', 'tokens' => [['index' => 0, 'text' => 'Hello']]];
+        $cards = ['dialect' => 'unknown', 'cues' => [['cueId' => 'cue-0', 'index' => 0, 'tokens' => [['index' => 0, 'translation' => 'Hola']]]]];
+        CueAnalysisAgent::fake([['cues' => [$cue]]])->preventStrayPrompts();
+        CueEnrichmentAgent::fake([$cards])->preventStrayPrompts();
+        LearningTokenCardAgent::fake([['token' => ['index' => 0, 'translation' => 'Hola']]])->preventStrayPrompts();
+        EditedCueAgent::fake([$cards])->preventStrayPrompts();
+        $analysis = app(LaravelAiTranslationAnalysisProvider::class);
+        $analysis->analyzeCueBatch([$cue], [$cue], 'eng', 'spa', false, false, selection: $selection);
+        $analysis->enrichCueBatch([$cue], 'eng', 'spa', $selection);
+        $analysis->enrichToken($cue, $cue['tokens'][0], 'eng', 'spa', $selection);
+        $analysis->refreshEditedCue($cue, 'eng', 'spa', false, false, $selection);
+        foreach ([CueAnalysisAgent::class, CueEnrichmentAgent::class, LearningTokenCardAgent::class, EditedCueAgent::class] as $agent) {
+            $agent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === $provider && $prompt->model === 'saved-model');
+        }
+        $this->assertSame($default, config('ai.default'));
+        $this->assertSame('different-current-model', config("ai.providers.{$provider}.models.text.default"));
     }
 
     public function test_luna_annotates_fixed_cues_and_returns_all_requested_language_work_once(): void

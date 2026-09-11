@@ -76,6 +76,12 @@ const lyricsCorrectionStatus = ajv.getSchema('lyrics-correction-status.schema.js
 
 const generationRequest = ajv.getSchema('create-subtitle-job-request.schema.json');
 const generationFixture = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-create-subtitle-job-request.json'), 'utf8'));
+for (const aiProvider of ['openai', 'cerebras']) {
+  if (!generationRequest({ ...generationFixture, aiProvider })) throw new Error('Valid AI provider rejected.');
+}
+for (const aiProvider of ['hybrid', 'invalid', null, 1]) {
+  if (generationRequest({ ...generationFixture, aiProvider })) throw new Error('Invalid AI provider accepted.');
+}
 if (!generationRequest({ ...generationFixture, vocabularyHints: ['Marie Curie', 'مرحبا'] })) {
   throw new Error('Valid vocabulary hints were rejected.');
 }

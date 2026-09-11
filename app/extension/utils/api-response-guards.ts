@@ -207,6 +207,8 @@ function guardJobCore(value: Record<string, unknown>): void {
   requiredString(value, 'sourceLanguage');
   optionalString(value, 'detectedSourceLanguage');
   requiredString(value, 'targetLanguage');
+  oneOf(value, 'aiProvider', ['openai', 'cerebras']);
+  requiredString(value, 'aiModel');
   oneOf(value, 'enrichmentMode', ['on_demand', 'full']);
   requiredBoolean(value, 'includeRomanization');
   requiredBoolean(value, 'includeTranslation');

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Ai\SubtitleModel;
 use App\Models\SubtitleJob;
 use App\Models\User;
 use App\Services\Subtitles\SubtitleJobService;
@@ -31,6 +32,8 @@ class SubtitleJobFactory extends Factory
             'detected_source_language' => null,
             'target_language' => 'eng',
             'processing_version' => SubtitleJobService::processingVersionFor('on_demand', false, false),
+            'ai_provider' => SubtitleModel::provider(),
+            'ai_model' => SubtitleModel::model(),
             'generation_tier' => 'base',
             'enrichment_mode' => 'on_demand',
             'include_romanization' => true,

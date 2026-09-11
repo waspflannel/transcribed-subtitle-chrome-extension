@@ -2,7 +2,6 @@
 
 namespace App\Services\Subtitles;
 
-use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
@@ -113,9 +112,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.enrichment_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('enrichment'),
+            'model' => $job->ai_model,
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => $cueCount,
@@ -127,9 +126,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.tokenization_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('tokenization'),
+            'model' => $job->ai_model,
             'source_language' => $job->source_language,
             'cue_count' => $cueCount,
         ]);
@@ -140,9 +139,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.tokenization_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('tokenization'),
+            'model' => $job->ai_model,
             'source_language' => $job->source_language,
             'cue_count' => count($enrichment->cues),
             'token_count' => $this->tokenCount($enrichment),
@@ -154,9 +153,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.enrichment_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('enrichment'),
+            'model' => $job->ai_model,
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => count($enrichment->cues),
@@ -169,9 +168,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.romanization_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('romanization'),
+            'model' => $job->ai_model,
             'cue_count' => $cueCount,
         ]);
     }
@@ -181,9 +180,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.romanization_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('romanization'),
+            'model' => $job->ai_model,
             'cue_count' => count($enrichment->cues),
         ]);
     }
@@ -193,9 +192,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.translation_started', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('analysis'),
+            'model' => $job->ai_model,
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => $cueCount,
@@ -207,9 +206,9 @@ class SubtitleWorkflowLogger
         Log::info('backend.translation_completed', [
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
-            'provider' => SubtitleModel::provider(),
+            'provider' => $job->ai_provider,
             'adapter' => 'laravel-ai-sdk',
-            'model' => $this->aiModel('analysis'),
+            'model' => $job->ai_model,
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => count($enrichment->cues),
@@ -298,11 +297,6 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'exception' => $exception::class,
         ]);
-    }
-
-    private function aiModel(string $purpose): string
-    {
-        return SubtitleModel::model($purpose === 'enrichment' ? 'cards' : 'analysis');
     }
 
     private function tokenCount(CueEnrichmentResult $enrichment): int

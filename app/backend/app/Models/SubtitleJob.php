@@ -25,6 +25,8 @@ class SubtitleJob extends Model
         'detected_source_language',
         'target_language',
         'processing_version',
+        'ai_provider',
+        'ai_model',
         'generation_tier',
         'enrichment_mode',
         'include_romanization',

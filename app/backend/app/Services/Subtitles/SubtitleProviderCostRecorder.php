@@ -2,7 +2,6 @@
 
 namespace App\Services\Subtitles;
 
-use App\Ai\SubtitleModel;
 use App\Models\SubtitleJob;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Enums\Lab;
@@ -38,7 +37,7 @@ final class SubtitleProviderCostRecorder
      */
     public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false, string $requiredStatus = 'running'): void
     {
-        $model = SubtitleModel::model();
+        $model = $job->ai_model;
 
         $stages = ['tokenizing' => 'tokenization'];
         if ($includeTranslation) {
@@ -51,11 +50,11 @@ final class SubtitleProviderCostRecorder
             $this->record(
                 job: $job,
                 stage: $stage,
-                provider: SubtitleModel::provider(),
+                provider: $job->ai_provider,
                 model: $model,
                 billingUnit: 'cue',
                 billedUnits: max(0, $cueCount),
-                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.SubtitleModel::provider()."_{$purpose}_microusd_per_cue", 0)),
+                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.$job->ai_provider."_{$purpose}_microusd_per_cue", 0)),
                 requiredStatus: $requiredStatus,
             );
         }
@@ -70,11 +69,11 @@ final class SubtitleProviderCostRecorder
         $this->record(
             job: $job,
             stage: 'aligning',
-            provider: SubtitleModel::provider(),
-            model: SubtitleModel::model(),
+            provider: $job->ai_provider,
+            model: $job->ai_model,
             billingUnit: 'alignment_call',
             billedUnits: 1,
-            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.SubtitleModel::provider().'_alignment_microusd_per_call', 0)),
+            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.$job->ai_provider.'_alignment_microusd_per_call', 0)),
             requiredStatus: 'completed',
         );
     }
@@ -90,13 +89,13 @@ final class SubtitleProviderCostRecorder
             return;
         }
 
-        $unitPrice = max(0, (int) config('subtitles.costs.'.SubtitleModel::provider()."_{$purpose}_microusd_per_cue", 0));
+        $unitPrice = max(0, (int) config('subtitles.costs.'.$job->ai_provider."_{$purpose}_microusd_per_cue", 0));
 
         $this->record(
             job: $job,
             stage: $stage,
-            provider: SubtitleModel::provider(),
-            model: SubtitleModel::model(),
+            provider: $job->ai_provider,
+            model: $job->ai_model,
             billingUnit: 'cue',
             billedUnits: max(0, $cueCount),
             unitPriceMicrousd: $unitPrice,

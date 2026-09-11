@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Text\SubtitleText;
@@ -45,6 +46,7 @@ class SubtitleCueBatchProcessor
                 includeTranslation: $includeTranslation,
                 includeRomanization: $includeRomanization,
                 beforeRetry: fn (): bool => $this->loadRunningJob($subtitleJobId, $runId) !== null,
+                selection: SubtitleModel::forJob($job),
             );
 
             $job = $this->loadRunningJob($subtitleJobId, $runId);
@@ -91,6 +93,7 @@ class SubtitleCueBatchProcessor
                     batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::MERGED_CUES, $batchIndex),
                     sourceLanguage: $job->effectiveSourceLanguage(),
                     targetLanguage: $job->target_language,
+                    selection: SubtitleModel::forJob($job),
                 );
             },
         );

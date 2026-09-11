@@ -6,5 +6,6 @@
   "targetLanguage": "eng",
   "enrichmentMode": "on_demand",
   "includeRomanization": true,
-  "includeTranslation": false
+  "includeTranslation": false,
+  "aiProvider": "openai"
 }

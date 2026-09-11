@@ -33,7 +33,9 @@
         "enrichmentMode",
         "includeRomanization",
         "includeTranslation",
-        "jobId"
+        "jobId",
+        "aiProvider",
+        "aiModel"
       ],
       "properties": {
         "youtubeVideoId": {
@@ -421,6 +423,20 @@
             "zul"
           ],
           "description": "Provider-detected source language when sourceLanguage was auto and detection produced a catalog language."
+        },
+        "aiProvider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "cerebras"
+          ],
+          "description": "AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model."
+        },
+        "aiModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Exact text model saved on this job."
         }
       },
       "allOf": [

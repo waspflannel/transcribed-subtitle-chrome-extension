@@ -47,6 +47,8 @@ class SubtitleJobHistoryResource extends JsonResource
             'lastUpdatedAt' => $this->updated_at->toJSON(),
             'sourceLanguage' => $this->source_language,
             'targetLanguage' => $this->target_language,
+            'aiProvider' => $this->ai_provider,
+            'aiModel' => $this->ai_model,
             'enrichmentMode' => $enrichmentMode,
             'includeRomanization' => $includeRomanization,
             'includeTranslation' => $includeTranslation,

@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Models\SubtitleJob;
@@ -101,6 +102,9 @@ class SubtitleJobService
         if (! in_array($mode, ['upload', 'youtube_url'], true)) {
             throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
         }
+        $selection = SubtitleModel::configured($payload['aiProvider'] ?? null);
+        $payload['aiProvider'] = $selection->provider;
+        $payload['aiModel'] = $selection->model;
         $payload['vocabularyHints'] = $hints;
         $payload['transcriptionIngestionMode'] = $mode;
         $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($hints, $mode);
@@ -314,6 +318,8 @@ class SubtitleJobService
             ->where('source_language', $payload['sourceLanguage'])
             ->where('target_language', $payload['targetLanguage'])
             ->where('transcription_options_hash', $payload['transcriptionOptionsHash'])
+            ->where('ai_provider', $payload['aiProvider'])
+            ->where('ai_model', $payload['aiModel'])
             ->where('processing_version', $processingVersion);
     }
 
@@ -344,6 +350,8 @@ class SubtitleJobService
             'detected_source_language' => null,
             'target_language' => $payload['targetLanguage'],
             'processing_version' => $processingVersion,
+            'ai_provider' => $payload['aiProvider'],
+            'ai_model' => $payload['aiModel'],
             'vocabulary_hints' => $payload['vocabularyHints'],
             'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
             'transcription_options_hash' => $payload['transcriptionOptionsHash'],

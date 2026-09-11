@@ -247,6 +247,10 @@ export interface CreateSubtitleJobRequest {
    * When true, backend translates cue text into the selected target language. When false, translatedText remains the source text.
    */
   includeTranslation: boolean;
+  /**
+   * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
+   */
+  aiProvider?: 'openai' | 'cerebras';
 }
 
 // Source: schemas/extension-login-request.schema.json
@@ -1089,6 +1093,14 @@ export type JobResponse = {
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error';
+  /**
+   * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
+   */
+  aiProvider: 'openai' | 'cerebras';
+  /**
+   * Exact text model saved on this job.
+   */
+  aiModel: string;
 };
 
 export interface TrackResponse {
@@ -1773,6 +1785,14 @@ export type SubtitleJobHistoryItem = {
     | 'xho'
     | 'yor'
     | 'zul';
+  /**
+   * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
+   */
+  aiProvider: 'openai' | 'cerebras';
+  /**
+   * Exact text model saved on this job.
+   */
+  aiModel: string;
 };
 
 export interface SubtitleJobHistoryResponse {
