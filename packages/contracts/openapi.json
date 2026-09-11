@@ -147,6 +147,13 @@
           },
           {
             "$ref": "#/components/parameters/ExtensionAuthorization"
+          },
+          {
+            "name": "youtubeVideoId",
+            "in": "query",
+            "required": false,
+            "description": "Return all completed, unexpired, readable generations for this video. Unfiltered history remains limited to 25 entries.",
+            "schema": { "type": "string", "pattern": "^[A-Za-z0-9_-]{11}$" }
           }
         ],
         "responses": {

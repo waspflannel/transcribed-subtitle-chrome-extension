@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelSubtitleLyricsRequest;
 use App\Http\Requests\CorrectSubtitleLyricsRequest;
 use App\Http\Requests\CreateSubtitleJobRequest;
+use App\Http\Requests\ListSubtitleJobsRequest;
 use App\Http\Requests\QuickFixSubtitleTokenRequest;
 use App\Http\Resources\SubtitleJobHistoryResource;
 use App\Http\Resources\SubtitleJobResource;
@@ -24,34 +25,45 @@ class SubtitleJobController extends Controller
 {
     use ResolvesExtensionUser;
 
-    public function index(Request $request): JsonResponse
+    public function index(ListSubtitleJobsRequest $request): JsonResponse
     {
         $now = now();
         $terminalCutoff = now()->subDays(30);
         $user = $this->extensionUser($request);
-        $jobs = SubtitleJob::query()
-            ->with('track')
-            ->whereBelongsTo($user)
-            ->where(function ($query) use ($now, $terminalCutoff): void {
-                $query
-                    ->where(function ($query): void {
-                        $query
-                            ->whereIn('status', ['queued', 'running']);
-                    })
-                    ->orWhere(function ($query) use ($now): void {
-                        $query
-                            ->where('status', 'completed')
-                            ->whereHas('track', fn ($query) => $query->where('expires_at', '>', $now));
-                    })
-                    ->orWhere(function ($query) use ($terminalCutoff): void {
-                        $query
-                            ->whereIn('status', ['failed', 'cancelled'])
-                            ->where('updated_at', '>=', $terminalCutoff);
-                    });
-            })
-            ->orderByRaw("case when status in ('queued', 'running') then 0 else 1 end")
-            ->latest('updated_at')
-            ->limit(25)
+        $videoId = $request->validated('youtubeVideoId');
+        $query = SubtitleJob::query()
+            ->with('track:id,subtitle_job_id,public_id,generated_at,expires_at')
+            ->whereBelongsTo($user);
+
+        if ($videoId !== null) {
+            $query->where('youtube_video_id', $videoId)
+                ->where('status', 'completed')
+                ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
+                ->whereHas('track', fn ($query) => $query->where('expires_at', '>', $now));
+        } else {
+            $query
+                ->where(function ($query) use ($now, $terminalCutoff): void {
+                    $query
+                        ->where(function ($query): void {
+                            $query
+                                ->whereIn('status', ['queued', 'running']);
+                        })
+                        ->orWhere(function ($query) use ($now): void {
+                            $query
+                                ->where('status', 'completed')
+                                ->whereHas('track', fn ($query) => $query->where('expires_at', '>', $now));
+                        })
+                        ->orWhere(function ($query) use ($terminalCutoff): void {
+                            $query
+                                ->whereIn('status', ['failed', 'cancelled'])
+                                ->where('updated_at', '>=', $terminalCutoff);
+                        });
+                })
+                ->orderByRaw("case when status in ('queued', 'running') then 0 else 1 end")
+                ->limit(25);
+        }
+
+        $jobs = $query->latest('updated_at')->latest('id')
             ->get()
             ->map(fn (SubtitleJob $job): array => SubtitleJobHistoryResource::make($job)->resolve())
             ->values();

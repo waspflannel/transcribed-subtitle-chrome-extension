@@ -1796,9 +1796,6 @@ export type SubtitleJobHistoryItem = {
 };
 
 export interface SubtitleJobHistoryResponse {
-  /**
-   * @maxItems 25
-   */
   jobs: SubtitleJobHistoryItem[];
 }
 

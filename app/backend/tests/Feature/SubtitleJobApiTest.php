@@ -2574,6 +2574,58 @@ class SubtitleJobApiTest extends TestCase
         ]);
     }
 
+    public function test_video_generations_include_both_providers_beyond_the_history_limit(): void
+    {
+        $user = User::factory()->create();
+        $ids = [];
+        for ($index = 0; $index < 27; $index++) {
+            $job = SubtitleJob::factory()->create([
+                'user_id' => $user->id,
+                'youtube_video_id' => 'dQw4w9WgXcQ',
+                'status' => 'completed',
+                'transcription_options_hash' => hash('sha256', (string) $index),
+                'ai_provider' => $index % 2 ? 'cerebras' : 'openai',
+                'ai_model' => $index % 2 ? 'gpt-oss-120b' : 'gpt-5.6-luna',
+                'updated_at' => now()->subDays(2),
+            ]);
+            SubtitleTrack::factory()->for($job, 'job')->create(['expires_at' => now()->addDay()]);
+            $ids[] = $job->public_id;
+        }
+        SubtitleJob::factory()->count(25)->create(['user_id' => $user->id]);
+        $this->withExtensionAuth($this->installId(), $user);
+        $this->getJson('/v1/subtitle-jobs')->assertOk()->assertJsonCount(25, 'jobs');
+        $response = $this->getJson('/v1/subtitle-jobs?youtubeVideoId=dQw4w9WgXcQ')
+            ->assertOk()->assertJsonCount(27, 'jobs');
+        $this->assertEqualsCanonicalizing($ids, array_column($response->json('jobs'), 'jobId'));
+        $this->assertEqualsCanonicalizing(['openai', 'cerebras'], array_unique(array_column($response->json('jobs'), 'aiProvider')));
+    }
+
+    public function test_video_generations_exclude_unavailable_or_unowned_jobs_and_validate_filter(): void
+    {
+        $user = User::factory()->create();
+        foreach (['foreign', 'expired', 'missing', 'running', 'old-version', 'other-video'] as $index => $kind) {
+            $job = SubtitleJob::factory()->create([
+                'user_id' => $kind === 'foreign' ? User::factory()->create()->id : $user->id,
+                'youtube_video_id' => $kind === 'other-video' ? 'M7lc1UVf-VE' : 'dQw4w9WgXcQ',
+                'status' => $kind === 'running' ? 'running' : 'completed',
+                'transcription_options_hash' => hash('sha256', (string) $index),
+                ...($kind === 'old-version' ? ['processing_version' => 'old'] : []),
+            ]);
+            if (! in_array($kind, ['missing', 'running'], true)) {
+                SubtitleTrack::factory()->for($job, 'job')->create([
+                    'expires_at' => $kind === 'expired' ? now()->subMinute() : now()->addDay(),
+                ]);
+            }
+        }
+        $this->withExtensionAuth($this->installId(), $user);
+        $this->getJson('/v1/subtitle-jobs?youtubeVideoId=dQw4w9WgXcQ')->assertOk()->assertJsonCount(0, 'jobs');
+        $this->getJson('/v1/subtitle-jobs?youtubeVideoId=unknown0001')->assertOk()->assertJsonCount(0, 'jobs');
+        foreach (['', 'bad', '%3Cscript%3E', '%5B%5D'] as $value) {
+            $this->getJson('/v1/subtitle-jobs?youtubeVideoId='.$value)->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed');
+        }
+        $this->getJson('/v1/subtitle-jobs?youtubeVideoId[]=dQw4w9WgXcQ')->assertUnprocessable();
+    }
+
     public function test_list_subtitle_jobs_returns_current_install_history(): void
     {
         $installId = $this->installId();

@@ -110,6 +110,26 @@ class ContractResponseValidationTest extends TestCase
         );
     }
 
+    public function test_filtered_generation_list_can_exceed_twenty_five_items(): void
+    {
+        $user = User::factory()->create();
+        $installId = $this->installId();
+        for ($index = 0; $index < 26; $index++) {
+            $job = SubtitleJob::factory()->create([
+                'user_id' => $user->id,
+                'youtube_video_id' => 'history0001',
+                'status' => 'completed',
+                'transcription_options_hash' => hash('sha256', (string) $index),
+            ]);
+            SubtitleTrack::factory()->for($job, 'job')->create(['expires_at' => now()->addDay()]);
+        }
+        $this->assertResponseMatchesSchema(
+            $this->withExtensionAuth($installId, $user)->getJson('/v1/subtitle-jobs?youtubeVideoId=history0001')
+                ->assertOk()->assertJsonCount(26, 'jobs'),
+            'subtitle-job-history-response.schema.json',
+        );
+    }
+
     public function test_history_learning_token_and_error_responses_match_contract_schemas(): void
     {
         $installId = $this->installId('b');
