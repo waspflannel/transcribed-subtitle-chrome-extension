@@ -93,11 +93,13 @@
             <div class="card">
               <label class="row">
                 <span class="row-key">AI model</span>
-                <select name="aiProvider" aria-describedby="ai-provider-help" disabled>
+                <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled>
                   <option value="openai">Luna</option>
                   <option value="cerebras">Cerebras</option>
                 </select>
               </label>
+              <p id="ai-luna-description" class="microcopy"><strong>Luna:</strong> Smarter, but slower. Recommended for languages that use non-Latin scripts.</p>
+              <p id="ai-cerebras-description" class="microcopy"><strong>Cerebras:</strong> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</p>
               <p id="ai-provider-help" class="microcopy">Applies to your next generation. Running jobs keep their selected model.</p>
             </div>
 
