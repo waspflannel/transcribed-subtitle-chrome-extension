@@ -244,3 +244,5 @@ Vocabulary hints add the [documented Scribe keyterm surcharge](https://elevenlab
 - Backups are encrypted or protected by the provider's managed storage controls.
 
 Worker launchers default to `--sleep=0`. Redis keeps its one-second blocking pop, which waits for ready work without an additional idle sleep and revisits delayed jobs promptly.
+
+Upload transcription starts with a 20-second nominal chunk for videos of at least 45 seconds, with two seconds of overlap. Later chunks target 60 seconds and grow to keep at most eight uploads per job. Tune `SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS`, `SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS`, and `SUBTITLE_TRANSCRIPTION_CHUNK_MAX_CHUNKS` together. Set first seconds to zero for an even-chunk comparison. Direct M4A-to-chunk preparation defaults on; WebM/Opus still normalizes the whole file first to preserve timing.

@@ -329,6 +329,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
     public function test_chunker_extracts_chunks_with_symmetric_overlap(): void
     {
         config([
+            'subtitles.transcription.chunking.first_seconds' => 0,
             'subtitles.transcription.chunking.min_audio_seconds' => 240,
             'subtitles.transcription.chunking.target_seconds' => 120,
             'subtitles.transcription.chunking.overlap_seconds' => 2.0,

@@ -133,7 +133,7 @@ return [
     ],
 
     'audio_preparation' => [
-        'direct_chunks' => (bool) env('SUBTITLE_AUDIO_DIRECT_CHUNKS', false),
+        'direct_chunks' => (bool) env('SUBTITLE_AUDIO_DIRECT_CHUNKS', true),
         'ffmpeg_binary' => env('FFMPEG_BINARY', 'ffmpeg'),
         'ffmpeg_timeout_seconds' => (int) env('SUBTITLE_AUDIO_PREP_FFMPEG_TIMEOUT_SECONDS', 600),
     ],
@@ -159,8 +159,9 @@ return [
         // midpoint. max_chunks bounds concurrent Scribe uploads -- chunks
         // grow beyond target_seconds for very long videos instead.
         'chunking' => [
-            'min_audio_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MIN_AUDIO_SECONDS', 240),
-            'target_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS', 120),
+            'first_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS', 20),
+            'min_audio_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MIN_AUDIO_SECONDS', 45),
+            'target_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS', 60),
             'overlap_seconds' => (float) env('SUBTITLE_TRANSCRIPTION_CHUNK_OVERLAP_SECONDS', 2.0),
             'max_chunks' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MAX_CHUNKS', 8),
         ],

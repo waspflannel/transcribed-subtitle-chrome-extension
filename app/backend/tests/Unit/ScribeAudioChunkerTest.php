@@ -17,12 +17,41 @@ class ScribeAudioChunkerTest extends TestCase
         parent::setUp();
 
         config([
+            'subtitles.transcription.chunking.first_seconds' => 0,
             'subtitles.transcription.chunking.min_audio_seconds' => 240,
             'subtitles.transcription.chunking.target_seconds' => 120,
             'subtitles.transcription.chunking.overlap_seconds' => 2.0,
             'subtitles.transcription.chunking.max_chunks' => 8,
             'subtitles.audio_preparation.ffmpeg_binary' => 'ffmpeg-test',
         ]);
+    }
+
+    public function test_short_opening_chunk_stays_small_when_later_chunks_hit_the_upload_cap(): void
+    {
+        config(['subtitles.transcription.chunking.first_seconds' => 20]);
+        $plan = $this->chunker()->plan(3600);
+        $this->assertCount(8, $plan);
+        $this->assertSame(20.0, $plan[0]['nominalEnd']);
+        $this->assertSame(22.0, $plan[0]['audioEnd']);
+        $this->assertSame(18.0, $plan[1]['audioStart']);
+        $this->assertSame(3600.0, $plan[7]['nominalEnd']);
+        foreach (array_slice($plan, 1) as $index => $chunk) {
+            $this->assertSame($plan[$index]['nominalEnd'], $chunk['nominalStart']);
+        }
+    }
+
+    public function test_short_videos_get_an_opening_chunk_without_exceeding_configured_limits(): void
+    {
+        config([
+            'subtitles.transcription.chunking.first_seconds' => 20,
+            'subtitles.transcription.chunking.min_audio_seconds' => 45,
+            'subtitles.transcription.chunking.target_seconds' => 60,
+        ]);
+        $this->assertSame([], $this->chunker()->plan(44));
+        $this->assertCount(2, $this->chunker()->plan(45));
+        $this->assertSame(20.0, $this->chunker()->plan(45)[0]['nominalEnd']);
+        config(['subtitles.transcription.chunking.max_chunks' => 1]);
+        $this->assertSame([], $this->chunker()->plan(300));
     }
 
     public function test_short_audio_is_not_chunked(): void

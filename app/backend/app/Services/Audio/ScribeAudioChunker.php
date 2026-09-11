@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Process;
 use Throwable;
 
 /**
- * Splits source or Scribe-prepared audio into fixed-interval chunks with symmetric
+ * Splits source or Scribe-prepared audio into a short opening chunk and bounded later chunks with symmetric
  * overlap so long videos can be transcribed in parallel. Every chunk hears
  * `overlap_seconds` past each nominal boundary on both sides, so a word cut
  * by one chunk edge is heard whole by its neighbour; the merger keeps each
@@ -25,8 +25,8 @@ class ScribeAudioChunker
      */
     public function plan(int $durationSeconds): array
     {
-        $minAudioSeconds = (int) config('subtitles.transcription.chunking.min_audio_seconds', 240);
-        $targetSeconds = max(30, (int) config('subtitles.transcription.chunking.target_seconds', 120));
+        $minAudioSeconds = (int) config('subtitles.transcription.chunking.min_audio_seconds', 45);
+        $targetSeconds = max(10, (int) config('subtitles.transcription.chunking.target_seconds', 60));
         $overlapSeconds = max(0.0, (float) config('subtitles.transcription.chunking.overlap_seconds', 2.0));
         $maxChunks = max(1, (int) config('subtitles.transcription.chunking.max_chunks', 8));
 
@@ -34,18 +34,25 @@ class ScribeAudioChunker
             return [];
         }
 
-        $chunkCount = min($maxChunks, (int) ceil($durationSeconds / $targetSeconds));
+        $firstSeconds = max(0, (int) config('subtitles.transcription.chunking.first_seconds', 20));
+        $firstSeconds = min($firstSeconds, $targetSeconds, $durationSeconds / 2);
+        $chunkCount = min($maxChunks, $firstSeconds > 0
+            ? 1 + (int) ceil(($durationSeconds - $firstSeconds) / $targetSeconds)
+            : (int) ceil($durationSeconds / $targetSeconds));
 
         if ($chunkCount < 2) {
             return [];
         }
 
-        $chunkLength = (float) $durationSeconds / $chunkCount;
+        $chunkLength = $firstSeconds > 0
+            ? ($durationSeconds - $firstSeconds) / ($chunkCount - 1)
+            : (float) $durationSeconds / $chunkCount;
         $plan = [];
 
         for ($index = 0; $index < $chunkCount; $index++) {
-            $nominalStart = $index * $chunkLength;
-            $nominalEnd = $index === $chunkCount - 1 ? (float) $durationSeconds : ($index + 1) * $chunkLength;
+            $nominalStart = $index === 0 ? 0.0 : (float) $plan[$index - 1]['nominalEnd'];
+            $length = $index === 0 && $firstSeconds > 0 ? $firstSeconds : $chunkLength;
+            $nominalEnd = $index === $chunkCount - 1 ? (float) $durationSeconds : $nominalStart + $length;
 
             $plan[] = [
                 'nominalStart' => $nominalStart,

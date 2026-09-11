@@ -982,6 +982,7 @@ class SubtitleJobApiTest extends TestCase
     {
         config([
             'subtitles.audio_preparation.direct_chunks' => true,
+            'subtitles.transcription.chunking.first_seconds' => 0,
             'subtitles.transcription.chunking.min_audio_seconds' => 240,
             'subtitles.transcription.chunking.target_seconds' => 120,
             'ai.providers.elevenlabs.key' => 'fake-key',
