@@ -137,6 +137,35 @@ class ElevenLabsScribeTranscriptionService
         }
     }
 
+    /** Only closed cues before the unresolved overlap can be published early. */
+    public function stableTranscriptPrefix(array $chunks, string $sourceLanguage, int $durationSeconds): ?TimestampedTranscript
+    {
+        if ($chunks === []) {
+            return null;
+        }
+        $last = $chunks[array_key_last($chunks)];
+        $boundary = $last['nextAudioStartSeconds'] ?? null;
+        if (! is_numeric($boundary)) {
+            return null;
+        }
+        $safeEnd = (float) $boundary;
+        // A long word can start before the overlap. Hold its entire cue back,
+        // since the next chunk may supply a better version of that word.
+        foreach ($last['payload']['words'] as $word) {
+            if (($word['type'] ?? null) === 'word' && is_numeric($word['end'] ?? null)
+                && $boundary <= $word['end'] + $last['audioStartSeconds']) {
+                $safeEnd = min($safeEnd, $word['start'] + $last['audioStartSeconds']);
+            }
+        }
+        $payload = $this->chunkMerger->merge($chunks);
+        if ($safeEnd <= 0 || ! array_filter($payload['words'], fn (array $word): bool => is_numeric($word['start'] ?? null) && is_numeric($word['end'] ?? null)) || ($sourceLanguage === 'auto'
+            && LanguageCatalog::normalizeCode($payload['language_code'] ?? null) === null)) {
+            return null;
+        }
+
+        return $this->normalizer->normalize($payload, $sourceLanguage, $durationSeconds, $safeEnd);
+    }
+
     /**
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>
@@ -189,7 +218,7 @@ class ElevenLabsScribeTranscriptionService
     ): array {
         $words = $payload['words'] ?? null;
 
-        if (! is_array($words) || $words === []) {
+        if (! is_array($words) || ! array_is_list($words)) {
             $this->failInvalidProviderPayload($provider, $model, 'missing_words', $context);
         }
 

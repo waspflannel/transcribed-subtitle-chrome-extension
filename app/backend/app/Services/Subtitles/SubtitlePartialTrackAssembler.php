@@ -24,18 +24,29 @@ class SubtitlePartialTrackAssembler
         foreach ($draft->payload['cues'] as $cue) {
             $cues[$cue['cueId']] = Arr::only($cue, ['cueId', 'index', 'startMs', 'endMs', 'sourceText']);
         }
-        $revision = 1;
+        $revision = $draft->payload['revision'] ?? 1;
+        $analyzed = [];
         foreach ($artifacts->where('artifact_type', SubtitleJobArtifactStore::ANALYZED_CUES) as $artifact) {
             foreach ($artifact->payload['cues'] as $cue) {
                 $cues[$cue['cueId']] = [...$cues[$cue['cueId']], ...Arr::only($cue, ['translatedText', 'romanization'])];
+                $analyzed[$cue['cueId']] = true;
             }
             $revision++;
+        }
+
+        $readyThroughMs = 0;
+        foreach ($cues as $cue) {
+            if (! isset($analyzed[$cue['cueId']])) {
+                break;
+            }
+            $readyThroughMs = $cue['endMs'];
         }
 
         return $cues === [] ? null : [
             'jobId' => $job->public_id,
             'youtubeVideoId' => $job->youtube_video_id,
             'revision' => $revision,
+            'readyThroughMs' => $readyThroughMs,
             'cues' => array_values($cues),
         ];
     }

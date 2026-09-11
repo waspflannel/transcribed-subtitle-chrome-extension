@@ -24,7 +24,7 @@ describe('SubtitleApiClient', () => {
     };
     const partialTrack = { jobId: job.jobId, youtubeVideoId: job.youtubeVideoId, revision: 1, cues: trackResponse().cues };
     expect(guardJobResponse({ ...job, partialTrack }).partialTrack).toEqual(partialTrack);
-    for (const patch of [{ jobId: 'another-job' }, { youtubeVideoId: 'another-id1' }, { cues: [] }]) {
+    for (const patch of [{ jobId: 'another-job' }, { youtubeVideoId: 'another-id1' }, { cues: [] }, { revision: 0 }, { revision: 1.5 }, { readyThroughMs: -1 }, { readyThroughMs: NaN }]) {
       expect(() => guardJobResponse({ ...job, partialTrack: { ...partialTrack, ...patch } })).toThrow();
     }
     expect(() => guardJobResponse({ ...job, status: 'cancelled', partialTrack })).toThrow();

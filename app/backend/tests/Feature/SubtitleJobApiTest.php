@@ -2182,7 +2182,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('cached_video_transcripts', [
             'youtube_video_id' => 'cachehit001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v3',
+            'transcription_model' => 'scribe-test:transcript-chunks-v4-progressive',
             'audio_duration_seconds' => 42,
         ]);
 
@@ -2251,7 +2251,7 @@ class SubtitleJobApiTest extends TestCase
         CachedVideoTranscript::create([
             'youtube_video_id' => 'cacheexp001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v3',
+            'transcription_model' => 'scribe-test:transcript-chunks-v4-progressive',
             'audio_duration_seconds' => 999,
             'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
             'expires_at' => now()->subDay(),

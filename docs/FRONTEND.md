@@ -54,3 +54,5 @@
 - New extension generation requests always use on-demand word cards. The upfront full-track option and its stored setting are removed; clicking a word still loads its card.
 
 - The signed-in Account tab shows the backend-configured analysis model as muted text at the bottom. It refreshes with the account summary and describes current configuration, not the model that produced an existing saved track. Older backend responses without model metadata show Model: Unavailable.
+
+While generation runs, `partialTrack.readyThroughMs` reports the contiguous analyzed prefix and the loading message shows its video timestamp. Source cues can appear sooner. Preview updates preserve cue identity and continue native video timing as more cues append. Partial playback remains passive; interactive study controls use the final track. Generation does not auto-play or auto-pause the video.

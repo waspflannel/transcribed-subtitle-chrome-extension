@@ -759,7 +759,9 @@ async function waitForCompletedSubtitleJob(
         jobId: job.jobId,
         youtubeVideoId: pageStatus.videoId,
         youtubeUrl: pageStatus.url,
-        message: job.status === 'queued' ? 'Queued - waiting for a generation slot...' : loadingMessageForStage(job.stage),
+        message: partialTrack?.readyThroughMs
+          ? `Subtitles ready through ${Math.floor(partialTrack.readyThroughMs / 60000)}:${String(Math.floor(partialTrack.readyThroughMs / 1000) % 60).padStart(2, '0')}. Preparing the rest...`
+          : job.status === 'queued' ? 'Queued - waiting for a generation slot...' : loadingMessageForStage(job.stage),
         stage: job.stage,
         progressPercent: job.progressPercent,
         startedAt: job.createdAt,

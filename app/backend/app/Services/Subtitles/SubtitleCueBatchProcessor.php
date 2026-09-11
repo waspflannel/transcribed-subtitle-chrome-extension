@@ -59,7 +59,13 @@ class SubtitleCueBatchProcessor
                 if ($job === null || $job->status !== 'running' || $job->hasReadyTrack()) {
                     return;
                 }
+                if ($this->artifacts->hasArtifact($job, SubtitleJobArtifactStore::ANALYZED_CUES, $batchIndex)) {
+                    return;
+                }
                 $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, $batchIndex, $result);
+                if ($batchIndex === 0) {
+                    $this->telemetry->recordFirstAnnotatedCueAvailable($job, $result->cues[array_key_last($result->cues)]['endMs']);
+                }
                 $this->costs->recordAnalyzedCueBatch($job, count($result->cues), $includeTranslation, $includeRomanization);
                 $this->telemetry->recordStageCompleted($job, 'tokenizing', $startedAtMs, $batchIndex);
             }, attempts: 5);

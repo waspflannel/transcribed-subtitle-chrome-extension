@@ -74,9 +74,9 @@ class ContractResponseValidationTest extends TestCase
         $this->assertResponseMatchesSchema(
             $this
                 ->withExtensionAuth($installId, $user)
-                ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id.'/partial-track')
+                ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id)
                 ->assertOk(),
-            'partial-track-response.schema.json',
+            'job-response.schema.json',
         );
 
         $completedTrack = $this->completedTrack($installId, $user, 'complete001');

@@ -33,7 +33,7 @@ class SubtitleJobArtifactBatchPlanTest extends TestCase
         $job = $this->runningJob();
         foreach ([false, true] as $balanced) {
             config(['subtitles.enrichment.balanced_batches' => $balanced]);
-            $plan = $store->batchPlan($cues);
+            $plan = $store->batchPlan($cues, forPlayback: true);
             $this->assertSame([0, 1], $plan[0]);
             foreach ($plan as $position => [$start, $end]) {
                 $this->assertLessThanOrEqual($position === 0 ? 10000 : 30000, $cues[$end]['endMs'] - $cues[$start]['startMs']);

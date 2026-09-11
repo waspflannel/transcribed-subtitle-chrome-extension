@@ -6,6 +6,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\OptimizeSubtitleAudio;
+use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
@@ -206,6 +207,7 @@ class SubtitleGenerationPipeline
                     audioStartSeconds: $chunk['audioStartSeconds'],
                     nominalStartSeconds: $chunk['nominalStartSeconds'],
                     nominalEndSeconds: $chunk['nominalEndSeconds'],
+                    nextAudioStartSeconds: $chunkPlan[$chunkIndex + 1]['audioStart'] ?? null,
                 );
             }
 
@@ -271,10 +273,17 @@ class SubtitleGenerationPipeline
         float $nominalStartSeconds,
         ?float $nominalEndSeconds,
         ?int $queuedAtMs = null,
+        ?float $nextAudioStartSeconds = null,
     ): void {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
         if ($job === null) {
+            return;
+        }
+
+        if ($this->artifacts->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT_CHUNK, $chunkIndex)) {
+            $this->publishTranscribedPrefix($subtitleJobId, $runId);
+
             return;
         }
 
@@ -304,7 +313,38 @@ class SubtitleGenerationPipeline
             audioStartSeconds: $audioStartSeconds,
             nominalStartSeconds: $nominalStartSeconds,
             nominalEndSeconds: $nominalEndSeconds,
+            nextAudioStartSeconds: $nextAudioStartSeconds,
         );
+        $this->publishTranscribedPrefix($subtitleJobId, $runId);
+    }
+
+    private function publishTranscribedPrefix(int $subtitleJobId, string $runId): void
+    {
+        DB::transaction(function () use ($subtitleJobId, $runId): void {
+            $job = $this->lockRunningJob($subtitleJobId, $runId);
+            if ($job === null || $job->stage !== 'transcribing') {
+                return;
+            }
+            $transcript = $this->transcriptionService->stableTranscriptPrefix(
+                $this->artifacts->transcriptChunks($job, contiguousPrefix: true),
+                $job->effectiveSourceLanguage(),
+                (int) $job->video_duration_seconds,
+            );
+            if ($transcript === null || $transcript->segments === []) {
+                return;
+            }
+            // Pin auto detection before the first analysis request. Later
+            // chunks must not change the language of already published cues.
+            $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
+            $indexes = $this->artifacts->appendDraftCues($job, $this->tracks->draftCues($transcript));
+            if ($indexes === []) {
+                return;
+            }
+            if ($indexes[0] === 0) {
+                $this->telemetry->recordFirstCueAvailable($job);
+            }
+            $this->dispatchAnalysisIndexes($job, $indexes);
+        }, attempts: 5);
     }
 
     /**
@@ -333,21 +373,18 @@ class SubtitleGenerationPipeline
             $durationSeconds = (int) $job->video_duration_seconds;
             $transcript = $this->transcriptionService->transcriptFromChunkPayloads(
                 chunks: $this->artifacts->transcriptChunks($job),
-                sourceLanguage: $job->source_language,
+                sourceLanguage: $job->effectiveSourceLanguage(),
                 durationSeconds: $durationSeconds,
                 jobId: $job->public_id,
                 runId: $job->run_id,
             );
-
             $draftCues = $this->tracks->draftCues($transcript);
 
             DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $draftCues, $durationSeconds, $transcribingStartedAtMs): void {
                 $job = $this->lockRunningJob($subtitleJobId, $runId);
-
                 if ($job === null || $job->stage !== 'transcribing') {
                     return;
                 }
-
                 $this->telemetry->recordStageCompleted($job, 'transcribing', $transcribingStartedAtMs);
                 $this->costs->recordTranscription($job, $durationSeconds);
                 $this->logger->transcriptionCompleted($job, $transcript, $durationSeconds);
@@ -362,8 +399,10 @@ class SubtitleGenerationPipeline
                     userId: $job->user_id,
                 );
                 $this->artifacts->putTranscript($job, $transcript);
-                $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
-                $this->telemetry->recordFirstCueAvailable($job);
+                $indexes = $this->artifacts->appendDraftCues($job, $draftCues);
+                if (in_array(0, $indexes, true)) {
+                    $this->telemetry->recordFirstCueAvailable($job);
+                }
                 $this->dispatchAnalysisBatches($job);
             }, attempts: 5);
         } catch (Throwable $exception) {
@@ -429,21 +468,20 @@ class SubtitleGenerationPipeline
 
     public function prepareCuesAfterCompletedAnalysisBatches(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
-        $job = $this->loadRunningJob($subtitleJobId, $runId);
-
-        if ($job === null) {
-            return;
-        }
-
-        $stage = 'assembling-analysis-results';
-        $this->telemetry->recordQueueWait($job, $stage, null, $queuedAtMs);
-        $this->telemetry->recordStageStarted($job, $stage);
-        $startedAtMs = $this->telemetry->currentTimeMs();
-
-        $analyzed = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
-        $this->logger->tokenizationCompleted($job, $analyzed);
-        $this->storeMergedCuesAndContinue($job, $analyzed);
-        $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
+        DB::transaction(function () use ($subtitleJobId, $runId, $queuedAtMs): void {
+            $job = $this->lockRunningJob($subtitleJobId, $runId);
+            if ($job === null || $job->stage !== 'tokenizing' || ! $this->artifacts->analysisIsComplete($job)) {
+                return;
+            }
+            $stage = 'assembling-analysis-results';
+            $this->telemetry->recordQueueWait($job, $stage, null, $queuedAtMs);
+            $this->telemetry->recordStageStarted($job, $stage);
+            $startedAtMs = $this->telemetry->currentTimeMs();
+            $analyzed = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
+            $this->logger->tokenizationCompleted($job, $analyzed);
+            $this->storeMergedCuesAndContinue($job, $analyzed);
+            $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
+        }, attempts: 5);
     }
 
     public function persistGeneratedSubtitleTrack(
@@ -530,12 +568,22 @@ class SubtitleGenerationPipeline
             $this->logger->romanizationStarted($job, $cueCount);
         }
 
-        $jobs = [];
-        $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
-        for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            $jobs[] = new AnalyzeSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
-        }
+        // Reconcile early dispatches as well as new cues. A worker can die
+        // after committing a prefix but before publishing its queue batch.
+        // Existing analysis locks and result checks make redelivery safe.
+        $indexes = $this->artifacts->pendingAnalysisIndexes($job);
+        $this->dispatchAnalysisIndexes($job, $indexes);
+    }
 
+    private function dispatchAnalysisIndexes(SubtitleJob $job, array $indexes): void
+    {
+        if ($indexes === []) {
+            PrepareSubtitleCuesAfterAnalysisBatches::dispatch($job->id, $job->run_id)
+                ->onQueue(SubtitleQueue::generationNameForJob($job))->afterCommit();
+
+            return;
+        }
+        $jobs = array_map(fn (int $index): AnalyzeSubtitleCueBatch => new AnalyzeSubtitleCueBatch($job->id, $index, $job->run_id), $indexes);
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
     }
 

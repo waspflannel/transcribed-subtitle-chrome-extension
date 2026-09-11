@@ -109,7 +109,12 @@ export function guardPartialTrackResponse(value: unknown): PartialTrackResponse 
 
   requiredString(response, 'jobId');
   requiredString(response, 'youtubeVideoId');
-  requiredNumber(response, 'revision');
+  const revision = requiredNumber(response, 'revision');
+  if (!Number.isInteger(revision) || revision < 1) throw invalid('Invalid preview revision');
+  if (response.readyThroughMs !== undefined) {
+    const readyThroughMs = requiredNumber(response, 'readyThroughMs');
+    if (!Number.isInteger(readyThroughMs) || readyThroughMs < 0) throw invalid('Invalid preview coverage');
+  }
   cues.forEach(guardPartialSubtitleCue);
 
   return response as unknown as PartialTrackResponse;
@@ -317,10 +322,11 @@ function optionalString(value: Record<string, unknown>, key: string): void {
   }
 }
 
-function requiredNumber(value: Record<string, unknown>, key: string): void {
+function requiredNumber(value: Record<string, unknown>, key: string): number {
   if (typeof value[key] !== 'number' || !Number.isFinite(value[key])) {
     throw invalid(`Backend response field ${key} must be a finite number.`);
   }
+  return value[key] as number;
 }
 
 function optionalNumber(value: Record<string, unknown>, key: string): void {

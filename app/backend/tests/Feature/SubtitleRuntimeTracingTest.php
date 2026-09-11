@@ -127,8 +127,13 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
         $staleRunId = (string) Str::uuid();
 
-        // Stale-run batch jobs no-op successfully, which still advances the
-        // Laravel batch and fires the progress callback with the real run id.
+        // Progress follows persisted results across all progressive batches.
+        // A stale queue member completing must not count as analyzed work.
+        config(['subtitles.enrichment.cue_batch_max_cues' => 1]);
+        $store = app(SubtitleJobArtifactStore::class);
+        $cues = [$this->sampleCue(), [...$this->sampleCue(), 'cueId' => 'cue-0002', 'index' => 1]];
+        $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
         app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
             new AnalyzeSubtitleCueBatch($job->id, 0, $staleRunId),
             new AnalyzeSubtitleCueBatch($job->id, 1, $staleRunId),

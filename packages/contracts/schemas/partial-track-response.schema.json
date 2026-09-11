@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://transcribed-subtitle-extension.local/schemas/partial-track-response.schema.json",
   "title": "PartialTrackResponse",
-  "description": "Cues available for a still-running subtitle job. Source text is present as soon as transcription lands; translations and romanization fill in per batch as the pipeline progresses. Tokens are never included: word cards need the finalized track.",
+  "description": "Cues available for a still-running subtitle job. Stable source cues append as contiguous transcription chunks arrive; translations and romanization fill in per batch as the pipeline progresses. Tokens are never included: word cards need the finalized track.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -23,7 +23,7 @@
     "revision": {
       "type": "integer",
       "minimum": 1,
-      "description": "Count of pipeline artifacts merged into these cues. Monotonically increasing for a given run; re-render when it changes."
+      "description": "Revision of the source prefix plus completed annotation batches. Monotonically increasing for a given run; re-render when it changes."
     },
     "cues": {
       "type": "array",
@@ -31,6 +31,11 @@
       "items": {
         "$ref": "#/$defs/PartialSubtitleCue"
       }
+    },
+    "readyThroughMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "End of the contiguous prefix with completed analysis, in video milliseconds. Later completed batches do not advance this value across an unfinished batch."
     }
   },
   "$defs": {

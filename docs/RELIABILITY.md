@@ -67,3 +67,5 @@ The side-panel local clear-state action removes local extension settings, anonym
 - Health check command.
 - Critical journey timing checks.
 - Build failure remediation notes.
+
+Progressive subtitle runs serialize local prefix assembly under the job/run lock and never hold that lock across a provider call. Only a contiguous audio prefix publishes closed cues, excluding words that the next overlap can change. Cue and batch bounds append without rewriting published data. Per-chunk overlap locks and durable chunk artifacts prevent repeat uploads on redelivery. Final merge requeues unfinished analysis, including a prefix whose queue publication was lost after its database commit; analysis locks and artifact checks prevent duplicate prompts and costs. Early completion callbacks wait for a full transcript and every persisted analysis index. Cancellation and run replacement reject late work.

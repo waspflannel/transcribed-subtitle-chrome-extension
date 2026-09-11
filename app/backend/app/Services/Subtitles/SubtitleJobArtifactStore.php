@@ -86,9 +86,11 @@ class SubtitleJobArtifactStore
         float $audioStartSeconds,
         float $nominalStartSeconds,
         ?float $nominalEndSeconds,
+        ?float $nextAudioStartSeconds = null,
     ): void {
         $this->put($job, self::TRANSCRIPT_CHUNK, [
             'chunkCount' => $chunkCount,
+            'nextAudioStartSeconds' => $nextAudioStartSeconds,
             'payload' => $payload,
             'audioStartSeconds' => $audioStartSeconds,
             'nominalStartSeconds' => $nominalStartSeconds,
@@ -102,7 +104,7 @@ class SubtitleJobArtifactStore
      *
      * @return array<int, array{payload: array<string, mixed>, audioStartSeconds: float, nominalStartSeconds: float, nominalEndSeconds: float|null}>
      */
-    public function transcriptChunks(SubtitleJob $job): array
+    public function transcriptChunks(SubtitleJob $job, bool $contiguousPrefix = false): array
     {
         $artifacts = SubtitleJobArtifact::query()
             ->where('subtitle_job_id', $job->id)
@@ -112,6 +114,9 @@ class SubtitleJobArtifactStore
             ->get();
 
         if ($artifacts->isEmpty()) {
+            if ($contiguousPrefix) {
+                return [];
+            }
             $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
         }
 
@@ -119,11 +124,18 @@ class SubtitleJobArtifactStore
         $expectedCount = null;
 
         foreach ($artifacts as $artifact) {
+            if ($artifact->batch_index !== count($chunks)) {
+                if ($contiguousPrefix) {
+                    break;
+                }
+                $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
+            }
             $payload = $artifact->payload;
             $chunkPayload = $payload['payload'] ?? null;
             $chunkCount = $payload['chunkCount'] ?? null;
 
-            if (! is_array($chunkPayload) || ! is_int($chunkCount)) {
+            if (! is_array($chunkPayload) || ! is_int($chunkCount) || $chunkCount < 1
+                || ($expectedCount !== null && $chunkCount !== $expectedCount)) {
                 $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
             }
 
@@ -132,13 +144,14 @@ class SubtitleJobArtifactStore
 
             $chunks[] = [
                 'payload' => $chunkPayload,
+                'nextAudioStartSeconds' => $payload['nextAudioStartSeconds'] ?? null,
                 'audioStartSeconds' => (float) ($payload['audioStartSeconds'] ?? 0.0),
                 'nominalStartSeconds' => (float) ($payload['nominalStartSeconds'] ?? 0.0),
                 'nominalEndSeconds' => is_numeric($nominalEnd) ? (float) $nominalEnd : null,
             ];
         }
 
-        if (count($chunks) !== $expectedCount) {
+        if (! $contiguousPrefix && count($chunks) !== $expectedCount) {
             $this->failMissingArtifact(self::TRANSCRIPT_CHUNK);
         }
 
@@ -159,8 +172,62 @@ class SubtitleJobArtifactStore
         $this->put($job, $artifactType, [
             'cues' => $cues,
             'sourceDialect' => $sourceDialect,
-            'batchPlan' => $this->batchPlan($cues, $job),
+            'batchPlan' => $this->batchPlan($cues, $job, forPlayback: $artifactType === self::DRAFT_CUES),
         ]);
+    }
+
+    /** Append closed cues without moving any cue or batch already being analyzed. */
+    public function appendDraftCues(SubtitleJob $job, array $cues): array
+    {
+        return DB::transaction(function () use ($job, $cues): array {
+            $current = SubtitleJobLock::current($job->id, $job->run_id);
+            if ($current === null || $current->status !== 'running' || $current->hasReadyTrack()) {
+                return [];
+            }
+            $draft = $this->hasArtifact($job, self::DRAFT_CUES) ? $this->payload($job, self::DRAFT_CUES) : [];
+            $previous = $draft['cues'] ?? [];
+            if (array_slice($cues, 0, count($previous)) !== $previous) {
+                throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'published_cues_changed']);
+            }
+            $added = array_slice($cues, count($previous));
+            if ($added === []) {
+                return [];
+            }
+            $plan = $draft['batchPlan'] ?? [];
+            $firstBatchIndex = count($plan);
+            foreach ($this->batchPlan($added, $job, forPlayback: true) as [$start, $end]) {
+                $plan[] = [$start + count($previous), $end + count($previous)];
+            }
+            $this->put($job, self::DRAFT_CUES, [
+                'cues' => array_values($cues),
+                'sourceDialect' => 'unknown',
+                'batchPlan' => $plan,
+                'revision' => $draft === [] ? 1 : ($draft['revision'] ?? 1) + 1,
+            ]);
+
+            return range($firstBatchIndex, count($plan) - 1);
+        }, attempts: 5);
+    }
+
+    public function pendingAnalysisIndexes(SubtitleJob $job): array
+    {
+        $completed = SubtitleJobArtifact::query()->where('subtitle_job_id', $job->id)
+            ->where('run_id', $job->run_id)->where('artifact_type', self::ANALYZED_CUES)
+            ->pluck('batch_index')->all();
+
+        return array_values(array_diff(range(0, $this->batchCount($job, self::DRAFT_CUES) - 1), $completed));
+    }
+
+    public function analysisIsComplete(SubtitleJob $job): bool
+    {
+        if (! $this->hasArtifact($job, self::TRANSCRIPT) || ! $this->hasArtifact($job, self::DRAFT_CUES)) {
+            return false;
+        }
+        $indexes = SubtitleJobArtifact::query()->where('subtitle_job_id', $job->id)
+            ->where('run_id', $job->run_id)->where('artifact_type', self::ANALYZED_CUES)
+            ->orderBy('batch_index')->pluck('batch_index')->all();
+
+        return $indexes === range(0, $this->batchCount($job, self::DRAFT_CUES) - 1);
     }
 
     public function hasArtifact(SubtitleJob $job, string $artifactType, int $batchIndex = 0): bool
@@ -407,7 +474,7 @@ class SubtitleJobArtifactStore
      * @param  array<int, array<string, mixed>>  $cues
      * @return array<int, array{0: int, 1: int}> inclusive [start, end] index pairs
      */
-    public function batchPlan(array $cues, ?SubtitleJob $job = null): array
+    public function batchPlan(array $cues, ?SubtitleJob $job = null, bool $forPlayback = false): array
     {
         $count = count($cues);
 
@@ -430,7 +497,7 @@ class SubtitleJobArtifactStore
             // past the character budget or the max cue count -- but never emit
             // an empty batch, so a single over-budget cue forms its own batch.
             if ($size > 0 && ($chars + $length > $charBudget || $size >= $maxCues
-                || $this->exceedsBatchDuration($cues[$start], $cue))) {
+                || ($forPlayback && $this->exceedsBatchDuration($cues[$start], $cue)))) {
                 $plan[] = [$start, $index - 1];
                 $start = $index;
                 $chars = 0;
@@ -442,7 +509,7 @@ class SubtitleJobArtifactStore
         $plan[] = [$start, $count - 1];
 
         return config('subtitles.enrichment.balanced_batches', false)
-            ? $this->balancedPlan($cues, $plan, $job) : $plan;
+            ? $this->balancedPlan($cues, $plan, $job, $forPlayback) : $plan;
     }
 
     private function exceedsBatchDuration(array $firstCue, array $lastCue): bool
@@ -454,7 +521,7 @@ class SubtitleJobArtifactStore
     }
 
     /** Balance estimated response work without adding calls or raising input limits. */
-    private function balancedPlan(array $cues, array $baseline, ?SubtitleJob $job): array
+    private function balancedPlan(array $cues, array $baseline, ?SubtitleJob $job, bool $forPlayback): array
     {
         if (count($baseline) < 2) {
             return $baseline;
@@ -470,14 +537,14 @@ class SubtitleJobArtifactStore
                 + ($job?->include_translation ? mb_strlen($text) : 0)
                 + ($job?->include_romanization ? 4 * $nonLatin : 0);
         }, $cues);
-        $partition = function (int $budget) use ($weights, $lengths, $cues): array {
+        $partition = function (int $budget) use ($weights, $lengths, $cues, $forPlayback): array {
             $result = [];
             $start = $chars = $work = 0;
             foreach ($weights as $index => $weight) {
                 if ($index > $start && ($work + $weight > $budget
                     || $chars + $lengths[$index] > $this->batchCharBudget()
                     || $index - $start >= $this->maxCuesPerBatch()
-                    || $this->exceedsBatchDuration($cues[$start], $cues[$index]))) {
+                    || ($forPlayback && $this->exceedsBatchDuration($cues[$start], $cues[$index])))) {
                     $result[] = [$start, $index - 1];
                     $start = $index;
                     $chars = $work = 0;

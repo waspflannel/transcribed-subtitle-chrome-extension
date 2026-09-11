@@ -38,9 +38,13 @@ class ScribeTranscriptNormalizer
     /**
      * @param  array<string, mixed>  $payload
      */
-    public function normalize(array $payload, string $requestedSourceLanguage, ?float $durationSeconds): TimestampedTranscript
+    public function normalize(array $payload, string $requestedSourceLanguage, ?float $durationSeconds, ?float $stableBeforeSeconds = null): TimestampedTranscript
     {
-        $segments = $this->segmentsFromWords($this->timedWords($payload));
+        $words = $this->timedWords($payload);
+        if ($stableBeforeSeconds !== null) {
+            $words = array_values(array_filter($words, fn (array $word): bool => $word['end'] < $stableBeforeSeconds));
+        }
+        $segments = $this->segmentsFromWords($words, $stableBeforeSeconds === null);
         $webVtt = $this->webVttFromSegments($segments);
         $language = $requestedSourceLanguage === 'auto'
             ? $this->detectedLanguage($payload)
@@ -164,7 +168,7 @@ class ScribeTranscriptNormalizer
      * @param  array<int, array{text: string, start: float, end: float}>  $words
      * @return array<int, TimestampedTranscriptSegment>
      */
-    private function segmentsFromWords(array $words): array
+    private function segmentsFromWords(array $words, bool $complete): array
     {
         $segments = [];
         $currentWords = [];
@@ -220,7 +224,7 @@ class ScribeTranscriptNormalizer
             }
         }
 
-        if ($currentWords !== []) {
+        if ($complete && $currentWords !== []) {
             $segments[] = $this->segmentFromWords($currentWords, $previousSegmentEnd);
         }
 

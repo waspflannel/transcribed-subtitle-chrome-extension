@@ -531,6 +531,9 @@
     },
     {
       "if": {
+        "properties": {
+          "partialTrack": {}
+        },
         "required": [
           "partialTrack"
         ]

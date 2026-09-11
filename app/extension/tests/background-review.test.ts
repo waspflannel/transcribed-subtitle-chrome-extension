@@ -358,10 +358,10 @@ describe('background entrypoint review regressions', () => {
     expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(1);
     expect(storageMock.values.get('local:tabSubtitleOperations')).toBe(operationBeforeUnchangedPoll);
 
-    apiMock.getSubtitleJob.mockResolvedValue({ ...runningJob, partialTrack: { ...partialTrack, revision: 2 } });
+    apiMock.getSubtitleJob.mockResolvedValue({ ...runningJob, partialTrack: { ...partialTrack, revision: 2, readyThroughMs: 10000 } });
     await vi.advanceTimersByTimeAsync(1000);
     expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(2);
-    expect((storageMock.values.get('local:tabSubtitleOperations') as Record<string, any>)['1'].partialTrack.revision).toBe(2);
+    expect((storageMock.values.get('local:tabSubtitleOperations') as Record<string, any>)['1'].partialTrack.readyThroughMs).toBe(10000);
 
     apiMock.getSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, 'job-poll'), status: 'completed', stage: 'finalizing', track: track(VIDEO_A, 'job-poll') });
     await vi.advanceTimersByTimeAsync(21000);

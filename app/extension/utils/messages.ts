@@ -38,6 +38,7 @@ export type AccountState = AnonymousAccountState | AuthenticatedAccountState;
  * pipeline is still translating and romanizing.
  */
 export interface PartialSubtitleTrack {
+  readyThroughMs?: number;
   jobId: string;
   youtubeVideoId: string;
   sourceLanguage: string;
@@ -373,6 +374,7 @@ function isPartialSubtitleTrack(value: unknown): value is PartialSubtitleTrack {
     && hasString(value, 'youtubeVideoId')
     && hasString(value, 'sourceLanguage')
     && isNonNegativeInteger(value.revision)
+    && (value.readyThroughMs === undefined || isNonNegativeInteger(value.readyThroughMs))
     && Array.isArray(value.cues);
 }
 

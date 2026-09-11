@@ -12,6 +12,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use RuntimeException;
 use Throwable;
@@ -50,6 +51,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
         public readonly float $nominalStartSeconds,
         public readonly ?float $nominalEndSeconds,
         ?int $queuedAtMs = null,
+        public readonly ?float $nextAudioStartSeconds = null,
     ) {
         $this->onConnection(SubtitleQueue::connection());
         $this->queuedAtMs = $queuedAtMs ?? (int) floor(microtime(true) * 1000);
@@ -60,7 +62,11 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new SkipIfBatchCancelled];
+        return [
+            (new WithoutOverlapping('subtitle-transcription:'.$this->runId.':'.$this->chunkIndex))
+                ->releaseAfter(1)->expireAfter(720),
+            new SkipIfBatchCancelled,
+        ];
     }
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
@@ -75,6 +81,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
             nominalStartSeconds: $this->nominalStartSeconds,
             nominalEndSeconds: $this->nominalEndSeconds,
             queuedAtMs: $this->queuedAtMs,
+            nextAudioStartSeconds: $this->nextAudioStartSeconds,
         );
     }
 

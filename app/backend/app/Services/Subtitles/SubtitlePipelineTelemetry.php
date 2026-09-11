@@ -4,6 +4,7 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleJobArtifact;
 use App\Models\SubtitleJobEvent;
 use Illuminate\Bus\Batch;
 use Throwable;
@@ -78,6 +79,16 @@ class SubtitlePipelineTelemetry
         $this->tracer->jobEvent($job, 'delivery.first_cue_available', [
             'stage' => $job->stage,
             'status' => $job->status,
+            'duration_ms' => (int) abs(now()->diffInMilliseconds($job->created_at)),
+        ]);
+    }
+
+    public function recordFirstAnnotatedCueAvailable(SubtitleJob $job, int $readyThroughMs): void
+    {
+        $this->tracer->jobEvent($job, 'delivery.first_annotated_cue_available', [
+            'stage' => $job->stage,
+            'status' => $job->status,
+            'ready_through_ms' => $readyThroughMs,
             'duration_ms' => (int) abs(now()->diffInMilliseconds($job->created_at)),
         ]);
     }
@@ -184,7 +195,18 @@ class SubtitlePipelineTelemetry
         }
 
         [$from, $to] = $band;
-        $percent = min($to, $from + (int) floor(($to - $from) * min(100, max(0, $batch->progress())) / 100));
+        $progress = $batch->progress();
+        if ($stage === 'analysis') {
+            $job = SubtitleJob::query()->find($subtitleJobId);
+            if ($job === null || $job->run_id !== $runId || $job->status !== 'running' || $job->stage !== 'tokenizing') {
+                return;
+            }
+            $total = app(SubtitleJobArtifactStore::class)->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
+            $completed = SubtitleJobArtifact::query()->where('subtitle_job_id', $subtitleJobId)
+                ->where('run_id', $runId)->where('artifact_type', SubtitleJobArtifactStore::ANALYZED_CUES)->count();
+            $progress = 100 * $completed / $total;
+        }
+        $percent = min($to, $from + (int) floor(($to - $from) * min(100, max(0, $progress)) / 100));
 
         // The monotonic guard doubles as a write throttle: only batch
         // completions that move the integer percent forward touch the row.

@@ -8,6 +8,21 @@ use Tests\TestCase;
 
 class ScribeTranscriptNormalizerTest extends TestCase
 {
+    public function test_streaming_normalization_holds_an_unfinished_phrase_and_overlap_back(): void
+    {
+        $payload = ['words' => [
+            ['text' => 'Hello.', 'start' => 0.1, 'end' => 1, 'type' => 'word'],
+            ['text' => 'A', 'start' => 2, 'end' => 2.5, 'type' => 'word'],
+            ['text' => 'longer', 'start' => 2.6, 'end' => 3, 'type' => 'word'],
+            ['text' => 'phrase.', 'start' => 3.2, 'end' => 4, 'type' => 'word'],
+        ]];
+        $prefix = $this->normalizer()->normalize($payload, 'eng', 10, stableBeforeSeconds: 3.5);
+        $complete = $this->normalizer()->normalize($payload, 'eng', 10);
+        $this->assertSame(['Hello.'], array_column($prefix->segments, 'text'));
+        $this->assertEquals($prefix->segments, array_slice($complete->segments, 0, 1));
+        $this->assertSame('A longer phrase.', $complete->segments[1]->text);
+    }
+
     public function test_it_converts_scribe_words_to_valid_webvtt_cues(): void
     {
         $transcript = $this->normalizer()->normalize([
