@@ -24,6 +24,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Testing\Fakes\QueueFake;
 use Illuminate\Testing\TestResponse;
 use Laravel\Ai\Exceptions\RateLimitedException;
+use PHPUnit\Framework\Attributes\TestWith;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -616,8 +617,16 @@ class LyricsCorrectionContinuationTest extends TestCase
         }
     }
 
-    public function test_work_is_divided_by_the_real_shared_batch_plan(): void
+    /** @param array<int, array{0: int, 1: int}> $expectedBounds */
+    #[TestWith([false, [[0, 19], [20, 39], [40, 44]]])]
+    #[TestWith([true, [[0, 14], [15, 29], [30, 44]]])]
+    public function test_work_is_divided_by_the_real_shared_batch_plan(bool $balanced, array $expectedBounds): void
     {
+        config([
+            'subtitles.enrichment.balanced_batches' => $balanced,
+            'subtitles.enrichment.cue_batch_char_budget' => 1000,
+            'subtitles.enrichment.cue_batch_max_cues' => 20,
+        ]);
         $queue = $this->completedTrackWithCues(45, fn (int $position): string => 'Lyrics line '.($position + 1));
         LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
         $response = $this->submitLyrics($queue['job'], $queue['texts']);
@@ -629,7 +638,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $plan = $row->work_state['batchPlan'];
         $expectedPlan = app(SubtitleJobArtifactStore::class)->batchPlan($row->track->cues);
         $this->assertSame($expectedPlan, $plan);
-        $this->assertSame([[0, 19], [20, 39], [40, 44]], $plan);
+        $this->assertSame($expectedBounds, $plan);
 
         $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'), startRevision: 1);
 
