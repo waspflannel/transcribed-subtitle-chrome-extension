@@ -7,11 +7,7 @@
     $bodyClassValue = $bodyClass ?? 'marketing-body';
     $headerClass = $headerClass ?? '';
     $socialImage = $socialImageUrl ?? null;
-    $siteCssPaths = [
-        public_path('css/site.css'),
-        ...glob(public_path('css/site/*.css')),
-    ];
-    $siteCssVersion = max(array_map(static fn (string $path): int => is_file($path) ? filemtime($path) : 0, $siteCssPaths));
+    $siteStylesheets = ['tokens', 'base', 'shell', 'ui', 'marketing', 'app', 'motion', 'responsive'];
 @endphp
 <!doctype html>
 <html lang="en">
@@ -39,7 +35,9 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
         <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=Spline+Sans+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-        <link rel="stylesheet" href="{{ asset('css/site.css') }}?v={{ $siteCssVersion }}">
+        @foreach ($siteStylesheets as $stylesheet)
+            <link rel="stylesheet" href="{{ asset('css/site/'.$stylesheet.'.css') }}?v={{ filemtime(public_path('css/site/'.$stylesheet.'.css')) }}">
+        @endforeach
         @stack('styles')
         <script defer src="{{ asset('js/site-interactions.js') }}?v={{ filemtime(public_path('js/site-interactions.js')) }}"></script>
         @stack('scripts')

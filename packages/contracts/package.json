@@ -13,7 +13,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "node scripts/generate-types.mjs",
-    "check": "npm run validate && npm run build",
+    "check": "node --test scripts/maintenance.test.mjs && npm run validate && npm run build",
     "sync:languages": "node scripts/sync-language-schemas.mjs",
     "validate": "node scripts/validate.mjs"
   },

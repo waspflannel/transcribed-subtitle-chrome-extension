@@ -75,7 +75,7 @@
             <article class="fc" data-reveal data-reveal-delay="140">
                 <span class="fc-ruby" aria-hidden="true">ja · 単語 · tan·go</span>
                 <h3>A flashcard behind every word</h3>
-                <p>Click any word to open a card with meaning, reading, and usage notes — saved to your account for review.</p>
+                <p>Click any word to open a card with meaning, reading, and usage notes. Reopen generated tracks from your history while they are retained.</p>
             </article>
             <article class="fc" data-reveal data-reveal-delay="200">
                 <span class="fc-ruby" aria-hidden="true">fr · ré·vi·sion</span>

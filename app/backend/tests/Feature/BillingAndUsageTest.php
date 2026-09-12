@@ -17,6 +17,7 @@ use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
@@ -26,6 +27,52 @@ use Tests\TestCase;
 class BillingAndUsageTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_ledger_summary_uses_one_query_and_preserves_scoped_signed_totals(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $start = now()->startOfMonth()->toImmutable();
+        $end = $start->addMonth();
+        $ledger = app(UsageLedger::class);
+
+        $this->assertSame(['available' => 0, 'reserved' => 0, 'used' => 0], $ledger->summary($user, $start, $end));
+
+        foreach ([[100, 0, 0], [0, 20, 0], [-5, -5, 5], [0, -2, 0]] as $index => [$available, $reserved, $used]) {
+            BillingUsageEvent::create([
+                'user_id' => $user->id,
+                'plan_code' => 'base',
+                'event_type' => 'adjustment',
+                'billing_period_start' => $start,
+                'billing_period_end' => $end,
+                'available_minutes_delta' => $available,
+                'reserved_minutes_delta' => $reserved,
+                'used_minutes_delta' => $used,
+                'idempotency_key' => 'summary-'.$index,
+            ]);
+        }
+        $event = BillingUsageEvent::query()->firstOrFail();
+        $event->replicate()->fill(['user_id' => $otherUser->id, 'idempotency_key' => 'other-user'])->save();
+        $event->replicate()->fill(['billing_period_start' => $start->subMonth(), 'idempotency_key' => 'other-start'])->save();
+        $event->replicate()->fill(['billing_period_end' => $end->addMonth(), 'idempotency_key' => 'other-end'])->save();
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+        try {
+            $this->assertSame(['available' => 82, 'reserved' => 13, 'used' => 5], $ledger->summary($user, $start, $end));
+            $this->assertCount(1, DB::getQueryLog());
+        } finally {
+            DB::disableQueryLog();
+            DB::flushQueryLog();
+        }
+
+        BillingUsageEvent::query()->whereBelongsTo($user)->update([
+            'available_minutes_delta' => -10,
+            'reserved_minutes_delta' => -2,
+            'used_minutes_delta' => -3,
+        ]);
+        $this->assertSame(['available' => 0, 'reserved' => 0, 'used' => 0], $ledger->summary($user, $start, $end));
+    }
 
     public function test_user_can_start_checkout_and_open_billing_portal_through_hosted_stripe_flows(): void
     {

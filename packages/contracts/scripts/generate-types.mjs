@@ -39,6 +39,8 @@ for (const schemaFile of schemaFiles) {
     bannerComment: '',
     cwd: schemasDir,
     enableConstEnums: false,
+    // Local definitions have no separately compiled root schema.
+    declareExternallyReferenced: ['subtitle-job-history-response.schema.json', 'partial-track-response.schema.json'].includes(schemaFile),
     // Request limits are enforced by schema validation; callers build ordinary arrays.
     ignoreMinAndMaxItems: schemaFile === 'create-subtitle-job-request.schema.json',
     style: {
