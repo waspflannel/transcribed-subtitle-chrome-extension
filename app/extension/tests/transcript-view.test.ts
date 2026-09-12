@@ -11,7 +11,7 @@ const cues: SubtitleCue[] = [
 ];
 
 function setupDom() {
-  const dom = new JSDOM('<input id="search" /><ol id="list"></ol><p id="status"></p>');
+  const dom = new JSDOM('<input id="search" /><ol id="list"></ol><p id="status"></p>', { pretendToBeVisual: true });
   const document = dom.window.document;
   const scrollSpy = { calls: 0 };
   // jsdom does not implement scrollIntoView — stub it so setActiveCue does not throw,
@@ -350,4 +350,30 @@ describe('bindTranscriptView quick fix editor', () => {
     view.setQuickFixEditing(null);
     expect(list.querySelector('[data-quick-fix-editor]')).toBeNull();
   });
+});
+
+it('coalesces search input and invalidates searchable metadata when the same track is patched', async () => {
+  const { view, list, search } = setupDom();
+  view.setData('vid', cues, DEFAULT_EXTENSION_SETTINGS);
+  const initial = list.firstElementChild;
+  const serialize = vi.spyOn(JSON, 'stringify');
+  search.value = 'hel';
+  search.dispatchEvent(new search.ownerDocument.defaultView!.Event('input'));
+  await Promise.resolve();
+  search.value = 'hello';
+  search.dispatchEvent(new search.ownerDocument.defaultView!.Event('input'));
+  expect(list.firstElementChild).toBe(initial);
+  await new Promise((resolve) => search.ownerDocument.defaultView!.requestAnimationFrame(resolve));
+  expect(serialize).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify(serialize.mock.calls[0][0]).length).toBeLessThan(100);
+  serialize.mockRestore();
+  expect(list.querySelectorAll('.cue')).toHaveLength(1);
+  const patched = structuredClone(cues);
+  patched[1].tokens[0].gloss = 'hello';
+  view.setData('vid', patched, DEFAULT_EXTENSION_SETTINGS);
+  expect(list.querySelectorAll('.cue')).toHaveLength(2);
+  patched[0].sourceText = 'corrected';
+  search.value = 'corrected';
+  view.setData('vid', patched, DEFAULT_EXTENSION_SETTINGS);
+  expect(list.querySelector('[data-cue-id="c1"]')).not.toBeNull();
 });

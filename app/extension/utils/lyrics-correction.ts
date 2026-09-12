@@ -111,6 +111,7 @@ export async function syncLyricsCorrectionStatus(options: {
   fetchStatus: () => Promise<LyricsCorrectionStatus>;
   onCurrentRequestError?: (error: unknown) => void;
   canCommit?: () => boolean;
+  onCompleted?: (status: LyricsCorrectionStatus) => void;
 }): Promise<LyricsCorrectionStatus | null> {
   const current = options.states.get(options.tabId) ?? lyricsCorrectionTabState();
 
@@ -162,6 +163,10 @@ export async function syncLyricsCorrectionStatus(options: {
   });
   if (accepted !== latest) {
     options.states.set(options.tabId, accepted);
+    if (correction.status === 'completed'
+      && (latest.status?.status !== 'completed' || latest.status.attemptId !== correction.attemptId)) {
+      options.onCompleted?.(correction);
+    }
   }
 
   return accepted.status;

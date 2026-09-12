@@ -4,7 +4,6 @@ import type { AccountState } from './messages';
 import { GENERATION_STAGES, stageLabel } from './panel-progress';
 
 export interface PublicJobTelemetry {
-  publicJobId: string;
   videoDurationSeconds?: number;
   errorMessage?: string;
 }
@@ -41,7 +40,6 @@ export function accountStateFromSummary(account: AccountSummary): AccountState {
 
 export function publicJobTelemetry(job: SubtitleJobHistoryItem): PublicJobTelemetry {
   const telemetry: PublicJobTelemetry = {
-    publicJobId: shortPublicId(job.jobId),
     errorMessage: failedJobPublicErrorMessage(job),
   };
 
@@ -131,9 +129,6 @@ function failedJobPublicErrorMessage(job: SubtitleJobHistoryItem): string | unde
   return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
 }
 
-function shortPublicId(id: string): string {
-  return id.length > 13 ? `${id.slice(0, 8)}...${id.slice(-4)}` : id;
-}
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;

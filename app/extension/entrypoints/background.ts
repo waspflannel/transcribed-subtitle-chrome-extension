@@ -282,14 +282,25 @@ async function getContentState(sender: Browser.runtime.MessageSender): Promise<{
   return { installId, settings, subtitleState };
 }
 
-/**
- * The content pull path only sees the per-tab map and the small remembered-
- * track cache, so a track generated in an earlier session (or evicted from
- * that cache) looked missing until the user pressed generate again. Recover
- * ready and in-flight jobs from backend history the way the panel does.
- * Old failed jobs are left alone: the overlay should not surface a stale
- * failure just because the user opened the video again.
- */
+/** Global history includes obsolete completed versions; the video list contains readable tracks. */
+async function savedTrackRecoveryJobs(
+  state: SubtitleState,
+  page: SupportedYoutubePageInfo,
+  jobs: SubtitleJobHistoryItem[],
+  installId: string,
+  session: StoredExtensionSession,
+): Promise<SubtitleJobHistoryItem[]> {
+  if (state.type !== 'no-track' || jobs.some((job) => job.youtubeVideoId === page.videoId
+    && (job.status === 'queued' || job.status === 'running'))) return jobs;
+  try {
+    const saved = await subtitleApi.listSubtitleJobs(installId, session.plainTextToken, page.videoId);
+    return [...saved.jobs, ...jobs.filter((job) => job.youtubeVideoId !== page.videoId || job.status !== 'completed')];
+  } catch (error) {
+    await clearSessionIfInvalid(error, session.sessionId);
+    return jobs;
+  }
+}
+
 async function recoverSubtitleStateFromBackend(
   tabId: number,
   pageStatus: SupportedYoutubePageInfo,
@@ -312,7 +323,8 @@ async function recoverSubtitleStateFromBackend(
     return localState;
   }
 
-  const resolved = await stateWithBackendProgress(localState, pageStatus, history.jobs, (job) =>
+  const recoveryJobs = await savedTrackRecoveryJobs(localState, pageStatus, history.jobs, installId, session);
+  const resolved = await stateWithBackendProgress(localState, pageStatus, recoveryJobs, (job) =>
     resolveCompletedSubtitleJob(installId, session.plainTextToken, job, session.sessionId),
   );
 
@@ -1626,7 +1638,8 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
         tabSubtitleStateOwners.delete(activeTabId);
         tabSubtitleStateSessions.delete(activeTabId);
       }
-    } else if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId) {
+    } else if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId
+      && !tabGenerationInFlight.has(activeTabId)) {
       const recoveryOperation = operation;
       const recoveryClaim = tabOperations.get(activeTabId) ?? Symbol('panel-recovery');
       tabOperations.set(activeTabId, recoveryClaim);
@@ -1913,7 +1926,11 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
   }
 
   backendRecoveryBlocked = await isSubtitleRecoveryBlocked();
-  let subtitleState = backendRecoveryBlocked ? stateForRecovery : await stateWithBackendProgress(stateForRecovery, pageStatus, history.jobs, (job) =>
+  const recoveryJobs = !backendRecoveryBlocked && options.syncBackend && effectiveSession && pageStatus?.supported
+    ? await savedTrackRecoveryJobs(stateForRecovery, pageStatus, history.jobs, installId, effectiveSession)
+    : history.jobs;
+  let subtitleState = backendRecoveryBlocked || !options.syncBackend || (activeTabId !== null && tabGenerationInFlight.has(activeTabId))
+    ? stateForRecovery : await stateWithBackendProgress(stateForRecovery, pageStatus, recoveryJobs, (job) =>
     effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job, effectiveSession.sessionId) : Promise.resolve(null),
   );
   const lyricsCorrection = await syncLyricsCorrection(activeTabId, pageStatus, effectiveSession, installId, options.syncBackend, stateForRecovery);
@@ -2019,11 +2036,13 @@ async function syncLyricsCorrection(
 
   try {
     const sessionId = session.sessionId;
+    let completedResult: LyricsCorrectionStatus | undefined;
     const status = await syncLyricsCorrectionStatus({
       tabId,
       jobId: trackedJobId,
       syncBackend,
       states: tabLyricsCorrectionStates,
+      onCompleted: (result) => { completedResult = result; },
       fetchStatus: () => subtitleApi.getLyricsCorrectionStatus(installId, session.plainTextToken, trackedJobId),
       canCommit: () => tabLyricsCorrectionStateSessions.get(tabId) === sessionId,
       onCurrentRequestError: (error) => {
@@ -2037,16 +2056,18 @@ async function syncLyricsCorrection(
 
     if (!await isCurrentSession(sessionId)) return null;
 
-    if (status?.status === 'completed' && status.track && await isCurrentSession(sessionId)) {
+    const latestCorrection = tabLyricsCorrectionStates.get(tabId);
+    if (completedResult?.status === 'completed' && completedResult.track && latestCorrection?.jobId === trackedJobId
+      && latestCorrection.status?.status === 'completed' && latestCorrection.status.attemptId === completedResult.attemptId) {
       const currentSubtitleState = tabSubtitleStates.get(tabId);
       const currentTrack = currentSubtitleState?.type === 'ready' ? currentSubtitleState.track : null;
 
       if (currentTrack && await activeReadyTrackMatches(tabId, pageStatus.videoId, trackedJobId, currentTrack.trackId, session.account.id, sessionId)) {
         if (await isCurrentSession(sessionId)) {
-          await publishSubtitleState(tabId, { type: 'ready', track: status.track }, session.account.id, session.sessionId);
+          await publishSubtitleState(tabId, { type: 'ready', track: completedResult.track }, session.account.id, session.sessionId);
         }
       } else if (await isCurrentSession(sessionId)) {
-        await rememberActiveTrack(status.track, session.account.id);
+        await rememberActiveTrack(completedResult.track, session.account.id);
       }
     }
 

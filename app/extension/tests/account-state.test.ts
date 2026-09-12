@@ -102,7 +102,6 @@ describe('account and job-history state helpers', () => {
     expect(JSON.stringify(telemetry)).not.toContain('install_');
     expect(JSON.stringify(telemetry)).not.toContain('audio.wav');
     expect(telemetry).toMatchObject({
-      publicJobId: '018f9e2f...3001',
       errorMessage: 'Subtitle generation is temporarily rate limited. Wait a minute and try again.',
       videoDurationSeconds: 213,
     });

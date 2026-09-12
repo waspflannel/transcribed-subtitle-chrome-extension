@@ -1,9 +1,4 @@
-@import '@fontsource/bricolage-grotesque/800.css';
-@import '@fontsource/schibsted-grotesk/400.css';
-@import '@fontsource/schibsted-grotesk/500.css';
-@import '@fontsource/schibsted-grotesk/700.css';
-@import '@fontsource/spline-sans-mono/400.css';
-@import '@fontsource/spline-sans-mono/500.css';
+@import './fonts.css';
 
 /* =========================================================================
    Ink & marker, night shift — the marketing site's design system (bone

@@ -1,4 +1,4 @@
-import type { LearningToken, PartialSubtitleCue, SubtitleCue } from '../contracts';
+import type { PartialSubtitleCue, SubtitleCue } from '../contracts';
 import type { SubtitleState } from '../messages';
 import type { ExtensionSettings } from '../settings-model';
 import type { YoutubePageInfo } from '../youtube';
@@ -31,5 +31,3 @@ export interface OverlayStatus {
   message: string;
   tone: 'info' | 'success' | 'error';
 }
-
-export type OverlayTokenClickHandler = (cue: SubtitleCue, token: LearningToken) => void;
