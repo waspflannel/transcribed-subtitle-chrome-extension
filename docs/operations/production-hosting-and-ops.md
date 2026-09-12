@@ -237,6 +237,14 @@ Drain active generations before switching to this branch and restarting workers.
 
 Auto language detection describes the available speech prefix and can change as chunks arrive. Final detection uses all chunks. Automatic AI requests identify each cue and token from its text and honor the translation toggle even when detected language matches the target. Lyric replacement, Quick fix and clicked word cards follow the same rule. This adds no separate language-detection API call. The mixed-language fix needs a worker restart and no additional migration; regenerate older tracks to replace copied-source translations. Chunking retains overlap, but recognition quality and provider latency need representative live comparisons. Audio acquisition still completes before uploads start. Very long videos grow later chunks to honor the upload cap, so this does not guarantee uninterrupted playback or an instantaneous first response.
 
+## Ponytail maintenance rollout (September 12)
+
+This maintenance patch adds two forward migrations: `2026_09_12_065327_drop_unused_billing_dates_from_users_table.php` and `2026_09_12_065450_backfill_terminal_subtitle_job_expiry.php`. Use the normal drain/deploy/migrate/cache-refresh/worker-restart procedure, then reload the extension. Automated checks used test databases; runtime migrations and computer testing remain user-owned.
+
+Failed/cancelled jobs receive 30-day diagnostic deadlines. The backfill can make old terminal rows eligible for the next daily prune; billing ledger entries remain. Completed/cancelled batch metadata and failed queue jobs are also pruned after 720 hours. The expiry backfill intentionally does not clear deadlines on rollback, since already-pruned rows cannot be recovered by reversing a migration.
+
+The run-scoped preview uses existing artifact storage. Chunk retries now allow three transient exceptions, and retry-start timestamps protect them from the stalled-job watchdog. Finish old queued work before switching releases; serialized jobs can retain their old retry properties. The extension's saved-track recovery, polling, font and timing-binding changes require a rebuilt/reloaded extension. See the [implementation plan](../exec-plans/active/2026-09-12-implement-ponytail-application-review.md) for code-test evidence and deferred measurements.
+
 ## Security Checklist
 
 - `APP_DEBUG=false`.

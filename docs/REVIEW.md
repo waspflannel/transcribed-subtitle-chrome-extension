@@ -20,6 +20,7 @@ Every meaningful PR should include:
 
 ## Architecture Review Reports
 
+- Ponytail application cleanup, performance and quality review, 2026-09-12: `docs/ponytail-application-review-2026-09-12.md`
 - Whole-codebase architecture review, 2026-05-20: `docs/architecture-review-report-2026-05-20.md`
 - Whole-codebase architecture review, 2026-06-09: `docs/architecture-review-report-2026-06-09.md` (all 12 findings closed by [2026-06-09-architecture-review-cleanup-2026-06-09.md (historical)](https://github.com/waspflannel/transcribed-subtitle-chrome-extension/blob/5f3a92b7347072471b59bb2b956e23559ada1e6f/docs/exec-plans/completed/2026-06-09-architecture-review-cleanup-2026-06-09.md))
 
