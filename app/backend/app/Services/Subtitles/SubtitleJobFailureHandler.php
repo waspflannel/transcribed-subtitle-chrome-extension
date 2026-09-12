@@ -33,8 +33,7 @@ class SubtitleJobFailureHandler
         bool $promoteQueued = true,
         ?CarbonInterface $expectedUpdatedAt = null,
         ?string $expectedStage = null,
-    ): bool
-    {
+    ): bool {
         $job = SubtitleJob::query()->find($subtitleJobId);
 
         if ($job === null) {
@@ -76,6 +75,7 @@ class SubtitleJobFailureHandler
                 'stage' => $stage,
                 'error_code' => $errorCode,
                 'error_message' => $errorMessage,
+                'expires_at' => now()->addDays(30),
             ]);
             $this->usageLedger->releaseReservation($current, 'failure');
             $this->artifacts->deleteForJob($current);

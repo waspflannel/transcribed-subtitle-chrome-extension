@@ -35,5 +35,6 @@ final readonly class TokenizationQualitySummary
         public int $orphanFragments,
         public int $truncatedWords,
         public int $unlocatableGoldTokens,
+        public int $unlocatablePredictedTokens,
     ) {}
 }

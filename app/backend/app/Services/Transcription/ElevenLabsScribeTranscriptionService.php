@@ -6,6 +6,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Languages\LanguageCatalog;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -70,6 +71,8 @@ class ElevenLabsScribeTranscriptionService
                 $provider,
                 $model,
             );
+        } catch (ConnectionException $exception) {
+            throw SubtitleProcessingException::providerUnavailable(context: ['provider' => $provider->value, 'adapter' => 'elevenlabs-http', 'model' => $model], previous: $exception);
         } catch (SubtitleProcessingException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -191,6 +194,14 @@ class ElevenLabsScribeTranscriptionService
         array $context = [],
     ): array {
         if ($response->failed()) {
+            $context = ['provider' => $provider->value, 'adapter' => 'elevenlabs-http', 'model' => $model, 'status' => $response->status(), ...$context];
+            $quotaExhausted = in_array($response->json('detail.status'), ['quota_exceeded', 'insufficient_credits', 'credit_balance_exhausted'], true);
+            if ($response->status() === 429 && ! $quotaExhausted) {
+                throw SubtitleProcessingException::rateLimited(context: $context);
+            }
+            if ($response->serverError() && ! $quotaExhausted) {
+                throw SubtitleProcessingException::providerUnavailable(context: $context);
+            }
             throw SubtitleProcessingException::transcriptionFailed('Transcription provider request failed.', [
                 'provider' => $provider->value,
                 'adapter' => 'elevenlabs-http',

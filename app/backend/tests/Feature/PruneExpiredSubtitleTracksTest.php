@@ -2,22 +2,106 @@
 
 namespace Tests\Feature;
 
+use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Tests\TestCase;
 
 class PruneExpiredSubtitleTracksTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_terminal_job_backfill_preserves_recent_and_active_jobs_and_pruning_keeps_billing_history(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        $oldUpdatedAt = now()->subDays(45);
+        $oldJobs = collect(['failed', 'cancelled'])->map(fn (string $status): SubtitleJob => SubtitleJob::factory()->create([
+            'status' => $status,
+            'updated_at' => $oldUpdatedAt,
+            'expires_at' => null,
+        ]));
+        $recent = SubtitleJob::factory()->create(['status' => 'failed', 'updated_at' => now()->subDays(5)]);
+        $existingExpiry = SubtitleJob::factory()->create(['status' => 'cancelled', 'expires_at' => now()->addDays(4)]);
+        $active = collect(['queued', 'running'])->map(fn (string $status): SubtitleJob => SubtitleJob::factory()->create([
+            'status' => $status,
+            'updated_at' => $oldUpdatedAt,
+        ]));
+        $activeExpired = SubtitleJob::factory()->create(['status' => 'running', 'expires_at' => now()->subDay()]);
+
+        foreach ($oldJobs as $job) {
+            SubtitleJobEvent::create([
+                'subtitle_job_id' => $job->id,
+                'public_job_id' => $job->public_id,
+                'run_id' => $job->run_id,
+                'event' => 'job.'.$job->status,
+            ]);
+            BillingUsageEvent::create([
+                'user_id' => $job->user_id,
+                'subtitle_job_id' => $job->id,
+                'plan_code' => 'base',
+                'event_type' => 'refund',
+                'billing_period_start' => now()->startOfMonth(),
+                'billing_period_end' => now()->addMonth()->startOfMonth(),
+                'reserved_minutes_delta' => -5,
+                'idempotency_key' => 'retained-refund-'.$job->id,
+            ]);
+        }
+
+        $migration = require database_path('migrations/2026_09_12_065450_backfill_terminal_subtitle_job_expiry.php');
+        $migration->up();
+        $migration->up();
+
+        foreach ($oldJobs as $job) {
+            $this->assertTrue($job->fresh()->updated_at->equalTo($oldUpdatedAt));
+            $this->assertTrue($job->fresh()->expires_at->equalTo($oldUpdatedAt->copy()->addDays(30)));
+        }
+        $this->assertTrue($recent->fresh()->expires_at->equalTo(now()->addDays(25)));
+        $this->assertTrue($existingExpiry->fresh()->expires_at->equalTo(now()->addDays(4)));
+        foreach ($active as $job) {
+            $this->assertNull($job->fresh()->expires_at);
+        }
+
+        $this->artisan('subtitles:prune-expired')->assertSuccessful();
+
+        foreach ($oldJobs as $job) {
+            $this->assertModelMissing($job);
+            $this->assertDatabaseMissing('subtitle_job_events', ['subtitle_job_id' => $job->id]);
+            $this->assertDatabaseHas('billing_usage_events', [
+                'idempotency_key' => 'retained-refund-'.$job->id,
+                'subtitle_job_id' => null,
+                'reserved_minutes_delta' => -5,
+            ]);
+        }
+        foreach ([$recent, $existingExpiry, $activeExpired, ...$active] as $job) {
+            $this->assertModelExists($job);
+        }
+    }
+
+    public function test_failed_jobs_receive_a_diagnostic_expiry_without_extending_it_on_duplicate_failure(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        $job = SubtitleJob::factory()->create();
+        $failure = app(SubtitleJobFailureHandler::class);
+        $this->assertTrue($failure->failJob($job->id, 'transcribing', new RuntimeException('test failure'), $job->run_id, promoteQueued: false));
+        $deadline = now()->addDays(30);
+        $this->assertTrue($job->fresh()->expires_at->equalTo($deadline));
+        $this->travel(1)->days();
+        $this->assertFalse($failure->failJob($job->id, 'transcribing', new RuntimeException('duplicate'), $job->run_id, promoteQueued: false));
+        $this->assertTrue($job->fresh()->expires_at->equalTo($deadline));
+    }
+
     public function test_it_deletes_expired_tracks_their_empty_jobs_and_expired_cached_transcripts(): void
     {
         Log::spy();
 
         $expiredJob = SubtitleJob::factory()->create([
+            'status' => 'completed',
             'expires_at' => now()->subDay(),
         ]);
         $expiredTrack = SubtitleTrack::factory()

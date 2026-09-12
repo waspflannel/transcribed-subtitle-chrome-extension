@@ -287,6 +287,23 @@ class SubtitleGenerationPipeline
             return;
         }
 
+        $job = DB::transaction(function () use ($subtitleJobId, $runId, $chunkIndex): ?SubtitleJob {
+            $job = $this->lockRunningJob($subtitleJobId, $runId);
+            if ($job === null || $this->artifacts->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT_CHUNK, $chunkIndex)) {
+                return null;
+            }
+
+            // Each bounded retry gets its own watchdog window; completed
+            // chunk redelivery must not extend an abandoned run's lifetime.
+            $job->touch();
+
+            return $job;
+        }, attempts: 5);
+
+        if ($job === null) {
+            return;
+        }
+
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
         $requestStartedAtMs = $this->telemetry->currentTimeMs();

@@ -34,6 +34,7 @@ use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
 use App\Services\Subtitles\SubtitleQueue;
+use App\Services\Subtitles\SubtitleRuntimeTracer;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
@@ -262,6 +263,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_cancelling_running_job_releases_minutes_promotes_queue_and_is_idempotent(): void
     {
+        $this->travelTo(now()->startOfSecond());
         config([
             'subtitles.tiers.plans.base.generation_concurrency' => 1,
             'subtitles.tiers.plans.base.submission_limit' => 3,
@@ -296,6 +298,8 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('errorCode', 'generation_cancelled');
 
         $this->assertSame('cancelled', $running->fresh()->status);
+        $expiry = now()->addDays(30);
+        $this->assertTrue($running->fresh()->expires_at->equalTo($expiry));
         $this->assertSame(0, $ledger->reservedMinutesForJob($running));
         $this->assertSame('running', $queued->fresh()->status);
         $this->assertSame(1, (int) BillingUsageEvent::query()
@@ -325,16 +329,19 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseMissing('subtitle_tracks', ['subtitle_job_id' => $running->id]);
         $this->assertSame(0, $ledger->usageForJob($running->fresh())['chargedMinutes']);
 
+        $this->travel(1)->hours();
         $this
             ->withExtensionAuth($installId, $user)
             ->deleteJson('/v1/subtitle-jobs/'.$running->public_id)
             ->assertOk()
             ->assertJsonPath('status', 'cancelled')
             ->assertJsonPath('errorCode', 'generation_cancelled');
+        $this->assertTrue($running->fresh()->expires_at->equalTo($expiry));
     }
 
     public function test_cancelling_queued_job_does_not_dispatch_or_call_provider(): void
     {
+        $this->travelTo(now()->startOfSecond());
         config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
         Queue::fake();
         $user = User::factory()->create();
@@ -355,6 +362,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('status', 'cancelled');
 
         $this->assertSame('cancelled', $job->fresh()->status);
+        $this->assertTrue($job->fresh()->expires_at->equalTo(now()->addDays(30)));
         Queue::assertNothingPushed();
         $this->assertSame(0, $this->audioSource->calls);
     }
@@ -783,6 +791,61 @@ class SubtitleJobApiTest extends TestCase
         $this->assertStringContainsString('first transcript segment', $track->web_vtt);
         $this->assertStringContainsString('second transcript segment', $track->web_vtt);
         $this->assertStringNotContainsString('first transcript segment second', $track->web_vtt);
+    }
+
+    public function test_duplicate_enrichment_delivery_is_released_while_the_batch_lock_is_held(): void
+    {
+        $job = $this->runningSubtitleJob('enriching');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [$this->sampleCue()]);
+        $delivery = (new EnrichSubtitleCueBatch($job->id, 0, $job->run_id))->withFakeQueueInteractions();
+        $duplicate = (new EnrichSubtitleCueBatch($job->id, 0, $job->run_id))->withFakeQueueInteractions();
+        $middleware = $delivery->middleware()[0];
+        $middleware->handle($delivery, function () use ($duplicate, $middleware, $delivery): void {
+            $middleware->handle($duplicate, fn () => $duplicate->handle(app(SubtitleCueBatchProcessor::class)));
+            $duplicate->assertReleased(1);
+            $this->assertSame(0, $this->translationAnalysis->calls);
+            $delivery->handle(app(SubtitleCueBatchProcessor::class));
+        });
+        $middleware->handle($duplicate, fn () => $duplicate->handle(app(SubtitleCueBatchProcessor::class)));
+        $this->assertSame(1, $this->translationAnalysis->calls);
+        $this->assertSame('running', $job->fresh()->status);
+    }
+
+    public function test_enrichment_result_rolls_back_when_cost_recording_fails(): void
+    {
+        $job = $this->runningSubtitleJob('enriching');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [$this->sampleCue()]);
+        $tracer = \Mockery::mock(SubtitleRuntimeTracer::class)->makePartial();
+        $tracer->shouldReceive('jobEvent')->withArgs(fn ($job, $event) => $event === 'provider.cost_estimated')
+            ->andThrow(SubtitleProcessingException::providerUnavailable());
+        $this->app->instance(SubtitleRuntimeTracer::class, $tracer);
+        try {
+            app(SubtitleCueBatchProcessor::class)->enrichCueBatch($job->id, 0, $job->run_id);
+            $this->fail('Expected cost recording failure.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertTrue($exception->isTransient());
+        }
+        $this->assertFalse($this->artifacts()->hasArtifact($job, SubtitleJobArtifactStore::ENRICHED_CUES, 0));
+        $this->assertSame(0, $job->fresh()->estimated_provider_cost_microusd);
+        $this->assertSame('running', $job->fresh()->status);
+    }
+
+    public function test_completed_enrichment_batch_is_not_prompted_or_charged_again_on_redelivery(): void
+    {
+        $job = $this->runningSubtitleJob('enriching');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [$this->sampleCue()]);
+        $processor = app(SubtitleCueBatchProcessor::class);
+        $processor->enrichCueBatch($job->id, 0, $job->run_id);
+        $cost = $job->fresh()->estimated_provider_cost_microusd;
+        $costEvents = $job->events()->where('event', 'provider.cost_estimated')->count();
+        $this->translationAnalysis->shouldFail = true;
+        $processor->enrichCueBatch($job->id, 0, $job->run_id);
+        $this->assertSame(1, $this->translationAnalysis->calls);
+        $this->assertSame($cost, $job->fresh()->estimated_provider_cost_microusd);
+        $this->assertSame(1, $costEvents);
+        $this->assertSame($costEvents, $job->events()->where('event', 'provider.cost_estimated')->count());
+        $this->assertSame('running', $job->fresh()->status);
+        $this->assertTrue($this->artifacts()->hasArtifact($job, SubtitleJobArtifactStore::ENRICHED_CUES, 0));
     }
 
     public function test_completed_analysis_batch_is_not_prompted_again_on_redelivery(): void

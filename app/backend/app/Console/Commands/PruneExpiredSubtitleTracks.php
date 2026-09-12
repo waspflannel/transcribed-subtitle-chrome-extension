@@ -29,6 +29,7 @@ class PruneExpiredSubtitleTracks extends Command
             ->delete();
 
         $expiredJobIds = SubtitleJob::query()
+            ->whereIn('status', ['completed', 'failed', 'cancelled'])
             ->where('expires_at', '<=', now())
             ->doesntHave('track')
             ->pluck('id');
@@ -38,6 +39,7 @@ class PruneExpiredSubtitleTracks extends Command
             : SubtitleJobEvent::query()->whereIn('subtitle_job_id', $expiredJobIds)->count();
 
         SubtitleJob::query()
+            ->whereIn('status', ['completed', 'failed', 'cancelled'])
             ->where('expires_at', '<=', now())
             ->doesntHave('track')
             ->delete();

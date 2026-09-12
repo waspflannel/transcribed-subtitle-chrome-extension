@@ -639,17 +639,17 @@ class SubtitleRuntimeTracingTest extends TestCase
         $serialJobs = [
             new AcquireSubtitleAudio(1, $runId),
             new OptimizeSubtitleAudio(1, $runId, $stageAudio),
-            new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $stageAudio, 0.0, 0.0, null),
             new MergeSubtitleTranscript(1, $runId, 0),
             new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
             new FinalizeSubtitleJob(1, false, $runId),
         ];
-        $cueBatchJobs = [
+        $providerJobs = [
+            new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $stageAudio, 0.0, 0.0, null),
             new AnalyzeSubtitleCueBatch(1, 0, $runId),
             new EnrichSubtitleCueBatch(1, 0, $runId),
         ];
 
-        foreach ([...$serialJobs, ...$cueBatchJobs] as $job) {
+        foreach ([...$serialJobs, ...$providerJobs] as $job) {
             $this->assertSame(0, $job->tries, get_class($job));
         }
 
@@ -657,7 +657,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             $this->assertSame(1, $job->maxExceptions, get_class($job));
         }
 
-        foreach ($cueBatchJobs as $job) {
+        foreach ($providerJobs as $job) {
             $this->assertSame(3, $job->maxExceptions, get_class($job));
             $this->assertSame([15, 60], $job->backoff(), get_class($job));
         }

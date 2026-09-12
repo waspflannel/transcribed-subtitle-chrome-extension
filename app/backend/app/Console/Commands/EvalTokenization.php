@@ -290,6 +290,7 @@ class EvalTokenization extends Command
                 'orphanFragments' => $summary->orphanFragments,
                 'truncatedWords' => $summary->truncatedWords,
                 'unlocatableGoldTokens' => $summary->unlocatableGoldTokens,
+                'unlocatablePredictedTokens' => $summary->unlocatablePredictedTokens,
             ],
         ];
     }
@@ -325,6 +326,7 @@ class EvalTokenization extends Command
                 'orphanFragments' => $evaluation->orphanFragments,
                 'truncatedWords' => $evaluation->truncatedWords,
                 'unlocatableGoldTokens' => $evaluation->unlocatableGoldTokens,
+                'unlocatablePredictedTokens' => $evaluation->unlocatablePredictedTokens,
             ],
         ];
     }
@@ -394,6 +396,7 @@ class EvalTokenization extends Command
                 ['gold-word splits', (string) $summary['failureModes']['goldWordSplits']],
                 ['orphan fragments', (string) $summary['failureModes']['orphanFragments']],
                 ['truncated words', (string) $summary['failureModes']['truncatedWords']],
+                ['unlocatable predicted tokens', (string) $summary['failureModes']['unlocatablePredictedTokens']],
                 ['unlocatable gold tokens (transcription)', (string) $summary['failureModes']['unlocatableGoldTokens']],
             ],
         );

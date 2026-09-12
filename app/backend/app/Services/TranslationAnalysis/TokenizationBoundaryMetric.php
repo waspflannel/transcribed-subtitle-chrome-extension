@@ -5,11 +5,10 @@ namespace App\Services\TranslationAnalysis;
 /**
  * Computes boundary/word F1 and failure-mode counts for tokenized cues.
  *
- * Normalization mirrors LearningTokenOutputValidator exactly (whitespace
- * collapse + no-space artifact-space stripping + lowercasing) so evaluation
- * boundaries are scored over the same comparable source string the production
- * validator enforces. Token spans are resolved with the same advancing-offset
- * mb_strpos search the validator uses, keeping eval aligned with production.
+ * Normalization shares the production text comparison rules. Evaluation resolves
+ * ordered source spans; production intentionally accepts model wording.
+ * Boundary F1 measures segmentation, not text fidelity: word precision also
+ * counts lexical predictions that cannot be located in the source.
  */
 class TokenizationBoundaryMetric
 {
@@ -33,7 +32,8 @@ class TokenizationBoundaryMetric
         $sourceLength = mb_strlen($comparableSource, 'UTF-8');
 
         $goldSpans = $this->spansOf($goldTokens, $comparableSource);
-        $predictedSpans = $this->spansOf($predictedTokens, $comparableSource);
+        $lexicalPredictions = array_values(array_filter($predictedTokens, fn (string $text): bool => preg_match('/[\p{L}\p{N}]/u', $text) === 1));
+        $predictedSpans = $this->spansOf($lexicalPredictions, $comparableSource);
 
         $goldBoundaries = $this->boundariesOf($goldSpans, $sourceLength);
         $predictedBoundaries = $this->boundariesOf($predictedSpans, $sourceLength);
@@ -76,12 +76,13 @@ class TokenizationBoundaryMetric
             predictedBoundaryCount: count($predictedBoundaries),
             goldBoundaryCount: count($goldBoundaries),
             correctWords: $correctWords,
-            predictedWordCount: count($validPredictedSpans),
+            predictedWordCount: count($lexicalPredictions),
             goldWordCount: count(array_filter($goldSpans, fn ($span) => $span !== null)),
             goldWordSplits: $goldWordSplits,
             orphanFragments: $orphanFragments,
             truncatedWords: $truncatedWords,
             unlocatableGoldTokens: $unlocatableGoldTokens,
+            unlocatablePredictedTokens: count($lexicalPredictions) - count($validPredictedSpans),
             transcriptionFault: $unlocatableGoldTokens > 0,
             note: $note,
         );
@@ -124,6 +125,7 @@ class TokenizationBoundaryMetric
             goldWordSplits: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->goldWordSplits, $scored)),
             orphanFragments: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->orphanFragments, $scored)),
             truncatedWords: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->truncatedWords, $scored)),
+            unlocatablePredictedTokens: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->unlocatablePredictedTokens, $scored)),
             unlocatableGoldTokens: array_sum(array_map(fn (SegmentationEvaluation $eval) => $eval->unlocatableGoldTokens, $evaluations)),
         );
     }

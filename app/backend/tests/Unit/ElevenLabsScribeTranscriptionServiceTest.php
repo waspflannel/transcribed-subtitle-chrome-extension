@@ -10,6 +10,7 @@ use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\ScribeChunkPayloadMerger;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use App\Services\Transcription\TimestampedTranscript;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Http\Client\Request;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
@@ -59,6 +60,31 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
             return Process::result();
         });
+    }
+
+    public function test_transient_responses_are_retryable_but_auth_input_and_quota_are_terminal(): void
+    {
+        foreach ([[503, [], true], [429, [], true], [401, [], false], [422, [], false], [429, ['detail' => ['status' => 'quota_exceeded']], false]] as [$status, $body, $transient]) {
+            Http::swap(new Factory);
+            Http::fake(['*' => Http::response($body, $status)]);
+            try {
+                app(ElevenLabsScribeTranscriptionService::class)->transcribeChunk($this->audio, 'eng');
+                $this->fail('Expected provider error.');
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertSame($transient, $exception->isTransient());
+            }
+        }
+    }
+
+    public function test_connection_failure_is_retryable(): void
+    {
+        Http::fake(['*' => Http::failedConnection()]);
+        try {
+            app(ElevenLabsScribeTranscriptionService::class)->transcribeChunk($this->audio, 'eng');
+            $this->fail('Expected connection error.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertTrue($exception->isTransient());
+        }
     }
 
     protected function tearDown(): void
@@ -372,8 +398,8 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
             $this->service()->transcribeChunk($this->audio, 'spa');
             $this->fail('Expected provider failure to throw a stable transcription exception.');
         } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('transcription_failed', $exception->publicCode);
-            $this->assertSame(502, $exception->status);
+            $this->assertSame('rate_limited', $exception->publicCode);
+            $this->assertSame(429, $exception->status);
             $this->assertSame('eleven', $exception->context['provider']);
             $this->assertSame('elevenlabs-http', $exception->context['adapter']);
             $this->assertSame(429, $exception->context['status']);

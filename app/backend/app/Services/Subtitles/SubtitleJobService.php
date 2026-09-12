@@ -288,6 +288,7 @@ class SubtitleJobService
                 'status' => 'cancelled',
                 'error_code' => 'generation_cancelled',
                 'error_message' => 'Generation was cancelled. Reserved minutes were released.',
+                'expires_at' => now()->addDays(30),
             ])->save();
             $this->tracer->jobEvent($current, 'job.cancelled', [
                 'stage' => $current->stage,
