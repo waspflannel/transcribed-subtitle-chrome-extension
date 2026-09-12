@@ -26,8 +26,6 @@ class SubtitleJobService
 {
     private const VERSION_PREFIX = SubtitleProcessingVersion::JOB;
 
-    private const PROCESSING_MODES = ['on_demand', 'full'];
-
     private const PROCESSING_FEATURE_SETS = [
         [false, false],
         [true, false],
@@ -58,28 +56,19 @@ class SubtitleJobService
     {
         $versions = [];
 
-        foreach (self::PROCESSING_MODES as $mode) {
-            foreach (self::PROCESSING_FEATURE_SETS as [$includeRomanization, $includeTranslation]) {
-                $versions[] = self::processingVersionFor($mode, $includeRomanization, $includeTranslation);
-            }
+        foreach (self::PROCESSING_FEATURE_SETS as [$includeRomanization, $includeTranslation]) {
+            $versions[] = self::processingVersionFor($includeRomanization, $includeTranslation);
         }
 
         return $versions;
     }
 
     public static function processingVersionFor(
-        string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
     ): string {
-        $mode = match ($enrichmentMode) {
-            'on_demand' => 'on-demand',
-            'full' => 'full',
-            default => throw new InvalidArgumentException('Unsupported subtitle enrichment mode.'),
-        };
-
         return self::VERSION_PREFIX
-            .$mode
+            .'on-demand'
             .($includeRomanization ? '-romanized' : '')
             .($includeTranslation ? '-translated' : '');
     }
@@ -108,10 +97,9 @@ class SubtitleJobService
         $payload['vocabularyHints'] = $hints;
         $payload['transcriptionIngestionMode'] = $mode;
         $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($hints, $mode);
-        $enrichmentMode = $payload['enrichmentMode'];
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
-        $processingVersion = $this->processingVersion($enrichmentMode, $includeRomanization, $includeTranslation);
+        $processingVersion = $this->processingVersion($includeRomanization, $includeTranslation);
         $dispatchState = self::DISPATCH_STATE_REUSED;
         $previousJobCount = null;
 
@@ -121,7 +109,6 @@ class SubtitleJobService
                 $user,
                 $installId,
                 $processingVersion,
-                $enrichmentMode,
                 $includeRomanization,
                 $includeTranslation,
                 &$dispatchState,
@@ -155,7 +142,6 @@ class SubtitleJobService
                         user: $user,
                         installId: $installId,
                         generationTier: $entitlement->generationTier,
-                        enrichmentMode: $enrichmentMode,
                         includeRomanization: $includeRomanization,
                         includeTranslation: $includeTranslation,
                         startImmediately: $entitlement->startImmediately,
@@ -176,7 +162,6 @@ class SubtitleJobService
                     installId: $installId,
                     processingVersion: $processingVersion,
                     generationTier: $entitlement->generationTier,
-                    enrichmentMode: $enrichmentMode,
                     includeRomanization: $includeRomanization,
                     includeTranslation: $includeTranslation,
                     startImmediately: $entitlement->startImmediately,
@@ -333,7 +318,6 @@ class SubtitleJobService
         string $installId,
         string $processingVersion,
         string $generationTier,
-        string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
         bool $startImmediately,
@@ -357,7 +341,6 @@ class SubtitleJobService
             'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
             'transcription_options_hash' => $payload['transcriptionOptionsHash'],
             'generation_tier' => $generationTier,
-            'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
             'status' => $startImmediately ? 'running' : 'queued',
@@ -389,7 +372,6 @@ class SubtitleJobService
         User $user,
         string $installId,
         string $generationTier,
-        string $enrichmentMode,
         bool $includeRomanization,
         bool $includeTranslation,
         bool $startImmediately,
@@ -410,7 +392,6 @@ class SubtitleJobService
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'detected_source_language' => null,
             'generation_tier' => $generationTier,
-            'enrichment_mode' => $enrichmentMode,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
             'status' => $startImmediately ? 'running' : 'queued',
@@ -454,9 +435,9 @@ class SubtitleJobService
             : $createdAt;
     }
 
-    private function processingVersion(string $enrichmentMode, bool $includeRomanization, bool $includeTranslation): string
+    private function processingVersion(bool $includeRomanization, bool $includeTranslation): string
     {
-        return self::processingVersionFor($enrichmentMode, $includeRomanization, $includeTranslation);
+        return self::processingVersionFor($includeRomanization, $includeTranslation);
     }
 
     private function isStalePreparingJob(SubtitleJob $job): bool

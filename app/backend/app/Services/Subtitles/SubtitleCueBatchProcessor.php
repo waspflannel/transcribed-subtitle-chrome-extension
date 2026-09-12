@@ -83,54 +83,6 @@ class SubtitleCueBatchProcessor
         }
     }
 
-    public function enrichCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
-    {
-        $job = $this->loadRunningJob($subtitleJobId, $runId);
-
-        if ($job === null || $this->artifacts->hasArtifact($job, SubtitleJobArtifactStore::ENRICHED_CUES, $batchIndex)) {
-            return;
-        }
-
-        $this->telemetry->recordQueueWait($job, 'enriching', $batchIndex, $queuedAtMs);
-        $this->telemetry->recordStageStarted($job, 'enriching', $batchIndex);
-
-        try {
-            $startedAtMs = $this->telemetry->currentTimeMs();
-            $result = $this->translationAnalysis->enrichCueBatch(
-                batch: $this->artifacts->cueBatch($job, SubtitleJobArtifactStore::MERGED_CUES, $batchIndex),
-                sourceLanguage: $job->source_language,
-                targetLanguage: $job->target_language,
-                selection: SubtitleModel::forJob($job),
-            );
-
-            DB::transaction(function () use ($subtitleJobId, $runId, $batchIndex, $result, $startedAtMs): void {
-                $job = SubtitleJobLock::current($subtitleJobId, $runId);
-                if ($job === null || $job->status !== 'running' || $job->hasReadyTrack()
-                    || $this->artifacts->hasArtifact($job, SubtitleJobArtifactStore::ENRICHED_CUES, $batchIndex)) {
-                    return;
-                }
-                $this->artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ENRICHED_CUES, $batchIndex, $result);
-                $this->costs->recordCueBatch($job, 'enriching', count($result->cues));
-                $this->telemetry->recordStageCompleted($job, 'enriching', $startedAtMs, $batchIndex);
-            }, attempts: 5);
-        } catch (Throwable $exception) {
-            if ($this->loadRunningJob($subtitleJobId, $runId) === null) {
-                return;
-            }
-
-            // Transient provider failures are retried by the queue job; failing
-            // the subtitle job here would delete its artifacts and force the
-            // whole pipeline to re-run from audio acquisition.
-            if (! ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {
-                $this->failureHandler->failJob($subtitleJobId, 'enriching', $exception, $runId, [
-                    'batch_index' => $batchIndex,
-                ]);
-            }
-
-            throw $exception;
-        }
-    }
-
     private function loadRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob
     {
         $job = SubtitleJob::query()

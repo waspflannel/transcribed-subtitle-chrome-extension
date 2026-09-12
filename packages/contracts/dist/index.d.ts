@@ -236,10 +236,6 @@ export interface CreateSubtitleJobRequest {
     | 'yor'
     | 'zul';
   /**
-   * on_demand returns transcript-first tracks with tokenizer-agent clickable boundaries when valid. full enriches every cue before returning the track.
-   */
-  enrichmentMode: 'on_demand' | 'full';
-  /**
    * When true, backend may add cue and token romanization for non-Latin source text. When false, generation skips romanization.
    */
   includeRomanization: boolean;
@@ -325,7 +321,7 @@ export type LyricsCorrectionStatus =
   | {
       attemptId: string;
       status: 'running';
-      stage: 'aligning' | 'rebuilding' | 'romanizing' | 'enriching' | 'finalizing';
+      stage: 'aligning' | 'rebuilding' | 'romanizing' | 'finalizing';
       updatedAt: string;
     }
   | {
@@ -561,10 +557,6 @@ export type JobResponse = {
     | 'yor'
     | 'zul';
   /**
-   * Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output.
-   */
-  enrichmentMode: 'on_demand' | 'full';
-  /**
    * Whether the request asked the backend to add romanization where available.
    */
   includeRomanization: boolean;
@@ -581,7 +573,6 @@ export type JobResponse = {
     | 'tokenizing'
     | 'romanizing'
     | 'translating'
-    | 'enriching'
     | 'finalizing';
   progressPercent: number;
   track?: TrackResponse;
@@ -747,7 +738,6 @@ export type SubtitleJobHistoryItem = {
     | 'tokenizing'
     | 'romanizing'
     | 'translating'
-    | 'enriching'
     | 'finalizing';
   progressPercent: number;
   sourceLanguage:
@@ -845,10 +835,6 @@ export type SubtitleJobHistoryItem = {
     | 'xho'
     | 'yor'
     | 'zul';
-  /**
-   * Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output.
-   */
-  enrichmentMode: 'on_demand' | 'full';
   /**
    * Whether the request asked the backend to add romanization where available.
    */

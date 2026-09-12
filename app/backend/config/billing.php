@@ -19,9 +19,6 @@ return [
             'monthly_minutes' => 90,
             'generation_tier' => 'base',
             'speed_label' => 'Standard queue',
-            'features' => [
-                'full_word_cards' => false,
-            ],
         ],
         'plus' => [
             'name' => 'Plus',
@@ -30,9 +27,6 @@ return [
             'monthly_minutes' => 240,
             'generation_tier' => 'plus',
             'speed_label' => 'Priority queue',
-            'features' => [
-                'full_word_cards' => true,
-            ],
         ],
         'pro' => [
             'name' => 'Pro',
@@ -41,9 +35,6 @@ return [
             'monthly_minutes' => 600,
             'generation_tier' => 'pro',
             'speed_label' => 'Fast queue',
-            'features' => [
-                'full_word_cards' => true,
-            ],
         ],
     ],
 ];

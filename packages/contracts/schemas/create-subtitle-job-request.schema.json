@@ -9,7 +9,6 @@
     "youtubeUrl",
     "sourceLanguage",
     "targetLanguage",
-    "enrichmentMode",
     "includeRomanization",
     "includeTranslation"
   ],
@@ -239,14 +238,6 @@
         "yor",
         "zul"
       ]
-    },
-    "enrichmentMode": {
-      "type": "string",
-      "enum": [
-        "on_demand",
-        "full"
-      ],
-      "description": "on_demand returns transcript-first tracks with tokenizer-agent clickable boundaries when valid. full enriches every cue before returning the track."
     },
     "includeRomanization": {
       "type": "boolean",

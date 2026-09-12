@@ -5,7 +5,6 @@
   "sourceLanguage": "auto",
   "detectedSourceLanguage": "spa",
   "targetLanguage": "fra",
-  "enrichmentMode": "full",
   "includeRomanization": true,
   "includeTranslation": true,
   "status": "completed",

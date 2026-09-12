@@ -6,15 +6,6 @@ use LogicException;
 
 trait ValidatesSubtitleResourceFields
 {
-    protected function requiredEnrichmentMode(mixed $value): string
-    {
-        if ($value !== 'on_demand' && $value !== 'full') {
-            throw new LogicException('Subtitle job has an invalid enrichment_mode.');
-        }
-
-        return $value;
-    }
-
     protected function requiredBoolean(mixed $value, string $field): bool
     {
         if (! is_bool($value)) {

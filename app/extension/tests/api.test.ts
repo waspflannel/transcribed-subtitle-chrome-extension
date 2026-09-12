@@ -19,7 +19,7 @@ describe('SubtitleApiClient', () => {
     const job = {
       jobId: 'job-1', youtubeVideoId: 'dQw4w9WgXcQ', status: 'running', stage: 'transcribing',
       sourceLanguage: 'eng', targetLanguage: 'fra', aiProvider: 'openai', aiModel: 'gpt-5.6-luna',
-      enrichmentMode: 'on_demand', includeRomanization: false, includeTranslation: true,
+      includeRomanization: false, includeTranslation: true,
       progressPercent: 50, createdAt: '2026-09-11T00:00:00Z', updatedAt: '2026-09-11T00:00:00Z',
     };
     const partialTrack = { jobId: job.jobId, youtubeVideoId: job.youtubeVideoId, revision: 1, cues: trackResponse().cues };
@@ -77,7 +77,6 @@ describe('SubtitleApiClient', () => {
       targetLanguage: 'fra',
       aiProvider: 'openai',
       aiModel: 'gpt-5.6-luna',
-      enrichmentMode: 'on_demand',
       includeRomanization: true,
       includeTranslation: true,
       status: 'completed',
@@ -97,7 +96,6 @@ describe('SubtitleApiClient', () => {
       sourceLanguage: 'auto',
       targetLanguage: 'fra',
       aiProvider: 'openai',
-      enrichmentMode: 'on_demand',
       includeRomanization: true,
       includeTranslation: true,
     };
@@ -124,7 +122,6 @@ describe('SubtitleApiClient', () => {
       targetLanguage: 'fra',
       aiProvider: 'openai',
       aiModel: 'gpt-5.6-luna',
-      enrichmentMode: 'on_demand',
       includeRomanization: true,
       includeTranslation: true,
       status: 'running',
@@ -157,7 +154,6 @@ describe('SubtitleApiClient', () => {
       targetLanguage: 'fra',
       aiProvider: 'openai',
       aiModel: 'gpt-5.6-luna',
-      enrichmentMode: 'on_demand',
       includeRomanization: true,
       includeTranslation: true,
       status: 'cancelled',
@@ -202,7 +198,6 @@ describe('SubtitleApiClient', () => {
           targetLanguage: 'eng',
           aiProvider: 'openai',
           aiModel: 'gpt-5.6-luna',
-          enrichmentMode: 'on_demand',
           includeRomanization: true,
           includeTranslation: false,
         },
@@ -452,7 +447,6 @@ describe('SubtitleApiClient', () => {
       sourceLanguage: 'auto',
       targetLanguage: 'fra',
       aiProvider: 'openai',
-      enrichmentMode: 'on_demand',
       includeRomanization: true,
       includeTranslation: false,
     };
@@ -474,7 +468,6 @@ describe('SubtitleApiClient', () => {
           targetLanguage: 'fra',
           aiProvider: 'openai',
           aiModel: 'gpt-5.6-luna',
-          enrichmentMode: 'on_demand',
           includeRomanization: true,
           includeTranslation: true,
           status: 'completed',

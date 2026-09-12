@@ -38,7 +38,6 @@ class ContractResponseValidationTest extends TestCase
                     'videoDurationSeconds' => 120,
                     'sourceLanguage' => 'auto',
                     'targetLanguage' => 'eng',
-                    'enrichmentMode' => 'on_demand',
                     'includeRomanization' => true,
                     'includeTranslation' => false,
                 ])
@@ -151,7 +150,7 @@ class ContractResponseValidationTest extends TestCase
             'youtube_video_id' => 'history0003',
             'youtube_url' => 'https://www.youtube.com/watch?v=history0003',
             'status' => 'failed',
-            'stage' => 'enriching',
+            'stage' => 'finalizing',
             'progress_percent' => 75,
             'error_code' => 'rate_limited',
             'error_message' => 'Subtitle enrichment is temporarily rate limited.',

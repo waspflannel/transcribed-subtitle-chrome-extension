@@ -611,7 +611,6 @@ class SaasWebsiteAndSeoTest extends TestCase
             'videoDurationSeconds' => 213,
             'sourceLanguage' => 'auto',
             'targetLanguage' => 'eng',
-            'enrichmentMode' => 'on_demand',
             'includeRomanization' => true,
             'includeTranslation' => false,
             ...$overrides,

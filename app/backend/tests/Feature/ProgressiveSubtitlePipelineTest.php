@@ -195,8 +195,8 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         Bus::assertDispatchedTimes(FinalizeSubtitleJob::class, 1);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $job->refresh()->load('track');
         $this->assertSame('completed', $job->status);
         $this->assertSame(1, BillingUsageEvent::where('event_type', 'debit')->count());
@@ -314,7 +314,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, $index, $job->run_id);
         }
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
         $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ['Earlier.', 'Hello.', 'Again. There.'],
             array_column($job->fresh()->track->cues, 'sourceText'));

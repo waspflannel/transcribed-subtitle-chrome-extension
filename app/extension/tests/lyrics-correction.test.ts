@@ -50,7 +50,6 @@ describe('lyrics correction guards', () => {
     expect(lyricsCorrectionProgress('aligning').percent).toBe(15);
     expect(lyricsCorrectionProgress('rebuilding').percent).toBe(45);
     expect(lyricsCorrectionProgress('romanizing').percent).toBe(70);
-    expect(lyricsCorrectionProgress('enriching').percent).toBe(85);
     expect(lyricsCorrectionProgress('finalizing').percent).toBe(95);
   });
 

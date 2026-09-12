@@ -38,10 +38,6 @@ final class BillingEntitlementService
             throw BillingEntitlementException::paymentRequired();
         }
 
-        if (($payload['enrichmentMode'] ?? null) === 'full' && ! $this->plans->supportsFullWordCards($plan)) {
-            throw BillingEntitlementException::featureUnavailable();
-        }
-
         $period = $this->ledger->periodForUser($lockedUser);
 
         if ($period === null) {

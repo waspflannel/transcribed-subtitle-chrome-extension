@@ -386,7 +386,6 @@ function isSubtitleStage(value: unknown): value is SubtitleJobHistoryItem['stage
     || value === 'tokenizing'
     || value === 'romanizing'
     || value === 'translating'
-    || value === 'enriching'
     || value === 'finalizing';
 }
 

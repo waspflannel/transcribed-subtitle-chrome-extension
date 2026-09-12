@@ -29,7 +29,7 @@ use Throwable;
 
 final class LyricsCorrectionService
 {
-    private const STAGES = ['aligning', 'analyzing', 'enriching', 'finalizing'];
+    private const STAGES = ['aligning', 'analyzing', 'finalizing'];
 
     public function __construct(
         private readonly BillingEntitlementService $billing,
@@ -528,7 +528,7 @@ final class LyricsCorrectionService
 
         return match ($stage) {
             'aligning' => $this->aligningUnit($correction, $job, $lyrics),
-            'analyzing', 'enriching' => $this->derivedUnit($correction, $job, $state, $stage),
+            'analyzing' => $this->derivedUnit($correction, $job, $state, $stage),
             'finalizing' => $this->finalizingUnit($state),
             default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
         };
@@ -619,15 +619,10 @@ final class LyricsCorrectionService
                 includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
                 selection: SubtitleModel::forJob($job),
             ),
-            'enriching' => $this->translationAnalysis->enrichCueBatch($batch, $job->source_language, $job->target_language, SubtitleModel::forJob($job)),
             default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
         };
         $this->ensureCorrectionCurrent($correction);
-        if ($stage === 'analyzing') {
-            $this->costs->recordAnalyzedCueBatch($job, count($result->cues), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed');
-        } else {
-            $this->costs->recordCueBatch($job, 'enriching', count($result->cues), requiredStatus: 'completed');
-        }
+        $this->costs->recordAnalyzedCueBatch($job, count($result->cues), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed');
         $this->mergeIntoPositions($cues, $result->cues, $bounds);
 
         return $cues;
@@ -646,10 +641,6 @@ final class LyricsCorrectionService
      */
     private function nextStage(array $state, SubtitleJob $job, string $stage): array
     {
-        if ($stage === 'analyzing' && $this->fullEnrichmentRequested($job)) {
-            return [...$state, 'stage' => 'enriching', 'batchIndex' => 0];
-        }
-
         return ['stage' => 'finalizing', 'cues' => $state['cues']];
     }
 
@@ -1150,11 +1141,6 @@ final class LyricsCorrectionService
     private function translationRequested(SubtitleJob $job): bool
     {
         return $job->include_translation && $job->source_language !== $job->target_language;
-    }
-
-    private function fullEnrichmentRequested(SubtitleJob $job): bool
-    {
-        return $job->enrichment_mode === 'full' && $job->source_language !== $job->target_language;
     }
 
     private function containsNonLatin(array $cues): bool

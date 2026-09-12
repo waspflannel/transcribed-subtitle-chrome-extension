@@ -14,7 +14,7 @@
                 <li>{{ $plan['speed_label'] }}</li>
                 <li>{{ $plan['concurrency'] }} concurrent {{ $plan['concurrency'] === 1 ? 'generation' : 'generations' }}</li>
                 <li>{{ $plan['batch_concurrency'] }} AI batch {{ $plan['batch_concurrency'] === 1 ? 'slot' : 'slots' }}</li>
-                <li>{{ data_get($plan, 'features.full_word_cards') ? 'Full word cards included' : 'On-demand word cards included' }}</li>
+                <li>On-demand word cards included</li>
             </ul>
             @auth
                 @if ($checkoutBlocked ?? false)

@@ -4,7 +4,6 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\TranscribeSubtitleAudioChunk;
@@ -505,7 +504,6 @@ class SubtitleGenerationPipeline
 
     public function persistGeneratedSubtitleTrack(
         int $subtitleJobId,
-        bool $useEnrichedCues,
         string $runId,
         ?int $queuedAtMs = null,
     ): void {
@@ -520,13 +518,7 @@ class SubtitleGenerationPipeline
         $startedAtMs = $this->telemetry->currentTimeMs();
 
         $transcript = $this->artifacts->transcript($job);
-        $enrichment = $useEnrichedCues
-            ? $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ENRICHED_CUES)
-            : $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::MERGED_CUES);
-
-        if ($useEnrichedCues) {
-            $this->logger->enrichmentCompleted($job, $enrichment);
-        }
+        $enrichment = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::MERGED_CUES);
 
         $track = DB::transaction(function () use ($subtitleJobId, $runId, $enrichment) {
             $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
@@ -606,22 +598,6 @@ class SubtitleGenerationPipeline
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
     }
 
-    private function dispatchWordCardEnrichmentBatches(SubtitleJob $job): void
-    {
-        $this->markJobRunning($job, 'enriching', 90);
-        $cueCount = $this->artifacts->cueCount($job, SubtitleJobArtifactStore::MERGED_CUES);
-        $this->logger->enrichmentStarted($job, $cueCount);
-
-        $jobs = [];
-        $batchCount = $this->artifacts->batchCount($job, SubtitleJobArtifactStore::MERGED_CUES);
-
-        for ($batchIndex = 0; $batchIndex < $batchCount; $batchIndex++) {
-            $jobs[] = new EnrichSubtitleCueBatch($job->id, $batchIndex, $job->run_id);
-        }
-
-        DB::afterCommit(fn () => $this->batchDispatcher->dispatchEnrichment($job, $jobs));
-    }
-
     private function storeMergedCuesAndContinue(
         SubtitleJob $job,
         CueEnrichmentResult $merged,
@@ -639,12 +615,6 @@ class SubtitleGenerationPipeline
                 cues: $merged->cues,
                 sourceDialect: $merged->sourceDialect,
             );
-
-            if ($job->enrichment_mode === 'full' && ! $this->isSameLanguageGeneration($job)) {
-                $this->dispatchWordCardEnrichmentBatches($job);
-
-                return;
-            }
 
             $this->markJobRunning($job, 'finalizing', 95);
             DB::afterCommit(fn () => $this->batchDispatcher->dispatchMergedCueTrackFinalization($job));

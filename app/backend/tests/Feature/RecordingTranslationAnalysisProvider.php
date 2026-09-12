@@ -18,8 +18,6 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
     /** @var array<int, array{?string, ?string}> */
     public array $selections = [];
 
-    public int $calls = 0;
-
     public int $tokenizationCalls = 0;
 
     public int $romanizationCalls = 0;
@@ -56,51 +54,6 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function enrichCueBatch(
-        array $batch,
-        string $sourceLanguage,
-        string $targetLanguage,
-        ?SubtitleModel $selection = null,
-    ): CueEnrichmentResult {
-        $this->selections[] = [$selection?->provider, $selection?->model];
-        $this->calls++;
-        $this->sourceLanguages[] = $sourceLanguage;
-        $this->targetLanguages[] = $targetLanguage;
-
-        if ($this->shouldFail) {
-            throw SubtitleProcessingException::enrichmentFailed();
-        }
-
-        return new CueEnrichmentResult(
-            array_map(
-                function (array $cue): array {
-                    $enrichedCue = [
-                        ...$cue,
-                        'translatedText' => (string) ($cue['translatedText'] ?? $cue['sourceText']),
-                        'tokens' => array_map(
-                            fn (array $token): array => [
-                                ...$token,
-                                'gloss' => $this->glossForToken((string) $token['text']),
-                                ...(is_string($token['romanization'] ?? null)
-                                    ? ['romanization' => $token['romanization']]
-                                    : []),
-                            ],
-                            $cue['tokens'],
-                        ),
-                    ];
-
-                    if (is_string($cue['romanization'] ?? null)) {
-                        $enrichedCue['romanization'] = $cue['romanization'];
-                    }
-
-                    return $enrichedCue;
-                },
-                $batch,
-            ),
-            'unknown',
-        );
-    }
-
     /**
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues

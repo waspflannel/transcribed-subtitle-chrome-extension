@@ -107,9 +107,6 @@ export function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): 
     case 'translating':
       return 'Translating subtitles...';
 
-    case 'enriching':
-      return 'Generating word cards...';
-
     case 'finalizing':
       return 'Finalizing track...';
 

@@ -59,7 +59,6 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelS
     jobHistoryMediaKind(job) === 'short' ? 'Short' : null,
     job.includeTranslation ? 'translation' : null,
     job.includeRomanization ? 'romanization' : null,
-    job.enrichmentMode === 'full' ? 'full word cards' : null,
     formatJobTiming(job),
     formatHistoryTimestamp(job.completedAt ?? job.lastUpdatedAt ?? job.startedAt),
   ]

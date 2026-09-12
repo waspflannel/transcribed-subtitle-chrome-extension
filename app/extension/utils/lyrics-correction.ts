@@ -10,7 +10,6 @@ export const LYRICS_CORRECTION_STAGES = [
   { key: 'aligning', percent: 15, label: 'Checking and aligning lyrics' },
   { key: 'rebuilding', percent: 45, label: 'Rebuilding words and translations' },
   { key: 'romanizing', percent: 70, label: 'Rebuilding pronunciation' },
-  { key: 'enriching', percent: 85, label: 'Rebuilding word cards' },
   { key: 'finalizing', percent: 95, label: 'Applying replacement' },
 ] as const;
 

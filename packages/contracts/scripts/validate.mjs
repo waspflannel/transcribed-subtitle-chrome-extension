@@ -46,7 +46,6 @@ const fixtures = [
   ['extension-login-request.schema.json', 'valid-extension-login-request.json'],
   ['extension-auth-response.schema.json', 'valid-extension-auth-response.json'],
   ['extension-account-response.schema.json', 'valid-extension-account-response.json'],
-  ['create-subtitle-job-request.schema.json', 'valid-create-subtitle-job-request-full.json'],
   ['learning-token-request.schema.json', 'valid-learning-token-request.json'],
   ['learning-token-response.schema.json', 'valid-learning-token-response.json'],
   ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request.json'],
@@ -125,10 +124,10 @@ assertInvalid(lyricsCorrectionRequest, {
 }, 'non-boolean allowPartial');
 
 const correctionStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled'];
-const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing', 'completed', 'failed', 'cancelled'];
+const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'finalizing', 'completed', 'failed', 'cancelled'];
 const validCorrectionStageByStatus = {
   queued: ['queued'],
-  running: ['aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing'],
+  running: ['aligning', 'rebuilding', 'romanizing', 'finalizing'],
   completed: ['completed'],
   failed: ['failed'],
   cancelled: ['cancelled'],

@@ -26,7 +26,6 @@ class SubtitleJobResource extends JsonResource
         $status = $this->requiredString($this->status, 'status');
         $stage = $this->requiredString($this->stage, 'stage');
         $progressPercent = $this->progress_percent;
-        $enrichmentMode = $this->requiredEnrichmentMode($this->enrichment_mode);
         $includeRomanization = $this->requiredBoolean($this->include_romanization, 'include_romanization');
         $includeTranslation = $this->requiredBoolean($this->include_translation, 'include_translation');
 
@@ -51,7 +50,6 @@ class SubtitleJobResource extends JsonResource
             'targetLanguage' => $this->target_language,
             'aiProvider' => $this->ai_provider,
             'aiModel' => $this->ai_model,
-            'enrichmentMode' => $enrichmentMode,
             'includeRomanization' => $includeRomanization,
             'includeTranslation' => $includeTranslation,
             'status' => $status,

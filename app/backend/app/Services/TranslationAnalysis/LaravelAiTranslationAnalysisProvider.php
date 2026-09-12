@@ -3,7 +3,6 @@
 namespace App\Services\TranslationAnalysis;
 
 use App\Ai\Agents\CueAnalysisAgent;
-use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\SubtitleModel;
@@ -119,16 +118,6 @@ class LaravelAiTranslationAnalysisProvider
             'cues' => array_map(fn (array $cue): array => Arr::only($cue, ['cueId', 'index', 'sourceText']), array_values($batch)),
             'contextCues' => array_values($context),
         ];
-    }
-
-    public function enrichCueBatch(array $batch, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null): CueEnrichmentResult
-    {
-        if ($batch === []) {
-            $this->failInvalidOutput('empty_source_cues');
-        }
-        $output = $this->promptAgent(CueEnrichmentAgent::class, $this->cardInput($batch, $sourceLanguage, $targetLanguage), $selection);
-
-        return $this->validatedCards($output, $batch);
     }
 
     public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null): array

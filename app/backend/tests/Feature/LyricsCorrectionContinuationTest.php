@@ -826,7 +826,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(0, $this->translationAnalysis->translationCalls);
         $this->assertSame(0, $this->translationAnalysis->romanizationCalls);
-        $this->assertSame(0, $this->translationAnalysis->calls);
         $this->assertNotEmpty($track->cues[0]['tokens']);
     }
 
@@ -853,7 +852,6 @@ class LyricsCorrectionContinuationTest extends TestCase
             'target_language' => 'eng',
             'include_translation' => true,
             'include_romanization' => false,
-            'enrichment_mode' => 'full',
         ]);
         LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
         $response = $this->submitLyrics($queue['job'], $texts);
@@ -864,8 +862,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame('completed', $row->status);
         $this->assertSame('Translated '.$texts[1], $row->track->cues[1]['translatedText']);
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
-        $this->assertSame(1, $this->translationAnalysis->calls);
-        $this->assertSame(['auto', 'auto'], $this->translationAnalysis->sourceLanguages);
+        $this->assertSame(['auto'], $this->translationAnalysis->sourceLanguages);
     }
 
     public function test_non_latin_correction_rebuilds_romanization(): void
@@ -881,20 +878,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame('completed', $row->status);
         $this->assertSame(1, $this->translationAnalysis->romanizationCalls);
         $this->assertStringStartsWith('romanized ', (string) $row->track->cues[0]['romanization']);
-    }
-
-    public function test_full_enrichment_correction_rebuilds_word_cards(): void
-    {
-        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1), ['include_translation' => true, 'include_romanization' => false, 'enrichment_mode' => 'full']);
-        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
-        $response = $this->submitLyrics($queue['job'], $queue['texts']);
-
-        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
-
-        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
-        $this->assertSame('completed', $row->status);
-        $this->assertSame(1, $this->translationAnalysis->calls);
-        $this->assertArrayHasKey('gloss', $row->track->cues[0]['tokens'][0]);
     }
 
     public function test_final_publication_is_atomic_and_stale_attempts_cannot_publish(): void

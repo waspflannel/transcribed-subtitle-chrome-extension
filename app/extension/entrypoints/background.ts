@@ -596,7 +596,6 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
-      enrichmentMode: 'on_demand',
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -612,7 +611,6 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
-      enrichmentMode: 'on_demand',
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });

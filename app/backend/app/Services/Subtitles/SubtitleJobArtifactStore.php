@@ -22,8 +22,6 @@ class SubtitleJobArtifactStore
 
     public const MERGED_CUES = 'merged_cues';
 
-    public const ENRICHED_CUES = 'enriched_cues';
-
     public const PARTIAL_TRACK = 'partial_track';
 
     public function __construct(

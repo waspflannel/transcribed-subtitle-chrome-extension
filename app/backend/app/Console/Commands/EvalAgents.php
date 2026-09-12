@@ -146,7 +146,6 @@ class EvalAgents extends Command
             $target = $case['targetLanguage'];
             $pipeline = match ($case['agent']) {
                 'analysis' => $provider->analyzeCueBatch($cues, $context, $source, $target, $case['includeTranslation'], $case['includeRomanization']),
-                'enrichment' => $provider->enrichCueBatch($cues, $source, $target),
                 'card' => $provider->enrichToken($cues[0], $cues[0]['tokens'][$case['requestedTokenPosition']], $source, $target),
                 'edited' => $provider->refreshEditedCue($cues[0], $source, $target, true, true),
                 'lyrics' => LyricsAlignmentAgent::make(allowPartial: $case['lyricsInput']['allowPartial'])

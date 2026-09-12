@@ -21,7 +21,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
-use InvalidArgumentException;
 use Tests\TestCase;
 
 class BillingAndUsageTest extends TestCase
@@ -945,12 +944,6 @@ class BillingAndUsageTest extends TestCase
     {
         Queue::fake();
 
-        $this
-            ->withExtensionAuth($this->installId('f'))
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['enrichmentMode' => 'full']))
-            ->assertForbidden()
-            ->assertJsonPath('error.code', 'feature_unavailable');
-
         config([
             'subtitles.tiers.plans.base.generation_concurrency' => 1,
             'subtitles.tiers.plans.base.submission_limit' => 1,
@@ -973,17 +966,6 @@ class BillingAndUsageTest extends TestCase
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'usage000001']))
             ->assertStatus(402)
             ->assertJsonPath('error.code', 'usage_exhausted');
-    }
-
-    public function test_full_word_cards_feature_must_be_explicitly_configured(): void
-    {
-        config(['billing.plans.base.features' => []]);
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Billing plan [base] must define feature [full_word_cards].');
-
-        $plans = app(BillingPlanCatalog::class);
-        $plans->supportsFullWordCards($plans->requirePlan('base'));
     }
 
     public function test_submission_over_processing_concurrency_is_queued_not_rejected(): void
@@ -1102,7 +1084,6 @@ class BillingAndUsageTest extends TestCase
             'source_language' => $payload['sourceLanguage'],
             'target_language' => $payload['targetLanguage'],
             'processing_version' => 'scribe-v2-analysis-v15-on-demand-romanized',
-            'enrichment_mode' => 'on_demand',
             'include_romanization' => true,
             'include_translation' => false,
             'status' => 'running',
@@ -1305,7 +1286,6 @@ class BillingAndUsageTest extends TestCase
             'videoDurationSeconds' => 213,
             'sourceLanguage' => 'auto',
             'targetLanguage' => 'eng',
-            'enrichmentMode' => 'on_demand',
             'includeRomanization' => true,
             'includeTranslation' => false,
             ...$overrides,

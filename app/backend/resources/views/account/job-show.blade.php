@@ -69,10 +69,6 @@
                     <dt>Generation tier</dt>
                     <dd>{{ $job->generation_tier }}</dd>
                 </div>
-                <div>
-                    <dt>Feature mode</dt>
-                    <dd>{{ $job->enrichment_mode }}</dd>
-                </div>
             </dl>
         </x-ui.panel>
 

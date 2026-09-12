@@ -4,7 +4,6 @@ namespace App\Services\Subtitles;
 
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\OptimizeSubtitleAudio;
@@ -93,7 +92,6 @@ class SubtitleRuntimeTracer
         OptimizeSubtitleAudio::class,
         TranscribeSubtitleAudioChunk::class,
         MergeSubtitleTranscript::class,
-        EnrichSubtitleCueBatch::class,
         FinalizeSubtitleJob::class,
         PrepareSubtitleCuesAfterAnalysisBatches::class,
         AnalyzeSubtitleCueBatch::class,
