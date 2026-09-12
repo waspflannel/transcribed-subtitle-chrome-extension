@@ -13,7 +13,7 @@ import {
 import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
-import { anonymousAccountState, formatResetDate, stageTimeline } from '../../utils/account-state';
+import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { accountFeatureListHtml, accountBillingLinkHtml } from './render/account';
@@ -1070,7 +1070,7 @@ function showPanelState(state: PanelState): void {
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
     void pullActiveCue(state);
-  } else if (subtitleState.type === 'loading' && subtitleState.partialTrack) {
+  } else if (subtitleState.type === 'loading' && subtitleState.partialTrack?.cues.length) {
     transcriptView.setPartialData(subtitleState.partialTrack.youtubeVideoId, subtitleState.partialTrack.cues, settings);
   } else {
     cueSnapshotRequest += 1;
@@ -1218,7 +1218,7 @@ async function pullActiveCue(state: PanelState): Promise<void> {
 function showWatchState(state: PanelState, supported: boolean, authenticated: boolean): void {
   const subtitleState = state.subtitleState;
   const loading = subtitleState.type === 'loading';
-  const partial = loading && subtitleState.partialTrack !== undefined;
+  const partial = loading && (subtitleState.partialTrack?.cues.length ?? 0) > 0;
   const ready = subtitleState.type === 'ready';
   const correctionRunning = isActiveLyricsCorrection(state.lyricsCorrection);
   const generationInProgress = loading
@@ -1258,12 +1258,13 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
 
     progressLabel.textContent = queued ? 'Queued' : 'Generating';
     progressStages.setAttribute('aria-label', 'Generation stages');
+    progressStages.hidden = true;
+    progressStages.innerHTML = '';
     progressPercent.setAttribute('aria-valuenow', String(progress.percent));
-    progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.activityLabel}`);
+    progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${queued ? progress.activityLabel : progress.stageLabel}`);
     progressPercent.textContent = `${progress.percent}%`;
-    announceProgress(queued ? 'Queued' : 'Generating', progress.activityLabel);
+    announceProgress(queued ? 'Queued' : 'Generating', queued ? progress.activityLabel : progress.stageLabel);
     progressBar.style.width = `${progress.percent}%`;
-    progressStages.innerHTML = stageChecklistHtml(subtitleState.stage, subtitleState.status ?? 'running');
     progressCopy.textContent = queued
       ? 'Waiting for a generation slot. You can close this panel — generation keeps going.'
       : 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
@@ -1271,6 +1272,7 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
     const progress = lyricsCorrectionProgress(state.lyricsCorrection.stage);
     progressLabel.textContent = 'Replacing lyrics';
     progressStages.setAttribute('aria-label', 'Replacement stages');
+    progressStages.hidden = false;
     progressPercent.setAttribute('aria-valuenow', String(progress.percent));
     progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.label}`);
     progressPercent.textContent = `${progress.percent}%`;
@@ -1300,22 +1302,6 @@ function lyricsCorrectionStageChecklistHtml(stage: LyricsCorrectionStatus['stage
       <span>${escapeHtml(item.label)}</span>
     </li>
   `).join('');
-}
-
-function stageChecklistHtml(
-  stage: PanelState['jobHistory'][number]['stage'],
-  status: 'queued' | 'running',
-): string {
-  return stageTimeline({ stage, status })
-    .map(
-      (item) => `
-        <li class="stage ${item.state}"${item.state === 'current' ? ' aria-current="step"' : ''}>
-          <span class="stage-dot" aria-hidden="true"></span>
-          <span>${escapeHtml(item.label)}</span>
-        </li>
-      `,
-    )
-    .join('');
 }
 
 function renderGenerateNote(state: PanelState, supported: boolean): void {

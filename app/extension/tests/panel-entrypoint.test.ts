@@ -131,6 +131,8 @@ it('cancels generation and saves the model selected for the next generation', as
   expect(dom.window.document.querySelector<HTMLElement>('[data-account-model]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-panel="watch"]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-progress]')?.hidden).toBe(false);
+  expect(dom.window.document.querySelector('[data-progress-activity]')?.textContent).toBe('Preparing request');
+  expect(dom.window.document.querySelector<HTMLElement>('[data-progress-stages]')?.hidden).toBe(true);
 
   responseState = runningState;
   Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, value: 'visible' });

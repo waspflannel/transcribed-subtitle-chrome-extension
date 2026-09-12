@@ -153,6 +153,41 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
     }
 
+    public function test_transcription_batch_progress_moves_the_job_through_its_progress_band(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'status' => 'running',
+            'stage' => 'transcribing',
+            'progress_percent' => 50,
+        ]);
+        $staleRunId = (string) Str::uuid();
+        $chunks = [0, 1];
+
+        app(SubtitleBatchDispatcher::class)->dispatchTranscription($job, array_map(
+            fn (int $index): TranscribeSubtitleAudioChunk => new TranscribeSubtitleAudioChunk(
+                $job->id,
+                $index,
+                count($chunks),
+                $staleRunId,
+                null,
+                0.0,
+                0.0,
+                null,
+            ),
+            $chunks,
+        ), 0);
+
+        Artisan::call('queue:work', [
+            '--queue' => SubtitleQueue::workerQueueList().',default',
+            '--once' => true,
+            '--tries' => 1,
+            '--sleep' => 0,
+        ]);
+
+        // 1 of 2 transcription jobs done -> halfway through the 50-65 band.
+        $this->assertSame(57, $job->refresh()->progress_percent);
+    }
+
     public function test_analysis_members_over_the_tier_cap_are_windowed_into_chains(): void
     {
         config(['subtitles.tiers.plans.base.batch_concurrency' => 2]);

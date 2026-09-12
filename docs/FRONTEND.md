@@ -32,6 +32,7 @@
 - The internal `tokenizing` generation stage is displayed as **Analyzing subtitles** in the extension and web dashboard. Tokenization, translation, and requested romanization share one analysis response, progress band, and timeline step; the timeline must not show translation and romanization as later sequential steps.
 
 - Running generation status includes available preview cues. Poll running jobs once per second and queued jobs or failed requests every five seconds. Each loop waits at least one second per active tab operation to share the status rate limit (about 60 requests per minute across active tabs, plus initial reads). Only changed preview revisions are stored again; completion and cancellation stop polling.
+- The Watch progress screen shows the backend percentage and current real pipeline activity instead of a fixed stage checklist. Transcription and analysis batch completions advance the bar within their progress bands. Before the first preview cue arrives, the on-video subtitle rail stays on a stable **Generating** placeholder; it switches to partial subtitle cues only when a non-empty batch is available.
 
 - Dashboard connection listings filter both per-token and configured Sanctum expiration before taking three recent extension tokens. This is a token-status snapshot, not browser-presence detection; viewing it does not revoke tokens.
 

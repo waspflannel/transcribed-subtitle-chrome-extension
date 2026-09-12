@@ -88,12 +88,11 @@ export function renderOverlayContent(
       return renderFrame(renderPartialRail(partialCue, state.subtitleState.partialTrack.sourceLanguage, state.settings));
     }
 
-    return renderFrame(renderShell({
-      eyebrow: 'AI subtitles',
-      title: 'Generating subtitles',
-      detail: state.subtitleState.message,
-      meta: [`Video ${state.page.videoId}`],
-    }));
+    return renderFrame(`
+      <section class="rail rail--message rail--generating" role="status" aria-label="Generating subtitles">
+        <div class="title">Generating</div>
+      </section>
+    `);
   }
 
   return renderFrame(renderShell({
