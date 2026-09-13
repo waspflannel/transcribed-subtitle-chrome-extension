@@ -1,6 +1,6 @@
 # Plan: First subtitle latency experiment
 
-Status: active — running second-chunk handoff experiment
+Status: active — both benchmarks complete; human playback and quality review remain
 Owner: agent
 Work mode: standard
 Created: 2026-09-12
@@ -84,6 +84,8 @@ Evidence to capture:
 - Follow-up authorized: retain first15s, add second20s (bounded by half the remaining audio and target), distribute the rest within max8. Disable with `SUBTITLE_TRANSCRIPTION_CHUNK_SECOND_SECONDS=0`; max1/2 and even-chunk mode retain previous behavior. Existing ascending dispatch and contiguous-prefix publication already prioritize early cues; no extra queue infrastructure needed. Laravel rules review and Boost queue docs confirm parallel completion order remains variable.
 - Validate chunk continuity, overlap, short videos and capped uploads; run full harness. Repeat the same 12 fresh benchmark runs in a new isolated schema/prefix, preserving the first experiment. Cached path is unchanged, so no paid cached reruns are needed. Compare first-ready, completion and sampled coverage gaps; quality remains a human review item.
 - Second-chunk validation passed: 539 backend tests (4318 assertions), 255 extension tests, contracts, compile and build. Integration runs both disabled and enabled second-chunk settings, including retry and final merge. Required Laravel reviewer found no correctness blockers. Evidence: `app/backend/storage/logs/second-chunk-experiment-check.log`.
+- Second-chunk benchmark completed all twelve fresh runs without cache hits or recorded errors. Matched first-ready mean 12.259s → 11.200s; completion 20.563s → 19.779s. Punjabi potential prefix deficits improved 8.834s → 1.484s and 6.154s → 0s on repeat. Transcription calls increased 15.2%, analysis calls 10.7%; no billing-cost claim. [Second experiment report](../evidence/2026-09-13-second-chunk-experiment.md) and [CSV](../evidence/2026-09-13-second-chunk-experiment.csv). Original public jobs/cache snapshots unchanged; benchmark workers stopped. Keep second20s for local playback review, with second0s as rollback.
+- Restarted local backend and 31 normal queue workers after confirming no active public generations. Strict runtime check passes; health endpoint returns 200. Default second20s is active. Logs: `second-chunk-runtime-restart.log` and `second-chunk-runtime-after.json` under backend storage/logs.
 
 - Completed 16 authorized live generations: nine matched fresh runs, three repeats, four confirmed transcript-cache hits. Existing 13 user jobs and 32 transcript-cache rows were unchanged. Benchmark workers stopped; isolated evidence retained.
 - [Measured report](../evidence/2026-09-13-first-subtitle-experiment.md) and [numeric results](../evidence/2026-09-13-first-subtitle-experiment.csv): matched fresh first-ready mean 15.288s → 12.259s; total 20.168s → 20.563s. Historical comparison and small sample limit causal claims.
