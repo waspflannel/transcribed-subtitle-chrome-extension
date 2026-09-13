@@ -8,6 +8,8 @@
 
 ## Startup And Runtime
 
+- Chunked transcription jobs allow 720 seconds: up to 60 seconds for FFmpeg extraction, the existing 600-second Scribe request, and 60 seconds of slack. The per-chunk overlap lock expires after 780 seconds; queue retry-after remains 1260 seconds. A retry extracts the same slice again rather than trusting a possibly incomplete file. Completed/stale deliveries skip extraction. All members share the run workspace until failure or final transcript merge.
+
 - The local/runtime profile uses Postgres for app data and Laravel batch metadata, and Redis for queued subtitle generation and AI batch jobs.
 - SQLite is test-only through PHPUnit's in-memory configuration. It is not a supported app runtime or smoke profile.
 - `php artisan subtitles:runtime-check` fails outside testing when `pdo_pgsql`, Postgres, Redis queue configuration, or Redis-backed subtitle concurrency bookkeeping is missing.
