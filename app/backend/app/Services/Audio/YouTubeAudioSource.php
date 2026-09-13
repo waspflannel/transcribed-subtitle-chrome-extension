@@ -22,7 +22,6 @@ class YouTubeAudioSource
             $cached = $this->prefetchedMetadata($userId, $videoId);
             if ($cached !== null) {
                 $durationSeconds = $this->durationSeconds($cached, (int) config('subtitles.max_video_duration_seconds'));
-                $this->assertSupportedVideo($cached);
                 $metadata = $cached;
             } else {
                 [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
@@ -71,22 +70,20 @@ class YouTubeAudioSource
             return;
         }
         $key = $this->prefetchKey($userId, $videoId);
-        Cache::lock($key.':lock', 15)->get(function () use ($userId, $videoId, $key): void {
-            if ($this->prefetchedMetadata($userId, $videoId) !== null) {
+        if ($this->prefetchedMetadata($userId, $videoId) !== null) {
+            return;
+        }
+        try {
+            $metadata = $this->metadata('https://www.youtube.com/watch?v='.$videoId, 8);
+            $this->assertSupportedVideo($metadata);
+            $this->durationSeconds($metadata, (int) config('subtitles.max_video_duration_seconds'));
+            if (($metadata['id'] ?? null) !== $videoId) {
                 return;
             }
-            try {
-                $metadata = $this->metadata('https://www.youtube.com/watch?v='.$videoId, 8);
-                $this->assertSupportedVideo($metadata);
-                $this->durationSeconds($metadata, (int) config('subtitles.max_video_duration_seconds'));
-                if (($metadata['id'] ?? null) !== $videoId) {
-                    return;
-                }
-                Cache::put($key, Crypt::encryptString(json_encode($metadata, JSON_THROW_ON_ERROR)), 60);
-            } catch (Throwable) {
-                Log::info('backend.youtube_prefetch_failed');
-            }
-        });
+            Cache::put($key, Crypt::encryptString(json_encode($metadata, JSON_THROW_ON_ERROR)), 60);
+        } catch (Throwable) {
+            Log::info('backend.youtube_prefetch_failed');
+        }
     }
 
     private function prefetchKey(int $userId, string $videoId): string

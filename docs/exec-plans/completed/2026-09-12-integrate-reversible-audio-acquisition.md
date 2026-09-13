@@ -1,6 +1,6 @@
 # Plan: Integrate reversible audio acquisition
 
-Status: complete; user tested successfully; branch not merged
+Status: complete; user tested successfully and authorized merge to main
 Owner: agent
 Created: 2026-09-12
 Last updated: 2026-09-13
@@ -13,7 +13,7 @@ Integrate the acquisition benchmark winner into normal generation: fetch metadat
 
 - Both backend flags and the extension build flag default off. Enable locally for user testing; do not merge until the user approves.
 - The authenticated write-scoped endpoint accepts only an 11-character video ID. It queues a unique, single-attempt job on the existing base generation queue and returns immediately. Jobs waiting 15 seconds become no-ops. This avoids blocking the local Windows HTTP server.
-- Metadata resolution has an eight-second timeout and a 15-second cache lock. Store encrypted metadata for 60 seconds, scoped to account and video. Recheck public availability, live status and duration before use.
+- Metadata resolution has an eight-second timeout. The unique queue job prevents duplicate work for the same account/video; a second service-level lock is unnecessary. Store encrypted metadata for 60 seconds, scoped to account and video. Recheck public availability, live status and duration before use.
 - The extension prefetches only with an open panel, a signed-in account and a supported video that is not already loading/ready. It does not await the result. A 45-second client dedupe and 60-second server TTL are best effort; idle/refresh timing can leave a cold-cache gap.
 - Direct acquisition accepts HTTPS Googlevideo hosts, verifies TLS and copies M4A without re-encoding. WebM and unsupported formats use the existing downloader. Direct failure falls back; failed cached acquisition discards metadata and resolves it fresh once.
 - Metadata prefetch makes no provider calls, creates no subtitle generation and reserves no credits. Queue payloads contain account/video IDs and a timestamp, not signed URLs.
@@ -27,7 +27,7 @@ Integrate the acquisition benchmark winner into normal generation: fetch metadat
 - [x] Real service smoke: Spanish video, metadata 2.714 seconds before Generate, direct full M4A acquisition 1.030 seconds, 3,546,900 bytes.
 - [x] Real complete generation smoke for Spanish and Japanese, with transcript cache disabled and isolated database/Redis prefixes.
 - [x] Final `scripts/agent/check.ps1`, local runtime restart and enabled extension build.
-- [x] User tested successfully and requested cleanup/commit on September 13. Merge remains a separate action.
+- [x] User tested successfully and requested cleanup/commit on September 13, then authorized the Ponytail simplifications, merge to main and removal of merged branches.
 
 Initial full validation passed: 545 backend tests and 256 extension tests, contracts, type checking and build. Queue review then added two backend tests; the targeted eight-test suite passes. Final evidence is recorded below after completion.
 
