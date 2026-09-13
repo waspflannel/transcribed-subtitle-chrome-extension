@@ -18,6 +18,7 @@ class ScribeAudioChunkerTest extends TestCase
 
         config([
             'subtitles.transcription.chunking.first_seconds' => 0,
+            'subtitles.transcription.chunking.second_seconds' => 0,
             'subtitles.transcription.chunking.min_audio_seconds' => 240,
             'subtitles.transcription.chunking.target_seconds' => 120,
             'subtitles.transcription.chunking.overlap_seconds' => 2.0,
@@ -57,6 +58,36 @@ class ScribeAudioChunkerTest extends TestCase
     public function test_short_audio_is_not_chunked(): void
     {
         $this->assertSame([], $this->chunker()->plan(239));
+    }
+
+    public function test_short_second_chunk_extends_the_opening_without_gaps_or_exceeding_upload_limits(): void
+    {
+        config([
+            'subtitles.transcription.chunking.first_seconds' => 15,
+            'subtitles.transcription.chunking.second_seconds' => 20,
+            'subtitles.transcription.chunking.min_audio_seconds' => 45,
+            'subtitles.transcription.chunking.target_seconds' => 60,
+        ]);
+        foreach ([45, 245, 3600] as $duration) {
+            $plan = $this->chunker()->plan($duration);
+            $this->assertLessThanOrEqual(8, count($plan));
+            $this->assertSame(15.0, $plan[0]['nominalEnd']);
+            $this->assertSame($duration === 45 ? 30.0 : 35.0, $plan[1]['nominalEnd']);
+            $this->assertSame(13.0, $plan[1]['audioStart']);
+            $this->assertSame((float) $duration, $plan[array_key_last($plan)]['nominalEnd']);
+            foreach ($plan as $index => $chunk) {
+                $this->assertGreaterThan($chunk['nominalStart'], $chunk['nominalEnd']);
+                if ($index > 0) {
+                    $this->assertSame($plan[$index - 1]['nominalEnd'], $chunk['nominalStart']);
+                }
+            }
+        }
+        config(['subtitles.transcription.chunking.max_chunks' => 2]);
+        $plan = $this->chunker()->plan(245);
+        $this->assertCount(2, $plan);
+        $this->assertSame(245.0, $plan[1]['nominalEnd']);
+        config(['subtitles.transcription.chunking.max_chunks' => 1]);
+        $this->assertSame([], $this->chunker()->plan(245));
     }
 
     public function test_plan_splits_audio_evenly_with_symmetric_overlap(): void

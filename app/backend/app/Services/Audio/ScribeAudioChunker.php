@@ -36,8 +36,12 @@ class ScribeAudioChunker
 
         $firstSeconds = max(0, (int) config('subtitles.transcription.chunking.first_seconds', 15));
         $firstSeconds = min($firstSeconds, $targetSeconds, $durationSeconds / 2);
+        $secondSeconds = $firstSeconds > 0 && $maxChunks > 2
+            ? min(max(0, (int) config('subtitles.transcription.chunking.second_seconds', 20)), $targetSeconds, ($durationSeconds - $firstSeconds) / 2)
+            : 0;
+        $openingCount = (int) ($firstSeconds > 0) + (int) ($secondSeconds > 0);
         $chunkCount = min($maxChunks, $firstSeconds > 0
-            ? 1 + (int) ceil(($durationSeconds - $firstSeconds) / $targetSeconds)
+            ? $openingCount + (int) ceil(($durationSeconds - $firstSeconds - $secondSeconds) / $targetSeconds)
             : (int) ceil($durationSeconds / $targetSeconds));
 
         if ($chunkCount < 2) {
@@ -45,13 +49,16 @@ class ScribeAudioChunker
         }
 
         $chunkLength = $firstSeconds > 0
-            ? ($durationSeconds - $firstSeconds) / ($chunkCount - 1)
+            ? ($durationSeconds - $firstSeconds - $secondSeconds) / ($chunkCount - $openingCount)
             : (float) $durationSeconds / $chunkCount;
         $plan = [];
 
         for ($index = 0; $index < $chunkCount; $index++) {
             $nominalStart = $index === 0 ? 0.0 : (float) $plan[$index - 1]['nominalEnd'];
             $length = $index === 0 && $firstSeconds > 0 ? $firstSeconds : $chunkLength;
+            if ($index === 1 && $secondSeconds > 0) {
+                $length = $secondSeconds;
+            }
             $nominalEnd = $index === $chunkCount - 1 ? (float) $durationSeconds : $nominalStart + $length;
 
             $plan[] = [

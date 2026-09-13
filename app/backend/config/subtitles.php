@@ -160,6 +160,7 @@ return [
         // grow beyond target_seconds for very long videos instead.
         'chunking' => [
             'first_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS', 15),
+            'second_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_SECOND_SECONDS', 20),
             'min_audio_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MIN_AUDIO_SECONDS', 45),
             'target_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS', 60),
             'overlap_seconds' => (float) env('SUBTITLE_TRANSCRIPTION_CHUNK_OVERLAP_SECONDS', 2.0),

@@ -1,6 +1,6 @@
 # Plan: First subtitle latency experiment
 
-Status: active — live benchmark complete; coverage handoff and human quality review remain
+Status: active — running second-chunk handoff experiment
 Owner: agent
 Work mode: standard
 Created: 2026-09-12
@@ -80,6 +80,10 @@ Evidence to capture:
 | 2026-09-12 | Local settings updated to opening audio 15s, opening analysis 10s / 2 cues. Restarted 31 queue workers and backend with no active generations. Strict runtime check passes; `/up` returns 200. | `app/backend/storage/logs/first-subtitle-runtime-restart.log`, `first-subtitle-runtime-after.json` |
 
 ## Completion Notes
+
+- Follow-up authorized: retain first15s, add second20s (bounded by half the remaining audio and target), distribute the rest within max8. Disable with `SUBTITLE_TRANSCRIPTION_CHUNK_SECOND_SECONDS=0`; max1/2 and even-chunk mode retain previous behavior. Existing ascending dispatch and contiguous-prefix publication already prioritize early cues; no extra queue infrastructure needed. Laravel rules review and Boost queue docs confirm parallel completion order remains variable.
+- Validate chunk continuity, overlap, short videos and capped uploads; run full harness. Repeat the same 12 fresh benchmark runs in a new isolated schema/prefix, preserving the first experiment. Cached path is unchanged, so no paid cached reruns are needed. Compare first-ready, completion and sampled coverage gaps; quality remains a human review item.
+- Second-chunk validation passed: 539 backend tests (4318 assertions), 255 extension tests, contracts, compile and build. Integration runs both disabled and enabled second-chunk settings, including retry and final merge. Required Laravel reviewer found no correctness blockers. Evidence: `app/backend/storage/logs/second-chunk-experiment-check.log`.
 
 - Completed 16 authorized live generations: nine matched fresh runs, three repeats, four confirmed transcript-cache hits. Existing 13 user jobs and 32 transcript-cache rows were unchanged. Benchmark workers stopped; isolated evidence retained.
 - [Measured report](../evidence/2026-09-13-first-subtitle-experiment.md) and [numeric results](../evidence/2026-09-13-first-subtitle-experiment.csv): matched fresh first-ready mean 15.288s → 12.259s; total 20.168s → 20.563s. Historical comparison and small sample limit causal claims.

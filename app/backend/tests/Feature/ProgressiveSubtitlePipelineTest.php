@@ -92,11 +92,14 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $restored->handle($pipeline);
     }
 
-    public function test_opening_cues_are_ready_before_later_audio_is_prepared(): void
+    #[TestWith([0])]
+    #[TestWith([20])]
+    public function test_opening_cues_are_ready_before_later_audio_is_prepared(int $secondSeconds): void
     {
         config([
             'subtitles.audio_preparation.direct_chunks' => true,
             'subtitles.transcription.chunking.first_seconds' => 15,
+            'subtitles.transcription.chunking.second_seconds' => $secondSeconds,
             'subtitles.transcription.chunking.min_audio_seconds' => 45,
             'subtitles.transcription.chunking.target_seconds' => 60,
             'subtitles.enrichment.first_batch_max_cues' => 2,
@@ -119,10 +122,10 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             new TemporaryAudioFile($source, $directory, 60, 10, 'audio/mp4'));
         Process::assertNothingRan();
         $members = [];
-        Bus::assertBatched(function ($batch) use (&$members): bool {
+        Bus::assertBatched(function ($batch) use (&$members, $secondSeconds): bool {
             $members = $batch->jobs->all();
 
-            return count($members) === 2 && $members[0] instanceof TranscribeSubtitleAudioChunk;
+            return count($members) === ($secondSeconds > 0 ? 3 : 2) && $members[0] instanceof TranscribeSubtitleAudioChunk;
         });
         $this->assertSame(17.0, $members[0]->audioEndSeconds);
         $this->assertSame(13.0, $members[1]->audioStartSeconds);
@@ -162,9 +165,14 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         Http::fake(['*' => Http::response(['language_code' => 'spa', 'words' => [
             ['text' => 'edge', 'start' => 1.5, 'end' => 2, 'type' => 'word'],
             ['text' => 'ends.', 'start' => 2.5, 'end' => 3, 'type' => 'word'],
-            ['text' => 'Last.', 'start' => 40, 'end' => 42, 'type' => 'word'],
+            ['text' => 'Last.', 'start' => 10, 'end' => 12, 'type' => 'word'],
         ]])]);
         $members[1]->handle($pipeline);
+        if ($secondSeconds > 0) {
+            $this->assertSame(37.0, $members[1]->audioEndSeconds);
+            $this->assertGreaterThan(8_000, $this->preview($job)['cues'][array_key_last($this->preview($job)['cues'])]['endMs']);
+            $members[2]->handle($pipeline);
+        }
         $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
         $this->assertDirectoryDoesNotExist($directory);
         $this->assertSame('tokenizing', $job->fresh()->stage);
