@@ -97,6 +97,32 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         ]);
     }
 
+    public function test_nonlexical_segments_are_skipped_without_changing_published_cues(): void
+    {
+        $segments = [
+            new TimestampedTranscriptSegment(0, 1, '♪'),
+            new TimestampedTranscriptSegment(1, 2, '会いましたか'),
+            new TimestampedTranscriptSegment(2, 3, '？'),
+            new TimestampedTranscriptSegment(3, 4, '変だわ'),
+            new TimestampedTranscriptSegment(4, 5, "\u{0301}"),
+            new TimestampedTranscriptSegment(5, 6, '123!'),
+        ];
+        $generator = app(TimestampedSubtitleTrackGenerator::class);
+        $draft = fn (array $parts): array => $generator->draftCues(new TimestampedTranscript('jpn', 6, $parts, ''));
+        $cues = $draft($segments);
+
+        $this->assertSame(['会いましたか', '変だわ', '123!'], array_column($cues, 'sourceText'));
+        $this->assertSame([0, 1, 2], array_column($cues, 'index'));
+        $this->assertSame(['cue-0001', 'cue-0002', 'cue-0003'], array_column($cues, 'cueId'));
+        $this->assertSame([1000, 3000, 5000], array_column($cues, 'startMs'));
+        $this->assertSame([2000, 4000, 6000], array_column($cues, 'endMs'));
+        foreach (range(1, count($segments)) as $length) {
+            $prefix = $draft(array_slice($segments, 0, $length));
+            $this->assertSame($prefix, array_slice($cues, 0, count($prefix)));
+        }
+        $this->assertCount(3, $this->generateTrack($segments)->cues);
+    }
+
     public function test_rejects_overlapping_timing(): void
     {
         $this->assertInvalidTranscriptReason('overlapping_timing', [

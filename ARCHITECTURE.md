@@ -8,6 +8,8 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 
 ## Current State
 
+- Draft cue generation excludes segments containing no Unicode letters or numbers before AI analysis, including cached transcripts. Remaining cues keep their text and timing and receive consecutive identities. Filtering never rewrites already published cues.
+
 - The extension's generation selector chooses Luna (`openai`, default) or Cerebras per job. The backend resolves `OPENAI_MODEL` or `CEREBRAS_MODEL` once and persists `ai_provider` and `ai_model` on the job. Every text task, including later cards, Quick Fix and lyrics alignment, uses those saved values. Provider switches need no worker restart. `AI_PROVIDER` supplies the default for API requests that omit the selector and for evaluations. Job reuse includes provider and exact model; Scribe transcript reuse remains independent. Job history shows the saved provider, while the account tab shows the next selection. ElevenLabs remains the transcription provider.
 
 - Transcription ingestion mode is pinned on the job: `upload` is the default; opt-in `youtube_url` validates public/non-live video metadata and duration before Scribe fetches the canonical video URL. Both routes converge on the same chunk artifacts and merge/analysis continuation. Optional vocabulary hints are normalized and included in job reuse identity; transcript-cache variants include ingestion mode and hints, and hinted entries are additionally scoped to the owner. All OpenAI agents use low reasoning effort through the shared provider configuration.
