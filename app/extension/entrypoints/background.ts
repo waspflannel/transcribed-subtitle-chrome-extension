@@ -164,7 +164,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return enrichLearningTokenFromContent(message, sender);
 
     case 'panel.getState':
-      return getPanelState({ syncBackend: message.syncBackend ?? true, windowId: message.windowId });
+      return getPanelState({ syncBackend: message.syncBackend ?? true, syncLyricsCorrection: message.syncLyricsCorrection, windowId: message.windowId });
 
     case 'panel.getActiveCue': {
       const tab = await browser.tabs.get(message.tabId);
@@ -1590,7 +1590,7 @@ async function logoutFromPanel(windowId?: number): Promise<PanelState> {
   return getPanelState({ syncBackend: true, windowId });
 }
 
-async function getPanelState(options: { syncBackend: boolean; windowId?: number; retryOnSessionChange?: boolean }): Promise<PanelState> {
+async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrection?: boolean; windowId?: number; retryOnSessionChange?: boolean }): Promise<PanelState> {
   const activeTab = await getActiveTab(options.windowId);
   const activeTabId = activeTab?.id ?? null;
   const pageStatus = activeTab ? parseYoutubePage(activeTab.url ?? '') : undefined;
@@ -1932,7 +1932,7 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
     ? stateForRecovery : await stateWithBackendProgress(stateForRecovery, pageStatus, recoveryJobs, (job) =>
     effectiveSession ? resolveCompletedSubtitleJob(installId, effectiveSession.plainTextToken, job, effectiveSession.sessionId) : Promise.resolve(null),
   );
-  const lyricsCorrection = await syncLyricsCorrection(activeTabId, pageStatus, effectiveSession, installId, options.syncBackend, stateForRecovery);
+  const lyricsCorrection = await syncLyricsCorrection(activeTabId, pageStatus, effectiveSession, installId, options.syncBackend || options.syncLyricsCorrection === true, stateForRecovery);
 
   if (activeTabId !== null && pageStatus?.supported) {
     const currentSubtitleState = effectiveSession?.account.id === undefined

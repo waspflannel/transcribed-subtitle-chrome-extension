@@ -100,6 +100,7 @@ export type BackgroundRequest =
   | {
       type: 'panel.getState';
       syncBackend?: boolean;
+      syncLyricsCorrection?: boolean;
       windowId?: number;
     }
   | {
@@ -251,7 +252,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
       return hasString(value, 'email') && hasString(value, 'password') && optionalNumber(value, 'windowId');
 
     case 'panel.getState':
-      return optionalBoolean(value, 'syncBackend') && optionalNumber(value, 'windowId');
+      return optionalBoolean(value, 'syncBackend') && optionalBoolean(value, 'syncLyricsCorrection') && optionalNumber(value, 'windowId');
 
     case 'panel.listGenerations':
       return hasString(value, 'youtubeVideoId') && optionalNumber(value, 'windowId');

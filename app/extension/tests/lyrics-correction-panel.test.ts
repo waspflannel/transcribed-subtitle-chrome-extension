@@ -63,4 +63,22 @@ it('shows a failure recovered on opening, preserves dismissal across navigation,
   await vi.advanceTimersByTimeAsync(0);
   expect(syncError.hidden).toBe(true);
   expect(document.querySelector<HTMLElement>('[data-watch-ready]')!.hidden).toBe(false);
+
+  state.lyricsCorrection = { attemptId: 'attempt-3', status: 'running', stage: 'rebuilding', updatedAt: '2026-09-13T12:00:00Z' };
+  document.dispatchEvent(new Event('visibilitychange'));
+  await vi.advanceTimersByTimeAsync(0);
+  transport.sendMessage.mockClear();
+  await vi.advanceTimersByTimeAsync(1999);
+  expect(transport.sendMessage).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(transport.sendMessage.mock.calls.filter(([request]) => request.type === 'panel.getState').at(-1)?.[0]).toMatchObject({
+    type: 'panel.getState', syncBackend: false, syncLyricsCorrection: true,
+  });
+  await vi.advanceTimersByTimeAsync(8000);
+  expect(transport.sendMessage.mock.calls.filter(([request]) => request.type === 'panel.getState').at(-1)?.[0]).toMatchObject({ syncBackend: true });
+  state.lyricsCorrection = { attemptId: 'attempt-3', status: 'completed', stage: 'completed', track, updatedAt: '2026-09-13T12:00:02Z' };
+  await vi.advanceTimersByTimeAsync(2000);
+  transport.sendMessage.mockClear();
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(transport.sendMessage).not.toHaveBeenCalled();
 });

@@ -366,6 +366,24 @@ describe('background entrypoint review regressions', () => {
     await dispatch(listener, request, {});
     expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(2);
   });
+  it('refreshes and publishes a correction without fetching account or history', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const original = track(VIDEO_A);
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { accountId: 'account-1', track: original } });
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'content.getState' }, sender(1));
+    const replacement = { ...original, trackId: 'replacement-track' };
+    apiMock.getLyricsCorrectionStatus.mockResolvedValue({ attemptId: 'attempt-1', status: 'completed', track: replacement });
+    apiMock.getExtensionAccount.mockClear();
+    apiMock.listSubtitleJobs.mockClear();
+    const result = await dispatch(listener, { type: 'panel.getState', syncBackend: false, syncLyricsCorrection: true, windowId: 1 }, {});
+    expect(apiMock.getLyricsCorrectionStatus).toHaveBeenCalledTimes(1);
+    expect(apiMock.getExtensionAccount).not.toHaveBeenCalled();
+    expect(apiMock.listSubtitleJobs).not.toHaveBeenCalled();
+    expect(result.subtitleState.track.trackId).toBe('replacement-track');
+  });
+
   it('does not replay a completed correction after a delayed word-card response or local refresh', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });

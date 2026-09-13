@@ -313,6 +313,8 @@ const timingControl = bindTimingOffsetControl({
 let backendRefreshInFlight = false;
 let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
 const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const LYRICS_POLL_INTERVAL_MS = 2_000;
+let lastFullBackendRefresh = 0;
 const IDLE_POLL_INTERVAL_MS = 30_000;
 
 setupTabs(tabButtons, panels);
@@ -392,10 +394,11 @@ function scheduleNextBackendPoll(): void {
   const hasInFlightJob = latestState?.subtitleState.type === 'loading'
     || latestState?.lyricsCorrection?.status === 'queued'
     || latestState?.lyricsCorrection?.status === 'running';
-  const interval = hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
+  const correcting = isActiveLyricsCorrection(latestState?.lyricsCorrection);
+  const interval = correcting ? LYRICS_POLL_INTERVAL_MS : hasInFlightJob ? ACTIVE_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
   backendPollTimer = setTimeout(() => {
     if (document.visibilityState === 'visible') {
-      void refreshBackendState();
+      void refreshBackendState(correcting && Date.now() - lastFullBackendRefresh < ACTIVE_POLL_INTERVAL_MS);
     }
     scheduleNextBackendPoll();
   }, interval);
@@ -439,7 +442,7 @@ async function onActiveTabChanged(): Promise<void> {
   void refreshBackendState();
 }
 
-async function refreshBackendState(): Promise<void> {
+async function refreshBackendState(lyricsOnly = false): Promise<void> {
   if (backendRefreshInFlight) {
     return;
   }
@@ -447,7 +450,8 @@ async function refreshBackendState(): Promise<void> {
   backendRefreshInFlight = true;
 
   try {
-    await sendPanelRequest({ type: 'panel.getState', syncBackend: true });
+    if (!lyricsOnly) lastFullBackendRefresh = Date.now();
+    await sendPanelRequest({ type: 'panel.getState', syncBackend: !lyricsOnly, syncLyricsCorrection: lyricsOnly });
   } finally {
     backendRefreshInFlight = false;
   }

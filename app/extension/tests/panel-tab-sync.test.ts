@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { isRuntimeMessage } from '../utils/messages';
 
 describe('windowId validation on panel requests', () => {
+  it('validates the correction-only refresh flag', () => {
+    expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false, syncLyricsCorrection: true })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.getState', syncLyricsCorrection: 'true' })).toBe(false);
+  });
   it('accepts panel.getState with a numeric windowId', () => {
     expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false, windowId: 7 })).toBe(true);
   });

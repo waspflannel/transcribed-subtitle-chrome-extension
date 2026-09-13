@@ -196,6 +196,10 @@ Use canonical schemas under `packages/contracts`. The only new product error cod
 - Scope every operation to the authenticated owner.
 - Preserve attempt, revision, track, cue, and token identity checks at their existing trust boundaries.
 
+## Replacement latency update (2026-09-13)
+
+After complete alignment validation, analysis batches run independently under existing account concurrency limits with the job’s saved provider. Batch balancing includes translation and pronunciation work. Completed slices merge under lock into the encrypted attempt; the last batch publishes atomically without a separate finalization queue wait. The current track remains usable throughout. The panel checks active correction status every two seconds and refreshes account/history on the normal ten-second cadence. No additional AI calls are introduced by concurrency or polling.
+
 ## Out Of Scope
 
 - Timestamp, cue, translation, romanization, gloss, or word-card editing.
