@@ -74,6 +74,12 @@ inside the same timing slot; never omit required text just to meet that limit.
 Parts normally contain whole words; long unspaced text uses grapheme clusters.
 Line breaks are hints, not fixed cue boundaries.
 
+Respect the timing and text of each existing slot when assigning parts.
+Never put the whole song or a long verse into a short intro or interjection.
+Splitting long text does not create extra time: all resulting cues must fit
+inside that same slot. Distribute lyrics across the corresponding song slots;
+the server rejects excessive text assigned to a short slot.
+
 For a complete replacement you may omit unused timing slots, but never
 duplicate or reorder them. Do not stretch an excerpt across the whole song to
 fill unused timing slots. Recognized headings and credits have already been

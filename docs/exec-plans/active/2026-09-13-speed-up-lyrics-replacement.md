@@ -48,3 +48,13 @@ Use focused backend race, middleware, recovery and API tests; extension backgrou
 ## Rollback
 
 Switch back to main and restart local workers; rebuild and reload the extension. No schema migration or new configuration is required. Finish or cancel active replacement attempts before switching versions.
+
+## Collapsed timing fix (2026-09-13)
+
+User testing exposed a pre-existing alignment validation gap: Cerebras assigned the entire paste to the first 240ms slot; splitting produced16 cues of3–16ms. A later failed attempt preserved this previously corrupted publication. Parallel analysis did not create the timings.
+
+Before splitting, reject assigned text longer than the maximum of12 Unicode code points, three times the source-slot text length, or60 code points per second of slot duration. These generous limits detect gross allocation errors, not ordinary subtitle reading speed. Apply to complete and partial replacement; retain the previous removal of whole-track coverage thresholds. Prompt instructions now explicitly prohibit placing a whole song in an intro slot. The failure retains the old track and requests a retry without adding automatic AI calls.
+
+Regressions cover the65-slot/240ms collapse, partial mode, and the short-slot boundary; existing Punjabi/Thai long-slot wrapping remains valid. Recovery of local job170 uses matching cached transcript57, fresh track/cue identities, unchanged expiry/billing, and an encrypted backup of the corrupted track. Original translations/cards cannot be reconstructed without analysis, so recovery restores source cues and timing only.
+
+Validation passed:555 backend tests (4431 assertions),258 extension tests, contracts, TypeScript, production build and docs checks; PHP Pint passed. Evidence: `app/backend/storage/logs/lyrics-timing-guard-check.log`. Read-only validation against all56 cues of the successful Luna job171 found zero excessive slots. Local job170 recovery completed with65 source cues spanning2220–158579ms; the encrypted backup remains outside Git and the one-off recovery script was removed.

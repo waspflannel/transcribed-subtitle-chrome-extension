@@ -1187,6 +1187,57 @@ class LyricsCorrectionContinuationTest extends TestCase
         ))->once();
     }
 
+    #[TestWith([false])]
+    #[TestWith([true])]
+    public function test_whole_song_in_a_240ms_intro_is_rejected_before_analysis(bool $partial): void
+    {
+        $queue = $this->completedTrackWithCues(65, fn (): string => 'اه');
+        $track = $queue['job']->track;
+        $cues = $track->cues;
+        $cues[0]['startMs'] = 2220;
+        $cues[0]['endMs'] = 2460;
+        $track->update(['cues' => $cues]);
+        $oldId = $track->public_id;
+        $lyrics = trim(str_repeat('يا وطني ', 160));
+        $alignment = [['cueId' => $cues[0]['cueId'], 'segments' => [[
+            'source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 319, 'separator' => '',
+        ]]]];
+        if ($partial) {
+            foreach (array_slice($cues, 1) as $cue) {
+                $alignment[] = ['cueId' => $cue['cueId'], 'segments' => [[
+                    'source' => 'existing', 'startPartIndex' => 0, 'endPartIndex' => 1, 'separator' => '',
+                ]]];
+            }
+        }
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => ! $partial, 'cues' => $alignment]])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], [$lyrics], allowPartial: $partial);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('failed', $row->status);
+        $this->assertStringContainsString('existing timing', $row->error_message);
+        $this->assertNull($row->work_state);
+        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame($cues, $track->fresh()->cues);
+        $this->assertSame($oldId, $track->fresh()->public_id);
+    }
+
+    #[TestWith([12, true])]
+    #[TestWith([13, false])]
+    public function test_short_slot_allocation_boundary(int $characters, bool $accepted): void
+    {
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'اه');
+        $track = $queue['job']->track;
+        $cues = $track->cues;
+        $cues[0]['endMs'] = 100;
+        $track->update(['cues' => $cues]);
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => [
+            ['cueId' => $cues[0]['cueId'], 'segments' => [['source' => 'pasted', 'endPartIndex' => 0]]],
+        ]]])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], [str_repeat('ا', $characters)]);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $this->assertSame($accepted ? 'completed' : 'failed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+    }
+
     public function test_overlong_punjabi_alignment_splits_inside_original_timing_without_another_ai_call(): void
     {
         $queue = $this->completedTrackWithCues(3, fn (): string => 'Timing evidence only');

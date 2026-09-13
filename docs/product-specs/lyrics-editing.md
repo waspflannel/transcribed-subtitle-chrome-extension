@@ -196,6 +196,10 @@ Use canonical schemas under `packages/contracts`. The only new product error cod
 - Scope every operation to the authenticated owner.
 - Preserve attempt, revision, track, cue, and token identity checks at their existing trust boundaries.
 
+## Timing allocation guard (2026-09-13)
+
+Before wrapping a reconstructed timing slot, reject text exceeding the greatest of12 Unicode code points, three times its original source-text length, or60 code points per second of its duration. This generous anomaly check prevents an entire song collapsing into a short intro; it does not verify acoustic alignment or impose the removed whole-track coverage thresholds. It applies equally to complete and partial replacement and preserves the current track on failure.
+
 ## Replacement latency update (2026-09-13)
 
 After complete alignment validation, analysis batches run independently under existing account concurrency limits with the job’s saved provider. Batch balancing includes translation and pronunciation work. Completed slices merge under lock into the encrypted attempt; the last batch publishes atomically without a separate finalization queue wait. The current track remains usable throughout. The panel checks active correction status every two seconds and refreshes account/history on the normal ten-second cadence. No additional AI calls are introduced by concurrency or polling.

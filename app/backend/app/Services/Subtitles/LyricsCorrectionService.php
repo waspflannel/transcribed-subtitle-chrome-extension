@@ -31,6 +31,13 @@ final class LyricsCorrectionService
 {
     private const STAGES = ['aligning', 'analyzing', 'finalizing'];
 
+    // Generous allocation limits catch collapsed songs without rejecting fast lyrics or short interjections.
+    private const MIN_SLOT_CHARACTERS = 12;
+
+    private const MAX_SLOT_CHARACTERS_PER_SECOND = 60;
+
+    private const MAX_SLOT_TEXT_EXPANSION = 3;
+
     public function __construct(
         private readonly BillingEntitlementService $billing,
         private readonly SubtitleJobArtifactStore $artifacts,
@@ -381,6 +388,8 @@ final class LyricsCorrectionService
                 $this->failAttempt($trackId, $attemptId, 'lyrics_do_not_match', 'These lyrics do not seem to match this song. Check the paste and try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
             } elseif ($exception->publicCode === 'lyrics_incomplete') {
                 $this->failAttempt($trackId, $attemptId, 'lyrics_incomplete', 'These lyrics may be incomplete. Your current subtitles are unchanged. Confirm that you want to apply them to the matching sections and keep the existing lyrics elsewhere.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
+            } elseif (($exception->context['reason'] ?? null) === 'excessive_cue_allocation') {
+                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'The lyrics could not be fitted to the existing timing. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
             } else {
                 $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
             }
@@ -1122,13 +1131,27 @@ final class LyricsCorrectionService
                 throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_text', 'cue_position' => $position, 'character_count' => $length]);
             }
 
+            $start = (int) $sourceCue['startMs'];
+            $duration = (int) $sourceCue['endMs'] - $start;
+            if ($start < 0 || $duration <= 0) {
+                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_timing', 'cue_position' => $position]);
+            }
+            $sourceLength = mb_strlen(SubtitleText::collapseWhitespace((string) $sourceCue['sourceText']), 'UTF-8');
+            $capacity = max(self::MIN_SLOT_CHARACTERS, $sourceLength * self::MAX_SLOT_TEXT_EXPANSION,
+                intdiv($duration * self::MAX_SLOT_CHARACTERS_PER_SECOND, 1000));
+            if ($length > $capacity) {
+                throw SubtitleProcessingException::lyricsCorrectionFailed([
+                    'reason' => 'excessive_cue_allocation', 'cue_position' => $position,
+                    'duration_ms' => $duration, 'source_character_count' => $sourceLength,
+                    'character_count' => $length, 'character_limit' => $capacity,
+                ]);
+            }
+
             $previousSourcePosition = $sourcePosition;
             $chunks = $length <= 84 ? [$text] : $this->splitAlignedText($text);
             $lengths = array_map(fn (string $chunk): int => mb_strlen($chunk, 'UTF-8'), $chunks);
             $totalLength = array_sum($lengths);
             $consumedLength = 0;
-            $start = (int) $sourceCue['startMs'];
-            $duration = (int) $sourceCue['endMs'] - $start;
             foreach ($chunks as $chunkIndex => $chunk) {
                 $consumedLength += $lengths[$chunkIndex];
                 $end = (int) $sourceCue['startMs'] + intdiv($duration * $consumedLength, $totalLength);
