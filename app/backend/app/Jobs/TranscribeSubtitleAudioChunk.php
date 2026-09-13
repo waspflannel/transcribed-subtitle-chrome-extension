@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
@@ -34,7 +35,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
 
     public int $tries = 0;
 
-    public int $maxExceptions = 1;
+    public int $maxExceptions = 3;
 
     /** Covers the Scribe request timeout (600s) plus upload slack. */
     public int $timeout = 660;
@@ -69,20 +70,34 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
         ];
     }
 
+    public function backoff(): array
+    {
+        return [15, 60];
+    }
+
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->transcribeAudioChunk(
-            subtitleJobId: $this->subtitleJobId,
-            runId: $this->runId,
-            chunkIndex: $this->chunkIndex,
-            chunkCount: $this->chunkCount,
-            chunkAudio: $this->chunkAudio,
-            audioStartSeconds: $this->audioStartSeconds,
-            nominalStartSeconds: $this->nominalStartSeconds,
-            nominalEndSeconds: $this->nominalEndSeconds,
-            queuedAtMs: $this->queuedAtMs,
-            nextAudioStartSeconds: $this->nextAudioStartSeconds,
-        );
+        try {
+            $pipeline->transcribeAudioChunk(
+                subtitleJobId: $this->subtitleJobId,
+                runId: $this->runId,
+                chunkIndex: $this->chunkIndex,
+                chunkCount: $this->chunkCount,
+                chunkAudio: $this->chunkAudio,
+                audioStartSeconds: $this->audioStartSeconds,
+                nominalStartSeconds: $this->nominalStartSeconds,
+                nominalEndSeconds: $this->nominalEndSeconds,
+                queuedAtMs: $this->queuedAtMs,
+                nextAudioStartSeconds: $this->nextAudioStartSeconds,
+            );
+        } catch (Throwable $exception) {
+            if ($this->job === null || ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {
+                throw $exception;
+            }
+            $this->fail($exception);
+
+            throw $exception;
+        }
     }
 
     public function failed(?Throwable $exception): void

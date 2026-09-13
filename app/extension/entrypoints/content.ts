@@ -100,9 +100,17 @@ export default defineContentScript({
     }
 
     window.addEventListener('keydown', handleKeyboardShortcut, true);
-    window.addEventListener('fullscreenchange', recoverPlayerBinding);
-    window.addEventListener('resize', recoverPlayerBinding);
-    window.addEventListener('scroll', recoverPlayerBinding, true);
+    let playerPositionFrame: number | undefined;
+    const schedulePlayerRecovery = (): void => {
+      if (playerPositionFrame !== undefined) return;
+      playerPositionFrame = window.requestAnimationFrame(() => {
+        playerPositionFrame = undefined;
+        recoverPlayerBinding();
+      });
+    };
+    window.addEventListener('fullscreenchange', schedulePlayerRecovery);
+    window.addEventListener('resize', schedulePlayerRecovery);
+    window.addEventListener('scroll', schedulePlayerRecovery, true);
     const playerRecoveryTimer = window.setInterval(recoverPlayerBinding, 1000);
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
     void hydrateContentState();
@@ -122,9 +130,10 @@ export default defineContentScript({
       window.removeEventListener('keydown', handleKeyboardShortcut, true);
       browser.runtime.onMessage.removeListener(handleRuntimeMessage);
       window.clearInterval(playerRecoveryTimer);
-      window.removeEventListener('fullscreenchange', recoverPlayerBinding);
-      window.removeEventListener('resize', recoverPlayerBinding);
-      window.removeEventListener('scroll', recoverPlayerBinding, true);
+      if (playerPositionFrame !== undefined) window.cancelAnimationFrame(playerPositionFrame);
+      window.removeEventListener('fullscreenchange', schedulePlayerRecovery);
+      window.removeEventListener('resize', schedulePlayerRecovery);
+      window.removeEventListener('scroll', schedulePlayerRecovery, true);
       clearBoundWebVttTrack();
       overlay.unmount();
     });
@@ -307,7 +316,7 @@ export default defineContentScript({
       updateOverlay();
     }
 
-    function updateOverlay(): void {
+    function updateOverlay(video = activeVideo ?? findActiveYoutubeVideo(document)): void {
       if (disposed) {
         return;
       }
@@ -326,7 +335,7 @@ export default defineContentScript({
         pendingTokenKeys,
         failedTokenKeys,
         bindingError,
-      });
+      }, video);
       const page = parseYoutubePage(window.location.href);
       if (page.supported) {
         const cueId = activeCue?.cueId ?? null;
@@ -345,18 +354,15 @@ export default defineContentScript({
 
     function recoverPlayerBinding(): void {
       if (disposed || !subtitleStateMatchesCurrentPage(subtitleState)) return;
-      if (subtitleState.type !== 'ready' && !(subtitleState.type === 'loading' && subtitleState.partialTrack)) {
-        updateOverlay();
+      const rectangles = new Map<HTMLVideoElement, DOMRect>();
+      const video = findActiveYoutubeVideo(document, rectangles);
+      const hasTrack = subtitleState.type === 'ready' || (subtitleState.type === 'loading' && subtitleState.partialTrack);
+      if (hasTrack && (video !== activeVideo || (activeVideo !== null && !activeVideo.isConnected)
+        || (video && !stopWebVttTrack))) {
+        applySubtitleState(subtitleState);
         return;
       }
-      const video = findActiveYoutubeVideo(document);
-      if (video !== activeVideo || (activeVideo !== null && !activeVideo.isConnected)) {
-        applySubtitleState(subtitleState);
-      } else if (video && !stopWebVttTrack
-        && (subtitleState.type === 'ready' || (subtitleState.type === 'loading' && subtitleState.partialTrack))) {
-        applySubtitleState(subtitleState);
-      }
-      updateOverlay();
+      overlay.position(video, video ? rectangles.get(video) : undefined);
     }
 
     /**
@@ -440,18 +446,28 @@ export default defineContentScript({
     function applySubtitleState(nextSubtitleState: SubtitleState): void {
       if (disposed || !subtitleStateMatchesCurrentPage(nextSubtitleState)) return;
       hydrationRequest += 1;
-      // Loading updates for an already-bound partial track (progress text,
-      // unchanged revision) must not rebind: rebinding resets the text track
-      // and drops the currently displayed cue every 2s poll.
+      // Progress and annotation updates keep the native timing track. Only
+      // changed cue identity, timing, or source text needs a new binding.
       const nextPartialKey = partialTrackKey(nextSubtitleState);
 
       if (
         nextPartialKey !== null
-        && nextPartialKey === boundPartialTrackKey
+        && boundPartialTrackKey !== null
+        && subtitleState.type === 'loading' && subtitleState.partialTrack
+        && nextSubtitleState.type === 'loading' && nextSubtitleState.partialTrack
+        && subtitleState.partialTrack.jobId === nextSubtitleState.partialTrack.jobId
+        && subtitleState.partialTrack.cues.length === nextSubtitleState.partialTrack.cues.length
+        && subtitleState.partialTrack.cues.every((cue, index) => {
+          const next = nextSubtitleState.partialTrack!.cues[index];
+          return cue.cueId === next.cueId && cue.startMs === next.startMs && cue.endMs === next.endMs
+            && cue.sourceText === next.sourceText;
+        })
         && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)
         && subtitleStateMatchesCurrentPage(nextSubtitleState)
       ) {
         subtitleState = nextSubtitleState;
+        boundPartialTrackKey = nextPartialKey;
+        activePartialCue = nextSubtitleState.partialTrack!.cues.find((cue) => cue.cueId === activePartialCue?.cueId) ?? null;
         updateOverlay();
 
         return;
@@ -562,17 +578,18 @@ export default defineContentScript({
         },
         timingOffsetSeconds: settings.subtitleTimingOffsetSeconds,
         onCueChange(change) {
-          activePartialCue = change.activeCue;
+          activePartialCue = subtitleState.type === 'loading' && subtitleState.partialTrack?.jobId === partialTrack.jobId
+            ? subtitleState.partialTrack.cues.find((cue) => cue.cueId === change.activeCue?.cueId) ?? null : null;
           updateOverlay();
         },
         onTrackLoaded: () => {
-          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && subtitleState.partialTrack?.jobId === partialTrack.jobId && activeVideo === video) {
             bindingError = null;
             updateOverlay();
           }
         },
         onTrackLoadError: () => {
-          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && partialTrackKey(subtitleState) === partialKey && activeVideo === video) {
+          if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && subtitleState.partialTrack?.jobId === partialTrack.jobId && activeVideo === video) {
             bindingError = 'The partial subtitle track could not load. Retry attachment.';
             updateOverlay();
           }

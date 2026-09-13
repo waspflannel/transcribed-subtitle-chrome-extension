@@ -49,21 +49,6 @@ class SubtitleBatchDispatcher
     }
 
     /**
-     * @param  array<int, object>  $jobs
-     */
-    public function dispatchEnrichment(SubtitleJob $job, array $jobs): void
-    {
-        $this->dispatchBatch(
-            job: $job,
-            jobs: $this->windowedBatchMembers($job, $jobs),
-            batchName: 'subtitle enrichment '.$job->public_id,
-            stage: 'enriching',
-            completionJobClass: FinalizeSubtitleJob::class,
-            completionJobArguments: [$job->id, true, $job->run_id],
-        );
-    }
-
-    /**
      * Partition AI batch members into at most batch_concurrency chains so the
      * queue only ever holds work this job is allowed to run: a chain link is
      * enqueued when its predecessor finishes, instead of enqueueing every
@@ -97,7 +82,7 @@ class SubtitleBatchDispatcher
 
     public function dispatchMergedCueTrackFinalization(SubtitleJob $job): void
     {
-        FinalizeSubtitleJob::dispatch($job->id, false, $job->run_id)
+        FinalizeSubtitleJob::dispatch($job->id, $job->run_id)
             ->onConnection(SubtitleQueue::connection())
             ->onQueue(SubtitleQueue::generationNameForJob($job));
     }

@@ -71,7 +71,6 @@ class DashboardController extends Controller
     private function recentJobs(User $user, UsageLedger $usage): Collection
     {
         return SubtitleJob::query()
-            ->with('track')
             ->whereBelongsTo($user)
             ->orderByRaw("case when status in ('queued', 'running') then 0 else 1 end")
             ->latest('updated_at')

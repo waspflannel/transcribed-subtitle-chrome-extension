@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Ai\Agents\CueAnalysisAgent;
-use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
@@ -34,7 +33,6 @@ class AiAgentInstructionTest extends TestCase
 
         foreach ([
             CueAnalysisAgent::class => 'analysis',
-            CueEnrichmentAgent::class => 'enrichment',
             EditedCueAgent::class => 'enrichment',
             LearningTokenCardAgent::class => 'enrichment',
             LyricsAlignmentAgent::class => 'analysis',
@@ -46,7 +44,7 @@ class AiAgentInstructionTest extends TestCase
             Http::assertSent(fn (Request $request): bool => $request['model'] === 'global-test');
         }
 
-        Http::assertSentCount(5);
+        Http::assertSentCount(4);
         Http::assertNotSent(fn (Request $request): bool => ! $request->hasHeader('Authorization', 'Bearer cerebras-test-key')
             || $request['response_format']['type'] !== 'json_schema'
             || $request['response_format']['json_schema']['strict'] !== true
@@ -126,7 +124,6 @@ class AiAgentInstructionTest extends TestCase
 
         foreach ([
             CueAnalysisAgent::class,
-            CueEnrichmentAgent::class,
             EditedCueAgent::class,
             LearningTokenCardAgent::class,
             LyricsAlignmentAgent::class,
@@ -134,11 +131,11 @@ class AiAgentInstructionTest extends TestCase
             $agentClass::make()->prompt('private-input');
         }
 
-        Http::assertSentCount(5);
+        Http::assertSentCount(4);
         Http::assertNotSent(fn (Request $request): bool => $request['model'] !== 'gpt-5.6-luna'
             || $request['service_tier'] !== 'fast'
             || $request['reasoning']['effort'] !== 'low');
-        Log::shouldHaveReceived('info')->times(5)->with('backend.openai_response_received', \Mockery::on(function (array $context): bool {
+        Log::shouldHaveReceived('info')->times(4)->with('backend.openai_response_received', \Mockery::on(function (array $context): bool {
             $this->assertSame('fast', $context['requested_service_tier']);
             $this->assertSame('priority', $context['served_service_tier']);
             $this->assertSame('completed', $context['response_status']);
@@ -157,7 +154,6 @@ class AiAgentInstructionTest extends TestCase
     {
         foreach ([
             CueAnalysisAgent::class,
-            CueEnrichmentAgent::class,
             EditedCueAgent::class,
             LearningTokenCardAgent::class,
         ] as $agentClass) {
@@ -169,7 +165,6 @@ class AiAgentInstructionTest extends TestCase
     {
         $agentClasses = [
             CueAnalysisAgent::class,
-            CueEnrichmentAgent::class,
             EditedCueAgent::class,
             LearningTokenCardAgent::class,
             LyricsAlignmentAgent::class,
@@ -213,10 +208,8 @@ class AiAgentInstructionTest extends TestCase
 
     public function test_cards_request_only_annotations_and_preserve_identity(): void
     {
-        $instructions = (new CueEnrichmentAgent)->instructions();
-        $this->assertStringContainsString('unchanged cueId, cue index and token index', $instructions);
-        $this->assertStringContainsString('do not echo or regenerate source text or readings', $instructions);
+        $instructions = (new LearningTokenCardAgent)->instructions();
+        $this->assertStringContainsString('Preserve requestedToken.index', $instructions);
         $this->assertStringContainsString('non-empty translation or gloss', $instructions);
-        $this->assertStringContainsString('Preserve requestedToken.index', (new LearningTokenCardAgent)->instructions());
     }
 }

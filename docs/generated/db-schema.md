@@ -1,7 +1,7 @@
 # Generated Database Schema
 
 Created: 2026-04-28
-Last updated: 2026-05-22
+Last updated: 2026-09-12 (billing-field retirement and retention/preview notes)
 
 The backend uses Postgres for runtime persistence. Redis-backed workers still rely on database tables for subtitle jobs, generated tracks, artifacts, batches, failed jobs, and trace events. SQLite is limited to PHPUnit's isolated in-memory test profile.
 
@@ -62,8 +62,6 @@ The product migrations currently define:
   - `billing_current_period_start`
   - `billing_current_period_end`
   - `billing_cancel_at_period_end`
-  - `billing_trial_ends_at`
-  - `billing_ends_at`
   - timestamps
 - `stripe_webhook_events`
   - `stripe_event_id`
@@ -93,11 +91,13 @@ The product migrations currently define:
   - timestamps
 - `subtitle_job_artifacts`
   - `subtitle_job_id`
+  - `run_id`
   - `artifact_type`
   - `batch_index`
   - `payload`
   - timestamps
   - unique artifact key: `subtitle_job_id`, `artifact_type`, `batch_index`
+  - `partial_track` caches the lightweight preview for the current run; draft/analysis writes invalidate it atomically.
 - `subtitle_job_events`
   - `subtitle_job_id`
   - `public_job_id`

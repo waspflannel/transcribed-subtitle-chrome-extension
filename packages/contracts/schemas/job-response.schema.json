@@ -9,7 +9,6 @@
     "youtubeVideoId",
     "sourceLanguage",
     "targetLanguage",
-    "enrichmentMode",
     "includeRomanization",
     "includeTranslation",
     "status",
@@ -232,14 +231,6 @@
         "zul"
       ]
     },
-    "enrichmentMode": {
-      "type": "string",
-      "enum": [
-        "on_demand",
-        "full"
-      ],
-      "description": "Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output."
-    },
     "includeRomanization": {
       "type": "boolean",
       "description": "Whether the request asked the backend to add romanization where available."
@@ -268,7 +259,6 @@
         "tokenizing",
         "romanizing",
         "translating",
-        "enriching",
         "finalizing"
       ]
     },

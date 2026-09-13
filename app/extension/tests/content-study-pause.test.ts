@@ -60,6 +60,72 @@ vi.mock('../utils/webvtt-track', () => ({
 }));
 
 describe('content study pause ownership', () => {
+  it('keeps native timing and the active cue during annotation-only partial revisions', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    const { bindWebVttTrackToVideo } = await import('../utils/webvtt-track');
+    const bind = vi.mocked(bindWebVttTrackToVideo);
+    bind.mockClear();
+    const video = document.createElement('video');
+    setVideoRect(video);
+    document.body.append(video);
+    let invalidate!: () => void;
+    (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
+    await Promise.resolve();
+    await Promise.resolve();
+    const track = readySubtitleState().track;
+    const partial = { jobId: track.jobId, youtubeVideoId: track.youtubeVideoId, sourceLanguage: 'spa', targetLanguage: 'fra',
+      revision: 1, cues: track.cues.map(({ tokens, ...cue }) => cue), readyThroughMs: 0 };
+    const state = { type: 'loading', status: 'running', youtubeVideoId: 'video-1', jobId: 'job-1', message: 'Generating', stage: 'tokenizing', progressPercent: 50, partialTrack: partial };
+    const publish = (value: unknown) => mocks.listeners[0]({ type: 'background.subtitleStateChanged', subtitleState: value }, {}, () => {});
+    mocks.listeners[0]({ type: 'background.settingsChanged', settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true } }, {}, () => {});
+    publish(state);
+    const initialBind = bind.mock.calls[0][0];
+    const annotation = { ...state, partialTrack: { ...partial, revision: 2, cues: [{ ...partial.cues[0], translatedText: 'Salut' }] } };
+    publish(annotation);
+    expect(bind).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('tse-overlay-host')?.shadowRoot?.textContent).toContain('Salut');
+    initialBind.onCueChange({ activeCue: partial.cues[0] } as any);
+    expect(document.getElementById('tse-overlay-host')?.shadowRoot?.textContent).toContain('Salut');
+    publish({ ...annotation, partialTrack: { ...annotation.partialTrack, revision: 3,
+      cues: [...annotation.partialTrack.cues, { ...partial.cues[0], cueId: 'cue-2', startMs: 2000, endMs: 3000 }] } });
+    expect(bind).toHaveBeenCalledTimes(2);
+    invalidate();
+  });
+
+  it('coalesces scroll bursts without rebuilding content and skips hidden overlay positioning', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    const { OverlayShell } = await import('../utils/overlay');
+    const video = document.createElement('video');
+    setVideoRect(video);
+    document.body.append(video);
+    let invalidate!: () => void;
+    (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
+    await Promise.resolve();
+    await Promise.resolve();
+    const onMessage = mocks.listeners[0];
+    onMessage({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState() }, {}, () => {});
+    const geometry = vi.spyOn(video, 'getBoundingClientRect');
+    const update = vi.spyOn(OverlayShell.prototype, 'update');
+    const position = vi.spyOn(OverlayShell.prototype, 'position');
+    for (let index = 0; index < 20; index += 1) window.dispatchEvent(new Event('scroll'));
+    expect(position).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(17);
+    expect(position).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(geometry).toHaveBeenCalledTimes(1);
+    onMessage({ type: 'background.settingsChanged', settings: { ...DEFAULT_EXTENSION_SETTINGS, overlayVisible: false } }, {}, () => {});
+    const host = document.getElementById('tse-overlay-host')!;
+    const left = host.style.left;
+    video.getBoundingClientRect = () => ({ left: 300, right: 900, top: 100, bottom: 400, width: 600, height: 300 } as DOMRect);
+    window.dispatchEvent(new Event('scroll'));
+    await vi.advanceTimersByTimeAsync(17);
+    expect(host.style.left).toBe(left);
+    expect(host.style.display).toBe('none');
+    update.mockRestore();
+    position.mockRestore();
+    invalidate();
+  });
+
   beforeEach(() => {
     mocks.listeners.length = 0;
     mocks.cueChange = null;

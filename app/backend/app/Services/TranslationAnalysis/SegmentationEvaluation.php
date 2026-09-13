@@ -38,6 +38,7 @@ final readonly class SegmentationEvaluation
         public int $orphanFragments,
         public int $truncatedWords,
         public int $unlocatableGoldTokens,
+        public int $unlocatablePredictedTokens,
         public bool $transcriptionFault,
         public ?string $note,
     ) {}

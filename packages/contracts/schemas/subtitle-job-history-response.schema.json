@@ -29,7 +29,6 @@
         "progressPercent",
         "sourceLanguage",
         "targetLanguage",
-        "enrichmentMode",
         "includeRomanization",
         "includeTranslation",
         "jobId",
@@ -83,7 +82,6 @@
             "tokenizing",
             "romanizing",
             "translating",
-            "enriching",
             "finalizing"
           ]
         },
@@ -190,14 +188,6 @@
             "yor",
             "zul"
           ]
-        },
-        "enrichmentMode": {
-          "type": "string",
-          "enum": [
-            "on_demand",
-            "full"
-          ],
-          "description": "Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output."
         },
         "includeRomanization": {
           "type": "boolean",

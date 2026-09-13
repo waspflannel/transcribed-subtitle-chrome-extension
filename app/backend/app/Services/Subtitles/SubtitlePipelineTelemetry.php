@@ -178,10 +178,10 @@ class SubtitlePipelineTelemetry
      * of a frozen hardcoded percentage.
      */
     private const BATCH_PROGRESS_BANDS = [
+        'transcribing' => [50, 65],
         // Romanization now runs chained inside the analysis batch, so the whole
         // tokenize/romanize/translate phase reports under the 'analysis' band.
         'analysis' => [65, 90],
-        'enriching' => [90, 95],
     ];
 
     public function recordBatchProgress(int $subtitleJobId, string $runId, string $batchName, string $stage, Batch $batch): void

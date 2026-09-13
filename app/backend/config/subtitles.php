@@ -199,7 +199,7 @@ return [
         //     their own stage job with its own timeout (900/1200/660s), and the
         //     job stage is stamped when the next stage is dispatched, so each
         //     ceiling spans one stage's queue wait plus its work.
-        //   - batch stages (`tokenizing`..`enriching`) heartbeat updated_at on
+        //   - batch stages heartbeat updated_at on
         //     every progress step, so the ceiling only spans one stalled step.
         'stage_timeout_seconds' => [
             'preparing' => (int) env('SUBTITLE_STALLED_PREPARING_TIMEOUT_SECONDS', 900),
@@ -209,7 +209,6 @@ return [
             'tokenizing' => (int) env('SUBTITLE_STALLED_TOKENIZING_TIMEOUT_SECONDS', 600),
             'romanizing' => (int) env('SUBTITLE_STALLED_ROMANIZING_TIMEOUT_SECONDS', 600),
             'translating' => (int) env('SUBTITLE_STALLED_TRANSLATING_TIMEOUT_SECONDS', 600),
-            'enriching' => (int) env('SUBTITLE_STALLED_ENRICHING_TIMEOUT_SECONDS', 600),
             'finalizing' => (int) env('SUBTITLE_STALLED_FINALIZING_TIMEOUT_SECONDS', 300),
         ],
         // Fallback for any stage not listed above.

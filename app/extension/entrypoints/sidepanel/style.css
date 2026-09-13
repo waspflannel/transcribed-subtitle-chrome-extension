@@ -1,9 +1,4 @@
-@import '@fontsource/bricolage-grotesque/800.css';
-@import '@fontsource/schibsted-grotesk/400.css';
-@import '@fontsource/schibsted-grotesk/500.css';
-@import '@fontsource/schibsted-grotesk/700.css';
-@import '@fontsource/spline-sans-mono/400.css';
-@import '@fontsource/spline-sans-mono/500.css';
+@import './fonts.css';
 
 /* =========================================================================
    Ink & marker, night shift — the marketing site's design system (bone
@@ -631,11 +626,13 @@ select option {
   align-items: baseline;
   display: flex;
   gap: 10px;
+  justify-content: space-between;
+  min-width: 0;
 }
 
 .pct span {
   font-family: var(--display);
-  font-size: 34px;
+  font-size: clamp(34px, 12vw, 48px);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1;
@@ -647,6 +644,8 @@ select option {
   font-size: 9.5px;
   font-weight: 500;
   letter-spacing: 0.12em;
+  overflow-wrap: anywhere;
+  text-align: right;
   text-transform: uppercase;
 }
 
@@ -654,7 +653,7 @@ select option {
   background: var(--night);
   border: 1.5px solid var(--line);
   border-radius: 3px;
-  height: 10px;
+  height: 12px;
   overflow: hidden;
 }
 
@@ -662,7 +661,7 @@ select option {
   background: repeating-linear-gradient(-45deg, var(--accent) 0 6px, var(--accent-deep) 6px 12px);
   display: block;
   height: 100%;
-  transition: width 200ms ease;
+  transition: width 450ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .stages {
@@ -737,8 +736,10 @@ select option {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stage.current .stage-dot {
+  .stage.current .stage-dot,
+  .progress-bar span {
     animation: none;
+    transition: none;
   }
 }
 

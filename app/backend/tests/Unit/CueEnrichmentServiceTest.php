@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Ai\Agents\CueAnalysisAgent;
-use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\SubtitleModel;
@@ -37,15 +36,13 @@ class CueEnrichmentServiceTest extends TestCase
         $cue = [...$this->part(0, 'Hello'), 'translatedText' => 'Hello', 'tokens' => [['index' => 0, 'text' => 'Hello']]];
         $cards = ['dialect' => 'unknown', 'cues' => [['cueId' => 'cue-0', 'index' => 0, 'tokens' => [['index' => 0, 'translation' => 'Hola']]]]];
         CueAnalysisAgent::fake([['cues' => [$cue]]])->preventStrayPrompts();
-        CueEnrichmentAgent::fake([$cards])->preventStrayPrompts();
         LearningTokenCardAgent::fake([['token' => ['index' => 0, 'translation' => 'Hola']]])->preventStrayPrompts();
         EditedCueAgent::fake([$cards])->preventStrayPrompts();
         $analysis = app(LaravelAiTranslationAnalysisProvider::class);
         $analysis->analyzeCueBatch([$cue], [$cue], 'eng', 'spa', false, false, selection: $selection);
-        $analysis->enrichCueBatch([$cue], 'eng', 'spa', $selection);
         $analysis->enrichToken($cue, $cue['tokens'][0], 'eng', 'spa', $selection);
         $analysis->refreshEditedCue($cue, 'eng', 'spa', false, false, $selection);
-        foreach ([CueAnalysisAgent::class, CueEnrichmentAgent::class, LearningTokenCardAgent::class, EditedCueAgent::class] as $agent) {
+        foreach ([CueAnalysisAgent::class, LearningTokenCardAgent::class, EditedCueAgent::class] as $agent) {
             $agent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === $provider && $prompt->model === 'saved-model');
         }
         $this->assertSame($default, config('ai.default'));
@@ -181,30 +178,6 @@ class CueEnrichmentServiceTest extends TestCase
         $cue = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch([$part], [$part], 'ara', 'eng', beforeRetry: fn () => $this->fail('Valid corrections need no retry.'))->cues[0];
         $this->assertSame($part['sourceText'], $cue['sourceText']);
         $this->assertSame('يدينو', $cue['tokens'][0]['text']);
-        $this->assertSame(1, $this->promptCount);
-    }
-
-    public function test_cards_preserve_source_identity_translation_and_luna_readings(): void
-    {
-        $cue = [...$this->part(0, '世界'), 'translatedText' => 'World', 'romanization' => 'sekai', 'tokens' => [['index' => 0, 'text' => '世界', 'normalizedText' => '世界', 'romanization' => 'sekai']]];
-        CueEnrichmentAgent::fake([['dialect' => 'unknown', 'cues' => [['cueId' => 'cue-0', 'index' => 0, 'romanization' => 'wrong', 'tokens' => [['index' => 0, 'translation' => 'world', 'romanization' => 'wrong']]]]]]);
-        $result = app(LaravelAiTranslationAnalysisProvider::class)->enrichCueBatch([$cue], 'jpn', 'eng')->cues[0];
-        $this->assertSame('World', $result['translatedText']);
-        $this->assertSame('sekai', $result['romanization']);
-        $this->assertSame('sekai', $result['tokens'][0]['romanization']);
-        $this->assertSame('世界', $result['tokens'][0]['text']);
-        $this->assertSame(1, $this->promptCount);
-    }
-
-    public function test_incomplete_card_batch_fails_once(): void
-    {
-        CueEnrichmentAgent::fake([['dialect' => 'unknown', 'cues' => []]])->preventStrayPrompts();
-        try {
-            app(LaravelAiTranslationAnalysisProvider::class)->enrichCueBatch([[...$this->part(0, 'Hello'), 'tokens' => [['index' => 0, 'text' => 'Hello']]]], 'eng', 'spa');
-            $this->fail('Missing cards must fail.');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('cue_count_mismatch', $exception->context['reason']);
-        }
         $this->assertSame(1, $this->promptCount);
     }
 

@@ -143,7 +143,7 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   requiredString(response, 'updatedAt');
 
   if (response.status === 'queued') oneOf(response, 'stage', ['queued']);
-  if (response.status === 'running') oneOf(response, 'stage', ['aligning', 'rebuilding', 'romanizing', 'enriching', 'finalizing']);
+  if (response.status === 'running') oneOf(response, 'stage', ['aligning', 'rebuilding', 'romanizing', 'finalizing']);
   if (response.status === 'completed') oneOf(response, 'stage', ['completed']);
   if (response.status === 'failed') oneOf(response, 'stage', ['failed']);
   if (response.status === 'cancelled') oneOf(response, 'stage', ['cancelled']);
@@ -221,7 +221,6 @@ function guardJobCore(value: Record<string, unknown>): void {
   requiredString(value, 'targetLanguage');
   oneOf(value, 'aiProvider', ['openai', 'cerebras']);
   requiredString(value, 'aiModel');
-  oneOf(value, 'enrichmentMode', ['on_demand', 'full']);
   requiredBoolean(value, 'includeRomanization');
   requiredBoolean(value, 'includeTranslation');
   oneOf(value, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
@@ -233,7 +232,6 @@ function guardJobCore(value: Record<string, unknown>): void {
     'tokenizing',
     'romanizing',
     'translating',
-    'enriching',
     'finalizing',
   ]);
   requiredNumber(value, 'progressPercent');

@@ -66,7 +66,6 @@ final class FunnelAnalytics
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'video_duration_seconds' => $job->video_duration_seconds,
-            'enrichment_mode' => $job->enrichment_mode,
             'include_romanization' => $job->include_romanization,
             'include_translation' => $job->include_translation,
             'previous_job_count' => $previousJobCount,

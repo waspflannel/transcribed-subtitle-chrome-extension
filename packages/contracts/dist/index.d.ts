@@ -236,10 +236,6 @@ export interface CreateSubtitleJobRequest {
     | 'yor'
     | 'zul';
   /**
-   * on_demand returns transcript-first tracks with tokenizer-agent clickable boundaries when valid. full enriches every cue before returning the track.
-   */
-  enrichmentMode: 'on_demand' | 'full';
-  /**
    * When true, backend may add cue and token romanization for non-Latin source text. When false, generation skips romanization.
    */
   includeRomanization: boolean;
@@ -275,50 +271,10 @@ export interface ExtensionAuthResponse {
     ];
   };
 }
-export interface AccountSummary {
-  /**
-   * Currently configured backend analysis model; not the provenance of saved tracks.
-   */
-  aiModel?: string;
-  status: 'authenticated';
-  id: string;
-  email: string;
-  name: string;
-  emailVerified: boolean;
-  planName: string;
-  tierName: string;
-  tierSpeedLabel: string;
-  monthlyMinuteLimit: number;
-  monthlyMinutesUsed: number;
-  monthlyMinutesPending: number;
-  monthlyMinutesRemaining: number;
-  resetAt: string;
-  upgradeAvailable: boolean;
-}
 
 // Source: schemas/extension-account-response.schema.json
 export interface ExtensionAccountResponse {
   account: AccountSummary;
-}
-export interface AccountSummary {
-  /**
-   * Currently configured backend analysis model; not the provenance of saved tracks.
-   */
-  aiModel?: string;
-  status: 'authenticated';
-  id: string;
-  email: string;
-  name: string;
-  emailVerified: boolean;
-  planName: string;
-  tierName: string;
-  tierSpeedLabel: string;
-  monthlyMinuteLimit: number;
-  monthlyMinutesUsed: number;
-  monthlyMinutesPending: number;
-  monthlyMinutesRemaining: number;
-  resetAt: string;
-  upgradeAvailable: boolean;
 }
 
 // Source: schemas/learning-token-request.schema.json
@@ -336,18 +292,6 @@ export interface LearningTokenResponse {
   trackId: string;
   cueId: string;
   token: LearningToken;
-}
-export interface LearningToken {
-  index: number;
-  text: string;
-  normalizedText: string;
-  lemma?: string;
-  root?: string;
-  partOfSpeech?: string;
-  translation?: string;
-  gloss?: string;
-  romanization?: string;
-  usageNote?: string;
 }
 
 // Source: schemas/lyrics-correction-request.schema.json
@@ -377,7 +321,7 @@ export type LyricsCorrectionStatus =
   | {
       attemptId: string;
       status: 'running';
-      stage: 'aligning' | 'rebuilding' | 'romanizing' | 'enriching' | 'finalizing';
+      stage: 'aligning' | 'rebuilding' | 'romanizing' | 'finalizing';
       updatedAt: string;
     }
   | {
@@ -401,333 +345,6 @@ export type LyricsCorrectionStatus =
       stage: 'cancelled';
       updatedAt: string;
     };
-
-export interface TrackResponse {
-  trackId: string;
-  jobId: string;
-  youtubeVideoId: string;
-  sourceLanguage:
-    | 'auto'
-    | 'bel'
-    | 'bos'
-    | 'bul'
-    | 'cat'
-    | 'hrv'
-    | 'ces'
-    | 'dan'
-    | 'nld'
-    | 'eng'
-    | 'est'
-    | 'fin'
-    | 'fra'
-    | 'glg'
-    | 'deu'
-    | 'ell'
-    | 'hun'
-    | 'isl'
-    | 'ind'
-    | 'ita'
-    | 'jpn'
-    | 'kan'
-    | 'lav'
-    | 'mkd'
-    | 'msa'
-    | 'mal'
-    | 'nor'
-    | 'pol'
-    | 'por'
-    | 'ron'
-    | 'rus'
-    | 'slk'
-    | 'spa'
-    | 'swe'
-    | 'tur'
-    | 'ukr'
-    | 'vie'
-    | 'hye'
-    | 'aze'
-    | 'ben'
-    | 'yue'
-    | 'fil'
-    | 'kat'
-    | 'guj'
-    | 'hin'
-    | 'kaz'
-    | 'lit'
-    | 'mlt'
-    | 'cmn'
-    | 'mar'
-    | 'nep'
-    | 'ori'
-    | 'fas'
-    | 'srp'
-    | 'slv'
-    | 'swa'
-    | 'tam'
-    | 'tel'
-    | 'afr'
-    | 'ara'
-    | 'asm'
-    | 'ast'
-    | 'mya'
-    | 'hau'
-    | 'heb'
-    | 'jav'
-    | 'kor'
-    | 'kir'
-    | 'ltz'
-    | 'mri'
-    | 'oci'
-    | 'pan'
-    | 'tgk'
-    | 'tha'
-    | 'uzb'
-    | 'cym'
-    | 'amh'
-    | 'lug'
-    | 'ibo'
-    | 'gle'
-    | 'khm'
-    | 'kur'
-    | 'lao'
-    | 'mon'
-    | 'nso'
-    | 'pus'
-    | 'sna'
-    | 'snd'
-    | 'som'
-    | 'urd'
-    | 'wol'
-    | 'xho'
-    | 'yor'
-    | 'zul';
-  targetLanguage:
-    | 'bel'
-    | 'bos'
-    | 'bul'
-    | 'cat'
-    | 'hrv'
-    | 'ces'
-    | 'dan'
-    | 'nld'
-    | 'eng'
-    | 'est'
-    | 'fin'
-    | 'fra'
-    | 'glg'
-    | 'deu'
-    | 'ell'
-    | 'hun'
-    | 'isl'
-    | 'ind'
-    | 'ita'
-    | 'jpn'
-    | 'kan'
-    | 'lav'
-    | 'mkd'
-    | 'msa'
-    | 'mal'
-    | 'nor'
-    | 'pol'
-    | 'por'
-    | 'ron'
-    | 'rus'
-    | 'slk'
-    | 'spa'
-    | 'swe'
-    | 'tur'
-    | 'ukr'
-    | 'vie'
-    | 'hye'
-    | 'aze'
-    | 'ben'
-    | 'yue'
-    | 'fil'
-    | 'kat'
-    | 'guj'
-    | 'hin'
-    | 'kaz'
-    | 'lit'
-    | 'mlt'
-    | 'cmn'
-    | 'mar'
-    | 'nep'
-    | 'ori'
-    | 'fas'
-    | 'srp'
-    | 'slv'
-    | 'swa'
-    | 'tam'
-    | 'tel'
-    | 'afr'
-    | 'ara'
-    | 'asm'
-    | 'ast'
-    | 'mya'
-    | 'hau'
-    | 'heb'
-    | 'jav'
-    | 'kor'
-    | 'kir'
-    | 'ltz'
-    | 'mri'
-    | 'oci'
-    | 'pan'
-    | 'tgk'
-    | 'tha'
-    | 'uzb'
-    | 'cym'
-    | 'amh'
-    | 'lug'
-    | 'ibo'
-    | 'gle'
-    | 'khm'
-    | 'kur'
-    | 'lao'
-    | 'mon'
-    | 'nso'
-    | 'pus'
-    | 'sna'
-    | 'snd'
-    | 'som'
-    | 'urd'
-    | 'wol'
-    | 'xho'
-    | 'yor'
-    | 'zul';
-  generatedAt: string;
-  expiresAt: string;
-  webVtt: string;
-  /**
-   * @minItems 1
-   */
-  cues: [SubtitleCue, ...SubtitleCue[]];
-  /**
-   * Provider-detected source language when sourceLanguage was auto and detection produced a catalog language.
-   */
-  detectedSourceLanguage?:
-    | 'bel'
-    | 'bos'
-    | 'bul'
-    | 'cat'
-    | 'hrv'
-    | 'ces'
-    | 'dan'
-    | 'nld'
-    | 'eng'
-    | 'est'
-    | 'fin'
-    | 'fra'
-    | 'glg'
-    | 'deu'
-    | 'ell'
-    | 'hun'
-    | 'isl'
-    | 'ind'
-    | 'ita'
-    | 'jpn'
-    | 'kan'
-    | 'lav'
-    | 'mkd'
-    | 'msa'
-    | 'mal'
-    | 'nor'
-    | 'pol'
-    | 'por'
-    | 'ron'
-    | 'rus'
-    | 'slk'
-    | 'spa'
-    | 'swe'
-    | 'tur'
-    | 'ukr'
-    | 'vie'
-    | 'hye'
-    | 'aze'
-    | 'ben'
-    | 'yue'
-    | 'fil'
-    | 'kat'
-    | 'guj'
-    | 'hin'
-    | 'kaz'
-    | 'lit'
-    | 'mlt'
-    | 'cmn'
-    | 'mar'
-    | 'nep'
-    | 'ori'
-    | 'fas'
-    | 'srp'
-    | 'slv'
-    | 'swa'
-    | 'tam'
-    | 'tel'
-    | 'afr'
-    | 'ara'
-    | 'asm'
-    | 'ast'
-    | 'mya'
-    | 'hau'
-    | 'heb'
-    | 'jav'
-    | 'kor'
-    | 'kir'
-    | 'ltz'
-    | 'mri'
-    | 'oci'
-    | 'pan'
-    | 'tgk'
-    | 'tha'
-    | 'uzb'
-    | 'cym'
-    | 'amh'
-    | 'lug'
-    | 'ibo'
-    | 'gle'
-    | 'khm'
-    | 'kur'
-    | 'lao'
-    | 'mon'
-    | 'nso'
-    | 'pus'
-    | 'sna'
-    | 'snd'
-    | 'som'
-    | 'urd'
-    | 'wol'
-    | 'xho'
-    | 'yor'
-    | 'zul';
-}
-export interface SubtitleCue {
-  cueId: string;
-  index: number;
-  startMs: number;
-  endMs: number;
-  sourceText: string;
-  /**
-   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
-   */
-  translatedText: string;
-  romanization?: string;
-  /**
-   * @minItems 1
-   */
-  tokens: [LearningToken, ...LearningToken[]];
-}
-export interface LearningToken {
-  index: number;
-  text: string;
-  normalizedText: string;
-  lemma?: string;
-  root?: string;
-  partOfSpeech?: string;
-  translation?: string;
-  gloss?: string;
-  romanization?: string;
-  usageNote?: string;
-}
 
 // Source: schemas/lyrics-correction-cancel-request.schema.json
 export interface LyricsCorrectionCancelRequest {
@@ -940,10 +557,6 @@ export type JobResponse = {
     | 'yor'
     | 'zul';
   /**
-   * Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output.
-   */
-  enrichmentMode: 'on_demand' | 'full';
-  /**
    * Whether the request asked the backend to add romanization where available.
    */
   includeRomanization: boolean;
@@ -960,7 +573,6 @@ export type JobResponse = {
     | 'tokenizing'
     | 'romanizing'
     | 'translating'
-    | 'enriching'
     | 'finalizing';
   progressPercent: number;
   track?: TrackResponse;
@@ -1104,361 +716,6 @@ export type JobResponse = {
   partialTrack?: PartialTrackResponse;
 };
 
-export interface TrackResponse {
-  trackId: string;
-  jobId: string;
-  youtubeVideoId: string;
-  sourceLanguage:
-    | 'auto'
-    | 'bel'
-    | 'bos'
-    | 'bul'
-    | 'cat'
-    | 'hrv'
-    | 'ces'
-    | 'dan'
-    | 'nld'
-    | 'eng'
-    | 'est'
-    | 'fin'
-    | 'fra'
-    | 'glg'
-    | 'deu'
-    | 'ell'
-    | 'hun'
-    | 'isl'
-    | 'ind'
-    | 'ita'
-    | 'jpn'
-    | 'kan'
-    | 'lav'
-    | 'mkd'
-    | 'msa'
-    | 'mal'
-    | 'nor'
-    | 'pol'
-    | 'por'
-    | 'ron'
-    | 'rus'
-    | 'slk'
-    | 'spa'
-    | 'swe'
-    | 'tur'
-    | 'ukr'
-    | 'vie'
-    | 'hye'
-    | 'aze'
-    | 'ben'
-    | 'yue'
-    | 'fil'
-    | 'kat'
-    | 'guj'
-    | 'hin'
-    | 'kaz'
-    | 'lit'
-    | 'mlt'
-    | 'cmn'
-    | 'mar'
-    | 'nep'
-    | 'ori'
-    | 'fas'
-    | 'srp'
-    | 'slv'
-    | 'swa'
-    | 'tam'
-    | 'tel'
-    | 'afr'
-    | 'ara'
-    | 'asm'
-    | 'ast'
-    | 'mya'
-    | 'hau'
-    | 'heb'
-    | 'jav'
-    | 'kor'
-    | 'kir'
-    | 'ltz'
-    | 'mri'
-    | 'oci'
-    | 'pan'
-    | 'tgk'
-    | 'tha'
-    | 'uzb'
-    | 'cym'
-    | 'amh'
-    | 'lug'
-    | 'ibo'
-    | 'gle'
-    | 'khm'
-    | 'kur'
-    | 'lao'
-    | 'mon'
-    | 'nso'
-    | 'pus'
-    | 'sna'
-    | 'snd'
-    | 'som'
-    | 'urd'
-    | 'wol'
-    | 'xho'
-    | 'yor'
-    | 'zul';
-  targetLanguage:
-    | 'bel'
-    | 'bos'
-    | 'bul'
-    | 'cat'
-    | 'hrv'
-    | 'ces'
-    | 'dan'
-    | 'nld'
-    | 'eng'
-    | 'est'
-    | 'fin'
-    | 'fra'
-    | 'glg'
-    | 'deu'
-    | 'ell'
-    | 'hun'
-    | 'isl'
-    | 'ind'
-    | 'ita'
-    | 'jpn'
-    | 'kan'
-    | 'lav'
-    | 'mkd'
-    | 'msa'
-    | 'mal'
-    | 'nor'
-    | 'pol'
-    | 'por'
-    | 'ron'
-    | 'rus'
-    | 'slk'
-    | 'spa'
-    | 'swe'
-    | 'tur'
-    | 'ukr'
-    | 'vie'
-    | 'hye'
-    | 'aze'
-    | 'ben'
-    | 'yue'
-    | 'fil'
-    | 'kat'
-    | 'guj'
-    | 'hin'
-    | 'kaz'
-    | 'lit'
-    | 'mlt'
-    | 'cmn'
-    | 'mar'
-    | 'nep'
-    | 'ori'
-    | 'fas'
-    | 'srp'
-    | 'slv'
-    | 'swa'
-    | 'tam'
-    | 'tel'
-    | 'afr'
-    | 'ara'
-    | 'asm'
-    | 'ast'
-    | 'mya'
-    | 'hau'
-    | 'heb'
-    | 'jav'
-    | 'kor'
-    | 'kir'
-    | 'ltz'
-    | 'mri'
-    | 'oci'
-    | 'pan'
-    | 'tgk'
-    | 'tha'
-    | 'uzb'
-    | 'cym'
-    | 'amh'
-    | 'lug'
-    | 'ibo'
-    | 'gle'
-    | 'khm'
-    | 'kur'
-    | 'lao'
-    | 'mon'
-    | 'nso'
-    | 'pus'
-    | 'sna'
-    | 'snd'
-    | 'som'
-    | 'urd'
-    | 'wol'
-    | 'xho'
-    | 'yor'
-    | 'zul';
-  generatedAt: string;
-  expiresAt: string;
-  webVtt: string;
-  /**
-   * @minItems 1
-   */
-  cues: [SubtitleCue, ...SubtitleCue[]];
-  /**
-   * Provider-detected source language when sourceLanguage was auto and detection produced a catalog language.
-   */
-  detectedSourceLanguage?:
-    | 'bel'
-    | 'bos'
-    | 'bul'
-    | 'cat'
-    | 'hrv'
-    | 'ces'
-    | 'dan'
-    | 'nld'
-    | 'eng'
-    | 'est'
-    | 'fin'
-    | 'fra'
-    | 'glg'
-    | 'deu'
-    | 'ell'
-    | 'hun'
-    | 'isl'
-    | 'ind'
-    | 'ita'
-    | 'jpn'
-    | 'kan'
-    | 'lav'
-    | 'mkd'
-    | 'msa'
-    | 'mal'
-    | 'nor'
-    | 'pol'
-    | 'por'
-    | 'ron'
-    | 'rus'
-    | 'slk'
-    | 'spa'
-    | 'swe'
-    | 'tur'
-    | 'ukr'
-    | 'vie'
-    | 'hye'
-    | 'aze'
-    | 'ben'
-    | 'yue'
-    | 'fil'
-    | 'kat'
-    | 'guj'
-    | 'hin'
-    | 'kaz'
-    | 'lit'
-    | 'mlt'
-    | 'cmn'
-    | 'mar'
-    | 'nep'
-    | 'ori'
-    | 'fas'
-    | 'srp'
-    | 'slv'
-    | 'swa'
-    | 'tam'
-    | 'tel'
-    | 'afr'
-    | 'ara'
-    | 'asm'
-    | 'ast'
-    | 'mya'
-    | 'hau'
-    | 'heb'
-    | 'jav'
-    | 'kor'
-    | 'kir'
-    | 'ltz'
-    | 'mri'
-    | 'oci'
-    | 'pan'
-    | 'tgk'
-    | 'tha'
-    | 'uzb'
-    | 'cym'
-    | 'amh'
-    | 'lug'
-    | 'ibo'
-    | 'gle'
-    | 'khm'
-    | 'kur'
-    | 'lao'
-    | 'mon'
-    | 'nso'
-    | 'pus'
-    | 'sna'
-    | 'snd'
-    | 'som'
-    | 'urd'
-    | 'wol'
-    | 'xho'
-    | 'yor'
-    | 'zul';
-}
-export interface SubtitleCue {
-  cueId: string;
-  index: number;
-  startMs: number;
-  endMs: number;
-  sourceText: string;
-  /**
-   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
-   */
-  translatedText: string;
-  romanization?: string;
-  /**
-   * @minItems 1
-   */
-  tokens: [LearningToken, ...LearningToken[]];
-}
-export interface LearningToken {
-  index: number;
-  text: string;
-  normalizedText: string;
-  lemma?: string;
-  root?: string;
-  partOfSpeech?: string;
-  translation?: string;
-  gloss?: string;
-  romanization?: string;
-  usageNote?: string;
-}
-/**
- * Available source cues and completed annotations, delivered with running job status.
- */
-export interface PartialTrackResponse {
-  jobId: string;
-  youtubeVideoId: string;
-  /**
-   * Revision of the source prefix plus completed annotation batches. Monotonically increasing for a given run; re-render when it changes.
-   */
-  revision: number;
-  /**
-   * @minItems 1
-   */
-  cues: [PartialSubtitleCue, ...PartialSubtitleCue[]];
-  /**
-   * End of the contiguous prefix with completed analysis, in video milliseconds. Later completed batches do not advance this value across an unfinished batch.
-   */
-  readyThroughMs?: number;
-}
-export interface PartialSubtitleCue {
-  cueId: string;
-  index: number;
-  startMs: number;
-  endMs: number;
-  sourceText: string;
-  translatedText?: string;
-  romanization?: string;
-}
-
 // Source: schemas/subtitle-job-history-response.schema.json
 export type SubtitleJobHistoryItem = {
   [k: string]: unknown;
@@ -1481,7 +738,6 @@ export type SubtitleJobHistoryItem = {
     | 'tokenizing'
     | 'romanizing'
     | 'translating'
-    | 'enriching'
     | 'finalizing';
   progressPercent: number;
   sourceLanguage:
@@ -1579,10 +835,6 @@ export type SubtitleJobHistoryItem = {
     | 'xho'
     | 'yor'
     | 'zul';
-  /**
-   * Requested word-card mode. This is public-safe generation-control telemetry, not billing or provider output.
-   */
-  enrichmentMode: 'on_demand' | 'full';
   /**
    * Whether the request asked the backend to add romanization where available.
    */
@@ -2127,34 +1379,6 @@ export interface TrackResponse {
     | 'yor'
     | 'zul';
 }
-export interface SubtitleCue {
-  cueId: string;
-  index: number;
-  startMs: number;
-  endMs: number;
-  sourceText: string;
-  /**
-   * Cue translation. Empty when requested translation is unavailable; source text is retained for translation-disabled or same-language generation.
-   */
-  translatedText: string;
-  romanization?: string;
-  /**
-   * @minItems 1
-   */
-  tokens: [LearningToken, ...LearningToken[]];
-}
-export interface LearningToken {
-  index: number;
-  text: string;
-  normalizedText: string;
-  lemma?: string;
-  root?: string;
-  partOfSpeech?: string;
-  translation?: string;
-  gloss?: string;
-  romanization?: string;
-  usageNote?: string;
-}
 
 // Source: schemas/partial-track-response.schema.json
 /**
@@ -2203,18 +1427,6 @@ export interface SubtitleCue {
    */
   tokens: [LearningToken, ...LearningToken[]];
 }
-export interface LearningToken {
-  index: number;
-  text: string;
-  normalizedText: string;
-  lemma?: string;
-  root?: string;
-  partOfSpeech?: string;
-  translation?: string;
-  gloss?: string;
-  romanization?: string;
-  usageNote?: string;
-}
 
 // Source: schemas/token.schema.json
 export interface LearningToken {
@@ -2237,41 +1449,6 @@ export interface ApiError {
    * Backend log correlation ID when available.
    */
   requestId?: string;
-}
-export interface ErrorObject {
-  code:
-    | 'validation_failed'
-    | 'invalid_credentials'
-    | 'unauthenticated'
-    | 'unauthorized'
-    | 'email_not_verified'
-    | 'insecure_transport'
-    | 'payment_required'
-    | 'usage_exhausted'
-    | 'feature_unavailable'
-    | 'queue_full'
-    | 'unsupported_video'
-    | 'audio_unavailable'
-    | 'video_too_long'
-    | 'audio_acquisition_failed'
-    | 'queue_publication_failed'
-    | 'generation_cancelled'
-    | 'generation_not_cancellable'
-    | 'transcription_failed'
-    | 'enrichment_failed'
-    | 'rate_limited'
-    | 'not_found'
-    | 'expired'
-    | 'lyrics_correction_in_progress'
-    | 'lyrics_incomplete'
-    | 'lyrics_do_not_match'
-    | 'lyrics_correction_failed'
-    | 'internal_error';
-  message: string;
-  details?: {
-    reason?: 'stale_track';
-    [k: string]: unknown;
-  };
 }
 
 // Source: schemas/error-object.schema.json

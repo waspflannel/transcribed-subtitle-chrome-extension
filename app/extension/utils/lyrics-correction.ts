@@ -10,7 +10,6 @@ export const LYRICS_CORRECTION_STAGES = [
   { key: 'aligning', percent: 15, label: 'Checking and aligning lyrics' },
   { key: 'rebuilding', percent: 45, label: 'Rebuilding words and translations' },
   { key: 'romanizing', percent: 70, label: 'Rebuilding pronunciation' },
-  { key: 'enriching', percent: 85, label: 'Rebuilding word cards' },
   { key: 'finalizing', percent: 95, label: 'Applying replacement' },
 ] as const;
 
@@ -111,6 +110,7 @@ export async function syncLyricsCorrectionStatus(options: {
   fetchStatus: () => Promise<LyricsCorrectionStatus>;
   onCurrentRequestError?: (error: unknown) => void;
   canCommit?: () => boolean;
+  onCompleted?: (status: LyricsCorrectionStatus) => void;
 }): Promise<LyricsCorrectionStatus | null> {
   const current = options.states.get(options.tabId) ?? lyricsCorrectionTabState();
 
@@ -162,6 +162,10 @@ export async function syncLyricsCorrectionStatus(options: {
   });
   if (accepted !== latest) {
     options.states.set(options.tabId, accepted);
+    if (correction.status === 'completed'
+      && (latest.status?.status !== 'completed' || latest.status.attemptId !== correction.attemptId)) {
+      options.onCompleted?.(correction);
+    }
   }
 
   return accepted.status;

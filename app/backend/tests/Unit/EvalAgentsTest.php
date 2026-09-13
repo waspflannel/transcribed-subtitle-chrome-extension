@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Ai\Agents\CueAnalysisAgent;
-use App\Ai\Agents\CueEnrichmentAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
@@ -20,7 +19,7 @@ class EvalAgentsTest extends TestCase
     public function test_reports_all_agents_real_batches_usage_and_pending_semantic_review(): void
     {
         Http::preventStrayRequests();
-        foreach ([CueAnalysisAgent::class, CueEnrichmentAgent::class, EditedCueAgent::class, LearningTokenCardAgent::class] as $agent) {
+        foreach ([CueAnalysisAgent::class, EditedCueAgent::class, LearningTokenCardAgent::class] as $agent) {
             $agent::fake(fn (string $prompt): StructuredTextResponse => $this->response($this->agentOutput($agent, json_decode($prompt, true))))->preventStrayPrompts();
         }
         LyricsAlignmentAgent::fake(fn (string $prompt): array => json_decode($prompt, true)['allowPartial']
@@ -33,7 +32,7 @@ class EvalAgentsTest extends TestCase
             ]]))->preventStrayPrompts();
 
         $report = $this->runReport(['--repeat' => '2']);
-        $this->assertCount(10, $report['cases']);
+        $this->assertCount(9, $report['cases']);
         foreach ($report['cases'] as $case) {
             $this->assertSame('pending', $case['humanReview']['status']);
             $this->assertNull($case['humanReview']['score']);
@@ -107,7 +106,7 @@ class EvalAgentsTest extends TestCase
                 $this->assertStringNotContainsString($cue['sourceText'], $prompts, $case['id']);
             }
         }
-        $this->assertCount(5, array_unique($agents));
+        $this->assertCount(4, array_unique($agents));
     }
 
     public function test_partial_lyrics_accept_existing_segments_and_reject_dropped_or_overlapping_spans(): void

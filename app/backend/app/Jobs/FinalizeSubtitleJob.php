@@ -30,7 +30,6 @@ class FinalizeSubtitleJob implements ShouldQueue
 
     public function __construct(
         public readonly int $subtitleJobId,
-        public readonly bool $useEnrichedCues,
         public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
@@ -49,7 +48,7 @@ class FinalizeSubtitleJob implements ShouldQueue
 
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
-        $pipeline->persistGeneratedSubtitleTrack($this->subtitleJobId, $this->useEnrichedCues, $this->runId, $this->queuedAtMs);
+        $pipeline->persistGeneratedSubtitleTrack($this->subtitleJobId, $this->runId, $this->queuedAtMs);
     }
 
     public function failed(?Throwable $exception): void

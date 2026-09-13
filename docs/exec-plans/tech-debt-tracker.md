@@ -1,5 +1,9 @@
 # Technical Debt Tracker
 
+## Ponytail application review (2026-09-12)
+
+The [Ponytail findings report](../ponytail-application-review-2026-09-12.md) is the dated audit baseline. C1–C6, F1–F11 and narrow E2–E5 changes are implemented on `codex/ponytail-review-fixes`; the [implementation plan](active/2026-09-12-implement-ponytail-application-review.md) owns integration evidence and disposition. E1 opening-chunk preparation overlap remains deferred pending representative timing/text evidence. Full-preview HTTP bytes, production polling costs, scroll/search performance and actual subtitle flicker still need measurement. The user owns computer/browser testing. Local code validation does not establish deployment, runtime migration or manual acceptance.
+
 ## Subtitle pipeline evaluation follow-up (2026-09-10)
 
 The selected pipeline implementation is covered by offline regressions. Still open: compare upload versus direct YouTube ingestion on representative reference audio; assess combined-analysis reading quality; calibrate language/logprob signals before enabling any selective second ASR pass. Use the user-requested low reasoning effort and keep upload as the default. Ambiguous repeated boundary words with no positive temporal overlap remain conservative; do not globally deduplicate them. Paid comparisons require a bounded sample and cost cap before execution. See the active [pipeline plan](active/2026-09-09-whole-project-review/pipeline-speed-quality-and-reliability.md).

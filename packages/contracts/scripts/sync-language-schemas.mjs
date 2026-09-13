@@ -40,14 +40,6 @@ const schemaUpdates = {
       };
     }
     item.properties.detectedSourceLanguage = detectedSourceLanguageProperty();
-    item.required = [
-      'youtubeVideoId',
-      'youtubeUrl',
-      'status',
-      'startedAt',
-      'sourceLanguage',
-      'targetLanguage',
-    ];
   },
 };
 

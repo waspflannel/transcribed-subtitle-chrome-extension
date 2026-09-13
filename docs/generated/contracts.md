@@ -36,7 +36,7 @@ The contract check:
 - The WXT extension imports generated contract types through `app/extension/utils/contracts.ts`.
 - Provider-native objects, Eloquent models, and UI state are internal and must not become API contracts.
 - Cue token metadata supports optional `root` and `usageNote` fields. Missing learning fields are omitted from responses and UI rather than serialized as `null`.
-- Subtitle job requests require explicit `enrichmentMode`, `includeRomanization`, and `includeTranslation` controls; the extension owns UI defaults and sends the normalized choices to the backend.
+- Subtitle job requests require explicit `includeRomanization` and `includeTranslation` controls; word cards are enriched only through the clicked-token endpoint.
 - Failed subtitle job responses include `errorCode` and `message`; extension UI maps the stable code, not exact backend copy.
 - Source dialect is stored on backend tracks for diagnostics and future product use, but it is not part of the extension-facing track response in the first release UI.
 - Extension auth contracts cover login, account summary, and logout. Login returns an opaque scoped bearer token plus safe account summary; account and logout requests require that bearer token.

@@ -85,7 +85,6 @@ describe('account and job-history state helpers', () => {
         errorCode: 'rate_limited',
         message: 'Provider limit exceeded.',
         videoDurationSeconds: 213,
-        enrichmentMode: 'full',
         includeRomanization: true,
         includeTranslation: true,
       }),
@@ -102,7 +101,6 @@ describe('account and job-history state helpers', () => {
     expect(JSON.stringify(telemetry)).not.toContain('install_');
     expect(JSON.stringify(telemetry)).not.toContain('audio.wav');
     expect(telemetry).toMatchObject({
-      publicJobId: '018f9e2f...3001',
       errorMessage: 'Subtitle generation is temporarily rate limited. Wait a minute and try again.',
       videoDurationSeconds: 213,
     });
@@ -115,7 +113,6 @@ describe('account and job-history state helpers', () => {
       'done',
       'done',
       'current',
-      'pending',
       'pending',
     ]);
     expect(stageTimeline(jobHistory({ status: 'failed', stage: 'transcribing' }))[3]).toMatchObject({
@@ -138,14 +135,13 @@ describe('account and job-history state helpers', () => {
 
   it('keeps every stage pending while a job is queued', () => {
     expect(stageTimeline(jobHistory({ status: 'queued', stage: 'transcribing' })).map((item) => item.state)).toEqual(
-      Array(7).fill('pending'),
+      Array(6).fill('pending'),
     );
   });
 });
 
 function jobHistory(overrides: Partial<SubtitleJobHistoryItem & {
   videoDurationSeconds: number;
-  enrichmentMode: 'on_demand' | 'full';
   includeRomanization: boolean;
   includeTranslation: boolean;
 }>): SubtitleJobHistoryItem {
@@ -166,7 +162,6 @@ function jobHistory(overrides: Partial<SubtitleJobHistoryItem & {
     aiProvider: 'openai',
     aiModel: 'gpt-5.6-luna',
     ...overrides,
-    enrichmentMode: overrides.enrichmentMode ?? 'on_demand',
     includeRomanization: overrides.includeRomanization ?? true,
     includeTranslation: overrides.includeTranslation ?? false,
   };

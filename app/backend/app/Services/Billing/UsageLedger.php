@@ -188,27 +188,22 @@ final class UsageLedger
     }
 
     /**
-     * @return array{available: int, reserved: int, used: int, granted: int}
+     * @return array{available: int, reserved: int, used: int}
      */
     public function summary(User $user, CarbonInterface $periodStart, CarbonInterface $periodEnd): array
     {
-        $query = BillingUsageEvent::query()
+        $totals = BillingUsageEvent::query()
             ->whereBelongsTo($user)
             ->where('billing_period_start', $periodStart)
-            ->where('billing_period_end', $periodEnd);
-
-        $availableDelta = (int) (clone $query)->sum('available_minutes_delta');
-        $reserved = (int) (clone $query)->sum('reserved_minutes_delta');
-        $used = (int) (clone $query)->sum('used_minutes_delta');
-        $granted = (int) (clone $query)
-            ->where('event_type', 'monthly_grant')
-            ->sum('available_minutes_delta');
+            ->where('billing_period_end', $periodEnd)
+            ->toBase()
+            ->selectRaw('SUM(available_minutes_delta) AS available, SUM(reserved_minutes_delta) AS reserved, SUM(used_minutes_delta) AS used')
+            ->first();
 
         return [
-            'available' => max(0, $availableDelta - $reserved),
-            'reserved' => max(0, $reserved),
-            'used' => max(0, $used),
-            'granted' => max(0, $granted),
+            'available' => max(0, (int) $totals->available - (int) $totals->reserved),
+            'reserved' => max(0, (int) $totals->reserved),
+            'used' => max(0, (int) $totals->used),
         ];
     }
 

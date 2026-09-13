@@ -51,6 +51,16 @@
           max-width: min(720px, calc(100vw - 32px));
         }
 
+        .rail--generating {
+          display: block;
+          padding-block: 14px;
+          text-align: center;
+        }
+
+        .rail--generating .title {
+          animation: generating-pulse 1.4s ease-in-out infinite;
+        }
+
         :host([data-position="compact"]) .rail {
           gap: 14px;
           grid-template-columns: minmax(0, 1fr);
@@ -164,6 +174,22 @@
           color: #f1f1f1;
           font-size: 15px;
           font-weight: 800;
+        }
+
+        @keyframes generating-pulse {
+          0%,
+          100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .rail--generating .title {
+            animation: none;
+          }
         }
 
         .detail {

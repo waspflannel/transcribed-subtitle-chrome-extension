@@ -8,7 +8,6 @@ import { findActiveYoutubeVideo } from './youtube-video';
 
 const OVERLAY_FONTS: ReadonlyArray<readonly [string, number, string]> = [
   ['Geist Sans', 400, 'geist-sans-latin-400-normal.woff2'],
-  ['Geist Sans', 500, 'geist-sans-latin-500-normal.woff2'],
   ['Geist Sans', 600, 'geist-sans-latin-600-normal.woff2'],
   ['Geist Sans', 700, 'geist-sans-latin-700-normal.woff2'],
   ['IBM Plex Mono', 400, 'ibm-plex-mono-latin-400-normal.woff2'],
@@ -32,8 +31,6 @@ function buildOverlayFontFaces(): string {
 
 interface FocusSnapshot {
   key: string;
-  selectionStart?: number | null;
-  selectionEnd?: number | null;
 }
 
 export class OverlayShell {
@@ -77,33 +74,17 @@ export class OverlayShell {
     } = {},
   ) {}
 
-  public update(state: OverlayRenderState): void {
+  public update(state: OverlayRenderState, video = findActiveYoutubeVideo(this.documentRef)): void {
     if (!this.host || !this.content) {
       this.mount();
-    }
-
-    const video = findActiveYoutubeVideo(this.documentRef);
-    const parent = this.documentRef.fullscreenElement ?? this.documentRef.body ?? this.documentRef.documentElement;
-    if (this.host!.parentElement !== parent) parent.append(this.host!);
-    const rect = video?.getBoundingClientRect();
-    const view = this.documentRef.defaultView;
-    if (rect && view) {
-      const left = Math.max(0, rect.left) + 16;
-      const right = Math.max(0, view.innerWidth - rect.right) + 16;
-      this.host!.style.left = state.settings.overlayPosition === 'compact' ? 'auto' : `${left}px`;
-      this.host!.style.right = `${right}px`;
-      this.host!.style.maxWidth = `${Math.max(0, view.innerWidth - left - right)}px`;
-      this.host!.style.top = state.settings.overlayPosition === 'top' ? `${Math.max(0, rect.top) + 16}px` : 'auto';
-      this.host!.style.bottom = state.settings.overlayPosition === 'top' ? 'auto'
-        : `${Math.max(0, view.innerHeight - rect.bottom) + Math.min(82, rect.height / 4)}px`;
     }
 
     this.host!.dataset.position = state.settings.overlayPosition;
     this.host!.dataset.captionSize = state.settings.captionFontSize;
     this.host!.dataset.captionDensity = state.settings.captionDensity;
     this.host!.dataset.captionTheme = state.settings.captionContrastTheme;
-    this.host!.style.display = state.settings.overlayVisible && video ? 'block' : 'none';
     this.currentState = state;
+    this.position(video);
 
     const activeCueId = state.subtitleState.type === 'ready' ? state.activeCue?.cueId ?? null : null;
 
@@ -120,6 +101,28 @@ export class OverlayShell {
     }
 
     this.render();
+  }
+
+  public position(video = findActiveYoutubeVideo(this.documentRef), videoRect?: DOMRect): void {
+    if (!this.host || !this.currentState) return;
+    this.host.style.display = this.currentState.settings.overlayVisible && video ? 'block' : 'none';
+    if (!this.currentState.settings.overlayVisible) return;
+    const parent = this.documentRef.fullscreenElement ?? this.documentRef.body ?? this.documentRef.documentElement;
+    if (this.host!.parentElement !== parent) parent.append(this.host!);
+    const rect = videoRect ?? video?.getBoundingClientRect();
+    const view = this.documentRef.defaultView;
+    if (rect && view) {
+      const left = Math.max(0, rect.left) + 16;
+      const right = Math.max(0, view.innerWidth - rect.right) + 16;
+      this.host!.style.left = this.currentState.settings.overlayPosition === 'compact' ? 'auto' : `${left}px`;
+      this.host!.style.right = `${right}px`;
+      this.host!.style.maxWidth = `${Math.max(0, view.innerWidth - left - right)}px`;
+      this.host!.style.top = this.currentState.settings.overlayPosition === 'top' ? `${Math.max(0, rect.top) + 16}px` : 'auto';
+      this.host!.style.bottom = this.currentState.settings.overlayPosition === 'top' ? 'auto'
+        : `${Math.max(0, view.innerHeight - rect.bottom) + Math.min(82, rect.height / 4)}px`;
+    }
+
+    this.constrainPopovers();
   }
 
   public unmount(): void {
@@ -335,14 +338,6 @@ export class OverlayShell {
       return null;
     }
 
-    if (activeElement instanceof HTMLInputElement && activeElement.dataset.focusKey) {
-      return {
-        key: activeElement.dataset.focusKey,
-        selectionStart: activeElement.selectionStart,
-        selectionEnd: activeElement.selectionEnd,
-      };
-    }
-
     return activeElement.dataset.focusKey ? { key: activeElement.dataset.focusKey } : null;
   }
 
@@ -363,10 +358,6 @@ export class OverlayShell {
     );
 
     focusTarget?.focus();
-
-    if (focusTarget instanceof HTMLInputElement && typeof focusSnapshot?.selectionStart === 'number') {
-      focusTarget.setSelectionRange(focusSnapshot.selectionStart, focusSnapshot.selectionEnd ?? focusSnapshot.selectionStart);
-    }
   }
 
   private constrainPopovers(): void {

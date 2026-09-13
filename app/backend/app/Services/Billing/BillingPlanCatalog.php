@@ -154,20 +154,6 @@ final class BillingPlanCatalog
     /**
      * @param  array<string, mixed>  $plan
      */
-    public function supportsFullWordCards(array $plan): bool
-    {
-        $features = $plan['features'] ?? null;
-
-        if (! is_array($features) || ! array_key_exists('full_word_cards', $features)) {
-            throw new InvalidArgumentException("Billing plan [{$this->planCode($plan)}] must define feature [full_word_cards].");
-        }
-
-        return (bool) $features['full_word_cards'];
-    }
-
-    /**
-     * @param  array<string, mixed>  $plan
-     */
     private function planCode(array $plan): string
     {
         $code = $plan['code'] ?? null;

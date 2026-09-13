@@ -19,6 +19,27 @@ class SaasWebsiteAndSeoTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_site_stylesheets_are_discovered_in_order_and_versioned_individually(): void
+    {
+        $stylesheets = ['tokens', 'base', 'shell', 'ui', 'marketing', 'app', 'motion', 'responsive'];
+        $links = array_map(fn (string $name): string => asset('css/site/'.$name.'.css').'?v='.filemtime(public_path('css/site/'.$name.'.css')), $stylesheets);
+        $this->get('/')->assertOk()->assertSeeInOrder($links, false)->assertDontSee('css/site.css', false);
+
+        $path = public_path('css/site/base.css');
+        $originalTime = filemtime($path);
+        try {
+            touch($path, $originalTime + 10);
+            clearstatcache(true, $path);
+            $this->get('/')->assertOk()
+                ->assertSee(asset('css/site/base.css').'?v='.($originalTime + 10), false)
+                ->assertDontSee($links[1], false)
+                ->assertSee($links[0], false);
+        } finally {
+            touch($path, $originalTime);
+            clearstatcache(true, $path);
+        }
+    }
+
     public function test_public_pages_render_seo_metadata_and_beta_copy(): void
     {
         $pages = [
@@ -73,6 +94,8 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertOk()
             ->assertSeeText('Learn a language from the videos you')
             ->assertSeeText('Click any word for an instant flashcard')
+            ->assertSeeText('Reopen generated tracks from your history while they are retained.')
+            ->assertDontSeeText('saved to your account for review')
             ->assertSeeText('Supported subtitle and translation languages')
             ->assertSeeText('generated-video minutes')
             ->assertSee(route('register', ['plan' => 'base']), false)
@@ -588,7 +611,6 @@ class SaasWebsiteAndSeoTest extends TestCase
             'videoDurationSeconds' => 213,
             'sourceLanguage' => 'auto',
             'targetLanguage' => 'eng',
-            'enrichmentMode' => 'on_demand',
             'includeRomanization' => true,
             'includeTranslation' => false,
             ...$overrides,

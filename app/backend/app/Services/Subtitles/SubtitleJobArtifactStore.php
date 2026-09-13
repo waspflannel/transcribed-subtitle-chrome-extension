@@ -22,7 +22,7 @@ class SubtitleJobArtifactStore
 
     public const MERGED_CUES = 'merged_cues';
 
-    public const ENRICHED_CUES = 'enriched_cues';
+    public const PARTIAL_TRACK = 'partial_track';
 
     public function __construct(
         private readonly SubtitleRuntimeTracer $tracer,
@@ -430,6 +430,14 @@ class SubtitleJobArtifactStore
                 ],
                 ['payload' => $payload],
             );
+
+            if (in_array($artifactType, [self::DRAFT_CUES, self::ANALYZED_CUES], true)) {
+                SubtitleJobArtifact::query()
+                    ->where('subtitle_job_id', $currentJob->id)
+                    ->where('run_id', $currentJob->run_id)
+                    ->where('artifact_type', self::PARTIAL_TRACK)
+                    ->delete();
+            }
 
             $this->tracer->jobEvent($currentJob, 'artifact.written', [
                 'artifact_type' => $artifactType,

@@ -23,7 +23,6 @@ class SubtitleJobHistoryResource extends JsonResource
         $track = $this->track;
         $hasReadyTrack = $this->hasReadyTrack();
         $status = $this->requiredString($this->status, 'status');
-        $enrichmentMode = $this->requiredEnrichmentMode($this->enrichment_mode);
         $includeRomanization = $this->requiredBoolean($this->include_romanization, 'include_romanization');
         $includeTranslation = $this->requiredBoolean($this->include_translation, 'include_translation');
 
@@ -49,7 +48,6 @@ class SubtitleJobHistoryResource extends JsonResource
             'targetLanguage' => $this->target_language,
             'aiProvider' => $this->ai_provider,
             'aiModel' => $this->ai_model,
-            'enrichmentMode' => $enrichmentMode,
             'includeRomanization' => $includeRomanization,
             'includeTranslation' => $includeTranslation,
             'jobId' => $this->public_id,

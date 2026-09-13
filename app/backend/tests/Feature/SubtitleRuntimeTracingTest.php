@@ -6,7 +6,6 @@ use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\EnrichSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
@@ -152,6 +151,41 @@ class SubtitleRuntimeTracingTest extends TestCase
             'subtitle_job_id' => $job->id,
             'event' => 'batch.progress',
         ]);
+    }
+
+    public function test_transcription_batch_progress_moves_the_job_through_its_progress_band(): void
+    {
+        $job = SubtitleJob::factory()->create([
+            'status' => 'running',
+            'stage' => 'transcribing',
+            'progress_percent' => 50,
+        ]);
+        $staleRunId = (string) Str::uuid();
+        $chunks = [0, 1];
+
+        app(SubtitleBatchDispatcher::class)->dispatchTranscription($job, array_map(
+            fn (int $index): TranscribeSubtitleAudioChunk => new TranscribeSubtitleAudioChunk(
+                $job->id,
+                $index,
+                count($chunks),
+                $staleRunId,
+                null,
+                0.0,
+                0.0,
+                null,
+            ),
+            $chunks,
+        ), 0);
+
+        Artisan::call('queue:work', [
+            '--queue' => SubtitleQueue::workerQueueList().',default',
+            '--once' => true,
+            '--tries' => 1,
+            '--sleep' => 0,
+        ]);
+
+        // 1 of 2 transcription jobs done -> halfway through the 50-65 band.
+        $this->assertSame(57, $job->refresh()->progress_percent);
     }
 
     public function test_analysis_members_over_the_tier_cap_are_windowed_into_chains(): void
@@ -639,17 +673,16 @@ class SubtitleRuntimeTracingTest extends TestCase
         $serialJobs = [
             new AcquireSubtitleAudio(1, $runId),
             new OptimizeSubtitleAudio(1, $runId, $stageAudio),
-            new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $stageAudio, 0.0, 0.0, null),
             new MergeSubtitleTranscript(1, $runId, 0),
             new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
-            new FinalizeSubtitleJob(1, false, $runId),
+            new FinalizeSubtitleJob(1, $runId),
         ];
-        $cueBatchJobs = [
+        $providerJobs = [
+            new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $stageAudio, 0.0, 0.0, null),
             new AnalyzeSubtitleCueBatch(1, 0, $runId),
-            new EnrichSubtitleCueBatch(1, 0, $runId),
         ];
 
-        foreach ([...$serialJobs, ...$cueBatchJobs] as $job) {
+        foreach ([...$serialJobs, ...$providerJobs] as $job) {
             $this->assertSame(0, $job->tries, get_class($job));
         }
 
@@ -657,7 +690,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             $this->assertSame(1, $job->maxExceptions, get_class($job));
         }
 
-        foreach ($cueBatchJobs as $job) {
+        foreach ($providerJobs as $job) {
             $this->assertSame(3, $job->maxExceptions, get_class($job));
             $this->assertSame([15, 60], $job->backoff(), get_class($job));
         }

@@ -1,15 +1,17 @@
-export function findActiveYoutubeVideo(document: Pick<Document, 'querySelectorAll'>): HTMLVideoElement | null {
+export function findActiveYoutubeVideo(document: Pick<Document, 'querySelectorAll'>, rectangles?: Map<HTMLVideoElement, DOMRect>): HTMLVideoElement | null {
   const videos = Array.from(document.querySelectorAll('video'));
 
-  return videos.find((video) => isVisibleVideo(video) && isPlayingVideo(video))
-    ?? videos.find(isVisibleVideo)
+  const visible = (video: HTMLVideoElement): boolean => isVisibleVideo(video, rectangles);
+  return videos.find((video) => visible(video) && isPlayingVideo(video))
+    ?? videos.find(visible)
     ?? videos.find(isPlayingVideo)
     ?? videos[0]
     ?? null;
 }
 
-function isVisibleVideo(video: HTMLVideoElement): boolean {
-  const rect = video.getBoundingClientRect();
+function isVisibleVideo(video: HTMLVideoElement, rectangles?: Map<HTMLVideoElement, DOMRect>): boolean {
+  const rect = rectangles?.get(video) ?? video.getBoundingClientRect();
+  rectangles?.set(video, rect);
 
   if (rect.width <= 0 || rect.height <= 0) {
     return false;

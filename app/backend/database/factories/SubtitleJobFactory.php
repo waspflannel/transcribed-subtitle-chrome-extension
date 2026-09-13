@@ -35,7 +35,6 @@ class SubtitleJobFactory extends Factory
             'ai_provider' => SubtitleModel::provider(),
             'ai_model' => SubtitleModel::model(),
             'generation_tier' => 'base',
-            'enrichment_mode' => 'on_demand',
             'include_romanization' => true,
             'include_translation' => false,
             'status' => 'running',

@@ -10,13 +10,13 @@ export interface QuickFixEditing {
   value: string;
 }
 
-export function filterTranscriptCues(cues: readonly SubtitleCue[], query: string): SubtitleCue[] {
+export function filterTranscriptCues(cues: readonly SubtitleCue[], query: string, searchableText?: readonly string[]): SubtitleCue[] {
   const q = query.trim().toLowerCase();
   if (q === '') return [...cues];
-  return cues.filter((cue) => transcriptSearchText(cue).includes(q));
+  return cues.filter((cue, index) => (searchableText?.[index] ?? transcriptSearchText(cue)).includes(q));
 }
 
-function transcriptSearchText(cue: SubtitleCue): string {
+export function transcriptSearchText(cue: SubtitleCue): string {
   return [
     cue.sourceText,
     cue.romanization ?? '',
@@ -34,12 +34,13 @@ export function panelTranscriptListHtml(input: {
   cues: readonly SubtitleCue[];
   activeCueId: string | null;
   query: string;
+  searchableText?: readonly string[];
   settings: ExtensionSettings;
   quickFixMode?: boolean;
   editingCueId?: string | null;
   quickFixEditing?: QuickFixEditing | null;
 }): string {
-  const cues = filterTranscriptCues(input.cues, input.query);
+  const cues = filterTranscriptCues(input.cues, input.query, input.searchableText);
   if (cues.length === 0) {
     return '<p class="transcript-empty muted">No cues match that search.</p>';
   }
@@ -50,11 +51,12 @@ export function panelPartialTranscriptListHtml(input: {
   cues: readonly PartialSubtitleCue[];
   activeCueId: string | null;
   query: string;
+  searchableText?: readonly string[];
 }): string {
   const query = input.query.trim().toLowerCase();
   const cues = query === ''
     ? input.cues
-    : input.cues.filter((cue) => cue.sourceText.toLowerCase().includes(query));
+    : input.cues.filter((cue, index) => (input.searchableText?.[index] ?? cue.sourceText.toLowerCase()).includes(query));
 
   if (cues.length === 0) return '<p class="transcript-empty muted">No cues match that search.</p>';
 

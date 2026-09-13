@@ -6,7 +6,6 @@ export const GENERATION_STAGES: readonly SubtitleJobHistoryItem['stage'][] = [
   'optimizing-audio',
   'transcribing',
   'tokenizing',
-  'enriching',
   'finalizing',
 ];
 
@@ -66,8 +65,6 @@ export function stageLabel(stage: NonNullable<SubtitleJobHistoryItem['stage']>):
     case 'translating':
       return 'Translating subtitles';
 
-    case 'enriching':
-      return 'Generating word cards';
 
     case 'finalizing':
       return 'Finalizing track';

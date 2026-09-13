@@ -48,9 +48,15 @@ class TimestampedSubtitleTrackGenerator
             $this->validateCue($sourceText, $startMs, $endMs, $index, $previousEndMs);
             $previousEndMs = $endMs;
 
+            // Punctuation and sound symbols have no learner words to analyze.
+            if (preg_match('/[\p{L}\p{N}]/u', $sourceText) !== 1) {
+                continue;
+            }
+
+            $cueIndex = count($cues);
             $cues[] = [
-                'cueId' => sprintf('cue-%04d', $index + 1),
-                'index' => $index,
+                'cueId' => sprintf('cue-%04d', $cueIndex + 1),
+                'index' => $cueIndex,
                 'startMs' => $startMs,
                 'endMs' => $endMs,
                 'sourceText' => $sourceText,

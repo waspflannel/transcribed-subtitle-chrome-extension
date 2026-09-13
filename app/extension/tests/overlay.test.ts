@@ -132,7 +132,7 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('There is no subtitle cue at the current playback position.');
   });
 
-  it('renders generation progress while the background job is running', () => {
+  it('shows one stable generating message until the first preview cue arrives', () => {
     const html = renderOverlayContent({
       ...readyState(),
       subtitleState: {
@@ -145,9 +145,10 @@ describe('renderOverlayContent', () => {
       activeCue: null,
     });
 
-    expect(html).toContain('Generating subtitles');
-    expect(html).toContain('Video dQw4w9WgXcQ');
-    expect(html).toContain('class="rail rail--message"');
+    expect(html).toContain('>Generating</div>');
+    expect(html).toContain('class="rail rail--message rail--generating"');
+    expect(html).not.toContain('Generating subtitles...');
+    expect(html).not.toContain('Video dQw4w9WgXcQ');
   });
 
   it('renders partial cues without token buttons while the job is still running', () => {

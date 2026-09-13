@@ -44,7 +44,6 @@ class SubtitleTrackLyricsCorrectionResource extends JsonResource
                 'aligning' => 'aligning',
                 'analyzing', 'tokenizing' => 'rebuilding',
                 'romanizing' => 'romanizing',
-                'enriching' => 'enriching',
                 'finalizing' => 'finalizing',
                 default => 'queued',
             },

@@ -25,7 +25,6 @@ function makeJob(overrides: Partial<SubtitleJobHistoryItem> = {}): SubtitleJobHi
     targetLanguage: 'eng',
     aiProvider: 'openai',
     aiModel: 'gpt-5.6-luna',
-    enrichmentMode: 'on_demand',
     includeRomanization: true,
     includeTranslation: false,
     ...overrides,
@@ -55,7 +54,7 @@ describe('renderJobHistory links', () => {
       settings: { ...DEFAULT_EXTENSION_SETTINGS, sourceLanguage: 'spa', targetLanguage: 'fra', aiProvider: 'cerebras' },
       jobHistory: [
         makeJob({ ...failed, sourceLanguage: 'jpn', includeTranslation: true }),
-        makeJob({ ...failed, sourceLanguage: 'kor', enrichmentMode: 'full', youtubeVideoId: 'other000001', youtubeUrl: 'https://www.youtube.com/watch?v=other000001' }),
+        makeJob({ ...failed, sourceLanguage: 'kor', youtubeVideoId: 'other000001', youtubeUrl: 'https://www.youtube.com/watch?v=other000001' }),
       ],
     };
 

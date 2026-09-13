@@ -29,7 +29,6 @@ class CreateSubtitleJobRequest extends FormRequest
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
             'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
-            'enrichmentMode' => ['required', 'string', Rule::in(['on_demand', 'full'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
             'vocabularyHints' => ['sometimes', 'array', 'list', 'max:20'],
@@ -43,7 +42,7 @@ class CreateSubtitleJobRequest extends FormRequest
     }
 
     /**
-     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, enrichmentMode: string, includeRomanization: bool, includeTranslation: bool}
+     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, includeRomanization: bool, includeTranslation: bool}
      */
     public function subtitlePayload(): array
     {
@@ -53,7 +52,6 @@ class CreateSubtitleJobRequest extends FormRequest
             'youtubeUrl' => $validated['youtubeUrl'],
             'sourceLanguage' => $validated['sourceLanguage'],
             'targetLanguage' => $validated['targetLanguage'],
-            'enrichmentMode' => $validated['enrichmentMode'],
             'includeRomanization' => $this->boolean('includeRomanization'),
             'includeTranslation' => $this->boolean('includeTranslation'),
             'vocabularyHints' => $validated['vocabularyHints'] ?? [],

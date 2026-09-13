@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Ai\Agents\CueAnalysisAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\FinalizeSubtitleJob;
+use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
@@ -18,6 +19,7 @@ use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\File;
@@ -71,6 +73,77 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_slow_transcription_retries_refresh_the_watchdog_but_abandoned_attempts_still_expire(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        config([
+            'subtitles.stalled_job.enabled' => true,
+            'subtitles.stalled_job.stage_timeout_seconds.transcribing' => 1200,
+            'subtitles.stalled_job.slack_seconds' => 120,
+        ]);
+        $job = $this->job();
+        $this->transcribe($job, 0);
+        $originalStart = now()->copy();
+        Http::swap(new Factory);
+        Http::fake(['*' => function () use ($job) {
+            $this->travel(600)->seconds();
+            $this->artisan('subtitles:fail-stalled-jobs')->assertSuccessful();
+            $this->assertSame('running', $job->fresh()->status);
+            $this->assertDirectoryExists(SubtitleAudioWorkspace::directory($job->run_id));
+
+            return Http::response([], 503);
+        }]);
+
+        foreach ([0, 15, 60] as $backoff) {
+            $this->travel($backoff)->seconds();
+            $attemptStart = now()->copy();
+            try {
+                $this->transcribe($job, 1);
+                $this->fail('Expected a retryable provider failure.');
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertTrue($exception->isTransient());
+            }
+            $this->assertTrue($job->fresh()->updated_at->equalTo($attemptStart));
+        }
+        $this->assertTrue(now()->greaterThan($originalStart->addSeconds(1320)));
+        $this->assertTrue(app(SubtitleJobArtifactStore::class)->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT_CHUNK, 0));
+
+        $this->travel(721)->seconds();
+        $this->artisan('subtitles:fail-stalled-jobs')->assertSuccessful();
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertDirectoryDoesNotExist(SubtitleAudioWorkspace::directory($job->run_id));
+    }
+
+    public function test_transient_chunk_failure_preserves_completed_work_and_retries_only_the_missing_chunk(): void
+    {
+        $job = $this->job();
+        $store = app(SubtitleJobArtifactStore::class);
+        $this->transcribe($job, 0);
+        Http::swap(new Factory);
+        Http::fake(['*' => Http::response([], 503)]);
+        try {
+            $this->transcribe($job, 1);
+            $this->fail('Expected transient error.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertTrue($exception->isTransient());
+        }
+        $this->assertSame('running', $job->fresh()->status);
+        $this->assertTrue($store->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT_CHUNK, 0));
+        $this->assertDirectoryExists(SubtitleAudioWorkspace::directory($job->run_id));
+        Http::swap(new Factory);
+        Http::fake(['*' => fn () => Http::response($this->transcriptionPayload)]);
+        $this->transcribe($job, 1);
+        $this->assertTrue($store->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT_CHUNK, 1));
+        $this->assertSame(2, $job->events()->where('event', 'provider.transcription_chunk_completed')->count());
+        $queueJob = new TranscribeSubtitleAudioChunk($job->id, 2, 3, $job->run_id, null, 0, 0, null);
+        $this->assertSame(3, $queueJob->maxExceptions);
+        $this->assertSame([15, 60], $queueJob->backoff());
+        $queueJob->failed(SubtitleProcessingException::providerUnavailable());
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertFalse($store->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT_CHUNK, 0));
+        $this->assertDirectoryDoesNotExist(SubtitleAudioWorkspace::directory($job->run_id));
+    }
+
     public function test_opening_subtitles_are_analyzed_before_later_audio_and_survive_finalization(): void
     {
         $job = $this->job();
@@ -122,8 +195,8 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         Bus::assertDispatchedTimes(FinalizeSubtitleJob::class, 1);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $job->refresh()->load('track');
         $this->assertSame('completed', $job->status);
         $this->assertSame(1, BillingUsageEvent::where('event_type', 'debit')->count());
@@ -145,7 +218,10 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->transcribe($job, 0);
         $preview = $this->preview($job);
         $this->assertGreaterThan(2, count($preview['cues']));
+        $lastProgress = $job->fresh()->updated_at;
+        $this->travel(60)->seconds();
         $this->transcribe($job, 0);
+        $this->assertTrue($job->fresh()->updated_at->equalTo($lastProgress));
         $this->assertSame($preview, $this->preview($job));
         Http::assertSentCount(2);
         Bus::assertBatchCount(1);
@@ -238,7 +314,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, $index, $job->run_id);
         }
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, false, $job->run_id);
+        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
         $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ['Earlier.', 'Hello.', 'Again. There.'],
             array_column($job->fresh()->track->cues, 'sourceText'));
@@ -267,7 +343,10 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $oldRun = $job->run_id;
         app(SubtitleJobArtifactStore::class)->deleteForJob($job);
         $job->update(['status' => $status, 'run_id' => $replaceRun ? (string) Str::uuid() : $oldRun]);
+        $lastProgress = $job->fresh()->updated_at;
+        $this->travel(60)->seconds();
         app(SubtitleGenerationPipeline::class)->transcribeAudioChunk($job->id, $oldRun, 1, 3, null, 18, 20, 40);
+        $this->assertTrue($job->fresh()->updated_at->equalTo($lastProgress));
         app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $oldRun);
         $this->assertNull($this->preview($job));
         $this->assertSame([], $this->analysisInputs);

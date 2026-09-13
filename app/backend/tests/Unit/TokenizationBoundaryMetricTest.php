@@ -8,6 +8,23 @@ use Tests\TestCase;
 
 class TokenizationBoundaryMetricTest extends TestCase
 {
+    public function test_invented_and_out_of_order_predictions_reduce_word_precision(): void
+    {
+        foreach ([
+            [['hello', 'world', 'invented'], 2, 1, 2 / 3],
+            [['invented', 'fiction'], 0, 2, 0.0],
+            [['world', 'hello'], 1, 1, 0.5],
+            [['hello', 'world', '!'], 2, 0, 1.0],
+        ] as [$predictions, $correct, $unlocatable, $precision]) {
+            $evaluation = $this->metric()->evaluate('test', 'eng', 'hello world', ['hello', 'world'], $predictions);
+            $summary = $this->metric()->aggregate('eng', [$evaluation]);
+            $this->assertSame($correct, $evaluation->correctWords);
+            $this->assertSame($unlocatable, $evaluation->unlocatablePredictedTokens);
+            $this->assertSame($unlocatable, $summary->unlocatablePredictedTokens);
+            $this->assertEqualsWithDelta($precision, $summary->wordPrecision, 0.0001);
+        }
+    }
+
     public function test_perfect_segmentation_scores_full_boundary_and_word_f1(): void
     {
         $evaluation = $this->metric()->evaluate(

@@ -28,7 +28,6 @@ class SubtitleJob extends Model
         'ai_provider',
         'ai_model',
         'generation_tier',
-        'enrichment_mode',
         'include_romanization',
         'include_translation',
         'vocabulary_hints',
