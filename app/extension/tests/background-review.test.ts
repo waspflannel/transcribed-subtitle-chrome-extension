@@ -89,6 +89,7 @@ const storageMock = vi.hoisted(() => {
 });
 
 const apiMock = vi.hoisted(() => ({
+  prefetchSubtitleAudio: vi.fn(),
   enrichLearningToken: vi.fn(),
   createSubtitleJob: vi.fn(),
   getSubtitleJob: vi.fn(),
@@ -161,6 +162,7 @@ vi.mock('wxt/browser', () => ({
 
 vi.mock('../utils/api', () => ({
   SubtitleApiClient: class {
+    prefetchSubtitleAudio(...args: unknown[]) { return apiMock.prefetchSubtitleAudio(...args); }
     enrichLearningToken(...args: unknown[]) { return apiMock.enrichLearningToken(...args); }
     createSubtitleJob(...args: unknown[]) { return apiMock.createSubtitleJob(...args); }
     getLyricsCorrectionStatus(...args: unknown[]) { return apiMock.getLyricsCorrectionStatus(...args); }
@@ -320,6 +322,8 @@ function seedBaseState(): void {
 }
 
 beforeEach(() => {
+  vi.stubEnv('WXT_AUDIO_METADATA_PREFETCH', 'false');
+  apiMock.prefetchSubtitleAudio.mockReset().mockResolvedValue({ ok: true });
   vi.resetModules();
   storageMock.reset();
   browserMock.reset();
@@ -333,11 +337,35 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
 describe('background entrypoint review regressions', () => {
+  it('prefetches only for an open panel, without waiting, and deduplicates per video', async () => {
+    vi.stubEnv('WXT_AUDIO_METADATA_PREFETCH', 'true');
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const listener = await loadBackground();
+    const request = { type: 'panel.getState', syncBackend: false, windowId: 1 };
+    await dispatch(listener, request, {});
+    expect(apiMock.prefetchSubtitleAudio).not.toHaveBeenCalled();
+    let disconnect = () => {};
+    browserMock.connectListeners[0]({ name: 'panel', onDisconnect: { addListener: (fn: () => void) => { disconnect = fn; } } });
+    apiMock.prefetchSubtitleAudio.mockReturnValue(new Promise(() => {}));
+    await dispatch(listener, request, {});
+    await dispatch(listener, request, {});
+    expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(1);
+    expect(apiMock.prefetchSubtitleAudio.mock.calls[0][2]).toBe(VIDEO_A);
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
+    await dispatch(listener, request, {});
+    expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(2);
+    disconnect();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_ONE}` });
+    await dispatch(listener, request, {});
+    expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(2);
+  });
   it('does not replay a completed correction after a delayed word-card response or local refresh', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });

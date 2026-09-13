@@ -63,6 +63,7 @@ let cachedPanelJobHistoryAccountId: string | undefined;
 let cachedPanelJobHistorySessionId: string | undefined;
 let localStateResetVersion = 0;
 let accountMutationVersion = 0;
+let audioPrefetch: { key: string; at: number } | undefined;
 const JOB_POLL_INTERVAL_MS = 5000;
 const ACTIVE_JOB_POLL_INTERVAL_MS = 1000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
@@ -1977,6 +1978,16 @@ async function getPanelState(options: { syncBackend: boolean; windowId?: number;
       jobHistory: [],
       lyricsCorrection: null,
     };
+  }
+
+  if (import.meta.env.WXT_AUDIO_METADATA_PREFETCH === 'true' && panelPorts.size > 0
+    && currentSession && pageStatus?.supported && subtitleState.type !== 'loading'
+    && subtitleState.type !== 'ready') {
+    const key = `${currentSession.sessionId}:${pageStatus.videoId}`;
+    if (audioPrefetch?.key !== key || Date.now() - audioPrefetch.at > 45000) {
+      audioPrefetch = { key, at: Date.now() };
+      void subtitleApi.prefetchSubtitleAudio(installId, currentSession.plainTextToken, pageStatus.videoId).catch(() => {});
+    }
   }
 
   return {

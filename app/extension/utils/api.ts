@@ -64,6 +64,12 @@ export class SubtitleApiClient {
     }, guardExtensionAccountResponse);
   }
 
+  public async prefetchSubtitleAudio(installId: string, authToken: string, youtubeVideoId: string): Promise<{ ok: true }> {
+    return this.request('subtitle-audio/prefetch', installId, {
+      method: 'POST', authToken, body: JSON.stringify({ youtubeVideoId }),
+    }, guardOkResponse);
+  }
+
   public async logoutExtension(installId: string, authToken: string): Promise<{ ok: true }> {
     return this.request<{ ok: true }>('extension-auth/logout', installId, {
       method: 'POST',
