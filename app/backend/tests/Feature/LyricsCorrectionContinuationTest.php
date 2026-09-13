@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -145,7 +146,7 @@ class LyricsCorrectionContinuationTest extends TestCase
             'work_state' => ['stage' => 'analyzing'],
         ]);
 
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1))
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1, 0))
             ->failed(new RuntimeException('stale worker failure'));
 
         $current = $correction->fresh();
@@ -525,7 +526,7 @@ class LyricsCorrectionContinuationTest extends TestCase
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 0))
             ->handle(app(LyricsCorrectionService::class));
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1))
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1, 0))
             ->handle(app(LyricsCorrectionService::class));
 
         $this->assertSame('cancelled', $correction->fresh()->status);
@@ -549,7 +550,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         })->preventStrayPrompts();
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 0))->handle(app(LyricsCorrectionService::class));
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1))->handle(app(LyricsCorrectionService::class));
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1, 0))->handle(app(LyricsCorrectionService::class));
 
         $this->assertSame(1, $prompts);
         $this->assertSame('cancelled', $correction->fresh()->status);
@@ -566,7 +567,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         };
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 0))->handle(app(LyricsCorrectionService::class));
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1))->handle(app(LyricsCorrectionService::class));
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 1, 0))->handle(app(LyricsCorrectionService::class));
 
         $this->assertSame('cancelled', $correction->fresh()->status);
         $this->assertNull($correction->fresh()->work_state);
@@ -636,7 +637,7 @@ class LyricsCorrectionContinuationTest extends TestCase
 
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $plan = $row->work_state['batchPlan'];
-        $expectedPlan = app(SubtitleJobArtifactStore::class)->batchPlan($row->track->cues);
+        $expectedPlan = app(SubtitleJobArtifactStore::class)->batchPlan($row->track->cues, $queue['job']);
         $this->assertSame($expectedPlan, $plan);
         $this->assertSame($expectedBounds, $plan);
 
@@ -656,7 +657,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $service = app(LyricsCorrectionService::class);
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))->handle($service);
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1))->handle($service);
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1, 0))->handle($service);
 
         $failed = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->assertSame('failed', $failed->status);
@@ -666,27 +667,137 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->translationCalls);
     }
 
-    public function test_each_continuation_advances_exactly_one_stage_or_batch_revision(): void
+    public function test_batches_fan_out_and_finish_out_of_order_before_atomic_publication(): void
     {
         $queue = $this->completedTrackWithCues(45, fn (int $position): string => 'Lyrics line '.($position + 1));
         LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
         $response = $this->submitLyrics($queue['job'], $queue['texts']);
         $service = app(LyricsCorrectionService::class);
-
-        $expectedStages = ['aligning', 'analyzing', 'analyzing', 'analyzing', 'finalizing'];
-
-        foreach ($expectedStages as $revision => $stage) {
-            $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
-            $this->assertSame($revision, $row->work_revision);
-            $this->assertSame($stage, $row->work_state['stage']);
-
-            (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), $revision))->handle($service);
+        $track = $queue['job']->track;
+        $originalId = $track->public_id;
+        $attempt = $response->json('attemptId');
+        $service->process($track->id, $attempt, 0);
+        Queue::assertPushed(LyricsCorrectionJob::class, 4);
+        foreach ([0, 1, 2] as $index) {
+            Queue::assertPushed(LyricsCorrectionJob::class, fn ($job): bool => $job->expectedRevision === 1 && $job->batchIndex === $index);
         }
-
-        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $service->process($track->id, $attempt, 1, 2);
+        $this->assertSame($originalId, $track->fresh()->public_id);
+        $this->assertSame(1, $this->correctionRow($queue['job'], $attempt)->work_revision);
+        $service->process($track->id, $attempt, 1, 2);
+        (new LyricsCorrectionJob($track->id, $queue['job']->id, $attempt, 1, 2))->failed(new RuntimeException('late duplicate failure'));
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame('running', $this->correctionRow($queue['job'], $attempt)->status);
+        $service->process($track->id, $attempt, 1, 0);
+        $this->assertSame($originalId, $track->fresh()->public_id);
+        $service->process($track->id, $attempt, 1, 1);
+        $row = $this->correctionRow($queue['job'], $attempt);
         $this->assertSame('completed', $row->status);
-        $this->assertSame(count($expectedStages), $row->work_revision);
+        $this->assertSame(2, $row->work_revision);
         $this->assertNull($row->work_state);
+        $this->assertNotSame($originalId, $track->fresh()->public_id);
+        $this->assertCount(45, $track->fresh()->cues);
+        $this->assertSame(3, $this->translationAnalysis->tokenizationCalls);
+        Queue::assertPushed(LyricsCorrectionJob::class, 4);
+    }
+
+    public function test_overlapping_batches_merge_current_results_and_recover_only_unfinished_work(): void
+    {
+        $queue = $this->completedTrackWithCues(45, fn (int $position): string => 'Lyrics line '.($position + 1));
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $service = app(LyricsCorrectionService::class);
+        $track = $queue['job']->track;
+        $originalId = $track->public_id;
+        $attempt = $response->json('attemptId');
+        $service->process($track->id, $attempt, 0);
+        $this->translationAnalysis->beforeTokenizationResult = function () use ($service, $track, $attempt): void {
+            $this->translationAnalysis->beforeTokenizationResult = null;
+            $service->process($track->id, $attempt, 1, 2);
+        };
+        $service->process($track->id, $attempt, 1, 0);
+        $row = $this->correctionRow($queue['job'], $attempt);
+        $this->assertSame([2, 0], $row->work_state['completedBatches']);
+        $this->assertNotEmpty($row->work_state['cues'][0]['tokens']);
+        $this->assertNotEmpty($row->work_state['cues'][44]['tokens']);
+        $this->assertSame($originalId, $track->fresh()->public_id);
+        Queue::fake();
+        $row->forceFill(['updated_at' => now()->subHours(2)])->saveQuietly();
+        $service->recoverStalledAttempt($row, now()->subHour());
+        Queue::assertPushed(LyricsCorrectionJob::class, 1);
+        Queue::assertPushed(LyricsCorrectionJob::class, fn ($job): bool => $job->batchIndex === 1);
+        $service->process($track->id, $attempt, 1, 1);
+        $this->assertSame('completed', $row->fresh()->status);
+        foreach ($track->fresh()->cues as $cue) {
+            $this->assertNotEmpty($cue['tokens']);
+        }
+        $this->assertSame(3, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_batch_overlap_locks_allow_different_batches_and_block_the_same_batch(): void
+    {
+        $attempt = (string) Str::uuid();
+        $first = new LyricsCorrectionJob(1, 1, $attempt, 1, 0);
+        $second = new LyricsCorrectionJob(1, 1, $attempt, 1, 1);
+        $duplicate = new LyricsCorrectionJob(1, 1, $attempt, 1, 0);
+        $delivery = \Mockery::mock(Job::class);
+        $delivery->shouldReceive('release')->once()->with(5);
+        $duplicate->setJob($delivery);
+        $calls = 0;
+        $first->middleware()[1]->handle($first, function () use ($second, $duplicate, &$calls): void {
+            $second->middleware()[1]->handle($second, function () use (&$calls): void {
+                $calls++;
+            });
+            $duplicate->middleware()[1]->handle($duplicate, function (): void {
+                $this->fail('Duplicate lock was acquired.');
+            });
+        });
+        $this->assertSame(1, $calls);
+    }
+
+    public function test_persisted_serial_work_dispatches_only_its_remaining_batches(): void
+    {
+        $queue = $this->completedTrackWithCues(45, fn (int $position): string => 'Lyrics line '.($position + 1));
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $service = app(LyricsCorrectionService::class);
+        $attempt = $response->json('attemptId');
+        $service->process($queue['job']->track->id, $attempt, 0);
+        $service->process($queue['job']->track->id, $attempt, 1, 0);
+        $row = $this->correctionRow($queue['job'], $attempt);
+        $state = $row->work_state;
+        unset($state['completedBatches']);
+        $row->update(['work_state' => $state, 'work_revision' => 2]);
+        Queue::fake();
+        $service->process($queue['job']->track->id, $attempt, 2);
+        Queue::assertPushed(LyricsCorrectionJob::class, 2);
+        Queue::assertNotPushed(LyricsCorrectionJob::class, fn ($job): bool => $job->batchIndex === 0);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+        $this->runCorrectionRevisions($queue['job'], $attempt, 2);
+        $this->assertSame('completed', $row->fresh()->status);
+        $this->assertSame(3, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_a_failed_parallel_batch_discards_all_results_and_stops_pending_work(): void
+    {
+        $queue = $this->completedTrackWithCues(45, fn (int $position): string => 'Lyrics line '.($position + 1));
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $service = app(LyricsCorrectionService::class);
+        $track = $queue['job']->track;
+        $originalId = $track->public_id;
+        $attempt = $response->json('attemptId');
+        $service->process($track->id, $attempt, 0);
+        $service->process($track->id, $attempt, 1, 2);
+        $this->translationAnalysis->tokenizationShouldFail = true;
+        $service->process($track->id, $attempt, 1, 1);
+        $service->process($track->id, $attempt, 1, 0);
+        $this->assertSame(2, $this->translationAnalysis->tokenizationCalls);
+        $row = $this->correctionRow($queue['job'], $attempt);
+        $this->assertSame('failed', $row->status);
+        $this->assertNull($row->work_state);
+        $this->assertNull($row->lyrics);
+        $this->assertSame($originalId, $track->fresh()->public_id);
     }
 
     public function test_replaying_a_stale_job_revision_does_no_provider_work_and_changes_no_state(): void
@@ -723,8 +834,8 @@ class LyricsCorrectionContinuationTest extends TestCase
         $service = app(LyricsCorrectionService::class);
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))->handle($service);
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1))->handle($service);
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1))->handle($service);
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1, 0))->handle($service);
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1, 0))->handle($service);
 
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->assertSame(2, $row->work_revision);
@@ -803,7 +914,7 @@ class LyricsCorrectionContinuationTest extends TestCase
 
         $queue['job']->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
 
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1))->handle($service);
+        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1, 0))->handle($service);
 
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls, 'No derived provider call may run after entitlement loss.');
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
@@ -887,11 +998,9 @@ class LyricsCorrectionContinuationTest extends TestCase
         $response = $this->submitLyrics($queue['job'], $queue['texts']);
         $service = app(LyricsCorrectionService::class);
 
-        for ($revision = 0; $revision < 3; $revision++) {
-            (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), $revision))->handle($service);
-        }
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
 
-        $this->assertSame(3, $this->correctionRow($queue['job'], $response->json('attemptId'))->work_revision);
+        $this->assertSame(2, $this->correctionRow($queue['job'], $response->json('attemptId'))->work_revision);
         $publishedId = $queue['job']->track->refresh()->public_id;
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 3))->handle($service);
@@ -1221,15 +1330,14 @@ class LyricsCorrectionContinuationTest extends TestCase
             $track = $queue['job']->track;
             $attempt = $response->json('attemptId');
             $service->process($track->id, $attempt, 0);
-            $service->process($track->id, $attempt, 1);
-            $this->assertSame('finalizing', $this->correctionRow($queue['job'], $attempt)->work_state['stage']);
+            $this->assertSame('analyzing', $this->correctionRow($queue['job'], $attempt)->work_state['stage']);
             match ($change) {
                 'entitlement' => $queue['job']->user->update(['billing_subscription_status' => 'past_due']),
                 'expiry' => $track->update(['expires_at' => now()->subSecond()]),
                 'track' => $track->update(['public_id' => (string) Str::uuid()]),
                 'run' => $queue['job']->update(['run_id' => (string) Str::uuid()]),
             };
-            $service->process($track->id, $attempt, 2);
+            $service->process($track->id, $attempt, 1, 0);
             $this->assertSame('failed', $this->correctionRow($queue['job'], $attempt)->status, $change);
             $this->assertSame('cue-0001', $track->fresh()->cues[0]['cueId'], $change);
         }
@@ -1325,7 +1433,7 @@ class LyricsCorrectionContinuationTest extends TestCase
                 return;
             }
 
-            (new LyricsCorrectionJob($job->track->id, $job->id, $attemptId, $revision))->handle($service);
+            (new LyricsCorrectionJob($job->track->id, $job->id, $attemptId, $row->work_revision, ($row->work_state['stage'] ?? null) === 'analyzing' ? $row->work_state['batchIndex'] : null))->handle($service);
         }
 
         $this->fail('Lyrics correction did not reach a terminal state within the expected revisions.');

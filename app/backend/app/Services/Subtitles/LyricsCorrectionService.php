@@ -334,9 +334,9 @@ final class LyricsCorrectionService
         return $track;
     }
 
-    public function process(int $trackId, string $attemptId, int $expectedRevision): void
+    public function process(int $trackId, string $attemptId, int $expectedRevision, ?int $batchIndex = null): void
     {
-        $correction = $this->claimUnit($trackId, $attemptId, $expectedRevision);
+        $correction = $this->claimUnit($trackId, $attemptId, $expectedRevision, $batchIndex);
 
         if ($correction === null) {
             return;
@@ -345,16 +345,24 @@ final class LyricsCorrectionService
         $job = $correction->track?->job;
 
         if (! $job instanceof SubtitleJob) {
-            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision);
+            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
 
             return;
         }
 
         $processedStage = is_array($correction->work_state) ? ($correction->work_state['stage'] ?? null) : null;
+        $startedAt = hrtime(true);
 
         try {
             $this->ensureCorrectionCurrent($correction);
-            $nextState = $this->advanceUnit($correction, $job);
+            if ($processedStage === 'analyzing' && $batchIndex === null) {
+                $this->dispatchPendingUnits($correction);
+
+                return;
+            }
+            $nextState = $processedStage === 'analyzing' && $batchIndex !== null
+                ? $this->derivedUnit($correction, $job, $correction->work_state, $batchIndex)
+                : $this->advanceUnit($correction, $job);
         } catch (SubtitleProcessingException $exception) {
             Log::warning('backend.lyrics_correction_unit_failed', [
                 'track_id' => $trackId,
@@ -370,16 +378,16 @@ final class LyricsCorrectionService
             }
 
             if ($exception->publicCode === 'lyrics_do_not_match') {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_do_not_match', 'These lyrics do not seem to match this song. Check the paste and try again.', expectedRevision: $expectedRevision);
+                $this->failAttempt($trackId, $attemptId, 'lyrics_do_not_match', 'These lyrics do not seem to match this song. Check the paste and try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
             } elseif ($exception->publicCode === 'lyrics_incomplete') {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_incomplete', 'These lyrics may be incomplete. Your current subtitles are unchanged. Confirm that you want to apply them to the matching sections and keep the existing lyrics elsewhere.', expectedRevision: $expectedRevision);
+                $this->failAttempt($trackId, $attemptId, 'lyrics_incomplete', 'These lyrics may be incomplete. Your current subtitles are unchanged. Confirm that you want to apply them to the matching sections and keep the existing lyrics elsewhere.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
             } else {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision);
+                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
             }
 
             return;
         } catch (BillingEntitlementException $exception) {
-            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision);
+            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
 
             return;
         } catch (Throwable $exception) {
@@ -390,12 +398,23 @@ final class LyricsCorrectionService
                 'stage' => 'processing',
                 'exception' => $exception::class,
             ]);
-            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision);
+            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
 
             return;
         }
 
         $this->commitProgress($trackId, $attemptId, $expectedRevision, $job, $processedStage, $nextState);
+        Log::info('backend.lyrics_correction_unit_finished', [
+            'subtitle_job_id' => $job->id,
+            'attempt_id' => $attemptId,
+            'work_revision' => $expectedRevision,
+            'stage' => $processedStage,
+            'batch_index' => $batchIndex,
+            'provider' => $job->ai_provider,
+            'model' => $job->ai_model,
+            'cue_count' => count($nextState['cues'] ?? []),
+            'duration_ms' => (int) round((hrtime(true) - $startedAt) / 1_000_000),
+        ]);
     }
 
     /**
@@ -408,7 +427,20 @@ final class LyricsCorrectionService
         string $message,
         int $expectedRevision,
         ?CarbonInterface $notUpdatedAfter = null,
+        ?int $batchIndex = null,
     ): bool {
+        if ($batchIndex !== null) {
+            return DB::transaction(function () use ($trackId, $attemptId, $errorCode, $message, $expectedRevision, $notUpdatedAfter, $batchIndex): bool {
+                $current = SubtitleTrackLyricsCorrection::query()->where('subtitle_track_id', $trackId)
+                    ->where('attempt_id', $attemptId)->lockForUpdate()->first();
+                if ($current === null || in_array($batchIndex, $current->work_state['completedBatches'] ?? [], true)) {
+                    return false;
+                }
+
+                return $this->failAttempt($trackId, $attemptId, $errorCode, $message, $expectedRevision, $notUpdatedAfter);
+            });
+        }
+
         $updated = SubtitleTrackLyricsCorrection::query()
             ->where('subtitle_track_id', $trackId)
             ->where('attempt_id', $attemptId)
@@ -469,8 +501,7 @@ final class LyricsCorrectionService
         }
 
         try {
-            LyricsCorrectionJob::dispatch($recover->subtitle_track_id, $recover->track->job->id, $recover->attempt_id, $recover->work_revision)
-                ->onQueue(SubtitleQueue::batchNameForJob($recover->track->job));
+            $this->dispatchPendingUnits($recover);
             Log::info('backend.lyrics_correction_recovered', [
                 'track_id' => $recover->subtitle_track_id,
                 'attempt_id' => $recover->attempt_id,
@@ -481,9 +512,9 @@ final class LyricsCorrectionService
         }
     }
 
-    private function claimUnit(int $trackId, string $attemptId, int $expectedRevision): ?SubtitleTrackLyricsCorrection
+    private function claimUnit(int $trackId, string $attemptId, int $expectedRevision, ?int $batchIndex): ?SubtitleTrackLyricsCorrection
     {
-        return DB::transaction(function () use ($trackId, $attemptId, $expectedRevision): ?SubtitleTrackLyricsCorrection {
+        return DB::transaction(function () use ($trackId, $attemptId, $expectedRevision, $batchIndex): ?SubtitleTrackLyricsCorrection {
             $correction = SubtitleTrackLyricsCorrection::query()
                 ->where('subtitle_track_id', $trackId)
                 ->where('attempt_id', $attemptId)
@@ -497,10 +528,22 @@ final class LyricsCorrectionService
             }
 
             $stage = is_array($correction->work_state) ? ($correction->work_state['stage'] ?? null) : null;
-
             if (! is_string($stage) || ! in_array($stage, self::STAGES, true)) {
                 $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Replacement could not resume. Your current subtitles are unchanged. Try again.', $expectedRevision);
 
+                return null;
+            }
+
+            // Resume persisted serial attempts without repeating their completed batches.
+            if ($stage === 'analyzing' && ! isset($correction->work_state['completedBatches'])) {
+                $state = $correction->work_state;
+                $state['completedBatches'] = ($state['batchIndex'] ?? 0) > 0 ? range(0, $state['batchIndex'] - 1) : [];
+                $correction->update(['work_state' => $state]);
+            }
+
+            if ($batchIndex !== null && ($stage !== 'analyzing'
+                || ! isset($correction->work_state['batchPlan'][$batchIndex])
+                || in_array($batchIndex, $correction->work_state['completedBatches'] ?? [], true))) {
                 return null;
             }
 
@@ -528,7 +571,6 @@ final class LyricsCorrectionService
 
         return match ($stage) {
             'aligning' => $this->aligningUnit($correction, $job, $lyrics),
-            'analyzing' => $this->derivedUnit($correction, $job, $state, $stage),
             'finalizing' => $this->finalizingUnit($state),
             default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
         };
@@ -554,7 +596,7 @@ final class LyricsCorrectionService
             attemptId: $correction->attempt_id,
             allowPartial: (bool) ($correction->work_state['allowPartial'] ?? false),
         );
-        $batchPlan = $this->artifacts->batchPlan($draftCues);
+        $batchPlan = $this->artifacts->batchPlan($draftCues, $job);
 
         if ($batchPlan === []) {
             throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'empty_batch_plan']);
@@ -563,16 +605,16 @@ final class LyricsCorrectionService
         return [
             'stage' => 'analyzing',
             'batchIndex' => 0,
+            'completedBatches' => [],
             'batchPlan' => $batchPlan,
             'cues' => $draftCues,
             'allowPartial' => (bool) ($correction->work_state['allowPartial'] ?? false),
         ];
     }
 
-    private function derivedUnit(SubtitleTrackLyricsCorrection $correction, SubtitleJob $job, array $state, string $stage): array
+    private function derivedUnit(SubtitleTrackLyricsCorrection $correction, SubtitleJob $job, array $state, int $batchIndex): array
     {
         $batchPlan = $state['batchPlan'] ?? null;
-        $batchIndex = (int) ($state['batchIndex'] ?? -1);
         $cues = $state['cues'] ?? null;
 
         if (! is_array($batchPlan) || ! is_array($cues) || $batchPlan === [] || ! isset($batchPlan[$batchIndex])) {
@@ -588,44 +630,16 @@ final class LyricsCorrectionService
 
         $this->requireActivePlan($job);
 
-        $cues = $this->processedBatch($cues, $batch, $bounds, $job, $stage, $correction);
-
-        if (isset($batchPlan[$batchIndex + 1])) {
-            return [...$state, 'batchIndex' => $batchIndex + 1, 'cues' => $cues];
-        }
-
-        return $this->nextStage([...$state, 'cues' => $cues], $job, $stage);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $cues
-     * @param  array<int, array<string, mixed>>  $batch
-     * @param  array{0: int, 1: int}  $bounds
-     * @return array<int, array<string, mixed>>
-     */
-    private function processedBatch(
-        array $cues,
-        array $batch,
-        array $bounds,
-        SubtitleJob $job,
-        string $stage,
-        SubtitleTrackLyricsCorrection $correction,
-    ): array {
         $this->ensureCorrectionCurrent($correction);
-        $result = match ($stage) {
-            'analyzing' => $this->translationAnalysis->analyzeCueBatch(
-                $batch, $cues, $job->source_language, $job->target_language,
-                includeTranslation: $this->translationRequested($job),
-                includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
-                selection: SubtitleModel::forJob($job),
-            ),
-            default => throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_stage']),
-        };
+        $result = $this->translationAnalysis->analyzeCueBatch(
+            $batch, $cues, $job->source_language, $job->target_language,
+            includeTranslation: $this->translationRequested($job),
+            includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
+            selection: SubtitleModel::forJob($job),
+        );
         $this->ensureCorrectionCurrent($correction);
-        $this->costs->recordAnalyzedCueBatch($job, count($result->cues), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed');
-        $this->mergeIntoPositions($cues, $result->cues, $bounds);
 
-        return $cues;
+        return ['stage' => 'analyzing', 'batchIndex' => $batchIndex, 'cues' => $result->cues];
     }
 
     private function mergeIntoPositions(array &$cues, array $processed, array $bounds): void
@@ -633,15 +647,6 @@ final class LyricsCorrectionService
         foreach (array_values($processed) as $offset => $cue) {
             $cues[$bounds[0] + $offset] = $cue;
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $state
-     * @return array<string, mixed>
-     */
-    private function nextStage(array $state, SubtitleJob $job, string $stage): array
-    {
-        return ['stage' => 'finalizing', 'cues' => $state['cues']];
     }
 
     private function finalizingUnit(array $state): array
@@ -703,6 +708,27 @@ final class LyricsCorrectionService
                 return null;
             }
 
+            if ($processedStage === 'analyzing') {
+                $state = $locked->work_state;
+                $batchIndex = $nextState['batchIndex'];
+                if (in_array($batchIndex, $state['completedBatches'], true)) {
+                    return null;
+                }
+                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed');
+                // Merge only this result into current state, preserving other workers' results.
+                $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
+                $state['completedBatches'][] = $batchIndex;
+                unset($state['recoveryDispatched']);
+                $pending = array_values(array_diff(array_keys($state['batchPlan']), $state['completedBatches']));
+                if ($pending !== []) {
+                    $state['batchIndex'] = $pending[0];
+                    $locked->update(['work_state' => $state]);
+
+                    return null;
+                }
+                $nextState = $this->finalizingUnit($state);
+            }
+
             if (($nextState['stage'] ?? null) === 'completed') {
                 $track->update([
                     'public_id' => (string) Str::uuid(),
@@ -737,8 +763,11 @@ final class LyricsCorrectionService
         }
 
         try {
-            LyricsCorrectionJob::dispatch($trackId, $job->getKey(), $attemptId, $nextRevision)
-                ->onQueue(SubtitleQueue::batchNameForJob($job));
+            $current = SubtitleTrackLyricsCorrection::query()->where('subtitle_track_id', $trackId)
+                ->where('attempt_id', $attemptId)->where('work_revision', $nextRevision)->with('track.job')->first();
+            if ($current !== null) {
+                $this->dispatchPendingUnits($current);
+            }
         } catch (Throwable $exception) {
             try {
                 $this->failAttempt(
@@ -751,6 +780,18 @@ final class LyricsCorrectionService
             } finally {
                 throw $exception;
             }
+        }
+    }
+
+    private function dispatchPendingUnits(SubtitleTrackLyricsCorrection $correction): void
+    {
+        $state = $correction->work_state ?? [];
+        $indices = ($state['stage'] ?? null) === 'analyzing'
+            ? array_diff(array_keys($state['batchPlan'] ?? []), $state['completedBatches'] ?? ((int) ($state['batchIndex'] ?? 0) > 0 ? range(0, $state['batchIndex'] - 1) : [])) : [null];
+        foreach ($indices as $index) {
+            LyricsCorrectionJob::dispatch($correction->subtitle_track_id, $correction->track->job->id,
+                $correction->attempt_id, $correction->work_revision, $index)
+                ->onQueue(SubtitleQueue::batchNameForJob($correction->track->job));
         }
     }
 

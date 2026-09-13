@@ -153,7 +153,6 @@ class SubtitleJobController extends Controller
     public function lyricsCorrectionStatus(Request $request, string $jobId): JsonResponse
     {
         $correction = SubtitleTrackLyricsCorrection::query()
-            ->with(['track.job'])
             ->whereHas('track', fn ($query) => $query->where('expires_at', '>', now()))
             ->whereHas('track.job', function ($query) use ($request, $jobId): void {
                 $query
@@ -161,6 +160,10 @@ class SubtitleJobController extends Controller
                     ->whereBelongsTo($this->extensionUser($request));
             })
             ->firstOrFail();
+
+        if ($correction->status === 'completed') {
+            $correction->load('track.job');
+        }
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());
     }

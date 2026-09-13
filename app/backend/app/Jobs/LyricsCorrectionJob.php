@@ -11,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use LogicException;
 use Throwable;
 
@@ -31,12 +32,19 @@ class LyricsCorrectionJob implements ShouldQueue
 
     public int $timeout;
 
+    public ?int $batchIndex = null;
+
+    public ?int $queuedAtMs = null;
+
     public function __construct(
         public readonly int $trackId,
         public readonly int $subtitleJobId,
         public readonly string $attemptId,
         public readonly int $expectedRevision,
+        ?int $batchIndex = null,
     ) {
+        $this->batchIndex = $batchIndex;
+        $this->queuedAtMs = (int) round(microtime(true) * 1000);
         $this->onConnection(SubtitleQueue::connection());
         $this->timeout = self::timeoutSeconds();
     }
@@ -45,7 +53,7 @@ class LyricsCorrectionJob implements ShouldQueue
     {
         return [
             new LimitSubtitleBatchConcurrency,
-            (new WithoutOverlapping('lyrics-correction:'.$this->attemptId))
+            (new WithoutOverlapping('lyrics-correction:'.$this->attemptId.':'.($this->batchIndex ?? 'alignment')))
                 ->expireAfter(self::timeoutSeconds() + 60)
                 ->releaseAfter(5),
         ];
@@ -61,7 +69,15 @@ class LyricsCorrectionJob implements ShouldQueue
 
     public function handle(LyricsCorrectionService $corrections): void
     {
-        $corrections->process($this->trackId, $this->attemptId, $this->expectedRevision);
+        Log::info('backend.lyrics_correction_unit_started', [
+            'subtitle_job_id' => $this->subtitleJobId,
+            'attempt_id' => $this->attemptId,
+            'work_revision' => $this->expectedRevision,
+            'batch_index' => $this->batchIndex,
+            'queued_at_ms' => $this->queuedAtMs,
+            'queue_wait_ms' => $this->queuedAtMs === null ? null : max(0, (int) round(microtime(true) * 1000) - $this->queuedAtMs),
+        ]);
+        $corrections->process($this->trackId, $this->attemptId, $this->expectedRevision, $this->batchIndex);
     }
 
     public function failed(?Throwable $exception): void
@@ -72,6 +88,7 @@ class LyricsCorrectionJob implements ShouldQueue
             'lyrics_correction_failed',
             'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.',
             expectedRevision: $this->expectedRevision,
+            batchIndex: $this->batchIndex,
         );
     }
 

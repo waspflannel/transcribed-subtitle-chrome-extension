@@ -3059,7 +3059,7 @@ class SubtitleJobApiTest extends TestCase
                 return;
             }
 
-            (new LyricsCorrectionJob($job->track->id, $job->id, $attemptId, $revision))->handle($service);
+            (new LyricsCorrectionJob($job->track->id, $job->id, $attemptId, $row->work_revision, ($row->work_state['stage'] ?? null) === 'analyzing' ? $row->work_state['batchIndex'] : null))->handle($service);
         }
 
         $this->fail('Lyrics correction did not reach a terminal state within the expected revisions.');
