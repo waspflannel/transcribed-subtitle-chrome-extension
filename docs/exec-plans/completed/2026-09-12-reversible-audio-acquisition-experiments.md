@@ -39,7 +39,7 @@ Measure three acquisition options against the current downloader, preserving acc
 
 ## Validation Plan
 
-Commands:
+Historical commands (the standalone harness was removed after user acceptance on September 13; source remains in commit `43363fd`):
 
 ```powershell
 python scripts/experiments/audio-acquisition.py --output app/backend/storage/app/acquisition-experiments/new-run.json

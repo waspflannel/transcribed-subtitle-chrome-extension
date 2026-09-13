@@ -64,7 +64,9 @@ Metadata prefetch offers the largest click-time change when it has completed bef
 
 All final samples were M4A on this Windows host. WebM/Opus codec delay, long videos, production host/network performance, late-video seek/merge behavior and signed-link expiry were not tested. Exact opening waveform agreement supports this acquisition experiment, not a complete subtitle-quality guarantee.
 
-## Reproduce and rollback
+## Historical reproduction and rollback
+
+The standalone harness was removed after successful user acceptance on September 13. Its source remains in commit `43363fd`; the numeric reports remain in this repository. The command below describes the original run.
 
 ```powershell
 python scripts/experiments/audio-acquisition.py --output app/backend/storage/app/acquisition-experiments/new-run.json

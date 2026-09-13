@@ -1,6 +1,6 @@
 # Plan: Integrate reversible audio acquisition
 
-Status: implemented; awaiting user acceptance before merge
+Status: complete; user tested successfully; branch not merged
 Owner: agent
 Created: 2026-09-12
 Last updated: 2026-09-13
@@ -27,7 +27,7 @@ Integrate the acquisition benchmark winner into normal generation: fetch metadat
 - [x] Real service smoke: Spanish video, metadata 2.714 seconds before Generate, direct full M4A acquisition 1.030 seconds, 3,546,900 bytes.
 - [x] Real complete generation smoke for Spanish and Japanese, with transcript cache disabled and isolated database/Redis prefixes.
 - [x] Final `scripts/agent/check.ps1`, local runtime restart and enabled extension build.
-- [ ] User subtitle-quality and playback acceptance; merge requires explicit approval.
+- [x] User tested successfully and requested cleanup/commit on September 13. Merge remains a separate action.
 
 Initial full validation passed: 545 backend tests and 256 extension tests, contracts, type checking and build. Queue review then added two backend tests; the targeted eight-test suite passes. Final evidence is recorded below after completion.
 
@@ -50,4 +50,6 @@ Two fresh complete generations used isolated schema `latency_bench_20260913c` an
 | 152 | Spanish | 0.427 s | 5.699 s | 8.338 s | 19.001 s |
 | 155 | Japanese | 0.614 s | 4.891 s | 11.563 s | 16.906 s |
 
-These two samples verify integration; they do not establish a percentage speedup. Metadata work happened before Generate. Raw local evidence is in ignored `app/backend/storage/app/latency-benchmark-integration/` and check logs in `app/backend/storage/logs/`. Subtitle quality and actual browser playback acceptance remain with the user. No merge performed.
+These two samples verify integration; they do not establish a percentage speedup. Metadata work happened before Generate. Raw local evidence is in ignored `app/backend/storage/app/latency-benchmark-integration/` and check logs in `app/backend/storage/logs/`. The user confirmed successful playback on September 13. No merge performed.
+
+After acceptance, removed the standalone acquisition benchmark script from the branch. Numeric reports and regression tests remain. Automatic approval review blocked deletion of ignored local scratch folders; those remain outside Git. No experiment processes were running at cleanup time.
