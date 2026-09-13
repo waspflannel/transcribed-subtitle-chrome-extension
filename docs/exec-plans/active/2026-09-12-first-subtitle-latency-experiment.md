@@ -1,10 +1,10 @@
 # Plan: First subtitle latency experiment
 
-Status: active — implementation complete; awaiting user video comparison
+Status: active — live benchmark complete; coverage handoff and human quality review remain
 Owner: agent
 Work mode: standard
 Created: 2026-09-12
-Last updated: 2026-09-12
+Last updated: 2026-09-13
 
 ## Goal
 
@@ -13,7 +13,7 @@ Reduce time to the first usable subtitles while later chunks continue in the bac
 ## Scope
 
 - In scope: a 15-second opening audio chunk with existing overlap; prepare each slice within its own transcription job; at most two cues and a 10-second span in the first analysis batch; per-chunk preparation timing; local runtime activation and baseline preservation.
-- Out of scope: streaming acquisition, partial YouTube downloads, provider routing, prompt/output changes, new dependencies, automatic paid test generations. Full audio acquisition still precedes transcription; WebM/Opus keeps whole-file normalization to preserve timing.
+- Out of scope: streaming acquisition, partial YouTube downloads, provider routing, prompt/output changes, new dependencies. Full audio acquisition still precedes transcription; WebM/Opus keeps whole-file normalization to preserve timing. The user subsequently authorized real provider benchmark runs on September 13.
 
 ## Acceptance Criteria
 
@@ -67,6 +67,8 @@ Evidence to capture:
 | 2026-09-12 | Prepare slices inside existing transcription jobs. | Keeps one complete batch and existing failure/merge behavior. Avoids a dynamic-membership race where opening completion could merge before other chunks are registered. |
 | 2026-09-12 | Bound extraction to at most 60s, job to 720s, overlap lock to 780s. | Leaves the existing 600s Scribe request budget plus slack; existing queue retry-after 1260s remains longer. |
 | 2026-09-12 | Apply local Laravel, subtitle-pipeline, AI SDK and ponytail skills. | A required Laravel skill sub-agent reviewed queue, testing/config rules and lifecycle risks. Boost search-docs verified batch completion and after-commit behavior. No AI SDK/provider API changes are needed. |
+| 2026-09-13 | Run the benchmark in a separate Postgres schema and Redis prefix with the same 8 generation / 20 analysis worker capacity for Pro jobs. | Preserves real user jobs, transcripts, and billing records. Fresh workers have transcript-cache reads/writes disabled; cached workers use copies of existing transcripts. A separate local fixture user per run prevents job reuse through the normal generation service. |
+| 2026-09-13 | Nine matched fresh runs, four matched cached runs, and repeats of baseline 152/154/156. | Tests the same video/provider/settings combinations and checks variability for Spanish, Punjabi and Japanese. Poll ready coverage every 500ms; this measures backend availability, not browser rendering or human-reviewed quality. |
 
 ## Progress Log
 
@@ -79,9 +81,10 @@ Evidence to capture:
 
 ## Completion Notes
 
-- Implementation is ready for user video generation. No live provider calls or data deletion were performed for the experiment.
-- Keep this plan active until the next video comparison is recorded. Use new videos for fresh-transcription measurements, or explicitly separate cache hits; clearing generated jobs alone may leave transcript cache entries.
+- Completed 16 authorized live generations: nine matched fresh runs, three repeats, four confirmed transcript-cache hits. Existing 13 user jobs and 32 transcript-cache rows were unchanged. Benchmark workers stopped; isolated evidence retained.
+- [Measured report](../evidence/2026-09-13-first-subtitle-experiment.md) and [numeric results](../evidence/2026-09-13-first-subtitle-experiment.csv): matched fresh first-ready mean 15.288s → 12.259s; total 20.168s → 20.563s. Historical comparison and small sample limit causal claims.
+- Keep this plan active for coverage handoff and human playback/quality review. Punjabi repeated a potential 6.2–8.8s ready-prefix deficit despite much earlier opening subtitles. Next experiment should shorten the second chunk and prioritize extending contiguous coverage. No further pipeline change was made during measurement.
 - Existing generated tracks are retained and may be reused. No output/cache version was bumped because the contract and analysis content requirements are unchanged.
 - Rollback: use main and restore local `SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS=40`, `SUBTITLE_ANALYSIS_FIRST_BATCH_SECONDS=30`; remove the experiment-only first-cue cap override, clear config and restart drained workers. Main ignores that new cap setting. Local `.env` changes are not committed.
-- Follow-up scope remains acquisition streaming only if the opening experiment still leaves startup too slow. No provider routing or quality compromise was introduced.
+- Follow-up candidates are the opening-to-second-chunk handoff and acquisition streaming. Provider routing and analysis requirements remain unchanged; linguistic quality has not been validated by this timing benchmark.
 
