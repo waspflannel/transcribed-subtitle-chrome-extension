@@ -34,7 +34,7 @@ class ScribeAudioChunker
             return [];
         }
 
-        $firstSeconds = max(0, (int) config('subtitles.transcription.chunking.first_seconds', 40));
+        $firstSeconds = max(0, (int) config('subtitles.transcription.chunking.first_seconds', 15));
         $firstSeconds = min($firstSeconds, $targetSeconds, $durationSeconds / 2);
         $chunkCount = min($maxChunks, $firstSeconds > 0
             ? 1 + (int) ceil(($durationSeconds - $firstSeconds) / $targetSeconds)
@@ -66,57 +66,47 @@ class ScribeAudioChunker
     }
 
     /**
-     * Extracts one FLAC file per plan entry into the audio's work directory.
-     * The chunk files live inside the parent audio's directory and are removed
-     * with it when the pipeline deletes the temporary audio.
-     *
-     * @param  array<int, array{nominalStart: float, nominalEnd: float, audioStart: float, audioEnd: float}>  $plan
-     * @return array<int, TemporaryAudioFile>
+     * Extract one slice inside its transcription job so the opening upload
+     * does not wait for later slices. The run owns the shared workspace.
      */
-    public function split(TemporaryAudioFile $audio, array $plan): array
+    public function extractChunk(TemporaryAudioFile $audio, int $index, float $startSeconds, float $endSeconds): TemporaryAudioFile
     {
-        $chunks = [];
+        $chunkPath = $audio->directory.DIRECTORY_SEPARATOR.sprintf('transcribe-chunk-%03d.flac', $index);
+        $this->runFfmpeg([
+            $this->ffmpegBinary(),
+            '-hide_banner',
+            '-nostdin',
+            '-y',
+            '-ss',
+            $this->formatSeconds($startSeconds),
+            '-t',
+            $this->formatSeconds($endSeconds - $startSeconds),
+            '-i',
+            $audio->path,
+            '-vn',
+            '-ac',
+            '1',
+            '-ar',
+            '16000',
+            '-c:a',
+            'flac',
+            $chunkPath,
+        ], $index);
 
-        foreach ($plan as $index => $bounds) {
-            $chunkPath = $audio->directory.DIRECTORY_SEPARATOR.sprintf('transcribe-chunk-%03d.flac', $index);
-            $this->runFfmpeg([
-                $this->ffmpegBinary(),
-                '-hide_banner',
-                '-nostdin',
-                '-y',
-                '-ss',
-                $this->formatSeconds($bounds['audioStart']),
-                '-t',
-                $this->formatSeconds($bounds['audioEnd'] - $bounds['audioStart']),
-                '-i',
-                $audio->path,
-                '-vn',
-                '-ac',
-                '1',
-                '-ar',
-                '16000',
-                '-c:a',
-                'flac',
-                $chunkPath,
-            ], $index);
-
-            if (! File::isFile($chunkPath) || File::size($chunkPath) < 1) {
-                throw $this->failure('Transcription audio chunk is empty.', [
-                    'reason' => 'empty_chunk',
-                    'chunk_index' => $index,
-                ]);
-            }
-
-            $chunks[] = new TemporaryAudioFile(
-                path: $chunkPath,
-                directory: $audio->directory,
-                durationSeconds: (int) round($bounds['audioEnd'] - $bounds['audioStart']),
-                sizeBytes: File::size($chunkPath),
-                mimeType: 'audio/flac',
-            );
+        if (! File::isFile($chunkPath) || File::size($chunkPath) < 1) {
+            throw $this->failure('Transcription audio chunk is empty.', [
+                'reason' => 'empty_chunk',
+                'chunk_index' => $index,
+            ]);
         }
 
-        return $chunks;
+        return new TemporaryAudioFile(
+            path: $chunkPath,
+            directory: $audio->directory,
+            durationSeconds: (int) round($endSeconds - $startSeconds),
+            sizeBytes: File::size($chunkPath),
+            mimeType: 'audio/flac',
+        );
     }
 
     /**
@@ -125,7 +115,8 @@ class ScribeAudioChunker
     private function runFfmpeg(array $command, int $chunkIndex): void
     {
         try {
-            $result = Process::timeout($this->ffmpegTimeoutSeconds())->run($command);
+            // Leave the rest of the 720s job budget for Scribe and upload slack.
+            $result = Process::timeout(min(60, $this->ffmpegTimeoutSeconds()))->run($command);
         } catch (Throwable $exception) {
             throw $this->failure('Transcription audio chunking could not run.', [
                 'reason' => 'process_exception',

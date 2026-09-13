@@ -14,6 +14,35 @@ class SubtitleJobArtifactBatchPlanTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_opening_analysis_is_small_without_shrinking_later_or_correction_batches(): void
+    {
+        config([
+            'subtitles.enrichment.first_batch_max_cues' => 2,
+            'subtitles.enrichment.first_batch_seconds' => 10,
+            'subtitles.enrichment.batch_seconds' => 30,
+            'subtitles.enrichment.cue_batch_char_budget' => 10000,
+            'subtitles.enrichment.cue_batch_max_cues' => 100,
+        ]);
+        $cues = $this->cues(12, 5);
+        foreach ($cues as $index => &$cue) {
+            $cue['index'] = $index;
+            $cue['startMs'] = $index * 1000;
+            $cue['endMs'] = ($index + 1) * 1000;
+        }
+        unset($cue);
+        $store = app(SubtitleJobArtifactStore::class);
+        foreach ([false, true] as $balanced) {
+            config(['subtitles.enrichment.balanced_batches' => $balanced]);
+            $job = $this->runningJob();
+            $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+            $this->assertCount(2, $store->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, 0));
+            $this->assertCount(10, $store->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, 1));
+            $this->assertCount(4, $store->cueBatchWithContext($job, SubtitleJobArtifactStore::DRAFT_CUES, 0)['context']);
+            $this->assertSame([[0, 11]], $store->batchPlan($cues));
+            $this->assertSame([[0, 9]], $store->batchPlan(array_slice($cues, 2), forPlayback: true));
+        }
+    }
+
     public function test_analysis_batches_bound_playback_duration_and_keep_nearby_context(): void
     {
         config([
@@ -69,6 +98,7 @@ class SubtitleJobArtifactBatchPlanTest extends TestCase
         config([
             'subtitles.enrichment.cue_batch_char_budget' => 100000,
             'subtitles.enrichment.cue_batch_max_cues' => 3,
+            'subtitles.enrichment.first_batch_max_cues' => 3,
         ]);
 
         $store = app(SubtitleJobArtifactStore::class);

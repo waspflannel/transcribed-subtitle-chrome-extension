@@ -108,7 +108,10 @@ class ScribeAudioChunkerTest extends TestCase
 
         try {
             $chunker = $this->chunker();
-            $chunks = $chunker->split($audio, $chunker->plan(300));
+            $chunks = [];
+            foreach ($chunker->plan(300) as $index => $bounds) {
+                $chunks[] = $chunker->extractChunk($audio, $index, $bounds['audioStart'], $bounds['audioEnd']);
+            }
 
             $this->assertCount(3, $chunks);
             $this->assertSame([102, 104, 102], array_column($chunks, 'durationSeconds'));
@@ -156,7 +159,10 @@ class ScribeAudioChunkerTest extends TestCase
         });
 
         try {
-            $chunks = $this->chunker()->split($audio, $this->chunker()->plan(300));
+            $chunks = [];
+            foreach ($this->chunker()->plan(300) as $index => $bounds) {
+                $chunks[] = $this->chunker()->extractChunk($audio, $index, $bounds['audioStart'], $bounds['audioEnd']);
+            }
 
             $this->assertCount(3, $chunks);
             $this->assertSame([102, 104, 102], array_column($chunks, 'durationSeconds'));

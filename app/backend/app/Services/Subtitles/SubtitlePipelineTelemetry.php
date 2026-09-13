@@ -103,6 +103,16 @@ class SubtitlePipelineTelemetry
         ]);
     }
 
+    public function recordAudioChunkPrepared(SubtitleJob $job, int $chunkIndex, int $startedAtMs, int $audioBytes): void
+    {
+        $this->tracer->jobEvent($job, 'audio.chunk_prepared', [
+            'stage' => 'transcribing',
+            'chunk_index' => $chunkIndex,
+            'audio_bytes' => $audioBytes,
+            'duration_ms' => $this->durationMs($startedAtMs),
+        ]);
+    }
+
     public function recordTranscriptCacheHit(SubtitleJob $job): void
     {
         $this->tracer->jobEvent($job, 'transcript.cache_hit', [

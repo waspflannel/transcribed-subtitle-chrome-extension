@@ -159,7 +159,7 @@ return [
         // midpoint. max_chunks bounds concurrent Scribe uploads -- chunks
         // grow beyond target_seconds for very long videos instead.
         'chunking' => [
-            'first_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS', 40),
+            'first_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_FIRST_SECONDS', 15),
             'min_audio_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_MIN_AUDIO_SECONDS', 45),
             'target_seconds' => (int) env('SUBTITLE_TRANSCRIPTION_CHUNK_TARGET_SECONDS', 60),
             'overlap_seconds' => (float) env('SUBTITLE_TRANSCRIPTION_CHUNK_OVERLAP_SECONDS', 2.0),
@@ -168,7 +168,8 @@ return [
     ],
 
     'enrichment' => [
-        'first_batch_seconds' => (int) env('SUBTITLE_ANALYSIS_FIRST_BATCH_SECONDS', 30),
+        'first_batch_seconds' => (int) env('SUBTITLE_ANALYSIS_FIRST_BATCH_SECONDS', 10),
+        'first_batch_max_cues' => (int) env('SUBTITLE_ANALYSIS_FIRST_BATCH_MAX_CUES', 2),
         'batch_seconds' => (int) env('SUBTITLE_ANALYSIS_BATCH_SECONDS', 30),
         'balanced_batches' => (bool) env('SUBTITLE_BALANCED_BATCHES', true),
         'timeout_seconds' => (int) env('OPENAI_ENRICHMENT_TIMEOUT_SECONDS', 120),
@@ -196,7 +197,7 @@ return [
         //   - `preparing` is pre-pickup queue wait; keep it generous so a brief
         //     worker backlog does not fail a job that is merely waiting.
         //   - `acquiring-audio`/`optimizing-audio`/`transcribing` each run as
-        //     their own stage job with its own timeout (900/1200/660s), and the
+        //     their own stage job with its own timeout (900/1200/720s), and the
         //     job stage is stamped when the next stage is dispatched, so each
         //     ceiling spans one stage's queue wait plus its work.
         //   - batch stages heartbeat updated_at on

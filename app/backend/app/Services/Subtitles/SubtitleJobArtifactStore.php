@@ -505,7 +505,7 @@ class SubtitleJobArtifactStore
             // past the character budget or the max cue count -- but never emit
             // an empty batch, so a single over-budget cue forms its own batch.
             if ($size > 0 && ($chars + $length > $charBudget || $size >= $maxCues
-                || ($forPlayback && $this->exceedsBatchDuration($cues[$start], $cue)))) {
+                || ($forPlayback && $this->exceedsPlaybackBatch($cues[$start], $cue, $size + 1)))) {
                 $plan[] = [$start, $index - 1];
                 $start = $index;
                 $chars = 0;
@@ -520,9 +520,13 @@ class SubtitleJobArtifactStore
             ? $this->balancedPlan($cues, $plan, $job, $forPlayback) : $plan;
     }
 
-    private function exceedsBatchDuration(array $firstCue, array $lastCue): bool
+    private function exceedsPlaybackBatch(array $firstCue, array $lastCue, int $cueCount): bool
     {
-        $seconds = (int) config(($firstCue['index'] ?? -1) === 0
+        $opening = ($firstCue['index'] ?? -1) === 0;
+        if ($opening && $cueCount > max(1, (int) config('subtitles.enrichment.first_batch_max_cues', 2))) {
+            return true;
+        }
+        $seconds = (int) config($opening
             ? 'subtitles.enrichment.first_batch_seconds' : 'subtitles.enrichment.batch_seconds', 0);
 
         return $seconds > 0 && ($lastCue['endMs'] ?? 0) - ($firstCue['startMs'] ?? 0) > $seconds * 1000;
@@ -552,7 +556,7 @@ class SubtitleJobArtifactStore
                 if ($index > $start && ($work + $weight > $budget
                     || $chars + $lengths[$index] > $this->batchCharBudget()
                     || $index - $start >= $this->maxCuesPerBatch()
-                    || ($forPlayback && $this->exceedsBatchDuration($cues[$start], $cues[$index])))) {
+                    || ($forPlayback && $this->exceedsPlaybackBatch($cues[$start], $cues[$index], $index - $start + 1)))) {
                     $result[] = [$start, $index - 1];
                     $start = $index;
                     $chars = $work = 0;

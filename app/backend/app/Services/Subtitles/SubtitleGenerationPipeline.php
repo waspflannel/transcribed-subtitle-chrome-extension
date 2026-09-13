@@ -146,8 +146,8 @@ class SubtitleGenerationPipeline
     }
 
     /**
-     * Generation stage 2: normalize the audio for Scribe, split it into
-     * chunks, and fan the chunks out as a generation-family batch whose
+     * Generation stage 2: normalize the audio for Scribe, plan its chunks,
+     * and fan out extraction/upload jobs as a generation-family batch whose
      * completion merges the transcript. Audio too short to chunk rides the
      * same path as a single whole-file chunk.
      */
@@ -185,13 +185,8 @@ class SubtitleGenerationPipeline
             $stage = 'transcribing';
             $chunkPlan = $this->chunker->plan($preparedAudio->durationSeconds);
             $chunks = $chunkPlan === []
-                ? [[
-                    'file' => $preparedAudio,
-                    'audioStartSeconds' => 0.0,
-                    'nominalStartSeconds' => 0.0,
-                    'nominalEndSeconds' => null,
-                ]]
-                : $this->chunkFiles($preparedAudio, $chunkPlan);
+                ? [['audioStart' => 0.0, 'nominalStart' => 0.0, 'nominalEnd' => null, 'audioEnd' => null]]
+                : $chunkPlan;
 
             $chunkCount = count($chunks);
             $chunkJobs = [];
@@ -202,11 +197,12 @@ class SubtitleGenerationPipeline
                     chunkIndex: $chunkIndex,
                     chunkCount: $chunkCount,
                     runId: $runId,
-                    chunkAudio: $chunk['file'],
-                    audioStartSeconds: $chunk['audioStartSeconds'],
-                    nominalStartSeconds: $chunk['nominalStartSeconds'],
-                    nominalEndSeconds: $chunk['nominalEndSeconds'],
+                    chunkAudio: $preparedAudio,
+                    audioStartSeconds: $chunk['audioStart'],
+                    nominalStartSeconds: $chunk['nominalStart'],
+                    nominalEndSeconds: $chunkIndex === $chunkCount - 1 ? null : $chunk['nominalEnd'],
                     nextAudioStartSeconds: $chunkPlan[$chunkIndex + 1]['audioStart'] ?? null,
+                    audioEndSeconds: $chunk['audioEnd'],
                 );
             }
 
@@ -273,6 +269,7 @@ class SubtitleGenerationPipeline
         ?float $nominalEndSeconds,
         ?int $queuedAtMs = null,
         ?float $nextAudioStartSeconds = null,
+        ?float $audioEndSeconds = null,
     ): void {
         $job = $this->loadRunningJob($subtitleJobId, $runId);
 
@@ -304,6 +301,16 @@ class SubtitleGenerationPipeline
         }
 
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
+
+        if ($chunkAudio !== null && $audioEndSeconds !== null) {
+            $preparationStartedAtMs = $this->telemetry->currentTimeMs();
+            $chunkAudio = $this->chunker->extractChunk($chunkAudio, $chunkIndex, $audioStartSeconds, $audioEndSeconds);
+            $job = $this->loadRunningJob($subtitleJobId, $runId);
+            if ($job === null) {
+                return;
+            }
+            $this->telemetry->recordAudioChunkPrepared($job, $chunkIndex, $preparationStartedAtMs, $chunkAudio->sizeBytes);
+        }
 
         $requestStartedAtMs = $this->telemetry->currentTimeMs();
         if ($chunkAudio === null) {
@@ -430,29 +437,6 @@ class SubtitleGenerationPipeline
         } finally {
             SubtitleAudioWorkspace::delete($runId);
         }
-    }
-
-    /**
-     * @param  array<int, array{nominalStart: float, nominalEnd: float, audioStart: float, audioEnd: float}>  $chunkPlan
-     * @return array<int, array{file: TemporaryAudioFile, audioStartSeconds: float, nominalStartSeconds: float, nominalEndSeconds: float|null}>
-     */
-    private function chunkFiles(TemporaryAudioFile $preparedAudio, array $chunkPlan): array
-    {
-        $chunkAudioFiles = $this->chunker->split($preparedAudio, $chunkPlan);
-        $lastChunkIndex = array_key_last($chunkPlan);
-        $chunks = [];
-
-        foreach ($chunkPlan as $index => $bounds) {
-            $chunks[] = [
-                'file' => $chunkAudioFiles[$index],
-                'audioStartSeconds' => $bounds['audioStart'],
-                'nominalStartSeconds' => $bounds['nominalStart'],
-                // The last chunk keeps everything past its nominal start.
-                'nominalEndSeconds' => $index === $lastChunkIndex ? null : $bounds['nominalEnd'],
-            ];
-        }
-
-        return $chunks;
     }
 
     /**

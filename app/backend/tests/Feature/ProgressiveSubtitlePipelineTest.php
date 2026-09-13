@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Ai\Agents\CueAnalysisAgent;
 use App\Exceptions\SubtitleProcessingException;
+use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobArtifact;
+use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Billing\BillingPlanCatalog;
@@ -17,13 +19,16 @@ use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
+use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
+use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
@@ -71,6 +76,125 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             SubtitleAudioWorkspace::delete($runId);
         }
         parent::tearDown();
+    }
+
+    public function test_pre_extracted_queued_payloads_without_extraction_bounds_still_run(): void
+    {
+        $queued = new TranscribeSubtitleAudioChunk(1, 0, 1, 'legacy-run', null, 0, 0, null);
+        $payload = $queued->__serialize();
+        unset($payload['audioEndSeconds']);
+        $restored = (new \ReflectionClass(TranscribeSubtitleAudioChunk::class))->newInstanceWithoutConstructor();
+        $restored->__unserialize($payload);
+        $pipeline = $this->mock(SubtitleGenerationPipeline::class);
+        $pipeline->shouldReceive('transcribeAudioChunk')->once()->with(
+            1, 'legacy-run', 0, 1, null, 0.0, 0.0, null, $queued->queuedAtMs, null, null,
+        );
+        $restored->handle($pipeline);
+    }
+
+    public function test_opening_cues_are_ready_before_later_audio_is_prepared(): void
+    {
+        config([
+            'subtitles.audio_preparation.direct_chunks' => true,
+            'subtitles.transcription.chunking.first_seconds' => 15,
+            'subtitles.transcription.chunking.min_audio_seconds' => 45,
+            'subtitles.transcription.chunking.target_seconds' => 60,
+            'subtitles.enrichment.first_batch_max_cues' => 2,
+        ]);
+        $job = $this->job();
+        $job->update(['stage' => 'optimizing-audio']);
+        $directory = SubtitleAudioWorkspace::directory($job->run_id);
+        File::ensureDirectoryExists($directory);
+        $source = $directory.'/source.m4a';
+        File::put($source, 'fake-audio');
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) {
+            $this->assertSame(60, $process->timeout);
+            File::put($process->command[array_key_last($process->command)], 'fake-flac');
+
+            return Process::result();
+        });
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->optimizeAudioAndDispatchTranscription($job->id, $job->run_id,
+            new TemporaryAudioFile($source, $directory, 60, 10, 'audio/mp4'));
+        Process::assertNothingRan();
+        $members = [];
+        Bus::assertBatched(function ($batch) use (&$members): bool {
+            $members = $batch->jobs->all();
+
+            return count($members) === 2 && $members[0] instanceof TranscribeSubtitleAudioChunk;
+        });
+        $this->assertSame(17.0, $members[0]->audioEndSeconds);
+        $this->assertSame(13.0, $members[1]->audioStartSeconds);
+        $this->transcriptionPayload = ['language_code' => 'spa', 'words' => [
+            ['text' => 'First.', 'start' => 0.5, 'end' => 2, 'type' => 'word'],
+            ['text' => 'Second.', 'start' => 6, 'end' => 8, 'type' => 'word'],
+            ['text' => 'Third.', 'start' => 10, 'end' => 11, 'type' => 'word'],
+            ['text' => 'edge', 'start' => 14.5, 'end' => 15, 'type' => 'word'],
+        ]];
+        $members[0]->handle($pipeline);
+        Bus::assertBatched(fn ($batch): bool => $batch->jobs->contains(fn ($member): bool => $member instanceof AnalyzeSubtitleCueBatch));
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
+        $this->assertGreaterThan(0, $this->preview($job)['readyThroughMs']);
+        $this->assertLessThanOrEqual(2, count($this->analysisInputs[0]['cues']));
+        $this->assertFileDoesNotExist($directory.'/transcribe-chunk-001.flac');
+        $this->assertSame('transcribing', $job->fresh()->stage);
+        $this->assertDatabaseCount('subtitle_tracks', 0);
+        $this->assertSame(1, $job->events()->where('event', 'audio.chunk_prepared')->count());
+        $members[0]->handle($pipeline);
+        $pipeline->transcribeAudioChunk($job->id, (string) Str::uuid(), 0, 2,
+            $members[0]->chunkAudio, 0, 0, 15, audioEndSeconds: 17);
+        Process::assertRanTimes(fn (): bool => true, 1);
+        Http::assertSentCount(1);
+
+        // A failed upload retains the shared source for a bounded retry.
+        Http::swap(new Factory);
+        Http::fake(['*' => Http::response([], 503)]);
+        try {
+            $members[1]->handle($pipeline);
+            $this->fail('Expected a retryable transcription failure.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertTrue($exception->isTransient());
+        }
+        $this->assertFileExists($source);
+        $this->assertSame('running', $job->fresh()->status);
+        Http::swap(new Factory);
+        Http::fake(['*' => Http::response(['language_code' => 'spa', 'words' => [
+            ['text' => 'edge', 'start' => 1.5, 'end' => 2, 'type' => 'word'],
+            ['text' => 'ends.', 'start' => 2.5, 'end' => 3, 'type' => 'word'],
+            ['text' => 'Last.', 'start' => 40, 'end' => 42, 'type' => 'word'],
+        ]])]);
+        $members[1]->handle($pipeline);
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+        $this->assertDirectoryDoesNotExist($directory);
+        $this->assertSame('tokenizing', $job->fresh()->stage);
+        $this->assertGreaterThan(0, $this->preview($job)['readyThroughMs']);
+    }
+
+    public function test_failure_during_chunk_preparation_prevents_upload_and_cleans_the_workspace(): void
+    {
+        $job = $this->job();
+        $directory = SubtitleAudioWorkspace::directory($job->run_id);
+        File::ensureDirectoryExists($directory);
+        $source = $directory.'/source.m4a';
+        File::put($source, 'fake-audio');
+        $audio = new TemporaryAudioFile($source, $directory, 60, 10, 'audio/mp4');
+        $this->partialMock(ScribeAudioChunker::class, function ($mock) use ($job, $audio): void {
+            $mock->shouldReceive('extractChunk')->once()->andReturnUsing(function () use ($job, $audio): TemporaryAudioFile {
+                app(SubtitleJobFailureHandler::class)->failJob($job->id, 'transcribing',
+                    SubtitleProcessingException::transcriptionFailed(), $job->run_id);
+
+                return $audio;
+            });
+        });
+        $member = new TranscribeSubtitleAudioChunk($job->id, 0, 2, $job->run_id,
+            $audio, 0, 0, 15,
+            nextAudioStartSeconds: 13, audioEndSeconds: 17);
+        $member->handle(app(SubtitleGenerationPipeline::class));
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('subtitle_job_artifacts', 0);
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertDirectoryDoesNotExist($directory);
     }
 
     public function test_slow_transcription_retries_refresh_the_watchdog_but_abandoned_attempts_still_expire(): void

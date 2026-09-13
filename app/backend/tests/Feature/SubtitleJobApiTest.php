@@ -983,8 +983,8 @@ class SubtitleJobApiTest extends TestCase
         Bus::fake();
         $job = $this->runningSubtitleJob('optimizing-audio');
         $audio = new TemporaryAudioFile('unused-source', 'unused-directory', 300, 1, $mimeType);
-        $this->partialMock(ScribeAudioChunker::class, function ($mock) use ($audio): void {
-            $mock->shouldReceive('split')->once()->andReturn([$audio, $audio, $audio]);
+        $this->partialMock(ScribeAudioChunker::class, function ($mock): void {
+            $mock->shouldNotReceive('extractChunk');
         });
 
         app(SubtitleGenerationPipeline::class)->optimizeAudioAndDispatchTranscription($job->id, $job->run_id, $audio);

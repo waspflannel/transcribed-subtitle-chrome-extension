@@ -19,10 +19,10 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Third generation stage, fanned out per chunk: uploads one audio chunk to
+ * Third generation stage, fanned out per chunk: extracts and uploads one audio chunk to
  * Scribe and stores its allowlisted word payload as a job artifact. A null
  * audio file represents one whole-video URL ingestion, guarded by job mode.
- * The batch
+ * audioEndSeconds marks a source file that still needs slicing. The batch
  * completion dispatches MergeSubtitleTranscript once every chunk landed.
  */
 class TranscribeSubtitleAudioChunk implements ShouldQueue
@@ -37,8 +37,8 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
 
     public int $maxExceptions = 3;
 
-    /** Covers the Scribe request timeout (600s) plus upload slack. */
-    public int $timeout = 660;
+    /** Covers extraction (60s), Scribe (600s), and upload/persistence slack. */
+    public int $timeout = 720;
 
     public readonly int $queuedAtMs;
 
@@ -53,6 +53,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
         public readonly ?float $nominalEndSeconds,
         ?int $queuedAtMs = null,
         public readonly ?float $nextAudioStartSeconds = null,
+        public readonly ?float $audioEndSeconds = null,
     ) {
         $this->onConnection(SubtitleQueue::connection());
         $this->queuedAtMs = $queuedAtMs ?? (int) floor(microtime(true) * 1000);
@@ -65,7 +66,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
     {
         return [
             (new WithoutOverlapping('subtitle-transcription:'.$this->runId.':'.$this->chunkIndex))
-                ->releaseAfter(1)->expireAfter(720),
+                ->releaseAfter(1)->expireAfter(780),
             new SkipIfBatchCancelled,
         ];
     }
@@ -89,6 +90,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
                 nominalEndSeconds: $this->nominalEndSeconds,
                 queuedAtMs: $this->queuedAtMs,
                 nextAudioStartSeconds: $this->nextAudioStartSeconds,
+                audioEndSeconds: $this->audioEndSeconds ?? null,
             );
         } catch (Throwable $exception) {
             if ($this->job === null || ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {

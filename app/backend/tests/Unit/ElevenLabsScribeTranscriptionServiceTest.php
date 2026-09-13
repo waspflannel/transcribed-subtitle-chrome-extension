@@ -372,7 +372,10 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
         $chunker = new ScribeAudioChunker;
         $plan = $chunker->plan($longAudio->durationSeconds);
-        $chunkFiles = $chunker->split($longAudio, $plan);
+        $chunkFiles = [];
+        foreach ($plan as $index => $bounds) {
+            $chunkFiles[] = $chunker->extractChunk($longAudio, $index, $bounds['audioStart'], $bounds['audioEnd']);
+        }
 
         $this->assertCount(3, $chunkFiles);
 

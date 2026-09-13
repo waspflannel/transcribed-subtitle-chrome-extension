@@ -16,7 +16,7 @@ use Throwable;
 
 /**
  * Second generation stage: normalizes the downloaded audio for Scribe,
- * splits it into transcription chunks, and fans the chunks out as queue jobs.
+ * plans transcription chunks, and fans out jobs that prepare/upload each slice.
  */
 class OptimizeSubtitleAudio implements ShouldQueue
 {
