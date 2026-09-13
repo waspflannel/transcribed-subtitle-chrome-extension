@@ -36,6 +36,8 @@ Route::prefix('v1')
             CheckAbilities::class.':'.ExtensionTokenAbility::SUBTITLES_WRITE,
         ])
             ->group(function (): void {
+                Route::post('/subtitle-audio/prefetch', [SubtitleJobController::class, 'prefetchAudio'])
+                    ->middleware('throttle:subtitle-prefetch');
                 Route::get('/subtitle-jobs', [SubtitleJobController::class, 'index'])
                     ->name('subtitle-jobs.index')
                     ->middleware('throttle:subtitle-status-api');

@@ -8,11 +8,13 @@ use App\Http\Requests\CancelSubtitleLyricsRequest;
 use App\Http\Requests\CorrectSubtitleLyricsRequest;
 use App\Http\Requests\CreateSubtitleJobRequest;
 use App\Http\Requests\ListSubtitleJobsRequest;
+use App\Http\Requests\PrefetchSubtitleAudioRequest;
 use App\Http\Requests\QuickFixSubtitleTokenRequest;
 use App\Http\Resources\SubtitleJobHistoryResource;
 use App\Http\Resources\SubtitleJobResource;
 use App\Http\Resources\SubtitleTrackLyricsCorrectionResource;
 use App\Http\Resources\SubtitleTrackResource;
+use App\Jobs\PrefetchSubtitleAudio;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Subtitles\LyricsCorrectionService;
@@ -23,6 +25,15 @@ use Illuminate\Http\Request;
 class SubtitleJobController extends Controller
 {
     use ResolvesExtensionUser;
+
+    public function prefetchAudio(PrefetchSubtitleAudioRequest $request): JsonResponse
+    {
+        if (config('subtitles.youtube.metadata_prefetch', false)) {
+            PrefetchSubtitleAudio::dispatch((int) $this->extensionUser($request)->id, $request->validated('youtubeVideoId'));
+        }
+
+        return response()->json(['ok' => true]);
+    }
 
     public function index(ListSubtitleJobsRequest $request): JsonResponse
     {

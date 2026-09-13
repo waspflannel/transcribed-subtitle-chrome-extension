@@ -126,6 +126,8 @@ return [
     ],
 
     'youtube' => [
+        'direct_download' => (bool) env('SUBTITLE_YOUTUBE_DIRECT_DOWNLOAD', false),
+        'metadata_prefetch' => (bool) env('SUBTITLE_YOUTUBE_METADATA_PREFETCH', false),
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
         'metadata_timeout_seconds' => (int) env('YOUTUBE_METADATA_TIMEOUT_SECONDS', 60),
         'download_timeout_seconds' => (int) env('YOUTUBE_AUDIO_DOWNLOAD_TIMEOUT_SECONDS', 600),

@@ -31,6 +31,11 @@ class AppServiceProvider extends ServiceProvider
         $this->registerSubtitleQueueTracing();
         $this->registerOpenAiResponseTracing();
 
+        RateLimiter::for('subtitle-prefetch', fn (Request $request): array => [
+            Limit::perMinute(6)->by('prefetch-user:'.$request->user()?->id),
+            Limit::perMinute(30)->by('prefetch-ip:'.$request->ip()),
+        ]);
+
         RateLimiter::for('subtitle-api', function (Request $request): array {
             return [
                 Limit::perMinute((int) config('subtitles.rate_limits.per_install_per_minute', 30))

@@ -3267,7 +3267,7 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
     public ?\Closure $beforeAcquireResult = null;
 
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?int $userId = null, ?string $videoId = null): TemporaryAudioFile
     {
         $this->calls++;
         parse_str((string) parse_url($youtubeUrl, PHP_URL_QUERY), $query);

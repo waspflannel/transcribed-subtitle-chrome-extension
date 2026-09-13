@@ -4,6 +4,8 @@ namespace App\Services\Audio;
 
 use App\Exceptions\SubtitleProcessingException;
 use Illuminate\Contracts\Process\ProcessResult;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -12,14 +14,30 @@ use Throwable;
 
 class YouTubeAudioSource
 {
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?int $userId = null, ?string $videoId = null): TemporaryAudioFile
     {
         File::ensureDirectoryExists($workDirectory, 0700);
 
         try {
-            [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
-
-            $realPath = $this->downloadAudio($workDirectory, $metadata);
+            $cached = $this->prefetchedMetadata($userId, $videoId);
+            if ($cached !== null) {
+                $durationSeconds = $this->durationSeconds($cached, (int) config('subtitles.max_video_duration_seconds'));
+                $this->assertSupportedVideo($cached);
+                $metadata = $cached;
+            } else {
+                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
+            }
+            Log::info('backend.youtube_metadata_reused', ['hit' => $cached !== null]);
+            try {
+                $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
+            } catch (SubtitleProcessingException $exception) {
+                if ($cached === null) {
+                    throw $exception;
+                }
+                Cache::forget($this->prefetchKey($userId, $videoId));
+                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
+                $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
+            }
             $sizeBytes = File::size($realPath);
 
             if ($sizeBytes < 1) {
@@ -47,6 +65,103 @@ class YouTubeAudioSource
         }
     }
 
+    public function prefetch(int $userId, string $videoId): void
+    {
+        if (! config('subtitles.youtube.metadata_prefetch', false)) {
+            return;
+        }
+        $key = $this->prefetchKey($userId, $videoId);
+        Cache::lock($key.':lock', 15)->get(function () use ($userId, $videoId, $key): void {
+            if ($this->prefetchedMetadata($userId, $videoId) !== null) {
+                return;
+            }
+            try {
+                $metadata = $this->metadata('https://www.youtube.com/watch?v='.$videoId, 8);
+                $this->assertSupportedVideo($metadata);
+                $this->durationSeconds($metadata, (int) config('subtitles.max_video_duration_seconds'));
+                if (($metadata['id'] ?? null) !== $videoId) {
+                    return;
+                }
+                Cache::put($key, Crypt::encryptString(json_encode($metadata, JSON_THROW_ON_ERROR)), 60);
+            } catch (Throwable) {
+                Log::info('backend.youtube_prefetch_failed');
+            }
+        });
+    }
+
+    private function prefetchKey(int $userId, string $videoId): string
+    {
+        return 'youtube-prefetch:v1:'.$userId.':'.$videoId;
+    }
+
+    private function prefetchedMetadata(?int $userId, ?string $videoId): ?array
+    {
+        if (! config('subtitles.youtube.metadata_prefetch', false) || $userId === null || $videoId === null) {
+            return null;
+        }
+        try {
+            $encrypted = Cache::get($this->prefetchKey($userId, $videoId));
+            if (! is_string($encrypted)) {
+                return null;
+            }
+            $metadata = json_decode(Crypt::decryptString($encrypted), true, flags: JSON_THROW_ON_ERROR);
+            if (! is_array($metadata) || ($metadata['id'] ?? null) !== $videoId) {
+                return null;
+            }
+            $this->assertSupportedVideo($metadata);
+            $this->durationSeconds($metadata, (int) config('subtitles.max_video_duration_seconds'));
+
+            return $metadata;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function directAudio(string $workDirectory, array $metadata): ?string
+    {
+        if (! config('subtitles.youtube.direct_download', false) || ($metadata['ext'] ?? null) !== 'm4a'
+            || ($metadata['vcodec'] ?? null) !== 'none') {
+            return null;
+        }
+        $url = $metadata['url'] ?? '';
+        $parts = is_string($url) ? parse_url($url) : false;
+        if (! is_array($parts) || ($parts['scheme'] ?? '') !== 'https'
+            || ! str_ends_with(strtolower($parts['host'] ?? ''), '.googlevideo.com')
+            || isset($parts['user']) || isset($parts['pass']) || ($parts['port'] ?? 443) !== 443) {
+            throw SubtitleProcessingException::audioAcquisitionFailed(context: ['stage' => 'download', 'reason' => 'unsupported_media_url']);
+        }
+        $headers = '';
+        foreach (($metadata['http_headers'] ?? []) as $name => $value) {
+            if (! in_array(strtolower($name), ['user-agent', 'referer', 'origin', 'accept', 'accept-language'], true)
+                || ! is_string($value) || str_contains($value, "\r") || str_contains($value, "\n")) {
+                continue;
+            }
+            $headers .= $name.': '.$value."\r\n";
+        }
+        $path = $workDirectory.DIRECTORY_SEPARATOR.'direct-audio.m4a';
+        $started = hrtime(true);
+        try {
+            $result = Process::timeout(min(60, (int) config('subtitles.youtube.download_timeout_seconds', 600)))
+                ->env($this->processEnvironment())->run([
+                    (string) config('subtitles.audio_preparation.ffmpeg_binary', 'ffmpeg'),
+                    '-hide_banner', '-nostdin', '-y', '-rw_timeout', '15000000',
+                    '-protocol_whitelist', 'https,tls,tcp', '-tls_verify', '1',
+                    '-headers', $headers, '-i', $url, '-vn', '-c:a', 'copy', $path,
+                ]);
+            if ($result->successful() && File::isFile($path) && File::size($path) > 0) {
+                Log::info('backend.youtube_direct_download', ['success' => true, 'duration_ms' => (int) round((hrtime(true) - $started) / 1_000_000)]);
+
+                return $path;
+            }
+        } catch (Throwable) {
+            // Process exceptions contain signed URLs; never attach them to logs or public errors.
+        }
+        File::delete($path);
+        Log::info('backend.youtube_direct_download', ['success' => false, 'duration_ms' => (int) round((hrtime(true) - $started) / 1_000_000)]);
+
+        return null;
+    }
+
     public function validatedDuration(string $youtubeUrl, ?int $requestDurationSeconds): int
     {
         return $this->validatedMetadata($youtubeUrl, $requestDurationSeconds)[1];
@@ -69,7 +184,7 @@ class YouTubeAudioSource
     /**
      * @return array<string, mixed>
      */
-    private function metadata(string $url): array
+    private function metadata(string $url, ?int $timeoutSeconds = null): array
     {
         $result = $this->runProcess([
             (string) config('subtitles.youtube.binary'),
@@ -77,8 +192,9 @@ class YouTubeAudioSource
             '--no-warnings',
             '--no-playlist',
             '--skip-download',
+            ...(config('subtitles.youtube.direct_download', false) ? ['--format', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best'] : []),
             $url,
-        ], (int) config('subtitles.youtube.metadata_timeout_seconds'), 'metadata');
+        ], $timeoutSeconds ?? (int) config('subtitles.youtube.metadata_timeout_seconds'), 'metadata');
 
         if ($result->failed()) {
             $this->throwProcessFailure($result, 'metadata');
@@ -260,6 +376,9 @@ class YouTubeAudioSource
             'stdout_excerpt' => $this->outputExcerpt($result->output()),
             'stderr_excerpt' => $this->outputExcerpt($result->errorOutput()),
         ];
+        if ($stage === 'download') {
+            $context = ['exit_code' => $result->exitCode(), 'stage' => $stage];
+        }
 
         if ($this->isMissingBinaryFailure($result)) {
             throw SubtitleProcessingException::audioAcquisitionFailed(

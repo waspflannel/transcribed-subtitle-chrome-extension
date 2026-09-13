@@ -12,6 +12,32 @@
     }
   ],
   "paths": {
+    "/v1/subtitle-audio/prefetch": {
+      "post": {
+        "operationId": "prefetchSubtitleAudio",
+        "summary": "Prepare short-lived account-scoped YouTube metadata without creating a generation. Disabled by default; best effort.",
+        "parameters": [
+          { "$ref": "#/components/parameters/ExtensionInstallId" },
+          { "$ref": "#/components/parameters/ExtensionAuthorization" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object", "required": ["youtubeVideoId"],
+            "properties": { "youtubeVideoId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{11}$" } }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "Best-effort prefetch queued when enabled. Does not guarantee a cache hit or start paid work.", "content": { "application/json": { "schema": {
+            "type": "object", "additionalProperties": false, "required": ["ok"], "properties": { "ok": { "type": "boolean", "const": true } }
+          } } } },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "429": { "$ref": "#/components/responses/RateLimited" },
+          "422": { "description": "Invalid YouTube video ID." }
+        }
+      }
+    },
     "/v1/extension-auth/login": {
       "post": {
         "operationId": "loginExtension",

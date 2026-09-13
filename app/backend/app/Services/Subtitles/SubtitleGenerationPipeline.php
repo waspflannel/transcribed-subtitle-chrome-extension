@@ -88,6 +88,8 @@ class SubtitleGenerationPipeline
                 youtubeUrl: $job->youtube_url,
                 requestDurationSeconds: $job->video_duration_seconds,
                 workDirectory: SubtitleAudioWorkspace::directory($runId),
+                userId: (int) $job->user_id,
+                videoId: $job->youtube_video_id,
             );
 
             $continued = DB::transaction(function () use ($subtitleJobId, $runId, $audio, $audioStartedAtMs): bool {
