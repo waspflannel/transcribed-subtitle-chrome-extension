@@ -44,18 +44,18 @@
         <div class="model-options" data-reveal>
             <article>
                 <p class="eyebrow">For demanding language study</p>
-                <h3>Luna<span class="model-note">The default choice</span></h3>
-                <p>Our recommended starting point for languages with non-Latin scripts. More capable language processing, with a longer wait than Cerebras.</p>
-                <span class="model-example" lang="ja">言葉 <span aria-hidden="true">·</span> <span lang="ar" dir="rtl">كلمات</span> <span aria-hidden="true">·</span> <span lang="hi">शब्द</span></span>
+                <h3>Transcriber<span class="model-note">The default choice</span></h3>
+                <p>Our most capable model for language processing. Takes a little longer, but delivers better quality for complex phrases, subtle meanings, and detailed study.</p>
+                <span class="model-example">Nuance <span aria-hidden="true">·</span> Context <span aria-hidden="true">·</span> Detail</span>
             </article>
             <article>
                 <p class="eyebrow">For a faster start</p>
-                <h3>Cerebras<span class="model-note">Built for speed</span></h3>
-                <p>A fast option for Latin-script languages, such as Spanish and French. Less capable with non-Latin text; choose Luna when those details matter.</p>
-                <span class="model-example" lang="es">palabras <span aria-hidden="true">·</span> <span lang="fr">mots</span> <span aria-hidden="true">·</span> <span lang="de">Wörter</span></span>
+                <h3>Transcriber-Spark<span class="model-note">Built for speed</span></h3>
+                <p>Blazing fast for everyday watching. Less capable than Transcriber with complex language, but a great choice when speed matters most.</p>
+                <span class="model-example">Speed <span aria-hidden="true">·</span> Flow <span aria-hidden="true">·</span> Everyday study</span>
             </article>
         </div>
-        <p class="feature-footnote">Generation time varies with the video, language, model, and queue. Model choice applies to generation; full lyrics correction uses Luna with either selection.</p>
+        <p class="feature-footnote">Generation time varies with the video, language, model, and queue. Model choice applies to generation; full lyrics correction uses Transcriber with either selection.</p>
     </section>
 
     <section class="section" id="features">
@@ -156,7 +156,7 @@
             </details>
             <details>
                 <summary><span class="faq-q">02</span>Can I use my own lyrics?</summary>
-                <p>Yes. After generating a song track, open Lyric correction and paste the complete lyrics. The app fits them to the track’s existing timing and rebuilds translations, pronunciation, and word data using Luna. This replaces the full track; it does not fetch lyrics or create new timing from the audio. Check the result before studying.</p>
+                <p>Yes. After generating a song track, open Lyric correction and paste the complete lyrics. The app fits them to the track’s existing timing and rebuilds translations, pronunciation, and word data using Transcriber. This replaces the full track; it does not fetch lyrics or create new timing from the audio. Check the result before studying.</p>
             </details>
             <details>
                 <summary><span class="faq-q">03</span>Can I fix just one word?</summary>
@@ -164,7 +164,7 @@
             </details>
             <details>
                 <summary><span class="faq-q">04</span>Which model should I choose?</summary>
-                <p>Start with Luna for languages with non-Latin scripts. Try Cerebras for faster generation with Latin-script languages such as Spanish and French. Select the model before generating; an existing generation keeps its model. Full lyrics correction always uses Luna.</p>
+                <p>Choose Transcriber for better quality with complex language and detailed study. Choose Transcriber-Spark for blazing-fast generation when speed is your priority. Select the model before generating; an existing generation keeps its model. Full lyrics correction always uses Transcriber.</p>
             </details>
             <details>
                 <summary><span class="faq-q">05</span>How long does generation take?</summary>

@@ -83,7 +83,7 @@ class MarketingPageController extends Controller
         $metadata = [
             'home' => [
                 'title' => 'Learn with YouTube videos and music | '.$productName,
-                'description' => 'Learn languages with AI subtitles for YouTube. Choose Luna or Cerebras, bring your own lyrics, and explore translations, pronunciation, and interactive word cards.',
+                'description' => 'Learn languages with AI subtitles for YouTube. Choose Transcriber or Transcriber-Spark, bring your own lyrics, and explore translations, pronunciation, and word cards.',
                 'route' => 'marketing.home',
             ],
             'pricing' => [

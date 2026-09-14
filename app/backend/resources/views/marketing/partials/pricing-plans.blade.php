@@ -1,5 +1,5 @@
 <div class="plan-access" data-reveal>
-    <p><strong>Included with every plan:</strong> Luna and Cerebras model choice, translations, optional romanization, interactive word cards, and lyrics correction.</p>
+    <p><strong>Included with every plan:</strong> Transcriber and Transcriber-Spark model choice, translations, optional romanization, interactive word cards, and lyrics correction.</p>
     @if (config('marketing.chrome_extension_url'))
         <p>Paid beta for desktop Chrome. <a class="strong-link" href="{{ config('marketing.chrome_extension_url') }}">Get the extension</a>, then choose a subscription to generate subtitles.</p>
     @else

@@ -18,7 +18,7 @@
                 <dl class="demo-settings">
                     <div><dt>Subtitles</dt><dd>Spanish</dd></div>
                     <div><dt>Translation</dt><dd>English</dd></div>
-                    <div><dt>AI model</dt><dd>Luna</dd></div>
+                    <div><dt>AI model</dt><dd>Transcriber</dd></div>
                 </dl>
                 <button type="button" class="button-accent" data-preview-toggle aria-controls="preview-subtitles" aria-expanded="true" data-open-label="Show example subtitles" data-close-label="Reset preview" hidden>Reset preview</button>
                 <p class="demo-help">Choose your languages and model. In the extension, select Generate to begin.</p>

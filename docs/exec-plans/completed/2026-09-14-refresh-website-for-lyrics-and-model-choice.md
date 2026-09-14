@@ -77,3 +77,10 @@ Run the existing website feature test, Pint, and `scripts/agent/check.ps1`. Insp
 ## Completion Notes
 
 Implemented and locally verified. The original Ink & Marker design remains the visual system. The demonstration uses clearly labeled original example content and does not run real generation. Public speed messaging describes progressive availability without a numeric guarantee. Existing prices and purchase behavior are preserved. The branch is local; no deployment or remote push was requested.
+
+## Model Branding Follow-up (2026-09-14)
+
+- User renamed the website choices to **Transcriber** and **Transcriber-Spark** and requested a general quality-versus-speed comparison.
+- Updated homepage model descriptions, examples, lyric-correction references, FAQ, pricing, preview, and SEO description. Transcriber emphasizes complex phrases, subtle meanings, and detailed study; Transcriber-Spark emphasizes fast everyday use with lower language-processing capability.
+- Replaced script-specific language examples with benefit labels. Preserved the existing theme and layout. Provider routing and extension labels are outside this website-copy change.
+- Validation: website feature tests passed (19 tests, 225 assertions); Pint passed; documentation harness passed. Browser inspection found no old model names on the rendered homepage or metadata and no model-section overflow at 320px. Refreshed desktop evidence and added `docs/design-assets/marketing-feature-refresh/qa/models-desktop.png`.
