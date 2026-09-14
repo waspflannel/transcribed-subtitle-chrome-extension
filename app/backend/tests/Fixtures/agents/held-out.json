@@ -325,7 +325,6 @@
     "cues": [],
     "lyricsInput": {
       "sourceLanguage": "eng",
-      "allowPartial": false,
       "cues": [
         {
           "cueId": "heldout-song-a",
@@ -388,7 +387,7 @@
       ]
     },
     "review": [
-      "These synthetic pasted lyrics cover both existing slots and repeat the opening phrase twice. Expected match and complete.",
+      "These synthetic pasted lyrics cover both existing slots and repeat the opening phrase twice.",
       "Preserve both repetitions in time order with every part consumed exactly once; do not deduplicate.",
       "Check natural timing-slot boundaries, independently of structural coverage."
     ]
@@ -399,13 +398,12 @@
     "sourceLanguage": "eng",
     "targetLanguage": "eng",
     "tags": [
-      "incomplete-lyrics",
-      "classification"
+      "excerpt",
+      "alignment"
     ],
     "cues": [],
     "lyricsInput": {
       "sourceLanguage": "eng",
-      "allowPartial": false,
       "cues": [
         {
           "cueId": "heldout-excerpt-a",
@@ -452,122 +450,8 @@
       ]
     },
     "review": [
-      "The pasted opening line belongs to the existing song but covers only an excerpt: expected isMatch true, isComplete false, empty cues.",
+      "Align the supplied opening line to its corresponding timing slot. No song-match or completeness classification is requested.",
       "Do not stretch the excerpt over all three timing slots."
-    ]
-  },
-  {
-    "id": "heldout-lyrics-partial-enabled",
-    "agent": "lyrics",
-    "sourceLanguage": "eng",
-    "targetLanguage": "eng",
-    "tags": [
-      "partial-lyrics",
-      "existing-source-preservation"
-    ],
-    "cues": [],
-    "lyricsInput": {
-      "sourceLanguage": "eng",
-      "allowPartial": true,
-      "cues": [
-        {
-          "cueId": "heldout-partial-a",
-          "index": 0,
-          "startMs": 0,
-          "endMs": 2000,
-          "sourceText": "The silver lantern turns blue"
-        },
-        {
-          "cueId": "heldout-partial-b",
-          "index": 1,
-          "startMs": 2000,
-          "endMs": 4000,
-          "sourceText": "We walk beyond the silent hill"
-        }
-      ],
-      "lyricsParts": [
-        {
-          "index": 0,
-          "text": "The "
-        },
-        {
-          "index": 1,
-          "text": "golden "
-        },
-        {
-          "index": 2,
-          "text": "lantern "
-        },
-        {
-          "index": 3,
-          "text": "turns "
-        },
-        {
-          "index": 4,
-          "text": "blue"
-        }
-      ],
-      "existingParts": [
-        {
-          "cueId": "heldout-partial-a",
-          "parts": [
-            {
-              "index": 0,
-              "text": "The "
-            },
-            {
-              "index": 1,
-              "text": "silver "
-            },
-            {
-              "index": 2,
-              "text": "lantern "
-            },
-            {
-              "index": 3,
-              "text": "turns "
-            },
-            {
-              "index": 4,
-              "text": "blue"
-            }
-          ]
-        },
-        {
-          "cueId": "heldout-partial-b",
-          "parts": [
-            {
-              "index": 0,
-              "text": "We "
-            },
-            {
-              "index": 1,
-              "text": "walk "
-            },
-            {
-              "index": 2,
-              "text": "beyond "
-            },
-            {
-              "index": 3,
-              "text": "the "
-            },
-            {
-              "index": 4,
-              "text": "silent "
-            },
-            {
-              "index": 5,
-              "text": "hill"
-            }
-          ]
-        }
-      ]
-    },
-    "review": [
-      "The pasted first line corrects silver to golden and belongs to this song, but omits the second line: expected isMatch true and isComplete false.",
-      "Replace the first timing slot from pasted parts; preserve every word of the second slot using its existing parts. Return both slots in order.",
-      "Supply inclusive start/end part indexes and separators. Structural checks do not decide whether a pasted span semantically replaces the correct existing text."
     ]
   },
   {

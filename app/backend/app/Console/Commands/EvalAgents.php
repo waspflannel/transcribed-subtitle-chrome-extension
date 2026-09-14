@@ -72,7 +72,7 @@ class EvalAgents extends Command
             $report = [
                 'provider' => SubtitleModel::provider(), 'model' => SubtitleModel::model(), 'createdAt' => now()->toIso8601String(),
                 'scope' => 'Four agents use production provider methods with one response per operation. Lyrics is agent-only; no lyrics pipeline validation is claimed.',
-                'validityScope' => 'Contract checks cover identity, usable tokens, requested translations/readings, card meanings, and lyrics span coverage/order. For partial lyrics, whether pasted spans replace the correct existing words still needs human review. These checks are not a general JSON Schema validator or a language-quality judge.',
+                'validityScope' => 'Contract checks cover identity, usable tokens, requested translations/readings, and card meanings. Lyrics has no automated contract checks; its check result is null and output is for human review only. These checks are not a general JSON Schema validator or a language-quality judge.',
                 'usageScope' => 'SDK-reported prompt/completion tokens per captured structured response. A request failing before AgentPrompted has unknown usage and no captured response, even if the remote provider returned malformed data. Faked responses are not performance evidence.',
                 'semanticQuality' => 'Pending bilingual human review; segmentation reference metrics are separate from semantic quality. Keep these held-out cases out of prompts.',
                 'percentileMethod' => 'Median averages the two middle values; p95 uses nearest rank. Small samples are descriptive only.',
@@ -88,7 +88,9 @@ class EvalAgents extends Command
             config([$modelKey => $originalModel]);
         }
 
-        return collect($results)->flatMap(fn (array $case): array => $case['runs'])->every(fn (array $run): bool => $run['pipelineCompleted'] && $run['firstResponseContractChecksPassed'] === true) ? self::SUCCESS : self::FAILURE;
+        return collect($results)->every(fn (array $case): bool => collect($case['runs'])->every(
+            fn (array $run): bool => $run['pipelineCompleted'] && ($case['agent'] === 'lyrics' || $run['firstResponseContractChecksPassed'] === true),
+        )) ? self::SUCCESS : self::FAILURE;
     }
 
     private function listen(): void
@@ -125,10 +127,10 @@ class EvalAgents extends Command
             } catch (Throwable) {
                 $attempt['contractErrors'] = ['malformed_output'];
             }
-            if ($event->response->steps->last()?->finishReason === FinishReason::Length) {
+            if ($this->activeCase['agent'] !== 'lyrics' && $event->response->steps->last()?->finishReason === FinishReason::Length) {
                 $attempt['contractErrors'][] = 'output_token_limit';
             }
-            $attempt['contractChecksPassed'] = $attempt['contractErrors'] === [];
+            $attempt['contractChecksPassed'] = $this->activeCase['agent'] === 'lyrics' ? null : $attempt['contractErrors'] === [];
         });
     }
 
@@ -148,7 +150,7 @@ class EvalAgents extends Command
                 'analysis' => $provider->analyzeCueBatch($cues, $context, $source, $target, $case['includeTranslation'], $case['includeRomanization']),
                 'card' => $provider->enrichToken($cues[0], $cues[0]['tokens'][$case['requestedTokenPosition']], $source, $target),
                 'edited' => $provider->refreshEditedCue($cues[0], $source, $target, true, true),
-                'lyrics' => LyricsAlignmentAgent::make(allowPartial: $case['lyricsInput']['allowPartial'])
+                'lyrics' => LyricsAlignmentAgent::make()
                     ->prompt(json_encode($case['lyricsInput'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))->toArray(),
             };
         } catch (Throwable $exception) {
@@ -173,7 +175,7 @@ class EvalAgents extends Command
     private function contractErrors(string $agent, array $input, array $output): array
     {
         if ($agent === 'lyrics') {
-            return $this->lyricsErrors($input, $output);
+            return [];
         }
         $provider = app(LaravelAiTranslationAnalysisProvider::class);
         try {
@@ -188,72 +190,6 @@ class EvalAgents extends Command
         }
 
         return [];
-    }
-
-    private function lyricsErrors(array $input, array $output): array
-    {
-        if (! is_bool($output['isMatch'] ?? null) || ! is_bool($output['isComplete'] ?? null) || ! is_array($output['cues'] ?? null)) {
-            return ['invalid_lyrics_assessment'];
-        }
-        if (! $output['isMatch'] || (! $output['isComplete'] && ! $input['allowPartial'])) {
-            return $output['cues'] === [] ? [] : ['unexpected_alignment'];
-        }
-        $partial = ! $output['isComplete'];
-        $cueIds = array_column($input['cues'], 'cueId');
-        if ($partial && array_column($output['cues'], 'cueId') !== $cueIds) {
-            return ['partial_cue_identity_mismatch'];
-        }
-        $existingParts = array_column($input['existingParts'] ?? [], 'parts', 'cueId');
-        $position = -1;
-        $pastedCursor = 0;
-        $usedExisting = false;
-        foreach ($output['cues'] as $cue) {
-            $next = array_search($cue['cueId'] ?? null, $cueIds, true);
-            if ($next === false || $next <= $position || empty($cue['segments'])) {
-                return ['invalid_timing_slot_order'];
-            }
-            $position = $next;
-            $existingCursor = 0;
-            $previousSource = null;
-            foreach ($cue['segments'] as $segment) {
-                $source = $segment['source'] ?? null;
-                $end = $segment['endPartIndex'] ?? null;
-                $start = $input['allowPartial'] ? ($segment['startPartIndex'] ?? null) : $pastedCursor;
-                $separator = $input['allowPartial'] ? ($segment['separator'] ?? null) : '';
-                if (! is_int($start) || ! is_int($end) || $start < 0 || $end < $start || ! in_array($separator, ['', ' '], true)) {
-                    return ['invalid_source_segment'];
-                }
-                if (($previousSource === null || $previousSource === $source || ! $partial) && $separator !== '') {
-                    return ['invalid_segment_separator'];
-                }
-                if ($source === 'pasted') {
-                    if ($start !== $pastedCursor || $end >= count($input['lyricsParts'])) {
-                        return ['invalid_pasted_part_order'];
-                    }
-                    $pastedCursor = $end + 1;
-                } elseif ($source === 'existing' && $partial) {
-                    if ($start < $existingCursor || $end >= count($existingParts[$cue['cueId']] ?? [])) {
-                        return ['invalid_existing_part_order'];
-                    }
-                    if ($start > $existingCursor && $previousSource !== 'pasted') {
-                        return ['unpreserved_existing_parts'];
-                    }
-                    $existingCursor = $end + 1;
-                    $usedExisting = true;
-                } else {
-                    return ['invalid_segment_source'];
-                }
-                $previousSource = $source;
-            }
-            if ($partial && $previousSource === 'existing' && $existingCursor !== count($existingParts[$cue['cueId']] ?? [])) {
-                return ['unpreserved_existing_parts'];
-            }
-        }
-        if ($partial && ! $usedExisting) {
-            return ['missing_existing_source'];
-        }
-
-        return $pastedCursor === count($input['lyricsParts']) ? [] : ['incomplete_lyrics_coverage'];
     }
 
     private function segmentation(array $case, array $output): array

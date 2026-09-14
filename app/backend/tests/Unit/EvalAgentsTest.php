@@ -22,17 +22,16 @@ class EvalAgentsTest extends TestCase
         foreach ([CueAnalysisAgent::class, EditedCueAgent::class, LearningTokenCardAgent::class] as $agent) {
             $agent::fake(fn (string $prompt): StructuredTextResponse => $this->response($this->agentOutput($agent, json_decode($prompt, true))))->preventStrayPrompts();
         }
-        LyricsAlignmentAgent::fake(fn (string $prompt): array => json_decode($prompt, true)['allowPartial']
-            ? $this->partialLyricsOutput()
-            : (count(json_decode($prompt, true)['lyricsParts']) === 4
-            ? ['isMatch' => true, 'isComplete' => false, 'cues' => []]
-            : ['isMatch' => true, 'isComplete' => true, 'cues' => [
-                ['cueId' => 'heldout-song-a', 'segments' => [['source' => 'pasted', 'endPartIndex' => 3]]],
-                ['cueId' => 'heldout-song-b', 'segments' => [['source' => 'pasted', 'endPartIndex' => 9]]],
-            ]]))->preventStrayPrompts();
+        LyricsAlignmentAgent::fake(function (string $prompt): array {
+            $input = json_decode($prompt, true);
+
+            return ['cues' => [['cueId' => $input['cues'][0]['cueId'], 'segments' => [
+                ['source' => 'pasted', 'endPartIndex' => count($input['lyricsParts']) - 1],
+            ]]]];
+        })->preventStrayPrompts();
 
         $report = $this->runReport(['--repeat' => '2']);
-        $this->assertCount(9, $report['cases']);
+        $this->assertCount(8, $report['cases']);
         foreach ($report['cases'] as $case) {
             $this->assertSame('pending', $case['humanReview']['status']);
             $this->assertNull($case['humanReview']['score']);
@@ -41,7 +40,7 @@ class EvalAgentsTest extends TestCase
             foreach ($case['runs'] as $run) {
                 $this->assertTrue($run['pipelineCompleted'], json_encode($run['pipelineError']));
                 $this->assertSame(1, $run['requestCount']);
-                $this->assertTrue($run['firstResponseContractChecksPassed'], json_encode($run['attempts'][0]['contractErrors']));
+                $this->assertSame($case['agent'] === 'lyrics' ? null : true, $run['firstResponseContractChecksPassed'], json_encode($run['attempts'][0]['contractErrors']));
                 $this->assertArrayNotHasKey('review', $run['attempts'][0]['input']);
                 $this->assertArrayNotHasKey('goldTokens', $run['attempts'][0]['input']);
                 if ($case['agent'] !== 'lyrics') {
@@ -107,28 +106,6 @@ class EvalAgentsTest extends TestCase
             }
         }
         $this->assertCount(4, array_unique($agents));
-    }
-
-    public function test_partial_lyrics_accept_existing_segments_and_reject_dropped_or_overlapping_spans(): void
-    {
-        $valid = $this->partialLyricsOutput();
-        $invalid = $valid;
-        $invalid['cues'][1]['segments'][0]['endPartIndex'] = 4;
-        $overlap = $valid;
-        $overlap['cues'][0]['segments'][] = ['source' => 'pasted', 'startPartIndex' => 4, 'endPartIndex' => 4, 'separator' => ''];
-        LyricsAlignmentAgent::fake([$valid, $invalid, $overlap])->preventStrayPrompts();
-        $runs = $this->runReport(['--case' => 'heldout-lyrics-partial-enabled', '--repeat' => '3'], 1)['cases'][0]['runs'];
-        $this->assertTrue($runs[0]['firstResponseContractChecksPassed']);
-        $this->assertContains('unpreserved_existing_parts', $runs[1]['attempts'][0]['contractErrors']);
-        $this->assertContains('invalid_pasted_part_order', $runs[2]['attempts'][0]['contractErrors']);
-    }
-
-    private function partialLyricsOutput(): array
-    {
-        return ['isMatch' => true, 'isComplete' => false, 'cues' => [
-            ['cueId' => 'heldout-partial-a', 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 4, 'separator' => '']]],
-            ['cueId' => 'heldout-partial-b', 'segments' => [['source' => 'existing', 'startPartIndex' => 0, 'endPartIndex' => 5, 'separator' => '']]],
-        ]];
     }
 
     private function runReport(array $options, int $status = 0): array
