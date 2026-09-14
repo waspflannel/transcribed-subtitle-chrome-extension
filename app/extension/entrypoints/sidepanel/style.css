@@ -9,7 +9,7 @@
    ========================================================================= */
 
 :root {
-  --night: #0e0e0e;
+  --night: #000;
   --night-high: #1a1a19;
   --line: rgba(245, 243, 234, 0.14);
   --line-soft: rgba(245, 243, 234, 0.08);
@@ -44,9 +44,7 @@ body {
 }
 
 body {
-  background:
-    repeating-linear-gradient(to bottom, transparent 0, transparent 35px, var(--line-soft) 35px, var(--line-soft) 36px),
-    var(--night);
+  background: var(--night);
   color: var(--text);
   font-family: var(--body);
   font-size: 14px;
