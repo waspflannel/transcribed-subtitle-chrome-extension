@@ -394,8 +394,7 @@ final class LyricsCorrectionService
 
         $this->commitProgress($trackId, $attemptId, $expectedRevision, $job, $processedStage, $nextState);
         $selection = match ($processedStage) {
-            'aligning' => SubtitleModel::configured('openai'),
-            'analyzing' => SubtitleModel::configured('cerebras'),
+            'aligning', 'analyzing' => SubtitleModel::configured('openai'),
             default => null,
         };
         Log::info('backend.lyrics_correction_unit_finished', [
@@ -627,7 +626,7 @@ final class LyricsCorrectionService
             $batch, $cues, $job->source_language, $job->target_language,
             includeTranslation: $this->translationRequested($job),
             includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
-            selection: SubtitleModel::configured('cerebras'),
+            selection: SubtitleModel::configured('openai'),
             validateOutput: false,
         );
         $this->ensureCorrectionCurrent($correction);
@@ -707,7 +706,7 @@ final class LyricsCorrectionService
                 if (in_array($batchIndex, $state['completedBatches'], true)) {
                     return null;
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::configured('cerebras'));
+                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::configured('openai'));
                 // Merge only this result into current state, preserving other workers' results.
                 $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
                 $state['completedBatches'][] = $batchIndex;

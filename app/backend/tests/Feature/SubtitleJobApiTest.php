@@ -1157,7 +1157,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
         LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'alignment-luna');
         foreach ($this->translationAnalysis->selections as $selection) {
-            $this->assertSame(['cerebras', 'changed-cerebras'], $selection);
+            $this->assertSame(['openai', 'alignment-luna'], $selection);
         }
     }
 

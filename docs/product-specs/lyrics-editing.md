@@ -23,9 +23,9 @@ The current track stays active until a replacement succeeds. Neither workflow de
 
 ## Replace Full Lyrics
 
-### Hybrid replacement (2026-09-13)
+### Luna-only replacement (2026-09-14)
 
-Full replacement uses the configured OpenAI/Luna model for alignment and the configured Cerebras model for translation, tokens and romanization in parallel analysis batches. Both Luna and Cerebras generations use this same replacement flow. Generation selection and Quick Fix still use saved job models. Analysis preserves Luna's cue text and timing, and publication remains atomic. Stage logs and cost estimates report the model actually used. No language-specific fallback is enabled; Arabic/Japanese enrichment quality remains part of user acceptance testing. Replacement-specific validation has been removed as described below.
+Full replacement uses only the configured OpenAI/Luna model for alignment, translation, tokens and romanization, with analysis batches still running in parallel. This supersedes the earlier Luna/Cerebras hybrid. Both Luna and Cerebras generations use this same replacement flow. Generation selection and Quick Fix still use saved job models. Analysis preserves Luna's cue text and timing, and publication remains atomic. Stage logs and cost estimates report the model actually used. No language-specific fallback is enabled; Arabic/Japanese enrichment quality remains part of user acceptance testing. Replacement-specific validation has been removed as described below.
 
 ### Replacement validator removal (2026-09-13)
 

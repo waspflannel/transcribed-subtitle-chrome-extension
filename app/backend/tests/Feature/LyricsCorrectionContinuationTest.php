@@ -50,9 +50,6 @@ class LyricsCorrectionContinuationTest extends TestCase
             'subtitles.tiers.plans.base.generation_concurrency' => 20,
             'subtitles.tiers.plans.base.batch_concurrency' => 20,
             'subtitles.costs.openai_alignment_microusd_per_call' => 25,
-            'subtitles.costs.cerebras_tokenization_microusd_per_cue' => 10,
-            'subtitles.costs.cerebras_translation_microusd_per_cue' => 5,
-            'subtitles.costs.cerebras_romanization_microusd_per_cue' => 5,
             'subtitles.costs.openai_tokenization_microusd_per_cue' => 10,
             'subtitles.costs.openai_translation_microusd_per_cue' => 5,
             'subtitles.costs.openai_romanization_microusd_per_cue' => 5,
@@ -62,11 +59,11 @@ class LyricsCorrectionContinuationTest extends TestCase
 
     #[TestWith(['openai'])]
     #[TestWith(['cerebras'])]
-    public function test_replacement_uses_hybrid_models_without_changing_generation_selection(string $provider): void
+    public function test_replacement_uses_luna_only_without_changing_generation_selection(string $provider): void
     {
         config([
             'ai.default' => $provider,
-            'ai.providers.openai.models.text.default' => 'alignment-luna',
+            'ai.providers.openai.models.text.default' => 'replacement-luna',
             'ai.providers.cerebras.models.text.default' => 'analysis-cerebras',
             'subtitles.costs.cerebras_tokenization_microusd_per_cue' => 2,
             'subtitles.costs.cerebras_translation_microusd_per_cue' => 3,
@@ -77,24 +74,29 @@ class LyricsCorrectionContinuationTest extends TestCase
         $timings = array_map(fn (array $cue): array => [$cue['startMs'], $cue['endMs']], $queue['job']->track->cues);
         LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]])->preventStrayPrompts();
         $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        Log::spy();
         $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
         $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
-        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'alignment-luna');
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'replacement-luna');
         $this->assertNotEmpty($this->translationAnalysis->selections);
         foreach ($this->translationAnalysis->selections as $selection) {
-            $this->assertSame(['cerebras', 'analysis-cerebras'], $selection);
+            $this->assertSame(['openai', 'replacement-luna'], $selection);
         }
+        $this->assertSame($provider, config('ai.default'));
         $job = $queue['job']->fresh();
         $this->assertSame($provider, $job->ai_provider);
         $this->assertSame('saved-generation-model', $job->ai_model);
         $this->assertSame($timings, array_map(fn (array $cue): array => [$cue['startMs'], $cue['endMs']], $job->track->cues));
-        $this->assertSame($initialCost + 35, $job->estimated_provider_cost_microusd);
+        $this->assertSame($initialCost + 55, $job->estimated_provider_cost_microusd);
         $events = SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->get();
         $this->assertCount(3, $events);
         foreach ($events as $event) {
-            $aligning = $event->stage === 'aligning';
-            $this->assertSame($aligning ? 'openai' : 'cerebras', $event->context['provider']);
-            $this->assertSame($aligning ? 'alignment-luna' : 'analysis-cerebras', $event->context['model']);
+            $this->assertSame('openai', $event->context['provider']);
+            $this->assertSame('replacement-luna', $event->context['model']);
+        }
+        foreach (['aligning', 'analyzing'] as $stage) {
+            Log::shouldHaveReceived('info')->with('backend.lyrics_correction_unit_finished', \Mockery::on(fn (array $context): bool => $context['stage'] === $stage
+                && $context['provider'] === 'openai' && $context['model'] === 'replacement-luna'));
         }
     }
 
