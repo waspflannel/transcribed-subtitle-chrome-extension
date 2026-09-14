@@ -10,9 +10,9 @@ The selected pipeline implementation is covered by offline regressions. Still op
 
 Track cleanup continuously. Prefer small, targeted follow-up plans over large periodic rewrites.
 
-## Partial-lyrics confirmation recovery (2026-09-10)
+## Lyric replacement verification redesign (2026-09-13)
 
-For `Y_vB-3R_BYc`, attempt `cbb0be40-c969-47cb-a872-433877a9f929` ended at alignment with `lyrics_incomplete` and preserved the existing 69-cue track. The user saw the terminal message asking them to paste again instead of the partial-merge confirmation. Code inspection shows that confirmation requires the matching in-memory draft, attempt, track and video; the exact cause of the missing or mismatched panel state has not been reproduced. Partial merging remains supported after explicit confirmation, but this attempt never reached it. Reproduce the panel handoff and recovery after reopening, then restore a clear route to confirmation while preserving draft and track identity checks. This issue remains open after the pipeline branch merge; the Punjabi long-cue fix and local Fast mode change do not resolve it.
+The user accepted the hybrid replacement pipeline and removal of the old replacement validators. Designing better verification is the next requested step; the replacement flow currently has no content/quality rejection gate. The old partial-confirmation recovery issue is superseded because partial merging and its confirmation UI were removed. Normal generation and Quick Fix retain their validators. See the [completed optimization plan](completed/2026-09-13-speed-up-lyrics-replacement.md) for failure evidence, removal scope and test results.
 
 ## Requirements retained after the 2026-09-09 plan cleanup
 

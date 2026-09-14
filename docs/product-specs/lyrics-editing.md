@@ -23,6 +23,22 @@ The current track stays active until a replacement succeeds. Neither workflow de
 
 ## Replace Full Lyrics
 
+### Hybrid replacement (2026-09-13)
+
+Full replacement uses the configured OpenAI/Luna model for alignment and the configured Cerebras model for translation, tokens and romanization in parallel analysis batches. Both Luna and Cerebras generations use this same replacement flow. Generation selection and Quick Fix still use saved job models. Analysis preserves Luna's cue text and timing, and publication remains atomic. Stage logs and cost estimates report the model actually used. No language-specific fallback is enabled; Arabic/Japanese enrichment quality remains part of user acceptance testing. Replacement-specific validation has been removed as described below.
+
+### Replacement validator removal (2026-09-13)
+
+The replacement validator implementation and its configuration switch have been deleted at the user's request. Alignment now requests cue allocations only; there are no song-match/completeness classifications, semantic rejection rules, exact-consumption checks, allocation caps or replacement WebVTT validation pass. Submission keeps whitespace normalization and basic nonempty/string/25,000-character request limits. Headings and credits remain part of the supplied text.
+
+The converter reconstructs usable pasted ranges in model response order, skips unknown or empty allocations and nonadvancing ranges, clamps array slices to available parts, groups repeated cue IDs and emits in original timing order. It wraps long text within the selected slot; tiny slots or unsplittable text can remain longer than 84 characters. Unallocated text does not block publication. If no usable cue remains, no replacement can be formed.
+
+Replacement analysis always takes the permissive path: fixed source text and timing remain authoritative, returned details attach by cue ID or remaining response order, usable tokens are reindexed, and missing details are allowed. Missing translation falls back to source text. Normal generation and Quick Fix retain their existing validation and saved model selection.
+
+The old partial-merge prompt and incomplete-lyrics confirmation flow have been removed. All pasted text is treated as a full replacement, including excerpts. The optional public `allowPartial` field remains accepted for older clients but is ignored; legacy error codes remain readable in stored status responses. Cancellation, ownership, current-track checks, provider error handling and atomic publication remain. The regular full-track replacement confirmation remains in the panel.
+
+A completed replacement can contain missing words, poor timing or mismatched analysis. Later replacements reuse current timing slots, so a bad published timing map may require regeneration. Provider transport/JSON errors can still fail the operation. No audio alignment or new validator is introduced. Earlier replacement rules below are historical and superseded by this section; Git history retains the removed implementation.
+
 ### Long aligned text (2026-09-10)
 
 An otherwise valid alignment must not fail only because one reconstructed timing slot contains more than 84 Unicode code points. The server wraps it into shorter cues at word boundaries, or grapheme boundaries for an overlong unspaced part, without deleting text. It divides that slot's duration in proportion to text length, preserves its original start/end and all neighboring slots, and rejects any split that cannot retain positive durations. These internal times are estimates; this does not add acoustic alignment. Identity, exact source consumption, match/completeness, cancellation and atomic publication checks still apply.

@@ -371,7 +371,7 @@ describe('SubtitleApiClient', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'GET' }));
   });
 
-  it('sends allowPartial only when the user confirms a partial correction', async () => {
+  it('preserves the optional legacy allowPartial request field', async () => {
     const status: LyricsCorrectionStatus = {
       attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
       status: 'queued',

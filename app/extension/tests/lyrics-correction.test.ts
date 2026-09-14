@@ -47,7 +47,7 @@ function status(
 describe('lyrics correction guards', () => {
   it('maps safe correction stages to fixed progress percentages', () => {
     expect(lyricsCorrectionProgress('queued').percent).toBe(0);
-    expect(lyricsCorrectionProgress('aligning').percent).toBe(15);
+    expect(lyricsCorrectionProgress('aligning')).toMatchObject({ percent: 15, label: 'Aligning lyrics' });
     expect(lyricsCorrectionProgress('rebuilding').percent).toBe(45);
     expect(lyricsCorrectionProgress('romanizing').percent).toBe(70);
     expect(lyricsCorrectionProgress('finalizing').percent).toBe(95);

@@ -7,7 +7,7 @@ export const QUICK_FIX_CHARACTER_LIMIT = 84;
 
 export const LYRICS_CORRECTION_STAGES = [
   { key: 'queued', percent: 0, label: 'Waiting to start' },
-  { key: 'aligning', percent: 15, label: 'Checking and aligning lyrics' },
+  { key: 'aligning', percent: 15, label: 'Aligning lyrics' },
   { key: 'rebuilding', percent: 45, label: 'Rebuilding words and translations' },
   { key: 'romanizing', percent: 70, label: 'Rebuilding pronunciation' },
   { key: 'finalizing', percent: 95, label: 'Applying replacement' },
