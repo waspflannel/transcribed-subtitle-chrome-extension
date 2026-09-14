@@ -49,7 +49,6 @@ type GenerationCancelFeedback = { kind: 'success' | 'error'; message: string };
 
 const {
   backTranscriptButton,
-  transcriptMenu,
   progressSummary,
   progressSummaryLabel,
   viewProgressButton,
@@ -198,7 +197,6 @@ lyricsCorrectionTextarea.addEventListener('input', () => {
 function openWatchScreen(screen: typeof watchScreen): void {
   if (quickFixRequestBusy || lyricsCorrectionRequestBusy) return;
   watchScreen = screen;
-  transcriptMenu.open = false;
   if (latestState) showPanelState(latestState);
   if (screen === 'transcript') transcriptSearch.focus({ preventScroll: true });
   else backTranscriptButton.focus({ preventScroll: true });
@@ -210,15 +208,6 @@ dismissCorrectionStatusButton.addEventListener('click', () => {
   if (latestState?.lyricsCorrection) dismissedCorrectionAttempts.add(latestState.lyricsCorrection.attemptId);
   correctionTerminalStatus.hidden = true;
   correctionTerminalMessage.textContent = '';
-});
-document.addEventListener('click', (event) => {
-  if (!transcriptMenu.contains(event.target as Node)) transcriptMenu.open = false;
-});
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && transcriptMenu.open) {
-    transcriptMenu.open = false;
-    transcriptMenu.querySelector('summary')?.focus();
-  }
 });
 confirmLyricsCorrectionButton.addEventListener('click', () => void applyConfirmedLyricsCorrection());
 cancelLyricsConfirmationButton.addEventListener('click', () => {
@@ -261,6 +250,7 @@ const savedGenerations = bindSavedGenerations(
   document.querySelector<HTMLButtonElement>('[data-generation-refresh]')!,
   request => sendPanelRequest(request, 'generation-selection', 'mutation'),
   () => panelWindowId,
+  showPanelState,
 );
 
 aiProviderSelect.addEventListener('change', () => {
@@ -783,7 +773,7 @@ async function sendPanelRequest(
         return false;
       }
       latestAppliedSeq = seq;
-      showRequestError('The extension background did not respond. Try again.', errorTarget);
+      showRequestError('The extension background did not respond. Reload AI Language Subtitles in chrome://extensions, then refresh YouTube and reopen the panel.', errorTarget);
 
       return false;
     }

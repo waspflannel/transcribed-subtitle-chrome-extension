@@ -138,16 +138,13 @@
               <button type="button" class="link-button" data-generation-refresh>Refresh saved generations</button>
 
             <div class="ready-toolbar">
+              <div class="transcript-actions">
+                <button type="button" class="btn-ghost" data-action="toggle-setup">Generate again</button>
+                <button type="button" class="btn-ghost" data-action="toggle-lyrics-edit">Lyric correction</button>
+              </div>
               <label class="search-field">
                 <input type="search" data-transcript-search placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" />
               </label>
-              <details class="transcript-menu" data-transcript-menu>
-                <summary aria-label="Transcript actions">Actions <span aria-hidden="true">▾</span></summary>
-                <div class="transcript-menu-items">
-                  <button type="button" class="link-button" data-action="toggle-lyrics-edit">Replace full lyrics…</button>
-                  <button type="button" class="link-button" data-action="toggle-setup">Generate again…</button>
-                </div>
-              </details>
             </div>
             <div class="status-banner correction-status" data-correction-terminal-status role="status" aria-live="polite" hidden>
               <span data-correction-terminal-message></span>

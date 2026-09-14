@@ -3,12 +3,15 @@ import type { PanelState, PanelRequest } from '../../utils/messages';
 import type { SubtitleJobHistoryItem } from '../../utils/contracts';
 import { languageLabel } from '../../utils/languages';
 
+const DELETE_GENERATION = 'delete-current-generation';
+
 export function bindSavedGenerations(
   select: HTMLSelectElement,
   status: HTMLElement,
   refresh: HTMLButtonElement,
   selectGeneration: (request: PanelRequest) => Promise<boolean>,
   windowId: () => number | undefined,
+  applyPanelState: (state: PanelState) => void,
 ): { render: (state: PanelState) => void; showError: (message: string) => void } {
   let latest: PanelState;
   let context = '';
@@ -33,10 +36,11 @@ export function bindSavedGenerations(
         const model = job.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna';
         select.add(option(`${source} → ${languageLabel(job.targetLanguage)} (${model})`, job.jobId));
       }
+      if (track) select.add(option('Delete selected generation…', DELETE_GENERATION));
     }
     if (select.value !== (track?.jobId ?? '')) select.value = track?.jobId ?? '';
     const correcting = latest?.lyricsCorrection?.status === 'queued' || latest?.lyricsCorrection?.status === 'running';
-    select.disabled = !track || loading || switching || correcting || select.options.length < 2;
+    select.disabled = !track || loading || switching || correcting;
     refresh.disabled = loading || switching || !track;
   };
   const load = async (): Promise<void> => {
@@ -52,6 +56,7 @@ export function bindSavedGenerations(
       if (!response || !Array.isArray(response.jobs)) throw new Error(response?.error ?? 'Unable to load saved generations. Try refreshing.');
       jobs = response.jobs.filter((job: SubtitleJobHistoryItem) => job.youtubeVideoId === page.videoId && job.status === 'completed');
       status.textContent = '';
+      if (response.panelState) applyPanelState(response.panelState);
     } catch (error) {
       if (requestRevision === revision) showError(error instanceof Error ? error.message : 'Unable to load saved generations.');
     } finally {
@@ -61,14 +66,17 @@ export function bindSavedGenerations(
   refresh.addEventListener('click', () => { void load(); });
   select.addEventListener('change', () => {
     const state = latest;
-    if (switching || state.subtitleState.type !== 'ready' || state.activeTabId === undefined) return;
+    if (select.disabled || switching || state.subtitleState.type !== 'ready' || state.activeTabId === undefined) return;
     const track = state.subtitleState.track;
     const jobId = select.value;
     if (jobId === track.jobId) return;
+    const deleting = jobId === DELETE_GENERATION;
+    select.value = track.jobId;
+    if (deleting && !window.confirm('Delete this saved generation? This cannot be undone. Used minutes will not be refunded.')) return;
     switching = true;
-    status.textContent = 'Loading transcript…';
+    status.textContent = deleting ? 'Deleting generation…' : 'Loading transcript…';
     draw();
-    void selectGeneration({ type: 'panel.selectGeneration', jobId, currentJobId: track.jobId,
+    void selectGeneration({ type: deleting ? 'panel.deleteGeneration' : 'panel.selectGeneration', jobId: deleting ? track.jobId : jobId, currentJobId: track.jobId,
       trackId: track.trackId, youtubeVideoId: track.youtubeVideoId, tabId: state.activeTabId }).finally(() => {
       switching = false;
       draw();

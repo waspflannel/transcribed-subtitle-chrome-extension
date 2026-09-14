@@ -20,13 +20,29 @@ function jobs() {
 function setup(onSelect = vi.fn(async () => true)) {
   const dom = new JSDOM('<select></select><p></p><button></button>');
   vi.stubGlobal('document', dom.window.document);
+  vi.stubGlobal('window', dom.window);
   const select = document.querySelector('select')!;
   const status = document.querySelector('p')!;
   const refresh = document.querySelector('button')!;
-  const view = bindSavedGenerations(select, status, refresh, onSelect, () => 1);
-  return { dom, select, status, refresh, view, onSelect };
+  const applyPanelState = vi.fn((state: PanelState) => view.render(state));
+  const view = bindSavedGenerations(select, status, refresh, onSelect, () => 1, applyPanelState);
+  return { dom, select, status, refresh, view, onSelect, applyPanelState };
 }
 async function flush() { for (let i = 0; i < 6; i++) await Promise.resolve(); }
+
+it('applies the cleared panel state when refreshing an empty saved-generation list', async () => {
+  mocks.sendMessage.mockResolvedValueOnce({ jobs: jobs() });
+  const { dom, select, view, refresh, applyPanelState } = setup();
+  view.render(state());
+  await flush();
+  const empty = { ...state(), subtitleState: { type: 'no-track' as const } };
+  mocks.sendMessage.mockResolvedValue({ jobs: [], panelState: empty });
+  refresh.click();
+  await flush();
+  expect(applyPanelState).toHaveBeenCalledWith(empty);
+  expect(select.options).toHaveLength(0);
+  dom.window.close();
+});
 
 it('keeps matching language pairs separate by job and selects the exact generation', async () => {
   mocks.sendMessage.mockResolvedValue({ jobs: jobs() });
@@ -35,6 +51,7 @@ it('keeps matching language pairs separate by job and selects the exact generati
   await flush();
   expect(Array.from(select.options, option => option.textContent)).toEqual([
     'Auto → English (Luna)', 'Auto → English (Cerebras)', 'Auto → Spanish (Cerebras)',
+    'Delete selected generation…',
   ]);
   expect(select.value).toBe('luna');
   select.value = 'cerebras';
@@ -57,10 +74,48 @@ it('keeps the current selection on failure and allows retrying the list', async 
   mocks.sendMessage.mockResolvedValue({ jobs: jobs() });
   refresh.click();
   await flush();
-  expect(select.options).toHaveLength(3);
+  expect(select.options).toHaveLength(4);
   expect(select.disabled).toBe(false);
   view.render({ ...state(), lyricsCorrection: { status: 'running' } } as PanelState);
   expect(select.disabled).toBe(true);
+  dom.window.close();
+});
+
+it('allows deleting the only generation and returns to an empty selector', async () => {
+  mocks.sendMessage.mockResolvedValue({ jobs: jobs().slice(0, 1) });
+  const { dom, select, view, onSelect } = setup();
+  vi.spyOn(dom.window, 'confirm').mockReturnValue(true);
+  view.render(state());
+  await flush();
+  expect(select.disabled).toBe(false);
+  select.value = 'delete-current-generation';
+  select.dispatchEvent(new dom.window.Event('change'));
+  expect(onSelect).toHaveBeenCalledWith({ type: 'panel.deleteGeneration', jobId: 'luna', currentJobId: 'luna',
+    trackId: 'track-luna', youtubeVideoId: 'dQw4w9WgXcQ', tabId: 1 });
+  view.render({ ...state(), subtitleState: { type: 'no-track' } });
+  await flush();
+  expect(select.options).toHaveLength(0);
+  expect(select.disabled).toBe(true);
+  dom.window.close();
+});
+
+it('keeps the selected generation when deletion is cancelled or fails', async () => {
+  mocks.sendMessage.mockResolvedValue({ jobs: jobs().slice(0, 1) });
+  const { dom, select, view, onSelect, status } = setup();
+  const confirm = vi.spyOn(dom.window, 'confirm').mockReturnValue(false);
+  view.render(state());
+  await flush();
+  const remove = () => { select.value = 'delete-current-generation'; select.dispatchEvent(new dom.window.Event('change')); };
+  remove();
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(select.value).toBe('luna');
+  confirm.mockReturnValue(true);
+  onSelect.mockImplementation(async () => { view.showError('Offline'); return false; });
+  remove();
+  await flush();
+  expect(select.value).toBe('luna');
+  expect(select.disabled).toBe(false);
+  expect(status.textContent).toBe('Offline');
   dom.window.close();
 });
 

@@ -3,7 +3,6 @@ export interface PanelDom {
   viewProgressButton: HTMLButtonElement;
   progressSummaryLabel: HTMLElement;
   progressSummary: HTMLElement;
-  transcriptMenu: HTMLDetailsElement;
   backTranscriptButton: HTMLButtonElement;
   tabButtons: HTMLButtonElement[];
   panels: HTMLElement[];
@@ -110,7 +109,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     viewProgressButton: query(root, '[data-action="view-progress"]', HTMLButtonElement),
     progressSummaryLabel: query(root, '[data-progress-summary-label]', HTMLElement),
     progressSummary: query(root, '[data-progress-summary]', HTMLElement),
-    transcriptMenu: query(root, '[data-transcript-menu]', HTMLDetailsElement),
     backTranscriptButton: query(root, '[data-action="back-transcript"]', HTMLButtonElement),
     tabButtons: queryAll<HTMLButtonElement>(root, '[data-tab]'),
     panels: queryAll<HTMLElement>(root, '[data-panel]'),

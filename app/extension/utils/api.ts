@@ -105,6 +105,13 @@ export class SubtitleApiClient {
     }, guardJobResponse);
   }
 
+  public async deleteSavedGeneration(installId: string, authToken: string, jobId: string): Promise<{ ok: true }> {
+    return this.request(`subtitle-generations/${encodeURIComponent(jobId)}`, installId, {
+      method: 'DELETE',
+      authToken,
+    }, guardOkResponse);
+  }
+
   public async listSubtitleJobs(installId: string, authToken: string, youtubeVideoId?: string): Promise<SubtitleJobHistoryResponse> {
     return this.request<SubtitleJobHistoryResponse>(youtubeVideoId ? `subtitle-jobs?youtubeVideoId=${encodeURIComponent(youtubeVideoId)}` : 'subtitle-jobs', installId, {
       method: 'GET',

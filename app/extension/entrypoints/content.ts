@@ -296,7 +296,7 @@ export default defineContentScript({
       const epoch = stateEpoch;
       const url = window.location.href;
       try {
-        const state = await browser.runtime.sendMessage({ type: 'content.getState' });
+        const state = await browser.runtime.sendMessage({ type: 'content.getState', revalidateSavedGeneration: true });
         if (disposed || request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) return;
 
         if (state?.settings) {

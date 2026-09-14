@@ -8,6 +8,8 @@ Describe the system shape in a way future agents can inspect, validate, and modi
 
 ## Current State
 
+- Saved-generation deletion uses owner-scoped `DELETE /v1/subtitle-generations/{jobId}` and shares the dashboard's locked deletion service, preserving usage history and cleanup. The extension revalidates its remembered generation on YouTube page entry; a missing generation falls back to another readable saved track or generation setup, without deletion polling. The existing job DELETE endpoint still cancels queued/running generation.
+
 - First-subtitle experiment: chunked uploads use a 15-second opening and a 20-second second chunk plus the existing overlap; remaining chunks share the rest within the eight-upload cap. Set second seconds to zero to restore the first experiment; a two-upload cap also retains first-plus-remainder behavior. Optimization registers all planned transcription jobs without extracting every slice first; each job extracts its own slice and uploads it immediately. The first analysis batch is capped at two cues and a 10-second span (one longer cue stays intact), retaining available neighboring context. Later batches and correction work keep their existing limits. Full audio acquisition and WebM/Opus whole-file normalization still precede this handoff. All members remain in one transcription batch so early analysis cannot finalize an incomplete transcript.
 
 - Draft cue generation excludes segments containing no Unicode letters or numbers before AI analysis, including cached transcripts. Remaining cues keep their text and timing and receive consecutive identities. Filtering never rewrites already published cues.

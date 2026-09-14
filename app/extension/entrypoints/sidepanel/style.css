@@ -850,10 +850,17 @@ select option {
 
 /* ============================== Ready toolbar + transcript ============================== */
 .ready-toolbar {
-  align-items: center;
-  display: flex;
+  display: grid;
   gap: 10px;
 }
+
+.transcript-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transcript-actions button { flex: 1; }
 
 /* Edit subview: the panel reuses .card; this is the mode switch and forms. */
 .lyrics-confirm {
@@ -1674,50 +1681,6 @@ output {
 .watch-setup h2, [data-lyrics-edit-panel] h2 {
   font-size: 20px;
   margin: 0 0 16px;
-}
-.transcript-menu {
-  position: relative;
-  flex: 0 0 auto;
-}
-.transcript-menu summary {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-  min-height: 40px;
-  background: var(--night-high);
-  border: 1px solid var(--faint);
-  border-radius: 4px;
-  color: var(--text);
-  cursor: pointer;
-  list-style: none;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.transcript-menu summary:hover,
-.transcript-menu[open] summary {
-  background: var(--accent-tint);
-  border-color: var(--accent-bright);
-}
-.transcript-menu summary::-webkit-details-marker {
-  display: none;
-}
-.transcript-menu-items {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 5;
-  width: 220px;
-  padding: 8px;
-  background: var(--night);
-  border: 1px solid var(--faint);
-  box-shadow: 0 8px 24px #0008;
-}
-.transcript-menu-items button {
-  display: block;
-  width: 100%;
-  padding: 12px;
-  text-align: left;
 }
 .progress-summary {
   display: flex;

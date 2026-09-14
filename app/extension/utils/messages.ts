@@ -93,9 +93,10 @@ export interface PanelState {
 
 export type BackgroundRequest =
   | { type: 'panel.listGenerations'; youtubeVideoId: string; windowId?: number }
-  | { type: 'panel.selectGeneration'; jobId: string; currentJobId: string; trackId: string; youtubeVideoId: string; tabId: number; windowId?: number }
+  | { type: 'panel.selectGeneration' | 'panel.deleteGeneration'; jobId: string; currentJobId: string; trackId: string; youtubeVideoId: string; tabId: number; windowId?: number }
   | {
       type: 'content.getState';
+      revalidateSavedGeneration?: boolean;
     }
   | {
       type: 'panel.getState';
@@ -213,6 +214,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'panel.generateSubtitles':
       return optionalNumber(value, 'windowId') && (value.vocabularyHints === undefined || validVocabularyHints(value.vocabularyHints));
     case 'content.getState':
+      return optionalBoolean(value, 'revalidateSavedGeneration');
     case 'panel.logout':
     case 'panel.clearLocalState':
     case 'background.getPageSnapshot':
@@ -257,6 +259,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'panel.listGenerations':
       return hasString(value, 'youtubeVideoId') && optionalNumber(value, 'windowId');
     case 'panel.selectGeneration':
+    case 'panel.deleteGeneration':
       return hasString(value, 'jobId') && hasString(value, 'currentJobId') && hasString(value, 'trackId')
         && hasString(value, 'youtubeVideoId') && isNonNegativeInteger(value.tabId) && optionalNumber(value, 'windowId');
 
@@ -310,6 +313,7 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'content.focusPanelTranscript':
     case 'panel.listGenerations':
     case 'panel.selectGeneration':
+    case 'panel.deleteGeneration':
     case 'panel.getState':
     case 'panel.updateSettings':
     case 'panel.generateSubtitles':

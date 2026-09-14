@@ -15,6 +15,14 @@ const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
 describe('SubtitleApiClient', () => {
+  it('deletes a saved generation through the authenticated generation resource', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
+    const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
+    expect(await client.deleteSavedGeneration(installId, authToken, 'saved/job')).toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8000/v1/subtitle-generations/saved%2Fjob',
+      expect.objectContaining({ method: 'DELETE', headers: expect.objectContaining({ Authorization: `Bearer ${authToken}` }) }));
+  });
+
   it('rejects malformed previews and previews belonging to another job or video', () => {
     const job = {
       jobId: 'job-1', youtubeVideoId: 'dQw4w9WgXcQ', status: 'running', stage: 'transcribing',
