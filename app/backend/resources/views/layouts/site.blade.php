@@ -51,11 +51,12 @@
                 <span>{{ $productName }}</span>
             </a>
             <nav class="site-nav" aria-label="Primary">
-                <a href="{{ route('marketing.home') }}#features">Features</a>
+                <a href="{{ route('marketing.home') }}#lyrics">Lyrics</a>
+                <a href="{{ route('marketing.home') }}#models">Models</a>
+                <a href="{{ route('marketing.home') }}#features">Study tools</a>
                 <a href="{{ route('marketing.home') }}#how">How it works</a>
                 <a href="{{ route('marketing.home') }}#languages">Languages</a>
                 <a href="{{ route('marketing.home') }}#pricing">Pricing</a>
-                <a href="{{ route('marketing.home') }}#faq">FAQ</a>
             </nav>
             <div class="site-actions">
                 @auth
@@ -69,7 +70,7 @@
                     @endif
                 @else
                     <a class="text-link" href="{{ route('login') }}">Sign in</a>
-                    <a class="button button-accent button-small" href="{{ route('marketing.home') }}#pricing">Start learning</a>
+                    <a class="button button-accent button-small" href="{{ route('marketing.home') }}#pricing">Get started</a>
                 @endauth
             </div>
         </header>
@@ -81,7 +82,7 @@
         <footer class="site-footer">
             <div>
                 <strong>{{ $productName }}</strong>
-                <p>Generated subtitles, translations, romanization, and word cards for public YouTube videos.</p>
+                <p>Learn from the videos and music you love. AI subtitles, interactive word cards, and lyrics correction for YouTube.</p>
             </div>
             <nav aria-label="Footer">
                 <a href="{{ route('marketing.pricing') }}">Pricing</a>

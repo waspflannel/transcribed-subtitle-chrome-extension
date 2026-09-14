@@ -3,10 +3,10 @@
 @section('content')
     <section class="page-hero">
         <p class="eyebrow">Pricing</p>
-        <h1>Simple monthly plans, metered in <span class="hl">generated-video minutes</span>.</h1>
+        <h1>Simple monthly plans for <span class="hl">your kind of learning</span>.</h1>
         <p>
-            Pick the queue speed, monthly minute cap, and learning depth that match your YouTube study volume.
-            Checkout is hosted by Stripe, and billing changes are managed from the account dashboard.
+            Choose your monthly video minutes and how many videos you generate at once.
+            Every plan includes model choice, learning tools, and lyrics correction.
         </p>
     </section>
 

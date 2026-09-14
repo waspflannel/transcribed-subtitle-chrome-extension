@@ -8,6 +8,16 @@
     }
 }
 
+@media (max-width: 1100px) {
+    .site-nav {
+        display: none;
+    }
+
+    .site-header {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+}
+
 @media (max-width: 1020px) {
     .workspace-grid {
         grid-template-columns: minmax(0, 1fr);
@@ -29,14 +39,6 @@
         font-size: 2.1rem;
     }
 
-    .site-nav {
-        display: none;
-    }
-
-    .site-header {
-        grid-template-columns: auto minmax(0, 1fr);
-    }
-
     .split-section {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -46,15 +48,29 @@
     }
 
     .hero-band {
-        padding-bottom: 220px;
+        padding-bottom: 88px;
     }
 
     .mk-wrap {
-        margin-top: -180px;
+        margin-top: -46px;
     }
 
-    .mk-player {
-        min-height: 370px;
+    .demo-scene {
+        grid-template-columns: 260px minmax(0, 1fr);
+    }
+
+    .demo-sidebar {
+        padding: 22px;
+    }
+
+    .demo-player {
+        padding-left: 18px;
+        padding-right: 18px;
+    }
+
+    .lyrics-section {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 30px;
     }
 
     .mk-tok {
@@ -100,7 +116,84 @@
     }
 
     .hero-band {
-        padding-top: 130px;
+        padding-top: 118px;
+        gap: 18px;
+    }
+
+    .hero-lede {
+        font-size: 1rem;
+    }
+
+    .hero-meta {
+        font-size: 0.63rem;
+        letter-spacing: 0.06em;
+        max-width: 34ch;
+    }
+
+    .demo-label,
+    .mk-dots {
+        display: none;
+    }
+
+    .demo-tabs button {
+        align-items: center;
+        flex-direction: column;
+        font-size: 0.76rem;
+        gap: 4px;
+        padding: 10px 5px;
+    }
+
+    .demo-scene,
+    .model-options {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .demo-sidebar {
+        border-right: 0;
+        border-top: 2px solid var(--ink);
+        gap: 14px;
+    }
+
+    .demo-sidebar h2 br {
+        display: none;
+    }
+
+    .demo-player {
+        grid-row: 1;
+        min-height: 300px;
+    }
+
+    .demo-video-label {
+        font-size: 0.62rem;
+    }
+
+    .demo-player .mk-tok {
+        font-size: 1.05rem;
+    }
+
+    .model-options article,
+    .model-options article + article {
+        padding: 26px 0;
+        border-left: 0;
+    }
+
+    .model-options article + article {
+        border-top: 1px solid var(--line);
+    }
+
+    .lyric-sheet {
+        padding: 24px;
+        transform: none;
+    }
+
+    .lyric-comparison p {
+        font-size: 1.25rem;
+    }
+
+    .lyrics-section h2,
+    .models-section h2,
+    .languages-section h2 {
+        font-size: 2rem;
     }
 
     .mk-card {
@@ -114,6 +207,14 @@
 }
 
 @media (max-width: 440px) {
+    html {
+        scroll-padding-top: 120px;
+    }
+
+    .hero-band h1 {
+        font-size: 2.4rem;
+    }
+
     .site-header {
         align-items: stretch;
         gap: 8px;

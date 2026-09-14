@@ -17,7 +17,12 @@
         </div>
         <div data-reveal data-reveal-delay="100">
             <h2>Install help</h2>
-            <p>If your beta invitation did not include a Chrome install link, contact support and request the current extension package or Chrome Web Store beta link.</p>
+            @if (config('marketing.chrome_extension_url'))
+                <p><a class="strong-link" href="{{ config('marketing.chrome_extension_url') }}">Add the extension to desktop Chrome</a>, then create an account, verify your email, and choose a plan. Sign in to the extension with that same account.</p>
+            @else
+                <p>Before subscribing, email support to request the current extension package or Chrome Web Store beta link. Install it in desktop Chrome, create an account, verify your email, and choose a plan. Sign in to the extension with that same account.</p>
+            @endif
+            <p>An active subscription is required to generate subtitles. The website preview works without an account.</p>
         </div>
     </section>
 

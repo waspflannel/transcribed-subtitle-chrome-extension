@@ -43,7 +43,7 @@ class SaasWebsiteAndSeoTest extends TestCase
     public function test_public_pages_render_seo_metadata_and_beta_copy(): void
     {
         $pages = [
-            ['marketing.home', 'actually watch', 'Only public YouTube watch pages and Shorts'],
+            ['marketing.home', 'music you love', 'Only public YouTube watch pages and Shorts'],
             ['marketing.pricing', 'Simple monthly plans', 'Stripe'],
             ['marketing.privacy', 'Video-derived data', 'raw audio is deleted'],
             ['marketing.terms', 'Paid beta terms', 'Refund requests'],
@@ -92,8 +92,11 @@ class SaasWebsiteAndSeoTest extends TestCase
         $this
             ->get(route('marketing.home', absolute: false))
             ->assertOk()
-            ->assertSeeText('Learn a language from the videos you')
-            ->assertSeeText('Click any word for an instant flashcard')
+            ->assertSeeText('Learn a language from the videos and')
+            ->assertSeeText('Interactive preview')
+            ->assertSeeText('Bring your own lyrics')
+            ->assertSeeText('Cerebras')
+            ->assertSeeText('Luna')
             ->assertSeeText('Reopen generated tracks from your history while they are retained.')
             ->assertDontSeeText('saved to your account for review')
             ->assertSeeText('Supported subtitle and translation languages')
@@ -101,10 +104,34 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertDontSeeText('tier 1')
             ->assertDontSee('lang-tier', false)
             ->assertDontSee('lang-badge', false)
-            ->assertSeeText('generated-video minutes')
+            ->assertSeeText('video minutes per month')
+            ->assertDontSeeText('AI batch')
+            ->assertDontSeeText('instant flashcard')
             ->assertSee(route('register', ['plan' => 'base']), false)
             ->assertSee(route('register', ['plan' => 'plus']), false)
             ->assertSee(route('register', ['plan' => 'pro']), false);
+    }
+
+    public function test_marketing_explains_install_access_before_purchase_with_and_without_a_store_link(): void
+    {
+        config(['marketing.chrome_extension_url' => null]);
+
+        foreach (['/', '/pricing'] as $path) {
+            $this->get($path)->assertOk()
+                ->assertSeeText('before subscribing')
+                ->assertSee(route('marketing.support').'#extension-install', false)
+                ->assertSee(route('register', ['plan' => 'base']), false);
+        }
+
+        $this->get('/support')->assertOk()->assertSeeText('Before subscribing');
+
+        $extensionUrl = 'https://chromewebstore.google.com/detail/example-extension';
+        config(['marketing.chrome_extension_url' => $extensionUrl]);
+
+        foreach (['/', '/pricing', '/support'] as $path) {
+            $this->get($path)->assertOk()->assertSee($extensionUrl, false)
+                ->assertDontSeeText('Request your beta install link');
+        }
     }
 
     public function test_retired_marketing_pages_redirect_to_landing_anchors(): void

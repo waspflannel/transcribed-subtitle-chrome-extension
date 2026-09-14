@@ -1,3 +1,11 @@
+<div class="plan-access" data-reveal>
+    <p><strong>Included with every plan:</strong> Luna and Cerebras model choice, translations, optional romanization, interactive word cards, and lyrics correction.</p>
+    @if (config('marketing.chrome_extension_url'))
+        <p>Paid beta for desktop Chrome. <a class="strong-link" href="{{ config('marketing.chrome_extension_url') }}">Get the extension</a>, then choose a subscription to generate subtitles.</p>
+    @else
+        <p>Paid beta for desktop Chrome. <a class="strong-link" href="{{ route('marketing.support') }}#extension-install">Request your beta install link</a> before subscribing.</p>
+    @endif
+</div>
 <div class="plan-row" data-reveal>
     @foreach ($plans as $plan)
         @php($featured = $loop->index === intdiv($loop->count - 1, 2))
@@ -10,11 +18,10 @@
                 <p class="price">${{ number_format(((int) $plan['price_cents']) / 100, 0) }}<span>/month</span></p>
             </div>
             <ul class="check-list">
-                <li>{{ $plan['monthly_minutes'] }} generated-video minutes</li>
+                <li>{{ $plan['monthly_minutes'] }} video minutes per month</li>
                 <li>{{ $plan['speed_label'] }}</li>
-                <li>{{ $plan['concurrency'] }} concurrent {{ $plan['concurrency'] === 1 ? 'generation' : 'generations' }}</li>
-                <li>{{ $plan['batch_concurrency'] }} AI batch {{ $plan['batch_concurrency'] === 1 ? 'slot' : 'slots' }}</li>
-                <li>On-demand word cards included</li>
+                <li>Generate {{ $plan['concurrency'] }} {{ $plan['concurrency'] === 1 ? 'video' : 'videos' }} at a time</li>
+                <li>All learning tools included</li>
             </ul>
             @auth
                 @if ($checkoutBlocked ?? false)
@@ -32,5 +39,5 @@
     @endforeach
 </div>
 <p class="plan-note">
-    Usage is the public video's generated duration, rounded up to whole minutes. Running jobs reserve minutes, completed tracks debit them, and failed jobs release unused reservations. Checkout is hosted by Stripe; beta refunds are handled through support when billing, access, or generation failures prevent reasonable use.
+    Minutes count the video you generate, rounded up to whole minutes. A 10-minute video uses 10 minutes; replaying a retained track uses none. Failed generations release unused reserved minutes. Checkout is hosted by Stripe. Cancel from your account; contact support for beta refunds.
 </p>
