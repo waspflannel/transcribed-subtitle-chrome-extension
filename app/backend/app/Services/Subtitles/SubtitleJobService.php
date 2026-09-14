@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
-use App\Services\Text\SubtitleText;
 use App\Support\PostgresErrors;
 use App\Support\SubtitleProcessingVersion;
 use Carbon\Carbon;
@@ -82,11 +81,6 @@ class SubtitleJobService
         string $installId,
         ?string $generationTier = null,
     ): SubtitleJob {
-        $hints = array_values(array_unique(array_map(
-            fn (string $hint): string => SubtitleText::collapseWhitespace($hint),
-            $payload['vocabularyHints'] ?? [],
-        )));
-        sort($hints, SORT_STRING);
         $mode = (string) config('subtitles.transcription.ingestion_mode', 'upload');
         if (! in_array($mode, ['upload', 'youtube_url'], true)) {
             throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
@@ -94,9 +88,8 @@ class SubtitleJobService
         $selection = SubtitleModel::configured($payload['aiProvider'] ?? null);
         $payload['aiProvider'] = $selection->provider;
         $payload['aiModel'] = $selection->model;
-        $payload['vocabularyHints'] = $hints;
         $payload['transcriptionIngestionMode'] = $mode;
-        $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($hints, $mode);
+        $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($mode);
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($includeRomanization, $includeTranslation);
@@ -358,7 +351,6 @@ class SubtitleJobService
             'processing_version' => $processingVersion,
             'ai_provider' => $payload['aiProvider'],
             'ai_model' => $payload['aiModel'],
-            'vocabulary_hints' => $payload['vocabularyHints'],
             'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
             'transcription_options_hash' => $payload['transcriptionOptionsHash'],
             'generation_tier' => $generationTier,

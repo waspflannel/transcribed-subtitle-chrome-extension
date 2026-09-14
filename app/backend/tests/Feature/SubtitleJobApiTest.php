@@ -41,6 +41,7 @@ use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use App\Support\SubtitleProcessingVersion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\NullQueue;
@@ -113,27 +114,21 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame($usageCount, BillingUsageEvent::count());
     }
 
-    public function test_vocabulary_hints_are_validated_normalized_and_isolate_job_and_transcript_reuse(): void
+    public function test_legacy_vocabulary_hints_are_ignored_without_changing_price_or_job_reuse(): void
     {
         config(['subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000]);
         $payload = $this->validPayload(['youtubeVideoId' => 'hintstest01', 'vocabularyHints' => ['Marie Curie', 'ElevenLabs', 'Marie Curie']]);
-        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
-        $this->assertSame(['ElevenLabs', 'Marie Curie'], SubtitleJob::query()->firstOrFail()->vocabulary_hints);
-        $this->assertSame(['ElevenLabs', 'Marie Curie'], $this->transcriptionService->lastHints);
+        $created = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $this->assertArrayNotHasKey('vocabulary_hints', SubtitleJob::query()->firstOrFail()->getAttributes());
         $transcriptionCost = SubtitleJobEvent::query()->where('event', 'provider.cost_estimated')->where('stage', 'transcribing')->firstOrFail();
-        $this->assertSame(1200, $transcriptionCost->context['unit_price_microusd']);
+        $this->assertSame(1000, $transcriptionCost->context['unit_price_microusd']);
         $this->assertStringNotContainsString('Marie Curie', json_encode($transcriptionCost->context));
-        $payload['vocabularyHints'] = ['ElevenLabs', 'Marie Curie'];
-        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $this->postJson('/v1/subtitle-jobs', [...$payload, 'vocabularyHints' => ['another name']])
+            ->assertOk()->assertJsonPath('jobId', $created->json('jobId'));
+        unset($payload['vocabularyHints']);
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $created->json('jobId'));
         $this->assertSame(1, $this->transcriptionService->chunkCalls);
-        $payload['vocabularyHints'] = ['another name'];
-        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk();
-        $this->assertSame(2, $this->transcriptionService->chunkCalls);
-        $this->assertSame(2, SubtitleJob::count());
-
-        foreach ([[str_repeat('a', 50)], ['one two three four five six'], ['bad\\term'], ['<term>'], array_fill(0, 21, 'term')] as $invalid) {
-            $this->postJson('/v1/subtitle-jobs', [...$payload, 'vocabularyHints' => $invalid])->assertUnprocessable();
-        }
+        $this->assertSame(1, SubtitleJob::count());
     }
 
     public function test_url_mode_validates_metadata_and_completes_without_download_or_encoding(): void
@@ -158,16 +153,41 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('failed', SubtitleJob::query()->firstOrFail()->status);
     }
 
-    public function test_hinted_transcript_cache_is_scoped_to_owner_and_ingestion_mode(): void
+    public function test_jobs_reuse_only_the_same_transcription_ingestion_mode(): void
     {
+        $payload = $this->validPayload();
+        $upload = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        config(['subtitles.transcription.ingestion_mode' => 'youtube_url']);
+        $url = $this->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+
+        $this->assertNotSame($upload->json('jobId'), $url->json('jobId'));
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $url->json('jobId'));
+        config(['subtitles.transcription.ingestion_mode' => 'upload']);
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $upload->json('jobId'));
+        $this->assertSame(2, SubtitleJob::count());
+        $this->assertSame(1, $this->transcriptionService->chunkCalls);
+        $this->assertSame(1, $this->transcriptionService->urlCalls);
+    }
+
+    public function test_transcript_cache_separates_ingestion_modes_with_keys_that_fit_the_database_column(): void
+    {
+        config(['ai.providers.eleven.models.transcription.default' => 'scribe_v2']);
         $cache = app(VideoTranscriptCache::class);
         $transcript = $this->transcriptionService->transcriptFromChunkPayloads([], 'spa', 42);
-        $cache->store('dQw4w9WgXcQ', 'spa', $transcript, 42, ['Marie Curie'], 'upload', 1);
+        $cache->store('dQw4w9WgXcQ', 'spa', $transcript, 42);
 
-        $this->assertNotNull($cache->find('dQw4w9WgXcQ', 'spa', ['Marie Curie'], 'upload', 1));
-        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa', ['Marie Curie'], 'upload', 2));
-        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa', ['Marie Curie'], 'youtube_url', 1));
-        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa'));
+        $upload = $cache->find('dQw4w9WgXcQ', 'spa');
+        $this->assertNotNull($upload);
+        $this->assertNull($cache->find('dQw4w9WgXcQ', 'spa', 'youtube_url'));
+        $cache->store('dQw4w9WgXcQ', 'spa', $transcript, 42, 'youtube_url');
+        $url = $cache->find('dQw4w9WgXcQ', 'spa', 'youtube_url');
+        $this->assertNotNull($url);
+        $this->assertNotSame($upload->id, $url->id);
+        $this->assertSame($upload->id, $cache->find('dQw4w9WgXcQ', 'spa')->id);
+        $this->assertSame(2, CachedVideoTranscript::count());
+        foreach ([$upload, $url] as $entry) {
+            $this->assertLessThanOrEqual(64, strlen($entry->transcription_model));
+        }
     }
 
     private RecordingYouTubeAudioSource $audioSource;
@@ -2068,7 +2088,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('cached_video_transcripts', [
             'youtube_video_id' => 'cachehit001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v5-mixed-language',
+            'transcription_model' => SubtitleProcessingVersion::transcriptCacheModel('scribe-test'),
             'audio_duration_seconds' => 42,
         ]);
 
@@ -2137,7 +2157,7 @@ class SubtitleJobApiTest extends TestCase
         CachedVideoTranscript::create([
             'youtube_video_id' => 'cacheexp001',
             'requested_source_language' => 'auto',
-            'transcription_model' => 'scribe-test:transcript-chunks-v5-mixed-language',
+            'transcription_model' => SubtitleProcessingVersion::transcriptCacheModel('scribe-test'),
             'audio_duration_seconds' => 999,
             'payload' => ['language' => 'spa', 'durationSeconds' => 999.0, 'webVtt' => 'WEBVTT', 'segments' => []],
             'expires_at' => now()->subDay(),
@@ -3275,12 +3295,9 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 {
     public int $urlCalls = 0;
 
-    public array $lastHints = [];
-
-    public function transcribeYouTube(string $videoId, string $sourceLanguage, array $vocabularyHints = []): array
+    public function transcribeYouTube(string $videoId, string $sourceLanguage): array
     {
         $this->urlCalls++;
-        $this->lastHints = $vocabularyHints;
 
         return ['words' => [], 'language_code' => $sourceLanguage];
     }
@@ -3319,9 +3336,8 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
         return $audio;
     }
 
-    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, array $vocabularyHints = []): array
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
     {
-        $this->lastHints = $vocabularyHints;
         $this->chunkCalls++;
         $this->sourceLanguages[] = $sourceLanguage;
         $this->beforeTranscriptionResult?->__invoke($audio);

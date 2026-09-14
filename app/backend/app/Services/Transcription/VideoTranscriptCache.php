@@ -11,23 +11,22 @@ use Laravel\Ai\Enums\Lab;
  * Caches transcripts per video so re-generating the same YouTube video skips
  * acquire, optimize, and transcribe entirely. Keyed by
  * (youtube_video_id, requested_source_language, transcription model, and
- * processing version). Ingestion mode and normalized vocabulary hints also
- * distinguish entries. Hinted entries are scoped to the requesting user.
+ * processing version). Ingestion mode also distinguishes entries.
  *
  * `subtitles.transcript_cache.ttl_days` <= 0 disables both reads and writes.
  */
 class VideoTranscriptCache
 {
-    public function find(string $youtubeVideoId, string $requestedSourceLanguage, array $vocabularyHints = [], string $ingestionMode = 'upload', ?int $userId = null): ?CachedVideoTranscript
+    public function find(string $youtubeVideoId, string $requestedSourceLanguage, string $ingestionMode = 'upload'): ?CachedVideoTranscript
     {
-        if ($this->ttlDays() <= 0 || ($vocabularyHints !== [] && $userId === null)) {
+        if ($this->ttlDays() <= 0) {
             return null;
         }
 
         $entry = CachedVideoTranscript::query()
             ->where('youtube_video_id', $youtubeVideoId)
             ->where('requested_source_language', $requestedSourceLanguage)
-            ->where('transcription_model', $this->transcriptionModel($vocabularyHints, $ingestionMode, $userId))
+            ->where('transcription_model', $this->transcriptionModel($ingestionMode))
             ->where('expires_at', '>', now())
             ->first();
 
@@ -39,11 +38,9 @@ class VideoTranscriptCache
         string $requestedSourceLanguage,
         TimestampedTranscript $transcript,
         int $audioDurationSeconds,
-        array $vocabularyHints = [],
         string $ingestionMode = 'upload',
-        ?int $userId = null,
     ): void {
-        if ($this->ttlDays() <= 0 || ($vocabularyHints !== [] && $userId === null)) {
+        if ($this->ttlDays() <= 0) {
             return;
         }
 
@@ -51,7 +48,7 @@ class VideoTranscriptCache
             [
                 'youtube_video_id' => $youtubeVideoId,
                 'requested_source_language' => $requestedSourceLanguage,
-                'transcription_model' => $this->transcriptionModel($vocabularyHints, $ingestionMode, $userId),
+                'transcription_model' => $this->transcriptionModel($ingestionMode),
             ],
             [
                 'audio_duration_seconds' => $audioDurationSeconds,
@@ -102,15 +99,13 @@ class VideoTranscriptCache
         );
     }
 
-    private function transcriptionModel(array $vocabularyHints, string $ingestionMode, ?int $userId): string
+    private function transcriptionModel(string $ingestionMode): string
     {
         $model = SubtitleProcessingVersion::transcriptCacheModel(
             trim((string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default')),
         );
-        $variant = SubtitleProcessingVersion::transcriptionOptionsHash($vocabularyHints, $ingestionMode);
 
-        // User-provided hints must never seed another user's cached transcript.
-        return $variant === '' ? $model : $model.':'.hash('sha256', $variant.($vocabularyHints === [] ? '' : ':user:'.$userId));
+        return $ingestionMode === 'upload' ? $model : $model.':'.$ingestionMode;
     }
 
     private function ttlDays(): int

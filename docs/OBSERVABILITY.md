@@ -58,7 +58,7 @@ Define metrics for:
 
 Metrics select events from each job's current `run_id`. Cue batch queue wait starts at Laravel's own queue publication timestamp, including for successors in a chain. That timestamp has second precision; a retried payload retains its original publication time, so its wait can include its earlier attempts and backoff. It is not pure broker residence time across retries.
 
-`backend.transcription_quality` logs job/run IDs, normalized chunk language codes, bounded language probabilities, and the count/mean/minimum of available word log probabilities. No words, hints or provider payloads are logged. These are diagnostic signals, not measured transcription accuracy or automatic retry thresholds. `backend.transcription_started` also records ingestion mode and hint count. Combined analysis emits one stage duration; configured per-feature costs remain estimates, with readings produced by the same selected AI model. Hinted transcription estimates include the provider's documented 20% surcharge.
+`backend.transcription_quality` logs job/run IDs, normalized chunk language codes, bounded language probabilities, and the count/mean/minimum of available word log probabilities. No words or provider payloads are logged. These are diagnostic signals, not measured transcription accuracy or automatic retry thresholds. `backend.transcription_started` also records ingestion mode. Combined analysis emits one stage duration; configured per-feature costs remain estimates, with readings produced by the same selected AI model. Vocabulary hints and their surcharge were removed.
 
 ## Traces
 

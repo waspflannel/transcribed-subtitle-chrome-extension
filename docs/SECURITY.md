@@ -1,6 +1,6 @@
 # Security
 
-Vocabulary hints are optional user content. They are validated before dispatch, stored on the owned subtitle job, and sent only as Scribe keyterms. Normalized hints and ingestion mode distinguish completed-job reuse; hinted transcript-cache keys additionally include the owner. Other users and jobs with different hints cannot reuse those entries. Hint text is excluded from telemetry. Cached hinted output follows transcript-cache expiry/pruning; it is not exposed through a shared transcript API.
+Vocabulary hints were removed on 2026-09-14. New transcription requests contain no user-provided keyterms. Job and transcript processing versions prevent reuse of old hinted output for new generations; saved tracks remain owner-scoped. Public-audio transcript caches distinguish ingestion mode and contain no user-provided vocabulary.
 
 ## Security Baseline
 

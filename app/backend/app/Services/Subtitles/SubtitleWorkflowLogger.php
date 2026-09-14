@@ -92,7 +92,6 @@ class SubtitleWorkflowLogger
             'model' => (string) config('ai.providers.'.Lab::ElevenLabs->value.'.models.transcription.default'),
             'timestamps_granularity' => 'word',
             'ingestion_mode' => $job->transcription_ingestion_mode,
-            'vocabulary_hint_count' => count($job->vocabulary_hints ?? []),
         ]);
     }
 

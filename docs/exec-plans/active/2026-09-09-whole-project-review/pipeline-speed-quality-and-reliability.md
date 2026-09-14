@@ -1,5 +1,7 @@
 # Pipeline speed, quality and reliability
 
+2026-09-14 update: vocabulary hints were removed at the user's request. References below to their implementation and screenshots are historical evidence, not current behavior. See [the removal and isolation plan](../2026-09-14-remove-keyterms-and-test-elevenlabs-voice-isolation.md).
+
 Branch context: selected implementation below is on `codex/subtitle-pipeline-quality`, based on main `b454e99`. Historical records below predate this implementation; [the index explains their application revisions](00-index.md#cleanup-branch-preservation).
 
 Created: 2026-09-09

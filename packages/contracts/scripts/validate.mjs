@@ -81,12 +81,6 @@ for (const aiProvider of ['openai', 'cerebras']) {
 for (const aiProvider of ['hybrid', 'invalid', null, 1]) {
   if (generationRequest({ ...generationFixture, aiProvider })) throw new Error('Invalid AI provider accepted.');
 }
-if (!generationRequest({ ...generationFixture, vocabularyHints: ['Marie Curie', 'مرحبا'] })) {
-  throw new Error('Valid vocabulary hints were rejected.');
-}
-for (const vocabularyHints of [['a'.repeat(50)], Array(21).fill('term'), ['one two three four five six'], ['bad\\term'], ['<term>']]) {
-  if (generationRequest({ ...generationFixture, vocabularyHints })) throw new Error('Invalid vocabulary hints were accepted.');
-}
 const unavailableTranslation = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-track-response.json'), 'utf8'));
 unavailableTranslation.cues[0].translatedText = '';
 if (!ajv.getSchema('track-response.schema.json')(unavailableTranslation)) throw new Error('Unavailable translation was rejected.');

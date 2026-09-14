@@ -128,22 +128,21 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $this->assertTrue($requestMatched);
     }
 
-    public function test_url_ingestion_sends_only_a_canonical_youtube_url_and_repeated_keyterms(): void
+    public function test_url_ingestion_sends_a_canonical_youtube_url_without_keyterms(): void
     {
         Http::fake(['api.elevenlabs.test/v1/speech-to-text' => Http::response($this->sampleScribePayload())]);
-        $this->service()->transcribeYouTube('dQw4w9WgXcQ', 'auto', ['ElevenLabs', 'Marie Curie']);
+        $this->service()->transcribeYouTube('dQw4w9WgXcQ', 'auto');
 
         Http::assertSentCount(1);
         Http::assertSent(fn (Request $request): bool => str_contains($request->body(), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
             && str_contains($request->body(), 'name="source_url"')
-            && substr_count($request->body(), 'name="keyterms"') === 2
-            && str_contains($request->body(), 'Marie Curie')
+            && ! str_contains($request->body(), 'name="keyterms"')
             && ! str_contains($request->body(), 'name="file"')
             && ! str_contains($request->body(), 'name="language_code"'));
         Process::assertNothingRan();
     }
 
-    public function test_upload_keeps_keyterms_and_allowlisted_quality_fields(): void
+    public function test_upload_omits_keyterms_and_keeps_allowlisted_quality_fields(): void
     {
         $response = $this->sampleScribePayload();
         $response['words'][0]['logprob'] = -0.4;
@@ -152,12 +151,12 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $response['words'][1]['end'] = null;
         Http::fake(function (Request $request) use ($response) {
             $this->assertStringContainsString('name="file"', $request->body());
-            $this->assertStringContainsString('name="keyterms"', $request->body());
+            $this->assertStringNotContainsString('name="keyterms"', $request->body());
             $this->assertStringNotContainsString('name="source_url"', $request->body());
 
             return Http::response($response);
         });
-        $payload = $this->service()->transcribeChunk($this->audio, 'spa', ['Marie Curie']);
+        $payload = $this->service()->transcribeChunk($this->audio, 'spa');
 
         $this->assertSame(-0.4, $payload['words'][0]['logprob']);
         $this->assertArrayNotHasKey('logprob', $payload['words'][1]);

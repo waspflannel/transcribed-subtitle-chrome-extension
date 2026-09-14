@@ -213,7 +213,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return changeSavedGenerationFromPanel(message);
 
     case 'panel.generateSubtitles':
-      return generateSubtitlesFromPanel(message.windowId, message.vocabularyHints ?? []);
+      return generateSubtitlesFromPanel(message.windowId);
 
     case 'panel.cancelSubtitleJob':
       return cancelSubtitleJobFromPanel(message, message.windowId);
@@ -520,7 +520,7 @@ async function updateSettingsFromContent(
   return { ok: true, settings };
 }
 
-async function generateSubtitlesFromPanel(windowId?: number, vocabularyHints: string[] = []): Promise<PanelState> {
+async function generateSubtitlesFromPanel(windowId?: number): Promise<PanelState> {
   const generationResetVersion = localStateResetVersion;
   const activeTab = await getActiveTab(windowId);
   const activeTabId = activeTab?.id ?? null;
@@ -649,7 +649,7 @@ async function generateSubtitlesFromPanel(windowId?: number, vocabularyHints: st
 
       await setTabOperation(activeTabId, { kind: 'generation', accountId: session.account.id, youtubeVideoId: pageStatus.videoId });
       generationStarted = true;
-      void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, session, operation, vocabularyHints)
+      void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, session, operation)
         .finally(() => {
           if (tabOperations.get(activeTabId) === operation) tabGenerationInFlight.delete(activeTabId);
         });
@@ -673,7 +673,6 @@ async function generateSubtitlesForTab(
   pageSnapshot: PageSnapshot,
   session: StoredExtensionSession,
   operation: symbol,
-  vocabularyHints: string[],
 ): Promise<void> {
   const sessionId = session.sessionId;
   const accountId = session.account.id;
@@ -693,7 +692,6 @@ async function generateSubtitlesForTab(
 
     const installId = await getOrCreateInstallId();
     const initialJob = await subtitleApi.createSubtitleJob(installId, session.plainTextToken, {
-      ...(vocabularyHints.length ? { vocabularyHints } : {}),
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
       ...(isCreatePayloadVideoDurationSeconds(pageSnapshot.videoDurationSeconds)

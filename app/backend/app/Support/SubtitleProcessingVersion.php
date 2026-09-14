@@ -8,9 +8,9 @@ namespace App\Support;
  */
 final class SubtitleProcessingVersion
 {
-    public const JOB = 'scribe-v2-analysis-v15-';
+    public const JOB = 'scribe-v2-analysis-v16-';
 
-    public const TRANSCRIPT_CACHE = 'transcript-chunks-v5-mixed-language';
+    public const TRANSCRIPT_CACHE = 'transcript-chunks-v6';
 
     public const LEARNING_TOKEN_CACHE = 'learning-token-v10';
 
@@ -19,10 +19,8 @@ final class SubtitleProcessingVersion
         return $model.':'.self::TRANSCRIPT_CACHE;
     }
 
-    /** @param array<int, string> $hints */
-    public static function transcriptionOptionsHash(array $hints, string $mode): string
+    public static function transcriptionOptionsHash(string $mode): string
     {
-        return $hints === [] && $mode === 'upload'
-            ? '' : hash('sha256', json_encode([$mode, $hints], JSON_THROW_ON_ERROR));
+        return $mode === 'upload' ? '' : hash('sha256', $mode);
     }
 }

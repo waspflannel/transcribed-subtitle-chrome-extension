@@ -1,5 +1,4 @@
 import type { ExtensionSettings } from './settings-model';
-import { validVocabularyHints } from './vocabulary-hints';
 import type { YoutubePageInfo } from './youtube';
 import type { LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
@@ -115,7 +114,6 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.generateSubtitles';
-      vocabularyHints?: string[];
       windowId?: number;
     }
   | {
@@ -212,7 +210,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'background.getActiveCue':
       return hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
     case 'panel.generateSubtitles':
-      return optionalNumber(value, 'windowId') && (value.vocabularyHints === undefined || validVocabularyHints(value.vocabularyHints));
+      return optionalNumber(value, 'windowId');
     case 'content.getState':
       return optionalBoolean(value, 'revalidateSavedGeneration');
     case 'panel.logout':

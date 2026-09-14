@@ -30,7 +30,6 @@ class SubtitleJob extends Model
         'generation_tier',
         'include_romanization',
         'include_translation',
-        'vocabulary_hints',
         'transcription_ingestion_mode',
         'transcription_options_hash',
         'status',
@@ -93,7 +92,6 @@ class SubtitleJob extends Model
             'include_translation' => 'boolean',
             'progress_percent' => 'integer',
             'video_duration_seconds' => 'integer',
-            'vocabulary_hints' => 'array',
         ];
     }
 }

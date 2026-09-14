@@ -42,32 +42,32 @@ class ElevenLabsScribeTranscriptionService
      *
      * @return array<string, mixed>
      */
-    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, array $vocabularyHints = []): array
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
     {
         $this->assertSupportedAudioMime($audio);
 
-        return $this->transcribeSource($audio, $sourceLanguage, $vocabularyHints);
+        return $this->transcribeSource($audio, $sourceLanguage);
     }
 
     /** @return array<string, mixed> */
-    public function transcribeYouTube(string $videoId, string $sourceLanguage, array $vocabularyHints = []): array
+    public function transcribeYouTube(string $videoId, string $sourceLanguage): array
     {
         if (preg_match('/^[A-Za-z0-9_-]{11}$/', $videoId) !== 1) {
             throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_video_id']);
         }
 
-        return $this->transcribeSource('https://www.youtube.com/watch?v='.$videoId, $sourceLanguage, $vocabularyHints);
+        return $this->transcribeSource('https://www.youtube.com/watch?v='.$videoId, $sourceLanguage);
     }
 
     /** @return array<string, mixed> */
-    private function transcribeSource(TemporaryAudioFile|string $audio, string $sourceLanguage, array $vocabularyHints): array
+    private function transcribeSource(TemporaryAudioFile|string $audio, string $sourceLanguage): array
     {
         $provider = Lab::ElevenLabs;
         ['apiKey' => $apiKey, 'model' => $model] = $this->transcriptionConfig($provider);
 
         try {
             return $this->validatedTranscriptionPayload(
-                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model, $vocabularyHints),
+                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model),
                 $provider,
                 $model,
             );
@@ -360,12 +360,8 @@ class ElevenLabsScribeTranscriptionService
         Lab $provider,
         string $apiKey,
         string $model,
-        array $vocabularyHints,
     ): Response {
         $payload = $this->transcriptionRequestPayload($sourceLanguage, $model);
-        foreach ($vocabularyHints as $hint) {
-            $payload[] = ['name' => 'keyterms', 'contents' => $hint];
-        }
         $request = Http::withHeaders(['xi-api-key' => $apiKey])
             ->timeout((int) config('subtitles.transcription.timeout_seconds'));
         if (is_string($audio)) {

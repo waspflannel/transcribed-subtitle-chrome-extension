@@ -17,9 +17,6 @@ final class SubtitleProviderCostRecorder
     {
         $billedMinutes = max(1, (int) ceil(max(1, (float) $audioDurationSeconds) / 60));
         $unitPrice = max(0, (int) config('subtitles.costs.elevenlabs_scribe_microusd_per_minute', 0));
-        if (($job->vocabulary_hints ?? []) !== []) {
-            $unitPrice = (int) ceil($unitPrice * 1.2);
-        }
 
         $this->record(
             job: $job,

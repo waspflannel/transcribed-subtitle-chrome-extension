@@ -66,7 +66,7 @@ class SubtitleGenerationPipeline
             // A cached transcript for this video makes acquire, optimize, and
             // transcribe unnecessary -- roughly 45% of a job's wall time.
             $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language,
-                $job->vocabulary_hints ?? [], $job->transcription_ingestion_mode, $job->user_id);
+                $job->transcription_ingestion_mode);
 
             if ($cached !== null) {
                 $stage = 'transcribing';
@@ -320,9 +320,9 @@ class SubtitleGenerationPipeline
                 || $audioStartSeconds !== 0.0 || $nominalStartSeconds !== 0.0 || $nominalEndSeconds !== null) {
                 throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_url_transcription_chunk']);
             }
-            $payload = $this->transcriptionService->transcribeYouTube($job->youtube_video_id, $job->source_language, $job->vocabulary_hints ?? []);
+            $payload = $this->transcriptionService->transcribeYouTube($job->youtube_video_id, $job->source_language);
         } else {
-            $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language, $job->vocabulary_hints ?? []);
+            $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
         }
 
         $this->telemetry->recordTranscriptionChunkCompleted($job, $chunkIndex, $requestStartedAtMs, $chunkAudio?->sizeBytes);
@@ -421,9 +421,7 @@ class SubtitleGenerationPipeline
                     requestedSourceLanguage: $job->source_language,
                     transcript: $transcript,
                     audioDurationSeconds: $durationSeconds,
-                    vocabularyHints: $job->vocabulary_hints ?? [],
                     ingestionMode: $job->transcription_ingestion_mode,
-                    userId: $job->user_id,
                 );
                 $this->artifacts->putTranscript($job, $transcript);
                 $indexes = $this->artifacts->appendDraftCues($job, $draftCues);

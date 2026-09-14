@@ -31,8 +31,6 @@ class CreateSubtitleJobRequest extends FormRequest
             'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
-            'vocabularyHints' => ['sometimes', 'array', 'list', 'max:20'],
-            'vocabularyHints.*' => ['required', 'string', 'max:49', 'regex:/^[^<>\{\}\[\]\\\\\s]+(?:\s+[^<>\{\}\[\]\\\\\s]+){0,4}$/u'],
         ];
     }
 
@@ -54,7 +52,6 @@ class CreateSubtitleJobRequest extends FormRequest
             'targetLanguage' => $validated['targetLanguage'],
             'includeRomanization' => $this->boolean('includeRomanization'),
             'includeTranslation' => $this->boolean('includeTranslation'),
-            'vocabularyHints' => $validated['vocabularyHints'] ?? [],
         ];
 
         if (isset($validated['aiProvider'])) {
