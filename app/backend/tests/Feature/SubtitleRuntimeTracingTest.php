@@ -958,7 +958,7 @@ class TraceRecordingTranslationAnalysisProvider extends LaravelAiTranslationAnal
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null, ?SubtitleModel $selection = null): CueEnrichmentResult
+    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null, ?SubtitleModel $selection = null, bool $validateOutput = true): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
 

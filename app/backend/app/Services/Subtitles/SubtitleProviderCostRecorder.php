@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Ai\SubtitleModel;
 use App\Models\SubtitleJob;
 use Illuminate\Support\Facades\DB;
 use Laravel\Ai\Enums\Lab;
@@ -35,9 +36,9 @@ final class SubtitleProviderCostRecorder
      * Record configured feature estimates against the shared analysis model.
      * These rows are estimates, not separate provider requests or actual usage.
      */
-    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false, string $requiredStatus = 'running'): void
+    public function recordAnalyzedCueBatch(SubtitleJob $job, int $cueCount, bool $includeTranslation = true, bool $includeRomanization = false, string $requiredStatus = 'running', ?SubtitleModel $selection = null): void
     {
-        $model = $job->ai_model;
+        $selection ??= SubtitleModel::forJob($job);
 
         $stages = ['tokenizing' => 'tokenization'];
         if ($includeTranslation) {
@@ -50,11 +51,11 @@ final class SubtitleProviderCostRecorder
             $this->record(
                 job: $job,
                 stage: $stage,
-                provider: $job->ai_provider,
-                model: $model,
+                provider: $selection->provider,
+                model: $selection->model,
                 billingUnit: 'cue',
                 billedUnits: max(0, $cueCount),
-                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.$job->ai_provider."_{$purpose}_microusd_per_cue", 0)),
+                unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.$selection->provider."_{$purpose}_microusd_per_cue", 0)),
                 requiredStatus: $requiredStatus,
             );
         }
@@ -64,16 +65,17 @@ final class SubtitleProviderCostRecorder
      * One structured alignment call resolves the whole pasted-lyrics prompt,
      * so record it as a single per-call unit against the alignment model.
      */
-    public function recordCorrectionAlignment(SubtitleJob $job): void
+    public function recordCorrectionAlignment(SubtitleJob $job, ?SubtitleModel $selection = null): void
     {
+        $selection ??= SubtitleModel::forJob($job);
         $this->record(
             job: $job,
             stage: 'aligning',
-            provider: $job->ai_provider,
-            model: $job->ai_model,
+            provider: $selection->provider,
+            model: $selection->model,
             billingUnit: 'alignment_call',
             billedUnits: 1,
-            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.$job->ai_provider.'_alignment_microusd_per_call', 0)),
+            unitPriceMicrousd: max(0, (int) config('subtitles.costs.'.$selection->provider.'_alignment_microusd_per_call', 0)),
             requiredStatus: 'completed',
         );
     }

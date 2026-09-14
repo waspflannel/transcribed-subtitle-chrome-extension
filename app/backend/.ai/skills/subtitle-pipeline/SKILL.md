@@ -21,8 +21,9 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 
 - Use ElevenLabs Scribe v2 for speech-to-text and word timestamps.
 - Use `Laravel\Ai\Enums\Lab::ElevenLabs` for Scribe provider identity in transcription logs/config.
-- Use the subtitle job's saved `ai_provider` and `ai_model` for all text AI work, including analysis, full and clicked word cards, Quick Fix and lyrics alignment. Supported choices are OpenAI Luna and Cerebras; no hybrid routing or global config mutation. Scribe transcription stays independent.
+- Use the subtitle job's saved `ai_provider` and `ai_model` for generation analysis, full and clicked word cards, and Quick Fix. User-authorized exception: full lyrics replacement uses configured OpenAI/Luna for alignment and configured Cerebras for parallel analysis, without changing saved job selection or global config. Replacement logs and cost estimates use the actual stage provider. Scribe transcription stays independent.
 - Use narrow Laravel HTTP requests for Scribe while keeping the provider boundary behind `TranscriptionService`.
+- Full lyrics replacement has no content/output validation or partial-merge mode. Normalize usable model allocations and details without reintroducing rejection heuristics. Shared generation and Quick Fix validators remain unchanged.
 - Use `config/ai.php` for provider keys, custom base URLs, and model defaults.
 - Normalize Scribe responses to the stored field allowlist before chunk artifacts are written, and recheck the job/run state after a provider call before persisting its result.
 - Prefer job-level stage logs for current transcription observability.

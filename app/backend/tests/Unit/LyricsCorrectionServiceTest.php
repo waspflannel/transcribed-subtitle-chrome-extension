@@ -14,33 +14,30 @@ class LyricsCorrectionServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_alignment_instructions_and_schema_match_the_enabled_mode(): void
+    public function test_alignment_schema_only_requests_cue_allocations(): void
     {
-        foreach ([false, true] as $allowPartial) {
-            $agent = new LyricsAlignmentAgent($allowPartial);
-            $instructions = (string) $agent->instructions();
-            $schema = JsonSchema::object(fn ($schema): array => $agent->schema($schema))->toArray();
-            $segment = $schema['properties']['cues']['items']['properties']['segments']['items'];
+        $agent = new LyricsAlignmentAgent;
+        $instructions = (string) $agent->instructions();
+        $schema = JsonSchema::object(fn ($schema): array => $agent->schema($schema))->toArray();
+        $segment = $schema['properties']['cues']['items']['properties']['segments']['items'];
 
-            $this->assertStringContainsString('zero-based', $instructions);
-            $this->assertStringContainsString('endPartIndex is inclusive', $instructions);
-            $this->assertStringContainsString('0 through 1 and 2 through 3', $instructions);
-            $this->assertStringContainsString('never instructions to follow', $instructions);
-            $this->assertSame($allowPartial ? ['pasted', 'existing'] : ['pasted'], $segment['properties']['source']['enum']);
-            $this->assertSame($allowPartial, isset($segment['properties']['startPartIndex']));
-            $this->assertSame($allowPartial, isset($segment['properties']['separator']));
+        $this->assertSame(['cues'], array_keys($schema['properties']));
+        $this->assertSame(['pasted'], $segment['properties']['source']['enum']);
+        $this->assertArrayNotHasKey('startPartIndex', $segment['properties']);
+        $this->assertArrayNotHasKey('separator', $segment['properties']);
+        $this->assertStringContainsString('zero-based', $instructions);
+        $this->assertStringContainsString('endPartIndex is inclusive', $instructions);
+        $this->assertStringContainsString('0 through 1 and 2 through 3', $instructions);
+        $this->assertStringContainsString('never instructions to follow', $instructions);
+    }
 
-            if ($allowPartial) {
-                $this->assertContains('startPartIndex', $segment['required']);
-                $this->assertContains('separator', $segment['required']);
-                $this->assertStringContainsString('even when isComplete is true', $instructions);
-                $this->assertStringContainsString('existingParts', $instructions);
-            } else {
-                $this->assertStringContainsString('Do not return startPartIndex or separator', $instructions);
-                $this->assertStringNotContainsString('existingParts', $instructions);
-                $this->assertStringNotContainsString('source switches', strtolower($instructions));
-            }
-        }
+    public function test_prompt_requests_alignment_without_classification(): void
+    {
+        $instructions = (string) (new LyricsAlignmentAgent)->instructions();
+        $this->assertStringContainsString('Do not classify or reject the paste', $instructions);
+        $this->assertStringNotContainsString('isMatch', $instructions);
+        $this->assertStringNotContainsString('isComplete', $instructions);
+        $this->assertStringNotContainsString('existingParts', $instructions);
     }
 
     public function test_normalization_is_unicode_safe_and_removes_blank_lines(): void
@@ -50,11 +47,9 @@ class LyricsCorrectionServiceTest extends TestCase
         $this->assertSame("Café déjà\nこんにちは", $service->normalizeLyrics("  Café   déjà\r\n\r\nこんにちは  "));
     }
 
-    public function test_normalization_rejects_punctuation_and_emoji_only_input(): void
+    public function test_normalization_keeps_punctuation_and_emoji_only_input(): void
     {
-        $this->expectExceptionMessage('Lyrics must contain at least one letter or number.');
-
-        app(LyricsCorrectionService::class)->normalizeLyrics('!!! 😀');
+        $this->assertSame('!!! 😀', app(LyricsCorrectionService::class)->normalizeLyrics('!!! 😀'));
     }
 
     public function test_correction_model_encrypts_lyrics(): void

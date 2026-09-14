@@ -49,6 +49,36 @@ class CueEnrichmentServiceTest extends TestCase
         $this->assertSame('different-current-model', config("ai.providers.{$provider}.models.text.default"));
     }
 
+    public function test_unchecked_analysis_preserves_source_cues_and_accepts_model_bookkeeping_errors(): void
+    {
+        $parts = [$this->part(10, 'First', 1000, 2000), $this->part(11, 'Second', 2000, 3000), $this->part(12, 'Third', 3000, 4000)];
+        CueAnalysisAgent::fake([['cues' => [
+            ['cueId' => 'cue-11', 'index' => 0, 'translatedText' => 'Second translation', 'tokens' => [['index' => 99, 'text' => 'Second'], null]],
+            ['cueId' => 'wrong-id', 'index' => 1, 'translatedText' => 'First translation', 'tokens' => [['index' => -1, 'text' => 'First'], ['text' => '!']]],
+        ]]])->preventStrayPrompts();
+        $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch($parts, $parts, 'eng', 'spa', includeRomanization: true, validateOutput: false);
+        $this->assertSame(['First translation', 'Second translation', 'Third'], array_column($result->cues, 'translatedText'));
+        foreach ($result->cues as $i => $cue) {
+            $this->assertSame($parts[$i], array_intersect_key($cue, $parts[$i]));
+            $this->assertArrayNotHasKey('romanization', $cue);
+        }
+        $this->assertSame([['index' => 0, 'text' => 'First', 'normalizedText' => 'first']], $result->cues[0]['tokens']);
+        $this->assertSame([['index' => 0, 'text' => 'Second', 'normalizedText' => 'second']], $result->cues[1]['tokens']);
+        $this->assertSame([], $result->cues[2]['tokens']);
+    }
+
+    #[TestWith([[]])]
+    #[TestWith([['cues' => [null, ['cueId' => 'extra', 'tokens' => 'malformed']]]])]
+    public function test_unchecked_analysis_keeps_aligned_text_when_details_are_missing(array $output): void
+    {
+        $parts = [$this->part(0, 'Keep these lyrics')];
+        CueAnalysisAgent::fake([$output])->preventStrayPrompts();
+        $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch($parts, $parts, 'eng', 'spa', includeRomanization: true, validateOutput: false);
+        $this->assertCount(1, $result->cues);
+        $this->assertSame('Keep these lyrics', $result->cues[0]['translatedText']);
+        $this->assertSame([], $result->cues[0]['tokens']);
+    }
+
     public function test_luna_annotates_fixed_cues_and_returns_all_requested_language_work_once(): void
     {
         $parts = [$this->part(10, 'Hello world.', 1000, 2000)];

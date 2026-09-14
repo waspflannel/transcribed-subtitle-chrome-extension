@@ -31,6 +31,7 @@ class LaravelAiTranslationAnalysisProvider
         bool $includeRomanization = false,
         ?Closure $beforeRetry = null,
         ?SubtitleModel $selection = null,
+        bool $validateOutput = true,
     ): CueEnrichmentResult {
         if ($batch === [] || $allCues === []) {
             $this->failInvalidOutput('empty_source_cues');
@@ -38,7 +39,10 @@ class LaravelAiTranslationAnalysisProvider
 
         $selection ??= SubtitleModel::configured();
         $input = $this->analysisInput($batch, $allCues, $sourceLanguage, $targetLanguage, $includeTranslation, $includeRomanization);
-        $output = $this->promptAgent(CueAnalysisAgent::class, $input, $selection);
+        $output = $this->promptAgent(CueAnalysisAgent::class, $input, $selection, $validateOutput);
+        if (! $validateOutput) {
+            return $this->uncheckedAnalysis($output, $batch, $includeTranslation, $includeRomanization);
+        }
         try {
             return $this->validatedAnalysis($output, $batch, $includeTranslation, $includeRomanization);
         } catch (SubtitleProcessingException $exception) {
@@ -55,6 +59,49 @@ class LaravelAiTranslationAnalysisProvider
         }
 
         return $this->validatedAnalysis($this->promptAgent(CueAnalysisAgent::class, $input, $selection), $batch, $includeTranslation, $includeRomanization);
+    }
+
+    private function uncheckedAnalysis(array $output, array $sourceCues, bool $includeTranslation, bool $includeRomanization): CueEnrichmentResult
+    {
+        $knownIds = array_flip(array_column($sourceCues, 'cueId'));
+        $byId = [];
+        $remaining = [];
+        foreach (is_array($output['cues'] ?? null) ? $output['cues'] : [] as $cue) {
+            $cue = is_array($cue) ? $cue : [];
+            $id = $cue['cueId'] ?? null;
+            if (is_string($id) && isset($knownIds[$id]) && ! isset($byId[$id])) {
+                $byId[$id] = $cue;
+            } else {
+                $remaining[] = $cue;
+            }
+        }
+
+        $cues = [];
+        foreach ($sourceCues as $source) {
+            // Keep matching IDs when available; otherwise trust the model's response order.
+            $cue = $byId[$source['cueId']] ?? array_shift($remaining) ?? [];
+            $source['translatedText'] = $includeTranslation
+                ? ($this->cleanString($cue['translatedText'] ?? null) ?? $source['sourceText']) : $source['sourceText'];
+            unset($source['romanization']);
+            if ($includeRomanization && ($reading = $this->cleanString($cue['romanization'] ?? null)) !== null) {
+                $source['romanization'] = $reading;
+            }
+            $source['tokens'] = [];
+            foreach (is_array($cue['tokens'] ?? null) ? $cue['tokens'] : [] as $token) {
+                $text = is_array($token) ? $this->cleanString($token['text'] ?? null) : null;
+                if ($text === null || preg_match('/[\p{L}\p{N}]/u', $text) !== 1) {
+                    continue;
+                }
+                $parsed = ['index' => count($source['tokens']), 'text' => $text, 'normalizedText' => $this->tokenValidator->normalizeTokenText($text)];
+                if ($includeRomanization && ($reading = $this->cleanString($token['romanization'] ?? null)) !== null) {
+                    $parsed['romanization'] = $reading;
+                }
+                $source['tokens'][] = $parsed;
+            }
+            $cues[] = $source;
+        }
+
+        return new CueEnrichmentResult($cues, $this->cleanString($output['dialect'] ?? null) ?? 'unknown');
     }
 
     public function validatedAnalysis(array $output, array $sourceCues, bool $includeTranslation, bool $includeRomanization): CueEnrichmentResult
@@ -264,7 +311,7 @@ class LaravelAiTranslationAnalysisProvider
         );
     }
 
-    private function promptAgent(string $agentClass, array $input, ?SubtitleModel $selection): array
+    private function promptAgent(string $agentClass, array $input, ?SubtitleModel $selection, bool $validateOutput = true): array
     {
         $selection ??= SubtitleModel::configured();
         try {
@@ -281,7 +328,7 @@ class LaravelAiTranslationAnalysisProvider
                 model: $selection->model,
             );
 
-            if ($response->steps->last()?->finishReason === FinishReason::Length) {
+            if ($validateOutput && $response->steps->last()?->finishReason === FinishReason::Length) {
                 throw SubtitleProcessingException::enrichmentFailed('Subtitle AI output exceeded its token limit.', [
                     'provider' => $selection->provider,
                     'agent' => $agentClass,

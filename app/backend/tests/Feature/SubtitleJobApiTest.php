@@ -1139,7 +1139,8 @@ class SubtitleJobApiTest extends TestCase
         ]);
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
-        config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-cerebras']);
+        config(['ai.default' => 'openai', 'ai.providers.openai.models.text.default' => 'alignment-luna', 'ai.providers.cerebras.models.text.default' => 'changed-cerebras']);
+        $this->translationAnalysis->selections = [];
         $oldTrackId = $job->track->public_id;
         $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "First lyric line\nSecond lyric line",
@@ -1154,9 +1155,9 @@ class SubtitleJobApiTest extends TestCase
         $this->assertStringContainsString('First lyric line', $job->track->web_vtt);
         $this->assertNull($job->track->lyricsCorrection->lyrics);
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
-        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'cerebras' && $prompt->model === 'saved-cerebras');
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'alignment-luna');
         foreach ($this->translationAnalysis->selections as $selection) {
-            $this->assertSame(['cerebras', 'saved-cerebras'], $selection);
+            $this->assertSame(['cerebras', 'changed-cerebras'], $selection);
         }
     }
 
@@ -1568,29 +1569,6 @@ class SubtitleJobApiTest extends TestCase
         ]);
     }
 
-    public function test_section_heading_filter_does_not_drop_sung_words(): void
-    {
-        LyricsAlignmentAgent::fake([
-            ['isMatch' => true, 'isComplete' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
-                ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
-            ]],
-        ]);
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
-        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
-        $oldTrackId = $job->track->public_id;
-        Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
-            'lyrics' => "Chorus we sing the whole next section\nFirst lyric line\nSecond lyric line",
-        ])->assertAccepted();
-
-        (new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0))->handle(app(LyricsCorrectionService::class));
-
-        $job->refresh()->load('track');
-        $this->assertSame($oldTrackId, $job->track->public_id);
-        $this->assertSame('failed', $job->track->lyricsCorrection->status);
-    }
-
     public function test_correction_worker_rechecks_entitlement_before_provider_work(): void
     {
         $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
@@ -1661,7 +1639,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => '!!!'])
+            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => ''])
             ->assertUnprocessable();
 
         $first = $this->withExtensionAuth($installId)

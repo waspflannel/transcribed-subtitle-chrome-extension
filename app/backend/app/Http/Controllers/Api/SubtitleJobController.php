@@ -144,7 +144,6 @@ class SubtitleJobController extends Controller
             user: $this->extensionUser($request),
             lyrics: $request->lyrics(),
             expectedTrackId: (string) $request->validated('expectedTrackId'),
-            allowPartial: $request->allowPartial(),
         );
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve(), 202);

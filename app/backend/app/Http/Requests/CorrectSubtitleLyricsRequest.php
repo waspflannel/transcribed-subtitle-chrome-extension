@@ -32,12 +32,6 @@ class CorrectSubtitleLyricsRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                $lyrics = $this->input('lyrics');
-
-                if (is_string($lyrics) && preg_match('/[\p{L}\p{N}]/u', $lyrics) !== 1) {
-                    $validator->errors()->add('lyrics', 'Lyrics must contain at least one letter or number.');
-                }
-
                 if ($this->exists('allowPartial') && ! is_bool($this->input('allowPartial'))) {
                     $validator->errors()->add('allowPartial', 'The allowPartial field must be a boolean.');
                 }
@@ -48,10 +42,5 @@ class CorrectSubtitleLyricsRequest extends FormRequest
     public function lyrics(): string
     {
         return (string) $this->validated('lyrics');
-    }
-
-    public function allowPartial(): bool
-    {
-        return (bool) $this->validated('allowPartial', false);
     }
 }

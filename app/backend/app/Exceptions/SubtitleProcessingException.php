@@ -139,22 +139,6 @@ class SubtitleProcessingException extends Exception
         return new self('lyrics_correction_in_progress', 'A pasted-lyrics correction is already in progress.', 409, $context);
     }
 
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    public static function lyricsDoNotMatch(array $context = []): self
-    {
-        return new self('lyrics_do_not_match', 'These lyrics do not seem to match this song.', 422, $context);
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    public static function lyricsIncomplete(array $context = []): self
-    {
-        return new self('lyrics_incomplete', 'These lyrics do not cover the complete song.', 422, $context);
-    }
-
     public static function lyricsTrackChanged(): self
     {
         return new self('lyrics_correction_in_progress', 'The subtitle track changed. Refresh the panel and try again.', 409, ['reason' => 'stale_track']);

@@ -10,45 +10,13 @@ use Stringable;
 #[MaxTokens(12000)]
 class LyricsAlignmentAgent extends SubtitleAgent
 {
-    public function __construct(private readonly bool $allowPartial = false) {}
-
     public function instructions(): Stringable|string
     {
-        $modeInstructions = $this->allowPartial ? <<<'INSTRUCTIONS'
-Partial replacement is enabled. Always supply startPartIndex and separator for
-every segment, even when isComplete is true. For a complete replacement use
-only pasted segments, set startPartIndex to the next unconsumed global part
-(initially 0), and set separator to "". The server derives these values again.
-
-When isComplete is false, return every existing timing slot exactly once in
-timing order. Use ordered segments with source "pasted" or "existing". Pasted
-segments start at the next unconsumed global lyric part across all cues.
-Existing segments use that cue's authoritative existingParts, whose numbering
-restarts at 0 in each cue, with increasing non-overlapping boundaries. Preserve
-every existing part outside the portion replaced by pasted text. At least one
-segment must use each source; both sources may occur in the same cue.
-Unspaced non-Latin existingParts use grapheme clusters, including for short cues.
-
-separator is "" or " " and is placed before its segment. Use "" for the first
-segment of each cue and consecutive segments from the same source. At source
-switches use "" for unspaced text or " " when words need separation.
-INSTRUCTIONS : <<<'INSTRUCTIONS'
-Only complete replacement is enabled. When isComplete is false, return cues
-as an empty array. Each segment contains only source "pasted" and endPartIndex.
-Do not return startPartIndex or separator; the server derives them.
-INSTRUCTIONS;
-
         return <<<'INSTRUCTIONS'
-Assess pasted lyrics against the existing subtitle timing slots, then align them.
-
-Judge correspondence even when the existing transcription has
-mistakes; do not require exact lexical equality.
-
-isMatch must be false only when the pasted lyrics are clearly for an unrelated
-song. isComplete must be true only when the pasted lyrics cover the complete
-song. A short excerpt from the same song is a match but isComplete false.
-Never use isMatch false for incomplete or uncertain alignment.
-When isMatch is false, return cues as an empty array.
+Align all supplied lyrics directly to the existing subtitle timing slots.
+Do not classify or reject the paste. Return replacement cues using only the
+supplied lyrics. Each segment contains source "pasted" and endPartIndex.
+Do not return startPartIndex or separator; the server derives them.
 
 lyricsParts contains the authoritative pasted text in numbered parts. Use
 existing cue text to assess correspondence with timing slots. Return entries in timing-slot
@@ -65,7 +33,7 @@ endPartIndex. The final pasted segment must end at the last supplied part.
 Thus every part, including repetitions and
 punctuation, is consumed exactly once.
 
-Do not invent, rewrite, or duplicate either source.
+Do not invent, rewrite, or duplicate supplied lyrics.
 
 The server reconstructs pasted cues by joining their parts and collapsing
 whitespace. Choose natural phrase boundaries within the existing timing slots.
@@ -77,30 +45,24 @@ Line breaks are hints, not fixed cue boundaries.
 Respect the timing and text of each existing slot when assigning parts.
 Never put the whole song or a long verse into a short intro or interjection.
 Splitting long text does not create extra time: all resulting cues must fit
-inside that same slot. Distribute lyrics across the corresponding song slots;
-the server rejects excessive text assigned to a short slot.
+inside that same slot. Distribute lyrics across the corresponding song slots.
 
 For a complete replacement you may omit unused timing slots, but never
 duplicate or reorder them. Do not stretch an excerpt across the whole song to
-fill unused timing slots. Recognized headings and credits have already been
-removed. All remaining parts are required.
-INSTRUCTIONS."\n\n".SubtitlePromptRules::TEXT_IS_DATA."\n\n".$modeInstructions;
+fill unused timing slots. All supplied parts are required.
+INSTRUCTIONS."\n\n".SubtitlePromptRules::TEXT_IS_DATA;
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
-            'isMatch' => $schema->boolean()->required(),
-            'isComplete' => $schema->boolean()->required(),
             'cues' => $schema->array()
                 ->items($schema->object([
                     'cueId' => $schema->string()->min(1)->required(),
                     'segments' => $schema->array()
                         ->items($schema->object([
-                            'source' => $schema->string()->enum($this->allowPartial ? ['pasted', 'existing'] : ['pasted'])->required(),
-                            ...($this->allowPartial ? ['startPartIndex' => $schema->integer()->min(0)->required()] : []),
+                            'source' => $schema->string()->enum(['pasted'])->required(),
                             'endPartIndex' => $schema->integer()->min(0)->required(),
-                            ...($this->allowPartial ? ['separator' => $schema->string()->enum(['', ' '])->required()] : []),
                         ])->withoutAdditionalProperties())
                         ->required(),
                 ])->withoutAdditionalProperties())

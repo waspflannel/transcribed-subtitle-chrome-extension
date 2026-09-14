@@ -67,6 +67,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         bool $includeRomanization = false,
         ?\Closure $beforeRetry = null,
         ?SubtitleModel $selection = null,
+        bool $validateOutput = true,
     ): CueEnrichmentResult {
         $this->selections[] = [$selection?->provider, $selection?->model];
         $this->tokenizationCalls++;

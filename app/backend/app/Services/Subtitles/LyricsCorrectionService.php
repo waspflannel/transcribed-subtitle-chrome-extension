@@ -24,19 +24,11 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Laravel\Ai\Exceptions\RateLimitedException;
-use Laravel\Ai\Responses\Data\FinishReason;
 use Throwable;
 
 final class LyricsCorrectionService
 {
     private const STAGES = ['aligning', 'analyzing', 'finalizing'];
-
-    // Generous allocation limits catch collapsed songs without rejecting fast lyrics or short interjections.
-    private const MIN_SLOT_CHARACTERS = 12;
-
-    private const MAX_SLOT_CHARACTERS_PER_SECOND = 60;
-
-    private const MAX_SLOT_TEXT_EXPANSION = 3;
 
     public function __construct(
         private readonly BillingEntitlementService $billing,
@@ -61,19 +53,19 @@ final class LyricsCorrectionService
 
         $normalizedLyrics = implode("\n", $normalized);
 
-        if ($normalizedLyrics === '' || preg_match('/[\p{L}\p{N}]/u', $normalizedLyrics) !== 1) {
-            throw new SubtitleProcessingException('validation_failed', 'Lyrics must contain at least one letter or number.', 422);
+        if ($normalizedLyrics === '') {
+            throw new SubtitleProcessingException('validation_failed', 'Lyrics must not be empty.', 422);
         }
 
         return $normalizedLyrics;
     }
 
-    public function submit(SubtitleJob $job, User $user, string $lyrics, string $expectedTrackId, bool $allowPartial = false): SubtitleTrackLyricsCorrection
+    public function submit(SubtitleJob $job, User $user, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
     {
         $trackId = $job->track?->getKey();
         $attemptId = (string) Str::uuid();
 
-        $correction = DB::transaction(function () use ($job, $user, $lyrics, $trackId, $attemptId, $expectedTrackId, $allowPartial): SubtitleTrackLyricsCorrection {
+        $correction = DB::transaction(function () use ($job, $user, $lyrics, $trackId, $attemptId, $expectedTrackId): SubtitleTrackLyricsCorrection {
             $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
 
             $job = SubtitleJob::query()->whereKey($job->id)->whereBelongsTo($lockedUser)->lockForUpdate()->firstOrFail();
@@ -106,19 +98,12 @@ final class LyricsCorrectionService
                 throw SubtitleProcessingException::lyricsCorrectionInProgress();
             }
 
-            $normalizedLyrics = $this->sungLyrics($this->normalizeLyrics($lyrics));
-            $characterCount = mb_strlen(preg_replace('/\s/u', '', $normalizedLyrics), 'UTF-8');
-            if ($characterCount > count($track->cues) * 84) {
-                throw ValidationException::withMessages([
-                    'lyrics' => ['These lyrics cannot fit the existing timing slots. Remove non-lyric text or generate a new track.'],
-                ]);
-            }
+            $normalizedLyrics = $this->normalizeLyrics($lyrics);
             $correction = $track->lyricsCorrection()->first();
             $initialState = [
                 'stage' => 'aligning',
                 'trackId' => $track->public_id,
                 'runId' => $job->run_id,
-                'allowPartial' => $allowPartial,
             ];
 
             if ($correction instanceof SubtitleTrackLyricsCorrection) {
@@ -384,15 +369,10 @@ final class LyricsCorrectionService
                 throw $exception;
             }
 
-            if ($exception->publicCode === 'lyrics_do_not_match') {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_do_not_match', 'These lyrics do not seem to match this song. Check the paste and try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
-            } elseif ($exception->publicCode === 'lyrics_incomplete') {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_incomplete', 'These lyrics may be incomplete. Your current subtitles are unchanged. Confirm that you want to apply them to the matching sections and keep the existing lyrics elsewhere.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
-            } elseif (($exception->context['reason'] ?? null) === 'excessive_cue_allocation') {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'The lyrics could not be fitted to the existing timing. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
-            } else {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
-            }
+            $message = $processedStage === 'analyzing'
+                ? 'Translations and word details could not be generated. Your current subtitles are unchanged. Try again.'
+                : 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
+            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', $message, expectedRevision: $expectedRevision, batchIndex: $batchIndex);
 
             return;
         } catch (BillingEntitlementException $exception) {
@@ -413,14 +393,19 @@ final class LyricsCorrectionService
         }
 
         $this->commitProgress($trackId, $attemptId, $expectedRevision, $job, $processedStage, $nextState);
+        $selection = match ($processedStage) {
+            'aligning' => SubtitleModel::configured('openai'),
+            'analyzing' => SubtitleModel::configured('cerebras'),
+            default => null,
+        };
         Log::info('backend.lyrics_correction_unit_finished', [
             'subtitle_job_id' => $job->id,
             'attempt_id' => $attemptId,
             'work_revision' => $expectedRevision,
             'stage' => $processedStage,
             'batch_index' => $batchIndex,
-            'provider' => $job->ai_provider,
-            'model' => $job->ai_model,
+            'provider' => $selection?->provider,
+            'model' => $selection?->model,
             'cue_count' => count($nextState['cues'] ?? []),
             'duration_ms' => (int) round((hrtime(true) - $startedAt) / 1_000_000),
         ]);
@@ -603,7 +588,6 @@ final class LyricsCorrectionService
             lyrics: $lyrics,
             sourceLanguage: $job->source_language,
             attemptId: $correction->attempt_id,
-            allowPartial: (bool) ($correction->work_state['allowPartial'] ?? false),
         );
         $batchPlan = $this->artifacts->batchPlan($draftCues, $job);
 
@@ -617,7 +601,6 @@ final class LyricsCorrectionService
             'completedBatches' => [],
             'batchPlan' => $batchPlan,
             'cues' => $draftCues,
-            'allowPartial' => (bool) ($correction->work_state['allowPartial'] ?? false),
         ];
     }
 
@@ -644,7 +627,8 @@ final class LyricsCorrectionService
             $batch, $cues, $job->source_language, $job->target_language,
             includeTranslation: $this->translationRequested($job),
             includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
-            selection: SubtitleModel::forJob($job),
+            selection: SubtitleModel::configured('cerebras'),
+            validateOutput: false,
         );
         $this->ensureCorrectionCurrent($correction);
 
@@ -680,7 +664,7 @@ final class LyricsCorrectionService
         return [
             'stage' => 'completed',
             'cues' => $cues,
-            'webVtt' => $this->webVtt($cues),
+            'webVtt' => SubtitleWebVttFormatter::fromCues($cues),
         ];
     }
 
@@ -723,7 +707,7 @@ final class LyricsCorrectionService
                 if (in_array($batchIndex, $state['completedBatches'], true)) {
                     return null;
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed');
+                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::configured('cerebras'));
                 // Merge only this result into current state, preserving other workers' results.
                 $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
                 $state['completedBatches'][] = $batchIndex;
@@ -811,7 +795,6 @@ final class LyricsCorrectionService
         string $lyrics,
         string $sourceLanguage,
         string $attemptId,
-        bool $allowPartial,
     ): array {
         $parts = $this->lyricsParts($lyrics);
         $input = [
@@ -821,34 +804,16 @@ final class LyricsCorrectionService
                 array_values($sourceCues),
             ),
             'lyricsParts' => array_map(fn (string $text, int $index): array => ['index' => $index, 'text' => $text], $parts, array_keys($parts)),
-            'allowPartial' => $allowPartial,
         ];
-
-        if ($allowPartial) {
-            $input['existingParts'] = array_map(
-                function (array $cue): array {
-                    $cueParts = $this->existingLyricsParts((string) ($cue['sourceText'] ?? ''));
-
-                    return [
-                        'cueId' => $cue['cueId'] ?? null,
-                        'parts' => array_map(
-                            fn (string $text, int $index): array => ['index' => $index, 'text' => $text],
-                            $cueParts,
-                            array_keys($cueParts),
-                        ),
-                    ];
-                },
-                array_values($sourceCues),
-            );
-        }
 
         $this->ensureCorrectionCurrent($correction);
         $this->requireActivePlan($job);
-        $output = $this->promptAlignment($input, SubtitleModel::forJob($job));
-        $this->costs->recordCorrectionAlignment($job);
+        $selection = SubtitleModel::configured('openai');
+        $output = $this->promptAlignment($input, $selection);
+        $this->costs->recordCorrectionAlignment($job, $selection);
         $this->ensureCorrectionCurrent($correction);
 
-        return $this->validatedAlignment($sourceCues, $parts, $output, $attemptId, $allowPartial);
+        return $this->cuesFromAlignment($sourceCues, $parts, $output, $attemptId);
     }
 
     private function ensureCorrectionCurrent(SubtitleTrackLyricsCorrection $correction): void
@@ -876,15 +841,12 @@ final class LyricsCorrectionService
     private function promptAlignment(array $input, SubtitleModel $selection): array
     {
         try {
-            $response = LyricsAlignmentAgent::make(allowPartial: (bool) $input['allowPartial'])
+            $response = LyricsAlignmentAgent::make()
                 ->prompt(
                     json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                     provider: $selection->provider,
                     model: $selection->model,
                 );
-            if ($response->steps->last()?->finishReason === FinishReason::Length) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'output_token_limit']);
-            }
 
             return $response->toArray();
         } catch (RateLimitedException $exception) {
@@ -954,7 +916,7 @@ final class LyricsCorrectionService
         foreach ($this->lyricsParts($text) as $part) {
             if (mb_strlen(SubtitleText::collapseWhitespace($current.$part), 'UTF-8') > 84) {
                 if ($current === '' || mb_strlen(SubtitleText::collapseWhitespace($part), 'UTF-8') > 84) {
-                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'unsplittable_lyric_part']);
+                    return [$text];
                 }
                 $chunks[] = SubtitleText::collapseWhitespace($current);
                 $current = '';
@@ -986,220 +948,60 @@ final class LyricsCorrectionService
         return $parts;
     }
 
-    /** @return list<string> */
-    private function existingLyricsParts(string $text): array
+    private function cuesFromAlignment(array $sourceCues, array $parts, array $output, string $attemptId): array
     {
-        if (preg_match('/\s/u', $text) !== 1 && preg_match('/(?!\p{Latin})\p{L}/u', $text) === 1) {
-            preg_match_all('/\X/u', $text, $graphemes);
-
-            return $graphemes[0];
+        $knownIds = array_flip(array_column($sourceCues, 'cueId'));
+        $texts = [];
+        $cursor = 0;
+        foreach (is_array($output['cues'] ?? null) ? $output['cues'] : [] as $cue) {
+            $id = is_array($cue) ? ($cue['cueId'] ?? null) : null;
+            if (! is_string($id) || ! isset($knownIds[$id])) {
+                continue;
+            }
+            foreach (is_array($cue['segments'] ?? null) ? $cue['segments'] : [] as $segment) {
+                if (! is_array($segment) || ($segment['source'] ?? null) !== 'pasted' || ! is_int($segment['endPartIndex'] ?? null)) {
+                    continue;
+                }
+                $end = min($segment['endPartIndex'], count($parts) - 1);
+                if ($end < $cursor) {
+                    continue;
+                }
+                $texts[$id][] = implode('', array_slice($parts, $cursor, $end - $cursor + 1));
+                $cursor = $end + 1;
+            }
         }
 
-        return $this->lyricsParts($text);
-    }
-
-    private function validatedAlignment(array $sourceCues, array $parts, array $output, string $attemptId, bool $allowPartial): array
-    {
-        if (! array_key_exists('isMatch', $output) || ! is_bool($output['isMatch'])) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_match_classification']);
-        }
-
-        if ($output['isMatch'] === false) {
-            throw SubtitleProcessingException::lyricsDoNotMatch();
-        }
-
-        if (! array_key_exists('isComplete', $output) || ! is_bool($output['isComplete'])) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_completeness_classification']);
-        }
-
-        $isComplete = $output['isComplete'];
-
-        if (! $isComplete && ! $allowPartial) {
-            throw SubtitleProcessingException::lyricsIncomplete(['reason' => 'ai_classified_incomplete']);
-        }
-
-        $outputCues = $output['cues'] ?? null;
-        $sourceCues = array_values($sourceCues);
-
-        if (! is_array($outputCues) || $outputCues === [] || count($sourceCues) === 0) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'cue_count_mismatch']);
-        }
-
-        if ($isComplete && count($outputCues) > count($sourceCues)) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'cue_count_mismatch']);
-        }
-
-        if (! $isComplete && count($outputCues) !== count($sourceCues)) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'partial_cue_count_mismatch']);
-        }
-
-        $sourceCuesById = [];
-
-        foreach ($sourceCues as $sourcePosition => $sourceCue) {
-            $sourceCuesById[$sourceCue['cueId']] = ['position' => $sourcePosition, 'cue' => $sourceCue];
-        }
-
-        $pastedCursor = 0;
         $draft = [];
-        $previousSourcePosition = -1;
-        $hasPastedSource = false;
-        $hasExistingSource = false;
-
-        foreach (array_values($outputCues) as $position => $outputCue) {
-            if (! is_array($outputCue)) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_entry', 'cue_position' => $position]);
-            }
-
-            $source = $sourceCuesById[$outputCue['cueId'] ?? ''] ?? null;
-            $sourceCue = is_array($source) ? ($source['cue'] ?? null) : null;
-            $sourcePosition = is_array($source) ? ($source['position'] ?? null) : null;
-            $segments = $outputCue['segments'] ?? null;
-
-            if (! is_array($sourceCue)
-                || ! is_int($sourcePosition)
-                || $sourcePosition <= $previousSourcePosition
-                || ! is_array($segments)
-                || $segments === []) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'cue_identity_mismatch', 'cue_position' => $position]);
-            }
-
-            $existingParts = $this->existingLyricsParts((string) ($sourceCue['sourceText'] ?? ''));
-            $existingCursor = 0;
-            $segmentsText = [];
-            $previousSegmentSource = null;
-
-            foreach (array_values($segments) as $segmentPosition => $segment) {
-                if (! is_array($segment)
-                    || ! in_array($segment['source'] ?? null, ['pasted', 'existing'], true)
-                    || ! is_int($segment['endPartIndex'] ?? null)
-                    || (! $isComplete && (! is_int($segment['startPartIndex'] ?? null)
-                        || ! is_string($segment['separator'] ?? null)
-                        || ! in_array($segment['separator'], ['', ' '], true)))) {
-                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_source_segment', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
-                }
-
-                $segmentSource = $segment['source'];
-                $segmentStart = $isComplete ? $pastedCursor : $segment['startPartIndex'];
-                $segmentEnd = $segment['endPartIndex'];
-                $separator = $isComplete ? '' : $segment['separator'];
-
-                if (($segmentPosition === 0 || $previousSegmentSource === $segmentSource) && $separator !== '') {
-                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_segment_separator', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
-                }
-
-                if ($segmentEnd < $segmentStart) {
-                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_source_segment_bounds', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
-                }
-
-                if ($segmentSource === 'pasted') {
-                    if ($segmentStart !== $pastedCursor || $segmentEnd >= count($parts)) {
-                        throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_part_boundary', 'cue_position' => $position, 'segment_position' => $segmentPosition, 'start_part_index' => $pastedCursor, 'part_count' => count($parts)]);
-                    }
-
-                    $segmentsText[] = $separator.implode('', array_slice($parts, $segmentStart, $segmentEnd - $segmentStart + 1));
-                    $pastedCursor = $segmentEnd + 1;
-                    $hasPastedSource = true;
-                } else {
-                    if ($isComplete || $segmentStart < $existingCursor || $segmentEnd >= count($existingParts)) {
-                        throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_existing_source', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
-                    }
-
-                    // A gap between existing spans is allowed only when the
-                    // preceding span was replaced by pasted text. Otherwise
-                    // the plan would silently discard generated lyrics.
-                    if ($segmentStart > $existingCursor && $previousSegmentSource !== 'pasted') {
-                        throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'unpreserved_existing_parts', 'cue_position' => $position, 'segment_position' => $segmentPosition]);
-                    }
-
-                    $segmentsText[] = $separator.implode('', array_slice($existingParts, $segmentStart, $segmentEnd - $segmentStart + 1));
-                    $existingCursor = $segmentEnd + 1;
-                    $hasExistingSource = true;
-                }
-
-                $previousSegmentSource = $segmentSource;
-            }
-
-            if (! $isComplete && $previousSegmentSource === 'existing' && $existingCursor !== count($existingParts)) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'unpreserved_existing_parts', 'cue_position' => $position]);
-            }
-
-            $text = SubtitleText::collapseWhitespace(implode('', $segmentsText));
-
-            $length = mb_strlen($text, 'UTF-8');
-
-            if ($text === '') {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_text', 'cue_position' => $position, 'character_count' => $length]);
-            }
-
+        foreach ($sourceCues as $sourceCue) {
+            $text = SubtitleText::collapseWhitespace(implode('', $texts[$sourceCue['cueId']] ?? []));
             $start = (int) $sourceCue['startMs'];
             $duration = (int) $sourceCue['endMs'] - $start;
-            if ($start < 0 || $duration <= 0) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_timing', 'cue_position' => $position]);
+            if ($text === '' || $start < 0 || $duration <= 0) {
+                continue;
             }
-            $sourceLength = mb_strlen(SubtitleText::collapseWhitespace((string) $sourceCue['sourceText']), 'UTF-8');
-            $capacity = max(self::MIN_SLOT_CHARACTERS, $sourceLength * self::MAX_SLOT_TEXT_EXPANSION,
-                intdiv($duration * self::MAX_SLOT_CHARACTERS_PER_SECOND, 1000));
-            if ($length > $capacity) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed([
-                    'reason' => 'excessive_cue_allocation', 'cue_position' => $position,
-                    'duration_ms' => $duration, 'source_character_count' => $sourceLength,
-                    'character_count' => $length, 'character_limit' => $capacity,
-                ]);
-            }
-
-            $previousSourcePosition = $sourcePosition;
-            $chunks = $length <= 84 ? [$text] : $this->splitAlignedText($text);
+            $chunks = $this->splitAlignedText($text);
             $lengths = array_map(fn (string $chunk): int => mb_strlen($chunk, 'UTF-8'), $chunks);
             $totalLength = array_sum($lengths);
+            // A tiny source slot cannot display multiple pieces; keep its text together.
+            if ($duration < $totalLength) {
+                $chunks = [$text];
+                $lengths = [$totalLength];
+            }
             $consumedLength = 0;
             foreach ($chunks as $chunkIndex => $chunk) {
                 $consumedLength += $lengths[$chunkIndex];
                 $end = (int) $sourceCue['startMs'] + intdiv($duration * $consumedLength, $totalLength);
-                if ($start < 0 || $end <= $start) {
-                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_cue_timing', 'cue_position' => $position]);
-                }
-                $draftIndex = count($draft);
+                $index = count($draft);
                 $draft[] = [
-                    'cueId' => sprintf('lyrics-%s-%04d', substr(str_replace('-', '', $attemptId), 0, 8), $draftIndex + 1),
-                    'index' => $draftIndex,
-                    'startMs' => $start,
-                    'endMs' => $end,
-                    'sourceText' => $chunk,
-                    'translatedText' => $chunk,
-                    'tokens' => [],
+                    'cueId' => sprintf('lyrics-%s-%04d', substr(str_replace('-', '', $attemptId), 0, 8), $index + 1),
+                    'index' => $index, 'startMs' => $start, 'endMs' => $end,
+                    'sourceText' => $chunk, 'translatedText' => $chunk, 'tokens' => [],
                 ];
                 $start = $end;
             }
         }
 
-        if ($pastedCursor !== count($parts)) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'unmatched_pasted_parts', 'next_part_index' => $pastedCursor, 'part_count' => count($parts)]);
-        }
-
-        if (! $isComplete && (! $hasPastedSource || ! $hasExistingSource)) {
-            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'partial_sources_not_mixed']);
-        }
-
         return $draft;
-    }
-
-    private function sungLyrics(string $normalizedLyrics): string
-    {
-        $lines = preg_split('/\n/u', $normalizedLyrics) ?: [];
-        $lyrics = array_values(array_filter($lines, fn (string $line): bool => ! $this->isSkippableLabelLine($line)));
-
-        if ($lyrics === []) {
-            throw new SubtitleProcessingException('validation_failed', 'Lyrics must contain sung text.', 422);
-        }
-
-        return implode("\n", $lyrics);
-    }
-
-    private function isSkippableLabelLine(string $line): bool
-    {
-        return preg_match('/^\[(?:intro|outro|verse(?:\s+\d+)?|chorus(?:\s+\d+)?|bridge(?:\s+\d+)?|pre[- ]chorus(?:\s+\d+)?|interlude)\]$/iu', $line) === 1
-            || preg_match('/^(?:intro|outro|verse(?:\s+\d+)?|chorus(?:\s+\d+)?|bridge(?:\s+\d+)?|pre[- ]chorus(?:\s+\d+)?|interlude)$/iu', $line) === 1
-            || preg_match('/^(?:written by|music by|lyrics by)\s+[\p{L}\p{N}][\p{L}\p{N}\s.,&\'-]{0,78}$/iu', $line) === 1;
     }
 
     private function translationRequested(SubtitleJob $job): bool
