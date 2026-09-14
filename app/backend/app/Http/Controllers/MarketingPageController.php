@@ -21,7 +21,7 @@ class MarketingPageController extends Controller
     ): View {
         return $this->marketingView($request, $analytics, 'home', 'marketing.home', [
             'plans' => $plans->publicPlans(),
-            'languageGroups' => $this->languageGroups(),
+            'supportedLanguages' => $this->supportedLanguages(),
             'checkoutBlocked' => $this->checkoutBlocked($request, $billing),
         ]);
     }
@@ -123,42 +123,12 @@ class MarketingPageController extends Controller
     }
 
     /**
-     * @return array<string, array{label: string, description: string, languages: Collection<int, array{code: string, label: string, tier: string}>}>
+     * @return Collection<int, array{code: string, label: string, tier: string}>
      */
-    private function languageGroups(): array
+    private function supportedLanguages(): Collection
     {
-        $labels = [
-            'excellent' => [
-                'label' => 'Excellent',
-                'description' => 'Best current fit for transcription quality and beta expectations.',
-            ],
-            'high' => [
-                'label' => 'High accuracy',
-                'description' => 'Strong coverage with normal AI transcription caveats.',
-            ],
-            'good' => [
-                'label' => 'Good',
-                'description' => 'Useful for study workflows, with more room for correction.',
-            ],
-            'moderate' => [
-                'label' => 'Moderate',
-                'description' => 'Available for beta feedback, but accuracy can vary more by speaker and audio.',
-            ],
-        ];
-
-        $languages = collect(LanguageCatalog::supportedLanguages())
-            ->groupBy('tier')
-            ->map(fn (Collection $items): Collection => $items->sortBy('label')->values());
-
-        $groups = [];
-
-        foreach ($labels as $tier => $copy) {
-            $groups[$tier] = [
-                ...$copy,
-                'languages' => $languages->get($tier, collect()),
-            ];
-        }
-
-        return $groups;
+        return collect(LanguageCatalog::supportedLanguages())
+            ->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
     }
 }

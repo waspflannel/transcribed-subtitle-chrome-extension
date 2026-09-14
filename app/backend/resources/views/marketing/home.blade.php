@@ -120,26 +120,13 @@
         <div class="section-heading" data-reveal>
             <p class="eyebrow">Language coverage</p>
             <h2>Supported subtitle and translation languages.</h2>
-            <p>Auto detect is available for subtitle generation, grouped below by current transcription quality.</p>
+            <p>Auto detect is available for subtitle generation. All of the languages below can be used for subtitles and translation.</p>
         </div>
-        <div>
-            @foreach ($languageGroups as $group)
-                <section class="lang-group" data-reveal data-reveal-delay="{{ $loop->index * 60 }}">
-                    <div>
-                        <div class="lang-tier">
-                            <h2>{{ $group['label'] }}</h2>
-                            <span class="lang-badge">tier {{ $loop->iteration }}</span>
-                        </div>
-                        <p>{{ $group['description'] }}</p>
-                    </div>
-                    <ul class="lang-cloud">
-                        @foreach ($group['languages'] as $language)
-                            <li>{{ $language['label'] }}</li>
-                        @endforeach
-                    </ul>
-                </section>
+        <ul class="lang-cloud" data-reveal>
+            @foreach ($supportedLanguages as $language)
+                <li>{{ $language['label'] }}</li>
             @endforeach
-        </div>
+        </ul>
     </section>
 
     <!-- PRICING -->

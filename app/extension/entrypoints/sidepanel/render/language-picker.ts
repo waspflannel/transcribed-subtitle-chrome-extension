@@ -31,7 +31,6 @@ function selectedLanguageSummary(language: LanguageOption): string {
   return `
     <span>${escapeHtml(language.label)}</span>
     <span class="language-code">${escapeHtml(language.code)}</span>
-    ${languageBadge(language)}
   `;
 }
 
@@ -49,19 +48,6 @@ function languageOptionButton(language: LanguageOption, selected: boolean, disab
         <span>${escapeHtml(language.label)}</span>
         <span class="language-code">${escapeHtml(language.code)}</span>
       </span>
-      ${languageBadge(language)}
     </button>
   `;
-}
-
-function languageBadge(language: Pick<LanguageOption, 'tier'>): string {
-  const labels: Record<LanguageOption['tier'], string> = {
-    auto: 'Auto',
-    excellent: 'Excellent',
-    high: 'High Accuracy',
-    good: 'Good',
-    moderate: 'Moderate',
-  };
-
-  return `<span class="language-badge ${language.tier}">${labels[language.tier]}</span>`;
 }

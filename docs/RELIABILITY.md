@@ -59,7 +59,7 @@ Generation always uses the same analysis agent, with optional translation/readin
 
 Quick fix uses original transcript spans only when the full token sequence matches without skipping lexical text. Otherwise it rebuilds the edited cue from the accepted tokens. This keeps corrected words editable and avoids matching a later repeated word. Reconstruction preserves token text and attached punctuation; punctuation present only in the original transcript can be lost. Normal generation retains the original transcript in sourceText and WebVTT while the overlay displays model tokens.
 
-The language catalog is limited to the WER-ranked transcription set used in the popup. The tier is a transcription accuracy signal only; translation card quality can still vary by language pair, dialect, audio quality, and provider coverage.
+The language catalog is limited to the WER-ranked transcription set used in the side panel. Catalog tiers are an internal transcription accuracy signal only and are not shown in the language picker; translation card quality can still vary by language pair, dialect, audio quality, and provider coverage.
 
 Compatible completed tracks are reused immediately, compatible running jobs are reused without duplicate dispatch unless they are stale in `preparing`, failed compatible jobs are reset for retry, and Laravel route throttling enforces both per-install and per-IP limits. Reuse is scoped to the authenticated account; cross-account public-video caching is deferred. Every created or reset generation gets a new `run_id`; queued subtitle jobs carry that run ID and stale queued work skips before provider calls and artifact writes. Public failures map by stable error code to popup and overlay messages.
 

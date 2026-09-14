@@ -24,16 +24,17 @@ describe('language catalog', () => {
     expect(TARGET_LANGUAGE_OPTIONS.some((language) => language.code === 'auto')).toBe(false);
   });
 
-  it('keeps WER accuracy tiers searchable', () => {
-    const excellent = SOURCE_LANGUAGE_OPTIONS.find((language) => language.code === 'jpn');
-    const high = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'swa');
-    const moderate = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'zul');
+  it('keeps catalog metadata and searchable aliases', () => {
+    const japanese = SOURCE_LANGUAGE_OPTIONS.find((language) => language.code === 'jpn');
+    const swahili = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'swa');
+    const zulu = TARGET_LANGUAGE_OPTIONS.find((language) => language.code === 'zul');
 
-    expect(excellent?.tier).toBe('excellent');
-    expect(high?.tier).toBe('high');
-    expect(moderate?.tier).toBe('moderate');
+    expect(japanese?.tier).toBe('excellent');
+    expect(swahili?.tier).toBe('high');
+    expect(zulu?.tier).toBe('moderate');
     expect(languageLabel('cmn')).toBe('Mandarin');
-    expect(languageSearchText(excellent!)).toContain('ja');
+    expect(languageSearchText(japanese!)).toContain('ja');
+    expect(languageSearchText(japanese!)).not.toContain('excellent');
   });
 
   it('rejects unknown display language codes instead of inventing labels', () => {

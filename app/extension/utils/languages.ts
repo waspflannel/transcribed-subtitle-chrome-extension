@@ -64,7 +64,6 @@ export function languageSearchText(language: LanguageOption): string {
   return [
     language.label,
     language.code,
-    language.tier,
     ...(language.aliases ?? []),
   ].join(' ').toLowerCase();
 }

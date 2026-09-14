@@ -418,55 +418,17 @@
 }
 
 /* ---------- Language coverage ---------- */
-.lang-group {
-    border-top: 2px solid var(--ink);
-    display: grid;
-    gap: 18px;
-    grid-template-columns: minmax(0, 0.34fr) minmax(0, 1fr);
-    padding: 26px 0;
-}
-
-.lang-group:last-child {
-    border-bottom: 2px solid var(--ink);
-}
-
-.lang-tier {
-    align-items: baseline;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.lang-tier h2 {
-    font-size: 1.2rem;
-}
-
-.lang-tier + p {
-    font-size: 0.94rem;
-    margin-top: 8px;
-}
-
-.lang-badge {
-    background: var(--accent);
-    border: 1.5px solid var(--ink);
-    color: var(--paper-high);
-    border-radius: 2px;
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    padding: 2px 7px;
-    text-transform: uppercase;
-}
-
 .lang-cloud {
     align-content: flex-start;
     align-items: flex-start;
+    border-bottom: 2px solid var(--ink);
+    border-top: 2px solid var(--ink);
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 26px 0;
 }
 
 .lang-cloud li {
