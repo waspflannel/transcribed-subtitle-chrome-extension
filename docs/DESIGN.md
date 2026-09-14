@@ -19,8 +19,9 @@
 
 ## Ink & Marker Website Rules
 
-- The marketing site is one landing page: night hero band, overlapping CSS product mock, then features, how-it-works, languages, pricing, and FAQ as anchored sections, plus a thin `/pricing` page. Retired pages (`/extension`, `/desktop`, `/languages`, `/how-it-works`, `/faq`) 301-redirect to home anchors; keep the sitemap listing live pages only.
-- Keep the product mock hand-built in CSS (player frame, per-word romaji subtitle tokens, translation line, open flashcard). No screenshots of stale UI.
+- The marketing site is one landing page: compact night hero and overlapping interactive CSS example, lyrics correction, speed/model choice, study tools, how-it-works, a collapsed A–Z language directory, pricing, and FAQ, plus a thin `/pricing` page. Preserve the Ink & Marker palette, fonts, rules, marker highlights, and tactile buttons. Retired pages (`/extension`, `/desktop`, `/languages`, `/how-it-works`, `/faq`) 301-redirect to home anchors; keep the sitemap listing live pages only.
+- Keep the product example hand-built in CSS and explicitly labeled as example content. Its three previews demonstrate generated subtitles, full lyrics correction, and interactive word cards. Use accessible tabs and native buttons, retain readable examples without JavaScript, and avoid fake timing benchmarks or screenshots of stale UI. Lyrics correction fits full pasted lyrics to existing timing; never imply automatic lyrics retrieval or partial merging.
+- Explain beta installation before purchase; use the configured Chrome link when available and otherwise link to install support. Describe plan benefits in video minutes and simultaneous videos, keeping infrastructure terms out of plan cards.
 - Use crimson as the only accent: marker highlights, primary CTA, active states. Green only for success/positive pills, red tones only for failures.
 - Keep buttons flashcard-hard: 2px ink borders, offset block shadow, translate-on-hover/press interaction (`ui.css` `.button`).
 - Keep the purchase path intact: plan cards link `register?plan=code`, registration stashes the plan in the session, and the dashboard shows a continue-to-checkout banner after email verification until checkout starts.
