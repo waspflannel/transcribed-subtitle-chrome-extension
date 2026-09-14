@@ -244,6 +244,27 @@ class SubtitleJobService
         return $job;
     }
 
+    public function delete(SubtitleJob $job, bool $completedOnly = false): bool
+    {
+        return DB::transaction(function () use ($job, $completedOnly): bool {
+            $current = SubtitleJobLock::current($job->id, userId: $job->user_id);
+
+            if ($current === null || ($completedOnly && $current->status !== 'completed')) {
+                return false;
+            }
+
+            if ($current->status !== 'completed') {
+                $this->billing->releaseJobReservation($current, 'deleted');
+            }
+
+            $runId = $current->run_id;
+            $current->delete();
+            DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($runId));
+
+            return true;
+        }, attempts: 5);
+    }
+
     public function cancel(SubtitleJob $job, User $user): SubtitleJob
     {
         $promoteQueued = false;

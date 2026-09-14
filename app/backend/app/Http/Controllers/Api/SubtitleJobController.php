@@ -115,6 +115,19 @@ class SubtitleJobController extends Controller
         return response()->json(SubtitleJobResource::make($job)->resolve());
     }
 
+    public function destroyGeneration(Request $request, string $jobId, SubtitleJobService $subtitleJobs): JsonResponse
+    {
+        $job = SubtitleJob::query()
+            ->where('public_id', $jobId)
+            ->whereBelongsTo($this->extensionUser($request))
+            ->where('status', 'completed')
+            ->firstOrFail();
+
+        abort_unless($subtitleJobs->delete($job, completedOnly: true), 404);
+
+        return response()->json(['ok' => true]);
+    }
+
     public function cancel(
         Request $request,
         string $jobId,

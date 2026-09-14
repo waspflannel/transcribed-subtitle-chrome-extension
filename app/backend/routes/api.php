@@ -50,6 +50,10 @@ Route::prefix('v1')
                     ->name('subtitle-jobs.cancel')
                     ->middleware('throttle:subtitle-api');
 
+                Route::delete('/subtitle-generations/{jobId}', [SubtitleJobController::class, 'destroyGeneration'])
+                    ->name('subtitle-generations.destroy')
+                    ->middleware('throttle:subtitle-api');
+
                 Route::post('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'correctLyrics'])
                     ->name('subtitle-jobs.lyrics.store')
                     ->middleware('throttle:subtitle-api');

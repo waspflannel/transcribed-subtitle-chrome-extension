@@ -369,6 +369,43 @@
         }
       }
     },
+    "/v1/subtitle-generations/{jobId}": {
+      "delete": {
+        "operationId": "deleteSubtitleGeneration",
+        "summary": "Delete one completed subtitle generation owned by the authenticated account.",
+        "description": "Removes the saved job, track, and associated correction data, including the account's only generation for a video. Completed usage is not refunded. Missing, unowned, and noncompleted jobs return 404. Queued or running jobs must use the cancellation endpoint.",
+        "parameters": [
+          { "$ref": "#/components/parameters/ExtensionInstallId" },
+          { "$ref": "#/components/parameters/ExtensionAuthorization" },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The saved generation was deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["ok"],
+                  "properties": { "ok": { "type": "boolean", "const": true } }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthenticated" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
     "/v1/subtitle-jobs/{jobId}/lyrics": {
       "post": {
         "operationId": "startLyricsCorrection",
