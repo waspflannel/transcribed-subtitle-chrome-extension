@@ -27,6 +27,7 @@
 - Keep buttons flashcard-hard: 2px ink borders, offset block shadow, translate-on-hover/press interaction (`ui.css` `.button`).
 - Keep the purchase path intact: plan cards link `register?plan=code`, registration stashes the plan in the session, and the dashboard shows a continue-to-checkout banner after email verification until checkout starts.
 - Keep legal, support, auth, dashboard, and job-detail surfaces readable and operational. Do not put account workflows in decorative hero layouts.
+- Legal pages use a full-width outer gutter with a separate readable text column, numbered sections, native anchor navigation, and a visible revision date. Stack the contents navigation on small screens. Never apply viewport gutters inside a width-capped article or hide a long legal document behind scroll-reveal effects. Use the public model names in the terms; name the actual processors and their roles in the privacy policy.
 - Keep historical generated-image references under `docs/design-assets/`; only active, optimized public assets should live under `app/backend/public/img/`.
 
 ## Extension Side Panel Rules (Ink & Marker, Night)

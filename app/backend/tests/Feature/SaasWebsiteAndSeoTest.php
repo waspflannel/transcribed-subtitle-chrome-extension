@@ -45,8 +45,8 @@ class SaasWebsiteAndSeoTest extends TestCase
         $pages = [
             ['marketing.home', 'music you love', 'Only public YouTube watch pages and Shorts'],
             ['marketing.pricing', 'Simple monthly plans', 'Stripe'],
-            ['marketing.privacy', 'Video-derived data', 'raw audio is deleted'],
-            ['marketing.terms', 'Paid beta terms', 'Refund requests'],
+            ['marketing.privacy', 'Privacy policy.', 'raw audio is deleted'],
+            ['marketing.terms', 'Terms of service.', 'Refund requests'],
             ['marketing.support', 'Help for beta access', 'failure code'],
         ];
 

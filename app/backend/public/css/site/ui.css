@@ -190,16 +190,112 @@ th {
 }
 
 /* Legal pages */
+.legal-meta {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+    padding-top: 8px;
+}
+
+.legal-meta a,
+.legal-copy a {
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+}
+
+.legal-meta a:hover,
+.legal-copy a:hover {
+    color: var(--accent-deep);
+}
+
+.legal-layout {
+    align-items: start;
+    display: grid;
+    gap: 64px;
+    grid-template-columns: 228px minmax(0, 1fr);
+    padding-top: 32px;
+}
+
+.legal-toc {
+    border-top: 2px solid var(--ink);
+    padding-top: 18px;
+    position: sticky;
+    top: 104px;
+}
+
+.legal-toc ol {
+    display: grid;
+    gap: 4px;
+    list-style: decimal-leading-zero;
+    margin: 16px 0 0;
+    padding-left: 28px;
+}
+
+.legal-toc li::marker {
+    color: var(--accent-deep);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+}
+
+.legal-toc a {
+    display: block;
+    font-size: 0.88rem;
+    padding: 6px 0 6px 4px;
+    text-decoration: none;
+}
+
+.legal-toc a:hover {
+    color: var(--accent-deep);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
 .legal-copy {
     display: grid;
-    gap: 14px;
-    max-width: 720px;
-    padding-top: 20px;
+    gap: 36px;
+    line-height: 1.75;
+    max-width: 760px;
+    min-width: 0;
+}
+
+.legal-copy section {
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 16px;
+    padding-bottom: 36px;
 }
 
 .legal-copy h2 {
-    font-size: 1.3rem;
-    margin-top: 18px;
+    align-items: baseline;
+    display: flex;
+    font-size: 1.5rem;
+    gap: 12px;
+    line-height: 1.25;
+}
+
+.legal-copy h2 span {
+    color: var(--accent-deep);
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0;
+}
+
+.legal-copy ul {
+    display: grid;
+    gap: 12px;
+    padding-left: 22px;
+}
+
+.legal-copy li::marker {
+    color: var(--accent-deep);
+}
+
+.legal-copy strong {
+    color: var(--ink);
 }
 
 /* Support */

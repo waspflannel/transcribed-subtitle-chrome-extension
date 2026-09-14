@@ -93,12 +93,12 @@ class MarketingPageController extends Controller
             ],
             'privacy' => [
                 'title' => 'Privacy for '.$productName,
-                'description' => 'How public YouTube audio, transcripts, generated tracks, providers, retention, and analytics are handled.',
+                'description' => 'How we handle account data, public YouTube audio, pasted lyrics, AI providers, cookies, and saved tracks, plus your account deletion and privacy choices.',
                 'route' => 'marketing.privacy',
             ],
             'terms' => [
                 'title' => 'Terms for '.$productName,
-                'description' => 'Beta terms covering subscriptions, refunds, support, acceptable use, AI limitations, and service availability.',
+                'description' => 'Terms for our paid beta: monthly subscriptions, video minutes, cancellation, refunds, lyrics correction, content rights, and AI limitations.',
                 'route' => 'marketing.terms',
             ],
             'support' => [
