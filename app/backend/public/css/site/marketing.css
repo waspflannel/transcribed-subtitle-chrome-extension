@@ -775,10 +775,6 @@
     display: none;
 }
 
-.demo-result {
-    animation: ink-rise 240ms ease-out;
-}
-
 .demo-timeline {
     align-items: center;
     border-top: 1px solid var(--night-line);

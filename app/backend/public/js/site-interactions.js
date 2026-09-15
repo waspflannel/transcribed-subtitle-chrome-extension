@@ -29,13 +29,13 @@
                 const delay = el.getAttribute('data-reveal-delay');
 
                 if (delay) {
-                    el.style.transitionDelay = `${delay}ms`;
+                    el.style.setProperty('--reveal-delay', `${delay}ms`);
                 }
 
                 el.classList.add('is-visible');
                 observer.unobserve(el);
             });
-        }, { threshold: 0.14, rootMargin: '0px 0px -8% 0px' });
+        }, { threshold: 0, rootMargin: '0px 0px -24px 0px' });
 
         revealables.forEach((el) => observer.observe(el));
     }

@@ -25,6 +25,9 @@
     --font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
     --shadow-card: 6px 6px 0 rgba(20, 20, 20, 0.1);
     --shadow-pop: 4px 4px 0 var(--ink);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --motion-fast: 160ms;
+    --motion-change: 240ms;
     color: var(--ink);
     font-family: var(--font-body);
     line-height: 1.55;

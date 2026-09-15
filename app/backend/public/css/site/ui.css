@@ -17,10 +17,10 @@ button {
     padding: 0 20px;
     text-decoration: none;
     transition:
-        transform 120ms ease,
-        box-shadow 120ms ease,
-        background 120ms ease,
-        color 120ms ease;
+        transform var(--motion-fast) var(--ease-out),
+        box-shadow var(--motion-fast) var(--ease-out),
+        background var(--motion-fast) ease,
+        color var(--motion-fast) ease;
 }
 
 .button:hover,
