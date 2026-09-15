@@ -186,12 +186,6 @@
           }
         }
 
-        @media (prefers-reduced-motion: reduce) {
-          .rail--generating .title {
-            animation: none;
-          }
-        }
-
         .detail {
           color: #d1d5db;
           font-size: 13px;
@@ -658,5 +652,26 @@
 
           .token-popover::after {
             display: none;
+          }
+        }
+
+        /* Hover previews fade without moving the synchronized caption rail. */
+        @media (prefers-reduced-motion: no-preference) {
+          @keyframes word-preview-enter {
+            from { opacity: 0; }
+          }
+
+          .token-inline-preview {
+            animation: word-preview-enter 140ms ease-out;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation: none !important;
+            transition: none !important;
+            scroll-behavior: auto !important;
           }
         }`;

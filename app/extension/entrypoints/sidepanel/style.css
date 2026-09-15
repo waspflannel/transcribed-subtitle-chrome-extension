@@ -26,6 +26,7 @@
   --display: 'Bricolage Grotesque', 'Arial Black', ui-sans-serif, sans-serif;
   --body: 'Schibsted Grotesk', ui-sans-serif, system-ui, sans-serif;
   --mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -113,7 +114,7 @@ a {
   min-height: 40px;
   padding: 0 4px;
   text-transform: uppercase;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 160ms ease, color 160ms ease;
 }
 
 .tab:last-child {
@@ -209,6 +210,7 @@ a {
   overflow-x: hidden;
   overflow-y: auto;
   overflow-anchor: none;
+  overscroll-behavior-y: contain;
   scrollbar-color: rgba(216, 59, 59, 0.5) transparent;
   scrollbar-width: thin;
 }
@@ -349,7 +351,7 @@ a {
   display: inline-flex;
   justify-content: center;
   text-align: center;
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: transform 160ms var(--ease-out), box-shadow 160ms var(--ease-out), background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 
 .btn-primary {
@@ -730,14 +732,6 @@ select option {
   }
   50% {
     opacity: 0.35;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stage.current .stage-dot,
-  .progress-bar span {
-    animation: none;
-    transition: none;
   }
 }
 
@@ -1180,7 +1174,7 @@ input[type='checkbox'].switch::after {
   left: 3px;
   position: absolute;
   top: 2.5px;
-  transition: left 120ms ease, background 120ms ease;
+  transition: transform 180ms var(--ease-out), background 120ms ease;
   width: 12px;
 }
 
@@ -1195,7 +1189,7 @@ input[type='checkbox'].switch:checked {
 
 input[type='checkbox'].switch:checked::after {
   background: var(--paper-high);
-  left: 19px;
+  transform: translateX(16px);
 }
 
 input[type='checkbox'].switch:disabled {
@@ -1680,3 +1674,40 @@ output {
 
 .generation-picker select { width: 100%; min-width: 0; }
 [data-generation-refresh] { margin-bottom: 12px; }
+
+/* Motion belongs to screen changes, never to individual playback cues.
+   These containers persist through background updates and keep focus intact. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes panel-fade {
+    from { opacity: 0.35; }
+  }
+
+  @keyframes panel-enter {
+    from { opacity: 0; translate: 0 4px; }
+  }
+
+  .view:not([data-panel='watch']):not([hidden]),
+  #panel-watch > :is([data-watch-unsupported], [data-watch-signin], [data-watch-setup], [data-progress], [data-watch-ready]):not([hidden]) {
+    animation: panel-fade 180ms ease-out;
+  }
+
+  .language-expand:not([hidden]),
+  [data-lyrics-edit-panel]:not([hidden]) {
+    animation: panel-enter 180ms var(--ease-out);
+  }
+
+  .btn-ghost:active:not(:disabled),
+  .job-action-button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
