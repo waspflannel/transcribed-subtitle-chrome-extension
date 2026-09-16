@@ -202,6 +202,22 @@ Chrome Web Store checklist:
 
 ## Staging Smoke
 
+### Local Stripe sandbox
+
+Local billing uses the **Transcribe-subtitle-app** sandbox (`acct_1UGAY62fCqu33Jv3`). Keep its secret key, price IDs and explicit portal configuration in the ignored `app/backend/.env`; Stripe object IDs from another sandbox cannot be reused. The current catalog is Base $9, Plus $19 and Pro $39 USD monthly. The portal permits price changes with prorations and cancellation at period end; quantity changes are disabled.
+
+`scripts/runtime/start-local-dev.ps1` starts signed webhook forwarding when a local Stripe test key is configured. The Stripe CLI must be installed. To start forwarding separately, or after rotating the key, run:
+
+```powershell
+.\scripts\runtime\start-local-stripe.ps1 -Restart
+```
+
+The helper reads the key from the backend environment, updates `STRIPE_WEBHOOK_SECRET` without printing it, clears cached configuration, and runs the CLI in a hidden process. Keys are excluded from process arguments and listener logs. PID and sanitized logs live in ignored `app/backend/storage/logs/local-runtime/stripe-listener*` files. Forwarding stops when the computer restarts; run local startup again. The CLI uses the sandbox's default event API version; the webhook handler accepts legacy and Basil subscription periods. A deployed webhook endpoint must still use the pinned production version below.
+
+Switching sandboxes also requires replacing local customer/subscription/checkout references. Preserve the old billing snapshot and usage ledger; use an actual subscription and signed events in the new sandbox to establish entitlement. Reloading the dashboard alone does not query Stripe or reconcile stale records.
+
+### Hosted staging
+
 Run this before production:
 
 - `GET /up`.

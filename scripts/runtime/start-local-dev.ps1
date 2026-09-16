@@ -43,6 +43,8 @@ if ($SkipMigrate) {
 
 & (Join-Path $ScriptDir "start-local-backend-workers.ps1") @launcherArgs
 
+& (Join-Path $ScriptDir "start-local-stripe.ps1")
+
 if ($SkipExtension) {
     Write-Host "Local containers, backend, and workers are running."
     return
