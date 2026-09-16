@@ -459,7 +459,7 @@ export default defineContentScript({
         && subtitleState.partialTrack.cues.length === nextSubtitleState.partialTrack.cues.length
         && subtitleState.partialTrack.cues.every((cue, index) => {
           const next = nextSubtitleState.partialTrack!.cues[index];
-          return cue.cueId === next.cueId && cue.startMs === next.startMs && cue.endMs === next.endMs
+          return next !== undefined && cue.cueId === next.cueId && cue.startMs === next.startMs && cue.endMs === next.endMs
             && cue.sourceText === next.sourceText;
         })
         && activeVideo?.isConnected && activeVideo === findActiveYoutubeVideo(document)

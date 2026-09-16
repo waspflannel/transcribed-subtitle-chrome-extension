@@ -49,9 +49,10 @@ function handleTabKeydown(
     return;
   }
 
-  event.preventDefault();
   const nextButton = tabButtons[nextIndex];
+  if (!nextButton) return;
 
+  event.preventDefault();
   nextButton.focus();
   showTab(tabButtons, panels, nextButton.dataset.tab ?? 'watch');
 }

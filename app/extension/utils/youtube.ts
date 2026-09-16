@@ -59,7 +59,7 @@ export function parseYoutubePage(input: string | URL): YoutubePageInfo {
 
   if (pathSegments[0] === 'shorts') {
     return pageInfoForVideoId({
-      videoId: pathSegments.length === 2 ? pathSegments[1].trim() : '',
+      videoId: pathSegments.length === 2 ? pathSegments[1]?.trim() ?? '' : '',
       url: canonicalUrl,
       mediaKind: 'short',
     });

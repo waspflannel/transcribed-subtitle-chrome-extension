@@ -37,6 +37,7 @@ export function createWebVttTrackLogger(consoleRef: Pick<Console, 'info' | 'warn
       }
 
       const lastCue = textTrack.cues[textTrack.cues.length - 1];
+      if (!lastCue) return;
       const trackDurationSeconds = lastCue.endTime;
       const overrunSeconds = trackDurationSeconds - video.duration;
 

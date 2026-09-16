@@ -21,8 +21,9 @@ export function cueForPlaybackTime(
 
 function findLastCueEndingAt(cues: readonly SubtitleCue[], sourceTimeMs: number): SubtitleCue | null {
   for (let i = cues.length - 1; i >= 0; i -= 1) {
-    if (cues[i].endMs === sourceTimeMs) {
-      return cues[i];
+    const cue = cues[i];
+    if (cue?.endMs === sourceTimeMs) {
+      return cue;
     }
   }
 

@@ -100,7 +100,7 @@ describe('cue navigation', () => {
   });
 });
 
-function cueList(): SubtitleCue[] {
+function cueList(): [SubtitleCue, SubtitleCue, SubtitleCue] {
   return [
     cue('cue-1', 0, 500, 1500),
     cue('cue-2', 1, 2500, 4200),

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { SubtitleCue, TrackResponse } from '../utils/contracts';
@@ -20,6 +20,12 @@ const mocks = vi.hoisted(() => {
     }),
   };
 });
+
+function messageListener() {
+  const listener = mocks.listeners[0];
+  assert(listener, 'Content script must register a message listener');
+  return listener;
+}
 
 vi.mock('wxt/browser', () => ({
   browser: {
@@ -76,10 +82,12 @@ describe('content study pause ownership', () => {
     const partial = { jobId: track.jobId, youtubeVideoId: track.youtubeVideoId, sourceLanguage: 'spa', targetLanguage: 'fra',
       revision: 1, cues: track.cues.map(({ tokens, ...cue }) => cue), readyThroughMs: 0 };
     const state = { type: 'loading', status: 'running', youtubeVideoId: 'video-1', jobId: 'job-1', message: 'Generating', stage: 'tokenizing', progressPercent: 50, partialTrack: partial };
-    const publish = (value: unknown) => mocks.listeners[0]({ type: 'background.subtitleStateChanged', subtitleState: value }, {}, () => {});
-    mocks.listeners[0]({ type: 'background.settingsChanged', settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true } }, {}, () => {});
+    const onMessage = messageListener();
+    const publish = (value: unknown) => onMessage({ type: 'background.subtitleStateChanged', subtitleState: value }, {}, () => {});
+    onMessage({ type: 'background.settingsChanged', settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true } }, {}, () => {});
     publish(state);
-    const initialBind = bind.mock.calls[0][0];
+    const initialBind = bind.mock.calls[0]?.[0];
+    assert(initialBind, 'Partial track must bind to the video');
     const annotation = { ...state, partialTrack: { ...partial, revision: 2, cues: [{ ...partial.cues[0], translatedText: 'Salut' }] } };
     publish(annotation);
     expect(bind).toHaveBeenCalledTimes(1);
@@ -102,7 +110,7 @@ describe('content study pause ownership', () => {
     (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
     await Promise.resolve();
     await Promise.resolve();
-    const onMessage = mocks.listeners[0];
+    const onMessage = messageListener();
     onMessage({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState() }, {}, () => {});
     const geometry = vi.spyOn(video, 'getBoundingClientRect');
     const update = vi.spyOn(OverlayShell.prototype, 'update');
@@ -172,7 +180,7 @@ describe('content study pause ownership', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const onMessage = mocks.listeners[0];
+    const onMessage = messageListener();
     expect(onMessage).toBeDefined();
     onMessage({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState() }, {}, () => {});
     expect(mocks.cueChange).toBeTruthy();
@@ -233,7 +241,7 @@ describe('content study pause ownership', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const onMessage = mocks.listeners[0];
+    const onMessage = messageListener();
     expect(onMessage).toBeDefined();
     onMessage({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState(500) }, {}, () => {});
 
