@@ -663,7 +663,7 @@ async function generateSubtitlesFromPanel(confirmationContext: string, windowId?
 
       await setTabOperation(activeTabId, { kind: 'generation', accountId: session.account.id, youtubeVideoId: pageStatus.videoId });
       generationStarted = true;
-      void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, session, operation, confirmationContext, windowId)
+      void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, session, operation, confirmationContext, currentState.type === 'ready', windowId)
         .finally(() => {
           if (tabOperations.get(activeTabId) === operation) tabGenerationInFlight.delete(activeTabId);
         });
@@ -688,6 +688,7 @@ async function generateSubtitlesForTab(
   session: StoredExtensionSession,
   operation: symbol,
   confirmationContext: string,
+  forceRegenerate: boolean,
   windowId?: number,
 ): Promise<void> {
   const sessionId = session.sessionId;
@@ -720,6 +721,7 @@ async function generateSubtitlesForTab(
       throw new Error('Generation details changed. Review them and confirm again.');
     }
     const initialJob = await subtitleApi.createSubtitleJob(installId, session.plainTextToken, {
+      ...(forceRegenerate ? { forceRegenerate: true } : {}),
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
       ...(isCreatePayloadVideoDurationSeconds(pageSnapshot.videoDurationSeconds)

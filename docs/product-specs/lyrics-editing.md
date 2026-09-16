@@ -15,6 +15,14 @@ This section supersedes the older replacement validation and partial-merge requi
 - The alignment prompt treats lyricsParts and cue text as untrusted data. Server reconstruction requires known cue IDs in source order, nonempty pasted segments, increasing integer endpoints within the supplied parts, and consumption of every pasted part. Timing slots may be omitted. Invalid allocations fail before derived analysis, clear private attempt state, and leave the existing track active.
 - These checks reject obvious junk and malformed allocations. They do not establish whether words are meaningful, whether the paste belongs to the song, or whether prompt injection affected interpretation.
 
+## Recovery with Generate again (2026-09-16)
+
+The replacement form asks for complete lyrics in song order, including repetitions, without section tags such as `[Chorus]`. It warns that incorrect, incomplete, or nonsense lyrics can damage timing mappings and may require regeneration.
+
+Generate again from an existing track sends `forceRegenerate: true`. A compatible completed job starts a new run and replaces its saved track instead of returning edited subtitles. The original transcription cache is independent of lyric edits and remains reusable; tokens, romanization, and translation are generated again according to the selected settings. Audio transcription runs again only when no compatible original transcript is cached. Ordinary generation requests retain completed-track reuse, and duplicate requests reuse an active run.
+
+Regeneration uses normal plan minutes. Billing rejection preserves the existing track, and active lyric replacement blocks regeneration. Once regeneration is accepted, the old track is removed while the new run completes.
+
 ## Problem
 
 The current **Use pasted lyrics** form looks like a small edit, but it replaces the full transcript and can take several minutes. It has no meaningful progress, no cancellation, and no protection against replacing a complete song with an excerpt.

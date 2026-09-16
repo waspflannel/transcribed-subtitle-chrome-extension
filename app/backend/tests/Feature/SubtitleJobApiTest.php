@@ -2103,6 +2103,92 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(2, SubtitleTrack::count());
     }
 
+    #[TestWith([true])]
+    #[TestWith([false])]
+    public function test_regeneration_rebuilds_edited_lyrics_and_learning_data_from_original_transcription(bool $cached): void
+    {
+        $source = $this->arabicGreeting();
+        $this->transcriptionService->transcript = new TimestampedTranscript(
+            language: 'ara', durationSeconds: 42,
+            segments: [new TimestampedTranscriptSegment(0.5, 2.1, $source)], webVtt: "WEBVTT\n",
+        );
+        $payload = $this->validPayload(['sourceLanguage' => 'ara', 'includeTranslation' => true]);
+        $original = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $job = SubtitleJob::where('public_id', $original->json('jobId'))->firstOrFail();
+        $oldRun = $job->run_id;
+        $cues = $job->track->cues;
+        $cues[0] = [...$cues[0], 'sourceText' => 'broken pasted lyrics', 'translatedText' => 'broken translation', 'romanization' => 'broken reading',
+            'tokens' => [['index' => 0, 'text' => 'broken', 'normalizedText' => 'broken']]];
+        $job->track->update(['cues' => $cues, 'web_vtt' => "WEBVTT\n\nbroken pasted lyrics\n"]);
+        $this->postJson('/v1/subtitle-jobs', [...$payload, 'forceRegenerate' => false])->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', 'broken pasted lyrics');
+        if (! $cached) {
+            CachedVideoTranscript::query()->update(['expires_at' => now()->subDay()]);
+        }
+        $fresh = $this->postJson('/v1/subtitle-jobs', [...$payload, 'forceRegenerate' => true])->assertOk()
+            ->assertJsonPath('track.cues.0.sourceText', $source);
+        $this->assertNotSame($original->json('track.trackId'), $fresh->json('track.trackId'));
+        $this->assertNotSame($oldRun, $job->fresh()->run_id);
+        $this->assertSame($original->json('track.cues.0.translatedText'), $fresh->json('track.cues.0.translatedText'));
+        $this->assertSame($original->json('track.cues.0.romanization'), $fresh->json('track.cues.0.romanization'));
+        $this->assertSame($original->json('track.cues.0.tokens'), $fresh->json('track.cues.0.tokens'));
+        $this->assertSame($cached ? 1 : 2, $this->audioSource->calls);
+        $this->assertSame($cached ? 1 : 2, $this->transcriptionService->chunkCalls);
+        $this->assertSame(2, $this->translationAnalysis->tokenizationCalls);
+        $this->assertSame(2, $this->translationAnalysis->romanizationCalls);
+        $this->assertSame(2, $this->translationAnalysis->translationCalls);
+        $this->assertSame(2, BillingUsageEvent::where('subtitle_job_id', $job->id)->where('event_type', 'debit')->count());
+    }
+
+    public function test_duplicate_regeneration_reuses_the_active_run_and_its_reservation(): void
+    {
+        $original = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $original->json('jobId'))->firstOrFail();
+        $oldRun = $job->run_id;
+        config(['queue.default' => 'database', 'subtitles.queue.connection' => 'database']);
+        Queue::fake();
+        $payload = $this->validPayload(['forceRegenerate' => true]);
+        $first = $this->postJson('/v1/subtitle-jobs', $payload)->assertAccepted();
+        $run = $job->fresh()->run_id;
+        $ledgerCount = BillingUsageEvent::count();
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertAccepted()->assertJsonPath('jobId', $first->json('jobId'));
+        $this->assertSame($run, $job->fresh()->run_id);
+        $this->assertSame($ledgerCount, BillingUsageEvent::count());
+        Queue::assertPushed(AcquireSubtitleAudio::class, 1);
+        (new AcquireSubtitleAudio($job->id, $oldRun))->handle(app(SubtitleGenerationPipeline::class));
+        $this->assertSame($run, $job->fresh()->run_id);
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertNull($job->fresh()->track);
+    }
+
+    #[TestWith(['billing', 402])]
+    #[TestWith(['correction', 409])]
+    public function test_regeneration_rejection_preserves_the_existing_track(string $reason, int $status): void
+    {
+        $original = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $original->json('jobId'))->firstOrFail();
+        $oldRun = $job->run_id;
+        if ($reason === 'billing') {
+            $job->user->update(['billing_subscription_status' => 'past_due']);
+        } else {
+            $job->track->lyricsCorrection()->create(['attempt_id' => (string) Str::uuid(), 'status' => 'queued', 'lyrics' => 'Replacement in progress']);
+        }
+        $this->postJson('/v1/subtitle-jobs', $this->validPayload(['forceRegenerate' => true]))->assertStatus($status);
+        $this->assertSame($oldRun, $job->fresh()->run_id);
+        $this->assertSame($original->json('track.trackId'), $job->fresh()->track->public_id);
+        $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    #[TestWith(['true'])]
+    #[TestWith([1])]
+    #[TestWith([null])]
+    public function test_regeneration_flag_requires_a_json_boolean(mixed $value): void
+    {
+        $this->withExtensionAuth($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['forceRegenerate' => $value]))->assertUnprocessable();
+        $this->assertSame(0, SubtitleJob::count());
+    }
+
     public function test_repeat_generation_for_the_same_video_reuses_the_cached_transcript(): void
     {
         config(['ai.providers.eleven.models.transcription.default' => 'scribe-test']);

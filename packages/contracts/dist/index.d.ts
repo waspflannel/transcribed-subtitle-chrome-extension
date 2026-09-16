@@ -238,6 +238,10 @@ export interface CreateSubtitleJobRequest {
    */
   includeTranslation: boolean;
   /**
+   * When true, rebuild a compatible completed track from the original transcription with fresh tokens, romanization, and translation. Original transcription may be cached; active jobs are still reused. Regeneration uses normal plan minutes.
+   */
+  forceRegenerate?: boolean;
+  /**
    * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
    */
   aiProvider?: 'openai' | 'cerebras';

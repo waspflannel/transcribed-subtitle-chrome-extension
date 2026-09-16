@@ -360,6 +360,25 @@ afterEach(() => {
 });
 
 describe('background entrypoint review regressions', () => {
+  it.each([false, true])('requests fresh analysis when generating from a saved track (saved: %s)', async (saved) => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const original = track(VIDEO_A);
+    if (saved) storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { accountId: 'account-1', track: original } });
+    const fresh = track(VIDEO_A, original.jobId, 'fresh-track');
+    const completed = { ...job(VIDEO_A, original.jobId), status: 'completed', track: fresh };
+    apiMock.createSubtitleJob.mockResolvedValue(completed);
+    apiMock.getSubtitleJob.mockResolvedValue(completed);
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
+    expect(apiMock.createSubtitleJob.mock.calls[0]?.[2].forceRegenerate).toBe(saved ? true : undefined);
+    await waitFor(() => (storageMock.values.get('local:activeTracksByVideoId') as any)?.[VIDEO_A]?.track.trackId === 'fresh-track');
+    const result = await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {});
+    expect(result.subtitleState.track.trackId).toBe('fresh-track');
+  });
+
   it('prefetches only for an open panel, without waiting, and deduplicates per video', async () => {
     vi.stubEnv('WXT_AUDIO_METADATA_PREFETCH', 'true');
     seedBaseState();
