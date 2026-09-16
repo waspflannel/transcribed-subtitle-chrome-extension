@@ -164,7 +164,7 @@ describe('backend subtitle state helpers', () => {
         stage: 'transcribing',
         progressPercent: 42,
         errorCode: 'generation_cancelled',
-        message: 'Generation was cancelled. Reserved minutes were released.',
+        message: 'Generation cancelled.',
       })]),
     ).resolves.toEqual({ type: 'no-track' });
   });

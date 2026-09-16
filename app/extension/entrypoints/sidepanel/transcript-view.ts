@@ -66,6 +66,11 @@ export function bindTranscriptView(dom: {
     if (signature === renderedSignature) return;
     renderedSignature = signature;
     const scrollTop = dom.transcriptList.scrollTop;
+    const previousInput = quickFixInputElement();
+    const editorSelection = !focusQuickFixEditor && previousInput === dom.transcriptList.ownerDocument.activeElement && previousInput
+      ? { start: previousInput.selectionStart, end: previousInput.selectionEnd,
+        direction: previousInput.selectionDirection, scrollLeft: previousInput.scrollLeft }
+      : null;
     dom.transcriptList.innerHTML = (partial ? partialTotal : total) === 0
       ? '<p class="transcript-empty muted">Generate subtitles to see the transcript.</p>'
       : partial ? panelPartialTranscriptListHtml({
@@ -86,6 +91,12 @@ export function bindTranscriptView(dom: {
           : null,
       });
     hydrateQuickFixEditor();
+    const input = quickFixInputElement();
+    if (input && editorSelection) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(editorSelection.start, editorSelection.end, editorSelection.direction ?? undefined);
+      input.scrollLeft = editorSelection.scrollLeft;
+    }
     dom.transcriptList.scrollTop = scrollTop;
   }
 

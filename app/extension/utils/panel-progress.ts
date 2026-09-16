@@ -1,14 +1,5 @@
 import type { SubtitleJobHistoryItem } from './contracts';
 
-export const GENERATION_STAGES: readonly SubtitleJobHistoryItem['stage'][] = [
-  'preparing',
-  'acquiring-audio',
-  'optimizing-audio',
-  'transcribing',
-  'tokenizing',
-  'finalizing',
-];
-
 export interface GenerationProgress {
   percent: number;
   stageLabel: string;

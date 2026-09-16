@@ -7,7 +7,6 @@ import {
   formatJobTiming,
   formatResetDate,
   publicJobTelemetry,
-  stageTimeline,
 } from '../utils/account-state';
 import { accountFeatureListHtml, accountBillingLinkHtml } from '../entrypoints/sidepanel/render/account';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
@@ -106,37 +105,8 @@ describe('account and job-history state helpers', () => {
     });
   });
 
-  it('marks stage timelines and timing labels for running, completed, and failed jobs', () => {
-    expect(stageTimeline(jobHistory({ status: 'running', stage: 'tokenizing' })).map((item) => item.state)).toEqual([
-      'done',
-      'done',
-      'done',
-      'done',
-      'current',
-      'pending',
-    ]);
-    expect(stageTimeline(jobHistory({ status: 'failed', stage: 'transcribing' }))[3]).toMatchObject({
-      stage: 'transcribing',
-      state: 'failed',
-    });
+  it('formats the total time for a completed job', () => {
     expect(formatJobTiming(jobHistory({ status: 'completed' }))).toBe('2m total');
-  });
-
-  it('keeps overlapping analysis work in one current timeline step', () => {
-    for (const stage of ['tokenizing', 'romanizing', 'translating'] as const) {
-      const timeline = stageTimeline({ status: 'running', stage });
-      expect(timeline.filter((item) => item.state === 'current')).toEqual([
-        { stage: 'tokenizing', label: 'Analyzing subtitles', state: 'current' },
-      ]);
-      expect(timeline.map((item) => item.stage)).not.toContain('romanizing');
-      expect(timeline.map((item) => item.stage)).not.toContain('translating');
-    }
-  });
-
-  it('keeps every stage pending while a job is queued', () => {
-    expect(stageTimeline(jobHistory({ status: 'queued', stage: 'transcribing' })).map((item) => item.state)).toEqual(
-      Array(6).fill('pending'),
-    );
   });
 });
 

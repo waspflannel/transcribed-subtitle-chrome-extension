@@ -115,10 +115,10 @@ describe('renderJobHistory links', () => {
 
     renderJobHistory({ ...stateWithJob(), jobHistory: [makeJob({
       status: 'cancelled', progressPercent: 42, stage: 'transcribing', errorCode: 'generation_cancelled',
-      message: 'Generation was cancelled. Reserved minutes were released.',
+      message: 'Generation cancelled.',
     })] }, { jobsList, jobsError });
     expect(jobsList.textContent).toContain('Cancelled');
-    expect(jobsList.textContent).toContain('Reserved minutes were released');
+    expect(jobsList.textContent).toContain('Generation cancelled.');
     expect(jobsList.querySelector('[data-action="cancel-generation"]')).toBeNull();
   });
 });

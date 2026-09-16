@@ -46,6 +46,10 @@ export interface PanelDom {
   pairTargetCode: HTMLElement;
   pairTargetName: HTMLElement;
   generateButton: HTMLButtonElement;
+  generationConfirmation: HTMLDialogElement;
+  generationConfirmationSummary: HTMLElement;
+  confirmGenerationButton: HTMLButtonElement;
+  cancelGenerationConfirmationButton: HTMLButtonElement;
   generateNote: HTMLElement;
   clearStateButton: HTMLButtonElement;
   resetTimingButton: HTMLButtonElement;
@@ -150,6 +154,10 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     pairTargetCode: query(root, '[data-pair-target-code]', HTMLElement),
     pairTargetName: query(root, '[data-pair-target-name]', HTMLElement),
     generateButton: query(root, '[data-action="generate"]', HTMLButtonElement),
+    generationConfirmation: query(root, '[data-generation-confirmation]', HTMLDialogElement),
+    generationConfirmationSummary: query(root, '[data-generation-confirmation-summary]', HTMLElement),
+    confirmGenerationButton: query(root, '[data-action="confirm-generation"]', HTMLButtonElement),
+    cancelGenerationConfirmationButton: query(root, '[data-action="cancel-generation-confirmation"]', HTMLButtonElement),
     generateNote: query(root, '[data-generate-note]', HTMLElement),
     clearStateButton: query(root, '[data-action="clear-state"]', HTMLButtonElement),
     resetTimingButton: query(root, '[data-action="reset-timing"]', HTMLButtonElement),

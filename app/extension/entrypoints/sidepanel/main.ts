@@ -13,6 +13,7 @@ import {
 import { isRuntimeMessage } from '../../utils/messages';
 import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
+import { generationConfirmationContext } from '../../utils/generation-confirmation';
 import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
 import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
@@ -42,7 +43,7 @@ import {
 
 type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-cancel' | 'generation-selection';
+type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-start' | 'generation-cancel' | 'generation-selection';
 type AccountFeedbackKind = 'info' | 'success' | 'error';
 type GenerationCancelFeedback = { kind: 'success' | 'error'; message: string };
 
@@ -93,6 +94,10 @@ const {
   pairTargetCode,
   pairTargetName,
   generateButton,
+  generationConfirmation,
+  generationConfirmationSummary,
+  confirmGenerationButton,
+  cancelGenerationConfirmationButton,
   generateNote,
   clearStateButton,
   resetTimingButton,
@@ -156,6 +161,8 @@ let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
 let accountRequestBusy = false;
 let generationRequestBusy = false;
+let confirmedGenerationContext: string | null = null;
+let settingsRequestsInFlight = 0;
 let lyricsCorrectionRequestBusy = false;
 let quickFixRequestBusy = false;
 let lyricsCancellationRequestBusy = false;
@@ -184,7 +191,13 @@ let quickFixNotice: string | null = null;
 collapseButton.addEventListener('click', () => {
   window.close();
 });
-generateButton.addEventListener('click', () => void generateSubtitles());
+generateButton.addEventListener('click', openGenerationConfirmation);
+confirmGenerationButton.addEventListener('click', () => void generateSubtitles());
+cancelGenerationConfirmationButton.addEventListener('click', dismissGenerationConfirmation);
+generationConfirmation.addEventListener('cancel', (event) => {
+  event.preventDefault();
+  dismissGenerationConfirmation();
+});
 lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
 lyricsCorrectionTextarea.addEventListener('input', () => {
   /* Editing the paste after Continue drops back out of the confirmation step. */
@@ -408,6 +421,7 @@ function attachTabListeners(): void {
 }
 
 function scheduleTabChangeRefresh(): void {
+  dismissGenerationConfirmation();
   if (tabChangeTimer) clearTimeout(tabChangeTimer);
   tabChangeTimer = setTimeout(() => void onActiveTabChanged(), 60);
 }
@@ -432,8 +446,40 @@ async function refreshBackendState(lyricsOnly = false): Promise<void> {
   }
 }
 
+function currentGenerationContext(): string | null {
+  const state = latestState;
+  if (!state?.pageStatus?.supported || state.accountState.status !== 'authenticated' || state.activeTabId === undefined) return null;
+  return generationConfirmationContext(state.activeTabId, state.pageStatus.videoId, state.accountState.id, state.pageVideoDurationSeconds, state.settings);
+}
+
+function generationUnavailable(): boolean {
+  return generationRequestBusy || generationCancellationRequestBusy || accountRequestBusy || settingsRequestsInFlight > 0
+    || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy
+    || latestState?.subtitleState.type === 'loading' || isActiveLyricsCorrection(latestState?.lyricsCorrection)
+    || currentGenerationContext() === null;
+}
+
+function openGenerationConfirmation(): void {
+  if (generationUnavailable() || generationConfirmation.open || !latestState) return;
+  confirmedGenerationContext = currentGenerationContext();
+  const { settings, pageVideoDurationSeconds: duration } = latestState;
+  const minutes = typeof duration === 'number'
+    ? `Estimated usage: ${Math.max(1, Math.ceil(duration / 60))} plan minutes for the full video`
+    : 'The full video duration counts toward your plan minutes';
+  generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${settings.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna'} · ${minutes}.`;
+  generationConfirmation.showModal();
+}
+
+function dismissGenerationConfirmation(): void {
+  confirmedGenerationContext = null;
+  if (generationConfirmation.open) generationConfirmation.close();
+}
+
 async function generateSubtitles(): Promise<void> {
-  if (generationRequestBusy || generationCancellationRequestBusy || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(latestState?.lyricsCorrection)) return;
+  const confirmationContext = confirmedGenerationContext;
+  if (!generationConfirmation.open || !confirmationContext) return;
+  dismissGenerationConfirmation();
+  if (generationUnavailable() || confirmationContext !== currentGenerationContext()) return;
 
   generationCancelFeedback = null;
   generationRequestBusy = true;
@@ -441,9 +487,11 @@ async function generateSubtitles(): Promise<void> {
   generateButton.textContent = 'Starting...';
 
   try {
-    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles' }, 'global', 'mutation');
+    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles', confirmationContext }, 'generation-start', 'mutation');
     if (applied) {
       openWatchScreen('transcript');
+    } else {
+      await sendPanelRequest({ type: 'panel.getState', syncBackend: false }, 'settings');
     }
   } finally {
     generationRequestBusy = false;
@@ -482,7 +530,7 @@ async function cancelGeneration(button: HTMLButtonElement): Promise<void> {
     }, 'generation-cancel', 'mutation');
 
     if (applied) {
-      generationCancelFeedback = { kind: 'success', message: 'Generation cancelled. Reserved minutes were released.' };
+      generationCancelFeedback = { kind: 'success', message: 'Generation cancelled.' };
       if (latestState) showPanelState(latestState);
     }
   } finally {
@@ -679,10 +727,19 @@ function renderLyricsEditState(): void {
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  await sendPanelRequest({ type: 'panel.updateSettings', patch }, 'settings', 'mutation');
+  dismissGenerationConfirmation();
+  settingsRequestsInFlight += 1;
+  generateButton.disabled = true;
+  try {
+    await sendPanelRequest({ type: 'panel.updateSettings', patch }, 'settings', 'mutation');
+  } finally {
+    settingsRequestsInFlight -= 1;
+    generateButton.disabled = generationUnavailable();
+  }
 }
 
 async function clearLocalState(): Promise<void> {
+  dismissGenerationConfirmation();
   await sendPanelRequest({ type: 'panel.clearLocalState' }, 'global', 'mutation');
 }
 
@@ -754,7 +811,7 @@ async function sendPanelRequest(
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
 
-    if (!response) {
+    if (!response && request.type !== 'panel.generateSubtitles') {
       await new Promise((resolve) => setTimeout(resolve, 150));
       response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
     }
@@ -891,6 +948,9 @@ function showPanelState(state: PanelState): void {
   const previousVideoId = latestState?.pageStatus?.supported ? latestState.pageStatus.videoId : null;
   const nextVideoId = state.pageStatus?.supported ? state.pageStatus.videoId : null;
   latestState = state;
+  const confirmationChanged = generationConfirmation.open
+    && (generationUnavailable() || confirmedGenerationContext !== currentGenerationContext());
+  if (confirmationChanged) dismissGenerationConfirmation();
   savedGenerations.render(state);
 
   if (previousAccountId !== nextAccountId) {
@@ -947,11 +1007,15 @@ function showPanelState(state: PanelState): void {
   renderAccount(accountState, settings);
   renderSettingsSummary(settings);
 
-  generateButton.disabled = generationRequestBusy || !authenticated || !supported || subtitleState.type === 'loading' || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy || isActiveLyricsCorrection(state.lyricsCorrection);
+  generateButton.disabled = generationUnavailable();
   renderLyricsEditState();
   renderLyricsCorrectionState(state);
   generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
   renderGenerateNote(state, supported);
+  if (confirmationChanged) {
+    statusBanner.hidden = false;
+    statusBanner.textContent = 'Generation details changed. Review them and press Generate subtitles again.';
+  }
 
   renderLanguagePair(settings);
   renderLanguagePickers(settings);
@@ -1171,8 +1235,8 @@ function renderGenerateNote(state: PanelState, supported: boolean): void {
 
   const duration = videoDurationForState(state);
   generateNote.textContent = typeof duration === 'number'
-    ? `≈ ${Math.max(1, Math.ceil(duration / 60))} min of video · counts toward your plan minutes`
-    : 'Generation time counts toward your plan minutes.';
+    ? `Estimated usage: ${Math.max(1, Math.ceil(duration / 60))} plan minutes for the full video`
+    : 'The full video duration counts toward your plan minutes.';
 }
 
 function renderLanguagePair(settings: ExtensionSettings | null): void {
@@ -1253,6 +1317,7 @@ function renderShortcutHelp(): void {
 }
 
 function showError(error: unknown): void {
+  dismissGenerationConfirmation();
   const emptyAccountState = anonymousAccountState();
 
   latestState = null;
@@ -1336,7 +1401,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
     return;
   }
 
-  if (errorTarget === 'generation-cancel') {
+  if (errorTarget === 'generation-cancel' || errorTarget === 'generation-start') {
     generationCancelFeedback = { kind: 'error', message };
     statusBanner.hidden = false;
     statusBanner.className = 'status-banner';
@@ -1362,6 +1427,8 @@ function clearAccountFeedback(): void {
 
 function setAccountRequestBusy(busy: boolean, message?: string): void {
   accountRequestBusy = busy;
+  if (busy) dismissGenerationConfirmation();
+  generateButton.disabled = generationUnavailable();
 
   if (message) {
     showAccountFeedback('info', message);

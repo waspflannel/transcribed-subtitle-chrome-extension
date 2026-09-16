@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { SubtitleCue } from '../utils/contracts';
 import { bindTranscriptView } from '../entrypoints/sidepanel/transcript-view';
 
-const cues: SubtitleCue[] = [
+const cues: [SubtitleCue, SubtitleCue] = [
   { cueId: 'c1', index: 0, startMs: 500, endMs: 2100, sourceText: 'hola', translatedText: 'hello', romanization: 'o-la', tokens: [{ index: 0, text: 'hola', normalizedText: 'hola' }] },
   { cueId: 'c2', index: 1, startMs: 2600, endMs: 4200, sourceText: 'adios', translatedText: 'goodbye', romanization: 'a-dios', tokens: [{ index: 0, text: 'adios', normalizedText: 'adios' }] },
 ];
@@ -344,6 +344,42 @@ describe('bindTranscriptView quick fix editor', () => {
     expect(list.querySelector<HTMLInputElement>('[data-quick-fix-input]')?.value).toBe('hola!');
   });
 
+  it('keeps typing focus, selection, draft and scroll when another cue receives word metadata', async () => {
+    const { view, list, document, onQuickFixSave } = setupQuickFix();
+    const { input } = openEditor(view, list);
+    type(input, 'hola! a longer correction');
+    input.setSelectionRange(2, 8, 'backward');
+    input.scrollLeft = 12;
+    list.scrollTop = 75;
+
+    await Promise.resolve();
+    const updated = structuredClone(cues);
+    updated[1].tokens[0].gloss = 'arriving word card';
+    view.setData('vid', updated, DEFAULT_EXTENSION_SETTINGS);
+
+    const restored = list.querySelector<HTMLInputElement>('[data-quick-fix-input]')!;
+    expect(document.activeElement).toBe(restored);
+    expect(restored.value).toBe('hola! a longer correction');
+    expect([restored.selectionStart, restored.selectionEnd, restored.selectionDirection]).toEqual([2, 8, 'backward']);
+    expect(restored.scrollLeft).toBe(12);
+    expect(list.scrollTop).toBe(75);
+    restored.dispatchEvent(new document.defaultView!.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(onQuickFixSave).toHaveBeenCalledWith('c1', 0, 'hola! a longer correction');
+  });
+
+  it('does not reclaim editor focus after the user moves to search before a metadata update', () => {
+    const { view, list, document } = setupQuickFix();
+    const { input } = openEditor(view, list);
+    type(input, 'hola!');
+    const search = document.getElementById('search')!;
+    search.focus();
+    const updated = structuredClone(cues);
+    updated[1].tokens[0].gloss = 'arriving word card';
+    view.setData('vid', updated, DEFAULT_EXTENSION_SETTINGS);
+    expect(document.activeElement).toBe(search);
+    expect(list.querySelector<HTMLInputElement>('[data-quick-fix-input]')!.value).toBe('hola!');
+  });
+
   it('closing the editing state removes the editor', () => {
     const { view, list } = setupQuickFix();
     openEditor(view, list);
@@ -365,7 +401,9 @@ it('coalesces search input and invalidates searchable metadata when the same tra
   expect(list.firstElementChild).toBe(initial);
   await new Promise((resolve) => search.ownerDocument.defaultView!.requestAnimationFrame(resolve));
   expect(serialize).toHaveBeenCalledTimes(1);
-  expect(JSON.stringify(serialize.mock.calls[0][0]).length).toBeLessThan(100);
+  const call = serialize.mock.calls[0];
+  assert(call, 'Search rendering must serialize a signature');
+  expect(JSON.stringify(call[0]).length).toBeLessThan(100);
   serialize.mockRestore();
   expect(list.querySelectorAll('.cue')).toHaveLength(1);
   const patched = structuredClone(cues);

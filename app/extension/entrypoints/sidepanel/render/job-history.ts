@@ -119,7 +119,7 @@ function jobMessage(
   }
 
   if (job.status === 'cancelled') {
-    return `${job.message ?? 'Generation cancelled. Reserved minutes were released.'} ${progress.stageLabel} · ${progress.percent}% captured.`;
+    return `${job.message ?? 'Generation cancelled.'} ${progress.stageLabel} · ${progress.percent}% captured.`;
   }
 
   return null;

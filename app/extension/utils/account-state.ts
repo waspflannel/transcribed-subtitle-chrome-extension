@@ -1,17 +1,10 @@
 import type { AccountSummary, SubtitleJobHistoryItem } from './contracts';
 import { publicSubtitleErrorMessage, SubtitleApiError } from './api';
 import type { AccountState } from './messages';
-import { GENERATION_STAGES, stageLabel } from './panel-progress';
 
 export interface PublicJobTelemetry {
   videoDurationSeconds?: number;
   errorMessage?: string;
-}
-
-export interface StageTimelineItem {
-  stage: SubtitleJobHistoryItem['stage'];
-  label: string;
-  state: 'done' | 'current' | 'pending' | 'failed';
 }
 
 export function anonymousAccountState(): AccountState {
@@ -48,30 +41,6 @@ export function publicJobTelemetry(job: SubtitleJobHistoryItem): PublicJobTeleme
   }
 
   return telemetry;
-}
-
-export function stageTimeline(job: Pick<SubtitleJobHistoryItem, 'stage' | 'status'>): StageTimelineItem[] {
-  // Analysis, translation, and romanization overlap inside one batch.
-  const currentStage = job.stage === 'romanizing' || job.stage === 'translating' ? 'tokenizing' : job.stage;
-  const currentIndex = GENERATION_STAGES.indexOf(currentStage);
-
-  return GENERATION_STAGES.map((stage, index) => {
-    let state: StageTimelineItem['state'] = 'pending';
-
-    if (job.status === 'queued') {
-      state = 'pending';
-    } else if (job.status === 'completed' || index < currentIndex) {
-      state = 'done';
-    } else if (index === currentIndex) {
-      state = job.status === 'failed' ? 'failed' : 'current';
-    }
-
-    return {
-      stage,
-      label: stageLabel(stage),
-      state,
-    };
-  });
 }
 
 export function formatDurationSeconds(seconds: number | undefined): string {

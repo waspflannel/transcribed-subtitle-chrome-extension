@@ -114,6 +114,7 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.generateSubtitles';
+      confirmationContext: string;
       windowId?: number;
     }
   | {
@@ -210,7 +211,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'background.getActiveCue':
       return hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
     case 'panel.generateSubtitles':
-      return optionalNumber(value, 'windowId');
+      return hasString(value, 'confirmationContext') && optionalNumber(value, 'windowId');
     case 'content.getState':
       return optionalBoolean(value, 'revalidateSavedGeneration');
     case 'panel.logout':

@@ -3,7 +3,7 @@ import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { PartialSubtitleCue, SubtitleCue } from '../utils/contracts';
 import { filterTranscriptCues, panelPartialTranscriptListHtml, panelTranscriptListHtml } from '../utils/panel/transcript';
 
-const cues: SubtitleCue[] = [
+const cues: [SubtitleCue, SubtitleCue] = [
   { cueId: 'c1', index: 0, startMs: 500, endMs: 2100, sourceText: 'hola', translatedText: 'hello', romanization: 'o-la', tokens: [{ index: 0, text: 'hola', normalizedText: 'hola' }] },
   { cueId: 'c2', index: 1, startMs: 2600, endMs: 4200, sourceText: 'adios', translatedText: 'goodbye', romanization: 'a-dios', tokens: [{ index: 0, text: 'adios', normalizedText: 'adios' }] },
 ];
@@ -79,9 +79,9 @@ describe('panelTranscriptListHtml quick fix mode', () => {
     const normal = panelTranscriptListHtml({ cues: cuesWithReadings, activeCueId: null, query: '', settings });
     const quickFix = panelTranscriptListHtml({ cues: cuesWithReadings, activeCueId: null, query: '', settings, editingCueId: 'c1', quickFixMode: true });
 
-    expect(normal).toContain('<span class="tok">hola<small>o-la</small></span>');
+    expect(normal).toContain('<span class="tok"><span class="tok-text">hola</span><small dir="ltr">o-la</small></span>');
     expect(quickFix).toContain('data-transcript-action="quick-fix-token"');
-    expect(quickFix).toContain('<small>o-la</small>');
+    expect(quickFix).toContain('<small dir="ltr">o-la</small>');
     /* Buttons join like normal tokens — no injected spaces that reflow the line. */
     expect(quickFix).toContain('</button><button');
     expect(quickFix).not.toContain('</button> <button');

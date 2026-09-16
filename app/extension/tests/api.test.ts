@@ -168,7 +168,7 @@ describe('SubtitleApiClient', () => {
       stage: 'transcribing',
       progressPercent: 42,
       errorCode: 'generation_cancelled',
-      message: 'Generation was cancelled. Reserved minutes were released.',
+      message: 'Generation cancelled.',
       createdAt: '2026-04-30T00:00:00Z',
       updatedAt: '2026-04-30T00:01:00Z',
     };

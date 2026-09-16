@@ -64,7 +64,7 @@ export function panelPartialTranscriptListHtml(input: {
     <article class="cue${cue.cueId === input.activeCueId ? ' on' : ''}" role="listitem" aria-current="${cue.cueId === input.activeCueId ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
       <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>
       <div class="cbody">
-        <div class="ct">${escapeHtml(cue.sourceText)}</div>
+        <div class="ct" dir="auto">${escapeHtml(cue.sourceText)}</div>
         <div class="cue-actions">
           <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Copy cue ${cue.index + 1}">Copy</button>
         </div>
@@ -74,7 +74,7 @@ export function panelPartialTranscriptListHtml(input: {
 
 function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings, quickFixMode: boolean, editingCueId: string | null, quickFixEditing: QuickFixEditing | null): string {
   const tr = settings.showTranslation && cue.translatedText.trim() !== cue.sourceText.trim()
-    ? `<div class="cg">${escapeHtml(cue.translatedText || 'Translation unavailable')}</div>` : '';
+    ? `<div class="cg" dir="auto">${escapeHtml(cue.translatedText || 'Translation unavailable')}</div>` : '';
   return `
     <article class="cue${active ? ' on' : ''}" role="listitem" aria-current="${active ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
       <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>
@@ -105,33 +105,33 @@ function sourceLineHtml(cue: SubtitleCue, settings: ExtensionSettings, quickFixM
   if (quickFixMode) {
     const tokens = cue.tokens
       .map((token) => {
-        const reading = token.romanization ? `<small>${escapeHtml(token.romanization)}</small>` : '';
+        const reading = token.romanization ? `<small dir="ltr">${escapeHtml(token.romanization)}</small>` : '';
 
-        return `<button type="button" class="tok tok-edit" data-transcript-action="quick-fix-token" data-cue-id="${escapeHtml(cue.cueId)}" data-token-index="${token.index}" aria-label="Edit source token ${escapeHtml(token.text)}">${escapeHtml(token.text)}${reading}</button>`;
+        return `<button type="button" class="tok tok-edit" data-transcript-action="quick-fix-token" data-cue-id="${escapeHtml(cue.cueId)}" data-token-index="${token.index}" aria-label="Edit source token ${escapeHtml(token.text)}"><span class="tok-text">${escapeHtml(token.text)}</span>${reading}</button>`;
       })
       .join('');
 
-    return `<div class="toks">${tokens}</div>`;
+    return `<div class="toks" dir="auto">${tokens}</div>`;
   }
 
   const useTokens = settings.showRomanization && cue.tokens.some((token) => typeof token.romanization === 'string' && token.romanization !== '');
 
   if (!useTokens) {
     const rom = settings.showRomanization && cue.romanization
-      ? `<div class="cr">${escapeHtml(cue.romanization)}</div>` : '';
+      ? `<div class="cr" dir="ltr">${escapeHtml(cue.romanization)}</div>` : '';
 
-    return `<div class="ct">${escapeHtml(cue.sourceText)}</div>${rom}`;
+    return `<div class="ct" dir="auto">${escapeHtml(cue.sourceText)}</div>${rom}`;
   }
 
   const tokens = cue.tokens
     .map((token) => {
-      const reading = token.romanization ? `<small>${escapeHtml(token.romanization)}</small>` : '';
+      const reading = token.romanization ? `<small dir="ltr">${escapeHtml(token.romanization)}</small>` : '';
 
-      return `<span class="tok">${escapeHtml(token.text)}${reading}</span>`;
+      return `<span class="tok"><span class="tok-text">${escapeHtml(token.text)}</span>${reading}</span>`;
     })
     .join('');
 
-  return `<div class="toks">${tokens}</div>`;
+  return `<div class="toks" dir="auto">${tokens}</div>`;
 }
 
 /** Correction form beneath the selected source line. */
@@ -139,7 +139,7 @@ function quickFixEditorHtml(value: string): string {
   return `
     <div class="tok-editor" data-quick-fix-editor>
       <label for="quick-fix-text">Correct word</label>
-      <input id="quick-fix-text" type="text" name="quickFixText" autocomplete="off" spellcheck="false" data-quick-fix-input value="${escapeHtml(value)}" aria-label="Replacement token or phrase" />
+      <input id="quick-fix-text" type="text" dir="auto" name="quickFixText" autocomplete="off" spellcheck="false" data-quick-fix-input value="${escapeHtml(value)}" aria-label="Replacement token or phrase" />
       <p class="microcopy">Updates this line’s translation, pronunciation, and word cards.</p>
       <span class="tok-editor-row">
         <span class="tok-editor-hint" data-quick-fix-hint role="status" aria-live="polite"></span>

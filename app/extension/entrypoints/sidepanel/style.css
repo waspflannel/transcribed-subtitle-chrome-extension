@@ -84,6 +84,36 @@ a {
 }
 
 /* ============================== Layout ============================== */
+.generation-confirmation {
+  background: var(--night-high);
+  border: 2px solid var(--line);
+  color: var(--text);
+  margin: auto;
+  max-height: calc(100% - 32px);
+  padding: 20px;
+  width: min(420px, calc(100% - 32px));
+}
+
+.generation-confirmation::backdrop {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.generation-confirmation h2 {
+  font-family: var(--display);
+  font-size: 24px;
+}
+
+.generation-confirmation p {
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+}
+
+.generation-confirmation-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
@@ -960,6 +990,7 @@ select option {
   line-height: 1.2;
   max-width: 100%;
   overflow-wrap: anywhere;
+  unicode-bidi: isolate;
 }
 
 .tok-edit {
@@ -970,6 +1001,10 @@ select option {
   color: var(--text);
   cursor: pointer;
   padding: 0 1px;
+}
+
+.tok-text {
+  unicode-bidi: plaintext;
 }
 
 .tok-edit:hover,

@@ -344,7 +344,7 @@ function messageForApiErrorCode(code: ApiError['error']['code']): string {
       return 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
 
     case 'generation_cancelled':
-      return 'Generation cancelled. Reserved minutes were released.';
+      return 'Generation cancelled.';
 
     case 'generation_not_cancellable':
       return 'This generation has already finished and cannot be cancelled.';

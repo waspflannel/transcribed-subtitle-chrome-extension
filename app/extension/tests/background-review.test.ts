@@ -1,4 +1,7 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, assert, describe, expect, it, vi } from 'vitest';
+import type { SubtitleCue, TrackResponse } from '../utils/contracts';
+import { generationConfirmationContext } from '../utils/generation-confirmation';
+import { createExtensionSettingsFromPartial, type ExtensionSettings } from '../utils/settings-model';
 
 const VIDEO_ONE = 'aBcDeFgHiJk';
 const VIDEO_A = 'dQw4w9WgXcQ';
@@ -69,8 +72,9 @@ const storageMock = vi.hoisted(() => {
       const reads = blockedReads.get(key) ?? [];
       const index = reads.findIndex((read) => read.readNumber === readNumber);
       if (index < 0) return;
-      reads[index].resolve(value);
-      reads.splice(index, 1);
+      const [read] = reads.splice(index, 1);
+      assert(read, 'Blocked storage read must exist');
+      read.resolve(value);
     },
     wasBlockedReadConsumed(key: string): boolean {
       return (consumedBlockedReads.get(key) ?? 0) > 0;
@@ -176,7 +180,7 @@ vi.mock('../utils/api', () => ({
     getExtensionAccount(...args: unknown[]) { return apiMock.getExtensionAccount(...args); }
   },
   SubtitleApiError: class MockSubtitleApiError extends Error {
-    public readonly name = 'SubtitleApiError';
+    public override readonly name = 'SubtitleApiError';
     public constructor(
       public readonly code: string,
       message: string,
@@ -219,7 +223,7 @@ function session() {
   };
 }
 
-function track(videoId: string, jobId = `job-${videoId}`, trackId = `track-${videoId}`) {
+function track(videoId: string, jobId = `job-${videoId}`, trackId = `track-${videoId}`): TrackResponse & { cues: [SubtitleCue] } {
   return {
     trackId,
     jobId,
@@ -265,6 +269,16 @@ function job(videoId: string, jobId: string, status: 'queued' | 'running' | 'can
 function sender(tabId: number) {
   const tab = browserMock.tabs.get(tabId);
   return { tab };
+}
+
+function generationRequest() {
+  const tabId = browserMock.activeTabId;
+  const tab = browserMock.tabs.get(tabId);
+  assert(tab);
+  const accountId = (storageMock.values.get('local:extensionSession') as ReturnType<typeof session>).account.id;
+  const settings = createExtensionSettingsFromPartial(storageMock.values.get('local:extensionSettings') as Partial<ExtensionSettings>);
+  return { type: 'panel.generateSubtitles', windowId: 1, confirmationContext:
+    generationConfirmationContext(tabId, new URL(tab.url).searchParams.get('v')!, accountId, 120, settings) };
 }
 
 async function loadBackground(): Promise<
@@ -355,12 +369,14 @@ describe('background entrypoint review regressions', () => {
     await dispatch(listener, request, {});
     expect(apiMock.prefetchSubtitleAudio).not.toHaveBeenCalled();
     let disconnect = () => {};
-    browserMock.connectListeners[0]({ name: 'panel', onDisconnect: { addListener: (fn: () => void) => { disconnect = fn; } } });
+    const connect = browserMock.connectListeners[0];
+    assert(connect, 'Background must register a connect listener');
+    connect({ name: 'panel', onDisconnect: { addListener: (fn: () => void) => { disconnect = fn; } } });
     apiMock.prefetchSubtitleAudio.mockReturnValue(new Promise(() => {}));
     await dispatch(listener, request, {});
     await dispatch(listener, request, {});
     expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(1);
-    expect(apiMock.prefetchSubtitleAudio.mock.calls[0][2]).toBe(VIDEO_A);
+    expect(apiMock.prefetchSubtitleAudio.mock.calls[0]?.[2]).toBe(VIDEO_A);
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
     await dispatch(listener, request, {});
     expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(2);
@@ -439,7 +455,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.createSubtitleJob.mockResolvedValue(running);
     apiMock.getSubtitleJob.mockResolvedValue(running);
     const listener = await loadBackground();
-    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await dispatch(listener, generationRequest(), {});
     await waitFor(() => vi.getTimerCount() > 0);
     apiMock.getSubtitleJob.mockClear();
     for (let index = 0; index < 6; index += 1) {
@@ -531,7 +547,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.getSubtitleJob.mockResolvedValue(runningJob);
     const listener = await loadBackground();
 
-    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await dispatch(listener, generationRequest(), {});
     await waitFor(() => vi.getTimerCount() > 0);
     const operationBeforeUnchangedPoll = storageMock.values.get('local:tabSubtitleOperations');
     apiMock.getSubtitleJob.mockClear();
@@ -564,7 +580,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.cancelSubtitleJob.mockResolvedValue(job(VIDEO_A, 'job-poll', 'cancelled'));
     const listener = await loadBackground();
 
-    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await dispatch(listener, generationRequest(), {});
     await waitFor(() => vi.getTimerCount() > 0);
     apiMock.getSubtitleJob.mockClear().mockRejectedValue(new Error('temporarily unavailable'));
     await vi.advanceTimersByTimeAsync(1000);
@@ -594,11 +610,11 @@ describe('background entrypoint review regressions', () => {
     apiMock.createSubtitleJob.mockResolvedValueOnce(jobs[0]).mockResolvedValueOnce(jobs[1]);
     apiMock.getSubtitleJob.mockImplementation(async (_installId, _token, jobId) => jobs.find((item) => item.jobId === jobId));
     const listener = await loadBackground();
-    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await dispatch(listener, generationRequest(), {});
     await waitFor(() => vi.getTimerCount() === 1);
     await dispatch(listener, { type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' }, windowId: 1 }, {});
     browserMock.setActiveTab(2);
-    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await dispatch(listener, generationRequest(), {});
     expect(apiMock.createSubtitleJob.mock.calls.map((call) => call[2].aiProvider)).toEqual(['openai', 'cerebras']);
     await waitFor(() => vi.getTimerCount() === 2);
     apiMock.getSubtitleJob.mockClear();
@@ -662,6 +678,42 @@ describe('background entrypoint review regressions', () => {
     expect(current.subtitleState.track.cues[0].tokens).toEqual(remembered.cues[0].tokens);
   });
 
+  it.each(['account', 'video', 'tab', 'duration', 'settings'])('rejects stale confirmed %s details before creating a job', async (change) => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const request = generationRequest();
+    if (change === 'account') storageMock.values.set('local:extensionSession', { ...session(), sessionId: 'session-2', account: { ...account(), id: 'account-2' } });
+    if (change === 'video') browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
+    if (change === 'tab') {
+      browserMock.tabs.set(2, { id: 2, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+      browserMock.setActiveTab(2);
+    }
+    if (change === 'duration') browserMock.tabsSendMessage.mockResolvedValueOnce({ ok: true, videoDurationSeconds: 240 });
+    if (change === 'settings') storageMock.values.set('local:extensionSettings', { ...storageMock.values.get('local:extensionSettings') as object, aiProvider: 'cerebras' });
+    const listener = await loadBackground();
+    const response = await dispatch(listener, request, {});
+    expect(response).toMatchObject({ ok: false, error: 'Generation details changed. Review them and confirm again.' });
+    expect(apiMock.createSubtitleJob).not.toHaveBeenCalled();
+  });
+
+  it.each(['video', 'account', 'settings'])('rechecks confirmed %s details after asynchronous preparation', async (change) => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const listener = await loadBackground();
+    const snapshot = deferred<{ ok: true; videoDurationSeconds: number }>();
+    browserMock.tabsSendMessage.mockImplementationOnce(() => snapshot.promise);
+    const request = dispatch(listener, generationRequest(), {});
+    await waitFor(() => browserMock.tabsSendMessage.mock.calls.some(([, message]) => (message as { type?: string }).type === 'background.getPageSnapshot'));
+    if (change === 'video') browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
+    if (change === 'account') storageMock.values.set('local:extensionSession', { ...session(), sessionId: 'session-2', account: { ...account(), id: 'account-2' } });
+    if (change === 'settings') storageMock.values.set('local:extensionSettings', { ...storageMock.values.get('local:extensionSettings') as object, aiProvider: 'cerebras' });
+    snapshot.resolve({ ok: true, videoDurationSeconds: 120 });
+    await request;
+    if (change !== 'account') await waitFor(() => browserMock.sentTabMessages.some(({ message }) =>
+      (message as { subtitleState?: { type?: string } }).subtitleState?.type === 'error'));
+    expect(apiMock.createSubtitleJob).not.toHaveBeenCalled();
+  });
+
   it('keeps a live generation loading while its create request is pending', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
@@ -669,7 +721,7 @@ describe('background entrypoint review regressions', () => {
     const createRequest = deferred<any>();
     apiMock.createSubtitleJob.mockReturnValue(createRequest.promise);
 
-    const firstGeneration = dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    const firstGeneration = dispatch(listener, generationRequest(), {});
     await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
     const firstState = await firstGeneration;
     expect(firstState.subtitleState).toMatchObject({
@@ -679,7 +731,7 @@ describe('background entrypoint review regressions', () => {
       message: 'Preparing request...',
     });
 
-    await dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    await dispatch(listener, generationRequest(), {});
     expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(1);
 
     createRequest.resolve({
@@ -716,7 +768,7 @@ describe('background entrypoint review regressions', () => {
     const initialRecovery = dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
     await waitFor(() => apiMock.listSubtitleJobs.mock.calls.length === 1);
 
-    const generation = dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    const generation = dispatch(listener, generationRequest(), {});
     await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
     const loadingState = await generation;
     expect(loadingState.subtitleState).toMatchObject({
@@ -827,7 +879,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.getSubtitleJob.mockReturnValue(pollRequest.promise);
     apiMock.cancelSubtitleJob.mockResolvedValue(job(VIDEO_A, 'job-cancel', 'cancelled'));
 
-    const generation = dispatch(listener, { type: 'panel.generateSubtitles', windowId: 1 }, {});
+    const generation = dispatch(listener, generationRequest(), {});
     await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
     await generation;
     createRequest.resolve(job(VIDEO_A, 'job-cancel'));
@@ -968,11 +1020,76 @@ describe('saved generation deletion and page reload', () => {
 
   it('does not remove a valid selected generation or fetch its track during a list refresh', async () => {
     const { listener, original } = await setup();
-    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [{ ...job(VIDEO_A, original.jobId), status: 'completed' }] } as any);
+    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [{ ...job(VIDEO_A, original.jobId), status: 'completed', trackId: original.trackId }] } as any);
     const result = await dispatch(listener, { type: 'panel.listGenerations', youtubeVideoId: VIDEO_A, windowId: 1 }, {});
     expect(result.panelState).toBeUndefined();
     expect(apiMock.getSubtitleJob).not.toHaveBeenCalled();
     expect((storageMock.values.get('local:activeTracksByVideoId') as any)[VIDEO_A].track).toEqual(original);
+  });
+
+  it.each(['page entry', 'saved list'])('publishes another device correction for the same job on %s', async (surface) => {
+    const { listener, original } = await setup();
+    const corrected = track(VIDEO_A, original.jobId, 'corrected-track');
+    corrected.cues[0].sourceText = 'corrected words';
+    corrected.cues[0].cueId = 'corrected-cue';
+    apiMock.getSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, original.jobId), status: 'completed', track: corrected });
+    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [{ ...job(VIDEO_A, original.jobId), status: 'completed', trackId: corrected.trackId }] } as any);
+
+    const result = await dispatch(listener, surface === 'page entry' ? { type: 'content.getState' }
+      : { type: 'panel.listGenerations', youtubeVideoId: VIDEO_A, windowId: 1 }, sender(1));
+
+    expect(surface === 'page entry' ? result.subtitleState : result.panelState.subtitleState).toEqual({ type: 'ready', track: corrected });
+    expect((storageMock.values.get('local:activeTracksByVideoId') as any)[VIDEO_A].track).toEqual(corrected);
+    expect(browserMock.sentTabMessages.filter(({ message }) => (message as any).type === 'background.subtitleStateChanged').at(-1)?.message)
+      .toEqual({ type: 'background.subtitleStateChanged', subtitleState: { type: 'ready', track: corrected } });
+  });
+
+  it.each(['page entry', 'saved list'])('keeps richer cached word cards for an unchanged track on %s', async (surface) => {
+    const { listener, original } = await setup();
+    const serverTrack = structuredClone(original);
+    Object.assign(original.cues[0].tokens[0], { gloss: 'a greeting', usageNote: 'cached card' });
+    apiMock.getSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, original.jobId), status: 'completed', track: serverTrack });
+    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [{ ...job(VIDEO_A, original.jobId), status: 'completed', trackId: original.trackId }] } as any);
+
+    await dispatch(listener, surface === 'page entry' ? { type: 'content.getState' }
+      : { type: 'panel.listGenerations', youtubeVideoId: VIDEO_A, windowId: 1 }, sender(1));
+
+    expect((storageMock.values.get('local:activeTracksByVideoId') as any)[VIDEO_A].track.cues[0].tokens[0])
+      .toMatchObject({ gloss: 'a greeting', usageNote: 'cached card' });
+    expect(browserMock.sentTabMessages).toHaveLength(0);
+    if (surface === 'saved list') expect(apiMock.getSubtitleJob).not.toHaveBeenCalled();
+  });
+
+  it.each(['page entry', 'saved list'].flatMap(surface => ['navigation', 'account', 'clear', 'closed tab', 'selection']
+    .map(change => [surface, change])))('ignores a correction returned late to %s after %s', async (surface, change) => {
+    const { listener, original } = await setup();
+    const pending = deferred<unknown>();
+    const corrected = track(VIDEO_A, original.jobId, 'late-corrected-track');
+    apiMock.getSubtitleJob.mockReturnValueOnce(pending.promise);
+    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [{ ...job(VIDEO_A, original.jobId), status: 'completed', trackId: corrected.trackId }] } as any);
+    const validation = dispatch(listener, surface === 'page entry' ? { type: 'content.getState' }
+      : { type: 'panel.listGenerations', youtubeVideoId: VIDEO_A, windowId: 1 }, sender(1));
+    await waitFor(() => apiMock.getSubtitleJob.mock.calls.length > 0);
+    if (change === 'navigation') browserMock.tabs.get(1)!.url = `https://www.youtube.com/watch?v=${VIDEO_B}`;
+    if (change === 'account') storageMock.values.set('local:extensionSession', { ...session(), sessionId: 'other-session', account: { ...account(), id: 'other-account' } });
+    if (change === 'clear') await dispatch(listener, { type: 'panel.clearLocalState', windowId: 1 }, {});
+    if (change === 'closed tab') {
+      browserMock.tabs.delete(1);
+      browserMock.removedListeners.forEach(listener => listener(1));
+    }
+    if (change === 'selection') {
+      const selected = track(VIDEO_A, 'selected-job', 'selected-track');
+      apiMock.getSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, selected.jobId), status: 'completed', track: selected });
+      await dispatch(listener, { type: 'panel.selectGeneration', jobId: selected.jobId, currentJobId: original.jobId,
+        trackId: original.trackId, youtubeVideoId: VIDEO_A, tabId: 1, windowId: 1 }, {});
+    }
+    browserMock.sentTabMessages.length = 0;
+    pending.resolve({ ...job(VIDEO_A, original.jobId), status: 'completed', track: corrected });
+    const result = await validation;
+    expect(result.subtitleState?.track?.trackId).not.toBe(corrected.trackId);
+    expect(result.panelState?.subtitleState?.track?.trackId).not.toBe(corrected.trackId);
+    expect((storageMock.values.get('local:activeTracksByVideoId') as any)?.[VIDEO_A]?.track.trackId).not.toBe(corrected.trackId);
+    expect(browserMock.sentTabMessages.some(({ message }) => (message as any).subtitleState?.track?.trackId === corrected.trackId)).toBe(false);
   });
 
   it('ignores a saved-list response after switching to a newer selection', async () => {

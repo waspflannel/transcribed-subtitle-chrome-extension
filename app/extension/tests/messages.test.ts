@@ -6,6 +6,7 @@ describe('runtime message validation', () => {
   it('accepts concrete extension messages with required payload fields', () => {
     expect(isRuntimeMessage({ type: 'content.getState' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', confirmationContext: 'confirmed-details' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.updateSettings', patch: { showTranslation: true } })).toBe(true);
     expect(isRuntimeMessage({ type: 'content.updateSettings', patch: { blurSourceWords: true } })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.login', email: 'learner@example.com', password: 'secret' })).toBe(true);
@@ -30,6 +31,8 @@ describe('runtime message validation', () => {
 
   it('rejects messages that only provide a type without the payload contract', () => {
     expect(isRuntimeMessage({ type: 'panel.updateSettings' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.generateSubtitles' })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', confirmationContext: '' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.cancelSubtitleJob', jobId: 'job', youtubeVideoId: 'video', tabId: '12' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.submitLyricsCorrection', lyrics: 'lyrics' })).toBe(false);
     expect(isRuntimeMessage({
