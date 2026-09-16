@@ -12,7 +12,7 @@ Track cleanup continuously. Prefer small, targeted follow-up plans over large pe
 
 ## Lyric replacement verification redesign (2026-09-13)
 
-The user accepted removal of the old replacement validators and subsequently switched replacement to Luna only on 2026-09-14. Better verification remains open; the replacement flow currently has no content/quality rejection gate. The old partial-confirmation recovery issue is superseded because partial merging and its confirmation UI were removed. Normal generation and Quick Fix retain their validators. See the [completed optimization plan](completed/2026-09-13-speed-up-lyrics-replacement.md) for failure evidence, removal scope and earlier test results, and the [lyrics specification](../product-specs/lyrics-editing.md) for current routing.
+The user accepted removal of the old replacement validators and subsequently switched replacement to Luna only on 2026-09-14. The 2026-09-15 input-validation change adds obvious-junk checks, ordered/bounded alignment references with complete pasted-part consumption, and account POST throttling. Gibberish, song-match/completeness, and derived-learning quality verification remain open. The old partial-confirmation recovery issue is superseded because partial merging and its confirmation UI were removed. Normal generation and Quick Fix retain their validators. See the [completed optimization plan](completed/2026-09-13-speed-up-lyrics-replacement.md) for earlier evidence and the [lyrics specification](../product-specs/lyrics-editing.md) for current behavior.
 
 ## Requirements retained after the 2026-09-09 plan cleanup
 

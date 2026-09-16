@@ -15,7 +15,7 @@ describe('settings model', () => {
     expect(createExtensionSettingsFromPartial({ overlayAttachedToVideo: 'false' as never }).overlayAttachedToVideo).toBe(true);
   });
 
-  it('defaults to Luna, remembers Cerebras, and rejects unknown providers', () => {
+  it('defaults to Transcriber, remembers Transcriber Spark, and rejects unknown providers', () => {
     expect(createExtensionSettingsFromPartial(undefined).aiProvider).toBe('openai');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'cerebras' }).aiProvider).toBe('cerebras');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'hybrid' as never }).aiProvider).toBe('openai');

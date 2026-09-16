@@ -236,6 +236,11 @@
       "type": "boolean",
       "description": "When true, backend translates cue text into the selected target language. When false, translatedText remains the source text."
     },
+    "forceRegenerate": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, rebuild a compatible completed track from the original transcription with fresh tokens, romanization, and translation. Original transcription may be cached; active jobs are still reused. Regeneration uses normal plan minutes."
+    },
     "aiProvider": {
       "type": "string",
       "enum": [

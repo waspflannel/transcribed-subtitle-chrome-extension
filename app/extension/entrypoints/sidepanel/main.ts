@@ -31,7 +31,7 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
-import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
+import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsValidationError, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
 import type { LyricsCorrectionStatus } from '../../utils/contracts';
 import {
   beginPanelRequest,
@@ -77,6 +77,7 @@ const {
   lyricsCorrectionForm,
   lyricsCorrectionTextarea,
   lyricsCorrectionCount,
+  lyricsCorrectionError,
   lyricsCorrectionStatus,
   lyricsCorrectionButton,
   lyricsConfirmation,
@@ -453,7 +454,7 @@ async function refreshBackendState(lyricsOnly = false): Promise<void> {
 function currentGenerationContext(): string | null {
   const state = latestState;
   if (!state?.pageStatus?.supported || state.accountState.status !== 'authenticated' || state.activeTabId === undefined) return null;
-  return generationConfirmationContext(state.activeTabId, state.pageStatus.videoId, state.accountState.id, state.pageVideoDurationSeconds, state.settings);
+  return generationConfirmationContext(state.activeTabId, state.pageStatus.videoId, state.accountState.id);
 }
 
 function generationUnavailable(): boolean {
@@ -470,7 +471,7 @@ function openGenerationConfirmation(): void {
   const minutes = typeof duration === 'number'
     ? `Estimated usage: ${Math.max(1, Math.ceil(duration / 60))} plan minutes for the full video`
     : 'The full video duration counts toward your plan minutes';
-  generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${settings.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna'} · ${minutes}.`;
+  generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'} · ${minutes}.`;
   generationConfirmation.showModal();
 }
 
@@ -581,7 +582,11 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
 
 function renderLyricsCorrectionInput(): void {
   const count = lyricsCharacterCount(lyricsCorrectionTextarea.value);
+  const error = count > 0 ? lyricsValidationError(lyricsCorrectionTextarea.value) : null;
   lyricsCorrectionCount.textContent = `${count.toLocaleString()} / 25,000 characters`;
+  lyricsCorrectionError.textContent = error ?? '';
+  lyricsCorrectionError.hidden = error === null;
+  lyricsCorrectionTextarea.setAttribute('aria-invalid', String(error !== null));
   lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 }
 
@@ -951,7 +956,13 @@ function showPanelState(state: PanelState): void {
   const previousTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
   const previousVideoId = latestState?.pageStatus?.supported ? latestState.pageStatus.videoId : null;
   const nextVideoId = state.pageStatus?.supported ? state.pageStatus.videoId : null;
+  const resetVideoLanguage = !latestState || previousVideoId !== nextVideoId || latestState.activeTabId !== state.activeTabId;
   latestState = state;
+  if (resetVideoLanguage) {
+    sourceLanguageQuery = '';
+    sourceLanguageSearchInput.value = '';
+    if (state.settings.sourceLanguage !== 'auto') void updateSettings({ sourceLanguage: 'auto' });
+  }
   const confirmationChanged = generationConfirmation.open
     && (generationUnavailable() || confirmedGenerationContext !== currentGenerationContext());
   if (confirmationChanged) dismissGenerationConfirmation();
@@ -1018,7 +1029,7 @@ function showPanelState(state: PanelState): void {
   renderGenerateNote(state, supported);
   if (confirmationChanged) {
     statusBanner.hidden = false;
-    statusBanner.textContent = 'Generation details changed. Review them and press Generate subtitles again.';
+    statusBanner.textContent = 'The selected video, account, or generation availability changed.';
   }
 
   renderLanguagePair(settings);
@@ -1302,7 +1313,7 @@ function renderAccount(accountState: AccountState, settings: ExtensionSettings):
   accountPlan.textContent = authenticated ? accountState.planName : 'Available after sign-in';
   accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Available after sign-in';
   accountModel.hidden = !authenticated;
-  accountModel.textContent = authenticated ? `Next generation: ${settings.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna'}` : '';
+  accountModel.textContent = authenticated ? `Next generation: ${settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'}` : '';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;

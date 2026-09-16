@@ -52,7 +52,7 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelS
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
   const meta = [
-    job.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna',
+    job.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber',
     `${languageLabel(job.sourceLanguage)} → ${languageLabel(job.targetLanguage)}`,
     job.detectedSourceLanguage ? `detected ${languageLabel(job.detectedSourceLanguage)}` : null,
     formatDurationSeconds(telemetry.videoDurationSeconds),

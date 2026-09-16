@@ -43,6 +43,23 @@ it('shows a failure recovered on opening, preserves dismissal across navigation,
   expect(notice.textContent).toContain('Replacement failed');
 
   click('toggle-lyrics-edit');
+  const input = document.querySelector<HTMLTextAreaElement>('[data-lyrics-correction-textarea]')!;
+  const error = document.querySelector<HTMLElement>('[data-lyrics-correction-error]')!;
+  const submit = document.querySelector<HTMLButtonElement>('[data-action="apply-lyrics-correction"]')!;
+  input.value = 'https://example.com/lyrics';
+  input.dispatchEvent(new Event('input'));
+  expect(error.hidden).toBe(false);
+  expect(error.textContent).toContain('not a link');
+  expect(input.getAttribute('aria-invalid')).toBe('true');
+  expect(submit.disabled).toBe(true);
+  transport.sendMessage.mockClear();
+  document.querySelector<HTMLFormElement>('[data-lyrics-correction-form]')!.dispatchEvent(new Event('submit', { cancelable: true }));
+  expect(transport.sendMessage).not.toHaveBeenCalled();
+  input.value = '[Chorus]\nਪਿਆਰ ਮੇਰਾ 😀';
+  input.dispatchEvent(new Event('input'));
+  expect(error.hidden).toBe(true);
+  expect(input.getAttribute('aria-invalid')).toBe('false');
+  expect(submit.disabled).toBe(false);
   click('back-transcript');
   expect(notice.hidden).toBe(false);
   click('dismiss-correction-status');

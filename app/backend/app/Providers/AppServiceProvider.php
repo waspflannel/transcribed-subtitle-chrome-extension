@@ -39,6 +39,9 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(30)->by('prefetch-ip:'.$request->ip()),
         ]);
 
+        RateLimiter::for('lyrics-replacement', fn (Request $request): Limit => Limit::perMinute(5)
+            ->by('lyrics-user:'.$request->user()->id));
+
         RateLimiter::for('subtitle-api', function (Request $request): array {
             return [
                 Limit::perMinute((int) config('subtitles.rate_limits.per_install_per_minute', 30))

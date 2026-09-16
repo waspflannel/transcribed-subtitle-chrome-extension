@@ -31,6 +31,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
+            'forceRegenerate' => ['sometimes', 'boolean:strict'],
         ];
     }
 
@@ -40,7 +41,7 @@ class CreateSubtitleJobRequest extends FormRequest
     }
 
     /**
-     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, includeRomanization: bool, includeTranslation: bool}
+     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, includeRomanization: bool, includeTranslation: bool, forceRegenerate?: bool}
      */
     public function subtitlePayload(): array
     {
@@ -56,6 +57,10 @@ class CreateSubtitleJobRequest extends FormRequest
 
         if (isset($validated['aiProvider'])) {
             $payload['aiProvider'] = $validated['aiProvider'];
+        }
+
+        if (array_key_exists('forceRegenerate', $validated)) {
+            $payload['forceRegenerate'] = $validated['forceRegenerate'];
         }
 
         if (array_key_exists('videoDurationSeconds', $validated)) {

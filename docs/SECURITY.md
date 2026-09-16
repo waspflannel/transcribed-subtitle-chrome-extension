@@ -4,6 +4,8 @@ Vocabulary hints were removed on 2026-09-14. New transcription requests contain 
 
 ## Security Baseline
 
+- Pasted lyrics are validated before framework trimming or queueing: at most 25,000 raw Unicode code points, at least one Unicode letter, no C0/C1 controls except tab/LF/CR, and no HTTP(S)/www link-only paste. Script joiners and combining marks remain valid. The panel mirrors the checks; the backend is authoritative.
+- Replacement POST has a five-per-minute authenticated-account limit across devices/IPs alongside existing install/IP limits. Polling and cancellation use their existing limits. Alignment receives JSON data with explicit untrusted-text instructions and no tools; known ordered cue references and complete in-range pasted-part consumption are enforced in code before analysis. Prompt instructions and junk checks do not guarantee semantic prompt-injection resistance.
 
 - Keep secrets out of the repository.
 - Document environment variables in `.env.example` when they are introduced.

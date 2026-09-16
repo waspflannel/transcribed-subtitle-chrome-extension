@@ -50,7 +50,7 @@ it('keeps matching language pairs separate by job and selects the exact generati
   view.render(state());
   await flush();
   expect(Array.from(select.options, option => option.textContent)).toEqual([
-    'Auto → English (Luna)', 'Auto → English (Cerebras)', 'Auto → Spanish (Cerebras)',
+    'Auto → English (Transcriber)', 'Auto → English (Transcriber Spark)', 'Auto → Spanish (Transcriber Spark)',
     'Delete selected generation…',
   ]);
   expect(select.value).toBe('luna');

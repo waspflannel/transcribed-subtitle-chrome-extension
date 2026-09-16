@@ -238,6 +238,10 @@ export interface CreateSubtitleJobRequest {
    */
   includeTranslation: boolean;
   /**
+   * When true, rebuild a compatible completed track from the original transcription with fresh tokens, romanization, and translation. Original transcription may be cached; active jobs are still reused. Regeneration uses normal plan minutes.
+   */
+  forceRegenerate?: boolean;
+  /**
    * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
    */
   aiProvider?: 'openai' | 'cerebras';
@@ -295,11 +299,11 @@ export interface LyricsCorrectionRequest {
    */
   expectedTrackId: string;
   /**
-   * Pasted plain-text lyrics, complete or partial. The backend applies a Unicode character limit after validation.
+   * Pasted plain-text lyrics, at most 25,000 raw Unicode code points. The backend requires a Unicode letter, rejects C0/C1 controls except tab/LF/CR, and rejects HTTP(S)/www link-only input before whitespace normalization.
    */
   lyrics: string;
   /**
-   * Allow the backend to continue after suspected incomplete lyrics and ask the AI to merge the supplied lyrics with the generated transcript.
+   * Legacy compatibility field, accepted but ignored. Replacement uses only the pasted lyrics; partial merging is unavailable.
    */
   allowPartial?: boolean;
 }

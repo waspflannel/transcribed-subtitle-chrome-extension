@@ -12,6 +12,7 @@ import {
 import {
   canApplyLyricsCorrection,
   lyricsCharacterCount,
+  lyricsValidationError,
   lyricsCorrectionProgress,
   lyricsCorrectionTabState,
   nextLyricsCorrectionSync,
@@ -62,6 +63,21 @@ describe('lyrics correction guards', () => {
     expect(canApplyLyricsCorrection('a'.repeat(25001), null)).toBe(false);
     expect(canApplyLyricsCorrection('lyrics', { status: 'running' } as never)).toBe(false);
     expect(canApplyLyricsCorrection('lyrics', null)).toBe(true);
+  });
+
+  it.each([' \n\t', '!!! 😀', '123', '\u0000lyrics', 'lyrics\u0000', 'ly\u001Brics', 'ly\u0085rics', 'ly\uD800rics', ' https://example.com/lyrics\n', '\uFEFFhttps://example.com/lyrics', 'HTTP://example.com', 'www.example.com'])('rejects junk before submission: %j', (lyrics) => {
+    expect(lyricsValidationError(lyrics)).not.toBeNull();
+    expect(canApplyLyricsCorrection(lyrics, null)).toBe(false);
+  });
+
+  it.each(['[Chorus]\nLa la la! 😀', "Café cafe\u0301 — l'amour", 'ਪਿਆਰ ਕ੍\u200Dਸ਼ می\u200Cروم', 'こんにちは ภาษาไทย', 'Visit https://example.com in my dreams', '<script>alert("lyrics")</script>'])('allows multilingual and literal lyrics: %j', (lyrics) => {
+    expect(lyricsValidationError(lyrics)).toBeNull();
+  });
+
+  it('enforces the raw Unicode character limit including surrounding spaces', () => {
+    expect(lyricsValidationError('𐐀'.repeat(25000))).toBeNull();
+    expect(lyricsValidationError('𐐀'.repeat(25001))).not.toBeNull();
+    expect(lyricsValidationError(' ' + 'a'.repeat(25000))).not.toBeNull();
   });
 });
 

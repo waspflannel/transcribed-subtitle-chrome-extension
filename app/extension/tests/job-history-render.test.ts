@@ -68,8 +68,8 @@ describe('renderJobHistory links', () => {
       expect(link.rel).toContain('noopener');
     }
     expect(jobsList.querySelector('button, form, [data-action]')).toBeNull();
-    expect(jobsList.textContent).toContain('Luna');
-    expect(jobsList.textContent).not.toContain('Cerebras');
+    expect(jobsList.textContent).toContain('Transcriber');
+    expect(jobsList.textContent).not.toContain('Transcriber Spark');
     expect(jobsList.textContent).not.toContain('Retry');
     expect(jobsList.textContent).toContain("This job's options are not restored.");
     expect(jobsList.textContent).toContain('review Watch settings');

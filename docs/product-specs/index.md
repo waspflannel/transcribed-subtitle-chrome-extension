@@ -60,7 +60,7 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 
 ## Generation cancellation policy (2026-09-16)
 
-Generate requires confirmation that cancellation is available but the full video's generation minutes will not be refunded. Declining sends no generation request. Confirmation applies to the selected account, video and generation options; a changed context requires confirmation again.
+Generate requires confirmation that cancellation is available but the full video's generation minutes will not be refunded. Declining sends no generation request. Confirming starts generation without another prompt for refreshed duration or generation options. Confirmation remains tied to the selected account and video.
 
 Voluntary cancellation or deletion after the first paid generation request is admitted consumes the full remaining reservation, even if only part of the transcript was produced. Cancellation before any paid request restores the reservation; this early exception is not advertised in user-facing copy. The backend uses a durable marker for the current run at the actual provider boundary, not a displayed stage. Cached transcription followed by paid analysis also starts billable work. Ordinary failed generations retain the existing refund behavior; completed-track reuse and editing do not add generation-minute charges. No new daily allowance or account-deletion retention is introduced.
 

@@ -59,11 +59,11 @@
               <div class="language-expand" data-language-expand hidden>
                 <div class="language-picker" data-language-picker="source">
                   <label class="field">
-                    <span>Subtitle language</span>
+                    <span>Video language</span>
                     <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
                   </label>
                   <div class="selected-language" data-source-language-selected></div>
-                  <div class="language-options" data-source-language-list role="listbox" aria-label="Subtitle language"></div>
+                  <div class="language-options" data-source-language-list role="listbox" aria-label="Video language"></div>
                 </div>
                 <div class="language-picker" data-language-picker="target">
                   <label class="field">
@@ -94,12 +94,12 @@
               <label class="row">
                 <span class="row-key">AI model</span>
                 <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled>
-                  <option value="openai">Luna</option>
-                  <option value="cerebras">Cerebras</option>
+                  <option value="openai">Transcriber</option>
+                  <option value="cerebras">Transcriber Spark</option>
                 </select>
               </label>
-              <p id="ai-luna-description" class="microcopy"><strong>Luna:</strong> Smarter, but slower. Recommended for languages that use non-Latin scripts.</p>
-              <p id="ai-cerebras-description" class="microcopy"><strong>Cerebras:</strong> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</p>
+              <p id="ai-luna-description" class="microcopy"><strong>Transcriber:</strong> Smarter, but slower. Recommended for languages that use non-Latin scripts.</p>
+              <p id="ai-cerebras-description" class="microcopy"><strong>Transcriber Spark:</strong> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</p>
               <p id="ai-provider-help" class="microcopy">Applies to your next generation. Running jobs keep their selected model.</p>
             </div>
 
@@ -148,11 +148,13 @@
               <h2>Replace full lyrics</h2>
               <div data-lyrics-replace-panel>
                 <form class="lyrics-correction-form" data-lyrics-correction-form>
-                  <p class="card-copy">Paste lyrics for this song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data.</p>
+                  <p id="lyrics-paste-instructions" class="card-copy">For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.</p>
+                  <p id="lyrics-paste-warning" class="microcopy">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles. Regeneration uses your plan minutes.</p>
                   <label class="field">
                     <span>Lyrics</span>
-                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
+                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error"></textarea>
                   </label>
+                  <p id="lyrics-correction-error" class="microcopy" data-lyrics-correction-error role="status" aria-live="polite" hidden></p>
                   <p class="lyrics-confirm" data-lyrics-confirmation hidden role="status" aria-live="polite"></p>
                   <div class="lyrics-correction-footer">
                     <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>

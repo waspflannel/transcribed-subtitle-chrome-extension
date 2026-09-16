@@ -114,7 +114,7 @@ class SubtitleJobService
                     ->first();
 
                 if ($job) {
-                    if ($job->hasReadyTrack()) {
+                    if ($job->hasReadyTrack() && ! ($payload['forceRegenerate'] ?? false)) {
                         $dispatchState = self::DISPATCH_STATE_REUSED;
 
                         return $job;
@@ -124,6 +124,10 @@ class SubtitleJobService
                         $dispatchState = self::DISPATCH_STATE_REUSED;
 
                         return $job;
+                    }
+
+                    if ($job->track?->lyricsCorrection()->whereIn('status', ['queued', 'running'])->exists()) {
+                        throw SubtitleProcessingException::lyricsCorrectionInProgress();
                     }
 
                     $this->billing->releaseJobReservation($job, 'reset');

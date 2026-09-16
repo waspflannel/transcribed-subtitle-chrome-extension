@@ -33,7 +33,7 @@ export function bindSavedGenerations(
       }
       for (const job of jobs) {
         const source = job.sourceLanguage === 'auto' ? 'Auto' : languageLabel(job.sourceLanguage);
-        const model = job.aiProvider === 'cerebras' ? 'Cerebras' : 'Luna';
+        const model = job.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber';
         select.add(option(`${source} → ${languageLabel(job.targetLanguage)} (${model})`, job.jobId));
       }
       if (track) select.add(option('Delete selected generation…', DELETE_GENERATION));
