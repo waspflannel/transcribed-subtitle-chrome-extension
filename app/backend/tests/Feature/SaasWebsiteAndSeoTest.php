@@ -473,7 +473,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             'status' => 'cancelled',
             'stage' => 'acquiring-audio',
             'error_code' => 'generation_cancelled',
-            'error_message' => 'Generation was cancelled. Reserved minutes were released.',
+            'error_message' => 'Generation was cancelled.',
         ]);
 
         $this
@@ -483,7 +483,8 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSeeText('Cancellation')
             ->assertSeeText('Cancellation code')
             ->assertSeeText('generation_cancelled')
-            ->assertSeeText('Reserved minutes were released.')
+            ->assertSeeText('Generation was cancelled.')
+            ->assertDontSeeText('Reserved minutes were released.')
             ->assertDontSeeText('Failure code');
     }
 

@@ -25,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        // Exception traces must not retain prompt/response arguments in logs or failed_jobs.
+        ini_set('zend.exception_ignore_args', '1');
+
         Ai::extend('cerebras', fn ($app, array $config): GroqProvider => new GroqProvider($config, $app->make(Dispatcher::class)));
 
         JsonResource::withoutWrapping();
@@ -54,10 +57,6 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
-        RateLimiter::for('subtitle-ai-batch', function (): Limit {
-            return Limit::perMinute(max(1, (int) config('subtitles.enrichment.global_rate_limit_per_minute', 300)));
-        });
-
         RateLimiter::for('extension-auth', function (Request $request): array {
             $email = $request->input('email');
             $emailKey = is_string($email) ? Str::lower($email) : 'invalid-email';
@@ -80,29 +79,32 @@ class AppServiceProvider extends ServiceProvider
 
             $stats = $event->response->handlerStats();
             $milliseconds = static fn (mixed $seconds): ?int => is_numeric($seconds) ? (int) round((float) $seconds * 1000) : null;
+            $number = static fn (mixed $value): ?int => is_numeric($value) ? (int) $value : null;
+            $allowed = static fn (mixed $value, array $values): ?string => in_array($value, $values, true) ? $value : null;
+            $requestId = $event->response->header('x-request-id');
 
             // Select diagnostics explicitly: never log request/response bodies,
             // authorization headers, prompts, or generated text.
             Log::info('backend.openai_response_received', [
                 'worker_pid' => getmypid() ?: null,
-                'request_id' => $event->response->header('x-request-id') ?: null,
+                'request_id' => is_string($requestId) && preg_match('/\Areq_[A-Za-z0-9_-]{1,100}\z/D', $requestId) === 1 ? $requestId : null,
                 'model' => $event->request['model'] ?? null,
                 'requested_service_tier' => $event->request['service_tier'] ?? null,
-                'served_service_tier' => $event->response->json('service_tier'),
+                'served_service_tier' => $allowed($event->response->json('service_tier'), ['auto', 'default', 'flex', 'scale', 'priority', 'fast']),
                 'reasoning_effort' => data_get($event->request->data(), 'reasoning.effort'),
                 'http_status' => $event->response->status(),
-                'response_status' => $event->response->json('status'),
-                'incomplete_reason' => $event->response->json('incomplete_details.reason'),
-                'error_code' => $event->response->json('error.code'),
+                'response_status' => $allowed($event->response->json('status'), ['completed', 'failed', 'in_progress', 'cancelled', 'queued', 'incomplete']),
+                'incomplete_reason' => $allowed($event->response->json('incomplete_details.reason'), ['max_output_tokens', 'content_filter']),
+                'error_code' => $allowed($event->response->json('error.code'), ['credit_balance_exhausted', 'insufficient_quota', 'organization_spend_limit_exceeded', 'project_spend_limit_exceeded', 'organization_usage_limit_exceeded', 'rate_limit_exceeded', 'server_error', 'invalid_request_error']),
                 'duration_ms' => $milliseconds($stats['total_time'] ?? null),
                 'connect_ms' => $milliseconds($stats['connect_time'] ?? null),
                 'time_to_first_byte_ms' => $milliseconds($stats['starttransfer_time'] ?? null),
                 'provider_processing_ms' => is_numeric($event->response->header('openai-processing-ms'))
                     ? (int) $event->response->header('openai-processing-ms') : null,
-                'input_tokens' => $event->response->json('usage.input_tokens'),
-                'cached_input_tokens' => $event->response->json('usage.input_tokens_details.cached_tokens'),
-                'output_tokens' => $event->response->json('usage.output_tokens'),
-                'reasoning_tokens' => $event->response->json('usage.output_tokens_details.reasoning_tokens'),
+                'input_tokens' => $number($event->response->json('usage.input_tokens')),
+                'cached_input_tokens' => $number($event->response->json('usage.input_tokens_details.cached_tokens')),
+                'output_tokens' => $number($event->response->json('usage.output_tokens')),
+                'reasoning_tokens' => $number($event->response->json('usage.output_tokens_details.reasoning_tokens')),
             ]);
         });
     }

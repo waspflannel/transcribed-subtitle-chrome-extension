@@ -5,7 +5,7 @@
         $limit = max(0, (int) $account['monthlyMinuteLimit']);
         $committed = (int) $account['monthlyMinutesUsed'] + (int) $account['monthlyMinutesPending'];
         $usagePercent = $limit > 0 ? min(100, (int) round(($committed / $limit) * 100)) : 0;
-        $deletionConsequences = 'Deleting removes jobs and stored tracks, so those tracks cannot be reused. Completed usage is not refunded. For queued or running jobs, deletion attempts to release reserved minutes. Provider requests already in progress may finish.';
+        $deletionConsequences = 'Deleting removes jobs and stored tracks, so those tracks cannot be reused. Used minutes are not refunded. Deleting an in-progress generation uses its full reserved minutes. Provider requests already in progress may finish.';
     @endphp
 
     <section class="workspace">

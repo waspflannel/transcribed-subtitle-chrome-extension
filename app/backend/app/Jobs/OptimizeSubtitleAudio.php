@@ -10,6 +10,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use RuntimeException;
 use Throwable;
@@ -51,6 +52,12 @@ class OptimizeSubtitleAudio implements ShouldQueue
             $this->audio,
             $this->queuedAtMs,
         );
+    }
+
+    public function middleware(): array
+    {
+        return [(new WithoutOverlapping('subtitle-optimization:'.$this->runId))
+            ->releaseAfter(2)->expireAfter(1260)];
     }
 
     public function failed(?Throwable $exception): void

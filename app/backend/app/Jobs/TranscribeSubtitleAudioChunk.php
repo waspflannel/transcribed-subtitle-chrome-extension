@@ -93,6 +93,12 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
                 audioEndSeconds: $this->audioEndSeconds ?? null,
             );
         } catch (Throwable $exception) {
+            if ($this->job !== null && $exception instanceof SubtitleProcessingException
+                && ($exception->context['reason'] ?? null) === 'provider_admission') {
+                $this->release(max(1, (int) ($exception->context['retry_after_seconds'] ?? 10)));
+
+                return;
+            }
             if ($this->job === null || ($exception instanceof SubtitleProcessingException && $exception->isTransient())) {
                 throw $exception;
             }

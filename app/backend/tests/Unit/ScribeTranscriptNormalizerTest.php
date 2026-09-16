@@ -8,6 +8,17 @@ use Tests\TestCase;
 
 class ScribeTranscriptNormalizerTest extends TestCase
 {
+    public function test_preserves_korean_word_boundaries_and_mixed_text(): void
+    {
+        foreach (['나는 학교에 갑니다.', '나는 Laravel 학교에 갑니다.', '나는 학교에 갑니다.'] as $text) {
+            $words = array_map(fn (string $word, int $index): array => [
+                'text' => $word, 'start' => $index * 0.2, 'end' => ($index + 1) * 0.2, 'type' => 'word',
+            ], explode(' ', $text), array_keys(explode(' ', $text)));
+            $transcript = $this->normalizer()->normalize(['words' => $words], 'kor', 3);
+            $this->assertSame($text, $transcript->segments[0]->text);
+        }
+    }
+
     public function test_streaming_normalization_holds_an_unfinished_phrase_and_overlap_back(): void
     {
         $payload = ['words' => [

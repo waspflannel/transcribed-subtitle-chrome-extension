@@ -286,7 +286,7 @@ class SubtitleJobService
             $current->forceFill([
                 'status' => 'cancelled',
                 'error_code' => 'generation_cancelled',
-                'error_message' => 'Generation was cancelled. Reserved minutes were released.',
+                'error_message' => 'Generation was cancelled.',
                 'expires_at' => now()->addDays(30),
             ])->save();
             $this->tracer->jobEvent($current, 'job.cancelled', [
@@ -403,6 +403,7 @@ class SubtitleJobService
             'user_id' => $user->id,
             'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
+            'paid_work_started_at' => null,
             'detected_source_language' => null,
             'generation_tier' => $generationTier,
             'include_romanization' => $includeRomanization,

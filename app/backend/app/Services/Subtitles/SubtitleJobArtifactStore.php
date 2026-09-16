@@ -16,6 +16,19 @@ class SubtitleJobArtifactStore
 
     public const TRANSCRIPT_CHUNK = 'transcript_chunk';
 
+    public const TRANSCRIPTION_PLAN = 'transcription_plan';
+
+    public function putTranscriptionPlan(SubtitleJob $job, array $plan): void
+    {
+        $this->put($job, self::TRANSCRIPTION_PLAN, $plan);
+    }
+
+    public function transcriptionPlan(SubtitleJob $job): ?array
+    {
+        return $this->hasArtifact($job, self::TRANSCRIPTION_PLAN)
+            ? $this->payload($job, self::TRANSCRIPTION_PLAN) : null;
+    }
+
     public const DRAFT_CUES = 'draft_cues';
 
     public const ANALYZED_CUES = 'analyzed_cues';
@@ -165,13 +178,11 @@ class SubtitleJobArtifactStore
         SubtitleJob $job,
         string $artifactType,
         array $cues,
-        string $sourceDialect = 'unknown',
     ): void {
         $cues = array_values($cues);
 
         $this->put($job, $artifactType, [
             'cues' => $cues,
-            'sourceDialect' => $sourceDialect,
             'batchPlan' => $this->batchPlan($cues, $job, forPlayback: $artifactType === self::DRAFT_CUES),
         ]);
     }
@@ -200,7 +211,6 @@ class SubtitleJobArtifactStore
             }
             $this->put($job, self::DRAFT_CUES, [
                 'cues' => array_values($cues),
-                'sourceDialect' => 'unknown',
                 'batchPlan' => $plan,
                 'revision' => $draft === [] ? 1 : ($draft['revision'] ?? 1) + 1,
             ]);
@@ -248,7 +258,6 @@ class SubtitleJobArtifactStore
 
         return new CueEnrichmentResult(
             cues: array_values($cues),
-            sourceDialect: is_string($payload['sourceDialect'] ?? null) ? $payload['sourceDialect'] : 'unknown',
         );
     }
 
@@ -303,7 +312,6 @@ class SubtitleJobArtifactStore
 
         return new CueEnrichmentResult(
             cues: array_values($cues),
-            sourceDialect: is_string($payload['sourceDialect'] ?? null) ? $payload['sourceDialect'] : 'unknown',
         );
     }
 
@@ -339,7 +347,6 @@ class SubtitleJobArtifactStore
     ): void {
         $this->put($job, $artifactType, [
             'cues' => array_values($result->cues),
-            'sourceDialect' => $result->sourceDialect,
         ], $batchIndex);
     }
 
@@ -359,7 +366,6 @@ class SubtitleJobArtifactStore
         }
 
         $cues = [];
-        $sourceDialect = 'unknown';
 
         foreach ($artifacts as $artifact) {
             $payload = $artifact->payload;
@@ -371,12 +377,9 @@ class SubtitleJobArtifactStore
 
             array_push($cues, ...array_values($batchCues));
 
-            if ($sourceDialect === 'unknown' && is_string($payload['sourceDialect'] ?? null) && $payload['sourceDialect'] !== 'unknown') {
-                $sourceDialect = $payload['sourceDialect'];
-            }
         }
 
-        return new CueEnrichmentResult($cues, $sourceDialect);
+        return new CueEnrichmentResult($cues);
     }
 
     public function deleteForJob(SubtitleJob $job): void

@@ -45,6 +45,7 @@ class SubtitleCueBatchProcessor
                 includeRomanization: $includeRomanization,
                 beforeRetry: fn (): bool => $this->loadRunningJob($subtitleJobId, $runId) !== null,
                 selection: SubtitleModel::forJob($job),
+                job: $job,
             );
 
             $job = $this->loadRunningJob($subtitleJobId, $runId);

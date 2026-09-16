@@ -20,7 +20,7 @@ class EditedCueAgent extends SubtitleAgent
             SubtitlePromptRules::WORD_CARD,
             'Return the corrected whole-line translation in top-level translatedText when includeTranslation is true; otherwise copy sourceText there. The nested cue has no translatedText field.',
             'When generating a translation: '.SubtitlePromptRules::TRANSLATION,
-            'When includeRomanization is true, regenerate fresh readings for the cue and tokens containing non-Latin letters using the corrected sentence; discard obsolete readings. Return null for Latin-only cue or token romanization. When includeRomanization is false, return null for all romanization. Use "unknown" for dialect when uncertain.',
+            'When includeRomanization is true, regenerate fresh readings for the cue and tokens containing non-Latin letters using the corrected sentence; discard obsolete readings. Return null for Latin-only cue or token romanization. When includeRomanization is false, return null for all romanization.',
             SubtitlePromptRules::romanization($this->sourceLanguage),
         ]);
     }
@@ -33,7 +33,6 @@ class EditedCueAgent extends SubtitleAgent
     public function schema(JsonSchema $schema): array
     {
         return [
-            'dialect' => $schema->string()->min(1)->required(),
             'translatedText' => $schema->string()->min(1)->required(),
             'cues' => $schema->array()->min(1)->max(1)->items($schema->object([
                 'cueId' => $schema->string()->min(1)->required(),

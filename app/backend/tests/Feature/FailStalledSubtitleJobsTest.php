@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class FailStalledSubtitleJobsTest extends TestCase
@@ -139,6 +141,7 @@ class FailStalledSubtitleJobsTest extends TestCase
 
     public function test_it_does_not_fail_queued_lyrics_corrections_waiting_in_the_queue(): void
     {
+        Queue::fake();
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
         $track = SubtitleTrack::factory()->for($job, 'job')->create();
         $correction = $track->lyricsCorrection()->create([
@@ -155,6 +158,7 @@ class FailStalledSubtitleJobsTest extends TestCase
         $correction->refresh();
         $this->assertSame('queued', $correction->status);
         $this->assertSame('waiting private lyrics', $correction->lyrics);
+        Queue::assertPushed(LyricsCorrectionJob::class, fn (LyricsCorrectionJob $delivery): bool => $delivery->attemptId === $correction->attempt_id);
     }
 
     public function test_it_fails_only_the_rows_that_pass_the_atomic_cleanup_recheck(): void

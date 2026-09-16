@@ -3,9 +3,11 @@
 namespace App\Services\Transcription;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Models\SubtitleJob;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Languages\LanguageCatalog;
+use App\Services\Subtitles\ProviderAdmission;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -42,32 +44,32 @@ class ElevenLabsScribeTranscriptionService
      *
      * @return array<string, mixed>
      */
-    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, ?SubtitleJob $job = null): array
     {
         $this->assertSupportedAudioMime($audio);
 
-        return $this->transcribeSource($audio, $sourceLanguage);
+        return $this->transcribeSource($audio, $sourceLanguage, $job);
     }
 
     /** @return array<string, mixed> */
-    public function transcribeYouTube(string $videoId, string $sourceLanguage): array
+    public function transcribeYouTube(string $videoId, string $sourceLanguage, ?SubtitleJob $job = null): array
     {
         if (preg_match('/^[A-Za-z0-9_-]{11}$/', $videoId) !== 1) {
             throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_video_id']);
         }
 
-        return $this->transcribeSource('https://www.youtube.com/watch?v='.$videoId, $sourceLanguage);
+        return $this->transcribeSource('https://www.youtube.com/watch?v='.$videoId, $sourceLanguage, $job);
     }
 
     /** @return array<string, mixed> */
-    private function transcribeSource(TemporaryAudioFile|string $audio, string $sourceLanguage): array
+    private function transcribeSource(TemporaryAudioFile|string $audio, string $sourceLanguage, ?SubtitleJob $job = null): array
     {
         $provider = Lab::ElevenLabs;
         ['apiKey' => $apiKey, 'model' => $model] = $this->transcriptionConfig($provider);
 
         try {
             return $this->validatedTranscriptionPayload(
-                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model),
+                $this->sendTranscriptionRequest($audio, $sourceLanguage, $provider, $apiKey, $model, $job),
                 $provider,
                 $model,
             );
@@ -360,23 +362,28 @@ class ElevenLabsScribeTranscriptionService
         Lab $provider,
         string $apiKey,
         string $model,
+        ?SubtitleJob $job,
     ): Response {
         $payload = $this->transcriptionRequestPayload($sourceLanguage, $model);
+        $url = $this->transcriptionUrl($provider);
         $request = Http::withHeaders(['xi-api-key' => $apiKey])
             ->timeout((int) config('subtitles.transcription.timeout_seconds'));
         if (is_string($audio)) {
-            return $request->asMultipart()->post($this->transcriptionUrl($provider), [...$payload, 'source_url' => $audio]);
+            $request->asMultipart();
+
+            return app(ProviderAdmission::class)->run($provider->value, $job, fn () => $request->post($url, [...$payload, 'source_url' => $audio]));
         }
         $stream = $this->openAudioStream($audio);
 
         try {
-            return $request->attach(
+            $request->attach(
                 'file',
                 $stream,
                 $this->audioFilename($audio),
                 ['Content-Type' => $audio->mimeType],
-            )
-                ->post($this->transcriptionUrl($provider), $payload);
+            );
+
+            return app(ProviderAdmission::class)->run($provider->value, $job, fn () => $request->post($url, $payload));
         } finally {
             fclose($stream);
         }

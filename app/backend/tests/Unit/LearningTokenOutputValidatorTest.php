@@ -9,6 +9,15 @@ use Tests\TestCase;
 
 class LearningTokenOutputValidatorTest extends TestCase
 {
+    public function test_preserves_korean_spaces_inside_learning_tokens(): void
+    {
+        $tokens = $this->validator()->validatedGeneratedTokens([
+            ['index' => 0, 'text' => '나는 학교에'],
+            ['index' => 1, 'text' => '갑니다'],
+        ], 0);
+        $this->assertSame(['나는 학교에', '갑니다'], array_column($tokens, 'text'));
+    }
+
     public function test_accepts_ordered_generated_tokens_without_source_spans(): void
     {
         $tokens = $this->validator()->validatedGeneratedTokens(

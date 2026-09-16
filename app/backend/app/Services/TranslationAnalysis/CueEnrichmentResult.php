@@ -9,6 +9,5 @@ final readonly class CueEnrichmentResult
      */
     public function __construct(
         public array $cues,
-        public string $sourceDialect,
     ) {}
 }

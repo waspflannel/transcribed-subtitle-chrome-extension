@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Exceptions\BillingEntitlementException;
+use App\Exceptions\SubtitleProcessingException;
 use App\Models\BillingUsageEvent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
@@ -157,6 +158,24 @@ final class UsageLedger
     public function debitCompletedJob(SubtitleJob $job, SubtitleTrack $track): void
     {
         $this->settleReservation($job, $track, null);
+    }
+
+    /** Commit the paid dispatch decision under the same locks as cancellation. */
+    public function startPaidGenerationWork(SubtitleJob $job): void
+    {
+        DB::transaction(function () use ($job): void {
+            $current = $job->exists && is_string($job->run_id) && $job->run_id !== ''
+                ? SubtitleJobLock::current($job->id, $job->run_id, $job->user_id)
+                : null;
+
+            if ($current === null || $current->status !== 'running' || $this->hasTerminalSettlement($current)) {
+                throw new SubtitleProcessingException('generation_cancelled', 'Generation is no longer active.', 409);
+            }
+
+            if ($current->paid_work_started_at === null) {
+                $current->forceFill(['paid_work_started_at' => now()])->save();
+            }
+        }, attempts: 5);
     }
 
     public function releaseReservation(SubtitleJob $job, string $reason): void
@@ -368,7 +387,11 @@ final class UsageLedger
                 return;
             }
 
-            if ($track instanceof SubtitleTrack) {
+            $cancelledPaidWork = in_array($reason, ['cancelled', 'deleted'], true)
+                && in_array($lockedJob->status, ['queued', 'running'], true)
+                && $lockedJob->paid_work_started_at !== null;
+
+            if ($track instanceof SubtitleTrack || $cancelledPaidWork) {
                 $this->recordEvent(
                     user: $user,
                     planCode: $reservation['planCode'],
@@ -383,7 +406,9 @@ final class UsageLedger
                     subtitleJob: $lockedJob,
                     subtitleTrack: $track,
                     stripeSubscriptionId: $reservation['stripeSubscriptionId'],
-                    note: 'Debited reserved minutes after a completed subtitle track was produced.',
+                    note: $cancelledPaidWork
+                        ? 'Debited reserved minutes after paid generation was voluntarily '.$reason.'.'
+                        : 'Debited reserved minutes after a completed subtitle track was produced.',
                 );
 
                 return;

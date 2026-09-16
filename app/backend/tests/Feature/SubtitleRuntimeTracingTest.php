@@ -132,7 +132,7 @@ class SubtitleRuntimeTracingTest extends TestCase
         $store = app(SubtitleJobArtifactStore::class);
         $cues = [$this->sampleCue(), [...$this->sampleCue(), 'cueId' => 'cue-0002', 'index' => 1]];
         $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
-        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
+        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]]));
         app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
             new AnalyzeSubtitleCueBatch($job->id, 0, $staleRunId),
             new AnalyzeSubtitleCueBatch($job->id, 1, $staleRunId),
@@ -958,7 +958,7 @@ class TraceRecordingTranslationAnalysisProvider extends LaravelAiTranslationAnal
      * @param  array<int, array<string, mixed>>  $batch
      * @param  array<int, array<string, mixed>>  $allCues
      */
-    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null, ?SubtitleModel $selection = null, bool $validateOutput = true): CueEnrichmentResult
+    public function analyzeCueBatch(array $batch, array $allCues, string $sourceLanguage, string $targetLanguage, bool $includeTranslation = true, bool $includeRomanization = false, ?\Closure $beforeRetry = null, ?SubtitleModel $selection = null, bool $validateOutput = true, ?SubtitleJob $job = null): CueEnrichmentResult
     {
         $this->tokenizationCalls++;
 
@@ -971,6 +971,6 @@ class TraceRecordingTranslationAnalysisProvider extends LaravelAiTranslationAnal
                 ],
             ],
             $batch,
-        ), 'unknown');
+        ));
     }
 }

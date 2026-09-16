@@ -26,7 +26,7 @@ class SubtitlePartialTrackCacheTest extends TestCase
         $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
         $cues[0]['tokens'] = [['index' => 0, 'text' => 'Word', 'normalizedText' => 'word']];
         $cues[0]['translatedText'] = 'Meaning';
-        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
+        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]]));
         $preview = $assembler->assemble($job);
         $this->assertArrayNotHasKey('tokens', $preview['cues'][0]);
         $this->assertSame('Meaning', $preview['cues'][0]['translatedText']);
@@ -55,14 +55,14 @@ class SubtitlePartialTrackCacheTest extends TestCase
         $this->assertSame(0, $initial['readyThroughMs']);
 
         $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1,
-            new CueEnrichmentResult([[...$cues[1], 'translatedText' => 'Second']], 'unknown'));
+            new CueEnrichmentResult([[...$cues[1], 'translatedText' => 'Second']]));
         $second = $assembler->assemble($job);
         $this->assertGreaterThan($initial['revision'], $second['revision']);
         $this->assertSame(0, $second['readyThroughMs']);
         $this->assertSame('Second', $second['cues'][1]['translatedText']);
 
         $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0,
-            new CueEnrichmentResult([[...$cues[0], 'translatedText' => 'First']], 'unknown'));
+            new CueEnrichmentResult([[...$cues[0], 'translatedText' => 'First']]));
         $analyzed = $assembler->assemble($job);
         $this->assertSame(2000, $analyzed['readyThroughMs']);
         $this->assertGreaterThan($second['revision'], $analyzed['revision']);

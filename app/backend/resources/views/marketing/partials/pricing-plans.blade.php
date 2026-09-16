@@ -39,5 +39,5 @@
     @endforeach
 </div>
 <p class="plan-note">
-    Minutes count the video you generate, rounded up to whole minutes. A 10-minute video uses 10 minutes; replaying a retained track uses none. Failed generations release unused reserved minutes. Checkout is hosted by Stripe. Cancel from your account; contact support for beta refunds.
+    Minutes count the video you generate, rounded up to whole minutes. A 10-minute video uses 10 minutes; replaying a retained track uses none. Cancelling generation does not refund its reserved minutes. Failed generations release unused reserved minutes. Checkout is hosted by Stripe. Cancel your subscription from your account; contact support for beta refunds.
 </p>

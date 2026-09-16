@@ -236,7 +236,7 @@ class SubtitleJobArtifactBatchPlanTest extends TestCase
         $job = $this->runningJob();
         $cues = $this->cues(2, 5);
         $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
-        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
+        $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]]));
         $this->expectException(SubtitleProcessingException::class);
         $store->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
     }

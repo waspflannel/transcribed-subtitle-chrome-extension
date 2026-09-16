@@ -87,6 +87,7 @@ class SubtitleJob extends Model
     {
         return [
             'expires_at' => 'immutable_datetime',
+            'paid_work_started_at' => 'immutable_datetime',
             'estimated_provider_cost_microusd' => 'integer',
             'include_romanization' => 'boolean',
             'include_translation' => 'boolean',

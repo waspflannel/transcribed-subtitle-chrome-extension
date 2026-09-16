@@ -10,7 +10,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -39,6 +39,7 @@ class ShowSubtitleRuntime extends Command
             ])
             ->values();
 
+        $depths = $this->queueDepths();
         $summary = [
             'connection' => SubtitleQueue::connection(),
             'driver' => config('queue.connections.'.SubtitleQueue::connection().'.driver'),
@@ -46,16 +47,16 @@ class ShowSubtitleRuntime extends Command
             'queueFamilies' => [
                 SubtitleQueue::FAMILY_GENERATION => [
                     'queues' => SubtitleQueue::generationNames(),
-                    'depths' => $this->queueDepths(SubtitleQueue::generationNames()),
+                    'depths' => array_intersect_key($depths, array_flip(SubtitleQueue::generationNames())),
                 ],
                 SubtitleQueue::FAMILY_BATCH => [
                     'queues' => SubtitleQueue::batchNames(),
-                    'depths' => $this->queueDepths(SubtitleQueue::batchNames()),
+                    'depths' => array_intersect_key($depths, array_flip(SubtitleQueue::batchNames())),
                 ],
             ],
-            'queueDepths' => $this->queueDepths(),
+            'queueDepths' => $depths,
             'workerGroups' => SubtitleQueue::workerGroups(),
-            'activeJobCount' => $activeJobs->count(),
+            'activeJobCount' => SubtitleJob::query()->where('status', 'running')->count(),
         ];
 
         $batches = $this->recentBatches();
@@ -92,9 +93,9 @@ class ShowSubtitleRuntime extends Command
             implode(',', $summary['queues']),
             $summary['activeJobCount'],
         ]]);
-        $this->table(['family', 'queue', 'depth'], collect($summary['queueFamilies'])
+        $this->table(['family', 'queue', 'total', 'ready', 'delayed', 'reserved'], collect($summary['queueFamilies'])
             ->flatMap(fn (array $family, string $familyName): array => collect($family['depths'])
-                ->map(fn (int|string $depth, string $queue): array => [$familyName, $queue, $depth])
+                ->map(fn (array $depth, string $queue): array => [$familyName, $queue, ...array_values($depth)])
                 ->values()
                 ->all())
             ->values()
@@ -108,10 +109,6 @@ class ShowSubtitleRuntime extends Command
             ])
             ->values()
             ->all());
-        $this->table(['queue', 'depth'], collect($summary['queueDepths'])
-            ->map(fn (int|string $depth, string $queue): array => [$queue, $depth])
-            ->values()
-            ->all());
         $this->table(['job_id', 'run_id', 'video', 'tier', 'stage', 'progress', 'updated'], $activeJobs->all());
         $this->table(['batch_id', 'name', 'total', 'pending', 'failed', 'finished_at'], $batches->all());
         $this->table(['time', 'job_id', 'event', 'stage', 'error', 'exception'], $failures->all());
@@ -120,7 +117,7 @@ class ShowSubtitleRuntime extends Command
     }
 
     /**
-     * @return array<string, int|string>
+     * @return array<string, array<string, int|string>>
      */
     private function queueDepths(?array $queues = null): array
     {
@@ -133,28 +130,27 @@ class ShowSubtitleRuntime extends Command
         return $depths;
     }
 
-    private function queueDepth(string $queueName): int|string
+    private function queueDepth(string $queueName): array
     {
         $connection = SubtitleQueue::connection();
         $driver = config('queue.connections.'.$connection.'.driver');
 
         try {
-            if ($driver === 'database' && Schema::hasTable('jobs')) {
-                return DB::table('jobs')
-                    ->where('queue', $queueName)
-                    ->count();
-            }
+            if (in_array($driver, ['database', 'redis'], true)) {
+                $queue = Queue::connection($connection);
 
-            if ($driver === 'redis') {
-                $redisConnection = (string) config('queue.connections.'.$connection.'.connection', 'default');
-
-                return Redis::connection($redisConnection)->llen('queues:'.$queueName);
+                return [
+                    'total' => $queue->size($queueName),
+                    'ready' => $queue->pendingSize($queueName),
+                    'delayed' => $queue->delayedSize($queueName),
+                    'reserved' => $queue->reservedSize($queueName),
+                ];
             }
         } catch (Throwable $exception) {
-            return 'unavailable:'.$exception::class;
+            return array_fill_keys(['total', 'ready', 'delayed', 'reserved'], 'unavailable:'.$exception::class);
         }
 
-        return 'unavailable';
+        return array_fill_keys(['total', 'ready', 'delayed', 'reserved'], 'unavailable');
     }
 
     private function recentBatches(): Collection

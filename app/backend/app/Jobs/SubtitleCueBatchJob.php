@@ -12,7 +12,6 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Queue\SerializesModels;
 use RuntimeException;
@@ -49,13 +48,7 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        $middleware = [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
-
-        if ($this->globalAiRateLimitEnabled()) {
-            $middleware[] = new RateLimited('subtitle-ai-batch');
-        }
-
-        return $middleware;
+        return [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
     }
 
     /**
@@ -79,6 +72,12 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
         try {
             $this->process($processor);
         } catch (Throwable $exception) {
+            if ($this->job !== null && $exception instanceof SubtitleProcessingException
+                && ($exception->context['reason'] ?? null) === 'provider_admission') {
+                $this->release(max(1, (int) ($exception->context['retry_after_seconds'] ?? 10)));
+
+                return;
+            }
             // Transient provider failures (429/5xx/timeout) are released back to
             // the queue with backoff until $maxExceptions is exhausted; anything
             // else (validation, programming errors) still fails the job loudly
@@ -108,17 +107,6 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
     abstract protected function stage(): string;
 
     abstract protected function failureMessage(): string;
-
-    private function globalAiRateLimitEnabled(): bool
-    {
-        if ((int) config('subtitles.enrichment.global_rate_limit_per_minute', 0) <= 0) {
-            return false;
-        }
-
-        // The sync driver cannot release jobs back to a queue, so rate limiting
-        // (like the per-user concurrency gate) only applies to real queues.
-        return (string) config('queue.connections.'.SubtitleQueue::connection().'.driver') !== 'sync';
-    }
 
     private function currentTimeMs(): int
     {

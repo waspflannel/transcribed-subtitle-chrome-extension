@@ -167,6 +167,15 @@ class SubtitleGenerationPipeline
             return;
         }
 
+        if ($job->stage === 'transcribing') {
+            $this->dispatchPlannedTranscription($job);
+
+            return;
+        }
+        if ($job->stage !== 'optimizing-audio') {
+            return;
+        }
+
         $this->telemetry->recordQueueWait($job, 'optimizing-audio', null, $queuedAtMs);
 
         $stage = 'optimizing-audio';
@@ -219,7 +228,7 @@ class SubtitleGenerationPipeline
             ): bool {
                 $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
 
-                if (! $currentJob instanceof SubtitleJob) {
+                if (! $currentJob instanceof SubtitleJob || $currentJob->stage !== 'optimizing-audio') {
                     return false;
                 }
 
@@ -237,15 +246,24 @@ class SubtitleGenerationPipeline
                 $this->logger->transcriptionStarted($currentJob);
                 $this->telemetry->recordStageStarted($currentJob, 'transcribing');
                 $transcribingStartedAtMs = $this->telemetry->currentTimeMs();
-
-                DB::afterCommit(function () use ($currentJob, $chunkJobs, $transcribingStartedAtMs): void {
-                    $this->batchDispatcher->dispatchTranscription($currentJob, $chunkJobs, $transcribingStartedAtMs);
-                });
+                $this->artifacts->putTranscriptionPlan($currentJob, [
+                    'audio' => get_object_vars($preparedAudio),
+                    'chunks' => array_map(fn (TranscribeSubtitleAudioChunk $chunk): array => [
+                        'audioStartSeconds' => $chunk->audioStartSeconds,
+                        'nominalStartSeconds' => $chunk->nominalStartSeconds,
+                        'nominalEndSeconds' => $chunk->nominalEndSeconds,
+                        'nextAudioStartSeconds' => $chunk->nextAudioStartSeconds,
+                        'audioEndSeconds' => $chunk->audioEndSeconds,
+                    ], $chunkJobs),
+                    'startedAtMs' => $transcribingStartedAtMs,
+                    'dispatched' => false,
+                ]);
+                DB::afterCommit(fn () => $this->dispatchPlannedTranscription($currentJob));
 
                 return true;
             }, attempts: 5);
 
-            if (! $continued) {
+            if (! $continued && $this->loadRunningJob($subtitleJobId, $runId) === null) {
                 SubtitleAudioWorkspace::delete($runId);
             }
         } catch (Throwable $exception) {
@@ -254,6 +272,31 @@ class SubtitleGenerationPipeline
 
             throw $exception;
         }
+    }
+
+    private function dispatchPlannedTranscription(SubtitleJob $job): void
+    {
+        $job = $this->loadRunningJob($job->id, $job->run_id);
+        if ($job === null || $job->stage !== 'transcribing') {
+            return;
+        }
+        $plan = $this->artifacts->transcriptionPlan($job);
+        if ($plan === null || $plan['dispatched']) {
+            return;
+        }
+        $audio = new TemporaryAudioFile(...$plan['audio']);
+        $chunks = [];
+        foreach ($plan['chunks'] as $index => $bounds) {
+            $chunks[] = new TranscribeSubtitleAudioChunk(
+                ...$bounds,
+                subtitleJobId: $job->id, chunkIndex: $index, chunkCount: count($plan['chunks']),
+                runId: $job->run_id, chunkAudio: $audio,
+            );
+        }
+        // A crash after publishing may replay this batch; chunk locks and artifacts
+        // make duplicate members harmless. The plan recovers a lost publication.
+        $this->batchDispatcher->dispatchTranscription($job, $chunks, $plan['startedAtMs']);
+        $this->artifacts->putTranscriptionPlan($job, [...$plan, 'dispatched' => true]);
     }
 
     /**
@@ -320,9 +363,9 @@ class SubtitleGenerationPipeline
                 || $audioStartSeconds !== 0.0 || $nominalStartSeconds !== 0.0 || $nominalEndSeconds !== null) {
                 throw SubtitleProcessingException::transcriptionFailed(context: ['reason' => 'invalid_url_transcription_chunk']);
             }
-            $payload = $this->transcriptionService->transcribeYouTube($job->youtube_video_id, $job->source_language);
+            $payload = $this->transcriptionService->transcribeYouTube($job->youtube_video_id, $job->source_language, job: $job);
         } else {
-            $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language);
+            $payload = $this->transcriptionService->transcribeChunk($chunkAudio, $job->source_language, job: $job);
         }
 
         $this->telemetry->recordTranscriptionChunkCompleted($job, $chunkIndex, $requestStartedAtMs, $chunkAudio?->sizeBytes);
@@ -597,7 +640,6 @@ class SubtitleGenerationPipeline
                 job: $job,
                 artifactType: SubtitleJobArtifactStore::MERGED_CUES,
                 cues: $merged->cues,
-                sourceDialect: $merged->sourceDialect,
             );
 
             $this->markJobRunning($job, 'finalizing', 95);
@@ -725,14 +767,6 @@ class SubtitleGenerationPipeline
             'error_code' => null,
             'error_message' => null,
         ]);
-    }
-
-    private function failIncompleteState(string $reason): never
-    {
-        throw SubtitleProcessingException::enrichmentFailed(
-            'Subtitle processing state is incomplete.',
-            ['reason' => $reason],
-        );
     }
 
     private function extendProcessingTimeLimit(): void

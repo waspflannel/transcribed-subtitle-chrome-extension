@@ -41,6 +41,7 @@ use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
+use App\Services\TranslationAnalysis\LearningTokenEnrichmentService;
 use App\Support\SubtitleProcessingVersion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Connectors\ConnectorInterface;
@@ -1324,6 +1325,32 @@ class SubtitleJobApiTest extends TestCase
         ])->assertOk()->assertJsonPath('cues.1.tokens.0.gloss', 'concurrent word card');
     }
 
+    public function test_overlapping_quick_fix_and_full_replacement_are_rejected_before_paid_work(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $track = $job->track;
+        $payload = ['expectedTrackId' => $track->public_id, 'text' => 'updated'];
+        $this->duringQuickFix = function () use ($job, $track, $payload): void {
+            $corrections = app(LyricsCorrectionService::class);
+            foreach ([
+                fn () => $corrections->quickFix($job, $job->user, $track->cues[0]['cueId'], 0, $payload),
+                fn () => $corrections->submit($job, $job->user, 'New lyric words', $track->public_id),
+            ] as $overlap) {
+                try {
+                    $overlap();
+                    $this->fail('Expected overlap rejection before a second provider call.');
+                } catch (SubtitleProcessingException $exception) {
+                    $this->assertSame('track_edit_in_progress', $exception->context['reason']);
+                }
+            }
+        };
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0', $payload)->assertOk();
+        EditedCueAgent::assertPrompted(fn () => true);
+        $this->assertDatabaseCount('subtitle_track_lyrics_corrections', 0);
+    }
+
     public function test_quick_fix_requires_current_entitlement_before_provider_work(): void
     {
         $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
@@ -2418,12 +2445,12 @@ class SubtitleJobApiTest extends TestCase
         $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 1)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonMissingPath('partialTrack.cues.0.translatedText')->assertJsonMissingPath('partialTrack.cues.0.tokens');
-        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1, new CueEnrichmentResult([$cues[1]], 'unknown'));
+        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1, new CueEnrichmentResult([$cues[1]]));
         $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 2)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonMissingPath('partialTrack.cues.0.translatedText')
             ->assertJsonPath('partialTrack.cues.1.translatedText', 'Second translation');
-        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]], 'unknown'));
+        $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]]));
         $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 3)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonPath('partialTrack.cues.1.cueId', 'cue-0002')->assertJsonPath('partialTrack.cues.1.index', 1)
@@ -2864,6 +2891,24 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame('beta concurrent gloss', $track->cues[0]['tokens'][1]['gloss']);
     }
 
+    public function test_overlapping_same_card_misses_make_one_provider_call_and_then_reuse_result(): void
+    {
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $payload = ['trackId' => $job->track->public_id, 'cueId' => $job->track->cues[0]['cueId'], 'tokenIndex' => 0];
+        $this->translationAnalysis->beforeTokenResult = function () use ($job, $payload): void {
+            try {
+                app(LearningTokenEnrichmentService::class)->enrich($payload, $job->user);
+                $this->fail('Expected identical in-flight lookup to be rejected.');
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertSame('learning_token_in_progress', $exception->context['reason']);
+            }
+        };
+        $this->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $this->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $this->assertSame(1, $this->translationAnalysis->tokenCalls);
+    }
+
     public function test_learning_token_enrichment_generates_cards_for_same_language_track(): void
     {
         $jobResponse = $this
@@ -3295,7 +3340,7 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
 {
     public int $urlCalls = 0;
 
-    public function transcribeYouTube(string $videoId, string $sourceLanguage): array
+    public function transcribeYouTube(string $videoId, string $sourceLanguage, ?SubtitleJob $job = null): array
     {
         $this->urlCalls++;
 
@@ -3336,7 +3381,7 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
         return $audio;
     }
 
-    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage): array
+    public function transcribeChunk(TemporaryAudioFile $audio, string $sourceLanguage, ?SubtitleJob $job = null): array
     {
         $this->chunkCalls++;
         $this->sourceLanguages[] = $sourceLanguage;

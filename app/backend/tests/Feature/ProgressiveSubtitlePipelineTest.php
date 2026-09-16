@@ -21,6 +21,7 @@ use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitlePartialTrackAssembler;
+use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Process\PendingProcess;
@@ -177,6 +178,59 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertDirectoryDoesNotExist($directory);
         $this->assertSame('tokenizing', $job->fresh()->stage);
         $this->assertGreaterThan(0, $this->preview($job)['readyThroughMs']);
+        $progress = $job->fresh()->progress_percent;
+        $pipeline->optimizeAudioAndDispatchTranscription($job->id, $job->run_id,
+            new TemporaryAudioFile($source, $directory, 60, 10, 'audio/webm'));
+        $this->assertSame('tokenizing', $job->fresh()->stage);
+        $this->assertSame($progress, $job->fresh()->progress_percent);
+        $this->assertSame('running', $job->fresh()->status);
+    }
+
+    public function test_optimizer_replays_saved_continuation_without_repreparing_audio(): void
+    {
+        $job = $this->job();
+        $audio = new TemporaryAudioFile('never-read', 'never-read', 60, 10, 'audio/webm');
+        $store = app(SubtitleJobArtifactStore::class);
+        $store->putTranscriptionPlan($job, [
+            'audio' => get_object_vars($audio),
+            'chunks' => [['audioStartSeconds' => 0, 'nominalStartSeconds' => 0, 'nominalEndSeconds' => null]],
+            'startedAtMs' => 123,
+            'dispatched' => false,
+        ]);
+        Process::preventStrayProcesses();
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->optimizeAudioAndDispatchTranscription($job->id, $job->run_id, $audio);
+        Bus::assertBatchCount(1);
+        $this->assertTrue($store->transcriptionPlan($job)['dispatched']);
+        $pipeline->optimizeAudioAndDispatchTranscription($job->id, $job->run_id, $audio);
+        Bus::assertBatchCount(1);
+        $this->assertSame('transcribing', $job->fresh()->stage);
+    }
+
+    public function test_optimizer_keeps_audio_when_the_run_advances_during_preparation(): void
+    {
+        config(['subtitles.audio_preparation.direct_chunks' => false]);
+        $job = $this->job();
+        $job->update(['stage' => 'optimizing-audio']);
+        $directory = SubtitleAudioWorkspace::directory($job->run_id);
+        File::ensureDirectoryExists($directory);
+        $source = $directory.'/source.webm';
+        File::put($source, 'fake-audio');
+        $audio = new TemporaryAudioFile($source, $directory, 60, 10, 'audio/webm');
+        $this->mock(ElevenLabsScribeTranscriptionService::class)->shouldReceive('prepareAudio')->once()
+            ->andReturnUsing(function () use ($job, $audio): TemporaryAudioFile {
+                $job->update(['stage' => 'transcribing', 'progress_percent' => 65]);
+
+                return $audio;
+            });
+
+        app(SubtitleGenerationPipeline::class)->optimizeAudioAndDispatchTranscription($job->id, $job->run_id, $audio);
+
+        $this->assertSame('transcribing', $job->fresh()->stage);
+        $this->assertSame(65, $job->fresh()->progress_percent);
+        $this->assertFileExists($source);
+        Bus::assertBatchCount(0);
+        Http::assertNothingSent();
     }
 
     public function test_failure_during_chunk_preparation_prevents_upload_and_cleans_the_workspace(): void

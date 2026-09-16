@@ -20,6 +20,7 @@ use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\DatabaseQueue;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -795,6 +796,40 @@ class LyricsCorrectionContinuationTest extends TestCase
 
         $this->assertSame(2, $calls);
         $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+    }
+
+    public function test_real_sdk_alignment_overload_keeps_revision_resumable_until_success(): void
+    {
+        config(['ai.providers.openai.url' => 'https://api.openai.com/v1']);
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        Http::preventStrayRequests();
+        Http::fake(['api.openai.com/v1/responses' => Http::sequence()
+            ->push(['error' => ['message' => 'PRIVATE_ALIGNMENT_SENTINEL']], 503)
+            ->push([
+                'id' => 'resp_alignment', 'status' => 'completed', 'model' => 'test-model',
+                'output' => [['type' => 'message', 'role' => 'assistant', 'content' => [[
+                    'type' => 'output_text', 'text' => json_encode(['cues' => $queue['alignmentCues']]),
+                ]]]],
+                'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+            ]),
+        ]);
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $queued = new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0);
+        try {
+            $queued->handle(app(LyricsCorrectionService::class));
+            $this->fail('Expected retryable SDK overload.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_unavailable', $exception->publicCode);
+            $this->assertSame(503, $exception->context['status']);
+            $this->assertStringNotContainsString('PRIVATE_ALIGNMENT_SENTINEL', (string) $exception);
+        }
+        $attempt = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('running', $attempt->status);
+        $this->assertSame(0, $attempt->work_revision);
+        $queued->handle(app(LyricsCorrectionService::class));
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'), startRevision: 1);
+        $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+        Http::assertSentCount(2);
     }
 
     public function test_an_empty_alignment_fails_once_records_cost_and_clears_private_state(): void

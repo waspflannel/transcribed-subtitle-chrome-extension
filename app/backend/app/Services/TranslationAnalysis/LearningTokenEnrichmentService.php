@@ -4,9 +4,11 @@ namespace App\Services\TranslationAnalysis;
 
 use App\Ai\SubtitleModel;
 use App\Exceptions\BillingEntitlementException;
+use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
 use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
+use App\Services\Subtitles\SubtitleTier;
 use App\Support\SubtitleProcessingVersion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -47,17 +49,29 @@ class LearningTokenEnrichmentService
             'token_index' => $token['index'],
         ]);
 
-        $enrichedToken = Cache::remember(
-            $this->cacheKey($track, $cue, $token),
-            now()->addDays(30),
-            fn (): array => $this->translationAnalysis->enrichToken(
-                cue: $cue,
-                token: $token,
-                sourceLanguage: $track->source_language,
-                targetLanguage: $track->target_language,
-                selection: SubtitleModel::forJob($track->job),
-            ),
+        $cacheKey = $this->cacheKey($track, $cue, $token);
+        $lock = Cache::store(SubtitleTier::concurrencyCacheStore())->lock(
+            $cacheKey.':lock', max(60, (int) config('subtitles.enrichment.timeout_seconds', 120) + 60),
         );
+        if (! $lock->get()) {
+            throw SubtitleProcessingException::rateLimited(context: ['reason' => 'learning_token_in_progress']);
+        }
+        try {
+            $enrichedToken = Cache::remember(
+                $cacheKey,
+                now()->addDays(30),
+                fn (): array => $this->translationAnalysis->enrichToken(
+                    cue: $cue,
+                    token: $token,
+                    sourceLanguage: $track->source_language,
+                    targetLanguage: $track->target_language,
+                    selection: SubtitleModel::forJob($track->job),
+                    job: $track->job,
+                ),
+            );
+        } finally {
+            $lock->release();
+        }
 
         $response = DB::transaction(function () use ($track, $user, $payload, $enrichedToken): array {
             $lockedTrack = SubtitleTrack::query()

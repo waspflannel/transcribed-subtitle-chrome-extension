@@ -184,9 +184,13 @@ return [
         // larger batches mean more output per call.
         'cue_batch_char_budget' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_CHAR_BUDGET', 1000),
         'cue_batch_max_cues' => (int) env('SUBTITLE_ENRICHMENT_CUE_BATCH_MAX_CUES', 20),
-        // Org-level guardrail across all users and workers; per-user tier caps
-        // are enforced separately by LimitSubtitleBatchConcurrency. 0 disables.
+        // Actual calls per provider across HTTP and queue workers, including retries.
         'global_rate_limit_per_minute' => (int) env('SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE', 300),
+    ],
+
+    'providers' => [
+        'global_concurrency' => (int) env('SUBTITLE_PROVIDER_GLOBAL_CONCURRENCY', 30),
+        'account_requests_per_minute' => (int) env('SUBTITLE_PROVIDER_ACCOUNT_REQUESTS_PER_MINUTE', 60),
     ],
 
     'stalled_job' => [

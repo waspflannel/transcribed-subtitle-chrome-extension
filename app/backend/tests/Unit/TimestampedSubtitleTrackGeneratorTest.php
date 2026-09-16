@@ -79,7 +79,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         ]];
 
         try {
-            $generator->generate($job, new CueEnrichmentResult($enrichedCues, 'unknown'));
+            $generator->generate($job, new CueEnrichmentResult($enrichedCues));
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('enrichment_failed', $exception->publicCode);
             $this->assertSame('empty_tokens', $exception->context['reason'] ?? null);
@@ -167,7 +167,7 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
 
         return $generator->generate(
             $job,
-            new CueEnrichmentResult($enrichedCues, 'unknown'),
+            new CueEnrichmentResult($enrichedCues),
         );
     }
 

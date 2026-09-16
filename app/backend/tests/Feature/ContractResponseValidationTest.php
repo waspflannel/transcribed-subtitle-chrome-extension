@@ -68,7 +68,7 @@ class ContractResponseValidationTest extends TestCase
         ]);
 
         app(SubtitleJobArtifactStore::class)->putCueBatchResult($runningJob, SubtitleJobArtifactStore::ANALYZED_CUES, 0,
-            new CueEnrichmentResult(app(SubtitleJobArtifactStore::class)->cueCollection($runningJob, SubtitleJobArtifactStore::DRAFT_CUES)->cues, 'unknown'));
+            new CueEnrichmentResult(app(SubtitleJobArtifactStore::class)->cueCollection($runningJob, SubtitleJobArtifactStore::DRAFT_CUES)->cues));
 
         $this->assertResponseMatchesSchema(
             $this

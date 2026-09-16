@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleQueue;
@@ -77,7 +78,17 @@ class LyricsCorrectionJob implements ShouldQueue
             'queued_at_ms' => $this->queuedAtMs,
             'queue_wait_ms' => $this->queuedAtMs === null ? null : max(0, (int) round(microtime(true) * 1000) - $this->queuedAtMs),
         ]);
-        $corrections->process($this->trackId, $this->attemptId, $this->expectedRevision, $this->batchIndex);
+        try {
+            $corrections->process($this->trackId, $this->attemptId, $this->expectedRevision, $this->batchIndex);
+        } catch (SubtitleProcessingException $exception) {
+            if ($this->job !== null && ($exception->context['reason'] ?? null) === 'provider_admission') {
+                $this->release(max(1, (int) ($exception->context['retry_after_seconds'] ?? 10)));
+
+                return;
+            }
+
+            throw $exception;
+        }
     }
 
     public function failed(?Throwable $exception): void

@@ -2,6 +2,7 @@
 
 namespace App\Services\Subtitles;
 
+use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
@@ -225,7 +226,9 @@ class SubtitleRuntimeTracer
         $context['duration_ms'] = $this->durationMs(self::$queueStartedAtMs[$runtimeKey] ?? null);
         $previous = $event->exception->getPrevious();
         $context['exception'] = $event->exception::class;
-        $context['previous_exception'] = $previous !== null ? $previous::class : null;
+        $context['previous_exception'] = $event->exception instanceof SubtitleProcessingException
+            ? ($event->exception->context['cause_exception'] ?? null)
+            : ($previous !== null ? $previous::class : null);
         unset(self::$queueStartedAtMs[$runtimeKey]);
 
         $this->jobEventById(

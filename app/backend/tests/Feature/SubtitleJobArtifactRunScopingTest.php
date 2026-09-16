@@ -59,7 +59,7 @@ class SubtitleJobArtifactRunScopingTest extends TestCase
             $staleJob,
             SubtitleJobArtifactStore::ANALYZED_CUES,
             0,
-            new CueEnrichmentResult($this->draftCues(), 'unknown'),
+            new CueEnrichmentResult($this->draftCues()),
         );
 
         $this->assertDatabaseMissing('subtitle_job_artifacts', [

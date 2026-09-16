@@ -6,7 +6,7 @@
         <h1 id="legal-title">Terms of <span class="hl">service.</span></h1>
         <p>The terms for using our paid beta, including subscriptions, video minutes, lyrics correction, and AI-generated study content.</p>
         <div class="legal-meta">
-            <span>Last updated <time datetime="2026-09-14">September 14, 2026</time></span>
+            <span>Last updated <time datetime="2026-09-16">September 16, 2026</time></span>
             <a href="{{ route('marketing.privacy') }}">Read the privacy policy &rarr;</a>
         </div>
     </section>
@@ -47,6 +47,7 @@
                 <ul>
                     <li>Generation is measured in video minutes, with video duration rounded up to the next whole minute. Your account shows the allowance and remaining balance.</li>
                     <li>Starting a job can reserve minutes. A completed track uses those minutes; a failed job releases unused reservations when no completed track is produced.</li>
+                    <li>You can cancel generation, but cancelling or deleting an in-progress job uses all the minutes reserved for it. Review the confirmation before starting generation.</li>
                     <li>Reopening a retained track does not spend generation minutes again. Starting a new generation, including with a different model, can use additional minutes.</li>
                     <li>Single-word fixes and full lyrics correction on an existing track do not consume additional generation minutes under the current beta plans.</li>
                     <li>Deleting a completed generation does not restore the minutes used to create it. Included minutes are a service allowance and cannot be redeemed for cash.</li>

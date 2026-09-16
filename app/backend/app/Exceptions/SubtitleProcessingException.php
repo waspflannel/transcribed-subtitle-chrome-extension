@@ -2,12 +2,14 @@
 
 namespace App\Exceptions;
 
+use App\Services\Subtitles\ProviderExceptionPolicy;
 use Exception;
-use Illuminate\Http\Client\RequestException;
 use Throwable;
 
 class SubtitleProcessingException extends Exception
 {
+    public readonly array $context;
+
     /**
      * @param  array<string, mixed>  $context
      */
@@ -15,10 +17,13 @@ class SubtitleProcessingException extends Exception
         public readonly string $publicCode,
         string $publicMessage,
         public readonly int $status,
-        public readonly array $context = [],
+        array $context = [],
         ?Throwable $previous = null,
     ) {
-        parent::__construct($publicMessage, 0, $previous);
+        $this->context = $previous === null ? $context : [...$context, ...ProviderExceptionPolicy::diagnostics($previous)];
+        // Previous provider exceptions can contain complete response bodies.
+        // Ordinary logs and failed_jobs must receive only these safe diagnostics.
+        parent::__construct($publicMessage);
     }
 
     /**
@@ -71,26 +76,34 @@ class SubtitleProcessingException extends Exception
      */
     public static function rateLimited(string $message = 'Subtitle generation is temporarily rate limited.', array $context = [], ?Throwable $previous = null): self
     {
-        // The AI SDK wraps every HTTP 429 as a rate limit, including billing
-        // failures. Walk the cause chain so all provider callers classify it once.
-        for ($cause = $previous; $cause !== null; $cause = $cause->getPrevious()) {
-            if (! $cause instanceof RequestException) {
-                continue;
-            }
-
-            $code = $cause->response->json('error.code');
-            $quotaCodes = ['credit_balance_exhausted', 'insufficient_quota', 'organization_spend_limit_exceeded', 'project_spend_limit_exceeded', 'organization_usage_limit_exceeded'];
-
-            if (in_array($code, $quotaCodes, true) || $cause->response->json('error.type') === 'insufficient_quota') {
+        if ($previous !== null) {
+            $diagnostics = ProviderExceptionPolicy::diagnostics($previous);
+            if (isset($diagnostics['provider_error_code'])) {
                 return self::enrichmentFailed('Subtitle AI provider quota is exhausted.', [
                     ...$context,
                     'reason' => 'provider_quota_exhausted',
-                    'provider_error_code' => in_array($code, $quotaCodes, true) ? $code : 'insufficient_quota',
+                    ...$diagnostics,
                 ], $previous);
             }
         }
 
         return new self('rate_limited', $message, 429, $context, $previous);
+    }
+
+    public function context(): array
+    {
+        return ['error_code' => $this->publicCode, ...$this->context];
+    }
+
+    public function __toString(): string
+    {
+        // Laravel's database failed-job store serializes the exception as text.
+        $diagnostics = array_intersect_key($this->context(), array_flip([
+            'error_code', 'provider', 'exception', 'cause_exception', 'status',
+            'provider_request_id', 'provider_error_code', 'reason',
+        ]));
+
+        return parent::__toString()."\nSafe diagnostics: ".json_encode($diagnostics, JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     /**

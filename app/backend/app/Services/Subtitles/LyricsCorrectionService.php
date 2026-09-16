@@ -16,14 +16,12 @@ use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Carbon\CarbonInterface;
-use Illuminate\Http\Client\ConnectionException;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Laravel\Ai\Exceptions\RateLimitedException;
 use Throwable;
 
 final class LyricsCorrectionService
@@ -61,6 +59,19 @@ final class LyricsCorrectionService
     }
 
     public function submit(SubtitleJob $job, User $user, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
+    {
+        $lock = Cache::store(SubtitleTier::concurrencyCacheStore())->lock('subtitle-track-edit:'.$job->id, 30);
+        if (! $lock->get()) {
+            throw SubtitleProcessingException::lyricsCorrectionInProgress(['reason' => 'track_edit_in_progress']);
+        }
+        try {
+            return $this->submitLocked($job, $user, $lyrics, $expectedTrackId);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function submitLocked(SubtitleJob $job, User $user, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
     {
         $trackId = $job->track?->getKey();
         $attemptId = (string) Str::uuid();
@@ -200,6 +211,22 @@ final class LyricsCorrectionService
             abort(404);
         }
 
+        $lock = Cache::store(SubtitleTier::concurrencyCacheStore())->lock(
+            'subtitle-track-edit:'.$job->id,
+            max(60, (int) config('subtitles.enrichment.timeout_seconds', 120) + 60),
+        );
+        if (! $lock->get()) {
+            throw SubtitleProcessingException::lyricsCorrectionInProgress(['reason' => 'track_edit_in_progress']);
+        }
+        try {
+            return $this->applyQuickFix($job, $cueId, $tokenIndex, $payload);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function applyQuickFix(SubtitleJob $job, string $cueId, int $tokenIndex, array $payload): SubtitleTrack
+    {
         [$cuePosition, $updatedCue] = DB::transaction(function () use ($job, $cueId, $tokenIndex, $payload): array {
             $track = $this->lockQuickFixTrack($job, $payload['expectedTrackId']);
 
@@ -283,6 +310,7 @@ final class LyricsCorrectionService
             $job->include_translation,
             $job->include_romanization,
             selection: SubtitleModel::forJob($job),
+            job: $job,
         );
 
         return DB::transaction(function () use ($job, $payload, $cuePosition, $updatedCue): SubtitleTrack {
@@ -628,6 +656,7 @@ final class LyricsCorrectionService
             includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
             selection: SubtitleModel::configured('openai'),
             validateOutput: false,
+            job: $job,
         );
         $this->ensureCorrectionCurrent($correction);
 
@@ -808,7 +837,7 @@ final class LyricsCorrectionService
         $this->ensureCorrectionCurrent($correction);
         $this->requireActivePlan($job);
         $selection = SubtitleModel::configured('openai');
-        $output = $this->promptAlignment($input, $selection);
+        $output = $this->promptAlignment($input, $selection, $job);
         $this->costs->recordCorrectionAlignment($job, $selection);
         $this->ensureCorrectionCurrent($correction);
 
@@ -837,71 +866,23 @@ final class LyricsCorrectionService
         }
     }
 
-    private function promptAlignment(array $input, SubtitleModel $selection): array
+    private function promptAlignment(array $input, SubtitleModel $selection, ?SubtitleJob $job = null): array
     {
         try {
-            $response = LyricsAlignmentAgent::make()
+            $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => LyricsAlignmentAgent::make()
                 ->prompt(
                     json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                     provider: $selection->provider,
                     model: $selection->model,
-                );
+                ));
 
             return $response->toArray();
-        } catch (RateLimitedException $exception) {
-            throw SubtitleProcessingException::rateLimited(
-                'Subtitle AI processing is temporarily rate limited.',
-                [
-                    'provider' => $selection->provider,
-                    'adapter' => 'laravel-ai-sdk',
-                    'agent' => LyricsAlignmentAgent::class,
-                    'exception' => $exception::class,
-                ],
-                $exception,
-            );
-        } catch (SubtitleProcessingException $exception) {
-            throw $exception;
         } catch (Throwable $exception) {
-            $context = [
+            throw ProviderExceptionPolicy::classify($exception, [
                 'provider' => $selection->provider,
                 'adapter' => 'laravel-ai-sdk',
                 'agent' => LyricsAlignmentAgent::class,
-                'exception' => $exception::class,
-            ];
-
-            if ($exception instanceof ConnectionException) {
-                throw SubtitleProcessingException::providerUnavailable(
-                    'Subtitle AI provider did not respond.',
-                    [...$context, 'reason' => 'connection_failure'],
-                    $exception,
-                );
-            }
-
-            if ($exception instanceof RequestException) {
-                $context['status'] = $exception->response->status();
-
-                if ($exception->response->status() === 429) {
-                    throw SubtitleProcessingException::rateLimited(
-                        'Subtitle AI processing is temporarily rate limited.',
-                        $context,
-                        $exception,
-                    );
-                }
-
-                if ($exception->response->serverError()) {
-                    throw SubtitleProcessingException::providerUnavailable(
-                        'Subtitle AI provider is temporarily unavailable.',
-                        $context,
-                        $exception,
-                    );
-                }
-            }
-
-            throw SubtitleProcessingException::enrichmentFailed(
-                'Subtitle AI processing failed.',
-                $context,
-                $exception,
-            );
+            ]);
         }
     }
 

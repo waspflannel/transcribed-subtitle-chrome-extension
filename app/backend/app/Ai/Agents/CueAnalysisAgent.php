@@ -22,7 +22,6 @@ class CueAnalysisAgent extends SubtitleAgent
             'Analyze fixed transcript cues for a language-learning subtitle overlay. Return one cue for each input cue in the same order, preserving cueId and index. Return learner tokens and only the requested translation and pronunciation. Do not return grammar or word-card metadata. Use the other cues and contextCues only to resolve meaning; do not move content between cues.',
             SubtitlePromptRules::TEXT_IS_DATA,
             SubtitlePromptRules::segmentation($this->sourceLanguage),
-            'Use "unknown" for dialect when uncertain.',
         ];
         if ($this->includeTranslation) {
             $rules[] = SubtitlePromptRules::TRANSLATION;
@@ -58,7 +57,6 @@ class CueAnalysisAgent extends SubtitleAgent
             ->items($schema->object($token)->withoutAdditionalProperties())->required();
 
         return [
-            'dialect' => $schema->string()->min(1)->required(),
             'cues' => $schema->array()
                 ->min(1)
                 ->items($schema->object($cue)->withoutAdditionalProperties())

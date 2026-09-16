@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
+use App\Models\SubtitleJob;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -68,6 +69,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         ?\Closure $beforeRetry = null,
         ?SubtitleModel $selection = null,
         bool $validateOutput = true,
+        ?SubtitleJob $job = null,
     ): CueEnrichmentResult {
         $this->selections[] = [$selection?->provider, $selection?->model];
         $this->tokenizationCalls++;
@@ -93,7 +95,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
         }
         ($this->beforeTokenizationResult)?->__invoke();
 
-        return new CueEnrichmentResult($cues, 'unknown');
+        return new CueEnrichmentResult($cues);
     }
 
     private function fakeReadings(array $batch, string $sourceLanguage): CueEnrichmentResult
@@ -120,7 +122,6 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
                 ],
                 $batch,
             ),
-            'unknown',
         );
     }
 
@@ -129,7 +130,7 @@ class RecordingTranslationAnalysisProvider extends LaravelAiTranslationAnalysisP
      * @param  array<string, mixed>  $token
      * @return array<string, mixed>
      */
-    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null): array
+    public function enrichToken(array $cue, array $token, string $sourceLanguage, string $targetLanguage, ?SubtitleModel $selection = null, ?SubtitleJob $job = null): array
     {
         $this->selections[] = [$selection?->provider, $selection?->model];
         $this->tokenCalls++;
