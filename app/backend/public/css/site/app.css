@@ -146,7 +146,18 @@ input[type="checkbox"] {
 }
 
 .narrow-workspace {
+    margin-inline: auto;
     max-width: 980px;
+    padding-inline: 22px;
+}
+
+.narrow-workspace .workspace-heading {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.narrow-workspace > .panel + .panel {
+    margin-top: 22px;
 }
 
 .panel {
@@ -211,6 +222,8 @@ input[type="checkbox"] {
 }
 
 .metric-grid {
+    display: grid;
+    gap: 12px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
