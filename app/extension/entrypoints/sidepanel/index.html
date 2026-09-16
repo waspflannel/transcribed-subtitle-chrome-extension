@@ -151,8 +151,9 @@
                   <p class="card-copy">Paste lyrics for this song. We will fit them to the existing timing and rebuild translations, pronunciation, and word data.</p>
                   <label class="field">
                     <span>Lyrics</span>
-                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count"></textarea>
+                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste plain-text lyrics here" aria-describedby="lyrics-correction-help lyrics-correction-count lyrics-correction-error"></textarea>
                   </label>
+                  <p id="lyrics-correction-error" class="microcopy" data-lyrics-correction-error role="status" aria-live="polite" hidden></p>
                   <p class="lyrics-confirm" data-lyrics-confirmation hidden role="status" aria-live="polite"></p>
                   <div class="lyrics-correction-footer">
                     <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>

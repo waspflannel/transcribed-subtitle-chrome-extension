@@ -23,13 +23,23 @@ export function lyricsCharacterCount(value: string): number {
   return Array.from(value).length;
 }
 
+export function lyricsValidationError(value: string): string | null {
+  if (!value.trim()) return 'Paste lyrics to continue.';
+  if (lyricsCharacterCount(value) > LYRICS_CHARACTER_LIMIT) return 'Lyrics must be 25,000 characters or fewer.';
+  // Allow tab/newlines and script joiners; reject controls and unpaired UTF-16 surrogates.
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uD800-\uDFFF]/u.test(value)) {
+    return 'Lyrics contain unsupported characters. Paste plain text.';
+  }
+  if (!/\p{L}/u.test(value)) return 'Paste lyrics containing words, not just numbers, punctuation, or emoji.';
+  if (/^(?:https?:\/\/|www\.)\S+$/iu.test(value.trim())) return 'Paste the lyrics themselves, not a link.';
+  return null;
+}
+
 export function canApplyLyricsCorrection(
   value: string,
   status: LyricsCorrectionStatus | null | undefined,
 ): boolean {
-  const count = lyricsCharacterCount(value);
-
-  return count > 0 && count <= LYRICS_CHARACTER_LIMIT && status?.status !== 'queued' && status?.status !== 'running';
+  return lyricsValidationError(value) === null && status?.status !== 'queued' && status?.status !== 'running';
 }
 
 /**

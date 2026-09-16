@@ -933,22 +933,31 @@ final class LyricsCorrectionService
         $knownIds = array_flip(array_column($sourceCues, 'cueId'));
         $texts = [];
         $cursor = 0;
-        foreach (is_array($output['cues'] ?? null) ? $output['cues'] : [] as $cue) {
+        $previousSlot = -1;
+        $partCount = count($parts);
+        $allocations = $output['cues'] ?? null;
+        if (! is_array($allocations) || $allocations === [] || count($allocations) > count($sourceCues)) {
+            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
+        }
+        foreach ($allocations as $cue) {
             $id = is_array($cue) ? ($cue['cueId'] ?? null) : null;
-            if (! is_string($id) || ! isset($knownIds[$id])) {
-                continue;
+            if (! is_string($id) || ! isset($knownIds[$id]) || $knownIds[$id] <= $previousSlot
+                || ! is_array($cue['segments'] ?? null) || $cue['segments'] === [] || count($cue['segments']) > $partCount) {
+                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
             }
-            foreach (is_array($cue['segments'] ?? null) ? $cue['segments'] : [] as $segment) {
-                if (! is_array($segment) || ($segment['source'] ?? null) !== 'pasted' || ! is_int($segment['endPartIndex'] ?? null)) {
-                    continue;
+            $previousSlot = $knownIds[$id];
+            foreach ($cue['segments'] as $segment) {
+                if (! is_array($segment) || ($segment['source'] ?? null) !== 'pasted' || ! is_int($segment['endPartIndex'] ?? null)
+                    || $segment['endPartIndex'] < $cursor || $segment['endPartIndex'] >= $partCount) {
+                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
                 }
-                $end = min($segment['endPartIndex'], count($parts) - 1);
-                if ($end < $cursor) {
-                    continue;
-                }
+                $end = $segment['endPartIndex'];
                 $texts[$id][] = implode('', array_slice($parts, $cursor, $end - $cursor + 1));
                 $cursor = $end + 1;
             }
+        }
+        if ($cursor !== $partCount) {
+            throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
         }
 
         $draft = [];

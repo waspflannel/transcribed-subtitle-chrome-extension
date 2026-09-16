@@ -56,7 +56,7 @@ Route::prefix('v1')
 
                 Route::post('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'correctLyrics'])
                     ->name('subtitle-jobs.lyrics.store')
-                    ->middleware('throttle:subtitle-api');
+                    ->middleware(['throttle:subtitle-api', 'throttle:lyrics-replacement']);
 
                 Route::get('/subtitle-jobs/{jobId}/lyrics', [SubtitleJobController::class, 'lyricsCorrectionStatus'])
                     ->name('subtitle-jobs.lyrics.show')

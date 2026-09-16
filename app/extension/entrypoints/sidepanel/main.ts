@@ -31,7 +31,7 @@ import {
   videoDurationLabel,
 } from './view-model';
 import { getPanelDom } from './dom';
-import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
+import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsValidationError, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
 import type { LyricsCorrectionStatus } from '../../utils/contracts';
 import {
   beginPanelRequest,
@@ -77,6 +77,7 @@ const {
   lyricsCorrectionForm,
   lyricsCorrectionTextarea,
   lyricsCorrectionCount,
+  lyricsCorrectionError,
   lyricsCorrectionStatus,
   lyricsCorrectionButton,
   lyricsConfirmation,
@@ -577,7 +578,11 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
 
 function renderLyricsCorrectionInput(): void {
   const count = lyricsCharacterCount(lyricsCorrectionTextarea.value);
+  const error = count > 0 ? lyricsValidationError(lyricsCorrectionTextarea.value) : null;
   lyricsCorrectionCount.textContent = `${count.toLocaleString()} / 25,000 characters`;
+  lyricsCorrectionError.textContent = error ?? '';
+  lyricsCorrectionError.hidden = error === null;
+  lyricsCorrectionTextarea.setAttribute('aria-invalid', String(error !== null));
   lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 }
 

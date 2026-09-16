@@ -28,6 +28,7 @@ export interface PanelDom {
   lyricsCorrectionForm: HTMLFormElement;
   lyricsCorrectionTextarea: HTMLTextAreaElement;
   lyricsCorrectionCount: HTMLElement;
+  lyricsCorrectionError: HTMLElement;
   lyricsCorrectionStatus: HTMLElement;
   lyricsCorrectionButton: HTMLButtonElement;
   lyricsConfirmation: HTMLElement;
@@ -137,6 +138,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     lyricsCorrectionForm: query(root, '[data-lyrics-correction-form]', HTMLFormElement),
     lyricsCorrectionTextarea: query(root, '[data-lyrics-correction-textarea]', HTMLTextAreaElement),
     lyricsCorrectionCount: query(root, '[data-lyrics-correction-count]', HTMLElement),
+    lyricsCorrectionError: query(root, '[data-lyrics-correction-error]', HTMLElement),
     lyricsCorrectionStatus: query(root, '[data-lyrics-correction-status]', HTMLElement),
     lyricsCorrectionButton: query(root, '[data-action="apply-lyrics-correction"]', HTMLButtonElement),
     lyricsConfirmation: query(root, '[data-lyrics-confirmation]', HTMLElement),

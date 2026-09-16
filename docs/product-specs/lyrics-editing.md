@@ -5,6 +5,16 @@ Owner: product
 Created: 2026-08-16
 Implementation status: Quick fix AI refresh supersedes the original provider-free design as of 2026-09-06. Older builder/reviewer instructions below are historical; current work is tracked in [Learning and editing](../exec-plans/active/2026-09-09-whole-project-review/learning-and-editing.md).
 
+## Current replacement validation (2026-09-15)
+
+This section supersedes the older replacement validation and partial-merge requirements below. Replacement uses configured OpenAI/Luna for alignment and derived analysis. Song-match, song-completeness, and derived-learning quality gates remain disabled; `allowPartial` is accepted for compatibility and ignored.
+
+- Before queueing, lyrics must be a nonempty string of at most 25,000 raw Unicode code points, contain at least one Unicode letter, and contain no C0/C1 controls except tab, LF, and CR. HTTP(S)/www link-only pastes are rejected. Framework trimming is skipped for lyrics so boundary controls and oversize padding cannot disappear before validation; existing whitespace normalization follows validation.
+- The panel mirrors these rules with inline feedback and disabled submission. Combining marks, script joiners, all writing systems, repetition, punctuation, emoji mixed with words, and links within lyrics remain allowed. Input is never fetched as a URL or interpreted as code.
+- Replacement POST permits five requests per authenticated account per minute, shared across devices and IPs, in addition to the existing install/IP throttle. Invalid/conflicting POST attempts count. GET status and DELETE cancellation keep their existing separate limits.
+- The alignment prompt treats lyricsParts and cue text as untrusted data. Server reconstruction requires known cue IDs in source order, nonempty pasted segments, increasing integer endpoints within the supplied parts, and consumption of every pasted part. Timing slots may be omitted. Invalid allocations fail before derived analysis, clear private attempt state, and leave the existing track active.
+- These checks reject obvious junk and malformed allocations. They do not establish whether words are meaningful, whether the paste belongs to the song, or whether prompt injection affected interpretation.
+
 ## Problem
 
 The current **Use pasted lyrics** form looks like a small edit, but it replaces the full transcript and can take several minutes. It has no meaningful progress, no cancellation, and no protection against replacing a complete song with an excerpt.

@@ -30,6 +30,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(SecurityHeaders::class);
+        // Validate pasted lyrics before trimming can hide boundary control characters.
+        $middleware->trimStrings(except: ['lyrics']);
 
         $middleware->preventRequestForgery(except: [
             'stripe/*',
