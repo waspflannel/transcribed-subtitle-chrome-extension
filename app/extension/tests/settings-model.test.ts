@@ -9,6 +9,12 @@ import {
 } from '../utils/settings-model';
 
 describe('settings model', () => {
+  it('keeps existing installs attached and saves only boolean movement preferences', () => {
+    expect(createExtensionSettingsFromPartial(undefined).overlayAttachedToVideo).toBe(true);
+    expect(createExtensionSettingsFromPartial({ overlayAttachedToVideo: false }).overlayAttachedToVideo).toBe(false);
+    expect(createExtensionSettingsFromPartial({ overlayAttachedToVideo: 'false' as never }).overlayAttachedToVideo).toBe(true);
+  });
+
   it('defaults to Luna, remembers Cerebras, and rejects unknown providers', () => {
     expect(createExtensionSettingsFromPartial(undefined).aiProvider).toBe('openai');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'cerebras' }).aiProvider).toBe('cerebras');

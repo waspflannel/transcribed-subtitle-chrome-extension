@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import { OverlayShell } from '../utils/overlay';
@@ -375,6 +375,139 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('Hello');
     expect(html).toContain('everyone');
     expect(html).not.toContain('class="translation"');
+  });
+});
+
+describe('free overlay movement', () => {
+  afterEach(() => {
+    document.body.replaceChildren();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, 'fullscreenElement');
+  });
+
+  function mount(position: 'top' | 'bottom' | 'compact' = 'bottom') {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.id === 'tse-overlay-host') {
+        return new DOMRect(Number.parseFloat(this.style.left) || 116, Number.parseFloat(this.style.top) || 230,
+          Number.parseFloat(this.style.width) || 568, 90);
+      }
+      return new DOMRect(116, 230, 568, 90);
+    });
+    const video = document.createElement('video');
+    video.getBoundingClientRect = () => new DOMRect(100, 100, 600, 300);
+    document.body.append(video);
+    const shell = new OverlayShell(document);
+    const attached = readyStateWithSettings({ overlayPosition: position });
+    const detached = { ...attached, settings: { ...attached.settings, overlayAttachedToVideo: false } };
+    shell.update(attached, video);
+    const host = document.querySelector<HTMLDivElement>('#tse-overlay-host')!;
+    const handle = host.shadowRoot!.querySelector<HTMLButtonElement>('[data-overlay-drag]')!;
+    const captured = new Set<number>();
+    handle.setPointerCapture = vi.fn(id => { captured.add(id); });
+    handle.hasPointerCapture = id => captured.has(id);
+    handle.releasePointerCapture = vi.fn(id => { captured.delete(id); });
+    const pointer = (type: string, x: number, y: number, pointerId = 1) => handle.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, pointerId, isPrimary: true, button: 0, clientX: x, clientY: y }),
+    );
+    return { shell, video, attached, detached, host, handle, pointer };
+  }
+
+  it.each(['bottom', 'top', 'compact'] as const)('drags through cue updates and snaps back to the %s preset', (position) => {
+    const { shell, video, attached, detached, host, handle, pointer } = mount(position);
+    const anchoredStyle = host.style.cssText;
+    expect(handle.hidden).toBe(true);
+    shell.update(detached, video);
+    expect(handle.hidden).toBe(false);
+    pointer('pointerdown', 130, 220);
+    pointer('pointermove', 230, 120);
+    expect(host.style.left).toBe('216px');
+    expect(host.style.top).toBe('130px');
+
+    shell.update({ ...detached, activeCue: { ...detached.activeCue!, cueId: 'cue-next' } }, video);
+    expect(host.shadowRoot!.querySelector('[data-overlay-drag]')).toBe(handle);
+    pointer('pointermove', 280, 160);
+    expect(host.style.left).toBe('266px');
+    expect(host.style.top).toBe('170px');
+    pointer('pointerup', 280, 160);
+    pointer('pointermove', 500, 500);
+    shell.position(video, new DOMRect(0, -300, 600, 300));
+    expect(host.style.left).toBe('266px');
+    expect(host.style.top).toBe('170px');
+
+    shell.update(attached, video);
+    expect(handle.hidden).toBe(true);
+    expect(host.style.cssText).toBe(anchoredStyle);
+    expect(host.dataset.floating).toBeUndefined();
+    shell.unmount();
+  });
+
+  it('keeps dragging and keyboard movement within the viewport and survives fullscreen changes', () => {
+    const { shell, video, detached, host, handle, pointer } = mount();
+    shell.update(detached, video);
+    pointer('pointerdown', 130, 220);
+    pointer('pointermove', -1000, -1000);
+    expect(host.style.left).toBe('8px');
+    expect(host.style.top).toBe('36px');
+    pointer('pointercancel', 0, 0);
+    pointer('pointermove', 300, 300);
+    expect(host.style.left).toBe('8px');
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true }));
+    expect(host.style.left).toBe('18px');
+    expect(host.style.top).toBe('86px');
+
+    pointer('pointerdown', 30, 80);
+    pointer('pointermove', 10000, 10000);
+    expect(host.style.left).toBe(`${window.innerWidth - 568 - 8}px`);
+    expect(host.style.top).toBe(`${window.innerHeight - 90 - 8}px`);
+    vi.stubGlobal('innerWidth', 400);
+    vi.stubGlobal('innerHeight', 250);
+    const player = document.createElement('div');
+    document.body.append(player);
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: player });
+    shell.position(video);
+    expect(host.parentElement).toBe(player);
+    expect(handle.hasPointerCapture(1)).toBe(false);
+    expect(host.style.width).toBe('384px');
+    expect(host.style.left).toBe('8px');
+    expect(host.style.top).toBe('152px');
+    shell.unmount();
+  });
+
+  it('keeps study controls clickable and stops dragging when hidden or unmounted', () => {
+    const { shell, video, detached, host, handle, pointer } = mount();
+    shell.update(detached, video);
+    host.shadowRoot!.querySelector<HTMLButtonElement>('[data-token-index]')!.click();
+    expect(host.shadowRoot!.querySelector('.token-popover')).not.toBeNull();
+    expect(handle.setPointerCapture).not.toHaveBeenCalled();
+    pointer('pointerdown', 130, 220);
+    shell.update({ ...detached, settings: { ...detached.settings, overlayVisible: false } }, video);
+    expect(handle.hasPointerCapture(1)).toBe(false);
+    expect(host.style.display).toBe('none');
+    shell.update(detached, video);
+    pointer('pointerdown', 130, 220);
+    shell.unmount();
+    expect(handle.hasPointerCapture(1)).toBe(false);
+    expect(document.querySelector('#tse-overlay-host')).toBeNull();
+    shell.update(detached, video);
+    expect(document.querySelector<HTMLElement>('#tse-overlay-host')!.style.left).toBe('116px');
+    shell.unmount();
+  });
+
+  it('enables free movement when the video appears after the first render', () => {
+    const { shell, video, detached } = mount();
+    shell.unmount();
+    shell.update(detached, null);
+    const host = document.querySelector<HTMLElement>('#tse-overlay-host')!;
+    expect(host.style.display).toBe('none');
+    shell.position(video);
+    expect(host.style.display).toBe('block');
+    expect(host.dataset.floating).toBe('true');
+    const handle = host.shadowRoot!.querySelector<HTMLButtonElement>('[data-overlay-drag]')!;
+    handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(host.style.left).toBe('126px');
+    shell.unmount();
   });
 });
 

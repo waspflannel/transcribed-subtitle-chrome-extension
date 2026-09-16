@@ -96,7 +96,7 @@ WXT extension
 - Prefer built-in APIs and shared project utilities before custom local helpers.
 - Avoid generic infrastructure around one endpoint, one provider, one storage location, or one current UI action. Add the abstraction when the second real use case arrives.
 - Preserve the current asynchronous generation contract; add delivery mechanisms only for a demonstrated gap.
-- Prefer preset overlay positions before drag/resize.
+- Keep video-anchored overlay presets as the default. Optional free movement uses a dedicated handle and returns to the selected preset when reattached; resizing is out of scope.
 - Use Postgres for the application runtime and disposable SQLite for ordinary tests; verify lock behavior with disposable Postgres/Redis integration tests.
 - Prefer one transcription candidate before a provider comparison framework.
 - Prefer one enrichment agent before a multi-agent system.

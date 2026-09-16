@@ -113,6 +113,7 @@ const {
   captionDensitySelect,
   captionContrastThemeSelect,
   overlayVisibleInput,
+  overlayAttachedToVideoInput,
   showRomanizationInput,
   showTranslationInput,
   showGlossInput,
@@ -268,6 +269,9 @@ aiProviderSelect.addEventListener('change', () => {
   if (aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
 });
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
+overlayAttachedToVideoInput.addEventListener('change', () =>
+  void updateSettings({ overlayAttachedToVideo: overlayAttachedToVideoInput.checked }),
+);
 showRomanizationInput.addEventListener('change', () =>
   void updateSettings({ showRomanization: showRomanizationInput.checked }),
 );
@@ -1020,6 +1024,7 @@ function showPanelState(state: PanelState): void {
   renderLanguagePair(settings);
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
+  overlayAttachedToVideoInput.checked = settings.overlayAttachedToVideo;
   aiProviderSelect.value = settings.aiProvider;
   overlayPositionSelect.value = settings.overlayPosition;
   captionFontSizeSelect.value = settings.captionFontSize;
@@ -1347,6 +1352,7 @@ function showError(error: unknown): void {
   generateButton.textContent = 'Generate subtitles';
   generateNote.textContent = '';
   overlayVisibleInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayVisible;
+  overlayAttachedToVideoInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayAttachedToVideo;
   overlayPositionSelect.value = DEFAULT_EXTENSION_SETTINGS.overlayPosition;
   captionFontSizeSelect.value = DEFAULT_EXTENSION_SETTINGS.captionFontSize;
   captionDensitySelect.value = DEFAULT_EXTENSION_SETTINGS.captionDensity;
@@ -1450,6 +1456,7 @@ function setSettingsDisabled(disabled: boolean): void {
     button.disabled = disabled;
   }
   overlayVisibleInput.disabled = disabled;
+  overlayAttachedToVideoInput.disabled = disabled;
   aiProviderSelect.disabled = disabled;
   overlayPositionSelect.disabled = disabled;
   captionFontSizeSelect.disabled = disabled;

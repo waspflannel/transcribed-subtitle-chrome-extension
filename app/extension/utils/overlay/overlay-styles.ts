@@ -25,6 +25,32 @@
           width: min(430px, calc(100vw - 32px));
         }
 
+        :host([data-floating="true"]) .rail {
+          box-sizing: border-box;
+          max-width: none;
+          width: 100%;
+        }
+
+        .drag-handle {
+          background: #161616;
+          border: 1px solid var(--hairline);
+          bottom: 100%;
+          color: #f1f1f1;
+          cursor: grab;
+          font: 12px/1.2 'Geist Sans', ui-sans-serif, system-ui, sans-serif;
+          height: 28px;
+          padding: 4px 10px;
+          pointer-events: auto;
+          position: absolute;
+          right: 0;
+          touch-action: none;
+          user-select: none;
+        }
+
+        .drag-handle[hidden] { display: none; }
+        .drag-handle[data-dragging] { cursor: grabbing; }
+        .drag-handle:focus-visible { outline: 2px solid var(--accent-bright); }
+
         .rail {
           background:
             linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),

@@ -65,6 +65,7 @@ export interface PanelDom {
   captionDensitySelect: HTMLSelectElement;
   captionContrastThemeSelect: HTMLSelectElement;
   overlayVisibleInput: HTMLInputElement;
+  overlayAttachedToVideoInput: HTMLInputElement;
   showRomanizationInput: HTMLInputElement;
   showTranslationInput: HTMLInputElement;
   showGlossInput: HTMLInputElement;
@@ -173,6 +174,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     captionDensitySelect: query(root, 'select[name="captionDensity"]', HTMLSelectElement),
     captionContrastThemeSelect: query(root, 'select[name="captionContrastTheme"]', HTMLSelectElement),
     overlayVisibleInput: query(root, 'input[name="overlayVisible"]', HTMLInputElement),
+    overlayAttachedToVideoInput: query(root, 'input[name="overlayAttachedToVideo"]', HTMLInputElement),
     showRomanizationInput: query(root, 'input[name="showRomanization"]', HTMLInputElement),
     showTranslationInput: query(root, 'input[name="showTranslation"]', HTMLInputElement),
     showGlossInput: query(root, 'input[name="showGloss"]', HTMLInputElement),

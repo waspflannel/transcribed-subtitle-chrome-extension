@@ -175,11 +175,15 @@
         <!-- ============================= STUDY ============================= -->
         <section class="view" data-panel="study" id="panel-study" role="tabpanel" aria-labelledby="tab-study" tabindex="0">
           <div class="card">
-            <p class="card-label">Captions on the video</p>
+            <p class="card-label">Caption display</p>
             <div class="rows">
               <label class="row">
                 <span class="row-key">Show overlay</span>
                 <input type="checkbox" class="switch" name="overlayVisible" disabled />
+              </label>
+              <label class="row">
+                <span class="row-key">Attach subtitles to video</span>
+                <input type="checkbox" class="switch" name="overlayAttachedToVideo" aria-describedby="overlay-movement-help" disabled />
               </label>
               <label class="row">
                 <span class="row-key">Position</span>
@@ -216,6 +220,7 @@
                 <input type="checkbox" class="switch" name="showGloss" disabled />
               </label>
             </div>
+            <p class="microcopy" id="overlay-movement-help">Uncheck to drag subtitles around the page. Check again to snap them back to the video.</p>
             <div class="timing">
               <span class="timing-label">Timing</span>
               <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled aria-label="Subtitle timing offset" />

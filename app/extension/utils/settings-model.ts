@@ -19,6 +19,7 @@ export interface ExtensionSettings {
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;
   overlayVisible: boolean;
+  overlayAttachedToVideo: boolean;
   overlayPosition: OverlayPosition;
   captionFontSize: CaptionFontSize;
   captionDensity: CaptionDensity;
@@ -42,6 +43,7 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
   overlayVisible: true,
+  overlayAttachedToVideo: true,
   overlayPosition: 'bottom',
   captionFontSize: 'medium',
   captionDensity: 'comfortable',
@@ -76,6 +78,10 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
 
   if (typeof value?.overlayVisible === 'boolean') {
     settings.overlayVisible = value.overlayVisible;
+  }
+
+  if (typeof value?.overlayAttachedToVideo === 'boolean') {
+    settings.overlayAttachedToVideo = value.overlayAttachedToVideo;
   }
 
   if (

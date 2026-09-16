@@ -45,6 +45,9 @@ export class OverlayShell {
   private copyStatus: 'copied' | 'failed' | null = null;
   private copyStatusTimeout: number | null = null;
   private focusKeyAfterRender: string | null = null;
+  private dragHandle: HTMLButtonElement | null = null;
+  private floatingPosition: { left: number; top: number; width: number } | null = null;
+  private drag: { pointerId: number; offsetX: number; offsetY: number } | null = null;
 
   private readonly handleShadowKeydown = (event: KeyboardEvent): void => {
     if (event.key !== 'Escape' || this.pinnedTokenIndex === null || !this.currentState) {
@@ -83,6 +86,12 @@ export class OverlayShell {
     this.host!.dataset.captionSize = state.settings.captionFontSize;
     this.host!.dataset.captionDensity = state.settings.captionDensity;
     this.host!.dataset.captionTheme = state.settings.captionContrastTheme;
+    if (state.settings.overlayAttachedToVideo) {
+      this.endDrag();
+      this.floatingPosition = null;
+      delete this.host!.dataset.floating;
+      this.host!.style.width = '';
+    }
     this.currentState = state;
     this.position(video);
 
@@ -106,9 +115,20 @@ export class OverlayShell {
   public position(video = findActiveYoutubeVideo(this.documentRef), videoRect?: DOMRect): void {
     if (!this.host || !this.currentState) return;
     this.host.style.display = this.currentState.settings.overlayVisible && video ? 'block' : 'none';
-    if (!this.currentState.settings.overlayVisible) return;
+    if (!this.currentState.settings.overlayVisible || !video) {
+      this.endDrag();
+      return;
+    }
     const parent = this.documentRef.fullscreenElement ?? this.documentRef.body ?? this.documentRef.documentElement;
-    if (this.host!.parentElement !== parent) parent.append(this.host!);
+    if (this.host.parentElement !== parent) {
+      this.endDrag();
+      parent.append(this.host);
+    }
+    if (this.floatingPosition) {
+      this.positionFloating();
+      this.constrainPopovers();
+      return;
+    }
     const rect = videoRect ?? video?.getBoundingClientRect();
     const view = this.documentRef.defaultView;
     if (rect && view) {
@@ -122,15 +142,19 @@ export class OverlayShell {
         : `${Math.max(0, view.innerHeight - rect.bottom) + Math.min(82, rect.height / 4)}px`;
     }
 
+    if (!this.currentState.settings.overlayAttachedToVideo) this.positionFloating();
     this.constrainPopovers();
   }
 
   public unmount(): void {
+    this.endDrag();
     this.options.onTokenPreviewEnd?.();
     this.options.onTokenBlur?.();
     this.host?.remove();
     this.host = null;
     this.content = null;
+    this.dragHandle = null;
+    this.floatingPosition = null;
     this.renderedHtml = null;
     this.currentState = null;
     this.currentCueId = null;
@@ -183,7 +207,87 @@ export class OverlayShell {
       this.restoreFocusAfterRender(focusSnapshot);
     }
 
+    this.dragHandle!.hidden = this.currentState.settings.overlayAttachedToVideo || html === '';
+    if (this.dragHandle!.hidden) this.endDrag();
+    if (!this.currentState.settings.overlayAttachedToVideo) this.positionFloating();
     this.constrainPopovers();
+  }
+
+  private positionFloating(): void {
+    const view = this.documentRef.defaultView;
+    if (!this.host || !view || this.host.style.display === 'none') return;
+    if (!this.floatingPosition) {
+      const rect = this.content?.querySelector('.rail')?.getBoundingClientRect();
+      if (!rect || rect.width <= 0) return;
+      this.floatingPosition = { left: rect.left, top: rect.top, width: rect.width };
+    }
+    const position = this.floatingPosition;
+
+    this.host.dataset.floating = 'true';
+    this.host.style.width = `${Math.min(position.width, Math.max(0, view.innerWidth - 16))}px`;
+    this.host.style.maxWidth = 'none';
+    this.host.style.right = 'auto';
+    this.host.style.bottom = 'auto';
+    const rect = this.host.getBoundingClientRect();
+    position.left = Math.max(8, Math.min(position.left, view.innerWidth - rect.width - 8));
+    // Leave room above the rail for the drag handle, even with a tall cue.
+    position.top = Math.max(36, Math.min(position.top, view.innerHeight - rect.height - 8));
+    this.host.style.left = `${position.left}px`;
+    this.host.style.top = `${position.top}px`;
+  }
+
+  private endDrag(): void {
+    const pointerId = this.drag?.pointerId;
+    this.drag = null;
+    this.dragHandle?.removeAttribute('data-dragging');
+    if (pointerId !== undefined && this.dragHandle?.hasPointerCapture(pointerId)) {
+      this.dragHandle.releasePointerCapture(pointerId);
+    }
+  }
+
+  private bindMovement(): void {
+    const handle = this.dragHandle!;
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || !event.isPrimary || !this.floatingPosition || handle.hidden) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.drag = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - this.floatingPosition.left,
+        offsetY: event.clientY - this.floatingPosition.top,
+      };
+      handle.setPointerCapture(event.pointerId);
+      handle.dataset.dragging = 'true';
+    });
+    handle.addEventListener('pointermove', (event) => {
+      if (!this.drag || event.pointerId !== this.drag.pointerId || !this.floatingPosition) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.floatingPosition.left = event.clientX - this.drag.offsetX;
+      this.floatingPosition.top = event.clientY - this.drag.offsetY;
+      this.positionFloating();
+      this.constrainPopovers();
+    });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+      handle.addEventListener(type, (event) => {
+        if ((event as PointerEvent).pointerId === this.drag?.pointerId) this.endDrag();
+      });
+    }
+    handle.addEventListener('keydown', (event) => {
+      if (!this.floatingPosition || handle.hidden) return;
+      const step = event.shiftKey ? 50 : 10;
+      switch (event.key) {
+        case 'ArrowLeft': this.floatingPosition.left -= step; break;
+        case 'ArrowRight': this.floatingPosition.left += step; break;
+        case 'ArrowUp': this.floatingPosition.top -= step; break;
+        case 'ArrowDown': this.floatingPosition.top += step; break;
+        default: return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.positionFloating();
+      this.constrainPopovers();
+    });
   }
 
   private bindTokenInteractions(): void {
@@ -392,7 +496,9 @@ export class OverlayShell {
     if (existingHost?.shadowRoot) {
       this.host = existingHost;
       this.content = existingHost.shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
+      this.dragHandle = existingHost.shadowRoot.querySelector<HTMLButtonElement>('[data-overlay-drag]')!;
       this.renderedHtml = null;
+      this.bindMovement();
 
       return;
     }
@@ -407,11 +513,16 @@ export class OverlayShell {
       <style>
         ${buildOverlayFontFaces()}${overlayStyles}
       </style>
+      <button type="button" class="drag-handle" data-overlay-drag hidden
+        aria-label="Move subtitles. Drag or use arrow keys; hold Shift for larger steps."
+        title="Drag to move subtitles. Arrow keys move; Shift moves faster.">Move subtitles</button>
       <div data-overlay-content></div>
     `;
 
     this.host = host;
     this.content = shadowRoot.querySelector<HTMLDivElement>('[data-overlay-content]')!;
+    this.dragHandle = shadowRoot.querySelector<HTMLButtonElement>('[data-overlay-drag]')!;
+    this.bindMovement();
     (this.documentRef.body ?? this.documentRef.documentElement).append(host);
   }
 }

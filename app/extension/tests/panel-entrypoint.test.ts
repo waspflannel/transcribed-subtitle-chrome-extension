@@ -176,5 +176,18 @@ it('cancels generation and saves the model selected for the next generation', as
   expect(selector.value).toBe('cerebras');
   expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Cerebras');
 
+  const attachInput = dom.window.document.querySelector<HTMLInputElement>('input[name="overlayAttachedToVideo"]')!;
+  expect(attachInput.disabled).toBe(false);
+  expect(attachInput.checked).toBe(true);
+  for (const checked of [false, true]) {
+    attachInput.checked = checked;
+    attachInput.dispatchEvent(new dom.window.Event('change'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'panel.updateSettings', patch: { overlayAttachedToVideo: checked },
+    }));
+    expect(attachInput.checked).toBe(checked);
+  }
+
   dom.window.close();
 });
