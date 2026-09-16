@@ -6,6 +6,18 @@ use Symfony\Component\Console\Input\ArgvInput;
 
 define('LARAVEL_START', microtime(true));
 
+$commandIndex = 1;
+while (isset($argv[$commandIndex]) && str_starts_with($argv[$commandIndex], '-')) {
+    $commandIndex += $argv[$commandIndex] === '--env' ? 2 : 1;
+}
+if (($argv[$commandIndex] ?? null) === 'test') {
+    require __DIR__.'/tests/bootstrap.php';
+    // Collision expects the command before global options.
+    array_splice($argv, $commandIndex, 1);
+    array_splice($argv, 1, 0, ['test']);
+    $_SERVER['argv'] = $argv;
+}
+
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';
 

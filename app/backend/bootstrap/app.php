@@ -21,7 +21,7 @@ use Laravel\Sanctum\Exceptions\MissingAbilityException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -145,3 +145,9 @@ return Application::configure(basePath: dirname(__DIR__))
             return ApiErrorResponse::make('internal_error', 'Unexpected backend error.', 500, request: $request);
         });
     })->create();
+
+if (defined('SUBTITLE_TEST_STORAGE')) {
+    $app->addAbsoluteCachePathPrefix(SUBTITLE_TEST_STORAGE);
+}
+
+return $app;
