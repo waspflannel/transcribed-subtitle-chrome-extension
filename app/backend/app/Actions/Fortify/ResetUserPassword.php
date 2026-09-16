@@ -31,9 +31,17 @@ class ResetUserPassword implements ResetsUserPasswords
             $user->forceFill([
                 'password' => Hash::make($input['password']),
                 'remember_token' => Str::random(60),
+                'web_sessions_revoked_at' => now(),
             ])->save();
 
             $user->tokens()->delete();
+
+            if (config('session.driver') === 'database') {
+                DB::connection(config('session.connection'))
+                    ->table(config('session.table', 'sessions'))
+                    ->where('user_id', $user->id)
+                    ->delete();
+            }
         }, attempts: 5);
     }
 }

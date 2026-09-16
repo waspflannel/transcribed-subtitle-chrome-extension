@@ -16,7 +16,7 @@ class ExtensionAuthApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_verified_user_can_issue_extension_token_and_fetch_account(): void
+    public function test_unverified_user_can_connect_and_receives_truthful_account_verification_state(): void
     {
         $user = User::factory()->create([
             'email' => 'learner@example.com',
@@ -32,6 +32,8 @@ class ExtensionAuthApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('account.status', 'authenticated')
             ->assertJsonPath('account.email', 'learner@example.com')
+            ->assertJsonPath('account.emailVerified', false)
+            ->assertJsonPath('account.monthlyMinuteLimit', 0)
             ->assertJsonPath('account.aiModel', 'gpt-5.6-luna')
             ->assertJsonPath('token.tokenType', 'Bearer')
             ->assertJsonStructure(['token' => ['plainTextToken', 'expiresAt', 'abilities']]);
@@ -56,7 +58,14 @@ class ExtensionAuthApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('account.id', (string) $user->id)
             ->assertJsonPath('account.aiModel', 'gpt-oss-120b')
+            ->assertJsonPath('account.emailVerified', false)
             ->assertJsonMissingPath('token');
+
+        $this->withExtensionAuth($this->installId(), $user)
+            ->getJson('/v1/extension-auth/account')
+            ->assertOk()
+            ->assertJsonPath('account.emailVerified', false)
+            ->assertJsonPath('account.monthlyMinuteLimit', 90);
     }
 
     public function test_extension_login_rejects_invalid_credentials(): void

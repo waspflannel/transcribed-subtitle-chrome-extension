@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Middleware\AuthenticateWebSession;
+use App\Http\Middleware\ThrottleAuthRequests;
 use Laravel\Fortify\Features;
 
 return [
@@ -101,7 +103,7 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    'middleware' => ['web', AuthenticateWebSession::class, ThrottleAuthRequests::class],
 
     /*
     |--------------------------------------------------------------------------
@@ -116,6 +118,11 @@ return [
 
     'limiters' => [
         'login' => 'login',
+    ],
+
+    'abuse_limits' => [
+        'registration' => ['ip_per_hour' => 5, 'global_per_hour' => 100],
+        'password-reset-mail' => ['ip_per_hour' => 10, 'global_per_hour' => 200],
     ],
 
     /*

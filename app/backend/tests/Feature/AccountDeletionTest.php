@@ -138,4 +138,81 @@ class AccountDeletionTest extends TestCase
 
         $this->assertModelMissing($user);
     }
+
+    public function test_account_deletion_expires_outstanding_payable_checkout_before_removing_the_user(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test_secret']);
+        $user = $this->userWithPendingCheckout();
+        Http::preventStrayRequests();
+        Http::fake(function (Request $request) use ($user) {
+            $this->assertModelExists($user);
+            $this->assertSame('https://api.stripe.com/v1/checkout/sessions/cs_pending/expire', $request->url());
+
+            return Http::response(['id' => 'cs_pending', 'status' => 'expired']);
+        });
+
+        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])->assertRedirectToRoute('login');
+
+        $this->assertModelMissing($user);
+        Http::assertSentCount(1);
+    }
+
+    public function test_account_deletion_preserves_account_and_tokens_when_checkout_expiration_fails(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test_secret']);
+        $user = $this->userWithPendingCheckout();
+        $token = $user->createToken('Chrome extension deletion-test');
+        Http::preventStrayRequests();
+        Http::fake(['https://api.stripe.com/v1/checkout/sessions/cs_pending/expire' => Http::response([], 503)]);
+
+        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])
+            ->assertRedirectToRoute('dashboard')->assertSessionHas('billing_error');
+
+        $this->assertModelExists($user);
+        $this->assertModelExists($token->accessToken);
+        $this->assertAuthenticatedAs($user);
+        $this->assertSame('cs_pending', $user->fresh()->stripe_checkout_session_id);
+    }
+
+    public function test_account_deletion_waits_for_reconciliation_when_checkout_completion_wins_expiration(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test_secret']);
+        $user = $this->userWithPendingCheckout();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.stripe.com/v1/checkout/sessions/cs_pending/expire' => Http::response([], 400),
+            'https://api.stripe.com/v1/checkout/sessions/cs_pending' => Http::response(['id' => 'cs_pending', 'status' => 'complete', 'subscription' => 'sub_paid']),
+        ]);
+
+        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])->assertSessionHas('billing_error');
+
+        $this->assertModelExists($user);
+        $this->assertAuthenticatedAs($user);
+        Http::assertSentCount(2);
+    }
+
+    public function test_account_deletion_blocks_unknown_checkout_creation_outcome(): void
+    {
+        $user = $this->userWithPendingCheckout();
+        $user->update(['stripe_checkout_session_id' => null, 'stripe_checkout_session_url' => null]);
+        Http::preventStrayRequests();
+        Http::fake();
+
+        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])->assertSessionHas('billing_error');
+
+        $this->assertModelExists($user);
+        Http::assertNothingSent();
+    }
+
+    private function userWithPendingCheckout(): User
+    {
+        return User::factory()->create([
+            'stripe_customer_id' => 'cus_pending',
+            'stripe_checkout_intent_id' => 'abd89c6d-70c7-4a86-bdf9-1dd5a89d7b66',
+            'stripe_checkout_session_id' => 'cs_pending',
+            'stripe_checkout_plan_code' => 'base',
+            'stripe_checkout_session_url' => 'https://checkout.stripe.test/pending',
+            'stripe_checkout_expires_at' => now()->addMinutes(20),
+        ]);
+    }
 }

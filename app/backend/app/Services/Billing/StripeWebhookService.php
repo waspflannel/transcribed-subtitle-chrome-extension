@@ -108,10 +108,12 @@ final class StripeWebhookService
     private function handleCheckoutCompleted(array $session, ?CarbonImmutable $eventCreatedAt): void
     {
         $user = $this->lockedUserForObject($session);
-        $plan = $this->requirePlanForObject($session);
         $subscriptionId = data_get($session, 'subscription');
-        $customerId = data_get($session, 'customer');
         $matchesCheckoutIntent = $this->matchesCurrentCheckoutIntent($user, $session);
+
+        if (! is_string($subscriptionId) || $subscriptionId === '') {
+            throw new RuntimeException('Completed Stripe checkout did not include a subscription id.');
+        }
 
         if (
             is_string($subscriptionId)
@@ -124,22 +126,13 @@ final class StripeWebhookService
             return;
         }
 
-        $user->forceFill([
-            'stripe_customer_id' => is_string($customerId) ? $customerId : $user->stripe_customer_id,
-            'stripe_subscription_id' => is_string($subscriptionId) ? $subscriptionId : $user->stripe_subscription_id,
-            'billing_plan_code' => is_array($plan) ? (string) $plan['code'] : $user->billing_plan_code,
-        ])->save();
-
+        $this->applySubscriptionState(
+            $user,
+            $this->stripe->retrieveSubscription($subscriptionId),
+            $eventCreatedAt,
+            'checkout.session.completed',
+        );
         $this->clearCheckoutIntentIfMatched($user, $session);
-
-        if (is_string($subscriptionId) && $subscriptionId !== '') {
-            $this->applySubscriptionState(
-                $user,
-                $this->stripe->retrieveSubscription($subscriptionId),
-                $eventCreatedAt,
-                'checkout.session.completed',
-            );
-        }
     }
 
     /**
@@ -213,11 +206,29 @@ final class StripeWebhookService
         }
 
         $plan = $this->requirePlanForObject($subscription);
-        $periodStart = $this->timestamp(data_get($subscription, 'current_period_start'));
-        $periodEnd = $this->timestamp(data_get($subscription, 'current_period_end'));
+        $items = data_get($subscription, 'items.data');
+
+        if (! is_array($items) || count($items) !== 1 || data_get($subscription, 'items.has_more', false)) {
+            throw new RuntimeException('Stripe subscription must contain exactly one billing item.');
+        }
+
+        $periodStart = $this->timestamp(data_get($subscription, 'items.data.0.current_period_start')
+            ?? data_get($subscription, 'current_period_start'));
+        $periodEnd = $this->timestamp(data_get($subscription, 'items.data.0.current_period_end')
+            ?? data_get($subscription, 'current_period_end'));
+
+        if ($periodStart === null || $periodEnd === null || $periodEnd->lte($periodStart)) {
+            throw new RuntimeException('Stripe subscription did not include a valid billing period.');
+        }
+
         $status = data_get($subscription, 'status');
         $subscriptionItemId = data_get($subscription, 'items.data.0.id');
         $customerId = data_get($subscription, 'customer');
+        $sameSubscription = $user->stripe_subscription_id === $subscriptionId;
+        $previousEventAt = $sameSubscription ? $user->billing_subscription_event_at : null;
+        $previousEventType = $sameSubscription ? $user->billing_subscription_event_type : null;
+        $advanceWatermark = $eventCreatedAt !== null
+            && ($previousEventAt === null || $eventCreatedAt->gte($previousEventAt));
 
         $user->forceFill([
             'stripe_customer_id' => is_string($customerId) ? $customerId : $user->stripe_customer_id,
@@ -228,9 +239,9 @@ final class StripeWebhookService
             'billing_current_period_start' => $periodStart ?? $user->billing_current_period_start,
             'billing_current_period_end' => $periodEnd ?? $user->billing_current_period_end,
             'billing_cancel_at_period_end' => (bool) data_get($subscription, 'cancel_at_period_end', false),
-            'billing_subscription_event_at' => $eventCreatedAt ?? $user->billing_subscription_event_at,
-            'billing_subscription_event_type' => $eventCreatedAt === null || $eventType === null
-                ? $user->billing_subscription_event_type
+            'billing_subscription_event_at' => $advanceWatermark ? $eventCreatedAt : $previousEventAt,
+            'billing_subscription_event_type' => ! $advanceWatermark || $eventType === null
+                ? $previousEventType
                 : $eventType,
         ])->save();
 
@@ -245,7 +256,8 @@ final class StripeWebhookService
     private function handleInvoicePaymentFailed(array $invoice): void
     {
         $user = $this->lockedUserForObject($invoice);
-        $subscriptionId = data_get($invoice, 'subscription');
+        $subscriptionId = data_get($invoice, 'parent.subscription_details.subscription')
+            ?? data_get($invoice, 'subscription');
 
         if (
             ! is_string($subscriptionId)

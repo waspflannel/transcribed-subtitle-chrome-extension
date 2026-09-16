@@ -57,41 +57,58 @@ final class StripeClient
             return $intent['session'];
         }
 
-        $response = $this->request()
-            ->withHeaders(['Idempotency-Key' => $this->idempotencyKey('checkout', $user, $intent['id'])])
-            ->asForm()
-            ->post('/checkout/sessions', [
-                'mode' => 'subscription',
-                'customer' => $customerId,
-                'client_reference_id' => (string) $user->id,
-                'success_url' => $successUrl,
-                'cancel_url' => $cancelUrl,
-                'expires_at' => $intent['expiresAt'],
-                'line_items' => [
-                    [
-                        'price' => $priceId,
-                        'quantity' => 1,
+        return DB::transaction(function () use ($user, $plan, $priceId, $customerId, $intent, $successUrl, $cancelUrl): array {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $this->ensureCheckoutAllowed($lockedUser);
+
+            if ($lockedUser->stripe_checkout_intent_id !== $intent['id']) {
+                throw new RuntimeException('Checkout intent changed before session creation.');
+            }
+
+            if (is_string($lockedUser->stripe_checkout_session_id) && is_string($lockedUser->stripe_checkout_session_url)) {
+                return ['id' => $lockedUser->stripe_checkout_session_id, 'url' => $lockedUser->stripe_checkout_session_url];
+            }
+
+            $response = $this->request()
+                ->withHeaders(['Idempotency-Key' => $this->idempotencyKey('checkout', $lockedUser, $intent['id'])])
+                ->asForm()
+                ->post('/checkout/sessions', [
+                    'mode' => 'subscription',
+                    'customer' => $customerId,
+                    'client_reference_id' => (string) $lockedUser->id,
+                    'success_url' => $successUrl,
+                    'cancel_url' => $cancelUrl,
+                    'expires_at' => $intent['expiresAt'],
+                    'line_items' => [
+                        [
+                            'price' => $priceId,
+                            'quantity' => 1,
+                        ],
                     ],
-                ],
-                'metadata' => [
-                    'user_id' => (string) $user->id,
-                    'plan_code' => (string) $plan['code'],
-                    'checkout_intent_id' => $intent['id'],
-                ],
-                'subscription_data' => [
                     'metadata' => [
-                        'user_id' => (string) $user->id,
+                        'user_id' => (string) $lockedUser->id,
                         'plan_code' => (string) $plan['code'],
                         'checkout_intent_id' => $intent['id'],
                     ],
-                ],
-            ])
-            ->throw();
+                    'subscription_data' => [
+                        'metadata' => [
+                            'user_id' => (string) $lockedUser->id,
+                            'plan_code' => (string) $plan['code'],
+                            'checkout_intent_id' => $intent['id'],
+                        ],
+                    ],
+                ])
+                ->throw();
 
-        $session = $this->sessionResponse($response->json());
-        $this->storeCheckoutSession($user, $intent['id'], $session);
+            $session = $this->sessionResponse($response->json());
 
-        return $session;
+            $lockedUser->forceFill([
+                'stripe_checkout_session_id' => $session['id'],
+                'stripe_checkout_session_url' => $session['url'],
+            ])->save();
+
+            return $session;
+        }, attempts: 5);
     }
 
     /**
@@ -187,11 +204,13 @@ final class StripeClient
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $this->ensureCheckoutAllowed($lockedUser);
+
             if (
                 is_string($lockedUser->stripe_checkout_intent_id)
                 && $lockedUser->stripe_checkout_intent_id !== ''
                 && $lockedUser->stripe_checkout_plan_code === $planCode
-                && $lockedUser->stripe_checkout_expires_at?->isFuture()
+                && ($lockedUser->stripe_checkout_expires_at?->isFuture() || $lockedUser->stripe_checkout_session_id === null)
             ) {
                 $session = is_string($lockedUser->stripe_checkout_session_id)
                     && $lockedUser->stripe_checkout_session_id !== ''
@@ -209,6 +228,8 @@ final class StripeClient
                     'session' => $session,
                 ];
             }
+
+            $this->expireOutstandingCheckout($lockedUser);
 
             $intentId = (string) Str::uuid();
             $expiresAt = now()->addMinutes(31);
@@ -229,26 +250,42 @@ final class StripeClient
         }, attempts: 5);
     }
 
-    /**
-     * @param  array{id: string, url: string}  $session
-     */
-    private function storeCheckoutSession(User $user, string $intentId, array $session): void
+    private function ensureCheckoutAllowed(User $user): void
     {
-        DB::transaction(function () use ($user, $intentId, $session): void {
-            $lockedUser = User::query()
-                ->whereKey($user->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        if (is_string($user->billing_subscription_status)
+            && $user->billing_subscription_status !== ''
+            && ! in_array($user->billing_subscription_status, ['canceled', 'incomplete_expired'], true)) {
+            throw new RuntimeException('An existing subscription must be managed in the billing portal.');
+        }
+    }
 
-            if ($lockedUser->stripe_checkout_intent_id !== $intentId) {
-                return;
-            }
+    /** The caller must hold the user row lock until replacement or account deletion commits. */
+    public function expireOutstandingCheckout(User $user): void
+    {
+        if ($user->stripe_checkout_intent_id !== null && $user->stripe_checkout_session_id === null) {
+            throw new RuntimeException('Previous checkout creation must be reconciled before changing billing.');
+        }
 
-            $lockedUser->forceFill([
-                'stripe_checkout_session_id' => $session['id'],
-                'stripe_checkout_session_url' => $session['url'],
-            ])->save();
-        }, attempts: 5);
+        if (is_string($user->stripe_checkout_session_id) && $user->stripe_checkout_session_id !== '') {
+            $this->expireCheckoutSession($user->stripe_checkout_session_id);
+        }
+    }
+
+    private function expireCheckoutSession(string $sessionId): void
+    {
+        $path = '/checkout/sessions/'.rawurlencode($sessionId);
+        $response = $this->request()->asForm()->post($path.'/expire');
+
+        // Completion can win the expiration race. Only a confirmed expired session permits replacement.
+        if ($response->clientError()) {
+            $response = $this->request()->get($path);
+        }
+
+        $payload = $response->throw()->json();
+
+        if (! is_array($payload) || ($payload['id'] ?? null) !== $sessionId || ($payload['status'] ?? null) !== 'expired') {
+            throw new RuntimeException('Previous checkout is not confirmed expired; await billing reconciliation.');
+        }
     }
 
     private function request(): PendingRequest
@@ -260,6 +297,7 @@ final class StripeClient
         }
 
         return Http::baseUrl((string) config('billing.stripe.api_base_url'))
+            ->withHeaders(['Stripe-Version' => (string) config('billing.stripe.api_version')])
             ->withToken($secret)
             ->acceptJson()
             ->timeout(max(1, (int) config('billing.stripe.timeout_seconds', 15)))

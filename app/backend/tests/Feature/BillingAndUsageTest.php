@@ -15,7 +15,9 @@ use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\StripeClient;
 use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
+use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -162,6 +164,7 @@ class BillingAndUsageTest extends TestCase
                     'id' => 'cs_test_456',
                     'url' => 'https://checkout.stripe.test/second-session',
                 ]),
+            'https://api.stripe.com/v1/checkout/sessions/cs_test_123/expire' => Http::response(['id' => 'cs_test_123', 'status' => 'expired']),
         ]);
         $user = User::factory()->create();
 
@@ -180,7 +183,8 @@ class BillingAndUsageTest extends TestCase
         $this->assertNotNull($firstIntentId);
         Http::assertSentCount(2);
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/customers'
-            && str_starts_with((string) $request->header('Idempotency-Key')[0], 'tse-v1-'));
+            && str_starts_with((string) $request->header('Idempotency-Key')[0], 'tse-v1-')
+            && $request->header('Stripe-Version') === ['2025-03-31.basil']);
         Http::assertSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/checkout/sessions'
             && str_starts_with((string) $request->header('Idempotency-Key')[0], 'tse-v1-')
             && $request['metadata']['checkout_intent_id'] === $firstIntentId
@@ -194,7 +198,7 @@ class BillingAndUsageTest extends TestCase
             ->assertRedirect('https://checkout.stripe.test/second-session');
 
         $this->assertNotSame($firstIntentId, $user->fresh()->stripe_checkout_intent_id);
-        Http::assertSentCount(3);
+        Http::assertSentCount(4);
 
         $checkoutRequests = collect(Http::recorded())
             ->filter(fn (array $exchange): bool => $exchange[0]->url() === 'https://api.stripe.com/v1/checkout/sessions')
@@ -226,6 +230,129 @@ class BillingAndUsageTest extends TestCase
             $customerRequests[0][0]->header('Idempotency-Key')[0],
             $customerRequests[1][0]->header('Idempotency-Key')[0],
         );
+    }
+
+    public function test_plan_switch_expires_old_checkout_before_creating_another_payable_session(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        $user = $this->userWithOpenCheckout();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.stripe.com/v1/checkout/sessions/cs_old/expire' => Http::response(['id' => 'cs_old', 'status' => 'expired']),
+            'https://api.stripe.com/v1/checkout/sessions' => Http::response(['id' => 'cs_new', 'url' => 'https://checkout.stripe.test/new']),
+        ]);
+
+        $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'plus']))->assertRedirect('https://checkout.stripe.test/new');
+
+        $this->assertSame('cs_new', $user->fresh()->stripe_checkout_session_id);
+        $this->assertSame('plus', $user->fresh()->stripe_checkout_plan_code);
+        $this->assertSame([
+            'https://api.stripe.com/v1/checkout/sessions/cs_old/expire',
+            'https://api.stripe.com/v1/checkout/sessions',
+        ], collect(Http::recorded())->map(fn (array $exchange): string => $exchange[0]->url())->all());
+    }
+
+    public function test_checkout_completion_winning_expiration_race_blocks_replacement_until_webhook_reconciliation(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        $user = $this->userWithOpenCheckout();
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://api.stripe.com/v1/checkout/sessions/cs_old/expire' => Http::response(['error' => ['code' => 'checkout_session_not_open']], 400),
+            'https://api.stripe.com/v1/checkout/sessions/cs_old' => Http::response(['id' => 'cs_old', 'status' => 'complete', 'subscription' => 'sub_paid']),
+        ]);
+
+        $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'plus']))
+            ->assertRedirectToRoute('dashboard')->assertSessionHas('billing_error');
+
+        $this->assertSame('cs_old', $user->fresh()->stripe_checkout_session_id);
+        $this->assertSame('intent_old', $user->fresh()->stripe_checkout_intent_id);
+        Http::assertSentCount(2);
+        Http::assertNotSent(fn ($request): bool => $request->url() === 'https://api.stripe.com/v1/checkout/sessions');
+    }
+
+    public function test_checkout_expiration_failure_preserves_old_intent_and_does_not_create_a_session(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        $user = $this->userWithOpenCheckout();
+        Http::preventStrayRequests();
+        Http::fake(['https://api.stripe.com/v1/checkout/sessions/cs_old/expire' => Http::response([], 503)]);
+
+        $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'plus']))->assertSessionHas('billing_error');
+
+        $this->assertSame('intent_old', $user->fresh()->stripe_checkout_intent_id);
+        Http::assertSentCount(1);
+    }
+
+    public function test_unknown_checkout_creation_outcome_cannot_be_replaced_by_switching_plans_or_local_expiry(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        $user = $this->userWithOpenCheckout();
+        $user->forceFill(['stripe_checkout_session_id' => null, 'stripe_checkout_session_url' => null, 'stripe_checkout_expires_at' => now()->subHour()])->save();
+        Http::preventStrayRequests();
+        Http::fake();
+
+        $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'plus']))->assertSessionHas('billing_error');
+
+        $this->assertSame('intent_old', $user->fresh()->stripe_checkout_intent_id);
+        Http::assertNothingSent();
+    }
+
+    public function test_checkout_timeout_retry_uses_persisted_intent_and_idempotency_key(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test', 'billing.plans.base.stripe_price_id' => 'price_base']);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_retry']);
+        Http::preventStrayRequests();
+        $calls = [];
+        Http::fake(function ($request) use (&$calls) {
+            $calls[] = $request->header('Idempotency-Key');
+            if (count($calls) === 1) {
+                throw new ConnectionException('Simulated timeout');
+            }
+
+            return Http::response(['id' => 'cs_recovered', 'url' => 'https://checkout.stripe.test/recovered']);
+        });
+
+        $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'base']))->assertSessionHas('billing_error');
+        $intent = $user->fresh()->stripe_checkout_intent_id;
+        $this->assertNotNull($intent);
+        $this->assertNull($user->fresh()->stripe_checkout_session_id);
+        $this->actingAs($user->fresh())->post(route('billing.checkout', ['planCode' => 'base']))->assertRedirect('https://checkout.stripe.test/recovered');
+
+        $this->assertSame($intent, $user->fresh()->stripe_checkout_intent_id);
+        $this->assertCount(2, $calls);
+        $this->assertSame($calls[0], $calls[1]);
+    }
+
+    public function test_interleaved_plan_switch_cannot_supersede_a_checkout_being_created(): void
+    {
+        config(['billing.stripe.secret' => 'sk_test', 'billing.plans.base.stripe_price_id' => 'price_base', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_competing']);
+        Http::preventStrayRequests();
+        Http::fake(function () use ($user) {
+            try {
+                app(StripeClient::class)->createCheckoutSession($user, app(BillingPlanCatalog::class)->requirePlan('plus'), '/success', '/cancel');
+                $this->fail('The competing checkout should wait for the unresolved intent.');
+            } catch (\RuntimeException $exception) {
+                $this->assertStringContainsString('reconciled', $exception->getMessage());
+            }
+
+            return Http::response(['id' => 'cs_winner', 'url' => 'https://checkout.stripe.test/winner']);
+        });
+
+        $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'base']))->assertRedirect('https://checkout.stripe.test/winner');
+        $this->assertSame('base', $user->fresh()->stripe_checkout_plan_code);
+        $this->assertSame('cs_winner', $user->fresh()->stripe_checkout_session_id);
+        Http::assertSentCount(1);
+    }
+
+    private function userWithOpenCheckout(): User
+    {
+        return User::factory()->create([
+            'stripe_customer_id' => 'cus_existing', 'stripe_checkout_intent_id' => 'intent_old',
+            'stripe_checkout_plan_code' => 'base', 'stripe_checkout_session_id' => 'cs_old',
+            'stripe_checkout_session_url' => 'https://checkout.stripe.test/old', 'stripe_checkout_expires_at' => now()->addMinutes(20),
+        ]);
     }
 
     public function test_checkout_is_blocked_for_a_non_terminal_subscription(): void
@@ -487,6 +614,126 @@ class BillingAndUsageTest extends TestCase
         $this->assertSame('active', $user->billing_subscription_status);
         $this->assertSame($createdAt, $user->billing_subscription_event_at->timestamp);
         $this->assertSame(1, BillingUsageEvent::query()->where('event_type', 'monthly_grant')->count());
+    }
+
+    public function test_basil_item_periods_grant_minutes_and_modern_invoice_parent_refreshes_payment_state(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test', 'billing.stripe.secret' => 'sk_test',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+        ]);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_modern']);
+        $start = now()->startOfMonth()->timestamp;
+        $end = now()->addMonthNoOverflow()->startOfMonth()->timestamp;
+        $subscription = $this->subscriptionObject($user, 'price_plus', 'active', $start, $end);
+        $subscription['items']['data'][0]['current_period_start'] = $start;
+        $subscription['items']['data'][0]['current_period_end'] = $end;
+        unset($subscription['current_period_start'], $subscription['current_period_end']);
+
+        $this->postStripeEventWithCreated('evt_modern', 'customer.subscription.created', $subscription, now()->timestamp);
+        $this->assertSame($start, $user->fresh()->billing_current_period_start->timestamp);
+        $this->assertSame($end, $user->fresh()->billing_current_period_end->timestamp);
+        $this->assertSame(240, (int) BillingUsageEvent::sum('available_minutes_delta'));
+        $this->postStripeEventWithCreated('evt_modern', 'customer.subscription.created', $subscription, now()->timestamp);
+        $this->assertSame(1, BillingUsageEvent::count());
+
+        $subscription['status'] = 'past_due';
+        Http::preventStrayRequests();
+        Http::fake(['https://api.stripe.com/v1/subscriptions/sub_456' => Http::response($subscription)]);
+        $this->postStripeEvent('evt_modern_invoice', 'invoice.payment_failed', [
+            'id' => 'in_modern', 'customer' => $subscription['customer'],
+            'parent' => ['type' => 'subscription_details', 'subscription_details' => ['subscription' => 'sub_456']],
+        ]);
+
+        $this->assertSame('past_due', $user->fresh()->billing_subscription_status);
+        $this->assertNull(app(BillingEntitlementService::class)->activePlan($user->fresh()));
+        $this->assertSame(1, BillingUsageEvent::count());
+        Http::assertSentCount(1);
+    }
+
+    public function test_invalid_periods_and_ambiguous_subscription_items_are_not_acknowledged_or_granted(): void
+    {
+        config(['billing.stripe.webhook_secret' => 'whsec_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_invalid']);
+        $subscription = $this->subscriptionObject($user, 'price_plus', 'active', now()->timestamp, now()->addMonth()->timestamp);
+        unset($subscription['current_period_start'], $subscription['current_period_end']);
+        $missingPeriod = $subscription;
+        $subscription['items']['data'][0]['current_period_start'] = now()->timestamp;
+        $subscription['items']['data'][0]['current_period_end'] = now()->subDay()->timestamp;
+        $reversedPeriod = $subscription;
+        $subscription['items']['data'][0]['current_period_end'] = now()->addMonth()->timestamp;
+        $subscription['items']['data'][] = $subscription['items']['data'][0];
+
+        foreach ([$missingPeriod, $reversedPeriod, $subscription] as $index => $object) {
+            $payload = $this->stripePayload(['id' => 'evt_invalid_'.$index, 'type' => 'customer.subscription.created', 'data' => ['object' => $object]]);
+            $this->call('POST', '/stripe/webhook', [], [], [], $this->stripeHeaders($payload), $payload)->assertStatus(500);
+            $this->assertNull(StripeWebhookEvent::where('stripe_event_id', 'evt_invalid_'.$index)->firstOrFail()->processed_at);
+        }
+
+        $this->assertSame(0, BillingUsageEvent::count());
+        $this->assertNull($user->fresh()->billing_subscription_status);
+    }
+
+    public function test_delayed_checkout_cannot_rewind_subscription_event_watermark_or_allow_intermediate_stale_event(): void
+    {
+        config([
+            'billing.stripe.webhook_secret' => 'whsec_test', 'billing.stripe.secret' => 'sk_test',
+            'billing.plans.plus.stripe_price_id' => 'price_plus',
+        ]);
+        $user = User::factory()->create(['stripe_customer_id' => 'cus_order']);
+        $start = now()->startOfMonth()->timestamp;
+        $end = now()->addMonthNoOverflow()->startOfMonth()->timestamp;
+        $newest = now()->timestamp;
+        $state = $this->subscriptionObject($user, 'price_plus', 'active', $start, $end);
+        $this->postStripeEventWithCreated('evt_newest', 'customer.subscription.updated', $state, $newest);
+        Http::preventStrayRequests();
+        Http::fake(['https://api.stripe.com/v1/subscriptions/sub_456' => Http::response($state)]);
+
+        $this->postStripeEventWithCreated('evt_delayed_checkout', 'checkout.session.completed', [
+            'id' => 'cs_delayed', 'customer' => 'cus_order', 'subscription' => 'sub_456',
+            'metadata' => ['user_id' => (string) $user->id, 'plan_code' => 'plus'],
+        ], $newest - 100);
+        $this->assertSame($newest, $user->fresh()->billing_subscription_event_at->timestamp);
+        $this->assertSame('customer.subscription.updated', $user->fresh()->billing_subscription_event_type);
+
+        $state['status'] = 'canceled';
+        $this->postStripeEventWithCreated('evt_intermediate', 'customer.subscription.deleted', $state, $newest - 50);
+        $this->assertSame('active', $user->fresh()->billing_subscription_status);
+        $this->assertSame($newest, $user->fresh()->billing_subscription_event_at->timestamp);
+        $this->assertSame(1, BillingUsageEvent::count());
+        Http::assertSentCount(1);
+    }
+
+    public function test_replacing_subscription_resets_its_watermark_for_both_checkout_and_subscription_events(): void
+    {
+        config(['billing.stripe.webhook_secret' => 'whsec_test', 'billing.stripe.secret' => 'sk_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
+        Http::preventStrayRequests();
+
+        foreach (['checkout.session.completed', 'customer.subscription.created'] as $index => $eventType) {
+            $previousTime = now()->timestamp;
+            $intent = '32b167b8-cbad-4a0e-b8aa-b71a88b6e3c'.$index;
+            $user = User::factory()->create([
+                'stripe_customer_id' => 'cus_replacement_'.$index, 'stripe_subscription_id' => 'sub_previous_'.$index,
+                'billing_subscription_status' => 'canceled', 'billing_subscription_event_at' => now(),
+                'billing_subscription_event_type' => 'customer.subscription.deleted',
+                'stripe_checkout_intent_id' => $intent,
+            ]);
+            $state = $this->subscriptionObject($user, 'price_plus', 'active', now()->startOfMonth()->timestamp, now()->addMonthNoOverflow()->startOfMonth()->timestamp, 'sub_new_'.$index, $intent);
+            $state['customer'] = $user->stripe_customer_id;
+            Http::fake(['https://api.stripe.com/v1/subscriptions/sub_new_'.$index => Http::response($state)]);
+            $object = $eventType === 'checkout.session.completed' ? [
+                'id' => 'cs_new_'.$index, 'customer' => $user->stripe_customer_id, 'subscription' => 'sub_new_'.$index,
+                'metadata' => $state['metadata'],
+            ] : $state;
+
+            $this->postStripeEventWithCreated('evt_new_identity_'.$index, $eventType, $object, $previousTime - 100);
+            $this->assertSame($previousTime - 100, $user->fresh()->billing_subscription_event_at->timestamp);
+            $this->assertSame($eventType, $user->fresh()->billing_subscription_event_type);
+            $state['status'] = 'past_due';
+            $this->postStripeEventWithCreated('evt_new_followup_'.$index, 'customer.subscription.updated', $state, $previousTime - 50);
+            $this->assertSame('past_due', $user->fresh()->billing_subscription_status);
+            $this->assertSame($previousTime - 50, $user->fresh()->billing_subscription_event_at->timestamp);
+        }
     }
 
     public function test_subscription_updated_in_order_applies_each_event(): void
@@ -1083,7 +1330,7 @@ class BillingAndUsageTest extends TestCase
             'youtube_url' => $payload['youtubeUrl'],
             'source_language' => $payload['sourceLanguage'],
             'target_language' => $payload['targetLanguage'],
-            'processing_version' => 'scribe-v2-analysis-v16-on-demand-romanized',
+            'processing_version' => SubtitleJobService::processingVersionFor(includeRomanization: true, includeTranslation: false),
             'include_romanization' => true,
             'include_translation' => false,
             'status' => 'running',

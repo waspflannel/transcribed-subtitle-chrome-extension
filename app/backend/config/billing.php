@@ -2,6 +2,8 @@
 
 return [
     'stripe' => [
+        // Keep outbound requests and the deployed webhook endpoint on this tested version.
+        'api_version' => '2025-03-31.basil',
         'api_base_url' => env('STRIPE_API_BASE_URL', 'https://api.stripe.com/v1'),
         'secret' => env('STRIPE_SECRET'),
         'portal_configuration' => env('STRIPE_BILLING_PORTAL_CONFIGURATION'),

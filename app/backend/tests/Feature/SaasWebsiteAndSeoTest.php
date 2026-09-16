@@ -173,7 +173,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         $user = User::factory()->create();
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->withSession(['checkout_plan' => 'plus'])
             ->get('/dashboard')
             ->assertOk()
@@ -194,7 +194,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->withSession(['checkout_plan' => 'plus'])
             ->post(route('billing.checkout', ['planCode' => 'plus']))
             ->assertRedirect('https://checkout.stripe.test/session')
@@ -219,7 +219,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         ]);
 
         $this
-            ->actingAs($subscribed)
+            ->signedInAs($subscribed)
             ->withSession(['checkout_plan' => 'plus'])
             ->get('/dashboard')
             ->assertOk()
@@ -246,7 +246,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->get('/dashboard')
             ->assertOk()
             ->assertSeeText('Install extension')
@@ -288,7 +288,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertOk()
             ->assertSeeText($job->public_id)
@@ -304,7 +304,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertDontSee('private generated text');
 
         $this
-            ->actingAs($otherUser)
+            ->signedInAs($otherUser)
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertNotFound();
     }
@@ -320,7 +320,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             'updated_at' => now()->subHours(6),
         ]);
 
-        $this->actingAs($user)
+        $this->signedInAs($user)
             ->get(route('dashboard', absolute: false))
             ->assertOk()
             ->assertViewHas('recentJobs', fn ($jobs): bool => $jobs->contains('jobId', $job->public_id));
@@ -349,7 +349,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         $user->createToken('Other API token');
         User::factory()->create()->createToken('Chrome extension other-owner');
 
-        $this->actingAs($user)->get(route('dashboard'))
+        $this->signedInAs($user)->get(route('dashboard'))
             ->assertOk()
             ->assertViewHas('extensionTokens', fn ($tokens): bool => $tokens->pluck('label')->all() === [$noExpiry->name, $active->name])
             ->assertDontSeeText('Chrome extension expired-')
@@ -373,7 +373,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         $user = User::factory()->create();
         $refreshLink = '<a class="button button-secondary" href="'.route('dashboard').'">Refresh status</a>';
 
-        $this->actingAs($user)->get('/dashboard?billing=success')
+        $this->signedInAs($user)->get('/dashboard?billing=success')
             ->assertOk()
             ->assertSee($refreshLink, false)
             ->assertSeeText('This page does not update automatically.')
@@ -422,7 +422,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         $url = route('dashboard.jobs.show', ['jobId' => $job->public_id]);
         $refreshLink = '<a class="button button-secondary" href="'.$url.'">Refresh status</a>';
 
-        $this->actingAs($user)->get($url)
+        $this->signedInAs($user)->get($url)
             ->assertOk()
             ->assertSee($refreshLink, false)
             ->assertSeeText('This page does not update automatically.')
@@ -458,7 +458,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertOk()
             ->assertSeeText('Failure code')
@@ -477,7 +477,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         ]);
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertOk()
             ->assertSeeText('Cancellation')
@@ -510,7 +510,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         $ledger->releaseReservation($job, 'failure');
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->get(route('dashboard.jobs.show', ['jobId' => $job->public_id], absolute: false))
             ->assertOk()
             ->assertSeeText('Estimated video minutes')
@@ -567,7 +567,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         $user = User::factory()->create();
 
         $this
-            ->actingAs($user)
+            ->signedInAs($user)
             ->post(route('billing.checkout', ['planCode' => 'base']))
             ->assertRedirect('https://checkout.stripe.test/session');
 
@@ -646,6 +646,17 @@ class SaasWebsiteAndSeoTest extends TestCase
             'includeTranslation' => false,
             ...$overrides,
         ];
+    }
+
+    private function signedInAs(User $user): static
+    {
+        $this->flushSession();
+        $this->app['auth']->forgetGuards();
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        return $this->actingAs($user);
     }
 
     private function installId(): string

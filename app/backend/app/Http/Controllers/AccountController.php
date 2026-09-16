@@ -31,39 +31,42 @@ class AccountController extends Controller
             'password' => ['required', 'current_password'],
         ]);
 
-        if ($this->hasCancellableSubscription($user, $billing)) {
-            try {
-                $stripe->cancelSubscription((string) $user->stripe_subscription_id);
-            } catch (HttpClientException|RuntimeException $exception) {
-                report($exception);
+        try {
+            DB::transaction(function () use ($user, $stripe, $billing): void {
+                $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+                $stripe->expireOutstandingCheckout($lockedUser);
 
-                return redirect()
-                    ->route('dashboard')
-                    ->with('billing_error', 'We could not cancel your subscription, so your account was not deleted. Try again shortly.');
-            }
+                if ($this->hasCancellableSubscription($lockedUser, $billing)) {
+                    $stripe->cancelSubscription((string) $lockedUser->stripe_subscription_id);
+                }
+
+                $lockedUser->subtitleJobs()
+                    ->select(['id', 'run_id'])
+                    ->chunkById(200, function (Collection $jobs): void {
+                        foreach ($jobs as $job) {
+                            SubtitleAudioWorkspace::delete($job->run_id);
+                        }
+                    });
+                $lockedUser->tokens()->delete();
+
+                if (config('session.driver') === 'database') {
+                    DB::connection(config('session.connection'))
+                        ->table((string) config('session.table', 'sessions'))
+                        ->where('user_id', $lockedUser->id)
+                        ->delete();
+                }
+
+                $lockedUser->delete();
+            });
+        } catch (HttpClientException|RuntimeException $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('dashboard')
+                ->with('billing_error', 'We could not close your Stripe billing, so your account was not deleted. Try again shortly.');
         }
 
-        $user->subtitleJobs()
-            ->select(['id', 'run_id'])
-            ->chunkById(200, function (Collection $jobs): void {
-                foreach ($jobs as $job) {
-                    SubtitleAudioWorkspace::delete($job->run_id);
-                }
-            });
-
         Auth::logout();
-
-        DB::transaction(function () use ($user): void {
-            $user->tokens()->delete();
-
-            if (config('session.driver') === 'database') {
-                DB::table((string) config('session.table', 'sessions'))
-                    ->where('user_id', $user->id)
-                    ->delete();
-            }
-
-            $user->delete();
-        });
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
