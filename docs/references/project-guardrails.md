@@ -9,7 +9,7 @@ These guardrails apply to the YouTube AI Language Subtitle Extension. Use them w
 ## Product Guardrails
 
 - Build the first product path only: public YouTube video -> generated subtitle track -> synchronized language-to-language overlay.
-- Keep Netflix, other platforms, live captioning, accounts, vocabulary review, and general subtitle editing out of the first release. The narrow pasted-lyrics correction flow is the documented exception for completed generated tracks.
+- Keep Netflix, other platforms, live captioning, vocabulary review, and general subtitle editing out of the first release. Paid-beta accounts, billing and account-owned history are implemented. The narrow pasted-lyrics correction flow is the documented exception for completed generated tracks.
 - The user must explicitly start AI subtitle generation.
 - Extension code must never call OpenAI or any AI provider directly.
 - Raw audio is temporary processing data and must be deleted after processing succeeds or fails.
@@ -36,7 +36,7 @@ WXT extension
   - stored/generated subtitle tracks
 - After boundary validation, trust the typed value inside the app instead of revalidating it in every handler.
 - Prefer one boring path before adding fallback paths.
-- Do not introduce distributed services, Redis, Postgres, WebSockets, queues, or object storage until a phase has evidence that SQLite, synchronous requests, or local files are insufficient.
+- The current runtime uses Postgres, Redis queues and shared local audio storage. SQLite is reserved for isolated tests. Do not add further services, WebSockets or object storage without measured need.
 - Do not keep old product paths as hidden compatibility layers after the visible workflow changes. Remove stale routes, schemas, states, persistence fields, tests, and documentation together.
 - Keep provider integrations behind small interfaces. The app should depend on our transcript/track contracts, not provider-native shapes.
 
@@ -95,9 +95,9 @@ WXT extension
 - Prefer direct object construction and named helper functions over clever normalization layers.
 - Prefer built-in APIs and shared project utilities before custom local helpers.
 - Avoid generic infrastructure around one endpoint, one provider, one storage location, or one current UI action. Add the abstraction when the second real use case arrives.
-- Prefer one synchronous generation request before async delivery mechanisms.
+- Preserve the current asynchronous generation contract; add delivery mechanisms only for a demonstrated gap.
 - Prefer preset overlay positions before drag/resize.
-- Prefer SQLite before production database infrastructure.
+- Use Postgres for the application runtime and disposable SQLite for ordinary tests; verify lock behavior with disposable Postgres/Redis integration tests.
 - Prefer one transcription candidate before a provider comparison framework.
 - Prefer one enrichment agent before a multi-agent system.
 - Prefer readable code over clever generic helpers.

@@ -4,6 +4,7 @@ Vocabulary hints were removed on 2026-09-14. New transcription requests contain 
 
 ## Security Baseline
 
+
 - Keep secrets out of the repository.
 - Document environment variables in `.env.example` when they are introduced.
 - Validate and sanitize external inputs.
@@ -44,10 +45,10 @@ Vocabulary hints were removed on 2026-09-14. New transcription requests contain 
   - Sending video-derived audio/text to configured AI services.
   - Persisting generated WebVTT and cue/token learning data.
   - Applying install-ID and IP rate limits.
-  - Issuing, expiring, and revoking scoped Sanctum extension API tokens only for verified users.
+  - Issuing, expiring, and revoking scoped Sanctum extension API tokens for authenticated users. Email verification is not currently a gate.
   - Applying server-side generation tier, queue priority, account generation concurrency, account AI batch concurrency, and cost telemetry without trusting client-provided entitlements.
   - Verifying Stripe webhook signatures before mutating subscription or usage state.
-  - Enforcing active billing, current-period minute balance, feature gates, and concurrency before subtitle provider work starts.
+  - Enforcing active billing, current-period minute balance, feature gates, and concurrency at generation admission. Already-admitted jobs retain their reservation and may run after entitlement changes; corrections and uncached cards recheck entitlement.
   - Returning public errors and request IDs without exposing internals.
 - Abuse cases:
   - Repeated generation requests to exhaust provider quota or local CPU/disk.
@@ -142,17 +143,24 @@ Project-specific security defaults:
 - The original anonymous API hardening required `X-Extension-Install-Id`, install/IP throttles, and stable public error objects.
 - SaaS Phase 03 `/v1/*` subtitle and learning-token routes require both `X-Extension-Install-Id` and a scoped Sanctum bearer token. Install ID remains a device/abuse signal; authenticated `user_id` is the ownership boundary.
 - Tiered generation admission and AI batch concurrency use authenticated `user_id` as the owner and may log only hashed user IDs. Runtime trace rows must not store raw user IDs or install IDs.
-- Extension login requires a verified email account, stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
-- Password reset rotates the remember token and revokes all scoped Sanctum tokens. A cache miss for clicked-token enrichment requires active billing before the provider call; already-stored metadata remains readable to its owner.
+- Extension login requires an authenticated email/password account; email verification is not enforced. It stores only the scoped Sanctum token plus safe account summary, and deletes the active token on logout. Production login requests must use HTTPS.
+- Password reset rotates the remember token, revokes all scoped Sanctum tokens and database sessions, and marks the account so legacy web sessions without a password fingerprint are rejected. Protected web/Fortify routes compare the session password fingerprint with the current password. A cache miss for clicked-token enrichment requires active billing before the provider call; already-stored metadata remains readable to its owner.
 - Stored Scribe chunk artifacts use a field allowlist (`language_code`, word text/type/timing) rather than raw provider payloads. Running job callbacks recheck job/run state before persistence.
-- Pasted lyrics are sent to configured OpenAI only for alignment.
-- Corrected cue text is sent through the same derived OpenAI stages used by generation.
+- Full pasted lyrics and their aligned cues are sent to configured OpenAI/Luna for alignment and parallel analysis.
+- Quick Fix and on-demand cards use the saved generation provider/model.
 - Quick fix replacement text is sent to the AI provider by the owner-scoped backend to refresh the edited cue. Active entitlement is checked before provider work and publication. Replacement text and generated learning data remain excluded from logs and diagnostics.
 - Lyrics and work state are excluded from logs, traces, analytics, API responses, extension storage, URLs, and runtime error payloads.
 - Encrypted database columns are the only persisted private copies, and they are cleared on completion, failure, expiry, or deletion.
   - Laravel responses set CSP, frame, MIME, referrer, permissions, and cross-origin isolation headers. HSTS is sent only for secure production requests; trusted-proxy and session-cookie configuration remain an operator-owned hosting decision.
 - SaaS website analytics are first-party structured logs only for beta. Analytics events must not include transcripts, prompts, generated subtitle text, YouTube URLs, provider payloads, bearer tokens, raw install IDs, raw audio paths, or account emails.
-- Phase 05 transcription uses a backend-only OpenAI WebVTT adapter with backend-held OpenAI credentials and returns stable public errors for acquisition and transcription failures.
-- Phase 06 enrichment uses a backend-only Laravel AI SDK OpenAI structured-output agent, validates generated learning metadata before storage, omits missing fields instead of exposing `null`, and returns stable `enrichment_failed` public errors.
+- Transcription uses backend-only ElevenLabs Scribe word timestamps, normalized into local WebVTT. OpenAI WebVTT transcription is historical.
+- Analysis uses backend-only Laravel AI SDK structured output with the saved OpenAI/Cerebras selection, validates generation metadata before storage, and returns stable public errors.
 - Phase 07 adds request IDs to extension-facing API errors, logs invalid install IDs and rate limits without raw install IDs, configures final install/IP throttle defaults, and schedules expired generated subtitle cleanup.
 - Production hosting uses `php artisan ops:production-check` and the production runbook to verify `APP_DEBUG=false`, HTTPS `APP_URL`, environment-only backend secrets, disabled billing test switcher, exact extension API host permissions, and sanitized logs before paid beta traffic.
+
+## Remediation controls (2026-09-15)
+
+- Provider adapters discard raw exception causes before ordinary reporting and failed-job storage. Only safe class, status, allowlisted quota code and validated request ID remain. Exception arguments are disabled at bootstrap so stack traces cannot retain prompts or credentials.
+- Registration and reset requests have configurable hourly IP and global bounds, in addition to login and reset-broker address throttles. Default registration limits are 5/IP and 100/global; reset limits are 10/IP and 200/global.
+- Shared actual-call permits cover account/provider concurrency and request rate, including retries and synchronous interactive requests. Cache hits avoid paid work. R07's September 16 policy additionally consumes the full reserved minutes on voluntary cancellation/deletion after paid work begins; it adds no separate daily allowance.
+- Account deletion retention is unchanged. No new persistent abuse identity is retained after deletion. Cancellation before paid generation admission and ordinary failed generations restore their unsettled reservation. The early-cancellation exception is not advertised; Generate warns that cancellation does not refund minutes.

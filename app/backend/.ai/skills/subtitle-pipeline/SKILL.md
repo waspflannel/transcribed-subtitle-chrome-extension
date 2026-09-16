@@ -21,7 +21,7 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 
 - Use ElevenLabs Scribe v2 for speech-to-text and word timestamps.
 - Use `Laravel\Ai\Enums\Lab::ElevenLabs` for Scribe provider identity in transcription logs/config.
-- Use the subtitle job's saved `ai_provider` and `ai_model` for generation analysis, full and clicked word cards, and Quick Fix. User-authorized exception: full lyrics replacement uses only configured OpenAI/Luna for alignment and parallel analysis, without changing saved job selection or global config. Replacement logs and cost estimates use the actual stage provider. Scribe transcription stays independent.
+- Use the subtitle job's saved `ai_provider` and `ai_model` for generation analysis, clicked word cards, and Quick Fix. User-authorized exception: full lyrics replacement uses only configured OpenAI/Luna for alignment and parallel analysis, without changing saved job selection or global config. Replacement logs and cost estimates use the actual stage provider. Scribe transcription stays independent.
 - Use narrow Laravel HTTP requests for Scribe while keeping the provider boundary behind `TranscriptionService`.
 - Full lyrics replacement has no content/output validation or partial-merge mode. Normalize usable model allocations and details without reintroducing rejection heuristics. Shared generation and Quick Fix validators remain unchanged.
 - Use `config/ai.php` for provider keys, custom base URLs, and model defaults.
@@ -32,7 +32,7 @@ Use this skill whenever backend work touches subtitle jobs, YouTube audio acquis
 
 Reconsider current Laravel AI/OpenAI SDK options before implementing any custom equivalent:
 
-- Agents and prompting for token analysis, romanization, glosses, dialect labels, and confidence.
+- Agents and prompting for token analysis, romanization, glosses, and confidence. Preserve dialect in spoken wording; do not emit unused dialect metadata.
 - Structured output for typed generated subtitle enrichment.
 - Conversation context only if the product adds user learning history, preferences, or tutoring.
 - SDK queueing only if it can preserve product-owned raw audio cleanup and subtitle job state.

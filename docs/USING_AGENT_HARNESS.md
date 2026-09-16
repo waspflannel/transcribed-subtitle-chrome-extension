@@ -148,3 +148,9 @@ When work is complete:
 3. Move finished plans from `docs/exec-plans/active/` to `docs/exec-plans/completed/`.
 4. Update `docs/QUALITY_SCORE.md` when the work changes project health.
 5. Update `docs/exec-plans/tech-debt-tracker.md` for remaining cleanup.
+
+## Test service isolation
+
+The standard backend test commands bootstrap an in-memory SQLite database, array cache/session/mail, sync queues, temporary private/public storage and independent config/route/event cache paths before Laravel starts. Loaded configuration is checked before providers and migration traits. Inherited host credentials and cached configuration cannot select the test database. `composer test` no longer clears shared configuration. Focused external-service tests require explicit disposable loopback services and their documented opt-in environment variables; normal tests never discover or reuse local databases.
+
+For the checkout and paid-generation cancellation concurrency suites, start a new disposable PostgreSQL instance and set `SUBTITLE_DISPOSABLE_PG_PORT`, `SUBTITLE_DISPOSABLE_PG_DATABASE`, `SUBTITLE_DISPOSABLE_PG_USERNAME` and `SUBTITLE_DISPOSABLE_PG_PASSWORD`. The database name must match `subtitle_review_test_[a-z0-9]+`; each test creates, migrates and drops only its random schema. For shared provider permits and queue counts, start a separate disposable Redis instance and set `SUBTITLE_TEST_REDIS_PORT`; keys use a random test prefix. The suites force loopback, and none accepts a runtime connection URL. Run the root harness with these variables to include all nine integration tests; without them the suites explicitly skip. Stop the disposable services after validation. Do not use an existing application database or Redis instance.

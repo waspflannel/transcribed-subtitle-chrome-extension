@@ -42,8 +42,8 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 - Selectable subtitle/source language, defaulting to Auto detect.
 - Selectable translation/target language, defaulting to English.
 - Optional cue-level subtitle translation into the selected translation/target language.
-- Word-card metadata in the selected target language on demand, or for the full track when explicitly enabled.
-- Learner-friendly cue tokenization for every generated transcript, with tokenizer-agent boundaries, structural validation that accepts model corrections to the transcript, one identical retry for malformed analysis while generation remains active, and visible failure when output remains unusable.
+- Word-card metadata in the selected target language on demand when a word is selected.
+- Learner-friendly cue tokenization for every generated transcript, with analysis-agent boundaries, structural validation that accepts model corrections to the transcript, one identical retry for malformed analysis while generation remains active, and visible failure when output remains unusable.
 - Optional non-Latin-script romanization when the user enables romanization, with visible generation failure when enabled romanization output is invalid.
 - Synchronized in-page overlay.
 - Local study controls for blurring token cards, full cue romanization, and translation, revealing token text plus token romanization per token on token hover/focus/pin while revealing full cue romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying/copying the active cue, navigating cues with keyboard shortcuts, and inspecting/searching the generated Transcript view in the side panel.
@@ -57,6 +57,12 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 - Cloud sync beyond the account, billing, extension-token, usage, and job-history records required for the paid beta.
 - General subtitle editing. The first release includes the narrow **Use pasted lyrics** correction flow for a completed generated track; it preserves the pasted words, reuses existing timing, and rebuilds derived learning data before atomic replacement.
 - Direct provider calls from the extension.
+
+## Generation cancellation policy (2026-09-16)
+
+Generate requires confirmation that cancellation is available but the full video's generation minutes will not be refunded. Declining sends no generation request. Confirmation applies to the selected account, video and generation options; a changed context requires confirmation again.
+
+Voluntary cancellation or deletion after the first paid generation request is admitted consumes the full remaining reservation, even if only part of the transcript was produced. Cancellation before any paid request restores the reservation; this early exception is not advertised in user-facing copy. The backend uses a durable marker for the current run at the actual provider boundary, not a displayed stage. Cached transcription followed by paid analysis also starts billable work. Ordinary failed generations retain the existing refund behavior; completed-track reuse and editing do not add generation-minute charges. No new daily allowance or account-deletion retention is introduced.
 
 ## Deferred Learning Upgrades
 
