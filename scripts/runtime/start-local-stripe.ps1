@@ -29,10 +29,23 @@ if (-not $appUrl.IsLoopback -or $appUrl.Scheme -notin @("http", "https")) {
 }
 $stripe = (Get-Command stripe -ErrorAction Stop).Source
 
+function Invoke-StripeCli {
+    param([Parameter(Mandatory = $true)][string[]]$StripeArgs)
+
+    # Stripe writes progress such as "Getting ready..." to stderr. With Stop, that kills the listener.
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $stripe @StripeArgs 2>&1 | ForEach-Object { $_.ToString() }
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 if ($Foreground) {
     # The CLI reads the key from its environment, never from process arguments.
     $env:STRIPE_API_KEY = $settings.STRIPE_SECRET
-    $secretOutput = & $stripe listen --print-secret --skip-update --color off 2>&1 | Out-String
+    $secretOutput = Invoke-StripeCli -StripeArgs @("listen", "--print-secret", "--skip-update", "--color", "off") | Out-String
     if ($LASTEXITCODE -ne 0 -or $secretOutput -notmatch 'whsec_[a-zA-Z0-9]+') {
         throw "Could not retrieve the sandbox webhook signing secret."
     }
@@ -50,8 +63,8 @@ if ($Foreground) {
         if ($LASTEXITCODE -ne 0) { throw "Could not clear backend configuration cache." }
         $events = "checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed"
         $forwardTo = $appUrl.AbsoluteUri.TrimEnd('/') + "/stripe/webhook"
-        & $stripe listen --events $events --forward-to $forwardTo --skip-update --color off 2>&1 |
-            ForEach-Object { $_.ToString() -replace '(?:[sr]k|pk)_(?:test|live)_[a-zA-Z0-9]+|whsec_[a-zA-Z0-9]+', '[redacted]' }
+        Invoke-StripeCli -StripeArgs @("listen", "--events", $events, "--forward-to", $forwardTo, "--skip-update", "--color", "off") |
+            ForEach-Object { $_ -replace '(?:[sr]k|pk)_(?:test|live)_[a-zA-Z0-9]+|whsec_[a-zA-Z0-9]+', '[redacted]' }
         if ($LASTEXITCODE -ne 0) { throw "Stripe webhook listener stopped with an error." }
     } finally {
         Remove-Item Env:STRIPE_API_KEY -ErrorAction SilentlyContinue
