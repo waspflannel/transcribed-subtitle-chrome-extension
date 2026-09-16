@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-- Product name: Transcribed Subtitle Extension for beta marketing and account surfaces; repository/package name remains `transcribed-subtitle-extension`.
+- Product name: Transcribed Subtitle Extension for website and account surfaces; repository/package name remains `transcribed-subtitle-extension`.
 - Primary user: language learners watching public YouTube videos.
 - Primary problem: YouTube captions are often missing, inaccurate, poorly segmented, or not useful for language study.
 - Core promise: Generate AI subtitle tracks from YouTube audio for a user-selected subtitle language or Auto detect, optionally translate subtitle cues and word cards into a user-selected target language, and render a synchronized overlay with timed subtitles, pronunciation metadata when available, and word-level study data on demand.

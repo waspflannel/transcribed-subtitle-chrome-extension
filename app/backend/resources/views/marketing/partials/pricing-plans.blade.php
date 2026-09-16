@@ -1,10 +1,6 @@
 <div class="plan-access" data-reveal>
     <p><strong>Included with every plan:</strong> Transcriber and Transcriber-Spark model choice, translations, optional romanization, interactive word cards, and lyrics correction.</p>
-    @if (config('marketing.chrome_extension_url'))
-        <p>Paid beta for desktop Chrome. <a class="strong-link" href="{{ config('marketing.chrome_extension_url') }}">Get the extension</a>, then choose a subscription to generate subtitles.</p>
-    @else
-        <p>Paid beta for desktop Chrome. <a class="strong-link" href="{{ route('marketing.support') }}#extension-install">Request your beta install link</a> before subscribing.</p>
-    @endif
+    <p>For desktop Chrome. Follow the <a class="strong-link" href="{{ route('marketing.how-to-use') }}#how-to-install">installation guide</a>, then sign in to the extension with your account.</p>
 </div>
 <div class="plan-row" data-reveal>
     @foreach ($plans as $plan)
@@ -39,5 +35,5 @@
     @endforeach
 </div>
 <p class="plan-note">
-    Minutes count the video you generate, rounded up to whole minutes. A 10-minute video uses 10 minutes; replaying a retained track uses none. Cancelling generation does not refund its reserved minutes. Failed generations release unused reserved minutes. Checkout is hosted by Stripe. Cancel your subscription from your account; contact support for beta refunds.
+    Minutes count the video you generate, rounded up to whole minutes. A 10-minute video uses 10 minutes; replaying a retained track uses none. Cancelling generation does not refund its reserved minutes. Failed generations release unused reserved minutes. Checkout is hosted by Stripe. Cancel your subscription from your account; contact support for refunds.
 </p>

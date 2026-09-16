@@ -40,18 +40,19 @@ class SaasWebsiteAndSeoTest extends TestCase
         }
     }
 
-    public function test_public_pages_render_seo_metadata_and_beta_copy(): void
+    public function test_public_pages_render_seo_metadata_without_beta_copy(): void
     {
         $pages = [
             ['marketing.home', 'music you love', 'Only public YouTube watch pages and Shorts'],
             ['marketing.pricing', 'Simple monthly plans', 'Stripe'],
             ['marketing.privacy', 'Privacy policy.', 'raw audio is deleted'],
             ['marketing.terms', 'Terms of service.', 'Refund requests'],
-            ['marketing.support', 'Help for beta access', 'failure code'],
+            ['marketing.support', 'Report a bug. Get in touch.', 'failure code'],
+            ['marketing.how-to-use', 'How To Use.', 'Replace full lyrics'],
         ];
 
         foreach ($pages as [$routeName, $heading, $copy]) {
-            $this
+            $response = $this
                 ->get(route($routeName, absolute: false))
                 ->assertOk()
                 ->assertSeeText($heading)
@@ -60,6 +61,8 @@ class SaasWebsiteAndSeoTest extends TestCase
                 ->assertSee('<meta property="og:title"', false)
                 ->assertSee('<meta name="twitter:card"', false)
                 ->assertSee('<link rel="canonical" href="'.route($routeName).'">', false);
+
+            $this->assertDoesNotMatchRegularExpression('/\bbeta\b/i', $response->getContent());
         }
     }
 
@@ -78,6 +81,7 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertHeader('content-type', 'application/xml; charset=UTF-8')
             ->assertSee(route('marketing.home'), false)
             ->assertSee(route('marketing.pricing'), false)
+            ->assertSee(route('marketing.how-to-use'), false)
             ->assertSee(route('marketing.privacy'), false)
             ->assertDontSee(url('/extension'), false)
             ->assertDontSee(url('/languages'), false)
@@ -87,13 +91,20 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertDontSee('/dashboard');
     }
 
-    public function test_landing_page_shows_product_mock_pricing_and_plan_signup_links(): void
+    public function test_landing_page_links_to_guide_and_keeps_pricing_and_plan_signup_links(): void
     {
         $this
             ->get(route('marketing.home', absolute: false))
             ->assertOk()
             ->assertSeeText('Learn a language from the videos and')
-            ->assertSeeText('Interactive preview')
+            ->assertSeeText('Generate subtitles, explore words and translations')
+            ->assertSeeText('How To Use')
+            ->assertSee(route('marketing.how-to-use'), false)
+            ->assertSee(route('marketing.how-to-use').'#replace-lyrics', false)
+            ->assertDontSeeText('Interactive preview')
+            ->assertDontSeeText('Try the preview')
+            ->assertDontSeeText('Generate AI subtitles')
+            ->assertDontSee('href="#demo"', false)
             ->assertSeeText('Bring your own lyrics')
             ->assertSeeText('Transcriber-Spark')
             ->assertSeeText('Transcriber')
@@ -112,35 +123,55 @@ class SaasWebsiteAndSeoTest extends TestCase
             ->assertSee(route('register', ['plan' => 'pro']), false);
     }
 
-    public function test_marketing_explains_install_access_before_purchase_with_and_without_a_store_link(): void
+    public function test_install_links_lead_to_guide_with_both_install_methods(): void
     {
         config(['marketing.chrome_extension_url' => null]);
 
-        foreach (['/', '/pricing'] as $path) {
+        foreach (['/', '/pricing', '/support', '/terms'] as $path) {
             $this->get($path)->assertOk()
-                ->assertSeeText('before subscribing')
-                ->assertSee(route('marketing.support').'#extension-install', false)
-                ->assertSee(route('register', ['plan' => 'base']), false);
+                ->assertSee(route('marketing.how-to-use').'#how-to-install', false);
         }
 
-        $this->get('/support')->assertOk()->assertSeeText('Before subscribing');
+        $this->get('/how-to-use')->assertOk()
+            ->assertSeeText('Chrome Web Store link is not available here yet')
+            ->assertSeeText('From the Chrome Web Store')
+            ->assertSeeText('From a downloaded ZIP')
+            ->assertSeeText('Load unpacked')
+            ->assertSeeText('manifest.json');
 
         $extensionUrl = 'https://chromewebstore.google.com/detail/example-extension';
         config(['marketing.chrome_extension_url' => $extensionUrl]);
 
-        foreach (['/', '/pricing', '/support'] as $path) {
-            $this->get($path)->assertOk()->assertSee($extensionUrl, false)
-                ->assertDontSeeText('Request your beta install link');
+        $this->get('/how-to-use')->assertOk()
+            ->assertSee('href="'.$extensionUrl.'"', false)
+            ->assertSeeText('From a downloaded ZIP')
+            ->assertDontSeeText('Chrome Web Store link is not available here yet');
+    }
+
+    public function test_guide_contents_and_section_links_have_real_targets(): void
+    {
+        $response = $this->get('/how-to-use')->assertOk();
+        $document = new \DOMDocument;
+        @$document->loadHTML($response->getContent());
+        $xpath = new \DOMXPath($document);
+        $contentsLinks = $xpath->query('//nav[@aria-label="Guide contents"]/a');
+
+        $this->assertGreaterThan(0, $contentsLinks->length);
+        $this->assertSame('#how-to-install', $contentsLinks->item(0)->getAttribute('href'));
+
+        foreach ($xpath->query('//a[starts-with(@href, "#")]') as $link) {
+            $id = substr($link->getAttribute('href'), 1);
+            $this->assertSame(1, $xpath->query('//*[@id="'.$id.'"]')->length, 'Broken or duplicate anchor: '.$id);
         }
     }
 
     public function test_retired_marketing_pages_redirect_to_landing_anchors(): void
     {
         foreach ([
-            '/desktop' => '/#install',
-            '/extension' => '/#install',
+            '/desktop' => '/how-to-use#how-to-install',
+            '/extension' => '/how-to-use#how-to-install',
             '/languages' => '/#languages',
-            '/how-it-works' => '/#how',
+            '/how-it-works' => '/how-to-use',
             '/faq' => '/#faq',
         ] as $from => $to) {
             $this

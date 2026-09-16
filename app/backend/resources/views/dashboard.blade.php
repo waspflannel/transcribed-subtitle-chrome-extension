@@ -18,7 +18,7 @@
             </div>
             <div class="action-stack horizontal-actions">
                 <a class="button button-secondary" href="{{ route('dashboard') }}">Refresh status</a>
-                <a class="button" href="{{ config('marketing.chrome_extension_url') ?: route('marketing.home').'#install' }}">Install extension</a>
+                <a class="button" href="{{ route('marketing.how-to-use') }}#how-to-install">Install extension</a>
                 <a class="button button-secondary" href="https://www.youtube.com" rel="noopener noreferrer">Open YouTube</a>
                 <a class="button button-secondary" href="{{ route('marketing.support') }}">Open support</a>
             </div>

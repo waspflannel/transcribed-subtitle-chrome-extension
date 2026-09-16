@@ -49,7 +49,8 @@
         font-size: 2.1rem;
     }
 
-    .split-section {
+    .split-section,
+    .guide-intro {
         grid-template-columns: minmax(0, 1fr);
     }
 
@@ -75,30 +76,9 @@
         padding-bottom: 88px;
     }
 
-    .mk-wrap {
-        margin-top: -46px;
-    }
-
-    .demo-scene {
-        grid-template-columns: 260px minmax(0, 1fr);
-    }
-
-    .demo-sidebar {
-        padding: 22px;
-    }
-
-    .demo-player {
-        padding-left: 18px;
-        padding-right: 18px;
-    }
-
     .lyrics-section {
         grid-template-columns: minmax(0, 1fr);
         gap: 30px;
-    }
-
-    .mk-tok {
-        font-size: 1.1rem;
     }
 
     .workspace-heading {
@@ -154,45 +134,8 @@
         max-width: 34ch;
     }
 
-    .demo-label,
-    .mk-dots {
-        display: none;
-    }
-
-    .demo-tabs button {
-        align-items: center;
-        flex-direction: column;
-        font-size: 0.76rem;
-        gap: 4px;
-        padding: 10px 5px;
-    }
-
-    .demo-scene,
     .model-options {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    .demo-sidebar {
-        border-right: 0;
-        border-top: 2px solid var(--ink);
-        gap: 14px;
-    }
-
-    .demo-sidebar h2 br {
-        display: none;
-    }
-
-    .demo-player {
-        grid-row: 1;
-        min-height: 300px;
-    }
-
-    .demo-video-label {
-        font-size: 0.62rem;
-    }
-
-    .demo-player .mk-tok {
-        font-size: 1.05rem;
     }
 
     .model-options article,
@@ -218,11 +161,6 @@
     .models-section h2,
     .languages-section h2 {
         font-size: 2rem;
-    }
-
-    .mk-card {
-        margin-bottom: 14px;
-        padding: 14px 16px;
     }
 
     .plan-card-featured {

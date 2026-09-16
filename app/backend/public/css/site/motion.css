@@ -67,10 +67,6 @@
     animation-delay: 280ms;
 }
 
-.mk {
-    animation: ink-rise 680ms 180ms var(--ease-out) both;
-}
-
 /* Marker swipe on the hero highlight. The resting style is fully
    highlighted; the animation only draws the swipe in, so the phrase
    stays legible even if animations never run. */
@@ -83,20 +79,6 @@
 .hero-band .hl {
     background-repeat: no-repeat;
     animation: marker-swipe 700ms 400ms ease-out backwards;
-}
-
-/* A quick change of scene keeps the example feeling like a working tool. */
-@keyframes scene-enter {
-    from {
-        opacity: 0;
-        translate: 0 6px;
-    }
-}
-
-.has-js .demo-scene:not([hidden]),
-.demo-result,
-.demo-word-space .mk-card:not([hidden]) {
-    animation: scene-enter var(--motion-change) var(--ease-out);
 }
 
 .site-nav a {
