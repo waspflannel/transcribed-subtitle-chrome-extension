@@ -106,7 +106,7 @@ it('confirms each retry and Generate again, and ignores duplicate clicks while s
 });
 
 it.each(['account', 'video', 'tab', 'duration', 'source', 'target', 'model', 'romanization', 'translation', 'loading'] as const)(
-  'invalidates confirmation when refreshed %s details change', async (change) => {
+  'only invalidates confirmation for identity or availability changes when %s changes', async (change) => {
     button('generate').click();
     if (change === 'account') state.accountState = { status: 'anonymous' };
     if (change === 'video') state.pageStatus = { supported: true, videoId: 'M7lc1UVf-VE', url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE', mediaKind: 'video' };
@@ -119,10 +119,10 @@ it.each(['account', 'video', 'tab', 'duration', 'source', 'target', 'model', 'ro
     if (change === 'translation') state.settings.showTranslation = !state.settings.showTranslation;
     if (change === 'loading') state.subtitleState = { type: 'loading', youtubeVideoId: 'dQw4w9WgXcQ', message: 'Working', stage: 'preparing', progressPercent: 5 };
     await refresh();
-    expect(dialog().open).toBe(false);
+    const invalidated = ['account', 'video', 'tab', 'loading'].includes(change);
+    expect(dialog().open).toBe(!invalidated);
     button('confirm-generation').click();
-    expect(generationRequests()).toHaveLength(0);
-    expect(dom.window.document.querySelector('[data-status]')?.textContent).toContain('Generation details changed');
+    expect(generationRequests()).toHaveLength(invalidated ? 0 : 1);
   },
 );
 
@@ -151,7 +151,7 @@ it('waits for settings persistence before allowing a confirmation', async () => 
   resolveSettings(structuredClone(state));
   await vi.advanceTimersByTimeAsync(0);
   button('generate').click();
-  expect(dialog().textContent).toContain('Cerebras');
+  expect(dialog().textContent).toContain('Transcriber Spark');
   expect(dialog().open).toBe(true);
   expect(generationRequests()).toHaveLength(0);
 });

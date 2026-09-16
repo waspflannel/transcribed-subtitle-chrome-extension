@@ -59,11 +59,11 @@
               <div class="language-expand" data-language-expand hidden>
                 <div class="language-picker" data-language-picker="source">
                   <label class="field">
-                    <span>Subtitle language</span>
+                    <span>Video language</span>
                     <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
                   </label>
                   <div class="selected-language" data-source-language-selected></div>
-                  <div class="language-options" data-source-language-list role="listbox" aria-label="Subtitle language"></div>
+                  <div class="language-options" data-source-language-list role="listbox" aria-label="Video language"></div>
                 </div>
                 <div class="language-picker" data-language-picker="target">
                   <label class="field">
@@ -94,12 +94,12 @@
               <label class="row">
                 <span class="row-key">AI model</span>
                 <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled>
-                  <option value="openai">Luna</option>
-                  <option value="cerebras">Cerebras</option>
+                  <option value="openai">Transcriber</option>
+                  <option value="cerebras">Transcriber Spark</option>
                 </select>
               </label>
-              <p id="ai-luna-description" class="microcopy"><strong>Luna:</strong> Smarter, but slower. Recommended for languages that use non-Latin scripts.</p>
-              <p id="ai-cerebras-description" class="microcopy"><strong>Cerebras:</strong> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</p>
+              <p id="ai-luna-description" class="microcopy"><strong>Transcriber:</strong> Smarter, but slower. Recommended for languages that use non-Latin scripts.</p>
+              <p id="ai-cerebras-description" class="microcopy"><strong>Transcriber Spark:</strong> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</p>
               <p id="ai-provider-help" class="microcopy">Applies to your next generation. Running jobs keep their selected model.</p>
             </div>
 

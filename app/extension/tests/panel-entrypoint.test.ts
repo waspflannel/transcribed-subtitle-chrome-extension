@@ -127,7 +127,7 @@ it('cancels generation and saves the model selected for the next generation', as
   expect(cancelButton?.hidden).toBe(false);
   expect(cancelButton?.disabled).toBe(true);
   expect(cancelButton?.textContent).toBe('Cancel generation');
-  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Luna');
+  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Transcriber');
   expect(dom.window.document.querySelector<HTMLElement>('[data-account-model]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-panel="watch"]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-progress]')?.hidden).toBe(false);
@@ -174,7 +174,48 @@ it('cancels generation and saves the model selected for the next generation', as
   await vi.advanceTimersByTimeAsync(0);
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' } }));
   expect(selector.value).toBe('cerebras');
-  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Cerebras');
+  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Transcriber Spark');
 
+  dom.window.close();
+});
+
+it('resets video language on panel startup and video changes, but preserves manual choices on ordinary refreshes', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup, { pretendToBeVisual: true });
+  stubPanelDom(dom);
+  let state: PanelState = {
+    installId: 'install_test', activeTabId: 1,
+    settings: { ...DEFAULT_EXTENSION_SETTINGS, sourceLanguage: 'jpn', targetLanguage: 'fra' },
+    pageStatus: { supported: true, videoId: 'dQw4w9WgXcQ', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', mediaKind: 'video' },
+    accountState: { status: 'anonymous' }, subtitleState: { type: 'no-track' }, jobHistory: [],
+  };
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; patch?: Partial<PanelState['settings']> }) => {
+    if (request?.type === 'panel.listGenerations') return { jobs: [] };
+    if (request?.type === 'panel.updateSettings') state = { ...state, settings: { ...state.settings, ...request.patch } };
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  const selected = () => dom.window.document.querySelector('[data-source-language-selected]')?.textContent;
+  const refresh = async () => {
+    dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+  };
+  expect(state.settings.sourceLanguage).toBe('auto');
+  expect(selected()).toContain('Auto');
+  expect(dom.window.document.querySelector('[data-source-language-list]')?.getAttribute('aria-label')).toBe('Video language');
+
+  dom.window.document.querySelector<HTMLButtonElement>('[data-source-language-list] [data-language-code="jpn"]')!.click();
+  await vi.advanceTimersByTimeAsync(0);
+  await refresh();
+  expect(state.settings.sourceLanguage).toBe('jpn');
+  expect(selected()).toContain('Japanese');
+
+  state.pageStatus = { supported: true, videoId: 'M7lc1UVf-VE', url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE', mediaKind: 'video' };
+  await refresh();
+  expect(state.settings.sourceLanguage).toBe('auto');
+  expect(selected()).toContain('Auto');
+  expect(state.settings.targetLanguage).toBe('fra');
   dom.window.close();
 });

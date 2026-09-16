@@ -630,8 +630,8 @@ async function generateSubtitlesFromPanel(confirmationContext: string, windowId?
       }
       const settings = await getExtensionSettings();
       const pageSnapshot = await getPageSnapshotFromTab(activeTabId);
-      if (confirmationContext !== generationConfirmationContext(activeTabId, pageStatus.videoId, session.account.id, pageSnapshot.videoDurationSeconds, settings)) {
-        throw new Error('Generation details changed. Review them and confirm again.');
+      if (confirmationContext !== generationConfirmationContext(activeTabId, pageStatus.videoId, session.account.id)) {
+        throw new Error('The selected video or account changed. Open generation for the current video.');
       }
       const now = new Date().toISOString();
 
@@ -708,17 +708,14 @@ async function generateSubtitlesForTab(
     });
 
     const installId = await getOrCreateInstallId();
-    // Recheck after asynchronous preparation, immediately before the create request.
-    await waitForExtensionSettingsWrites();
-    const currentSettings = await getExtensionSettings();
-    const currentSnapshot = await getPageSnapshotFromTab(tabId);
+    // Keep the request tied to its video and session after asynchronous preparation.
     const currentSession = await getStoredExtensionSession();
     const currentTab = await getActiveTab(windowId);
     const currentPage = parseYoutubePage(currentTab?.url ?? '');
     if (tabOperations.get(tabId) !== operation || currentSession?.sessionId !== sessionId) return;
     if (currentTab?.id !== tabId || !currentPage.supported
-      || confirmationContext !== generationConfirmationContext(tabId, currentPage.videoId, currentSession.account.id, currentSnapshot.videoDurationSeconds, currentSettings)) {
-      throw new Error('Generation details changed. Review them and confirm again.');
+      || confirmationContext !== generationConfirmationContext(tabId, currentPage.videoId, currentSession.account.id)) {
+      throw new Error('The selected video or account changed. Open generation for the current video.');
     }
     const initialJob = await subtitleApi.createSubtitleJob(installId, session.plainTextToken, {
       ...(forceRegenerate ? { forceRegenerate: true } : {}),
