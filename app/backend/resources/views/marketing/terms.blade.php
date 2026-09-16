@@ -4,7 +4,7 @@
     <section class="page-hero legal-hero">
         <p class="eyebrow">The details</p>
         <h1 id="legal-title">Terms of <span class="hl">service.</span></h1>
-        <p>The terms for using our paid beta, including subscriptions, video minutes, lyrics correction, and AI-generated study content.</p>
+        <p>The terms for using our service, including subscriptions, video minutes, lyrics correction, and AI-generated study content.</p>
         <div class="legal-meta">
             <span>Last updated <time datetime="2026-09-16">September 16, 2026</time></span>
             <a href="{{ route('marketing.privacy') }}">Read the privacy policy &rarr;</a>
@@ -22,7 +22,7 @@
                 <li><a href="#content">Videos &amp; lyrics</a></li>
                 <li><a href="#acceptable-use">Acceptable use</a></li>
                 <li><a href="#ai-limitations">AI &amp; timing limitations</a></li>
-                <li><a href="#availability">Beta availability</a></li>
+                <li><a href="#availability">Service availability</a></li>
                 <li><a href="#contact">Updates &amp; contact</a></li>
             </ol>
         </nav>
@@ -31,7 +31,7 @@
             <section id="service">
                 <h2><span aria-hidden="true">01</span> Using the service</h2>
                 <p>These terms apply to your use of {{ config('marketing.product_name') }}, including our website and Chrome extension. By creating an account or using the service, you agree to these terms. If you do not agree, do not use the service.</p>
-                <p>The service is a paid beta for generating study-oriented subtitles on supported public YouTube watch pages and Shorts in desktop Chrome. Features include translation, pronunciation guides, word cards, model choice, and lyrics correction. Check the <a href="{{ route('marketing.support') }}#extension-install">extension installation information</a> before subscribing.</p>
+                <p>The service generates study-oriented subtitles on supported public YouTube watch pages and Shorts in desktop Chrome. Features include translation, pronunciation guides, word cards, model choice, and lyrics correction. Check the <a href="{{ route('marketing.how-to-use') }}#how-to-install">extension installation information</a> before subscribing.</p>
                 <p>Our <a href="{{ route('marketing.privacy') }}">privacy policy</a> explains how account information, videos, lyrics, and generated content are processed.</p>
             </section>
 
@@ -49,7 +49,7 @@
                     <li>Starting a job can reserve minutes. A completed track uses those minutes; a failed job releases unused reservations when no completed track is produced.</li>
                     <li>You can cancel generation, but cancelling or deleting an in-progress job uses all the minutes reserved for it. Review the confirmation before starting generation.</li>
                     <li>Reopening a retained track does not spend generation minutes again. Starting a new generation, including with a different model, can use additional minutes.</li>
-                    <li>Single-word fixes and full lyrics correction on an existing track do not consume additional generation minutes under the current beta plans.</li>
+                    <li>Single-word fixes and full lyrics correction on an existing track do not consume additional generation minutes under the current plans.</li>
                     <li>Deleting a completed generation does not restore the minutes used to create it. Included minutes are a service allowance and cannot be redeemed for cash.</li>
                 </ul>
             </section>
@@ -83,8 +83,8 @@
             </section>
 
             <section id="availability">
-                <h2><span aria-hidden="true">08</span> Beta availability</h2>
-                <p>Features, supported videos, language performance, and model availability may change during beta. Service can be interrupted by maintenance, errors, or changes to YouTube, Chrome, payment services, or AI providers. We do not promise uninterrupted availability or that every video will generate successfully.</p>
+                <h2><span aria-hidden="true">08</span> Service availability</h2>
+                <p>Features, supported videos, language performance, and model availability may change over time. Service can be interrupted by maintenance, errors, or changes to YouTube, Chrome, payment services, or AI providers. We do not promise uninterrupted availability or that every video will generate successfully.</p>
                 <p>Generated tracks are available for 30 days and may be deleted after expiry or when you delete them or your account. The service is not a permanent archive. Keep independent copies of material you need, where you have the right to do so.</p>
                 <p>Any service limitations in these terms apply only to the extent permitted by law and do not exclude statutory guarantees or remedies that cannot be excluded.</p>
             </section>

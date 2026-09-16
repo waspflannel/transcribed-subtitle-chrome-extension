@@ -8,6 +8,7 @@
                 <h1>{{ $job->public_id }}</h1>
                 <p>Public-safe support details. Generated subtitle text and provider payloads are not shown here.</p>
                 <p>Snapshot at {{ now()->toIso8601String() }}. This page does not update automatically.</p>
+                <p><a class="text-link strong-link" href="{{ route('marketing.support') }}">Contact support</a> and include the Support ID above when reporting a problem.</p>
             </div>
             <div class="action-stack horizontal-actions">
                 <a class="button button-secondary" href="{{ route('dashboard.jobs.show', ['jobId' => $job->public_id]) }}">Refresh status</a>

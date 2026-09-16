@@ -3,7 +3,7 @@
 @section('content')
     <section class="page-hero">
         <p class="eyebrow">Support</p>
-        <h1>Help for beta access, billing, and generation failures.</h1>
+        <h1>Report a bug. Get in touch.</h1>
         <p>
             Use public-safe job details from your dashboard when asking for help. Do not send generated transcript text unless support explicitly asks for a minimal excerpt.
         </p>
@@ -12,17 +12,13 @@
     <section class="section split-section" id="extension-install">
         <div data-reveal>
             <h2>Contact</h2>
-            <p>Email paid beta support at <a class="text-link strong-link" href="mailto:{{ $supportEmail }}">{{ $supportEmail }}</a>.</p>
-            <p>Include your account email, plan, public-safe job ID, failure code, and what you expected to happen.</p>
+            <p>Email <a class="text-link strong-link" href="mailto:{{ $supportEmail }}">{{ $supportEmail }}</a> for bugs, questions, and account or billing help.</p>
+            <p>Include what you were doing, what you expected, and what happened instead. For generation issues, include your account email, Support ID, and failure code from your dashboard.</p>
         </div>
         <div data-reveal data-reveal-delay="100">
-            <h2>Install help</h2>
-            @if (config('marketing.chrome_extension_url'))
-                <p><a class="strong-link" href="{{ config('marketing.chrome_extension_url') }}">Add the extension to desktop Chrome</a>, then create an account, verify your email, and choose a plan. Sign in to the extension with that same account.</p>
-            @else
-                <p>Before subscribing, email support to request the current extension package or Chrome Web Store beta link. Install it in desktop Chrome, create an account, verify your email, and choose a plan. Sign in to the extension with that same account.</p>
-            @endif
-            <p>An active subscription is required to generate subtitles. The website preview works without an account.</p>
+            <h2>Looking for instructions?</h2>
+            <p>Start with <a class="strong-link" href="{{ route('marketing.how-to-use') }}#how-to-install">How to install</a> for Chrome Web Store and manual installation steps.</p>
+            <p>The <a class="strong-link" href="{{ route('marketing.how-to-use') }}">How To Use guide</a> covers generation, lyrics correction, single-word fixes, and study tools.</p>
         </div>
     </section>
 

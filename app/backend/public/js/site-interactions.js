@@ -40,62 +40,23 @@
         revealables.forEach((el) => observer.observe(el));
     }
 
-    const preview = document.querySelector('.product-demo');
+    const guideLinks = [...document.querySelectorAll('.guide-contents a[href^="#"]')];
 
-    if (preview) {
-        const tabs = [...preview.querySelectorAll('[role="tab"]')];
-        const selectPreview = (tab) => {
-            tabs.forEach((item) => {
-                const selected = item === tab;
-                item.setAttribute('aria-selected', String(selected));
-                item.tabIndex = selected ? 0 : -1;
-                document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
+    if (guideLinks.length > 0) {
+        const sections = guideLinks.map((link) => document.getElementById(link.hash.slice(1)));
+        const updateGuideLocation = () => {
+            let current = 0;
+            sections.forEach((section, index) => {
+                if (section.getBoundingClientRect().top <= 160) current = index;
+            });
+            guideLinks.forEach((link, index) => {
+                if (index === current) link.setAttribute('aria-current', 'location');
+                else link.removeAttribute('aria-current');
             });
         };
 
-        tabs.forEach((tab, index) => {
-            const panel = document.getElementById(tab.getAttribute('aria-controls'));
-            panel.setAttribute('role', 'tabpanel');
-            panel.setAttribute('aria-labelledby', tab.id);
-            panel.tabIndex = 0;
-            tab.addEventListener('click', () => selectPreview(tab));
-            tab.addEventListener('keydown', (event) => {
-                let next;
-                if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
-                if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
-                if (event.key === 'Home') next = 0;
-                if (event.key === 'End') next = tabs.length - 1;
-                if (next === undefined) return;
-                event.preventDefault();
-                selectPreview(tabs[next]);
-                tabs[next].focus();
-            });
-        });
-
-        preview.querySelector('[role="tablist"]').hidden = false;
-        selectPreview(tabs[0]);
-
-        preview.querySelectorAll('[data-preview-toggle]').forEach((button) => {
-            const target = document.getElementById(button.getAttribute('aria-controls'));
-            const setExpanded = (expanded) => {
-                target.hidden = !expanded;
-                button.setAttribute('aria-expanded', String(expanded));
-                if (button.dataset.openLabel) {
-                    button.textContent = expanded ? button.dataset.closeLabel : button.dataset.openLabel;
-                }
-            };
-            button.hidden = false;
-            setExpanded(target.id === 'preview-subtitles' || target.id === 'preview-translation');
-            button.addEventListener('click', () => setExpanded(target.hidden));
-        });
-
-        document.querySelectorAll('[data-preview-link]').forEach((link) => {
-            link.addEventListener('click', () => {
-                const tab = document.getElementById(`preview-tab-${link.dataset.previewLink}`);
-                selectPreview(tab);
-                requestAnimationFrame(() => tab.focus({ preventScroll: true }));
-            });
-        });
+        updateGuideLocation();
+        window.addEventListener('scroll', updateGuideLocation, { passive: true });
     }
 
     document.querySelectorAll('form[data-confirm]').forEach((form) => {

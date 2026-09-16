@@ -43,6 +43,11 @@ class MarketingPageController extends Controller
         return $this->marketingView($request, $analytics, 'privacy', 'marketing.privacy');
     }
 
+    public function howToUse(Request $request, FunnelAnalytics $analytics): View
+    {
+        return $this->marketingView($request, $analytics, 'how-to-use', 'marketing.how-to-use');
+    }
+
     public function terms(Request $request, FunnelAnalytics $analytics): View
     {
         return $this->marketingView($request, $analytics, 'terms', 'marketing.terms');
@@ -88,7 +93,7 @@ class MarketingPageController extends Controller
             ],
             'pricing' => [
                 'title' => 'Pricing for '.$productName,
-                'description' => 'Compare monthly video minutes and generation capacity. Every paid beta plan includes model choice, interactive word cards, and lyrics correction.',
+                'description' => 'Compare monthly video minutes and generation capacity. Every plan includes model choice, interactive word cards, and lyrics correction.',
                 'route' => 'marketing.pricing',
             ],
             'privacy' => [
@@ -96,14 +101,19 @@ class MarketingPageController extends Controller
                 'description' => 'How we handle account data, public YouTube audio, pasted lyrics, AI providers, cookies, and saved tracks, plus your account deletion and privacy choices.',
                 'route' => 'marketing.privacy',
             ],
+            'how-to-use' => [
+                'title' => 'How To Use | '.$productName,
+                'description' => 'Install the Chrome extension, generate subtitles, replace lyrics, fix a word, and use translations, word cards, study tools, and saved generations.',
+                'route' => 'marketing.how-to-use',
+            ],
             'terms' => [
                 'title' => 'Terms for '.$productName,
-                'description' => 'Terms for our paid beta: monthly subscriptions, video minutes, cancellation, refunds, lyrics correction, content rights, and AI limitations.',
+                'description' => 'Terms for monthly subscriptions, video minutes, cancellation, refunds, lyrics correction, content rights, and AI limitations.',
                 'route' => 'marketing.terms',
             ],
             'support' => [
                 'title' => 'Support for '.$productName,
-                'description' => 'Get help with beta access, extension setup, billing, refunds, generation failures, and language coverage.',
+                'description' => 'Report bugs or get help with extension setup, billing, refunds, generation failures, and language coverage.',
                 'route' => 'marketing.support',
             ],
         ][$page];

@@ -6,22 +6,35 @@
     <section class="hero-band">
         <p class="eyebrow">Chrome extension for YouTube immersion</p>
         <h1>Learn a language from the videos and <span class="hl">music you love.</span></h1>
-        <p class="hero-lede">Generate AI subtitles, explore words and translations, and bring your own lyrics to study your favorite songs.</p>
+        <p class="hero-lede">Generate subtitles, explore words and translations, and bring your own lyrics to study your favorite songs.</p>
         <div class="hero-actions">
             <a class="button button-accent" href="#pricing">Get started</a>
-            <a class="button button-secondary" href="#demo">Try the preview <span aria-hidden="true">↘</span></a>
+            <a class="button button-secondary" href="{{ route('marketing.how-to-use') }}">How To Use <span aria-hidden="true">↗</span></a>
         </div>
         <p class="hero-meta">Public YouTube videos + Shorts · No captions required</p>
     </section>
 
-    @include('marketing.partials.product-demo')
+    <section class="section guide-intro" aria-labelledby="guide-intro-title">
+        <div>
+            <p class="eyebrow">How To Use</p>
+            <h2 id="guide-intro-title">A guide for <span class="hl">every step.</span></h2>
+            <p>Install the extension, generate your first subtitles, and learn how to correct lyrics and make the most of your study tools.</p>
+            <a class="button" href="{{ route('marketing.how-to-use') }}">Open the guide <span aria-hidden="true">↗</span></a>
+        </div>
+        <nav class="guide-intro-links" aria-label="Popular guides">
+            <a href="{{ route('marketing.how-to-use') }}#how-to-install"><span>01</span> How to install <span aria-hidden="true">↗</span></a>
+            <a href="{{ route('marketing.how-to-use') }}#generate-subtitles"><span>02</span> Generate subtitles <span aria-hidden="true">↗</span></a>
+            <a href="{{ route('marketing.how-to-use') }}#replace-lyrics"><span>03</span> Replace full lyrics <span aria-hidden="true">↗</span></a>
+            <a href="{{ route('marketing.how-to-use') }}#fix-a-word"><span>04</span> Fix a single word <span aria-hidden="true">↗</span></a>
+        </nav>
+    </section>
 
     <section class="section lyrics-section" id="lyrics">
         <div class="section-heading" data-reveal>
             <p class="eyebrow">Bring your own lyrics</p>
             <h2>Your favorite song.<br>Your lyrics. <span class="hl">Your next lesson.</span></h2>
             <p>Already have the words? Paste the full lyrics for a generated song track. We fit them to its existing timing and rebuild translations, pronunciation, and word data.</p>
-            <a class="text-link strong-link" href="#demo" data-preview-link="lyrics">Try lyrics correction <span aria-hidden="true">↗</span></a>
+            <a class="text-link strong-link" href="{{ route('marketing.how-to-use') }}#replace-lyrics">Learn how to replace lyrics <span aria-hidden="true">↗</span></a>
         </div>
         <div class="lyric-sheet" data-reveal>
             <p class="eyebrow">A small correction. A different meaning.</p>
@@ -96,17 +109,12 @@
         <div class="step-list" data-reveal>
             <article class="step" id="install">
                 <h3>Get the extension</h3>
-                @if (config('marketing.chrome_extension_url'))
-                    <p>Add the extension to desktop Chrome. You will need an account and an active plan to generate subtitles.</p>
-                    <a class="text-link strong-link" href="{{ config('marketing.chrome_extension_url') }}">Add to Chrome <span aria-hidden="true">↗</span></a>
-                @else
-                    <p>Request your beta install link before subscribing, then add the extension to desktop Chrome.</p>
-                    <a class="text-link strong-link" href="{{ route('marketing.support') }}#extension-install">Request install link <span aria-hidden="true">↗</span></a>
-                @endif
+                <p>Add the extension to desktop Chrome through the Chrome Web Store or install a downloaded package.</p>
+                <a class="text-link strong-link" href="{{ route('marketing.how-to-use') }}#how-to-install">How to install <span aria-hidden="true">↗</span></a>
             </article>
             <article class="step">
                 <h3>Choose your plan</h3>
-                <p>Create an account, verify your email, and choose a subscription. Sign in to the extension with the same account.</p>
+                <p>Create an account and choose a subscription. Sign in to the extension with the same account.</p>
                 <a class="text-link strong-link" href="#pricing">Compare plans <span aria-hidden="true">↘</span></a>
             </article>
             <article class="step">
@@ -152,7 +160,7 @@
         <div class="faq-list" data-reveal>
             <details open>
                 <summary><span class="faq-q">01</span>What can I watch?</summary>
-                <p>Only public YouTube watch pages and Shorts are supported for beta, including music videos. Use the extension in desktop Chrome. Existing captions are not required. Private videos, live captioning, and other platforms are not supported.</p>
+                <p>Only public YouTube watch pages and Shorts are supported, including music videos. Use the extension in desktop Chrome. Existing captions are not required. Private videos, live captioning, and other platforms are not supported.</p>
             </details>
             <details>
                 <summary><span class="faq-q">02</span>Can I use my own lyrics?</summary>
@@ -171,16 +179,12 @@
                 <p>The wait depends on video length, language, model, selected learning layers, and queue demand. Subtitles appear as they become ready, so you can start before the entire track is finished. Reopening a retained completed track does not require a new generation.</p>
             </details>
             <details>
-                <summary><span class="faq-q">06</span>What do I need for the paid beta?</summary>
-                <p>You need desktop Chrome, the extension, a verified account, and an active subscription. <a class="strong-link" href="#install">Check installation access</a> before choosing a plan. Generation starts only when you select Generate.</p>
+                <summary><span class="faq-q">06</span>What happens to my audio and subtitles?</summary>
+                <p>Temporary raw audio is used for processing and deleted after success or failure. Generated tracks are retained for 30 days for reuse and support. Interactive word cards explain words in context; saved vocabulary and a spaced-repetition review system are not currently included.</p>
             </details>
             <details>
-                <summary><span class="faq-q">07</span>What happens to my audio and subtitles?</summary>
-                <p>Temporary raw audio is used for processing and deleted after success or failure. Generated tracks are retained for 30 days for reuse and support. Interactive word cards explain words in context; saved vocabulary and a spaced-repetition review system are not included in this beta.</p>
-            </details>
-            <details>
-                <summary><span class="faq-q">08</span>What if something goes wrong?</summary>
-                <p>AI subtitles can contain mistakes, especially with unclear audio. You can correct words or replace a song’s lyrics. Contact support for billing, access, or generation failures; beta refund requests are handled case by case.</p>
+                <summary><span class="faq-q">07</span>What if something goes wrong?</summary>
+                <p>Subtitles can contain mistakes, especially with unclear audio. You can correct words or replace a song’s lyrics. <a class="strong-link" href="{{ route('marketing.support') }}">Contact support</a> to report a bug or get help with billing, access, or generation failures.</p>
             </details>
         </div>
     </section>

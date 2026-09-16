@@ -54,7 +54,7 @@
                 <a href="{{ route('marketing.home') }}#lyrics">Lyrics</a>
                 <a href="{{ route('marketing.home') }}#models">Models</a>
                 <a href="{{ route('marketing.home') }}#features">Study tools</a>
-                <a href="{{ route('marketing.home') }}#how">How it works</a>
+                <a href="{{ route('marketing.how-to-use') }}" @if (request()->routeIs('marketing.how-to-use')) aria-current="page" @endif>How To Use</a>
                 <a href="{{ route('marketing.home') }}#languages">Languages</a>
                 <a href="{{ route('marketing.home') }}#pricing">Pricing</a>
             </nav>
@@ -85,6 +85,7 @@
                 <p>Learn from the videos and music you love. AI subtitles, interactive word cards, and lyrics correction for YouTube.</p>
             </div>
             <nav aria-label="Footer">
+                <a href="{{ route('marketing.how-to-use') }}">How To Use</a>
                 <a href="{{ route('marketing.pricing') }}">Pricing</a>
                 <a href="{{ route('marketing.support') }}">Support</a>
                 <a href="{{ route('marketing.privacy') }}">Privacy</a>
