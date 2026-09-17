@@ -10,20 +10,22 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class FailStalledSubtitleJobsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_it_fails_running_jobs_past_their_stage_timeout_plus_slack_and_records_a_trace_event(): void
+    #[TestWith(['tokenizing'])]
+    #[TestWith(['finalizing'])]
+    public function test_it_fails_running_jobs_past_their_stage_timeout_plus_slack_and_records_a_trace_event(string $stage): void
     {
-        // A tokenizing job last touched well past the tokenizing timeout (600s)
-        // plus default slack (120s). Set its updated_at 30 minutes ago so it
-        // is safely over the deadline regardless of config drift.
+        // Both stages stay bounded if their worker dies. Thirty minutes
+        // is safely beyond both deadlines regardless of config drift.
         $stalled = SubtitleJob::factory()->create([
             'status' => 'running',
-            'stage' => 'tokenizing',
+            'stage' => $stage,
             'run_id' => '018f0000-0000-7000-8000-000000000001',
             'updated_at' => now()->subMinutes(30),
         ]);
@@ -31,7 +33,7 @@ class FailStalledSubtitleJobsTest extends TestCase
         // A running job still inside its stage timeout must be left alone.
         $fresh = SubtitleJob::factory()->create([
             'status' => 'running',
-            'stage' => 'tokenizing',
+            'stage' => $stage,
             'run_id' => '018f0000-0000-7000-8000-000000000002',
             'updated_at' => now()->subSecond(),
         ]);
@@ -50,7 +52,7 @@ class FailStalledSubtitleJobsTest extends TestCase
         $completed->refresh();
 
         $this->assertSame('failed', $stalled->status);
-        $this->assertSame('tokenizing', $stalled->stage);
+        $this->assertSame($stage, $stalled->stage);
         $this->assertSame('enrichment_failed', $stalled->error_code);
 
         $this->assertSame('running', $fresh->status, 'Job inside its stage timeout must not be failed.');

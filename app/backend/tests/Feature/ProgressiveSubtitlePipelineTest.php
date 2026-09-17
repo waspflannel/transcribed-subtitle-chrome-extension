@@ -14,6 +14,7 @@ use App\Models\SubtitleJobArtifact;
 use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -21,17 +22,22 @@ use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitlePartialTrackAssembler;
+use App\Services\Subtitles\TimestampedSubtitleTrackGenerator;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\Transcription\TimestampedTranscript;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
+use RuntimeException;
 use Tests\TestCase;
 
 class ProgressiveSubtitlePipelineTest extends TestCase
@@ -57,7 +63,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             'subtitles.enrichment.balanced_batches' => true,
             'subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000,
         ]);
-        Bus::fake();
+        Bus::fake()->except(FinalizeSubtitleJob::class);
         Http::preventStrayRequests();
         Http::fake(['api.elevenlabs.test/*' => fn () => Http::response($this->transcriptionPayload)]);
         CueAnalysisAgent::fake(function (string $prompt): array {
@@ -380,7 +386,8 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertCount($batchCount, $this->analysisInputs);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        Bus::assertDispatchedTimes(FinalizeSubtitleJob::class, 1);
+        $this->assertSame('completed', $job->fresh()->status);
+        $this->assertDatabaseCount('jobs', 0);
         $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $job->refresh()->load('track');
@@ -471,7 +478,54 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
         Bus::assertBatchCount(1);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        Bus::assertDispatchedTimes(FinalizeSubtitleJob::class, 1);
+        $this->assertSame('completed', $job->fresh()->status);
+    }
+
+    public function test_hour_long_analysis_finalizes_after_commit_without_another_queue_delivery(): void
+    {
+        $job = $this->completedAnalysisJob(1200);
+        $pipeline = app(SubtitleGenerationPipeline::class);
+
+        DB::beginTransaction();
+        $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
+        $this->assertSame('finalizing', $job->fresh()->stage);
+        $this->assertSame('running', $job->fresh()->status);
+        $this->assertDatabaseCount('subtitle_tracks', 0);
+        DB::commit();
+
+        $this->assertSame('completed', $job->fresh()->status);
+        $this->assertCount(1200, $job->fresh()->track->cues);
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertSame(60, (int) BillingUsageEvent::where('event_type', 'debit')->sum('used_minutes_delta'));
+
+        // Old serialized finalizers and duplicate continuations remain harmless.
+        (new FinalizeSubtitleJob($job->id, $job->run_id))->handle($pipeline);
+        $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
+        $this->assertSame(1, BillingUsageEvent::where('event_type', 'debit')->count());
+        $this->travel(8)->minutes();
+        $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
+        $this->assertSame('completed', $job->fresh()->status);
+    }
+
+    public function test_synchronous_finalizer_failure_releases_its_reservation_and_cleans_artifacts(): void
+    {
+        $job = $this->completedAnalysisJob();
+        $this->mock(TimestampedSubtitleTrackGenerator::class)
+            ->shouldReceive('generate')->once()->andThrow(new RuntimeException('Synthetic persistence failure.'));
+
+        try {
+            app(SubtitleGenerationPipeline::class)->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
+            $this->fail('Expected the finalization failure to propagate.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('Synthetic persistence failure.', $exception->getMessage());
+        }
+
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertSame('finalizing', $job->fresh()->stage);
+        $this->assertDatabaseCount('subtitle_tracks', 0);
+        $this->assertDatabaseCount('subtitle_job_artifacts', 0);
+        $this->assertSame(0, BillingUsageEvent::where('event_type', 'debit')->count());
+        $this->assertSame(1, BillingUsageEvent::where('event_type', 'refund')->count());
     }
 
     #[TestWith([false])]
@@ -548,6 +602,28 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $cues[0]['sourceText'] = 'A different transcript';
         $this->expectException(SubtitleProcessingException::class);
         $store->appendDraftCues($job, $cues);
+    }
+
+    private function completedAnalysisJob(int $cueCount = 1): SubtitleJob
+    {
+        $job = $this->job();
+        $job->update(['stage' => 'tokenizing', 'video_duration_seconds' => $cueCount * 3]);
+        app(BillingEntitlementService::class)->syncJobReservationToActualDuration($job);
+        $cues = array_map(fn (int $index): array => [
+            'cueId' => sprintf('cue-%04d', $index + 1), 'index' => $index,
+            'startMs' => $index * 3000, 'endMs' => ($index + 1) * 3000,
+            'sourceText' => 'Hello.', 'translatedText' => 'Bonjour.',
+            'tokens' => [['index' => 0, 'text' => 'Hello', 'normalizedText' => 'hello']],
+        ], range(0, $cueCount - 1));
+        $store = app(SubtitleJobArtifactStore::class);
+        $store->putTranscript($job, new TimestampedTranscript('eng', $cueCount * 3, [], "WEBVTT\n\n"));
+        $store->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+        foreach ($store->pendingAnalysisIndexes($job) as $index) {
+            $store->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, $index,
+                new CueEnrichmentResult($store->cueBatch($job, SubtitleJobArtifactStore::DRAFT_CUES, $index)));
+        }
+
+        return $job;
     }
 
     private function job(): SubtitleJob
