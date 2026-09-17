@@ -225,6 +225,24 @@ it('resets video language on panel startup and video changes, but preserves manu
   expect(state.settings.sourceLanguage).toBe('jpn');
   expect(selected()).toContain('Japanese');
 
+  const interfaceSelector = dom.window.document.querySelector<HTMLSelectElement>('[data-interface-language]')!;
+  for (const locale of ['es', 'ja', 'en']) {
+    interfaceSelector.value = locale;
+    interfaceSelector.dispatchEvent(new dom.window.Event('change'));
+    await vi.advanceTimersByTimeAsync(0);
+    await refresh();
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'panel.updateSettings', patch: { interfaceLocale: locale },
+    }));
+    expect(dom.window.document.documentElement.lang).toBe(locale);
+    expect(interfaceSelector.value).toBe(locale);
+    expect(state.settings.sourceLanguage).toBe('jpn');
+    expect(state.settings.targetLanguage).toBe('fra');
+    const signIn = dom.window.document.querySelector('[data-i18n="Sign in"]')?.textContent?.trim();
+    if (locale === 'en') expect(signIn).toBe('Sign in');
+    else expect(signIn).not.toBe('Sign in');
+  }
+
   state.pageStatus = { supported: true, videoId: 'M7lc1UVf-VE', url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE', mediaKind: 'video' };
   await refresh();
   expect(state.settings.sourceLanguage).toBe('auto');

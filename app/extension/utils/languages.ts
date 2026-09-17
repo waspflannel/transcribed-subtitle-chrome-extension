@@ -1,4 +1,5 @@
 import languageCatalog from '@transcribed-subtitle-extension/contracts/languages.json';
+import { t } from './i18n';
 
 import type { CreateSubtitleJobRequest } from './contracts';
 
@@ -57,12 +58,13 @@ export function languageLabel(code: string): string {
     throw new TypeError(`Unknown language code: ${code}`);
   }
 
-  return language.label;
+  return t(language.label);
 }
 
 export function languageSearchText(language: LanguageOption): string {
   return [
     language.label,
+    t(language.label),
     language.code,
     ...(language.aliases ?? []),
   ].join(' ').toLowerCase();

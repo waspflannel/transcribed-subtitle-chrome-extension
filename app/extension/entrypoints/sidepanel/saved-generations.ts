@@ -1,3 +1,4 @@
+import { t, interfaceLocale } from '../../utils/i18n';
 import { browser } from 'wxt/browser';
 import type { PanelState, PanelRequest } from '../../utils/messages';
 import type { SubtitleJobHistoryItem } from '../../utils/contracts';
@@ -19,24 +20,26 @@ export function bindSavedGenerations(
   let jobs: SubtitleJobHistoryItem[] = [];
   let renderedJobs: SubtitleJobHistoryItem[] | undefined;
   let renderedJobId: string | undefined;
+  let renderedLocale: string | undefined;
   let loading = false;
   let switching = false;
-  const showError = (message: string): void => { status.textContent = message; };
+  const showError = (message: string): void => { status.textContent = t(message); };
   const draw = (): void => {
     const track = latest?.subtitleState.type === 'ready' ? latest.subtitleState.track : null;
-    if (renderedJobs !== jobs || renderedJobId !== track?.jobId) {
+    if (renderedJobs !== jobs || renderedJobId !== track?.jobId || renderedLocale !== interfaceLocale()) {
       renderedJobs = jobs;
       renderedJobId = track?.jobId;
+      renderedLocale = interfaceLocale();
       select.replaceChildren();
       if (track && !jobs.some(job => job.jobId === track.jobId)) {
-        select.add(option('Current generation', track.jobId));
+        select.add(option(t("Current generation"), track.jobId));
       }
       for (const job of jobs) {
-        const source = job.sourceLanguage === 'auto' ? 'Auto' : languageLabel(job.sourceLanguage);
+        const source = job.sourceLanguage === 'auto' ? t("Auto") : languageLabel(job.sourceLanguage);
         const model = job.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber';
         select.add(option(`${source} → ${languageLabel(job.targetLanguage)} (${model})`, job.jobId));
       }
-      if (track) select.add(option('Delete selected generation…', DELETE_GENERATION));
+      if (track) select.add(option(t("Delete selected generation…"), DELETE_GENERATION));
     }
     if (select.value !== (track?.jobId ?? '')) select.value = track?.jobId ?? '';
     const correcting = latest?.lyricsCorrection?.status === 'queued' || latest?.lyricsCorrection?.status === 'running';
@@ -48,17 +51,17 @@ export function bindSavedGenerations(
     const page = latest?.pageStatus;
     if (!page?.supported || latest.accountState.status !== 'authenticated') return;
     loading = true;
-    status.textContent = 'Loading saved generations…';
+    status.textContent = t("Loading saved generations…");
     draw();
     try {
       const response = await browser.runtime.sendMessage({ type: 'panel.listGenerations', youtubeVideoId: page.videoId, windowId: windowId() });
       if (requestRevision !== revision) return;
-      if (!response || !Array.isArray(response.jobs)) throw new Error(response?.error ?? 'Unable to load saved generations. Try refreshing.');
+      if (!response || !Array.isArray(response.jobs)) throw new Error(response?.error ?? t("Unable to load saved generations. Try refreshing."));
       jobs = response.jobs.filter((job: SubtitleJobHistoryItem) => job.youtubeVideoId === page.videoId && job.status === 'completed');
       status.textContent = '';
       if (response.panelState) applyPanelState(response.panelState);
     } catch (error) {
-      if (requestRevision === revision) showError(error instanceof Error ? error.message : 'Unable to load saved generations.');
+      if (requestRevision === revision) showError(error instanceof Error ? error.message : t("Unable to load saved generations."));
     } finally {
       if (requestRevision === revision) { loading = false; draw(); }
     }
@@ -72,9 +75,9 @@ export function bindSavedGenerations(
     if (jobId === track.jobId) return;
     const deleting = jobId === DELETE_GENERATION;
     select.value = track.jobId;
-    if (deleting && !window.confirm('Delete this saved generation? This cannot be undone. Used minutes will not be refunded.')) return;
+    if (deleting && !window.confirm(t("Delete this saved generation? This cannot be undone. Used minutes will not be refunded."))) return;
     switching = true;
-    status.textContent = deleting ? 'Deleting generation…' : 'Loading transcript…';
+    status.textContent = deleting ? t("Deleting generation…") : t("Loading transcript…");
     draw();
     void selectGeneration({ type: deleting ? 'panel.deleteGeneration' : 'panel.selectGeneration', jobId: deleting ? track.jobId : jobId, currentJobId: track.jobId,
       trackId: track.trackId, youtubeVideoId: track.youtubeVideoId, tabId: state.activeTabId }).finally(() => {

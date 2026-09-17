@@ -2,10 +2,11 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import type { PanelState } from '../utils/messages';
 import { bindSavedGenerations } from '../entrypoints/sidepanel/saved-generations';
+import { setInterfaceLocale, t } from '../utils/i18n';
 
 const mocks = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage: mocks.sendMessage } } }));
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); setInterfaceLocale('en'); });
 
 function state(jobId = 'luna'): PanelState {
   return { activeTabId: 1, accountState: { status: 'authenticated', id: 'account' },
@@ -54,6 +55,12 @@ it('keeps matching language pairs separate by job and selects the exact generati
     'Delete selected generation…',
   ]);
   expect(select.value).toBe('luna');
+  for (const locale of ['es', 'ja', 'en']) {
+    setInterfaceLocale(locale);
+    view.render(state());
+    expect(select.value).toBe('luna');
+    expect(select.options[3]!.textContent).toBe(t('Delete selected generation…'));
+  }
   select.value = 'cerebras';
   select.dispatchEvent(new dom.window.Event('change'));
   expect(onSelect).toHaveBeenCalledWith({ type: 'panel.selectGeneration', jobId: 'cerebras', currentJobId: 'luna',

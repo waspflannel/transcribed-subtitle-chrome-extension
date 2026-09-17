@@ -1,3 +1,4 @@
+import { t, INTERFACE_LOCALES, isInterfaceLocale, setInterfaceLocale, localizeDocument, interfaceLocale } from '../../utils/i18n';
 import './style.css';
 import { bindSavedGenerations } from './saved-generations';
 
@@ -156,6 +157,17 @@ const {
   settingsLanguageSummary,
   shortcutHelpList,
 } = getPanelDom();
+
+const interfaceLanguageSelect = document.querySelector<HTMLSelectElement>('[data-interface-language]')!;
+interfaceLanguageSelect.innerHTML = '<option value="auto" data-i18n="Browser language">Browser language</option>'
+  + Object.entries(INTERFACE_LOCALES).map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
+interfaceLanguageSelect.addEventListener('change', () => {
+  const value = interfaceLanguageSelect.value;
+  if (value === 'auto' || isInterfaceLocale(value)) void updateSettings({ interfaceLocale: value });
+});
+setInterfaceLocale('auto');
+localizeDocument(document);
+let appliedInterfaceLocale = interfaceLocale();
 
 let currentSettings: ExtensionSettings | null = null;
 let latestState: PanelState | null = null;
@@ -469,8 +481,8 @@ function openGenerationConfirmation(): void {
   confirmedGenerationContext = currentGenerationContext();
   const { settings, pageVideoDurationSeconds: duration } = latestState;
   const minutes = typeof duration === 'number'
-    ? `Estimated usage: ${Math.max(1, Math.ceil(duration / 60))} plan minutes for the full video`
-    : 'The full video duration counts toward your plan minutes';
+    ? t("Estimated usage: {value1} plan minutes for the full video", {value1: Math.max(1, Math.ceil(duration / 60))})
+    : t("The full video duration counts toward your plan minutes");
   generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'} · ${minutes}.`;
   generationConfirmation.showModal();
 }
@@ -489,7 +501,7 @@ async function generateSubtitles(): Promise<void> {
   generationCancelFeedback = null;
   generationRequestBusy = true;
   generateButton.disabled = true;
-  generateButton.textContent = 'Starting...';
+  generateButton.textContent = t("Starting...");
 
   try {
     const applied = await sendPanelRequest({ type: 'panel.generateSubtitles', confirmationContext }, 'generation-start', 'mutation');
@@ -535,7 +547,7 @@ async function cancelGeneration(button: HTMLButtonElement): Promise<void> {
     }, 'generation-cancel', 'mutation');
 
     if (applied) {
-      generationCancelFeedback = { kind: 'success', message: 'Generation cancelled.' };
+      generationCancelFeedback = { kind: 'success', message: t("Generation cancelled.") };
       if (latestState) showPanelState(latestState);
     }
   } finally {
@@ -583,7 +595,7 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
 function renderLyricsCorrectionInput(): void {
   const count = lyricsCharacterCount(lyricsCorrectionTextarea.value);
   const error = count > 0 ? lyricsValidationError(lyricsCorrectionTextarea.value) : null;
-  lyricsCorrectionCount.textContent = `${count.toLocaleString()} / 25,000 characters`;
+  lyricsCorrectionCount.textContent = t("{value1} / 25,000 characters", {value1: count.toLocaleString()});
   lyricsCorrectionError.textContent = error ?? '';
   lyricsCorrectionError.hidden = error === null;
   lyricsCorrectionTextarea.setAttribute('aria-invalid', String(error !== null));
@@ -673,15 +685,15 @@ async function submitQuickFix(cueId: string, tokenIndex: number, text: string): 
 
   if (applied) {
     clearQuickFixSelection();
-    quickFixNotice = 'Saved.';
+    quickFixNotice = t("Saved.");
     transcriptSearch.focus({ preventScroll: true });
   } else if (quickFixError?.code === 'lyrics_correction_in_progress' && quickFixError.reason === 'stale_track') {
     clearQuickFixSelection();
-    quickFixNotice = 'The subtitles changed — the latest version is loaded.';
+    quickFixNotice = t("The subtitles changed — the latest version is loaded.");
     void refreshBackendState();
     transcriptSearch.focus({ preventScroll: true });
   } else {
-    transcriptView.setQuickFixError(quickFixError?.message ?? 'Could not save. Try again.');
+    transcriptView.setQuickFixError(quickFixError?.message ?? t("Could not save. Try again."));
   }
 
   renderLyricsEditState();
@@ -718,12 +730,12 @@ function renderLyricsEditState(): void {
   /* Replace all: Continue reveals the inline warning and swaps the footer
      actions; the pasted text stays visible while confirming. */
   lyricsConfirmation.hidden = !lyricsReplaceConfirm;
-  lyricsConfirmation.textContent = 'This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.';
+  lyricsConfirmation.textContent = t("This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.");
   lyricsCorrectionButton.hidden = lyricsReplaceConfirm;
   confirmLyricsCorrectionButton.hidden = !lyricsReplaceConfirm;
   cancelLyricsConfirmationButton.hidden = !lyricsReplaceConfirm;
-  confirmLyricsCorrectionButton.textContent = 'Replace entire track';
-  cancelLyricsConfirmationButton.textContent = 'Cancel';
+  confirmLyricsCorrectionButton.textContent = t("Replace entire track");
+  cancelLyricsConfirmationButton.textContent = t("Cancel");
   lyricsCorrectionTextarea.disabled = lyricsCorrectionRequestBusy;
   confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 
@@ -755,7 +767,7 @@ async function clearLocalState(): Promise<void> {
 async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
   event.preventDefault();
 
-  setAccountRequestBusy(true, 'Signing in...');
+  setAccountRequestBusy(true, t("Signing in..."));
 
   try {
     const signedIn = await sendPanelRequest(
@@ -773,7 +785,7 @@ async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
     accountPasswordInput.value = '';
 
     if (signedIn) {
-      showAccountFeedback('success', 'Signed in.');
+      showAccountFeedback('success', t("Signed in."));
     }
   } finally {
     setAccountRequestBusy(false);
@@ -781,13 +793,13 @@ async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
 }
 
 async function logoutAccount(): Promise<void> {
-  setAccountRequestBusy(true, 'Signing out...');
+  setAccountRequestBusy(true, t("Signing out..."));
 
   try {
     const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account', 'mutation', true);
 
     if (signedOut) {
-      showAccountFeedback('success', 'Signed out.');
+      showAccountFeedback('success', t("Signed out."));
     }
   } finally {
     setAccountRequestBusy(false);
@@ -831,7 +843,7 @@ async function sendPanelRequest(
         return false;
       }
       latestAppliedSeq = seq;
-      showRequestError('The extension background did not respond. Reload AI Language Subtitles in chrome://extensions, then refresh YouTube and reopen the panel.', errorTarget);
+      showRequestError(t("The extension background did not respond. Reload AI Language Subtitles in chrome://extensions, then refresh YouTube and reopen the panel."), errorTarget);
 
       return false;
     }
@@ -944,11 +956,21 @@ function languageButtonCode(event: MouseEvent): string | null {
 function setLanguagesExpanded(expanded: boolean): void {
   languagesExpanded = expanded;
   languageExpand.hidden = !expanded;
-  toggleLanguagesButton.textContent = expanded ? 'Done' : 'Change';
+  toggleLanguagesButton.textContent = expanded ? t("Done") : t("Change");
   toggleLanguagesButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 }
 
 function showPanelState(state: PanelState): void {
+  setInterfaceLocale(state.settings.interfaceLocale);
+  if (appliedInterfaceLocale !== interfaceLocale()) {
+    localizeDocument(document);
+    appliedInterfaceLocale = interfaceLocale();
+    lastProgressAnnouncement = null;
+    setLanguagesExpanded(languagesExpanded);
+  }
+  interfaceLanguageSelect.value = state.settings.interfaceLocale;
+  renderShortcutHelp();
+  accountBillingLink.innerHTML = accountBillingLinkHtml();
   const previousAccountId = latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null;
   const nextAccountId = state.accountState.status === 'authenticated' ? state.accountState.id : null;
   const previousStateType = latestState?.subtitleState.type;
@@ -1029,7 +1051,7 @@ function showPanelState(state: PanelState): void {
   renderGenerateNote(state, supported);
   if (confirmationChanged) {
     statusBanner.hidden = false;
-    statusBanner.textContent = 'The selected video, account, or generation availability changed.';
+    statusBanner.textContent = t("The selected video, account, or generation availability changed.");
   }
 
   renderLanguagePair(settings);
@@ -1052,7 +1074,7 @@ function showPanelState(state: PanelState): void {
   timingControl.showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
 
-  nowPlayingEyebrow.textContent = supported ? 'Now playing' : 'No video';
+  nowPlayingEyebrow.textContent = supported ? t("Now playing") : t("No video");
   nowPlayingTitle.textContent = nowPlayingTitleLabel(state);
   nowPlayingMeta.textContent = supported
     ? `${videoDurationLabel(state)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)}`
@@ -1073,7 +1095,7 @@ function showPanelState(state: PanelState): void {
 function renderLyricsCorrectionState(state: PanelState): void {
   const correction = state.lyricsCorrection;
   correctionSyncError.hidden = !state.lyricsCorrectionSyncError;
-  correctionSyncError.textContent = state.lyricsCorrectionSyncError ?? '';
+  correctionSyncError.textContent = t(state.lyricsCorrectionSyncError ?? '');
 
   if (
     !correction
@@ -1099,21 +1121,21 @@ function renderLyricsCorrectionState(state: PanelState): void {
   correctionTerminalStatus.hidden = false;
   if (correction.status === 'completed') {
     correctionTerminalStatus.className = 'status-banner correction-status success';
-    correctionTerminalMessage.textContent = 'Lyrics replaced — the transcript is up to date.';
+    correctionTerminalMessage.textContent = t("Lyrics replaced — the transcript is up to date.");
     return;
   }
 
   correctionTerminalStatus.className = 'status-banner correction-status';
   correctionTerminalMessage.textContent = correction.status === 'cancelled'
-    ? 'Replacement cancelled. Your current subtitles are unchanged.'
-    : correction.message || 'Replacement failed. Your current subtitles are unchanged.';
+    ? t("Replacement cancelled. Your current subtitles are unchanged.")
+    : t(correction.message || '') || t("Replacement failed. Your current subtitles are unchanged.");
 }
 
 function showStatusBanner(state: PanelState): void {
   if (generationCancelFeedback) {
     statusBanner.hidden = false;
     statusBanner.className = `status-banner${generationCancelFeedback.kind === 'success' ? ' success' : ''}`;
-    statusBanner.textContent = generationCancelFeedback.message;
+    statusBanner.textContent = t(generationCancelFeedback.message);
 
     return;
   }
@@ -1121,7 +1143,7 @@ function showStatusBanner(state: PanelState): void {
   if (state.subtitleState.type === 'error') {
     statusBanner.hidden = false;
     statusBanner.className = 'status-banner';
-    statusBanner.textContent = state.subtitleState.message || 'Generation failed.';
+    statusBanner.textContent = t(state.subtitleState.message || "") || t("Generation failed.");
 
     return;
   }
@@ -1169,7 +1191,7 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   if (watchScreen === 'progress' && !loading && !correctionRunning) watchScreen = 'transcript';
   progressContainer.hidden = (!loading && !correctionRunning) || (ready && watchScreen !== 'progress');
   progressSummary.hidden = !ready || !correctionRunning || watchScreen !== 'transcript';
-  progressSummaryLabel.textContent = correctionRunning ? 'Updating lyrics…' : '';
+  progressSummaryLabel.textContent = correctionRunning ? t("Updating lyrics…") : '';
   backTranscriptButton.hidden = !ready || watchScreen === 'transcript';
   backTranscriptButton.disabled = quickFixRequestBusy || lyricsCorrectionRequestBusy;
   readyToolbar.hidden = watchScreen !== 'transcript' || partial;
@@ -1179,7 +1201,7 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   watchReady.hidden = !ready && !partial;
   cancelGenerationButton.hidden = !generationInProgress;
   cancelGenerationButton.disabled = generationCancellationRequestBusy || !canCancelGeneration;
-  cancelGenerationButton.textContent = generationCancellationRequestBusy ? 'Cancelling…' : 'Cancel generation';
+  cancelGenerationButton.textContent = generationCancellationRequestBusy ? t("Cancelling…") : t("Cancel generation");
   if (canCancelGeneration) {
     cancelGenerationButton.dataset.jobId = subtitleState.jobId;
     cancelGenerationButton.dataset.youtubeVideoId = subtitleState.youtubeVideoId;
@@ -1194,30 +1216,30 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
     const queued = subtitleState.status === 'queued';
     const progress = generationProgress(subtitleState);
 
-    progressLabel.textContent = queued ? 'Queued' : 'Generating';
-    progressStages.setAttribute('aria-label', 'Generation stages');
+    progressLabel.textContent = queued ? t("Queued") : t("Generating");
+    progressStages.setAttribute('aria-label', t("Generation stages"));
     progressStages.hidden = true;
     progressStages.innerHTML = '';
     progressPercent.setAttribute('aria-valuenow', String(progress.percent));
     progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${queued ? progress.activityLabel : progress.stageLabel}`);
     progressPercent.textContent = `${progress.percent}%`;
-    announceProgress(queued ? 'Queued' : 'Generating', queued ? progress.activityLabel : progress.stageLabel);
+    announceProgress(queued ? t("Queued") : t("Generating"), queued ? progress.activityLabel : progress.stageLabel);
     progressBar.style.width = `${progress.percent}%`;
     progressCopy.textContent = queued
-      ? 'Waiting for a generation slot. You can close this panel — generation keeps going.'
-      : 'Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.';
+      ? t("Waiting for a generation slot. You can close this panel — generation keeps going.")
+      : t("Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.");
   } else if (correctionRunning && state.lyricsCorrection) {
     const progress = lyricsCorrectionProgress(state.lyricsCorrection.stage);
-    progressLabel.textContent = 'Replacing lyrics';
-    progressStages.setAttribute('aria-label', 'Replacement stages');
+    progressLabel.textContent = t("Replacing lyrics");
+    progressStages.setAttribute('aria-label', t("Replacement stages"));
     progressStages.hidden = false;
     progressPercent.setAttribute('aria-valuenow', String(progress.percent));
     progressPercent.setAttribute('aria-valuetext', `${progress.percent}% ${progress.label}`);
     progressPercent.textContent = `${progress.percent}%`;
-    announceProgress('Replacing lyrics', progress.label);
+    announceProgress(t("Replacing lyrics"), progress.label);
     progressBar.style.width = `${progress.percent}%`;
     progressStages.innerHTML = lyricsCorrectionStageChecklistHtml(state.lyricsCorrection.stage);
-    progressCopy.textContent = 'Your current subtitles stay active while the replacement runs.';
+    progressCopy.textContent = t("Your current subtitles stay active while the replacement runs.");
   }
 }
 
@@ -1237,7 +1259,7 @@ function lyricsCorrectionStageChecklistHtml(stage: LyricsCorrectionStatus['stage
   return stages.map((item, index) => `
     <li class="stage ${index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'pending'}"${index === currentIndex ? ' aria-current="step"' : ''}>
       <span class="stage-dot" aria-hidden="true"></span>
-      <span>${escapeHtml(item.label)}</span>
+      <span>${escapeHtml(t(item.label))}</span>
     </li>
   `).join('');
 }
@@ -1251,8 +1273,8 @@ function renderGenerateNote(state: PanelState, supported: boolean): void {
 
   const duration = videoDurationForState(state);
   generateNote.textContent = typeof duration === 'number'
-    ? `Estimated usage: ${Math.max(1, Math.ceil(duration / 60))} plan minutes for the full video`
-    : 'The full video duration counts toward your plan minutes.';
+    ? t("Estimated usage: {value1} plan minutes for the full video", {value1: Math.max(1, Math.ceil(duration / 60))})
+    : t("The full video duration counts toward your plan minutes.");
 }
 
 function renderLanguagePair(settings: ExtensionSettings | null): void {
@@ -1283,12 +1305,12 @@ function renderLanguagePickers(settings: ExtensionSettings | null): void {
 
 function renderUsage(accountState: AccountState): void {
   if (accountState.status !== 'authenticated') {
-    usageSummary.textContent = 'Sign in to see usage';
-    usageRemaining.textContent = 'Usage unavailable';
+    usageSummary.textContent = t("Sign in to see usage");
+    usageRemaining.textContent = t("Usage unavailable");
     usageBar.style.width = '0%';
-    usagePlan.textContent = 'Not signed in';
-    usagePending.textContent = 'Sign in required';
-    usageReset.textContent = 'Unavailable';
+    usagePlan.textContent = t("Not signed in");
+    usagePending.textContent = t("Sign in required");
+    usageReset.textContent = t("Unavailable");
 
     return;
   }
@@ -1298,34 +1320,34 @@ function renderUsage(accountState: AccountState): void {
     ? 0
     : Math.min(100, Math.round((totalCommitted / accountState.monthlyMinuteLimit) * 100));
 
-  usageSummary.textContent = `${accountState.monthlyMinutesUsed} of ${accountState.monthlyMinuteLimit} min used`;
-  usageRemaining.textContent = `${accountState.monthlyMinutesRemaining} min left`;
+  usageSummary.textContent = t("{value1} of {value2} min used", {value1: accountState.monthlyMinutesUsed, value2: accountState.monthlyMinuteLimit});
+  usageRemaining.textContent = t("{value1} min left", {value1: accountState.monthlyMinutesRemaining});
   usageBar.style.width = `${percent}%`;
   usagePlan.textContent = `${accountState.planName} (${accountState.tierName})`;
-  usagePending.textContent = `${accountState.monthlyMinutesPending} min pending`;
+  usagePending.textContent = t("{value1} min pending", {value1: accountState.monthlyMinutesPending});
   usageReset.textContent = formatResetDate(accountState.resetAt);
 }
 
 function renderAccount(accountState: AccountState, settings: ExtensionSettings): void {
   const authenticated = accountState.status === 'authenticated';
 
-  accountStatus.textContent = authenticated ? accountState.email : 'Account';
-  accountPlan.textContent = authenticated ? accountState.planName : 'Available after sign-in';
-  accountSpeed.textContent = authenticated ? accountState.tierSpeedLabel : 'Available after sign-in';
+  accountStatus.textContent = authenticated ? accountState.email : t("Account");
+  accountPlan.textContent = authenticated ? accountState.planName : t("Available after sign-in");
+  accountSpeed.textContent = authenticated ? t(accountState.tierSpeedLabel) : t("Available after sign-in");
   accountModel.hidden = !authenticated;
-  accountModel.textContent = authenticated ? `Next generation: ${settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'}` : '';
+  accountModel.textContent = authenticated ? t("Next generation: {value1}", {value1: settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'}) : '';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;
   accountLoginButton.disabled = accountRequestBusy || authenticated;
-  accountLoginButton.textContent = accountRequestBusy ? 'Signing in...' : 'Sign in';
+  accountLoginButton.textContent = accountRequestBusy ? t("Signing in...") : t("Sign in");
   logoutButton.disabled = accountRequestBusy || !authenticated;
   logoutButton.hidden = !authenticated;
   featureList.innerHTML = accountFeatureListHtml(accountState, settings);
 }
 
 function renderSettingsSummary(settings: ExtensionSettings): void {
-  settingsLanguageSummary.textContent = `${languageLabel(settings.sourceLanguage)} to ${languageLabel(settings.targetLanguage)}`;
+  settingsLanguageSummary.textContent = `${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)}`;
 }
 
 function renderShortcutHelp(): void {
@@ -1342,9 +1364,9 @@ function showError(error: unknown): void {
   statusBanner.hidden = false;
   statusBanner.className = 'status-banner';
   statusBanner.textContent =
-    typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unable to load extension state';
-  nowPlayingEyebrow.textContent = 'No video';
-  nowPlayingTitle.textContent = 'Open a YouTube video';
+    typeof error === 'string' ? error : error instanceof Error ? error.message : t("Unable to load extension state");
+  nowPlayingEyebrow.textContent = t("No video");
+  nowPlayingTitle.textContent = t("Open a YouTube video");
   nowPlayingMeta.textContent = '';
   watchUnsupported.hidden = false;
   watchSignin.hidden = true;
@@ -1353,14 +1375,14 @@ function showError(error: unknown): void {
   progressSummary.hidden = true;
   backTranscriptButton.hidden = true;
   watchReady.hidden = true;
-  jobsList.innerHTML = '<p class="empty-state">Unable to load jobs.</p>';
+  jobsList.innerHTML = `<p class="empty-state">${escapeHtml(t("Unable to load jobs."))}</p>`;
   renderLanguagePair(null);
   renderLanguagePickers(null);
   renderUsage(emptyAccountState);
   renderAccount(emptyAccountState, DEFAULT_EXTENSION_SETTINGS);
-  settingsLanguageSummary.textContent = 'Unavailable';
+  settingsLanguageSummary.textContent = t("Unavailable");
   generateButton.disabled = true;
-  generateButton.textContent = 'Generate subtitles';
+  generateButton.textContent = t("Generate subtitles");
   generateNote.textContent = '';
   overlayVisibleInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayVisible;
   overlayAttachedToVideoInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayAttachedToVideo;
@@ -1378,7 +1400,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
     ? error
     : error instanceof Error
       ? error.message
-      : 'Unable to load extension state';
+      : t("Unable to load extension state");
 
   if (errorTarget === 'generation-selection') {
     savedGenerations.showError(message);
@@ -1393,7 +1415,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
 
   if (errorTarget === 'settings') {
     statusBanner.hidden = false;
-    statusBanner.textContent = message;
+    statusBanner.textContent = t(message);
 
     return;
   }
@@ -1406,14 +1428,14 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
 
   if (errorTarget === 'correction') {
     lyricsReplaceConfirm = false;
-    lyricsCorrectionStatus.textContent = message;
+    lyricsCorrectionStatus.textContent = t(message);
 
     return;
   }
 
   if (errorTarget === 'cancel') {
     correctionCancelError.hidden = false;
-    correctionCancelError.textContent = message;
+    correctionCancelError.textContent = t(message);
 
     return;
   }
@@ -1422,7 +1444,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
     generationCancelFeedback = { kind: 'error', message };
     statusBanner.hidden = false;
     statusBanner.className = 'status-banner';
-    statusBanner.textContent = message;
+    statusBanner.textContent = t(message);
 
     return;
   }
@@ -1433,7 +1455,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
 function showAccountFeedback(kind: AccountFeedbackKind, message: string): void {
   accountFeedback.hidden = false;
   accountFeedback.className = `account-feedback ${kind}`;
-  accountFeedback.textContent = message;
+  accountFeedback.textContent = t(message);
 }
 
 function clearAccountFeedback(): void {
@@ -1456,7 +1478,7 @@ function setAccountRequestBusy(busy: boolean, message?: string): void {
   accountEmailInput.disabled = busy || authenticated;
   accountPasswordInput.disabled = busy || authenticated;
   accountLoginButton.disabled = busy || authenticated;
-  accountLoginButton.textContent = busy ? 'Signing in...' : 'Sign in';
+  accountLoginButton.textContent = busy ? t("Signing in...") : t("Sign in");
   logoutButton.disabled = busy || !authenticated;
 }
 

@@ -1,3 +1,4 @@
+import { t } from '../utils/i18n';
 import { browser, type Browser } from 'wxt/browser';
 
 import {
@@ -259,28 +260,28 @@ export default defineContentScript({
 
         case 'toggle-translation':
           if (await updateSettingsFromShortcut({ showTranslation: !settings.showTranslation })) {
-            overlay.showActionStatus(settings.showTranslation ? 'Translation shown.' : 'Translation hidden.', 'success');
+            overlay.showActionStatus(settings.showTranslation ? t("Translation shown.") : t("Translation hidden."), 'success');
           }
 
           return;
 
         case 'toggle-source-blur':
           if (await updateSettingsFromShortcut({ blurSourceWords: !settings.blurSourceWords })) {
-            overlay.showActionStatus(settings.blurSourceWords ? 'Source words blurred.' : 'Source words revealed.', 'success');
+            overlay.showActionStatus(settings.blurSourceWords ? t("Source words blurred.") : t("Source words revealed."), 'success');
           }
 
           return;
 
         case 'toggle-auto-pause':
           if (await updateSettingsFromShortcut({ pauseOnWordHover: !settings.pauseOnWordHover })) {
-            overlay.showActionStatus(settings.pauseOnWordHover ? 'Hover pause on.' : 'Hover pause off.', 'success');
+            overlay.showActionStatus(settings.pauseOnWordHover ? t("Hover pause on.") : t("Hover pause off."), 'success');
           }
 
           return;
 
         case 'toggle-transcript':
           void browser.runtime.sendMessage({ type: 'content.focusPanelTranscript' }).catch(() => {});
-          overlay.showActionStatus('Open the side panel for the transcript.', 'info');
+          overlay.showActionStatus(t("Open the side panel for the transcript."), 'info');
           return;
 
         case 'copy-current-cue':
@@ -556,7 +557,7 @@ export default defineContentScript({
 
       if (!video) {
         if (!scheduleVideoBindRetry(() => bindPartialSubtitles(partialTrack, partialKey))) {
-          bindingError = 'The video player is unavailable. Retry attachment when it is visible.';
+          bindingError = t("The video player is unavailable. Retry attachment when it is visible.");
         }
         updateOverlay();
 
@@ -590,7 +591,7 @@ export default defineContentScript({
         },
         onTrackLoadError: () => {
           if (stateEpoch === bindingEpoch && subtitleState.type === 'loading' && subtitleState.partialTrack?.jobId === partialTrack.jobId && activeVideo === video) {
-            bindingError = 'The partial subtitle track could not load. Retry attachment.';
+            bindingError = t("The partial subtitle track could not load. Retry attachment.");
             updateOverlay();
           }
         },
@@ -615,7 +616,7 @@ export default defineContentScript({
       if (!video) {
         webVttTrackLogger.videoMissing(track);
         if (!scheduleVideoBindRetry(() => bindGeneratedSubtitles(track))) {
-          bindingError = 'The video player is unavailable. Retry attachment when it is visible.';
+          bindingError = t("The video player is unavailable. Retry attachment when it is visible.");
         }
         updateOverlay();
 
@@ -653,7 +654,7 @@ export default defineContentScript({
         },
         onTrackLoadError: () => {
           if (stateEpoch === bindingEpoch && subtitleState.type === 'ready' && subtitleState.track.trackId === track.trackId && activeVideo === video) {
-            bindingError = 'The subtitle track could not load. Retry attachment.';
+            bindingError = t("The subtitle track could not load. Retry attachment.");
             updateOverlay();
           }
         },
@@ -791,7 +792,7 @@ export default defineContentScript({
           cueHold.resume(cue, true);
         }).catch((error: unknown) => {
           console.warn('extension.subtitle_study_resume_failed', {
-            error: error instanceof Error ? error.message : 'Unknown resume error',
+            error: error instanceof Error ? error.message : t("Unknown resume error"),
           });
         });
       } else {
@@ -805,18 +806,18 @@ export default defineContentScript({
       const cue = activeCueFromState();
 
       if (!cue) {
-        overlay.showActionStatus('No active cue to replay.', 'error');
+        overlay.showActionStatus(t("No active cue to replay."), 'error');
 
         return;
       }
 
       replayCue(cue);
-      overlay.showActionStatus('Replaying cue.', 'success');
+      overlay.showActionStatus(t("Replaying cue."), 'success');
     }
 
     function jumpToNeighborCue(direction: 'previous' | 'next'): void {
       if (subtitleState.type !== 'ready') {
-        overlay.showActionStatus('No generated track is active.', 'error');
+        overlay.showActionStatus(t("No generated track is active."), 'error');
 
         return;
       }
@@ -830,13 +831,13 @@ export default defineContentScript({
       });
 
       if (!cue) {
-        overlay.showActionStatus('No cue to navigate to.', 'error');
+        overlay.showActionStatus(t("No cue to navigate to."), 'error');
 
         return;
       }
 
       jumpToCue(cue);
-      overlay.showActionStatus(direction === 'previous' ? 'Previous cue.' : 'Next cue.', 'success');
+      overlay.showActionStatus(direction === 'previous' ? t("Previous cue.") : t("Next cue."), 'success');
     }
 
     function activeCueFromState(): SubtitleCue | null {
@@ -879,7 +880,7 @@ export default defineContentScript({
         playResult.catch((error: unknown) => {
           console.warn('extension.subtitle_replay_failed', {
             cueId: cue.cueId,
-            error: error instanceof Error ? error.message : 'Unknown replay error',
+            error: error instanceof Error ? error.message : t("Unknown replay error"),
           });
         });
       }
@@ -889,15 +890,15 @@ export default defineContentScript({
       const cue = activeCueFromState();
 
       if (!cue) {
-        overlay.showActionStatus('No active cue to copy.', 'error');
+        overlay.showActionStatus(t("No active cue to copy."), 'error');
 
         return;
       }
 
       if (await copyCueToClipboard(cue)) {
-        overlay.showActionStatus('Cue copied.', 'success');
+        overlay.showActionStatus(t("Cue copied."), 'success');
       } else {
-        overlay.showActionStatus('Copy failed.', 'error');
+        overlay.showActionStatus(t("Copy failed."), 'error');
       }
     }
 
@@ -915,7 +916,7 @@ export default defineContentScript({
       } catch (error) {
         console.warn('extension.subtitle_copy_failed', {
           cueId: cue.cueId,
-          error: error instanceof Error ? error.message : 'Unknown clipboard error',
+          error: error instanceof Error ? error.message : t("Unknown clipboard error"),
         });
 
         return false;
@@ -952,10 +953,10 @@ export default defineContentScript({
           return true;
         }
 
-        throw new Error(response?.error ?? 'Unable to update extension settings.');
+        throw new Error(response?.error ?? t("Unable to update extension settings."));
       } catch (error) {
         overlay.showActionStatus(
-          error instanceof Error ? error.message : 'Unable to update extension settings.',
+          error instanceof Error ? error.message : t("Unable to update extension settings."),
           'error',
         );
 
@@ -1014,13 +1015,13 @@ export default defineContentScript({
             return;
           }
 
-          throw new Error(response?.error ?? 'Unable to generate word card.');
+          throw new Error(response?.error ?? t("Unable to generate word card."));
         }
         if (response.track.trackId !== trackId || response.track.youtubeVideoId !== youtubeVideoId) return;
 
         const enrichedToken = response.track.cues.find((candidate) => candidate.cueId === cue.cueId)
           ?.tokens.find((candidate) => candidate.index === token.index);
-        if (!enrichedToken || enrichedToken.text !== token.text) throw new Error('Word card does not match the requested token.');
+        if (!enrichedToken || enrichedToken.text !== token.text) throw new Error(t("Word card does not match the requested token."));
         if (subtitleState.type === 'ready') {
           applyEnrichedTrack(trackWithLearningToken(subtitleState.track, cue.cueId, enrichedToken), cue.cueId, key);
         }
@@ -1030,7 +1031,7 @@ export default defineContentScript({
           trackId,
           cueId: cue.cueId,
           tokenIndex: token.index,
-          error: error instanceof Error ? error.message : 'Unknown extension enrichment error',
+          error: error instanceof Error ? error.message : t("Unknown extension enrichment error"),
         });
         pendingTokenKeys.delete(key);
         failedTokenKeys.add(key);

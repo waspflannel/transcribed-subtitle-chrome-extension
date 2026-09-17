@@ -16,7 +16,7 @@ describe('account and job-history state helpers', () => {
   it('uses the build-configured backend origin for billing without an override', () => {
     vi.stubEnv('WXT_BACKEND_API_BASE_URL', 'https://configured.example.test/v1');
     try {
-      expect(accountBillingLinkHtml()).toContain('href="https://configured.example.test/dashboard"');
+      expect(accountBillingLinkHtml()).toContain('href="https://configured.example.test/dashboard?lang=en"');
     } finally {
       vi.unstubAllEnvs();
     }
@@ -26,13 +26,13 @@ describe('account and job-history state helpers', () => {
     const dom = new JSDOM(accountBillingLinkHtml(baseUrl));
     const links = [...dom.window.document.querySelectorAll('a')];
     expect(links.map((link) => link.href)).toEqual(
-      [new URL(baseUrl).origin + '/dashboard'],
+      [new URL(baseUrl).origin + '/dashboard?lang=en'],
     );
     expect(links.map((link) => link.textContent)).toEqual(['Account and billing']);
     for (const link of links) {
       expect(link.target).toBe('_blank');
       expect(link.rel).toBe('noopener noreferrer');
-      expect(new URL(link.href).search).toBe('');
+      expect(new URL(link.href).search).toBe('?lang=en');
     }
   });
 

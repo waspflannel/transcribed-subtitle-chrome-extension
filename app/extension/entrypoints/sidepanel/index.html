@@ -1,362 +1,364 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Subtitles</title>
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="AI Subtitles">AI Subtitles</title>
   </head>
   <body>
     <div id="app" class="panel">
-      <nav class="tab-bar" aria-label="Sections" role="tablist">
-        <button class="tab" type="button" data-tab="watch" id="tab-watch" role="tab" aria-selected="true" aria-controls="panel-watch">Watch</button>
-        <button class="tab" type="button" data-tab="study" id="tab-study" role="tab" aria-selected="false" aria-controls="panel-study">Study</button>
-        <button class="tab" type="button" data-tab="history" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history">History</button>
-        <button class="tab" type="button" data-tab="account" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account">Account</button>
+      <nav class="tab-bar" aria-label="Sections" role="tablist" data-i18n-aria-label="Sections">
+        <button class="tab" type="button" data-tab="watch" id="tab-watch" role="tab" aria-selected="true" aria-controls="panel-watch" data-i18n="Watch">Watch</button>
+        <button class="tab" type="button" data-tab="study" id="tab-study" role="tab" aria-selected="false" aria-controls="panel-study" data-i18n="Study">Study</button>
+        <button class="tab" type="button" data-tab="history" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history" data-i18n="History">History</button>
+        <button class="tab" type="button" data-tab="account" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" data-i18n="Account">Account</button>
       </nav>
+
+      <label class="interface-language"><span data-i18n="Interface language">Interface language</span><select data-interface-language aria-label="Interface language" data-i18n-aria-label="Interface language"></select></label>
 
       <header class="np">
         <div class="np-text">
-          <div class="ey" data-now-playing-eyebrow>Now playing</div>
-          <div class="title" data-now-playing-title>—</div>
-          <div class="meta" data-now-playing-meta></div>
+          <div class="ey" data-now-playing-eyebrow="" data-i18n="Now playing">Now playing</div>
+          <div class="title" data-now-playing-title="">—</div>
+          <div class="meta" data-now-playing-meta=""></div>
         </div>
-        <button class="np-collapse" type="button" data-action="collapse-panel" title="Hide panel" aria-label="Hide panel">»</button>
+        <button class="np-collapse" type="button" data-action="collapse-panel" title="Hide panel" aria-label="Hide panel" data-i18n-title="Hide panel" data-i18n-aria-label="Hide panel">»</button>
       </header>
 
       <main class="scroll">
         <!-- ============================= WATCH ============================= -->
         <section class="view" data-panel="watch" id="panel-watch" role="tabpanel" aria-labelledby="tab-watch" tabindex="0">
-          <p class="status-banner" data-status role="status" aria-live="polite" hidden>Loading</p>
+          <p class="status-banner" data-status="" role="status" aria-live="polite" hidden="" data-i18n="Loading">Loading</p>
 
           <!-- No supported video on the active tab. -->
-          <div class="card empty-card" data-watch-unsupported hidden>
-            <p class="empty-title">No video here</p>
-            <p class="empty-copy">Open a public YouTube video or Short in this window and the panel picks it up automatically.</p>
+          <div class="card empty-card" data-watch-unsupported="" hidden="">
+            <p class="empty-title" data-i18n="No video here">No video here</p>
+            <p class="empty-copy" data-i18n="Open a public YouTube video or Short in this window and the panel picks it up automatically.">Open a public YouTube video or Short in this window and the panel picks it up automatically.</p>
           </div>
 
           <!-- Signed out: inline prompt instead of dumping users on the Account tab. -->
-          <div class="card" data-watch-signin hidden>
-            <p class="card-label">Sign in to generate</p>
-            <p class="card-copy">Subtitle generation runs on your verified beta account. Your plan minutes and job history live there too.</p>
-            <button type="button" class="btn-primary" data-action="open-account">Go to sign in</button>
+          <div class="card" data-watch-signin="" hidden="">
+            <p class="card-label" data-i18n="Sign in to generate">Sign in to generate</p>
+            <p class="card-copy" data-i18n="Subtitle generation runs on your verified beta account. Your plan minutes and job history live there too.">Subtitle generation runs on your verified beta account. Your plan minutes and job history live there too.</p>
+            <button type="button" class="btn-primary" data-action="open-account" data-i18n="Go to sign in">Go to sign in</button>
           </div>
 
-          <button type="button" class="link-button watch-back" data-action="back-transcript" hidden>← Back to transcript</button>
+          <button type="button" class="link-button watch-back" data-action="back-transcript" hidden="" data-i18n="← Back to transcript">← Back to transcript</button>
 
           <!-- Setup: languages, layers, generate. -->
-          <div class="watch-setup" data-watch-setup hidden>
-            <h2>Generate subtitles</h2>
+          <div class="watch-setup" data-watch-setup="" hidden="">
+            <h2 data-i18n="Generate subtitles">Generate subtitles</h2>
             <div class="card">
-              <p class="card-label">Languages</p>
+              <p class="card-label" data-i18n="Languages">Languages</p>
               <div class="pair-row">
-                <div class="pair" data-language-pair>
-                  <span class="pair-lang"><span class="pair-code" data-pair-source-code></span><span class="pair-name" data-pair-source-name>—</span></span>
+                <div class="pair" data-language-pair="">
+                  <span class="pair-lang"><span class="pair-code" data-pair-source-code=""></span><span class="pair-name" data-pair-source-name="">—</span></span>
                   <span class="pair-arrow" aria-hidden="true">→</span>
-                  <span class="pair-lang"><span class="pair-code" data-pair-target-code></span><span class="pair-name" data-pair-target-name>—</span></span>
+                  <span class="pair-lang"><span class="pair-code" data-pair-target-code=""></span><span class="pair-name" data-pair-target-name="">—</span></span>
                 </div>
-                <button type="button" class="link-button" data-action="toggle-languages" aria-expanded="false">Change</button>
+                <button type="button" class="link-button" data-action="toggle-languages" aria-expanded="false" data-i18n="Change">Change</button>
               </div>
-              <div class="language-expand" data-language-expand hidden>
+              <div class="language-expand" data-language-expand="" hidden="">
                 <div class="language-picker" data-language-picker="source">
                   <label class="field">
-                    <span>Video language</span>
-                    <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+                    <span data-i18n="Video language">Video language</span>
+                    <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled="" data-i18n-placeholder="Search languages">
                   </label>
-                  <div class="selected-language" data-source-language-selected></div>
-                  <div class="language-options" data-source-language-list role="listbox" aria-label="Video language"></div>
+                  <div class="selected-language" data-source-language-selected=""></div>
+                  <div class="language-options" data-source-language-list="" role="listbox" aria-label="Video language" data-i18n-aria-label="Video language"></div>
                 </div>
                 <div class="language-picker" data-language-picker="target">
                   <label class="field">
-                    <span>Translation language</span>
-                    <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled />
+                    <span data-i18n="Translation language">Translation language</span>
+                    <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled="" data-i18n-placeholder="Search languages">
                   </label>
-                  <div class="selected-language" data-target-language-selected></div>
-                  <div class="language-options" data-target-language-list role="listbox" aria-label="Translation language"></div>
+                  <div class="selected-language" data-target-language-selected=""></div>
+                  <div class="language-options" data-target-language-list="" role="listbox" aria-label="Translation language" data-i18n-aria-label="Translation language"></div>
                 </div>
               </div>
             </div>
 
             <div class="card">
-              <p class="card-label">Layers</p>
+              <p class="card-label" data-i18n="Layers">Layers</p>
               <div class="chips">
                 <label class="chip">
-                  <input type="checkbox" name="showTranslation" disabled />
-                  <span>Translation</span>
+                  <input type="checkbox" name="showTranslation" disabled="">
+                  <span data-i18n="Translation">Translation</span>
                 </label>
                 <label class="chip">
-                  <input type="checkbox" name="showRomanization" disabled />
-                  <span>Romanization</span>
+                  <input type="checkbox" name="showRomanization" disabled="">
+                  <span data-i18n="Romanization">Romanization</span>
                 </label>
               </div>
             </div>
 
             <div class="card">
               <label class="row">
-                <span class="row-key">AI model</span>
-                <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled>
+                <span class="row-key" data-i18n="AI model">AI model</span>
+                <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
                   <option value="openai">Transcriber</option>
                   <option value="cerebras">Transcriber Spark</option>
                 </select>
               </label>
-              <p id="ai-luna-description" class="microcopy"><strong>Transcriber:</strong> Smarter, but slower. Recommended for languages that use non-Latin scripts.</p>
-              <p id="ai-cerebras-description" class="microcopy"><strong>Transcriber Spark:</strong> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</p>
-              <p id="ai-provider-help" class="microcopy">Applies to your next generation. Running jobs keep their selected model.</p>
+              <p id="ai-luna-description" class="microcopy"><strong data-i18n="Transcriber:">Transcriber:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
+              <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Transcriber Spark:">Transcriber Spark:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
+              <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
             </div>
 
-            <button type="button" class="btn-primary" data-action="generate" disabled>Generate subtitles</button>
-            <p class="microcopy" data-generate-note></p>
-            <p class="microcopy">Review and confirm before generation starts.</p>
+            <button type="button" class="btn-primary" data-action="generate" disabled="" data-i18n="Generate subtitles">Generate subtitles</button>
+            <p class="microcopy" data-generate-note=""></p>
+            <p class="microcopy" data-i18n="Review and confirm before generation starts.">Review and confirm before generation starts.</p>
           </div>
 
           <!-- Generating / replacing: one progress surface with named stages. -->
-          <p class="status-banner" data-correction-sync-error role="status" hidden></p>
-          <div class="progress-summary" data-progress-summary hidden><span data-progress-summary-label role="status"></span><button type="button" class="link-button" data-action="view-progress">View progress</button></div>
-          <div class="card" data-progress hidden>
-            <p class="card-label" id="progress-label" data-progress-label>Generating</p>
-            <p class="pct"><span data-progress-percent role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span><small data-progress-activity aria-live="polite">standard queue</small></p>
-            <div class="progress-bar" aria-hidden="true"><span data-progress-bar></span></div>
-            <ol class="stages" data-progress-stages aria-label="Generation stages"></ol>
-            <p class="microcopy" data-progress-copy>Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
-            <p class="microcopy" data-correction-cancel-error role="alert" hidden></p>
-            <button type="button" class="btn-ghost" data-action="cancel-lyrics-correction" hidden>Cancel replacement</button>
-            <button type="button" class="btn-ghost" data-action="cancel-generation" hidden>Cancel generation</button>
+          <p class="status-banner" data-correction-sync-error="" role="status" hidden=""></p>
+          <div class="progress-summary" data-progress-summary="" hidden=""><span data-progress-summary-label="" role="status"></span><button type="button" class="link-button" data-action="view-progress" data-i18n="View progress">View progress</button></div>
+          <div class="card" data-progress="" hidden="">
+            <p class="card-label" id="progress-label" data-progress-label="" data-i18n="Generating">Generating</p>
+            <p class="pct"><span data-progress-percent="" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span><small data-progress-activity="" aria-live="polite" data-i18n="standard queue">standard queue</small></p>
+            <div class="progress-bar" aria-hidden="true"><span data-progress-bar=""></span></div>
+            <ol class="stages" data-progress-stages="" aria-label="Generation stages" data-i18n-aria-label="Generation stages"></ol>
+            <p class="microcopy" data-progress-copy="" data-i18n="Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.">Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
+            <p class="microcopy" data-correction-cancel-error="" role="alert" hidden=""></p>
+            <button type="button" class="btn-ghost" data-action="cancel-lyrics-correction" hidden="" data-i18n="Cancel replacement">Cancel replacement</button>
+            <button type="button" class="btn-ghost" data-action="cancel-generation" hidden="" data-i18n="Cancel generation">Cancel generation</button>
           </div>
 
           <!-- Ready: the transcript is the landing state. -->
-          <div class="watch-ready" data-watch-ready hidden>
-              <label class="generation-picker">
+          <div class="watch-ready" data-watch-ready="" hidden="">
+              <label class="generation-picker"><span data-i18n="Saved generation">
                 Saved generation
-                <select data-generation-select aria-describedby="generation-status" disabled></select>
+                </span><select data-generation-select="" aria-describedby="generation-status" disabled=""></select>
               </label>
-              <p id="generation-status" class="microcopy" data-generation-status role="status"></p>
-              <button type="button" class="link-button" data-generation-refresh>Refresh saved generations</button>
+              <p id="generation-status" class="microcopy" data-generation-status="" role="status"></p>
+              <button type="button" class="link-button" data-generation-refresh="" data-i18n="Refresh saved generations">Refresh saved generations</button>
 
             <div class="ready-toolbar">
               <div class="transcript-actions">
-                <button type="button" class="btn-ghost" data-action="toggle-setup">Generate again</button>
-                <button type="button" class="btn-ghost" data-action="toggle-lyrics-edit">Lyric correction</button>
+                <button type="button" class="btn-ghost" data-action="toggle-setup" data-i18n="Generate again">Generate again</button>
+                <button type="button" class="btn-ghost" data-action="toggle-lyrics-edit" data-i18n="Lyric correction">Lyric correction</button>
               </div>
               <label class="search-field">
-                <input type="search" data-transcript-search placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" />
+                <input type="search" data-transcript-search="" placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" data-i18n-aria-label="Search transcript" data-i18n-placeholder="Search transcript…">
               </label>
             </div>
-            <div class="status-banner correction-status" data-correction-terminal-status role="status" aria-live="polite" hidden>
-              <span data-correction-terminal-message></span>
-              <button type="button" class="status-banner-close" data-action="dismiss-correction-status" aria-label="Dismiss replacement status">×</button>
+            <div class="status-banner correction-status" data-correction-terminal-status="" role="status" aria-live="polite" hidden="">
+              <span data-correction-terminal-message=""></span>
+              <button type="button" class="status-banner-close" data-action="dismiss-correction-status" aria-label="Dismiss replacement status" data-i18n-aria-label="Dismiss replacement status">×</button>
             </div>
-            <div class="card" data-lyrics-edit-panel hidden>
-              <h2>Replace full lyrics</h2>
-              <div data-lyrics-replace-panel>
-                <form class="lyrics-correction-form" data-lyrics-correction-form>
-                  <p id="lyrics-paste-instructions" class="card-copy">For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.</p>
-                  <p id="lyrics-paste-warning" class="microcopy">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles. Regeneration uses your plan minutes.</p>
+            <div class="card" data-lyrics-edit-panel="" hidden="">
+              <h2 data-i18n="Replace full lyrics">Replace full lyrics</h2>
+              <div data-lyrics-replace-panel="">
+                <form class="lyrics-correction-form" data-lyrics-correction-form="">
+                  <p id="lyrics-paste-instructions" class="card-copy" data-i18n="For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.">For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.</p>
+                  <p id="lyrics-paste-warning" class="microcopy" data-i18n="This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles. Regeneration uses your plan minutes.">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles. Regeneration uses your plan minutes.</p>
                   <label class="field">
-                    <span>Lyrics</span>
-                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea rows="6" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error"></textarea>
+                    <span data-i18n="Lyrics">Lyrics</span>
+                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea="" rows="6" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error" data-i18n-placeholder="Paste the full lyrics without section tags"></textarea>
                   </label>
-                  <p id="lyrics-correction-error" class="microcopy" data-lyrics-correction-error role="status" aria-live="polite" hidden></p>
-                  <p class="lyrics-confirm" data-lyrics-confirmation hidden role="status" aria-live="polite"></p>
+                  <p id="lyrics-correction-error" class="microcopy" data-lyrics-correction-error="" role="status" aria-live="polite" hidden=""></p>
+                  <p class="lyrics-confirm" data-lyrics-confirmation="" hidden="" role="status" aria-live="polite"></p>
                   <div class="lyrics-correction-footer">
-                    <span id="lyrics-correction-count" data-lyrics-correction-count>0 / 25,000 characters</span>
+                    <span id="lyrics-correction-count" data-lyrics-correction-count="" data-i18n="0 / 25,000 characters">0 / 25,000 characters</span>
                     <span class="lyrics-correction-actions">
-                      <button type="submit" class="btn-primary" data-action="apply-lyrics-correction">Continue</button>
-                      <button type="button" class="btn-primary" data-action="confirm-lyrics-correction" hidden>Replace entire track</button>
-                      <button type="button" class="btn-ghost" data-action="cancel-lyrics-confirmation" hidden>Cancel</button>
+                      <button type="submit" class="btn-primary" data-action="apply-lyrics-correction" data-i18n="Continue">Continue</button>
+                      <button type="button" class="btn-primary" data-action="confirm-lyrics-correction" hidden="" data-i18n="Replace entire track">Replace entire track</button>
+                      <button type="button" class="btn-ghost" data-action="cancel-lyrics-confirmation" hidden="" data-i18n="Cancel">Cancel</button>
                     </span>
                   </div>
-                  <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status role="status" aria-live="polite"></p>
+                  <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status="" role="status" aria-live="polite"></p>
                 </form>
               </div>
             </div>
-            <p class="microcopy" data-quick-fix-status role="status" aria-live="polite"></p>
-            <div class="transcript-list" data-transcript-list role="list" aria-label="Generated cues"></div>
-            <p class="transcript-status" data-transcript-status role="status" aria-live="polite"></p>
+            <p class="microcopy" data-quick-fix-status="" role="status" aria-live="polite"></p>
+            <div class="transcript-list" data-transcript-list="" role="list" aria-label="Generated cues" data-i18n-aria-label="Generated cues"></div>
+            <p class="transcript-status" data-transcript-status="" role="status" aria-live="polite"></p>
           </div>
         </section>
 
         <!-- ============================= STUDY ============================= -->
         <section class="view" data-panel="study" id="panel-study" role="tabpanel" aria-labelledby="tab-study" tabindex="0">
           <div class="card">
-            <p class="card-label">Caption display</p>
+            <p class="card-label" data-i18n="Caption display">Caption display</p>
             <div class="rows">
               <label class="row">
-                <span class="row-key">Show overlay</span>
-                <input type="checkbox" class="switch" name="overlayVisible" disabled />
+                <span class="row-key" data-i18n="Show overlay">Show overlay</span>
+                <input type="checkbox" class="switch" name="overlayVisible" disabled="">
               </label>
               <label class="row">
-                <span class="row-key">Attach subtitles to video</span>
-                <input type="checkbox" class="switch" name="overlayAttachedToVideo" aria-describedby="overlay-movement-help" disabled />
+                <span class="row-key" data-i18n="Attach subtitles to video">Attach subtitles to video</span>
+                <input type="checkbox" class="switch" name="overlayAttachedToVideo" aria-describedby="overlay-movement-help" disabled="">
               </label>
               <label class="row">
-                <span class="row-key">Position</span>
-                <select name="overlayPosition" disabled>
-                  <option value="bottom">Bottom</option>
-                  <option value="top">Top</option>
-                  <option value="compact">Compact</option>
+                <span class="row-key" data-i18n="Position">Position</span>
+                <select name="overlayPosition" disabled="">
+                  <option value="bottom" data-i18n="Bottom">Bottom</option>
+                  <option value="top" data-i18n="Top">Top</option>
+                  <option value="compact" data-i18n="Compact">Compact</option>
                 </select>
               </label>
               <label class="row">
-                <span class="row-key">Caption size</span>
-                <select name="captionFontSize" disabled>
-                  <option value="small">Small</option>
-                  <option value="medium">Medium</option>
-                  <option value="large">Large</option>
+                <span class="row-key" data-i18n="Caption size">Caption size</span>
+                <select name="captionFontSize" disabled="">
+                  <option value="small" data-i18n="Small">Small</option>
+                  <option value="medium" data-i18n="Medium">Medium</option>
+                  <option value="large" data-i18n="Large">Large</option>
                 </select>
               </label>
               <label class="row">
-                <span class="row-key">Density</span>
-                <select name="captionDensity" disabled>
-                  <option value="comfortable">Comfortable</option>
-                  <option value="compact">Compact</option>
+                <span class="row-key" data-i18n="Density">Density</span>
+                <select name="captionDensity" disabled="">
+                  <option value="comfortable" data-i18n="Comfortable">Comfortable</option>
+                  <option value="compact" data-i18n="Compact">Compact</option>
                 </select>
               </label>
               <label class="row">
-                <span class="row-key">Contrast</span>
-                <select name="captionContrastTheme" disabled>
-                  <option value="default">Default</option>
-                  <option value="high">High contrast</option>
+                <span class="row-key" data-i18n="Contrast">Contrast</span>
+                <select name="captionContrastTheme" disabled="">
+                  <option value="default" data-i18n="Default">Default</option>
+                  <option value="high" data-i18n="High contrast">High contrast</option>
                 </select>
               </label>
               <label class="row">
-                <span class="row-key">Word gloss</span>
-                <input type="checkbox" class="switch" name="showGloss" disabled />
+                <span class="row-key" data-i18n="Word gloss">Word gloss</span>
+                <input type="checkbox" class="switch" name="showGloss" disabled="">
               </label>
             </div>
-            <p class="microcopy" id="overlay-movement-help">Uncheck to drag subtitles around the page. Check again to snap them back to the video.</p>
+            <p class="microcopy" id="overlay-movement-help" data-i18n="Uncheck to drag subtitles around the page. Check again to snap them back to the video.">Uncheck to drag subtitles around the page. Check again to snap them back to the video.</p>
             <div class="timing">
-              <span class="timing-label">Timing</span>
-              <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled aria-label="Subtitle timing offset" />
-              <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled aria-label="Subtitle timing offset seconds" />
-              <output data-timing-offset>0.0s</output>
-              <button type="button" class="link-button" data-action="reset-timing" disabled>Reset</button>
+              <span class="timing-label" data-i18n="Timing">Timing</span>
+              <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled="" aria-label="Subtitle timing offset" data-i18n-aria-label="Subtitle timing offset">
+              <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled="" aria-label="Subtitle timing offset seconds" data-i18n-aria-label="Subtitle timing offset seconds">
+              <output data-timing-offset="">0.0s</output>
+              <button type="button" class="link-button" data-action="reset-timing" disabled="" data-i18n="Reset">Reset</button>
             </div>
           </div>
 
           <div class="card">
-            <p class="card-label">Active recall</p>
+            <p class="card-label" data-i18n="Active recall">Active recall</p>
             <div class="rows">
               <label class="row">
-                <span class="row-key">Blur source words</span>
-                <input type="checkbox" class="switch" name="blurSourceWords" disabled />
+                <span class="row-key" data-i18n="Blur source words">Blur source words</span>
+                <input type="checkbox" class="switch" name="blurSourceWords" disabled="">
               </label>
               <label class="row">
-                <span class="row-key">Blur romanization</span>
-                <input type="checkbox" class="switch" name="blurRomanization" disabled />
+                <span class="row-key" data-i18n="Blur romanization">Blur romanization</span>
+                <input type="checkbox" class="switch" name="blurRomanization" disabled="">
               </label>
               <label class="row">
-                <span class="row-key">Blur translation</span>
-                <input type="checkbox" class="switch" name="blurTranslation" disabled />
+                <span class="row-key" data-i18n="Blur translation">Blur translation</span>
+                <input type="checkbox" class="switch" name="blurTranslation" disabled="">
               </label>
               <label class="row">
-                <span class="row-key">Pause video on word hover</span>
-                <input type="checkbox" class="switch" name="pauseOnWordHover" disabled />
+                <span class="row-key" data-i18n="Pause video on word hover">Pause video on word hover</span>
+                <input type="checkbox" class="switch" name="pauseOnWordHover" disabled="">
               </label>
             </div>
           </div>
 
           <div class="card">
-            <p class="card-label">Keyboard shortcuts</p>
+            <p class="card-label" data-i18n="Keyboard shortcuts">Keyboard shortcuts</p>
             <div class="rows">
               <label class="row">
-                <span class="row-key">Shortcuts enabled</span>
-                <input type="checkbox" class="switch" name="keyboardShortcutsEnabled" disabled />
+                <span class="row-key" data-i18n="Shortcuts enabled">Shortcuts enabled</span>
+                <input type="checkbox" class="switch" name="keyboardShortcutsEnabled" disabled="">
               </label>
             </div>
-            <div class="shortcut-list" data-shortcut-help aria-label="Keyboard shortcuts"></div>
+            <div class="shortcut-list" data-shortcut-help="" aria-label="Keyboard shortcuts" data-i18n-aria-label="Keyboard shortcuts"></div>
           </div>
 
           <div class="card">
-            <p class="card-label">This device</p>
+            <p class="card-label" data-i18n="This device">This device</p>
             <div class="rows">
               <div class="row">
-                <span class="row-key">Language defaults</span>
-                <span class="row-value" data-settings-language-summary>Loading</span>
+                <span class="row-key" data-i18n="Language defaults">Language defaults</span>
+                <span class="row-value" data-settings-language-summary="" data-i18n="Loading">Loading</span>
               </div>
             </div>
-            <button type="button" class="btn-ghost danger" data-action="clear-state" disabled>Clear local state</button>
+            <button type="button" class="btn-ghost danger" data-action="clear-state" disabled="" data-i18n="Clear local state">Clear local state</button>
           </div>
         </section>
 
         <!-- ============================ HISTORY ============================ -->
         <section class="view" data-panel="history" id="panel-history" role="tabpanel" aria-labelledby="tab-history" tabindex="0">
-          <div class="jobs-list" data-jobs-list></div>
-          <p class="jobs-error" data-jobs-error hidden></p>
+          <div class="jobs-list" data-jobs-list=""></div>
+          <p class="jobs-error" data-jobs-error="" hidden=""></p>
         </section>
 
         <!-- ============================ ACCOUNT ============================ -->
         <section class="view" data-panel="account" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="0">
           <div class="card">
-            <p class="card-label">Account</p>
-            <p class="account-feedback" data-account-feedback role="status" aria-live="polite" hidden></p>
+            <p class="card-label" data-i18n="Account">Account</p>
+            <p class="account-feedback" data-account-feedback="" role="status" aria-live="polite" hidden=""></p>
             <dl class="facts">
               <div class="fact">
-                <dt>Status</dt>
-                <dd data-account-status>Account</dd>
+                <dt data-i18n="Status">Status</dt>
+                <dd data-account-status="" data-i18n="Account">Account</dd>
               </div>
               <div class="fact">
-                <dt>Plan</dt>
-                <dd data-account-plan>Available after sign-in</dd>
+                <dt data-i18n="Plan">Plan</dt>
+                <dd data-account-plan="" data-i18n="Available after sign-in">Available after sign-in</dd>
               </div>
               <div class="fact">
-                <dt>Queue</dt>
-                <dd data-account-speed>Available after sign-in</dd>
+                <dt data-i18n="Queue">Queue</dt>
+                <dd data-account-speed="" data-i18n="Available after sign-in">Available after sign-in</dd>
               </div>
             </dl>
-            <form class="account-form" data-account-login-form>
+            <form class="account-form" data-account-login-form="">
               <label class="field">
-                <span>Email</span>
-                <input type="email" name="accountEmail" autocomplete="email" required />
+                <span data-i18n="Email">Email</span>
+                <input type="email" name="accountEmail" autocomplete="email" required="">
               </label>
               <label class="field">
-                <span>Password</span>
-                <input type="password" name="accountPassword" autocomplete="current-password" required />
+                <span data-i18n="Password">Password</span>
+                <input type="password" name="accountPassword" autocomplete="current-password" required="">
               </label>
-              <button type="submit" class="btn-primary" data-action="login">Sign in</button>
+              <button type="submit" class="btn-primary" data-action="login" data-i18n="Sign in">Sign in</button>
             </form>
-            <div class="feature-list" data-feature-list></div>
-            <p class="muted">Selections are preferences, not a guarantee of access. Generation depends on your plan and remaining minutes.</p>
-            <nav class="account-billing" aria-label="Account and billing" data-account-billing></nav>
-            <p class="muted">This link opens the website, which may require a separate sign-in. Use the same email as the extension.</p>
-            <button type="button" class="btn-ghost" data-action="logout" disabled>Sign out</button>
+            <div class="feature-list" data-feature-list=""></div>
+            <p class="muted" data-i18n="Selections are preferences, not a guarantee of access. Generation depends on your plan and remaining minutes.">Selections are preferences, not a guarantee of access. Generation depends on your plan and remaining minutes.</p>
+            <nav class="account-billing" aria-label="Account and billing" data-account-billing="" data-i18n-aria-label="Account and billing"></nav>
+            <p class="muted" data-i18n="This link opens the website, which may require a separate sign-in. Use the same email as the extension.">This link opens the website, which may require a separate sign-in. Use the same email as the extension.</p>
+            <button type="button" class="btn-ghost" data-action="logout" disabled="" data-i18n="Sign out">Sign out</button>
           </div>
 
           <div class="card">
-            <p class="card-label">This month</p>
+            <p class="card-label" data-i18n="This month">This month</p>
             <div class="usage-meter">
               <div class="usage-meter-label">
-                <span data-usage-summary>Sign in to see usage</span>
-                <strong data-usage-remaining>Usage unavailable</strong>
+                <span data-usage-summary="" data-i18n="Sign in to see usage">Sign in to see usage</span>
+                <strong data-usage-remaining="" data-i18n="Usage unavailable">Usage unavailable</strong>
               </div>
-              <div class="progress-bar usage-bar" aria-hidden="true"><span data-usage-bar></span></div>
+              <div class="progress-bar usage-bar" aria-hidden="true"><span data-usage-bar=""></span></div>
             </div>
             <dl class="facts">
               <div class="fact">
-                <dt>Current plan</dt>
-                <dd data-usage-plan>Not signed in</dd>
+                <dt data-i18n="Current plan">Current plan</dt>
+                <dd data-usage-plan="" data-i18n="Not signed in">Not signed in</dd>
               </div>
               <div class="fact">
-                <dt>Pending jobs</dt>
-                <dd data-usage-pending>0 min pending</dd>
+                <dt data-i18n="Pending jobs">Pending jobs</dt>
+                <dd data-usage-pending="" data-i18n="0 min pending">0 min pending</dd>
               </div>
               <div class="fact">
-                <dt>Reset date</dt>
-                <dd data-usage-reset>Unavailable</dd>
+                <dt data-i18n="Reset date">Reset date</dt>
+                <dd data-usage-reset="" data-i18n="Unavailable">Unavailable</dd>
               </div>
             </dl>
           </div>
-          <p class="muted" data-account-model hidden></p>
+          <p class="muted" data-account-model="" hidden=""></p>
         </section>
       </main>
     </div>
-    <dialog class="generation-confirmation" data-generation-confirmation aria-labelledby="generation-confirmation-title" aria-describedby="generation-confirmation-copy generation-confirmation-summary">
-      <h2 id="generation-confirmation-title">Start generation?</h2>
-      <p id="generation-confirmation-summary" class="muted" data-generation-confirmation-summary></p>
-      <p id="generation-confirmation-copy">You can cancel at any time, but the minutes for the entire video will still be used and won't be refunded. Would you like to proceed?</p>
+    <dialog class="generation-confirmation" data-generation-confirmation="" aria-labelledby="generation-confirmation-title" aria-describedby="generation-confirmation-copy generation-confirmation-summary">
+      <h2 id="generation-confirmation-title" data-i18n="Start generation?">Start generation?</h2>
+      <p id="generation-confirmation-summary" class="muted" data-generation-confirmation-summary=""></p>
+      <p id="generation-confirmation-copy" data-i18n="You can cancel at any time, but the minutes for the entire video will still be used and won't be refunded. Would you like to proceed?">You can cancel at any time, but the minutes for the entire video will still be used and won't be refunded. Would you like to proceed?</p>
       <div class="generation-confirmation-actions">
-        <button type="button" class="btn-ghost" data-action="cancel-generation-confirmation" autofocus>Go back</button>
-        <button type="button" class="btn-primary" data-action="confirm-generation">Start generation</button>
+        <button type="button" class="btn-ghost" data-action="cancel-generation-confirmation" autofocus="" data-i18n="Go back">Go back</button>
+        <button type="button" class="btn-primary" data-action="confirm-generation" data-i18n="Start generation">Start generation</button>
       </div>
     </dialog>
     <script type="module" src="./main.ts"></script>
-  </body>
-</html>
+
+
+</body></html>

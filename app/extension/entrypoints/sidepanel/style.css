@@ -469,7 +469,9 @@ button:disabled {
 
 .pair {
   align-items: center;
-  display: flex;
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
@@ -1746,3 +1748,18 @@ output {
     scroll-behavior: auto !important;
   }
 }
+/* Interface language is independent of the learning-language controls. */
+.interface-language {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.interface-language select { min-width: 0; max-width: 100%; flex: 1 1 150px; padding: 5px 8px; }
+.tab { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.interface-language > span { min-width: 0; overflow-wrap: anywhere; }
+.pair-name { white-space: normal; overflow-wrap: anywhere; }

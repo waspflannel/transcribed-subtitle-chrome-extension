@@ -6,12 +6,27 @@ import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import { OverlayShell } from '../utils/overlay';
 import { renderOverlayContent } from '../utils/overlay/overlay-render';
 import { overlayStyles } from '../utils/overlay/overlay-styles';
+import { setInterfaceLocale, t } from '../utils/i18n';
 import type { OverlayRenderState } from '../utils/overlay/types';
 import type { TrackResponse } from '../utils/contracts';
 
 vi.mock('wxt/browser', () => ({ browser: { runtime: { getURL: () => '' } } }));
 
 describe('renderOverlayContent', () => {
+  it('translates overlay controls while preserving generated learning content', () => {
+    try {
+      for (const locale of ['es', 'ja', 'zh-CN']) {
+        setInterfaceLocale(locale);
+        const html = renderOverlayContent(readyStateWithSettings({ showTranslation: true }));
+        expect(html).toContain(t('AI subtitles'));
+        expect(html).not.toContain('AI subtitles');
+        for (const text of ['hola', 'Bonjour', 'o-la', 'hello']) expect(html).toContain(text);
+      }
+    } finally {
+      setInterfaceLocale('en');
+    }
+  });
+
   it('renders the active cue source text, translation, and token learning metadata', () => {
     const html = renderOverlayContent(readyStateWithSettings({ showTranslation: true }));
 
