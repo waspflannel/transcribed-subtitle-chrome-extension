@@ -61,6 +61,7 @@ Use isolated normal test harness; fresh disposable PostgreSQL/Redis for concurre
 4. Clean up extension generation monitors and set beta version.
 5. Fix queued finalization/watchdog behavior with regressions.
 6. Add release/CI checks and update launch evidence and outstanding gates.
+7. Remove runtime environment-file dependencies exposed by the first clean Linux CI run.
 
 ## Progress Log
 
@@ -72,6 +73,8 @@ Use isolated normal test harness; fresh disposable PostgreSQL/Redis for concurre
 | 2026-09-16 | Release checker rejects malformed paths and root-dot localhost aliases, validates exact ZIP permissions/version and rejects env/key files. Deploy requires explicit HTTPS health URL before mutation. | PowerShell fixture checks and real fixture-origin WXT ZIP build passed; fixture ZIP deleted. |
 | 2026-09-16 | Full local harness with fresh disposable PostgreSQL/Redis passed: 725 backend tests / 39,068 assertions; 366 extension tests; contracts, compile, Chrome build and release guards. Both containers removed. | Ignored `app/backend/storage/logs/launch-fixes-check.log`. No integration skips. |
 | 2026-09-16 | Pint and runtime Composer, full extension and shared-contract dependency audits passed. Workflow YAML parsed; pinned action commits verified against upstream tags. | Local commands and independent release review. |
+| 2026-09-16 | First Linux CI run exposed a missing model setting in one audio fixture and suppressed missing-env warnings. Corrected the fixture and made test processes load an empty env file in disposable storage, including child processes. | Run 35179438464; focused audio tests and environment-isolation tests pass without runtime `.env` settings. |
+| 2026-09-16 | Repeated the full harness after environment isolation: 725 backend tests / 39,070 assertions, all eleven service tests, 366 extension tests and all builds/release guards pass without warnings. Fresh service containers removed. | Ignored `app/backend/storage/logs/launch-fixes-clean-env-check.log`; Pint and doc checks pass. |
 
 ## Completion Notes
 

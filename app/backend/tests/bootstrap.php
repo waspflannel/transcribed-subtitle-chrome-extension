@@ -8,6 +8,10 @@ if (! defined('SUBTITLE_TEST_STORAGE')) {
             throw new RuntimeException('Cannot create disposable test storage.');
         }
     }
+    // Tests must not read settings or credentials from the runtime .env file.
+    if (file_put_contents(SUBTITLE_TEST_STORAGE.'/.env', '') === false) {
+        throw new RuntimeException('Cannot create disposable test environment.');
+    }
 }
 
 foreach ([

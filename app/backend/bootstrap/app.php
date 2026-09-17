@@ -152,6 +152,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
 if (defined('SUBTITLE_TEST_STORAGE')) {
     $app->addAbsoluteCachePathPrefix(SUBTITLE_TEST_STORAGE);
+    $app->useEnvironmentPath(SUBTITLE_TEST_STORAGE);
 }
 
 return $app;
