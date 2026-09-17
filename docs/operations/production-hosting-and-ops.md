@@ -110,6 +110,15 @@ The deploy process must complete these checks before a paid-beta production rele
 - `php artisan queue:restart`
 - `GET /up`
 
+## Public Website Launch Checks
+
+- Set `APP_URL` to the final HTTPS website origin; canonicals, language alternates, the sitemap, and migration redirects use this configured origin. Verify `MARKETING_PRODUCT_NAME`, `SUPPORT_EMAIL`, and `CHROME_EXTENSION_URL` against the actual launch values.
+- Keep private staging behind access controls. At public launch verify that the website is crawlable and that no deployment-wide `noindex` or robots block remains.
+- Fetch `/robots.txt` and `/sitemap.xml`; the initial sitemap has 54 public page variants and excludes account routes and redirects. Inspect a homepage, pricing page, and guide in each locale. English is unprefixed; language home URLs such as `/es` omit a trailing slash.
+- Verify the language switch preserves the page, old `?lang=` addresses redirect, and install/support links work. Auth and billing paths remain unprefixed.
+- With owner access, verify the real domain in Search Console and submit `/sitemap.xml`. These account steps are not completed by merging code.
+- Check the real install, signup, extension connection, and first successful generation journey. Use the basic event-counting procedure in `docs/OBSERVABILITY.md`; local tests do not establish live indexing or paid-provider availability.
+
 ## Rollback Flow
 
 Use the host's release directory rollback or Git revision rollback, then run:
