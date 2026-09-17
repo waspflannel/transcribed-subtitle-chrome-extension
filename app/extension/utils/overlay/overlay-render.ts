@@ -1,4 +1,5 @@
-﻿import type { ExtensionSettings } from '../settings-model';
+import { t } from '../i18n';
+import type { ExtensionSettings } from '../settings-model';
 import { escapeHtml } from '../html';
 import type { LearningToken, PartialSubtitleCue, SubtitleCue } from '../contracts';
 import { hasLearningMetadata, tokenKey } from '../track-tokens';
@@ -14,12 +15,12 @@ export function renderOverlayContent(
 
   if (!state.page.supported) {
     return renderFrame(renderShell({
-      eyebrow: 'AI subtitles',
-      title: 'Unsupported page',
+      eyebrow: t("AI subtitles"),
+      title: t("Unsupported page"),
       detail:
         state.page.reason === 'missing_video_id' || state.page.reason === 'invalid_video_id'
-          ? 'The current YouTube URL has no valid video ID.'
-          : 'YouTube video or Short required.',
+          ? t("The current YouTube URL has no valid video ID.")
+          : t("YouTube video or Short required."),
       meta: [],
     }));
   }
@@ -34,9 +35,9 @@ export function renderOverlayContent(
     if (!cue) {
       return interaction.actionStatus
         ? renderFrame(renderShell({
-            eyebrow: 'AI subtitles',
+            eyebrow: t("AI subtitles"),
             title: interaction.actionStatus.message,
-            detail: 'There is no subtitle cue at the current playback position.',
+            detail: t("There is no subtitle cue at the current playback position."),
             meta: [],
           }))
         : renderFrame('');
@@ -47,23 +48,19 @@ export function renderOverlayContent(
         ? `<div class="cue-romanization study-cue-romanization${studyBlurClass(
             state.settings.blurRomanization,
             'romanization',
-          )}"${
-            state.settings.blurRomanization
-              ? ' tabindex="0" aria-label="Cue romanization, focus to reveal blurred text"'
-              : ''
-          }>${escapeHtml(cue.romanization)}</div>`
+          )}"${state.settings.blurRomanization
+              ? ` tabindex="0" aria-label="${escapeHtml(t('Cue romanization, focus to reveal blurred text'))}"`
+              : ''}>${escapeHtml(cue.romanization)}</div>`
         : '';
 
     return renderFrame(`
       <section class="rail" role="status" data-study-rail>
         <div class="rail-meta">
-          <span class="eyebrow">AI subtitles</span>
+          <span class="eyebrow">${escapeHtml(t("AI subtitles"))}</span>
           <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
         </div>
         <div class="rail-main">
-          <div class="token-area" dir="auto" lang="${
-            state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage
-          }">${renderSourceLine(cue, state.settings, interaction)}</div>
+          <div class="token-area" dir="auto" lang="${state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage}">${renderSourceLine(cue, state.settings, interaction)}</div>
           ${cueRomanization}
           ${renderTranslation(cue, state.settings)}
         </div>
@@ -74,10 +71,10 @@ export function renderOverlayContent(
 
   if (state.subtitleState.type === 'error') {
     return renderFrame(renderShell({
-      eyebrow: 'AI subtitles',
-      title: 'Subtitle generation failed',
-      detail: state.subtitleState.message,
-      meta: [`Video ${state.page.videoId}`],
+      eyebrow: t("AI subtitles"),
+      title: t("Subtitle generation failed"),
+      detail: t(state.subtitleState.message),
+      meta: [t("Video {value1}", {value1: state.page.videoId})],
     }));
   }
 
@@ -89,17 +86,17 @@ export function renderOverlayContent(
     }
 
     return renderFrame(`
-      <section class="rail rail--message rail--generating" role="status" aria-label="Generating subtitles">
-        <div class="title">Generating</div>
+      <section class="rail rail--message rail--generating" role="status" aria-label="${escapeHtml(t("Generating subtitles"))}">
+        <div class="title">${escapeHtml(t("Generating"))}</div>
       </section>
     `);
   }
 
   return renderFrame(renderShell({
-    eyebrow: 'AI subtitles',
-    title: 'No generated track',
-    detail: 'This video does not have a generated subtitle track yet.',
-    meta: [`Video ${state.page.videoId}`],
+    eyebrow: t("AI subtitles"),
+    title: t("No generated track"),
+    detail: t("This video does not have a generated subtitle track yet."),
+    meta: [t("Video {value1}", {value1: state.page.videoId})],
   }));
 }
 
@@ -118,34 +115,26 @@ function renderPartialRail(
       ? `<div class="cue-romanization study-cue-romanization${studyBlurClass(
           settings.blurRomanization,
           'romanization',
-        )}"${
-          settings.blurRomanization
-            ? ' tabindex="0" aria-label="Cue romanization, focus to reveal blurred text"'
-            : ''
-        }>${escapeHtml(cue.romanization)}</div>`
+        )}"${settings.blurRomanization
+            ? ` tabindex="0" aria-label="${escapeHtml(t('Cue romanization, focus to reveal blurred text'))}"`
+            : ''}>${escapeHtml(cue.romanization)}</div>`
       : '';
   const translatedText = cue.translatedText?.trim() ?? '';
   const translation =
     settings.showTranslation && translatedText !== '' && translatedText !== cue.sourceText.trim()
-      ? `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${
-          settings.blurTranslation ? ' tabindex="0" aria-label="Cue translation, focus to reveal blurred text"' : ''
-        } dir="auto">${escapeHtml(translatedText)}</div>`
+      ? `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${settings.blurTranslation ? ` tabindex="0" aria-label="${escapeHtml(t('Cue translation, focus to reveal blurred text'))}"` : ''} dir="auto">${escapeHtml(translatedText)}</div>`
       : '';
 
   return `
     <section class="rail" role="status">
       <div class="rail-meta">
-        <span class="eyebrow">AI subtitles &middot; still generating</span>
+        <span class="eyebrow">${escapeHtml(t("AI subtitles · still generating"))}</span>
         <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
       </div>
       <div class="rail-main">
-        <div class="token-area" dir="auto" lang="${
-          sourceLanguage === 'auto' ? 'und' : escapeHtml(sourceLanguage)
-        }"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${
-          settings.blurSourceWords
-            ? ' tabindex="0" aria-label="Partial source text, focus to reveal blurred text"'
-            : ''
-        }>${escapeHtml(cue.sourceText)}</span></div>
+        <div class="token-area" dir="auto" lang="${sourceLanguage === 'auto' ? 'und' : escapeHtml(sourceLanguage)}"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${settings.blurSourceWords
+            ? ` tabindex="0" aria-label="${escapeHtml(t('Partial source text, focus to reveal blurred text'))}"`
+            : ''}>${escapeHtml(cue.sourceText)}</span></div>
         ${cueRomanization}
         ${translation}
       </div>
@@ -177,9 +166,7 @@ function renderSourceLine(
         <span class="token-slot">
           <button class="token-card" type="button" data-token-index="${token.index}" data-focus-key="${escapeHtml(
             `${cue.cueId}:${token.index}`,
-          )}" aria-pressed="${
-            isPinned ? 'true' : 'false'
-          }" aria-label="Study word: ${escapeHtml(token.text)}">
+          )}" aria-pressed="${isPinned ? 'true' : 'false'}" aria-label="${escapeHtml(t('Study word: {word}', {word: token.text}))}">
             <span class="token-text${studyBlurClass(settings.blurSourceWords, 'token')}">${escapeHtml(
               token.text,
             )}</span>
@@ -202,7 +189,7 @@ function renderTokenInteraction(
   const token = cue.tokens.find((candidate) => candidate.index === selectedIndex);
 
   if (!token) {
-    throw new TypeError(`Pinned token ${String(selectedIndex)} is not present on cue ${cue.cueId}.`);
+    throw new TypeError(t("Pinned token {value1} is not present on cue {value2}.", {value1: String(selectedIndex), value2: cue.cueId}));
   }
 
   const key = tokenKey(cue.cueId, token.index);
@@ -212,8 +199,8 @@ function renderTokenInteraction(
 
   if (!hasMetadata || isPending || isFailed) {
     const detail = isFailed
-      ? 'Word card generation failed. Select the word again to retry.'
-      : 'Loading word card...';
+      ? t("Word card generation failed. Select the word again to retry.")
+      : t("Loading word card...");
 
     return `
       <div class="token-popover">
@@ -221,7 +208,7 @@ function renderTokenInteraction(
           <span class="token-popover-title">${escapeHtml(token.text)}</span>
           <button class="icon-button" type="button" data-close-token-detail data-focus-key="token-detail-close" data-return-focus-key="${escapeHtml(
             `${cue.cueId}:${token.index}`,
-          )}" aria-label="Close token detail">x</button>
+          )}" aria-label="${escapeHtml(t("Close token detail"))}">x</button>
         </div>
         <div class="detail">${escapeHtml(detail)}</div>
       </div>
@@ -245,7 +232,7 @@ function renderTokenInteraction(
         <span class="token-popover-title">${escapeHtml(token.text)}</span>
         <button class="icon-button" type="button" data-close-token-detail data-focus-key="token-detail-close" data-return-focus-key="${escapeHtml(
           `${cue.cueId}:${token.index}`,
-        )}" aria-label="Close token detail">x</button>
+        )}" aria-label="${escapeHtml(t("Close token detail"))}">x</button>
       </div>
       <div class="token-fields">${rows}</div>
     </div>
@@ -257,9 +244,7 @@ function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): strin
     return '';
   }
 
-  return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${
-    settings.blurTranslation ? ' tabindex="0" aria-label="Cue translation, focus to reveal blurred text"' : ''
-  } dir="auto">${escapeHtml(cue.translatedText)}</div>`;
+  return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${settings.blurTranslation ? ` tabindex="0" aria-label="${escapeHtml(t('Cue translation, focus to reveal blurred text'))}"` : ''} dir="auto">${escapeHtml(cue.translatedText)}</div>`;
 }
 
 function studyBlurClass(enabled: boolean, layer: 'token' | 'romanization' | 'translation'): string {
@@ -272,21 +257,19 @@ function renderStudyControls(
 ): string {
   const visibleStatus = copyStatus
     ? {
-        message: copyStatus === 'copied' ? 'Copied' : 'Copy failed',
+        message: copyStatus === 'copied' ? t("Copied") : t("Copy failed"),
         tone: copyStatus === 'copied' ? 'success' : 'error',
       }
     : actionStatus;
   const statusClass = copyStatus ?? visibleStatus?.tone;
   const status = visibleStatus
-    ? `<span class="control-status ${statusClass}" role="status">${
-        escapeHtml(visibleStatus.message)
-      }</span>`
+    ? `<span class="control-status ${statusClass}" role="status">${escapeHtml(t(visibleStatus.message))}</span>`
     : '';
 
   return `
-    <div class="rail-controls" aria-label="Subtitle study controls">
-      <button class="study-control" type="button" data-study-control="replay">Replay</button>
-      <button class="study-control" type="button" data-study-control="copy">Copy</button>
+    <div class="rail-controls" aria-label="${escapeHtml(t("Subtitle study controls"))}">
+      <button class="study-control" type="button" data-study-control="replay">${escapeHtml(t("Replay"))}</button>
+      <button class="study-control" type="button" data-study-control="copy">${escapeHtml(t("Copy"))}</button>
       ${status}
     </div>
   `;
@@ -326,22 +309,22 @@ function renderTokenPreview(token: LearningToken, settings: ExtensionSettings): 
 }
 
 function tokenDetailRows(token: LearningToken, settings: ExtensionSettings): { label: string; value: string }[] {
-  const rows: { label: string; value: string }[] = [{ label: 'Text', value: token.text }];
+  const rows: { label: string; value: string }[] = [{ label: t("Text"), value: token.text }];
 
   if (settings.showRomanization) {
-    rows.push({ label: 'Romanization', value: token.romanization ?? '' });
+    rows.push({ label: t("Romanization"), value: token.romanization ?? '' });
   }
 
-  rows.push({ label: 'Translation', value: token.translation ?? '' });
+  rows.push({ label: t("Translation"), value: token.translation ?? '' });
 
   if (settings.showGloss) {
-    rows.push({ label: 'Gloss', value: token.gloss ?? '' });
+    rows.push({ label: t("Gloss"), value: token.gloss ?? '' });
   }
 
-  rows.push({ label: 'Part of speech', value: token.partOfSpeech ?? '' });
-  rows.push({ label: 'Lemma', value: token.lemma ?? '' });
-  rows.push({ label: 'Root', value: token.root ?? '' });
-  rows.push({ label: 'Usage note', value: token.usageNote ?? '' });
+  rows.push({ label: t("Part of speech"), value: token.partOfSpeech ?? '' });
+  rows.push({ label: t("Lemma"), value: token.lemma ?? '' });
+  rows.push({ label: t("Root"), value: token.root ?? '' });
+  rows.push({ label: t("Usage note"), value: token.usageNote ?? '' });
 
   return rows.filter((row) => row.value.trim() !== '');
 }
@@ -369,14 +352,14 @@ function renderBindingError(detail: string): string {
   return `
     <section class="rail rail--message" role="alert">
       <div class="rail-meta">
-        <span class="eyebrow">AI subtitles</span>
+        <span class="eyebrow">${escapeHtml(t("AI subtitles"))}</span>
       </div>
       <div class="rail-main rail-main--message">
-        <div class="title">Subtitle display needs a retry</div>
+        <div class="title">${escapeHtml(t("Subtitle display needs a retry"))}</div>
         <div class="detail">${escapeHtml(detail)}</div>
       </div>
       <div class="rail-controls">
-        <button class="study-control" type="button" data-retry-binding>Retry attachment</button>
+        <button class="study-control" type="button" data-retry-binding>${escapeHtml(t("Retry attachment"))}</button>
       </div>
     </section>
   `;

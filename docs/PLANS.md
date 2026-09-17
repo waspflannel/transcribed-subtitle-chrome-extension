@@ -25,6 +25,7 @@ The user can select **Brain / Worker** by saying "use brain / worker" when start
 
 ## Current Work
 
+- [International SEO for website and extension](exec-plans/active/2026-09-16-optimize-international-seo-for-website-and-extension.md): launch basics verified; broader content, store, and acquisition work deferred until after launch.
 - [Whole-project audit follow-up by topic](exec-plans/active/2026-09-09-whole-project-review/00-index.md): accounts, pipeline, learning, and operations.
 - [Current delivery and testing record](exec-plans/active/2026-09-09-whole-project-review/delivery-and-testing.md): awaiting user acceptance; the pipeline document retains the current slowdown investigation.
 - [Technical debt](exec-plans/tech-debt-tracker.md): remaining evidence and deferred requirements.

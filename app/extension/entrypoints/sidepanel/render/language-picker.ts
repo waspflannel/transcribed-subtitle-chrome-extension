@@ -1,3 +1,4 @@
+import { t } from '../../../utils/i18n';
 import { escapeHtml } from '../../../utils/html';
 import { languageSearchText, type LanguageOption } from '../../../utils/languages';
 
@@ -18,10 +19,10 @@ export function renderLanguagePicker(options: {
 
   options.selectedContainer.innerHTML = selectedLanguage
     ? selectedLanguageSummary(selectedLanguage)
-    : '<span class="muted">No language selected</span>';
+    : `<span class="muted">${escapeHtml(t("No language selected"))}</span>`;
   options.listContainer.innerHTML =
     visibleLanguages.length === 0
-      ? '<p class="muted empty-state">No languages match that search.</p>'
+      ? `<p class="muted empty-state">${escapeHtml(t("No languages match that search."))}</p>`
       : visibleLanguages
           .map((language) => languageOptionButton(language, language.code === options.selectedCode, options.disabled))
           .join('');
@@ -29,7 +30,7 @@ export function renderLanguagePicker(options: {
 
 function selectedLanguageSummary(language: LanguageOption): string {
   return `
-    <span>${escapeHtml(language.label)}</span>
+    <span>${escapeHtml(t(language.label))}</span>
     <span class="language-code">${escapeHtml(language.code)}</span>
   `;
 }
@@ -45,7 +46,7 @@ function languageOptionButton(language: LanguageOption, selected: boolean, disab
       ${disabled ? 'disabled' : ''}
     >
       <span class="language-option-main">
-        <span>${escapeHtml(language.label)}</span>
+        <span>${escapeHtml(t(language.label))}</span>
         <span class="language-code">${escapeHtml(language.code)}</span>
       </span>
     </button>

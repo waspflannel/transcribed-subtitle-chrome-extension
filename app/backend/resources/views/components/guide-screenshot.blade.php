@@ -1,7 +1,7 @@
 @props(['image', 'width', 'height', 'title', 'alt', 'steps', 'wide' => false])
 
 <figure @class(['guide-shot', 'guide-shot-wide' => $wide])>
-    <a class="guide-shot-link" href="{{ asset('img/guide/'.$image) }}" target="_blank" rel="noopener" aria-label="{{ $title }} — open full-size image in a new tab">
+    <a class="guide-shot-link" href="{{ asset('img/guide/'.$image) }}" target="_blank" rel="noopener" aria-label="{{ __(':title — open full-size image in a new tab', ['title' => $title]) }}">
         <span class="guide-shot-image">
             <img src="{{ asset('img/guide/'.$image) }}" width="{{ $width * 2 }}" height="{{ $height * 2 }}" alt="{{ $alt }}" loading="lazy" decoding="async">
             <svg class="guide-shot-marks" viewBox="0 0 {{ $width }} {{ $height }}" aria-hidden="true" focusable="false">
@@ -12,10 +12,10 @@
                 @endforeach
             </svg>
         </span>
-        <span class="guide-shot-zoom">Open full-size image <span aria-hidden="true">↗</span></span>
+        <span class="guide-shot-zoom">{{ __('Open full-size image') }} <span aria-hidden="true">↗</span></span>
     </a>
     <figcaption>
-        <p class="eyebrow">On your screen</p>
+        <p class="eyebrow">{{ __('On your screen') }}</p>
         <h3>{{ $title }}</h3>
         <ol class="guide-callouts" role="list">
             @foreach ($steps as $step)

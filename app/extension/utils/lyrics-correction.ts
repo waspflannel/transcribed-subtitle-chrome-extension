@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { LyricsCorrectionStatus } from './contracts';
 
 export const LYRICS_CHARACTER_LIMIT = 25000;
@@ -6,17 +7,17 @@ export const LYRICS_CHARACTER_LIMIT = 25000;
 export const QUICK_FIX_CHARACTER_LIMIT = 84;
 
 export const LYRICS_CORRECTION_STAGES = [
-  { key: 'queued', percent: 0, label: 'Waiting to start' },
-  { key: 'aligning', percent: 15, label: 'Aligning lyrics' },
-  { key: 'rebuilding', percent: 45, label: 'Rebuilding words and translations' },
-  { key: 'romanizing', percent: 70, label: 'Rebuilding pronunciation' },
-  { key: 'finalizing', percent: 95, label: 'Applying replacement' },
+  { key: 'queued', percent: 0, label: "Waiting to start" },
+  { key: 'aligning', percent: 15, label: "Aligning lyrics" },
+  { key: 'rebuilding', percent: 45, label: "Rebuilding words and translations" },
+  { key: 'romanizing', percent: 70, label: "Rebuilding pronunciation" },
+  { key: 'finalizing', percent: 95, label: "Applying replacement" },
 ] as const;
 
 export function lyricsCorrectionProgress(stage: LyricsCorrectionStatus['stage']): { percent: number; label: string } {
   const progress = LYRICS_CORRECTION_STAGES.find((item) => item.key === stage);
 
-  return progress ?? (stage === 'completed' ? { percent: 100, label: 'Complete' } : { percent: 0, label: 'Waiting to start' });
+  return progress ? { ...progress, label: t(progress.label) } : (stage === 'completed' ? { percent: 100, label: t("Complete") } : { percent: 0, label: t("Waiting to start") });
 }
 
 export function lyricsCharacterCount(value: string): number {
@@ -24,14 +25,14 @@ export function lyricsCharacterCount(value: string): number {
 }
 
 export function lyricsValidationError(value: string): string | null {
-  if (!value.trim()) return 'Paste lyrics to continue.';
-  if (lyricsCharacterCount(value) > LYRICS_CHARACTER_LIMIT) return 'Lyrics must be 25,000 characters or fewer.';
+  if (!value.trim()) return t("Paste lyrics to continue.");
+  if (lyricsCharacterCount(value) > LYRICS_CHARACTER_LIMIT) return t("Lyrics must be 25,000 characters or fewer.");
   // Allow tab/newlines and script joiners; reject controls and unpaired UTF-16 surrogates.
   if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uD800-\uDFFF]/u.test(value)) {
-    return 'Lyrics contain unsupported characters. Paste plain text.';
+    return t("Lyrics contain unsupported characters. Paste plain text.");
   }
-  if (!/\p{L}/u.test(value)) return 'Paste lyrics containing words, not just numbers, punctuation, or emoji.';
-  if (/^(?:https?:\/\/|www\.)\S+$/iu.test(value.trim())) return 'Paste the lyrics themselves, not a link.';
+  if (!/\p{L}/u.test(value)) return t("Paste lyrics containing words, not just numbers, punctuation, or emoji.");
+  if (/^(?:https?:\/\/|www\.)\S+$/iu.test(value.trim())) return t("Paste the lyrics themselves, not a link.");
   return null;
 }
 
@@ -150,7 +151,7 @@ export async function syncLyricsCorrectionStatus(options: {
       && (!options.canCommit || options.canCommit())) {
       options.states.set(options.tabId, {
         ...latest,
-        syncError: 'Could not refresh replacement status. Showing the last known state; retrying automatically.',
+        syncError: t("Could not refresh replacement status. Showing the last known state; retrying automatically."),
       });
       options.onCurrentRequestError?.(error);
     }

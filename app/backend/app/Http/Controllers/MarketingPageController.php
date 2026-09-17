@@ -7,6 +7,7 @@ use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Billing\BillingEntitlementService;
 use App\Services\Billing\BillingPlanCatalog;
 use App\Services\Languages\LanguageCatalog;
+use App\Support\WebsiteLocale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -87,33 +88,33 @@ class MarketingPageController extends Controller
 
         $metadata = [
             'home' => [
-                'title' => 'Learn with YouTube videos and music | '.$productName,
-                'description' => 'Learn languages with AI subtitles for YouTube. Choose Transcriber or Transcriber-Spark, bring your own lyrics, and explore translations, pronunciation, and word cards.',
+                'title' => __('Learn with YouTube videos and music | :product', ['product' => $productName]),
+                'description' => __('Learn languages with AI subtitles for YouTube. Choose Transcriber or Transcriber-Spark, bring your own lyrics, and explore translations, pronunciation, and word cards.'),
                 'route' => 'marketing.home',
             ],
             'pricing' => [
-                'title' => 'Pricing for '.$productName,
-                'description' => 'Compare monthly video minutes and generation capacity. Every plan includes model choice, interactive word cards, and lyrics correction.',
+                'title' => __('Pricing for :product', ['product' => $productName]),
+                'description' => __('Compare monthly video minutes and generation capacity. Every plan includes model choice, interactive word cards, and lyrics correction.'),
                 'route' => 'marketing.pricing',
             ],
             'privacy' => [
-                'title' => 'Privacy for '.$productName,
-                'description' => 'How we handle account data, public YouTube audio, pasted lyrics, AI providers, cookies, and saved tracks, plus your account deletion and privacy choices.',
+                'title' => __('Privacy for :product', ['product' => $productName]),
+                'description' => __('How we handle account data, public YouTube audio, pasted lyrics, AI providers, cookies, and saved tracks, plus your account deletion and privacy choices.'),
                 'route' => 'marketing.privacy',
             ],
             'how-to-use' => [
-                'title' => 'How To Use | '.$productName,
-                'description' => 'Install the Chrome extension, generate subtitles, replace lyrics, fix a word, and use translations, word cards, study tools, and saved generations.',
+                'title' => __('How To Use | :product', ['product' => $productName]),
+                'description' => __('Install the Chrome extension, generate subtitles, replace lyrics, fix a word, and use translations, word cards, study tools, and saved generations.'),
                 'route' => 'marketing.how-to-use',
             ],
             'terms' => [
-                'title' => 'Terms for '.$productName,
-                'description' => 'Terms for monthly subscriptions, video minutes, cancellation, refunds, lyrics correction, content rights, and AI limitations.',
+                'title' => __('Terms for :product', ['product' => $productName]),
+                'description' => __('Terms for monthly subscriptions, video minutes, cancellation, refunds, lyrics correction, content rights, and AI limitations.'),
                 'route' => 'marketing.terms',
             ],
             'support' => [
-                'title' => 'Support for '.$productName,
-                'description' => 'Report bugs or get help with extension setup, billing, refunds, generation failures, and language coverage.',
+                'title' => __('Support for :product', ['product' => $productName]),
+                'description' => __('Report bugs or get help with extension setup, billing, refunds, generation failures, and language coverage.'),
                 'route' => 'marketing.support',
             ],
         ][$page];
@@ -121,7 +122,7 @@ class MarketingPageController extends Controller
         return [
             'pageTitle' => $metadata['title'],
             'metaDescription' => $metadata['description'],
-            'canonicalUrl' => route($metadata['route']),
+            'canonicalUrl' => WebsiteLocale::route($metadata['route']),
         ];
     }
 

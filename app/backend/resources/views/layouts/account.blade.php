@@ -7,7 +7,7 @@
     $siteCssVersion = max(array_map(static fn (string $path): int => is_file($path) ? filemtime($path) : 0, $siteCssPaths));
 @endphp
 <!doctype html>
-<html lang="en">
+<html lang="{{ app()->getLocale() }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,10 +21,8 @@
     <body class="auth-body">
         <x-layout.skip-link />
         <header class="auth-header">
-            <a class="brand" href="{{ route('marketing.home') }}">
-                <span class="brand-mark" aria-hidden="true">Aa</span>
-                <span>{{ $productName }}</span>
-            </a>
+            <x-locale-switcher />
+            <a class="brand" href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}">{!! strtr(e(__(':slot1:Aa:slot2: :slot3::slot4::slot5:')), [':slot1:' => '<span class="brand-mark" aria-hidden="true">', ':slot2:' => '</span>', ':slot3:' => '<span>', ':slot4:' => e($productName), ':slot5:' => '</span>']) !!}</a>
         </header>
         <main class="auth-shell" id="main-content" tabindex="-1">
             <section class="auth-panel">

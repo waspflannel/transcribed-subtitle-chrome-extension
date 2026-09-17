@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { PartialSubtitleCue, SubtitleCue } from '../contracts';
 import type { ExtensionSettings } from '../settings-model';
 import { escapeHtml } from '../html';
@@ -42,7 +43,7 @@ export function panelTranscriptListHtml(input: {
 }): string {
   const cues = filterTranscriptCues(input.cues, input.query, input.searchableText);
   if (cues.length === 0) {
-    return '<p class="transcript-empty muted">No cues match that search.</p>';
+    return `<p class="transcript-empty muted">${escapeHtml(t("No cues match that search."))}</p>`;
   }
   return cues.map((cue) => transcriptRow(cue, cue.cueId === input.activeCueId, input.settings, input.quickFixMode ?? false, input.editingCueId ?? null, input.quickFixEditing ?? null)).join('');
 }
@@ -58,7 +59,7 @@ export function panelPartialTranscriptListHtml(input: {
     ? input.cues
     : input.cues.filter((cue, index) => (input.searchableText?.[index] ?? cue.sourceText.toLowerCase()).includes(query));
 
-  if (cues.length === 0) return '<p class="transcript-empty muted">No cues match that search.</p>';
+  if (cues.length === 0) return `<p class="transcript-empty muted">${escapeHtml(t("No cues match that search."))}</p>`;
 
   return cues.map((cue) => `
     <article class="cue${cue.cueId === input.activeCueId ? ' on' : ''}" role="listitem" aria-current="${cue.cueId === input.activeCueId ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
@@ -66,7 +67,7 @@ export function panelPartialTranscriptListHtml(input: {
       <div class="cbody">
         <div class="ct" dir="auto">${escapeHtml(cue.sourceText)}</div>
         <div class="cue-actions">
-          <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Copy cue ${cue.index + 1}">Copy</button>
+          <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="${escapeHtml(t('Copy cue {number}', {number: cue.index + 1}))}">${escapeHtml(t("Copy"))}</button>
         </div>
       </div>
     </article>`).join('');
@@ -74,18 +75,18 @@ export function panelPartialTranscriptListHtml(input: {
 
 function transcriptRow(cue: SubtitleCue, active: boolean, settings: ExtensionSettings, quickFixMode: boolean, editingCueId: string | null, quickFixEditing: QuickFixEditing | null): string {
   const tr = settings.showTranslation && cue.translatedText.trim() !== cue.sourceText.trim()
-    ? `<div class="cg" dir="auto">${escapeHtml(cue.translatedText || 'Translation unavailable')}</div>` : '';
+    ? `<div class="cg" dir="auto">${escapeHtml(cue.translatedText || t("Translation unavailable"))}</div>` : '';
   return `
     <article class="cue${active ? ' on' : ''}" role="listitem" aria-current="${active ? 'true' : 'false'}" data-cue-id="${escapeHtml(cue.cueId)}">
       <div class="tc">${escapeHtml(timecode(cue.startMs))}</div>
       <div class="cbody">
         ${sourceLineHtml(cue, settings, quickFixMode && editingCueId === cue.cueId)}
         ${tr}
-        ${quickFixMode && editingCueId === cue.cueId ? (quickFixEditing?.cueId === cue.cueId ? quickFixEditorHtml(quickFixEditing.value) : '<p class="microcopy">Select a word above to correct it.</p>') : ''}
+        ${quickFixMode && editingCueId === cue.cueId ? (quickFixEditing?.cueId === cue.cueId ? quickFixEditorHtml(quickFixEditing.value) : `<p class="microcopy">${escapeHtml(t("Select a word above to correct it."))}</p>`) : ''}
         <div class="cue-actions">
-          ${quickFixMode ? `<button type="button" class="cue-action" data-transcript-action="quick-fix-line" data-cue-id="${escapeHtml(cue.cueId)}" aria-expanded="${editingCueId === cue.cueId}" ${quickFixEditing ? 'disabled' : ''}>${editingCueId === cue.cueId ? 'Done' : 'Edit'}</button>` : ''}
-          <button type="button" class="cue-action" data-transcript-action="jump" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Jump to cue ${cue.index + 1}">Jump</button>
-          <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="Copy cue ${cue.index + 1}">Copy</button>
+          ${quickFixMode ? `<button type="button" class="cue-action" data-transcript-action="quick-fix-line" data-cue-id="${escapeHtml(cue.cueId)}" aria-expanded="${editingCueId === cue.cueId}" ${quickFixEditing ? 'disabled' : ''}>${editingCueId === cue.cueId ? t("Done") : t("Edit")}</button>` : ''}
+          <button type="button" class="cue-action" data-transcript-action="jump" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="${escapeHtml(t('Jump to cue {number}', {number: cue.index + 1}))}">${escapeHtml(t("Jump"))}</button>
+          <button type="button" class="cue-action" data-transcript-action="copy" data-cue-id="${escapeHtml(cue.cueId)}" aria-label="${escapeHtml(t('Copy cue {number}', {number: cue.index + 1}))}">${escapeHtml(t("Copy"))}</button>
         </div>
       </div>
     </article>`;
@@ -107,7 +108,7 @@ function sourceLineHtml(cue: SubtitleCue, settings: ExtensionSettings, quickFixM
       .map((token) => {
         const reading = token.romanization ? `<small dir="ltr">${escapeHtml(token.romanization)}</small>` : '';
 
-        return `<button type="button" class="tok tok-edit" data-transcript-action="quick-fix-token" data-cue-id="${escapeHtml(cue.cueId)}" data-token-index="${token.index}" aria-label="Edit source token ${escapeHtml(token.text)}"><span class="tok-text">${escapeHtml(token.text)}</span>${reading}</button>`;
+        return `<button type="button" class="tok tok-edit" data-transcript-action="quick-fix-token" data-cue-id="${escapeHtml(cue.cueId)}" data-token-index="${token.index}" aria-label="${escapeHtml(t('Edit source token {word}', {word: token.text}))}"><span class="tok-text">${escapeHtml(token.text)}</span>${reading}</button>`;
       })
       .join('');
 
@@ -138,13 +139,13 @@ function sourceLineHtml(cue: SubtitleCue, settings: ExtensionSettings, quickFixM
 function quickFixEditorHtml(value: string): string {
   return `
     <div class="tok-editor" data-quick-fix-editor>
-      <label for="quick-fix-text">Correct word</label>
-      <input id="quick-fix-text" type="text" dir="auto" name="quickFixText" autocomplete="off" spellcheck="false" data-quick-fix-input value="${escapeHtml(value)}" aria-label="Replacement token or phrase" />
-      <p class="microcopy">Updates this line’s translation, pronunciation, and word cards.</p>
+      <label for="quick-fix-text">${escapeHtml(t("Correct word"))}</label>
+      <input id="quick-fix-text" type="text" dir="auto" name="quickFixText" autocomplete="off" spellcheck="false" data-quick-fix-input value="${escapeHtml(value)}" aria-label="${escapeHtml(t("Replacement token or phrase"))}" />
+      <p class="microcopy">${escapeHtml(t("Updates this line’s translation, pronunciation, and word cards."))}</p>
       <span class="tok-editor-row">
         <span class="tok-editor-hint" data-quick-fix-hint role="status" aria-live="polite"></span>
-        <button type="button" class="cue-action" data-transcript-action="quick-fix-save">Save correction</button>
-        <button type="button" class="cue-action" data-transcript-action="quick-fix-cancel">Cancel</button>
+        <button type="button" class="cue-action" data-transcript-action="quick-fix-save">${escapeHtml(t("Save correction"))}</button>
+        <button type="button" class="cue-action" data-transcript-action="quick-fix-cancel">${escapeHtml(t("Cancel"))}</button>
       </span>
     </div>`;
 }

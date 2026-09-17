@@ -1,3 +1,4 @@
+import { t, interfaceLocale } from './i18n';
 import type { AccountSummary, SubtitleJobHistoryItem } from './contracts';
 import { publicSubtitleErrorMessage, SubtitleApiError } from './api';
 import type { AccountState } from './messages';
@@ -45,7 +46,7 @@ export function publicJobTelemetry(job: SubtitleJobHistoryItem): PublicJobTeleme
 
 export function formatDurationSeconds(seconds: number | undefined): string {
   if (!isPositiveInteger(seconds)) {
-    return 'Duration pending';
+    return t("Duration pending");
   }
 
   const minutes = Math.floor(seconds / 60);
@@ -63,13 +64,13 @@ export function formatJobTiming(job: Pick<SubtitleJobHistoryItem, 'startedAt' | 
   const endedAt = Date.parse(job.completedAt ?? job.lastUpdatedAt);
 
   if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) {
-    throw new Error('Job timing contains invalid timestamps.');
+    throw new Error(t("Job timing contains invalid timestamps."));
   }
 
-  const label =
-    job.status === 'running' || job.status === 'queued' ? 'elapsed' : job.status === 'failed' ? 'until failure' : 'total';
-
-  return `${formatDurationSeconds(Math.max(1, Math.round((endedAt - startedAt) / 1000)))} ${label}`;
+  const duration = formatDurationSeconds(Math.max(1, Math.round((endedAt - startedAt) / 1000)));
+  return job.status === 'running' || job.status === 'queued'
+    ? t('{duration} elapsed', { duration })
+    : job.status === 'failed' ? t('{duration} until failure', { duration }) : t('{duration} total', { duration });
 }
 
 export function formatResetDate(value: string): string {
@@ -79,7 +80,7 @@ export function formatResetDate(value: string): string {
     throw new Error(`Invalid usage reset timestamp: ${value}`);
   }
 
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(interfaceLocale(), {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
@@ -92,7 +93,7 @@ function failedJobPublicErrorMessage(job: SubtitleJobHistoryItem): string | unde
   }
 
   if (!job.errorCode || !job.message) {
-    throw new Error('Failed job history item is missing public error fields.');
+    throw new Error(t("Failed job history item is missing public error fields."));
   }
 
   return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));

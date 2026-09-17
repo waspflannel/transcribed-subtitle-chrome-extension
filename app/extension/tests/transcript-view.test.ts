@@ -1,9 +1,11 @@
-import { assert, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, describe, expect, it, vi } from 'vitest';
+import { setInterfaceLocale, t } from '../utils/i18n';
 import { JSDOM } from 'jsdom';
 
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { SubtitleCue } from '../utils/contracts';
 import { bindTranscriptView } from '../entrypoints/sidepanel/transcript-view';
+afterEach(() => setInterfaceLocale('en'));
 
 const cues: [SubtitleCue, SubtitleCue] = [
   { cueId: 'c1', index: 0, startMs: 500, endMs: 2100, sourceText: 'hola', translatedText: 'hello', romanization: 'o-la', tokens: [{ index: 0, text: 'hola', normalizedText: 'hola' }] },
@@ -342,6 +344,20 @@ describe('bindTranscriptView quick fix editor', () => {
     view.setData('vid', cues, { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true });
 
     expect(list.querySelector<HTMLInputElement>('[data-quick-fix-input]')?.value).toBe('hola!');
+  });
+
+  it('preserves the draft and active cue when the interface language changes', () => {
+    const { view, list } = setupQuickFix();
+    const { input } = openEditor(view, list);
+    type(input, 'hola!');
+    for (const locale of ['es', 'ja', 'zh-CN', 'en'] as const) {
+      setInterfaceLocale(locale);
+      view.setData('vid', cues, { ...DEFAULT_EXTENSION_SETTINGS, interfaceLocale: locale });
+      view.setActiveCue('c2');
+      expect(list.querySelector<HTMLInputElement>('[data-quick-fix-input]')?.value).toBe('hola!');
+      expect(list.querySelector('.cue.on')?.getAttribute('data-cue-id')).toBe('c2');
+      expect(list.querySelector('[data-transcript-action="quick-fix-save"]')?.textContent).toBe(t('Save correction'));
+    }
   });
 
   it('keeps typing focus, selection, draft and scroll when another cue receives word metadata', async () => {

@@ -1,3 +1,4 @@
+import { t, interfaceLocale } from '../../../utils/i18n';
 import { escapeHtml } from '../../../utils/html';
 import { resolveBackendApiBaseUrl } from '../../../utils/api-config';
 import type { AccountState } from '../../../utils/messages';
@@ -7,22 +8,22 @@ export function accountFeatureListHtml(accountState: AccountState, settings: Ext
   const authenticated = accountState.status === 'authenticated';
 
   if (!authenticated) {
-    return featureRows([['Account', 'Available after sign-in']]);
+    return featureRows([[t("Account"), t("Available after sign-in")]]);
   }
 
   return featureRows([
-    ['Generation access', 'Checked when you generate'],
-    ['Cue translation', settings.showTranslation ? 'Selected' : 'Not selected'],
-    ['Romanization', settings.showRomanization ? 'Selected' : 'Not selected'],
-    ['Word cards', 'On click'],
-    ['Queue speed', accountState.tierSpeedLabel],
+    [t("Generation access"), t("Checked when you generate")],
+    [t("Cue translation"), settings.showTranslation ? t("Selected") : t("Not selected")],
+    [t("Romanization"), settings.showRomanization ? t("Selected") : t("Not selected")],
+    [t("Word cards"), t("On click")],
+    [t("Queue speed"), t(accountState.tierSpeedLabel)],
   ]);
 }
 
 export function accountBillingLinkHtml(baseUrl?: string): string {
   const origin = new URL(resolveBackendApiBaseUrl(baseUrl ?? import.meta.env.WXT_BACKEND_API_BASE_URL)).origin;
 
-  return `<a class="btn-ghost" href="${escapeHtml(origin + '/dashboard')}" target="_blank" rel="noopener noreferrer">Account and billing</a>`;
+  return `<a class="btn-ghost" href="${escapeHtml(origin + '/dashboard?lang=' + interfaceLocale())}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("Account and billing"))}</a>`;
 }
 
 function featureRows(rows: readonly [string, string][]): string {

@@ -1,4 +1,5 @@
 import type { CreateSubtitleJobRequest } from '@transcribed-subtitle-extension/contracts';
+import { isInterfaceLocale, type InterfaceLocale } from './i18n';
 
 import {
   DEFAULT_SOURCE_LANGUAGE,
@@ -15,6 +16,7 @@ export type CaptionDensity = 'compact' | 'comfortable';
 export type CaptionContrastTheme = 'default' | 'high';
 
 export interface ExtensionSettings {
+  interfaceLocale: InterfaceLocale | 'auto';
   aiProvider: NonNullable<CreateSubtitleJobRequest['aiProvider']>;
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;
@@ -39,6 +41,7 @@ export const MIN_SUBTITLE_TIMING_OFFSET_SECONDS = -10;
 export const MAX_SUBTITLE_TIMING_OFFSET_SECONDS = 10;
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
+  interfaceLocale: 'auto',
   aiProvider: 'openai',
   sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
@@ -61,6 +64,7 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
 
 export function createExtensionSettingsFromPartial(value: Partial<ExtensionSettings> | null | undefined): ExtensionSettings {
   const settings: ExtensionSettings = { ...DEFAULT_EXTENSION_SETTINGS };
+  if (isInterfaceLocale(value?.interfaceLocale)) settings.interfaceLocale = value.interfaceLocale;
   const sourceLanguage = normalizeSourceLanguage(value?.sourceLanguage);
   const targetLanguage = normalizeTargetLanguage(value?.targetLanguage);
 

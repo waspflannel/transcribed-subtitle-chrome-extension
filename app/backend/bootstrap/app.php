@@ -4,6 +4,7 @@ use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Http\Middleware\RequireExtensionInstallId;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SetWebsiteLocale;
 use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
@@ -29,6 +30,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(append: [SetWebsiteLocale::class]);
         $middleware->append(SecurityHeaders::class);
         // Validate pasted lyrics before trimming can hide boundary control characters.
         $middleware->trimStrings(except: ['lyrics']);

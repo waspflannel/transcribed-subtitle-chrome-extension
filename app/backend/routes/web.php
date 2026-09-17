@@ -9,30 +9,24 @@ use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\WebSubtitleJobController;
 use App\Http\Middleware\AuthenticateWebSession;
+use App\Support\WebsiteLocale;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [MarketingPageController::class, 'home'])
-    ->name('marketing.home');
-Route::redirect('/desktop', '/how-to-use#how-to-install', 301)
-    ->name('marketing.desktop');
-Route::redirect('/extension', '/how-to-use#how-to-install', 301)
-    ->name('marketing.extension');
-Route::get('/pricing', [MarketingPageController::class, 'pricing'])
-    ->name('marketing.pricing');
-Route::get('/how-to-use', [MarketingPageController::class, 'howToUse'])
-    ->name('marketing.how-to-use');
-Route::redirect('/languages', '/#languages', 301)
-    ->name('marketing.languages');
-Route::redirect('/how-it-works', '/how-to-use', 301)
-    ->name('marketing.how-it-works');
-Route::redirect('/faq', '/#faq', 301)
-    ->name('marketing.faq');
-Route::get('/privacy', [MarketingPageController::class, 'privacy'])
-    ->name('marketing.privacy');
-Route::get('/terms', [MarketingPageController::class, 'terms'])
-    ->name('marketing.terms');
-Route::get('/support', [MarketingPageController::class, 'support'])
-    ->name('marketing.support');
+foreach (config('localization.prefixes') as $locale => $prefix) {
+    Route::prefix($prefix)->name($locale === 'en' ? '' : $locale.'.')->group(function () use ($prefix): void {
+        Route::get('/', [MarketingPageController::class, 'home'])->name('marketing.home');
+        Route::get('/pricing', [MarketingPageController::class, 'pricing'])->name('marketing.pricing');
+        Route::get('/how-to-use', [MarketingPageController::class, 'howToUse'])->name('marketing.how-to-use');
+        Route::get('/privacy', [MarketingPageController::class, 'privacy'])->name('marketing.privacy');
+        Route::get('/terms', [MarketingPageController::class, 'terms'])->name('marketing.terms');
+        Route::get('/support', [MarketingPageController::class, 'support'])->name('marketing.support');
+
+        foreach (WebsiteLocale::REDIRECTS as $alias => $destination) {
+            Route::redirect('/'.$alias, ($prefix === '' ? '' : '/'.$prefix).$destination, 301)
+                ->name('marketing.'.$alias);
+        }
+    });
+}
 
 Route::get('/robots.txt', RobotsController::class)
     ->name('robots');

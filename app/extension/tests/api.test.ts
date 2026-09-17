@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { INTERFACE_LOCALES, setInterfaceLocale } from '../utils/i18n';
 
 import { guardJobResponse } from '../utils/api-response-guards';
 import { SubtitleApiClient, SubtitleApiError, publicSubtitleErrorMessage } from '../utils/api';
@@ -13,6 +14,7 @@ import type {
 
 const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const authToken = '1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+afterEach(() => setInterfaceLocale('en'));
 
 describe('SubtitleApiClient', () => {
   it('deletes a saved generation through the authenticated generation resource', async () => {
@@ -409,7 +411,8 @@ describe('SubtitleApiClient', () => {
     }));
   });
 
-  it('cancels corrections and patches one token through the canonical endpoints', async () => {
+  it.each(Object.keys(INTERFACE_LOCALES))('keeps correction endpoints and source content unchanged in %s', async (locale) => {
+    setInterfaceLocale(locale);
     const cancelled: LyricsCorrectionStatus = {
       attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
       status: 'cancelled',
@@ -433,7 +436,10 @@ describe('SubtitleApiClient', () => {
       method: 'DELETE',
       body: JSON.stringify({ attemptId: cancelled.attemptId }),
     }));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/cues/cue-1/tokens/2', expect.objectContaining({ method: 'PATCH' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/cues/cue-1/tokens/2', expect.objectContaining({
+      method: 'PATCH', body: JSON.stringify({ expectedTrackId: track.trackId, text: 'updated' }),
+    }));
+    expect(new SubtitleApiError('internal_error', 'test', 500).name).toBe('SubtitleApiError');
   });
 
   it('throws stable backend errors', async () => {

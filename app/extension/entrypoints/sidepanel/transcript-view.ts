@@ -1,3 +1,5 @@
+import { escapeHtml } from '../../utils/html';
+import { t } from '../../utils/i18n';
 import type { PartialSubtitleCue, SubtitleCue } from '../../utils/contracts';
 import type { ExtensionSettings } from '../../utils/settings-model';
 import { panelPartialTranscriptListHtml, panelTranscriptListHtml, transcriptSearchText } from '../../utils/panel/transcript';
@@ -48,6 +50,7 @@ export function bindTranscriptView(dom: {
       dom.transcriptSearch.value,
       settings?.showRomanization ?? false,
       settings?.showTranslation ?? false,
+      settings?.interfaceLocale,
       partial,
       quickFixMode,
       editingCueId,
@@ -61,8 +64,8 @@ export function bindTranscriptView(dom: {
     const signature = renderSignature();
     const partialTotal = partialCues.length;
     dom.transcriptStatus.textContent = partial
-      ? partialTotal === 0 ? '' : `${partialTotal} cues · Still generating`
-      : total === 0 ? '' : `${total} cues`;
+      ? partialTotal === 0 ? '' : t("{value1} cues · Still generating", {value1: partialTotal})
+      : total === 0 ? '' : t("{value1} cues", {value1: total});
     if (signature === renderedSignature) return;
     renderedSignature = signature;
     const scrollTop = dom.transcriptList.scrollTop;
@@ -72,7 +75,7 @@ export function bindTranscriptView(dom: {
         direction: previousInput.selectionDirection, scrollLeft: previousInput.scrollLeft }
       : null;
     dom.transcriptList.innerHTML = (partial ? partialTotal : total) === 0
-      ? '<p class="transcript-empty muted">Generate subtitles to see the transcript.</p>'
+      ? `<p class="transcript-empty muted">${escapeHtml(t("Generate subtitles to see the transcript."))}</p>`
       : partial ? panelPartialTranscriptListHtml({
         cues: partialCues,
         activeCueId,
@@ -133,11 +136,11 @@ export function bindTranscriptView(dom: {
     input.disabled = quickFixBusy;
     cancel.disabled = quickFixBusy;
     save.disabled = quickFixBusy || overLimit || unchanged || quickFixDraft.trim() === '';
-    save.textContent = quickFixBusy ? 'Saving…' : 'Save correction';
+    save.textContent = quickFixBusy ? t("Saving…") : t("Save correction");
     editor.setAttribute('aria-busy', String(quickFixBusy));
 
     if (quickFixBusy) {
-      hint.textContent = 'Refreshing translation and word data…';
+      hint.textContent = t("Refreshing translation and word data…");
       hint.classList.remove('error');
     } else if (quickFixError) {
       hint.textContent = quickFixError;
@@ -225,10 +228,10 @@ export function bindTranscriptView(dom: {
       const text = (partial ? partialCues : cues).find((c) => c.cueId === cueId)?.sourceText;
       if (text && navigator.clipboard) {
         void navigator.clipboard.writeText(text)
-          .then(() => ackButton(button, 'Copied'))
-          .catch(() => ackButton(button, 'Failed'));
+          .then(() => ackButton(button, t("Copied")))
+          .catch(() => ackButton(button, t("Failed")));
       } else {
-        ackButton(button, 'Failed');
+        ackButton(button, t("Failed"));
       }
     }
   });

@@ -1,3 +1,5 @@
+import { escapeHtml } from './html';
+import { t, setInterfaceLocale, interfaceLocale } from './i18n';
 import { browser } from 'wxt/browser';
 import type { LearningToken, SubtitleCue } from './contracts';
 import { renderOverlayContent } from './overlay/overlay-render';
@@ -78,11 +80,18 @@ export class OverlayShell {
   ) {}
 
   public update(state: OverlayRenderState, video = findActiveYoutubeVideo(this.documentRef)): void {
+    setInterfaceLocale(state.settings.interfaceLocale);
     if (!this.host || !this.content) {
       this.mount();
     }
 
     this.host!.dataset.position = state.settings.overlayPosition;
+    this.host!.lang = interfaceLocale();
+    if (this.dragHandle) {
+      this.dragHandle.textContent = t('Move subtitles');
+      this.dragHandle.setAttribute('aria-label', t('Move subtitles. Drag or use arrow keys; hold Shift for larger steps.'));
+      this.dragHandle.title = t('Drag to move subtitles. Arrow keys move; Shift moves faster.');
+    }
     this.host!.dataset.captionSize = state.settings.captionFontSize;
     this.host!.dataset.captionDensity = state.settings.captionDensity;
     this.host!.dataset.captionTheme = state.settings.captionContrastTheme;
@@ -514,8 +523,8 @@ export class OverlayShell {
         ${buildOverlayFontFaces()}${overlayStyles}
       </style>
       <button type="button" class="drag-handle" data-overlay-drag hidden
-        aria-label="Move subtitles. Drag or use arrow keys; hold Shift for larger steps."
-        title="Drag to move subtitles. Arrow keys move; Shift moves faster.">Move subtitles</button>
+        aria-label="${escapeHtml(t("Move subtitles. Drag or use arrow keys; hold Shift for larger steps."))}"
+        title="${escapeHtml(t("Drag to move subtitles. Arrow keys move; Shift moves faster."))}">${escapeHtml(t("Move subtitles"))}</button>
       <div data-overlay-content></div>
     `;
 

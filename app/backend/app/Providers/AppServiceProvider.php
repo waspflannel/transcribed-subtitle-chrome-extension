@@ -25,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        $this->app['translator']->addJsonPath(base_path('../../packages/localization/website'));
         // Exception traces must not retain prompt/response arguments in logs or failed_jobs.
         ini_set('zend.exception_ignore_args', '1');
 

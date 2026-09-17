@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type {
   ApiError,
   CreateSubtitleJobRequest,
@@ -240,13 +241,13 @@ export class SubtitleApiClient {
       }
 
       if (body === null) {
-        throw new TypeError('Backend returned invalid JSON.');
+        throw new TypeError(t("Backend returned invalid JSON."));
       }
 
       return guardResponse(body);
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) {
-        throw new TypeError('Backend request timed out.');
+        throw new TypeError(t("Backend request timed out."));
       }
 
       throw error;
@@ -267,88 +268,88 @@ export function publicSubtitleErrorMessage(error: unknown): string {
   }
 
   if (error instanceof TypeError) {
-    return 'Could not reach the subtitle backend. Make sure it is running and try again.';
+    return t("Could not reach the subtitle backend. Make sure it is running and try again.");
   }
 
-  return 'Unable to generate subtitles. Try again later.';
+  return t("Unable to generate subtitles. Try again later.");
 }
 
 function messageForApiErrorCode(code: ApiError['error']['code']): string {
   switch (code) {
     case 'validation_failed':
-      return 'The video details could not be validated. Refresh the YouTube tab and try again.';
+      return t("The video details could not be validated. Refresh the YouTube tab and try again.");
 
     case 'invalid_credentials':
-      return 'The email or password was not accepted.';
+      return t("The email or password was not accepted.");
 
     case 'unauthenticated':
-      return 'Sign in to the extension before generating subtitles.';
+      return t("Sign in to the extension before generating subtitles.");
 
     case 'unauthorized':
-      return 'This extension session is not allowed to access that subtitle job.';
+      return t("This extension session is not allowed to access that subtitle job.");
 
     case 'email_not_verified':
-      return 'Verify your email address before generating subtitles.';
+      return t("Verify your email address before generating subtitles.");
 
     case 'insecure_transport':
-      return 'Extension sign-in requires HTTPS in production.';
+      return t("Extension sign-in requires HTTPS in production.");
 
     case 'payment_required':
-      return 'Choose an active billing plan before generating subtitles. Open Account and choose Account and billing.';
+      return t("Choose an active billing plan before generating subtitles. Open Account and choose Account and billing.");
 
     case 'usage_exhausted':
-      return 'This billing period does not have enough subtitle minutes left. Check usage and plans through Account and billing in Account.';
+      return t("This billing period does not have enough subtitle minutes left. Check usage and plans through Account and billing in Account.");
 
     case 'feature_unavailable':
-      return 'Your current plan does not include that generation option. Change your Watch selections or review plans through Account and billing in Account.';
+      return t("Your current plan does not include that generation option. Change your Watch selections or review plans through Account and billing in Account.");
 
     case 'queue_full':
-      return 'Your generation queue is full. Wait for a queued video to finish before adding more.';
+      return t("Your generation queue is full. Wait for a queued video to finish before adding more.");
 
     case 'unsupported_video':
     case 'audio_unavailable':
-      return 'This video is not available for subtitle generation. Use a public non-live YouTube video.';
+      return t("This video is not available for subtitle generation. Use a public non-live YouTube video.");
 
     case 'video_too_long':
-      return 'This video is over the 60 minute release limit.';
+      return t("This video is over the 60 minute release limit.");
 
     case 'audio_acquisition_failed':
-      return 'The backend could not extract audio from this video. Try another public video or check local backend setup.';
+      return t("The backend could not extract audio from this video. Try another public video or check local backend setup.");
 
     case 'transcription_failed':
-      return 'The AI transcription step failed. Try again later.';
+      return t("The AI transcription step failed. Try again later.");
 
     case 'enrichment_failed':
-      return 'The AI subtitle analysis step failed. Try again later.';
+      return t("The AI subtitle analysis step failed. Try again later.");
 
     case 'rate_limited':
-      return 'Subtitle generation is temporarily rate limited. Wait a minute and try again.';
+      return t("Subtitle generation is temporarily rate limited. Wait a minute and try again.");
 
     case 'not_found':
     case 'expired':
-      return 'The generated subtitle track is no longer available. Generate subtitles again.';
+      return t("The generated subtitle track is no longer available. Generate subtitles again.");
 
     case 'internal_error':
-      return 'The backend hit an unexpected error. Try again later.';
+      return t("The backend hit an unexpected error. Try again later.");
 
     case 'lyrics_correction_in_progress':
-      return 'A pasted-lyrics correction is already in progress.';
+      return t("A pasted-lyrics correction is already in progress.");
 
     case 'lyrics_incomplete':
-      return 'Paste the complete lyrics for the song. Your current subtitles are unchanged.';
+      return t("Paste the complete lyrics for the song. Your current subtitles are unchanged.");
 
     case 'lyrics_do_not_match':
-      return 'These lyrics do not seem to match this song. Check the paste and try again.';
+      return t("These lyrics do not seem to match this song. Check the paste and try again.");
 
     case 'lyrics_correction_failed':
-      return 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.';
+      return t("Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.");
 
     case 'generation_cancelled':
-      return 'Generation cancelled.';
+      return t("Generation cancelled.");
 
     case 'generation_not_cancellable':
-      return 'This generation has already finished and cannot be cancelled.';
+      return t("This generation has already finished and cannot be cancelled.");
   }
 
-  return 'Unable to generate subtitles. Try again later.';
+  return t("Unable to generate subtitles. Try again later.");
 }

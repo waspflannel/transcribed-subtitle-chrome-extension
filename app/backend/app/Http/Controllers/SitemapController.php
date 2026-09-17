@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\WebsiteLocale;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -10,23 +11,28 @@ class SitemapController extends Controller
     public function __invoke(Request $request): Response
     {
         $routes = [
-            ['marketing.home', '1.0'],
-            ['marketing.pricing', '0.9'],
-            ['marketing.how-to-use', '0.8'],
-            ['marketing.support', '0.6'],
-            ['marketing.privacy', '0.4'],
-            ['marketing.terms', '0.4'],
+            'marketing.home',
+            'marketing.pricing',
+            'marketing.how-to-use',
+            'marketing.support',
+            'marketing.privacy',
+            'marketing.terms',
         ];
 
+        $variants = [];
+        foreach ($routes as $route) {
+            foreach (array_keys(config('localization.locales')) as $locale) {
+                $variants[] = WebsiteLocale::route($route, locale: $locale);
+            }
+        }
+
         $urls = array_map(
-            static fn (array $route): string => implode("\n", [
+            static fn (string $url): string => implode("\n", [
                 '    <url>',
-                '        <loc>'.e(route($route[0])).'</loc>',
-                '        <changefreq>weekly</changefreq>',
-                '        <priority>'.$route[1].'</priority>',
+                '        <loc>'.e($url).'</loc>',
                 '    </url>',
             ]),
-            $routes,
+            $variants,
         );
 
         $body = implode("\n", [

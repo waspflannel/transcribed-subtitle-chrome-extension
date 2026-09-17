@@ -60,7 +60,7 @@ class SaasWebsiteAndSeoTest extends TestCase
                 ->assertSee('<meta name="description"', false)
                 ->assertSee('<meta property="og:title"', false)
                 ->assertSee('<meta name="twitter:card"', false)
-                ->assertSee('<link rel="canonical" href="'.route($routeName).'">', false);
+                ->assertSee('<link rel="canonical" href="'.rtrim(config('app.url'), '/').route($routeName, absolute: false).'">', false);
 
             $this->assertDoesNotMatchRegularExpression('/\bbeta\b/i', $response->getContent());
         }
@@ -563,13 +563,14 @@ class SaasWebsiteAndSeoTest extends TestCase
         Log::shouldHaveReceived('info')
             ->with('analytics.marketing_page_view', Mockery::on(
                 fn (array $context): bool => $context['page'] === 'pricing'
+                    && $context['interface_locale'] === 'en'
                     && $context['visitor_type'] === 'anonymous'
                     && ! array_key_exists('youtube_url', $context)
                     && ! array_key_exists('transcript', $context),
             ));
 
         $this
-            ->post('/register', [
+            ->post('/register?lang=es', [
                 'name' => 'Beta Learner',
                 'email' => 'learner@example.com',
                 'password' => 'correct12345',
@@ -580,6 +581,7 @@ class SaasWebsiteAndSeoTest extends TestCase
         Log::shouldHaveReceived('info')
             ->with('analytics.signup_completed', Mockery::on(
                 fn (array $context): bool => isset($context['user_hash'])
+                    && $context['interface_locale'] === 'es'
                     && ! array_key_exists('email', $context),
             ));
 
