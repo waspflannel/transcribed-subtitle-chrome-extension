@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\StripeCheckoutPendingException;
 use App\Http\Controllers\AccountController;
 use App\Models\User;
 use App\Services\Billing\BillingEntitlementService;
@@ -110,7 +111,7 @@ if ($mode === 'delete-account') {
         }
         echo "checkout-created\n";
     } catch (RuntimeException $exception) {
-        if ($mode !== 'complete-expire' || ! str_contains($exception->getMessage(), 'not confirmed expired')) {
+        if ($mode !== 'complete-expire' || ! ($exception instanceof StripeCheckoutPendingException)) {
             throw $exception;
         }
         echo "replacement-rejected\n";

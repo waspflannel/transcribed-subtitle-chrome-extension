@@ -284,18 +284,19 @@ class BillingAndUsageTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_unknown_checkout_creation_outcome_cannot_be_replaced_by_switching_plans_or_local_expiry(): void
+    public function test_unknown_checkout_creation_outcome_cannot_be_replaced_when_reconciliation_fails(): void
     {
         config(['billing.stripe.secret' => 'sk_test', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
         $user = $this->userWithOpenCheckout();
         $user->forceFill(['stripe_checkout_session_id' => null, 'stripe_checkout_session_url' => null, 'stripe_checkout_expires_at' => now()->subHour()])->save();
         Http::preventStrayRequests();
-        Http::fake();
+        Http::fake(['https://api.stripe.com/v1/checkout/sessions*' => Http::response([], 503)]);
 
         $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'plus']))->assertSessionHas('billing_error');
 
         $this->assertSame('intent_old', $user->fresh()->stripe_checkout_intent_id);
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
+        Http::assertNotSent(fn ($request): bool => $request->method() === 'POST');
     }
 
     public function test_checkout_timeout_retry_uses_persisted_intent_and_idempotency_key(): void
@@ -329,12 +330,16 @@ class BillingAndUsageTest extends TestCase
         config(['billing.stripe.secret' => 'sk_test', 'billing.plans.base.stripe_price_id' => 'price_base', 'billing.plans.plus.stripe_price_id' => 'price_plus']);
         $user = User::factory()->create(['stripe_customer_id' => 'cus_competing']);
         Http::preventStrayRequests();
-        Http::fake(function () use ($user) {
+        Http::fake(function ($request) use ($user) {
+            if ($request->method() === 'GET') {
+                return Http::response(['data' => [], 'has_more' => false]);
+            }
+
             try {
                 app(StripeClient::class)->createCheckoutSession($user, app(BillingPlanCatalog::class)->requirePlan('plus'), '/success', '/cancel');
                 $this->fail('The competing checkout should wait for the unresolved intent.');
             } catch (\RuntimeException $exception) {
-                $this->assertStringContainsString('reconciled', $exception->getMessage());
+                $this->assertStringContainsString('Retry after', $exception->getMessage());
             }
 
             return Http::response(['id' => 'cs_winner', 'url' => 'https://checkout.stripe.test/winner']);
@@ -343,7 +348,7 @@ class BillingAndUsageTest extends TestCase
         $this->actingAs($user)->post(route('billing.checkout', ['planCode' => 'base']))->assertRedirect('https://checkout.stripe.test/winner');
         $this->assertSame('base', $user->fresh()->stripe_checkout_plan_code);
         $this->assertSame('cs_winner', $user->fresh()->stripe_checkout_session_id);
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     private function userWithOpenCheckout(): User

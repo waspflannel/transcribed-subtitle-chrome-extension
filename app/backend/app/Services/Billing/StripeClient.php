@@ -2,6 +2,7 @@
 
 namespace App\Services\Billing;
 
+use App\Exceptions\StripeCheckoutPendingException;
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\DB;
@@ -206,11 +207,18 @@ final class StripeClient
 
             $this->ensureCheckoutAllowed($lockedUser);
 
+            if ($lockedUser->stripe_checkout_intent_id !== null
+                && $lockedUser->stripe_checkout_session_id === null
+                && ($lockedUser->stripe_checkout_plan_code !== $planCode
+                    || $lockedUser->stripe_checkout_expires_at?->lte(now()->addMinutes(30)))) {
+                $this->reconcileUnknownCheckout($lockedUser);
+            }
+
             if (
                 is_string($lockedUser->stripe_checkout_intent_id)
                 && $lockedUser->stripe_checkout_intent_id !== ''
                 && $lockedUser->stripe_checkout_plan_code === $planCode
-                && ($lockedUser->stripe_checkout_expires_at?->isFuture() || $lockedUser->stripe_checkout_session_id === null)
+                && $lockedUser->stripe_checkout_expires_at?->isFuture()
             ) {
                 $session = is_string($lockedUser->stripe_checkout_session_id)
                     && $lockedUser->stripe_checkout_session_id !== ''
@@ -263,12 +271,98 @@ final class StripeClient
     public function expireOutstandingCheckout(User $user): void
     {
         if ($user->stripe_checkout_intent_id !== null && $user->stripe_checkout_session_id === null) {
-            throw new RuntimeException('Previous checkout creation must be reconciled before changing billing.');
+            $this->reconcileUnknownCheckout($user);
         }
 
         if (is_string($user->stripe_checkout_session_id) && $user->stripe_checkout_session_id !== '') {
             $this->expireCheckoutSession($user->stripe_checkout_session_id);
         }
+    }
+
+    /** Recover identity before replacing a request whose response was lost. Caller holds the user lock. */
+    private function reconcileUnknownCheckout(User $user): void
+    {
+        if (! is_string($user->stripe_customer_id) || $user->stripe_customer_id === ''
+            || $user->stripe_checkout_expires_at === null) {
+            throw new RuntimeException('Previous checkout is missing its reconciliation identity.');
+        }
+
+        $matchingSession = null;
+        $cursor = null;
+        $seenCursors = [];
+
+        do {
+            $page = $this->request()->get('/checkout/sessions', array_filter([
+                'customer' => $user->stripe_customer_id,
+                'limit' => 100,
+                'starting_after' => $cursor,
+            ], static fn ($value): bool => $value !== null))->throw()->json();
+
+            if (! is_array($page) || ! is_array($page['data'] ?? null)
+                || ! array_is_list($page['data']) || ! is_bool($page['has_more'] ?? null)) {
+                throw new RuntimeException('Stripe checkout lookup returned an invalid page.');
+            }
+
+            foreach ($page['data'] as $session) {
+                if (! is_array($session) || ! is_string($session['id'] ?? null)
+                    || $session['id'] === '' || ($session['customer'] ?? null) !== $user->stripe_customer_id) {
+                    throw new RuntimeException('Stripe checkout lookup returned an invalid session.');
+                }
+
+                if (data_get($session, 'metadata.checkout_intent_id') === $user->stripe_checkout_intent_id) {
+                    if ($matchingSession !== null || ($session['mode'] ?? null) !== 'subscription') {
+                        throw new RuntimeException('Previous checkout has an ambiguous reconciliation result.');
+                    }
+
+                    $matchingSession = $session;
+                }
+            }
+
+            if ($page['has_more']) {
+                $cursor = data_get($page, 'data.'.(count($page['data']) - 1).'.id');
+                if (! is_string($cursor) || in_array($cursor, $seenCursors, true)) {
+                    throw new RuntimeException('Stripe checkout lookup returned an invalid cursor.');
+                }
+                $seenCursors[] = $cursor;
+            }
+        } while ($page['has_more']);
+
+        if ($matchingSession !== null) {
+            $status = $matchingSession['status'] ?? null;
+
+            if ($status === 'open') {
+                $session = $this->sessionResponse($matchingSession);
+                $user->forceFill([
+                    'stripe_checkout_session_id' => $session['id'],
+                    'stripe_checkout_session_url' => $session['url'],
+                ])->save();
+
+                return;
+            }
+
+            if ($status === 'complete') {
+                throw new StripeCheckoutPendingException('Your previous checkout has completed. Wait for your billing status to update, then try again. Contact support if it does not update.');
+            }
+
+            if ($status !== 'expired') {
+                throw new RuntimeException('Previous checkout has an unknown status.');
+            }
+        } elseif ($user->stripe_checkout_expires_at->isFuture()) {
+            throw new StripeCheckoutPendingException(
+                'Your previous checkout could not be confirmed. Retry after :retryAt to start checkout or delete your account.',
+                ['retryAt' => $user->stripe_checkout_expires_at->utc()->format('Y-m-d H:i:s \\U\\T\\C')],
+            );
+        }
+
+        // A complete lookup plus the original absolute expiry prevents a lost request
+        // from creating a payable session later. Never replay that expired intent.
+        $user->forceFill([
+            'stripe_checkout_intent_id' => null,
+            'stripe_checkout_plan_code' => null,
+            'stripe_checkout_session_id' => null,
+            'stripe_checkout_session_url' => null,
+            'stripe_checkout_expires_at' => null,
+        ])->save();
     }
 
     private function expireCheckoutSession(string $sessionId): void
@@ -282,6 +376,10 @@ final class StripeClient
         }
 
         $payload = $response->throw()->json();
+
+        if (is_array($payload) && ($payload['id'] ?? null) === $sessionId && ($payload['status'] ?? null) === 'complete') {
+            throw new StripeCheckoutPendingException('Your previous checkout has completed. Wait for your billing status to update, then try again. Contact support if it does not update.');
+        }
 
         if (! is_array($payload) || ($payload['id'] ?? null) !== $sessionId || ($payload['status'] ?? null) !== 'expired') {
             throw new RuntimeException('Previous checkout is not confirmed expired; await billing reconciliation.');
