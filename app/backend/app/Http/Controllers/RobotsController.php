@@ -15,7 +15,7 @@ class RobotsController extends Controller
             'Disallow: /dashboard',
             'Disallow: /billing',
             'Disallow: /stripe',
-            'Sitemap: '.route('sitemap'),
+            'Sitemap: '.rtrim(config('app.url'), '/').route('sitemap', absolute: false),
             '',
         ]);
 

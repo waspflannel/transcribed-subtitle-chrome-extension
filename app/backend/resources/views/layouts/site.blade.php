@@ -1,7 +1,7 @@
 @php
     $productName = (string) config('marketing.product_name');
     $title = $pageTitle ?? $productName;
-    $description = $metaDescription ?? 'Generated AI subtitles and language-learning word cards for public YouTube videos.';
+    $description = $metaDescription ?? __('Generated AI subtitles and language-learning word cards for public YouTube videos.');
     $canonical = $canonicalUrl ?? url()->current();
     $robotsValue = $robots ?? 'index,follow';
     $bodyClassValue = $bodyClass ?? 'marketing-body';
@@ -10,7 +10,7 @@
     $siteStylesheets = ['tokens', 'base', 'shell', 'ui', 'marketing', 'app', 'motion', 'responsive'];
 @endphp
 <!doctype html>
-<html lang="en">
+<html lang="{{ \App\Support\WebsiteLocale::languageTag() }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,6 +18,12 @@
         <meta name="description" content="{{ $description }}">
         <meta name="robots" content="{{ $robotsValue }}">
         <link rel="canonical" href="{{ $canonical }}">
+        @if (request()->routeIs('marketing.*', '*.marketing.*'))
+            @foreach (config('localization.locales') as $code => $name)
+                <link rel="alternate" hreflang="{{ \App\Support\WebsiteLocale::languageTag($code) }}" href="{{ \App\Support\WebsiteLocale::route(request()->route()->getName(), locale: $code) }}">
+            @endforeach
+            <link rel="alternate" hreflang="x-default" href="{{ \App\Support\WebsiteLocale::route(request()->route()->getName(), locale: 'en') }}">
+        @endif
         <meta property="og:site_name" content="{{ $productName }}">
         <meta property="og:type" content="website">
         <meta property="og:title" content="{{ $title }}">
@@ -46,31 +52,29 @@
         <x-layout.skip-link />
         @stack('body_start')
         <header class="site-header @yield('header_class', $headerClass)" id="navbar">
-            <a class="brand" href="{{ route('marketing.home') }}" aria-label="{{ $productName }} home">
-                <span class="brand-mark" aria-hidden="true">Aa</span>
-                <span>{{ $productName }}</span>
-            </a>
-            <nav class="site-nav" aria-label="Primary">
-                <a href="{{ route('marketing.home') }}#lyrics">Lyrics</a>
-                <a href="{{ route('marketing.home') }}#models">Models</a>
-                <a href="{{ route('marketing.home') }}#features">Study tools</a>
-                <a href="{{ route('marketing.how-to-use') }}" @if (request()->routeIs('marketing.how-to-use')) aria-current="page" @endif>How To Use</a>
-                <a href="{{ route('marketing.home') }}#languages">Languages</a>
-                <a href="{{ route('marketing.home') }}#pricing">Pricing</a>
+            <a class="brand" href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}" aria-label="{{ __(':product home', ['product' => $productName]) }}">{!! strtr(e(__(':slot1:Aa:slot2: :slot3::slot4::slot5:')), [':slot1:' => '<span class="brand-mark" aria-hidden="true">', ':slot2:' => '</span>', ':slot3:' => '<span>', ':slot4:' => e($productName), ':slot5:' => '</span>']) !!}</a>
+            <nav class="site-nav" aria-label="{{ __('Primary') }}">
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}#lyrics">{{ __('Lyrics') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}#models">{{ __('Models') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}#features">{{ __('Study tools') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.how-to-use') }}" @if (request()->routeIs('marketing.how-to-use', '*.marketing.how-to-use')) aria-current="page" @endif>{{ __('How To Use') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}#languages">{{ __('Languages') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}#pricing">{{ __('Pricing') }}</a>
             </nav>
             <div class="site-actions">
+                <x-locale-switcher />
                 @auth
                     @if (request()->routeIs('dashboard'))
                         <form method="post" action="{{ route('logout') }}">
                             @csrf
-                            <button type="submit" class="text-link">Log out</button>
+                            <button type="submit" class="text-link">{{ __('Log out') }}</button>
                         </form>
                     @else
-                        <a class="text-link" href="{{ route('dashboard') }}">Dashboard</a>
+                        <a class="text-link" href="{{ route('dashboard') }}">{{ __('Dashboard') }}</a>
                     @endif
                 @else
-                    <a class="text-link" href="{{ route('login') }}">Sign in</a>
-                    <a class="button button-accent button-small" href="{{ route('marketing.home') }}#pricing">Get started</a>
+                    <a class="text-link" href="{{ \App\Support\WebsiteLocale::route('login') }}">{{ __('Sign in') }}</a>
+                    <a class="button button-accent button-small" href="{{ \App\Support\WebsiteLocale::route('marketing.home') }}#pricing">{{ __('Get started') }}</a>
                 @endauth
             </div>
         </header>
@@ -82,14 +86,14 @@
         <footer class="site-footer">
             <div>
                 <strong>{{ $productName }}</strong>
-                <p>Learn from the videos and music you love. AI subtitles, interactive word cards, and lyrics correction for YouTube.</p>
+                <p>{{ __('Learn from the videos and music you love. AI subtitles, interactive word cards, and lyrics correction for YouTube.') }}</p>
             </div>
-            <nav aria-label="Footer">
-                <a href="{{ route('marketing.how-to-use') }}">How To Use</a>
-                <a href="{{ route('marketing.pricing') }}">Pricing</a>
-                <a href="{{ route('marketing.support') }}">Support</a>
-                <a href="{{ route('marketing.privacy') }}">Privacy</a>
-                <a href="{{ route('marketing.terms') }}">Terms</a>
+            <nav aria-label="{{ __('Footer') }}">
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.how-to-use') }}">{{ __('How To Use') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.pricing') }}">{{ __('Pricing') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.support') }}">{{ __('Support') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.privacy') }}">{{ __('Privacy') }}</a>
+                <a href="{{ \App\Support\WebsiteLocale::route('marketing.terms') }}">{{ __('Terms') }}</a>
             </nav>
         </footer>
     </body>

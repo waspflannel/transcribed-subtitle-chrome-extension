@@ -2,34 +2,34 @@
 
 @section('content')
     <div>
-        <h1>Sign in</h1>
-        <p>Use your account email to connect the extension.</p>
+        <h1>{{ __('Sign in') }}</h1>
+        <p>{{ __('Use your account email to connect the extension.') }}</p>
     </div>
 
     @if (session('status'))
-        <p class="status">{{ session('status') }}</p>
+        <p class="status">{{ __(session('status')) }}</p>
     @endif
 
     <x-form.error-list :errors="$errors" />
 
     <form method="post" action="{{ route('login.store') }}">
         @csrf
-        <x-form.field label="Email">
+        <x-form.field label="{{ __('Email') }}">
             <input type="email" name="email" value="{{ old('email') }}" autocomplete="email" required>
         </x-form.field>
-        <x-form.field label="Password">
+        <x-form.field label="{{ __('Password') }}">
             <input type="password" name="password" autocomplete="current-password" required>
         </x-form.field>
         <label>
             <span>
                 <input type="checkbox" name="remember" value="1">
-                Remember this browser
+                {{ __('Remember this browser') }}
             </span>
         </label>
         <div class="actions">
-            <a class="button-link" href="{{ route('register') }}">Create account</a>
-            <a class="button-link" href="{{ route('password.request') }}">Reset password</a>
-            <button type="submit">Sign in</button>
+            <a class="button-link" href="{{ \App\Support\WebsiteLocale::route('register') }}">{{ __('Create account') }}</a>
+            <a class="button-link" href="{{ \App\Support\WebsiteLocale::route('password.request') }}">{{ __('Reset password') }}</a>
+            <button type="submit">{{ __('Sign in') }}</button>
         </div>
     </form>
 @endsection

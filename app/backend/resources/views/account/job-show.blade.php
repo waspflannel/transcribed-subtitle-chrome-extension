@@ -4,70 +4,70 @@
     <section class="workspace narrow-workspace">
         <div class="workspace-heading">
             <div>
-                <p class="eyebrow">Subtitle job</p>
+                <p class="eyebrow">{{ __('Subtitle job') }}</p>
                 <h1>{{ $job->public_id }}</h1>
-                <p>Public-safe support details. Generated subtitle text and provider payloads are not shown here.</p>
-                <p>Snapshot at {{ now()->toIso8601String() }}. This page does not update automatically.</p>
-                <p><a class="text-link strong-link" href="{{ route('marketing.support') }}">Contact support</a> and include the Support ID above when reporting a problem.</p>
+                <p>{{ __('Public-safe support details. Generated subtitle text and provider payloads are not shown here.') }}</p>
+                <p>{!! strtr(e(__('Snapshot at :slot1:. This page does not update automatically.')), [':slot1:' => e(now()->toIso8601String())]) !!}</p>
+                <p>{!! strtr(e(__(':slot1:Contact support:slot2: and include the Support ID above when reporting a problem.')), [':slot1:' => '<a class="text-link strong-link" href="'.e(\App\Support\WebsiteLocale::route('marketing.support')).'">', ':slot2:' => '</a>']) !!}</p>
             </div>
             <div class="action-stack horizontal-actions">
-                <a class="button button-secondary" href="{{ route('dashboard.jobs.show', ['jobId' => $job->public_id]) }}">Refresh status</a>
-                <a class="button button-secondary" href="{{ route('dashboard') }}">Back to dashboard</a>
+                <a class="button button-secondary" href="{{ route('dashboard.jobs.show', ['jobId' => $job->public_id]) }}">{{ __('Refresh status') }}</a>
+                <a class="button button-secondary" href="{{ route('dashboard') }}">{{ __('Back to dashboard') }}</a>
             </div>
         </div>
 
-        <x-ui.panel title="Status" description="{{ $job->status }} during {{ $job->stageLabel() }}">
+        <x-ui.panel title="{{ __('Status') }}" description="{{ __(':status during :stage', ['status' => __($job->status), 'stage' => __($job->stageLabel())]) }}">
             <dl class="metric-grid detail-grid">
                 <div>
-                    <dt>Source video</dt>
+                    <dt>{{ __('Source video') }}</dt>
                     <dd><a class="text-link" href="https://www.youtube.com/watch?v={{ rawurlencode($job->youtube_video_id) }}" rel="noopener noreferrer">{{ $job->youtube_video_id }}</a></dd>
                 </div>
                 <div>
-                    <dt>Status</dt>
+                    <dt>{{ __('Status') }}</dt>
                     <dd><x-ui.status-pill :status="$job->status" /></dd>
                 </div>
                 <div>
-                    <dt>Stage</dt>
-                    <dd>{{ $job->stageLabel() }}</dd>
+                    <dt>{{ __('Stage') }}</dt>
+                    <dd>{{ __($job->stageLabel()) }}</dd>
                 </div>
                 <div>
-                    <dt>Progress</dt>
+                    <dt>{{ __('Progress') }}</dt>
                     <dd>{{ $job->progress_percent }}%</dd>
                 </div>
                 <div>
-                    <dt>Language pair</dt>
+                    <dt>{{ __('Language pair') }}</dt>
                     <dd>{{ $languagePair }}</dd>
                 </div>
                 <div>
-                    <dt>Estimated video minutes</dt>
-                    <dd>{{ $usage['estimatedMinutes'] ?? 'Unknown' }}</dd>
+                    <dt>{{ __('Estimated video minutes') }}</dt>
+                    <dd>{{ $usage['estimatedMinutes'] ?? __('Unknown') }}</dd>
                 </div>
                 <div>
-                    <dt>Reserved minutes</dt>
+                    <dt>{{ __('Reserved minutes') }}</dt>
                     <dd>{{ $usage['reservedMinutes'] }}</dd>
                 </div>
                 <div>
-                    <dt>Charged minutes</dt>
+                    <dt>{{ __('Charged minutes') }}</dt>
                     <dd>{{ $usage['chargedMinutes'] }}</dd>
                 </div>
                 <div>
-                    <dt>Released minutes</dt>
+                    <dt>{{ __('Released minutes') }}</dt>
                     <dd>{{ $usage['releasedMinutes'] }}</dd>
                 </div>
                 <div>
-                    <dt>Video duration</dt>
-                    <dd>{{ $job->video_duration_seconds ?? 'Unknown' }} seconds</dd>
+                    <dt>{{ __('Video duration') }}</dt>
+                    <dd>{!! strtr(e(__(':slot1: seconds')), [':slot1:' => e($job->video_duration_seconds ?? 'Unknown')]) !!}</dd>
                 </div>
                 <div>
-                    <dt>Created</dt>
+                    <dt>{{ __('Created') }}</dt>
                     <dd>{{ $job->created_at->toJSON() }}</dd>
                 </div>
                 <div>
-                    <dt>Updated</dt>
+                    <dt>{{ __('Updated') }}</dt>
                     <dd>{{ $job->updated_at->toJSON() }}</dd>
                 </div>
                 <div>
-                    <dt>Generation tier</dt>
+                    <dt>{{ __('Generation tier') }}</dt>
                     <dd>{{ $job->generation_tier }}</dd>
                 </div>
             </dl>
@@ -76,39 +76,39 @@
         @if (in_array($job->status, ['failed', 'cancelled'], true))
             <x-ui.panel
                 class="failure-panel"
-                title="{{ $job->status === 'cancelled' ? 'Cancellation' : 'Failure' }}"
-                description="{{ $job->status === 'cancelled' ? 'Generation was cancelled; share this outcome with support.' : 'Share this stable failure code with support.' }}"
+                title="{{ $job->status === 'cancelled' ? __('Cancellation') : __('Failure') }}"
+                description="{{ $job->status === 'cancelled' ? __('Generation was cancelled; share this outcome with support.') : __('Share this stable failure code with support.') }}"
             >
                 <dl class="metric-grid">
                     <div>
-                        <dt>{{ $job->status === 'cancelled' ? 'Cancellation code' : 'Failure code' }}</dt>
+                        <dt>{{ $job->status === 'cancelled' ? __('Cancellation code') : __('Failure code') }}</dt>
                         <dd>{{ $job->error_code ?? 'unknown' }}</dd>
                     </div>
                     <div>
-                        <dt>Public message</dt>
-                        <dd>{{ $job->error_message ?? 'Generation failed.' }}</dd>
+                        <dt>{{ __('Public message') }}</dt>
+                        <dd>{{ __($job->error_message ?? 'Generation failed.') }}</dd>
                     </div>
                 </dl>
             </x-ui.panel>
         @endif
 
         @if ($track)
-            <x-ui.panel title="Generated track" description="Track metadata only. Subtitle cue text is intentionally hidden.">
+            <x-ui.panel title="{{ __('Generated track') }}" description="{{ __('Track metadata only. Subtitle cue text is intentionally hidden.') }}">
                 <dl class="metric-grid detail-grid">
                     <div>
-                        <dt>Track ID</dt>
+                        <dt>{{ __('Track ID') }}</dt>
                         <dd>{{ $track->public_id }}</dd>
                     </div>
                     <div>
-                        <dt>Cues</dt>
+                        <dt>{{ __('Cues') }}</dt>
                         <dd>{{ count($track->cues ?? []) }}</dd>
                     </div>
                     <div>
-                        <dt>Generated</dt>
+                        <dt>{{ __('Generated') }}</dt>
                         <dd>{{ $track->generated_at->toJSON() }}</dd>
                     </div>
                     <div>
-                        <dt>Expires</dt>
+                        <dt>{{ __('Expires') }}</dt>
                         <dd>{{ $track->expires_at->toJSON() }}</dd>
                     </div>
                 </dl>

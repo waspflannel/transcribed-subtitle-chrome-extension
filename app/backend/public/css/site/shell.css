@@ -9,6 +9,50 @@
     padding-right: max(22px, calc((100vw - var(--content)) / 2));
 }
 
+.locale-switcher {
+    position: relative;
+    flex-shrink: 0;
+    font-size: .82rem;
+}
+
+.locale-switcher summary {
+    cursor: pointer;
+    padding: 8px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+}
+
+.on-night .locale-switcher { color: var(--night-text); }
+.locale-switcher nav {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: grid;
+    width: max-content;
+    min-width: 180px;
+    max-height: 65vh;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--paper);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    box-shadow: 4px 4px 0 var(--ink);
+    z-index: 110;
+}
+
+.locale-switcher a {
+    display: block;
+    color: var(--ink);
+    padding: 8px 12px;
+    text-decoration: none;
+}
+.locale-switcher a:hover,
+.locale-switcher a[aria-current] { background: var(--ink); color: var(--paper); }
+.auth-header { display: flex; align-items: center; gap: 20px; }
+.auth-header .locale-switcher { order: 1; margin-left: auto; }
+
+
+
 .skip-link {
     background: var(--ink);
     color: var(--paper);

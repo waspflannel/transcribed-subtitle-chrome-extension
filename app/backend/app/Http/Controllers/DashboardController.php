@@ -37,8 +37,8 @@ class DashboardController extends Controller
             'recentJobs' => $this->recentJobs($user, $usage),
             'totalJobs' => SubtitleJob::query()->whereBelongsTo($user)->count(),
             'extensionTokens' => $this->extensionTokens($user),
-            'pageTitle' => 'Dashboard | '.config('marketing.product_name'),
-            'metaDescription' => 'Account dashboard for '.config('marketing.product_name').'.',
+            'pageTitle' => __('Dashboard').' | '.config('marketing.product_name'),
+            'metaDescription' => __('Account dashboard for :product.', ['product' => config('marketing.product_name')]),
             'canonicalUrl' => route('dashboard'),
             'robots' => 'noindex,nofollow',
             'bodyClass' => 'app-body',
@@ -103,13 +103,13 @@ class DashboardController extends Controller
             ->map(fn (PersonalAccessToken $token): array => [
                 'label' => $token->name,
                 'createdAt' => $token->created_at->format('M j, Y H:i'),
-                'lastUsedAt' => $token->last_used_at?->format('M j, Y H:i') ?? 'Not used yet',
-                'expiresAt' => $token->expires_at?->format('M j, Y H:i') ?? 'No expiry',
+                'lastUsedAt' => $token->last_used_at?->format('M j, Y H:i') ?? __('Not used yet'),
+                'expiresAt' => $token->expires_at?->format('M j, Y H:i') ?? __('No expiry'),
             ]);
     }
 
     private function languagePair(SubtitleJob $job): string
     {
-        return LanguageCatalog::label($job->effectiveSourceLanguage()).' to '.LanguageCatalog::label((string) $job->target_language);
+        return __(':source to :target', ['source' => __(LanguageCatalog::label($job->effectiveSourceLanguage())), 'target' => __(LanguageCatalog::label((string) $job->target_language))]);
     }
 }

@@ -1,1 +1,1 @@
-<a class="skip-link" href="#main-content">Skip to main content</a>
+<a class="skip-link" href="#main-content">{{ __('Skip to main content') }}</a>

@@ -17,6 +17,7 @@ final class FunnelAnalytics
             'page' => $page,
             'route' => $request->route()?->getName(),
             'path' => $request->path(),
+            'interface_locale' => app()->getLocale(),
             'visitor_type' => $user instanceof User ? 'authenticated' : 'anonymous',
             'user_hash' => $user instanceof User ? $this->userHash($user) : null,
         ]));
@@ -26,6 +27,7 @@ final class FunnelAnalytics
     {
         Log::info('analytics.signup_completed', [
             'user_hash' => $this->userHash($user),
+            'interface_locale' => app()->getLocale(),
         ]);
     }
 

@@ -34,8 +34,8 @@ class WebSubtitleJobController extends Controller
             'track' => $job->track,
             'usage' => $usage->usageForJob($job),
             'languagePair' => $this->languagePair($job),
-            'pageTitle' => 'Subtitle job '.$job->public_id.' | '.config('marketing.product_name'),
-            'metaDescription' => 'Public-safe subtitle job status for support.',
+            'pageTitle' => __('Subtitle job :job', ['job' => $job->public_id]).' | '.config('marketing.product_name'),
+            'metaDescription' => __('Public-safe subtitle job status for support.'),
             'canonicalUrl' => route('dashboard.jobs.show', ['jobId' => $job->public_id]),
             'robots' => 'noindex,nofollow',
             'bodyClass' => 'app-body',
@@ -66,7 +66,7 @@ class WebSubtitleJobController extends Controller
 
         return redirect()
             ->route('dashboard')
-            ->with('jobs_status', 'Subtitle job '.$job->public_id.' was deleted.');
+            ->with('jobs_status', __('Subtitle job :job was deleted.', ['job' => $job->public_id]));
     }
 
     public function clearAll(Request $request, SubtitleJobService $subtitleJobs): RedirectResponse
@@ -97,11 +97,11 @@ class WebSubtitleJobController extends Controller
 
         return redirect()
             ->route('dashboard')
-            ->with('jobs_status', $deleted.' subtitle job(s) cleared.');
+            ->with('jobs_status', __(':count subtitle job(s) cleared.', ['count' => $deleted]));
     }
 
     private function languagePair(SubtitleJob $job): string
     {
-        return LanguageCatalog::label($job->effectiveSourceLanguage()).' to '.LanguageCatalog::label((string) $job->target_language);
+        return __(':source to :target', ['source' => __(LanguageCatalog::label($job->effectiveSourceLanguage())), 'target' => __(LanguageCatalog::label((string) $job->target_language))]);
     }
 }
