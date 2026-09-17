@@ -17,6 +17,14 @@ $Backend = if ($BackendPath) { Resolve-Path $BackendPath } else { Resolve-Path (
 $Contracts = Resolve-Path (Join-Path $Root "packages\contracts")
 $AgentCheck = Join-Path $Root "scripts\agent\check.ps1"
 
+if (-not $SkipHealthCheck) {
+    $healthUri = $null
+    if (-not [Uri]::TryCreate($HealthUrl, [UriKind]::Absolute, [ref]$healthUri) -or
+        $healthUri.Scheme -ne 'https' -or $healthUri.UserInfo -or $healthUri.Query -or $healthUri.Fragment) {
+        throw 'Provide an HTTPS HealthUrl for the deployed app, or explicitly use SkipHealthCheck.'
+    }
+}
+
 function Invoke-Checked {
     param(
         [string]$FilePath,
@@ -58,7 +66,7 @@ if (-not $SkipMigrations) {
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "optimize", "--no-ansi") -WorkingDirectory $Backend
 Invoke-Checked -FilePath "php" -Arguments @("artisan", "queue:restart", "--no-ansi") -WorkingDirectory $Backend
 
-if (-not $SkipHealthCheck -and $HealthUrl) {
+if (-not $SkipHealthCheck) {
     $response = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 20
 
     if ($response.StatusCode -lt 200 -or $response.StatusCode -ge 300) {

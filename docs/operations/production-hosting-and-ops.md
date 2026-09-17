@@ -98,6 +98,8 @@ The deploy script encodes the release order confirmed by Laravel 13 deployment d
 
 Use `-SkipRepositoryChecks` only when CI has already run the full harness for the exact commit being deployed.
 
+The deployment script now requires an explicit HTTPS `-HealthUrl` before it runs any install or migration. `-SkipHealthCheck` is an explicit operator exception; a missing URL no longer silently skips health verification. The `Project checks` GitHub workflow runs the full harness with disposable PostgreSQL/Redis, audits dependencies and checks fixture-origin packaging; it does not deploy.
+
 The deploy process must complete these checks before a paid-beta production release:
 
 - `.\scripts\agent\check.ps1`
@@ -198,6 +200,10 @@ Build Chrome release artifacts with an HTTPS production API base URL:
 ```powershell
 .\scripts\ops\build-extension-release.ps1 -ApiBaseUrl "https://api.example.com/v1"
 ```
+
+The beta package version is `0.1.0`. The release script audits the complete dependency graph, runs tests/type checks unless explicitly skipped, builds the ZIP once, then verifies the manifest inside that exact ZIP. Only YouTube plus the chosen API origin are allowed; local hosts, malformed API paths, extra host permissions, version mismatches and bundled environment/private-key files fail. Recheck an existing artifact with `scripts/ops/check-extension-release.ps1 -ApiBaseUrl <actual-https-v1-url> -ArchivePath <zip-path>`. This does not establish that the host works or that no arbitrary secret could be embedded in JavaScript.
+
+Do not distribute the ZIP from the fixture-origin CI packaging test. The real API domain, support address and hosting provider remain undecided by the owner's September 16 instruction. Once chosen, set `CHROME_EXTENSION_RELEASE_VERSION`, `CHROME_EXTENSION_API_HOST_PERMISSION` and the actual install/support values on the backend to match the distributed artifact.
 
 The script requires a real extension version, audits shipped production dependencies, runs extension tests and TypeScript compile unless `-SkipTests` is provided, builds with WXT, verifies the manifest contains the configured production API host permission, rejects localhost backend permission, and creates the Chrome ZIP through `wxt zip`.
 
@@ -303,6 +309,13 @@ Rollback: disable both backend flags, clear config and restart drained workers. 
 - Apply the forward `web_sessions_revoked_at` migration with the release. Password reset deletes database sessions and all extension tokens, while authenticated-session checks reject stale/passwordless pre-reset sessions for every supported driver. Reset users must log in again.
 - Set the Stripe webhook endpoint to the tested `2025-03-31.basil` version before release, matching the pinned REST header. Legacy period/invoice fields remain readable for delayed events. Validate hosted checkout, plan changes, cancellation and expiry races in authorized Stripe test mode; local fixtures do not establish hosted behavior. Never replay grants blindly to reconcile existing accounts.
 - Monitor unknown or completed prior checkout intents: the app intentionally blocks another payable session until the first outcome is reconciled. If a customer reports a timeout, retry the same plan/intent before changing plans.
+- Launch-fix checkout recovery now looks up lost responses by customer and exact intent metadata, including pagination. If no session is found before the original expiry, the UI gives a UTC retry deadline (at most the original 31-minute window). A complete lookup after expiry permits a fresh intent or account deletion; completed payments still wait for signed webhook reconciliation. Never manually clear an uncertain intent just to remove the wait.
 - Set actual provider-call limits in `config/subtitles.php` / environment for production capacity. The global request setting counts each provider attempt; account limits aggregate across devices/providers. Redis concurrency bookkeeping must be shared by HTTP and worker processes.
 - Runtime queue JSON now exposes total/ready/delayed/reserved; update any external consumers that assumed a scalar depth. The displayed job list remains capped at 25; activeJobCount is the true total.
 - R07's September 16 decision charges the full reserved minutes for user cancellation/deletion after paid generation admission, while early cancellation and ordinary failures restore their unsettled reservation. Pause new generation admission and drain queued/running work with the old workers before rolling out the policy. Deploy the paid-work marker migration together with the extension's Generate confirmation and updated website copy. Do not infer past provider calls from a null marker on a previously running job or charge historical work retroactively. Account-deletion retention is unchanged.
+
+## Launch-fix rollout (September 16)
+
+The launch-fix branch needs no additional migration or queue. Deploy the web code and drain/restart workers normally. Login now holds the user row lock through password validation and extension token creation, so password reset either rejects the old login or revokes its token. The analysis continuation publishes final tracks synchronously after commit instead of requeueing finalization behind audio work; old serialized finalizers remain supported until drained. Genuine stalled-work timeouts remain enabled.
+
+Rebuild/reload extension `0.1.0` for monitor cleanup, including failed cancellation and recovered jobs. New billing recovery messages are included in all nine draft interface catalogs. Hosted email, Stripe, YouTube/browser lifecycle, provider cost and backup/rollback/alert evidence remain release gates in [release readiness](../product-specs/release-readiness.md#beta-launch-acceptance-record), not claims established by these code changes.
