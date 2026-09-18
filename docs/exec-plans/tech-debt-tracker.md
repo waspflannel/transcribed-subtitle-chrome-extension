@@ -1,5 +1,9 @@
 # Technical Debt Tracker
 
+## Launch readiness fixes (2026-09-16)
+
+The [launch review](../launch-readiness-review-2026-09-16.md) R1–R4 code findings are resolved with regression coverage on `codex/launch-readiness-fixes`; see the [fix plan](completed/2026-09-16-fix-launch-readiness-findings.md). All eleven service-dependent tests now pass against disposable PostgreSQL/Redis, and CI includes them. Release tooling verifies the actual Chrome ZIP and requires an explicit deployment health URL. TD-003/007/011/012 remain open for loaded-browser, hosted billing and operations evidence. Hosting provider, domain/API origin and support address are deliberately undecided; native-speaker review and actual provider-spend comparison also remain external acceptance work.
+
 ## Ponytail application review (2026-09-12)
 
 The [Ponytail findings report](../ponytail-application-review-2026-09-12.md) is the dated audit baseline. C1–C6, F1–F11 and narrow E2–E5 changes are implemented on `codex/ponytail-review-fixes`; the [implementation plan](active/2026-09-12-implement-ponytail-application-review.md) owns integration evidence and disposition. E1 opening-chunk preparation overlap remains deferred pending representative timing/text evidence. Full-preview HTTP bytes, production polling costs, scroll/search performance and actual subtitle flicker still need measurement. The user owns computer/browser testing. Local code validation does not establish deployment, runtime migration or manual acceptance.

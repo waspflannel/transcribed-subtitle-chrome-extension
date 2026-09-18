@@ -13,6 +13,7 @@ use App\Services\Billing\BillingEntitlementService;
 use App\Support\ExtensionTokenAbility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -35,11 +36,20 @@ class ExtensionAuthController extends Controller
             );
         }
 
-        $user = User::query()
-            ->where('email', $request->email())
-            ->first();
+        $authentication = DB::transaction(function () use ($request, $tokens): ?array {
+            $user = User::query()
+                ->where('email', $request->email())
+                ->lockForUpdate()
+                ->first();
 
-        if ($user === null || ! Hash::check($request->password(), $user->password)) {
+            if ($user === null || ! Hash::check($request->password(), $user->password)) {
+                return null;
+            }
+
+            return [$user, $tokens->issue($user, $request->extensionInstallId())];
+        }, attempts: 5);
+
+        if ($authentication === null) {
             return ApiErrorResponse::make(
                 'invalid_credentials',
                 'The provided credentials are invalid.',
@@ -48,7 +58,7 @@ class ExtensionAuthController extends Controller
             );
         }
 
-        $issuedToken = $tokens->issue($user, $request->extensionInstallId());
+        [$user, $issuedToken] = $authentication;
         $account = $billing->accountSummary($user);
         $analytics->extensionConnected($user, $request->extensionInstallId(), $account);
 

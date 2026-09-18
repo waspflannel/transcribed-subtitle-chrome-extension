@@ -1,0 +1,80 @@
+name: Project checks
+
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: subtitle_review_test_ci
+          POSTGRES_USER: subtitle_ci
+          POSTGRES_PASSWORD: disposable_ci_only
+        ports: ['5432']
+        options: >-
+          --health-cmd "pg_isready -U subtitle_ci -d subtitle_review_test_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@b604ade2a87db23f8871b7182e69ec5e75effb45 # v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pdo_sqlite, mbstring, intl, dom, xml, curl, pcntl
+          coverage: none
+          tools: composer:v2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            packages/contracts/package-lock.json
+            app/extension/package-lock.json
+      - name: Install contracts
+        run: npm ci
+        working-directory: packages/contracts
+      - name: Install extension
+        run: npm ci
+        working-directory: app/extension
+      - name: Install backend
+        run: composer install --prefer-dist --no-interaction --no-progress
+        working-directory: app/backend
+      - name: Full harness including isolated PostgreSQL and Redis tests
+        shell: pwsh
+        run: ./scripts/agent/check.ps1
+        env:
+          SUBTITLE_DISPOSABLE_PG_PORT: ${{ job.services.postgres.ports[5432] }}
+          SUBTITLE_DISPOSABLE_PG_DATABASE: subtitle_review_test_ci
+          SUBTITLE_DISPOSABLE_PG_USERNAME: subtitle_ci
+          SUBTITLE_DISPOSABLE_PG_PASSWORD: disposable_ci_only
+          SUBTITLE_TEST_REDIS_PORT: ${{ job.services.redis.ports[6379] }}
+      - name: Audit backend runtime dependencies
+        run: composer audit --locked --no-dev --no-interaction
+        working-directory: app/backend
+      - name: Audit shared contracts
+        run: npm audit --audit-level=high
+        working-directory: packages/contracts
+      - name: Exercise release packaging with a fixture origin (never published)
+        shell: pwsh
+        run: ./scripts/ops/build-extension-release.ps1 -ApiBaseUrl https://release-check.example.com/v1 -SkipTests

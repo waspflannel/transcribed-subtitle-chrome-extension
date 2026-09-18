@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\StripeCheckoutPendingException;
 use App\Models\User;
 use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Billing\BillingEntitlementService;
@@ -51,6 +52,8 @@ class BillingController extends Controller
                 successUrl: route('dashboard', ['billing' => 'success']),
                 cancelUrl: route('dashboard', ['billing' => 'cancelled']),
             );
+        } catch (StripeCheckoutPendingException $exception) {
+            return redirect()->route('dashboard')->with('billing_error', __($exception->getMessage(), $exception->replacements));
         } catch (HttpClientException|RuntimeException $exception) {
             report($exception);
 

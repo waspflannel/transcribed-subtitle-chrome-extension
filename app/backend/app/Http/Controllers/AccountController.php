@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\StripeCheckoutPendingException;
 use App\Models\User;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Billing\BillingEntitlementService;
@@ -58,6 +59,8 @@ class AccountController extends Controller
 
                 $lockedUser->delete();
             });
+        } catch (StripeCheckoutPendingException $exception) {
+            return redirect()->route('dashboard')->with('billing_error', __($exception->getMessage(), $exception->replacements));
         } catch (HttpClientException|RuntimeException $exception) {
             report($exception);
 

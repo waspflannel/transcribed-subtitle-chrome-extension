@@ -1,4 +1,6 @@
 {
+    "Your previous checkout has completed. Wait for your billing status to update, then try again. Contact support if it does not update.": "Tu proceso de pago anterior se ha completado. Espera a que se actualice el estado de facturación y vuelve a intentarlo. Contacta con soporte si no se actualiza.",
+    "Your previous checkout could not be confirmed. Retry after :retryAt to start checkout or delete your account.": "No se pudo confirmar tu proceso de pago anterior. Vuelve a intentarlo después de :retryAt para iniciar el pago o eliminar tu cuenta.",
     "Usage": "Uso",
     "Recent jobs": "Trabajos recientes",
     "Actions": "Acciones",

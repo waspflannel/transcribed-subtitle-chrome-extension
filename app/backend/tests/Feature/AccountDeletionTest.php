@@ -196,12 +196,32 @@ class AccountDeletionTest extends TestCase
         $user = $this->userWithPendingCheckout();
         $user->update(['stripe_checkout_session_id' => null, 'stripe_checkout_session_url' => null]);
         Http::preventStrayRequests();
-        Http::fake();
+        Http::fake(['https://api.stripe.com/v1/checkout/sessions*' => Http::response(['data' => [], 'has_more' => false])]);
 
-        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])->assertSessionHas('billing_error');
+        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])
+            ->assertSessionHas('billing_error', fn ($message): bool => str_contains($message, 'Retry after'));
 
         $this->assertModelExists($user);
-        Http::assertNothingSent();
+        Http::assertSentCount(1);
+        Http::assertNotSent(fn ($request): bool => $request->method() === 'POST');
+    }
+
+    public function test_account_deletion_reconciles_absent_checkout_after_its_original_expiry(): void
+    {
+        $user = $this->userWithPendingCheckout();
+        $user->update([
+            'stripe_checkout_session_id' => null,
+            'stripe_checkout_session_url' => null,
+            'stripe_checkout_expires_at' => now()->subHour(),
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['https://api.stripe.com/v1/checkout/sessions*' => Http::response(['data' => [], 'has_more' => false])]);
+
+        $this->actingAs($user)->delete(route('account.destroy'), ['password' => 'password'])->assertRedirect(route('login'));
+
+        $this->assertModelMissing($user);
+        Http::assertSentCount(1);
+        Http::assertNotSent(fn ($request): bool => $request->method() !== 'GET');
     }
 
     private function userWithPendingCheckout(): User

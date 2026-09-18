@@ -1,4 +1,6 @@
 {
+    "Your previous checkout has completed. Wait for your billing status to update, then try again. Contact support if it does not update.": "前回の購入手続きは完了しています。請求状況が更新されてから、もう一度お試しください。更新されない場合はサポートにお問い合わせください。",
+    "Your previous checkout could not be confirmed. Retry after :retryAt to start checkout or delete your account.": "前回の購入手続きを確認できませんでした。購入手続きの開始またはアカウントの削除は、:retryAt 以降にもう一度お試しください。",
     "Usage": "使用量",
     "Recent jobs": "最近のジョブ",
     "Actions": "操作",

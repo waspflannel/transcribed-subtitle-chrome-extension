@@ -1,4 +1,6 @@
 {
+    "Your previous checkout has completed. Wait for your billing status to update, then try again. Contact support if it does not update.": "上一次结账已完成。请等待账单状态更新后重试。如果状态未更新，请联系支持团队。",
+    "Your previous checkout could not be confirmed. Retry after :retryAt to start checkout or delete your account.": "无法确认上一次结账的状态。请在 :retryAt 之后重试，以开始结账或删除账户。",
     "Usage": "用量",
     "Recent jobs": "最近的任务",
     "Actions": "操作",

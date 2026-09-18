@@ -19,6 +19,8 @@ class TestEnvironmentIsolationTest extends TestCase
         $this->assertSame('array', config('mail.default'));
         $this->assertSame('sync', config('queue.default'));
         $this->assertSame(SUBTITLE_TEST_STORAGE, storage_path());
+        $this->assertSame(SUBTITLE_TEST_STORAGE.DIRECTORY_SEPARATOR.'.env', $this->app->environmentFilePath());
+        $this->assertSame('', file_get_contents($this->app->environmentFilePath()));
         $this->assertSame(SUBTITLE_TEST_STORAGE.'/config.php', $this->app->getCachedConfigPath());
     }
 

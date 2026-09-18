@@ -63,6 +63,8 @@ if (-not $SkipAppChecks) {
     } else {
         Write-Host "No WXT extension detected."
     }
+
+    & (Join-Path $Root 'scripts/ops/tests/release-checks.ps1')
 }
 
 Write-Host "Agent scaffold checks completed."

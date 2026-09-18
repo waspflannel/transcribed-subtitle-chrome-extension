@@ -1,8 +1,8 @@
 {
   "name": "transcribed-subtitle-extension",
-  "description": "AI language-to-language subtitle extension scaffold.",
+  "description": "Generate and study translated subtitles on YouTube with word cards and lyric correction.",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",

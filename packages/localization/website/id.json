@@ -1,4 +1,6 @@
 {
+    "Your previous checkout has completed. Wait for your billing status to update, then try again. Contact support if it does not update.": "Proses pembayaran sebelumnya telah selesai. Tunggu hingga status tagihan Anda diperbarui, lalu coba lagi. Hubungi dukungan jika status tidak diperbarui.",
+    "Your previous checkout could not be confirmed. Retry after :retryAt to start checkout or delete your account.": "Proses pembayaran sebelumnya tidak dapat dikonfirmasi. Coba lagi setelah :retryAt untuk memulai pembayaran atau menghapus akun Anda.",
     "Usage": "Penggunaan",
     "Recent jobs": "Tugas terbaru",
     "Actions": "Tindakan",

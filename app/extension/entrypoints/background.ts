@@ -665,7 +665,12 @@ async function generateSubtitlesFromPanel(confirmationContext: string, windowId?
       generationStarted = true;
       void generateSubtitlesForTab(activeTabId, pageStatus, settings, pageSnapshot, session, operation, confirmationContext, currentState.type === 'ready', windowId)
         .finally(() => {
-          if (tabOperations.get(activeTabId) === operation) tabGenerationInFlight.delete(activeTabId);
+          if (tabOperations.get(activeTabId) !== operation) return;
+          tabGenerationInFlight.delete(activeTabId);
+          // Cancellation still needs its claim to clear the displayed state.
+          if (tabGenerationCancellationInFlight.get(activeTabId)?.operation !== operation) {
+            tabOperations.delete(activeTabId);
+          }
         });
     }
 
@@ -1206,6 +1211,9 @@ async function cancelSubtitleJobFromPanel(
       && tabGenerationCancellationInFlight.get(message.tabId)?.jobId === message.jobId
       && tabGenerationCancellationInFlight.get(message.tabId)?.operation === cancellationOperation) {
       tabGenerationCancellationInFlight.delete(message.tabId);
+      if (!tabGenerationInFlight.has(message.tabId) && tabOperations.get(message.tabId) === cancellationOperation) {
+        tabOperations.delete(message.tabId);
+      }
     }
     await clearSessionIfInvalid(error, sessionId);
 
@@ -2632,16 +2640,22 @@ function ensureRecoveredGenerationMonitor(
       }, session.account.id, session.sessionId);
     }
   }).finally(async () => {
-    if (tabOperations.get(tabId) === operation) {
-      tabGenerationInFlight.delete(tabId);
+    if (tabOperations.get(tabId) !== operation) return;
+    try {
       const persisted = await getTabOperation(tabId);
       const current = await getStoredExtensionSession();
-      if (terminal && current?.sessionId === session.sessionId
+      if (terminal && tabOperations.get(tabId) === operation && current?.sessionId === session.sessionId
         && persisted?.kind === 'generation'
         && persisted.accountId === session.account.id
         && persisted.youtubeVideoId === pageStatus.videoId) {
         await clearTabOperationIfMatches(tabId, persisted);
-        tabOperations.delete(tabId);
+      }
+    } finally {
+      if (tabOperations.get(tabId) === operation) {
+        tabGenerationInFlight.delete(tabId);
+        if (tabGenerationCancellationInFlight.get(tabId)?.operation !== operation) {
+          tabOperations.delete(tabId);
+        }
       }
     }
   }).catch(() => {});

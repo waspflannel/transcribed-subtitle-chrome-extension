@@ -999,7 +999,8 @@ class SubtitleJobApiTest extends TestCase
             'subtitles.transcription.chunking.first_seconds' => 0,
             'subtitles.transcription.chunking.min_audio_seconds' => 240,
             'subtitles.transcription.chunking.target_seconds' => 120,
-            'ai.providers.elevenlabs.key' => 'fake-key',
+            'ai.providers.eleven.key' => 'fake-key',
+            'ai.providers.eleven.models.transcription.default' => 'scribe_v2',
         ]);
         Bus::fake();
         $job = $this->runningSubtitleJob('optimizing-audio');

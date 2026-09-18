@@ -82,9 +82,9 @@ class SubtitleBatchDispatcher
 
     public function dispatchMergedCueTrackFinalization(SubtitleJob $job): void
     {
-        FinalizeSubtitleJob::dispatch($job->id, $job->run_id)
-            ->onConnection(SubtitleQueue::connection())
-            ->onQueue(SubtitleQueue::generationNameForJob($job));
+        // Assembly already has a worker. Publish its local result immediately
+        // after commit instead of waiting behind more audio/provider work.
+        FinalizeSubtitleJob::dispatchSync($job->id, $job->run_id);
     }
 
     /**
