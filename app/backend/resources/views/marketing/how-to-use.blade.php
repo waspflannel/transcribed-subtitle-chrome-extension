@@ -95,6 +95,7 @@
                     <li>{!! strtr(e(__('Select :slot1:Generate subtitles:slot2:. Review the video, options, and minute-use notice, then choose :slot3:Start generation:slot4:. Choose :slot5:Go back:slot6: to change your settings.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>', ':slot3:' => '<strong>', ':slot4:' => '</strong>', ':slot5:' => '<strong>', ':slot6:' => '</strong>']) !!}</li>
                     <li>{{ __('Follow the named progress stages. Subtitles appear on the video as they become ready. You can close the side panel while generation continues.') }}</li>
                 </ol>
+                <p>{{ __('Auto chooses Transcriber or Transcriber Spark from the transcript.') }}</p>
                 <p>{{ __('Editing and interactive word cards become available once the track is complete. If your plan’s simultaneous-video slots are occupied, an accepted generation waits in the queue.') }}</p>
                 <aside class="guide-note">{!! strtr(e(__(':slot1:Before you start::slot2: a new generation can use plan minutes for the whole video. Cancelling after processing starts does not restore those minutes. Review the confirmation before proceeding.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>']) !!}</aside>
                 <p>{!! strtr(e(__('To try different languages, layers, or a model on a video with a completed track, choose :slot1:Generate again:slot2: above the transcript. Changing next-generation settings does not change an existing saved track.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>']) !!}</p>

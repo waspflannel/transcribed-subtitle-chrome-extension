@@ -683,5 +683,9 @@
     ":slot1:Cerebras::slot2: text processing for :slot3:Transcriber-Spark:slot4:, including its translations and study content. :slot5:Cerebras privacy policy:slot6:.": ":slot1:Cerebras::slot2: 文本处理，用于 :slot3:Transcriber-Spark:slot4:，包括其翻译和学习内容。:slot5:Cerebras 隐私政策:slot6:。",
     "Remember this browser": "记住此浏览器",
     "Confirm your password": "确认您的密码",
-    "The website uses session, security, and language-preference cookies for functions such as sign-in, protecting forms, and remembering your interface language. The extension uses local browser storage for your sign-in token, installation identifier, preferences, recent tracks, and in-progress work. Clearing that storage can sign you out or remove locally remembered work.": "本网站使用会话 Cookie、安全 Cookie 和语言偏好 Cookie，以实现登录、保护表单和记住界面语言等功能。该扩展使用浏览器本地存储来保存您的登录令牌、安装标识符、偏好设置、最近的音轨和正在进行的工作。清除这些存储内容可能会使您退出登录，或删除本地记住的工作。"
+    "The website uses session, security, and language-preference cookies for functions such as sign-in, protecting forms, and remembering your interface language. The extension uses local browser storage for your sign-in token, installation identifier, preferences, recent tracks, and in-progress work. Clearing that storage can sign you out or remove locally remembered work.": "本网站使用会话 Cookie、安全 Cookie 和语言偏好 Cookie，以实现登录、保护表单和记住界面语言等功能。该扩展使用浏览器本地存储来保存您的登录令牌、安装标识符、偏好设置、最近的音轨和正在进行的工作。清除这些存储内容可能会使您退出登录，或删除本地记住的工作。",
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自动模式根据转录内容选择 Transcriber 或 Transcriber Spark。",
+    "TypeSafe: when you choose Auto, a short transcript sample and language settings are sent to Jev to select the processing model.": "TypeSafe：选择自动模式时，一小段转录样本和语言设置会发送给 Jev，以选择处理模型。",
+    "TypeSafe privacy policy": "TypeSafe 隐私政策",
+    "Last updated :slot1:September 18, 2026:slot2:": "最后更新于 :slot1:2026年9月18日:slot2:"
 }

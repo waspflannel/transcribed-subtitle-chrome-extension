@@ -6,7 +6,7 @@
         <h1 id="legal-title">{!! strtr(e(__('Privacy :slot1:policy.:slot2:')), [':slot1:' => '<span class="hl">', ':slot2:' => '</span>']) !!}</h1>
         <p>{{ __('What we process, why we need it, and the choices you have when you use our website and Chrome extension.') }}</p>
         <div class="legal-meta">
-            <span>{!! strtr(e(__('Last updated :slot1:September 14, 2026:slot2:')), [':slot1:' => '<time datetime="2026-09-14">', ':slot2:' => '</time>']) !!}</span>
+            <span>{!! strtr(e(__('Last updated :slot1:September 18, 2026:slot2:')), [':slot1:' => '<time datetime="2026-09-18">', ':slot2:' => '</time>']) !!}</span>
             <a href="{{ \App\Support\WebsiteLocale::route('marketing.terms') }}">{{ __('Read the terms of service →') }}</a>
         </div>
     </section>
@@ -57,6 +57,7 @@
                 <p>{{ __('Our model names describe product choices. The companies below provide the underlying services and receive the information needed for their part of the workflow:') }}</p>
                 <ul>
                     <li>{!! strtr(e(__(':slot1:ElevenLabs::slot2: audio or a public video URL for speech transcription. :slot3:ElevenLabs privacy policy:slot4:.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>', ':slot3:' => '<a href="https://elevenlabs.io/privacy-policy">', ':slot4:' => '</a>']) !!}</li>
+                    <li>{{ __('TypeSafe: when you choose Auto, a short transcript sample and language settings are sent to Jev to select the processing model.') }} <a href="https://typesafe.ai/legal/privacy-policy">{{ __('TypeSafe privacy policy') }}</a>.</li>
                     <li>{!! strtr(e(__(':slot1:OpenAI::slot2: text processing for :slot3:Transcriber:slot4:, including translations and study content. Full lyrics correction also uses OpenAI, including when the original track used Transcriber-Spark. :slot5:OpenAI business data privacy:slot6:.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>', ':slot3:' => '<strong>', ':slot4:' => '</strong>', ':slot5:' => '<a href="https://openai.com/enterprise-privacy/">', ':slot6:' => '</a>']) !!}</li>
                     <li>{!! strtr(e(__(':slot1:Cerebras::slot2: text processing for :slot3:Transcriber-Spark:slot4:, including its translations and study content. :slot5:Cerebras privacy policy:slot6:.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>', ':slot3:' => '<strong>', ':slot4:' => '</strong>', ':slot5:' => '<a href="https://www.cerebras.ai/privacy-policy">', ':slot6:' => '</a>']) !!}</li>
                     <li>{!! strtr(e(__(':slot1:Stripe::slot2: payments, recurring subscriptions, and the billing portal. :slot3:Stripe privacy policy:slot4:.')), [':slot1:' => '<strong>', ':slot2:' => '</strong>', ':slot3:' => '<a href="https://stripe.com/privacy">', ':slot4:' => '</a>']) !!}</li>

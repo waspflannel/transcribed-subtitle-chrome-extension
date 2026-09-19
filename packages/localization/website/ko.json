@@ -683,5 +683,9 @@
     ":slot1:Cerebras::slot2: text processing for :slot3:Transcriber-Spark:slot4:, including its translations and study content. :slot5:Cerebras privacy policy:slot6:.": ":slot1:Cerebras::slot2:를 사용한 :slot3:Transcriber-Spark:slot4: 텍스트 처리로, 번역과 학습 콘텐츠가 포함됩니다. :slot5:Cerebras 개인정보 보호정책:slot6:.",
     "Remember this browser": "이 브라우저 기억하기",
     "Confirm your password": "비밀번호 확인",
-    "The website uses session, security, and language-preference cookies for functions such as sign-in, protecting forms, and remembering your interface language. The extension uses local browser storage for your sign-in token, installation identifier, preferences, recent tracks, and in-progress work. Clearing that storage can sign you out or remove locally remembered work.": "이 웹사이트는 로그인, 양식 보호, 인터페이스 언어 기억 등의 기능을 위해 세션 쿠키, 보안 쿠키, 언어 기본 설정 쿠키를 사용합니다. 확장 프로그램은 로그인 토큰, 설치 식별자, 환경설정, 최근 트랙 및 진행 중인 작업을 위해 브라우저의 로컬 저장소를 사용합니다. 해당 저장소를 삭제하면 로그아웃되거나 로컬에 저장된 작업이 삭제될 수 있습니다."
+    "The website uses session, security, and language-preference cookies for functions such as sign-in, protecting forms, and remembering your interface language. The extension uses local browser storage for your sign-in token, installation identifier, preferences, recent tracks, and in-progress work. Clearing that storage can sign you out or remove locally remembered work.": "이 웹사이트는 로그인, 양식 보호, 인터페이스 언어 기억 등의 기능을 위해 세션 쿠키, 보안 쿠키, 언어 기본 설정 쿠키를 사용합니다. 확장 프로그램은 로그인 토큰, 설치 식별자, 환경설정, 최근 트랙 및 진행 중인 작업을 위해 브라우저의 로컬 저장소를 사용합니다. 해당 저장소를 삭제하면 로그아웃되거나 로컬에 저장된 작업이 삭제될 수 있습니다.",
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "자동 모드는 전사 내용을 바탕으로 Transcriber 또는 Transcriber Spark를 선택합니다.",
+    "TypeSafe: when you choose Auto, a short transcript sample and language settings are sent to Jev to select the processing model.": "TypeSafe: 자동 모드를 선택하면 처리 모델을 선택하기 위해 짧은 전사 샘플과 언어 설정이 Jev로 전송됩니다.",
+    "TypeSafe privacy policy": "TypeSafe 개인정보 처리방침",
+    "Last updated :slot1:September 18, 2026:slot2:": "최종 업데이트 :slot1:2026년 9월 18일:slot2:"
 }

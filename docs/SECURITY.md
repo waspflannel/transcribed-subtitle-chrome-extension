@@ -130,6 +130,8 @@ Use `laravel-security` as a required review lens for those changes. Project guar
 
 Project-specific security defaults:
 
+- Auto model selection sends TypeSafe only a bounded transcript sample and source/target language/layer settings. The TypeSafe key stays in backend environment/config. Routing calls use the same account/provider admission and paid-work marker as other provider requests. Stored routing decisions and traces contain only allowlisted decision metadata; no raw response, transcript, key or error body is logged. The public privacy page names TypeSafe and its role.
+
 - Provider keys stay only in Laravel environment/config.
 - Extension code must never call AI providers directly.
 - Raw audio is temporary and must be deleted after processing succeeds or fails.
