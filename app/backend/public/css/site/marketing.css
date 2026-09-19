@@ -1,14 +1,6 @@
 /* ---------- Night hero band ---------- */
 .hero-band {
-    background:
-        repeating-linear-gradient(
-            to bottom,
-            transparent 0,
-            transparent 35px,
-            var(--night-line) 35px,
-            var(--night-line) 36px
-        ),
-        var(--night);
+    background: var(--night);
     color: var(--night-text);
     display: grid;
     gap: 20px;
@@ -98,7 +90,6 @@
 /* ---------- Guide introduction ---------- */
 .guide-intro {
     align-items: center;
-    border-bottom: 2px solid var(--ink);
     display: grid;
     gap: 48px 80px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -406,15 +397,7 @@
 
 /* ---------- Final night band ---------- */
 .cta-band {
-    background:
-        repeating-linear-gradient(
-            to bottom,
-            transparent 0,
-            transparent 35px,
-            var(--night-line) 35px,
-            var(--night-line) 36px
-        ),
-        var(--night);
+    background: var(--night);
     display: grid;
     gap: 20px;
     justify-items: center;

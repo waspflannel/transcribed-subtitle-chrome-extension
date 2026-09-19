@@ -4,7 +4,7 @@ Created: 2026-05-05
 
 ## Goal
 
-Define the first-release hardening checks for the YouTube AI Language Subtitle Extension.
+Define the first-release hardening checks for Transcribe.
 
 ## Critical User States
 

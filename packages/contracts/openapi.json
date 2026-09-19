@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "YouTube AI Language Subtitles API",
+    "title": "Transcribe API",
     "version": "0.1.0",
     "description": "API contract for requesting subtitle generation and receiving subtitle-focused generated tracks."
   },

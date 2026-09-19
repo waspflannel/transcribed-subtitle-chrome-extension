@@ -4,7 +4,7 @@ Created: 2026-04-28
 
 > A great engineer finds the simplest solution to the hardest problems.
 
-These guardrails apply to the YouTube AI Language Subtitle Extension. Use them when implementing phases, reviewing changes, or deciding whether a new abstraction is justified.
+These guardrails apply to Transcribe. Use them when implementing phases, reviewing changes, or deciding whether a new abstraction is justified.
 
 ## Product Guardrails
 

@@ -1,4 +1,4 @@
-# transcribed-subtitle-extension Architecture
+# Transcribe Architecture
 
 Created: 2026-04-28
 
@@ -144,6 +144,7 @@ Current local enforcement:
 - local generation metrics: `php artisan subtitles:metrics --json`
 - production readiness: `php artisan ops:production-check --target=production --json`
 - managed Laravel deploy helper: `.\scripts\ops\deploy-managed-laravel.ps1`
+- first Ubuntu/EC2 host boot: `./scripts/ops/deploy-ubuntu.sh`
 
 Promote these into CI when a remote repository workflow is introduced.
 

@@ -1,6 +1,6 @@
 {
   "extensionName": {
-    "message": "AI 语言字幕"
+    "message": "Transcribe"
   },
   "extensionDescription": {
     "message": "为公开的 YouTube 视频生成字幕和语言对语言单词卡。"

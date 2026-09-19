@@ -1,4 +1,4 @@
-# Transcribed Subtitle Extension Backend
+# Transcribe Backend
 
 Laravel API for generating YouTube subtitle tracks, learning-token metadata, and subtitle job history for the browser extension.
 

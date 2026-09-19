@@ -2,7 +2,7 @@
   "name": "@transcribed-subtitle-extension/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "Canonical API and subtitle track contracts for the YouTube AI subtitle learning extension.",
+  "description": "Canonical API and subtitle track contracts for Transcribe.",
   "type": "module",
   "files": [
     "dist",

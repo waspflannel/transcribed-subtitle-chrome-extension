@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "transcribed-subtitle-extension/backend",
     "type": "project",
-    "description": "API backend for the transcribed subtitle extension.",
+    "description": "API backend for Transcribe.",
     "keywords": ["subtitles", "youtube", "language-learning"],
     "license": "MIT",
     "require": {

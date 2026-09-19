@@ -15,17 +15,8 @@ body {
     overflow-x: hidden;
 }
 
-/* Faint ruled-notebook baseline on marketing pages */
 .marketing-body {
-    background:
-        repeating-linear-gradient(
-            to bottom,
-            transparent 0,
-            transparent 35px,
-            rgba(20, 20, 20, 0.045) 35px,
-            rgba(20, 20, 20, 0.045) 36px
-        ),
-        var(--paper);
+    background: var(--paper);
 }
 
 a {

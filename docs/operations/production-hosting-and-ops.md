@@ -17,6 +17,27 @@ This runbook is provider-neutral. Fill in the hosting provider, region, managed 
 - Secrets: keep `APP_KEY`, provider keys, Stripe keys, database credentials, and Redis credentials in host/provider environment settings only. Do not put them in extension builds.
 - Extension: build with `WXT_BACKEND_API_BASE_URL=https://<api-host>/v1`; the built manifest should contain only the production API origin plus YouTube host permission.
 
+## First Ubuntu / EC2 Boot
+
+Artisan does not provision a server. `composer setup` only installs PHP packages and migrates a local app. `scripts/ops/deploy-managed-laravel.ps1` is the later release path; it expects PHP, Composer, Nginx, ffmpeg, and yt-dlp to already exist.
+
+For a new Ubuntu host, upload the **repository root** (not only `app/backend`). Website translations and the language catalog live in `packages/` and Laravel reads them at runtime. The Chrome extension is not installed on EC2.
+
+```bash
+sudo ./scripts/ops/deploy-ubuntu.sh provision --user ubuntu --domain example.com
+# copy app/backend/.env.example to app/backend/.env and set production values
+sudo ./scripts/ops/deploy-ubuntu.sh deploy --user ubuntu
+# after DNS resolves
+sudo certbot --nginx -d example.com
+curl --fail https://example.com/up
+```
+
+`provision` installs PHP 8.4, Composer, Nginx, Supervisor, ffmpeg, yt-dlp, and the scheduler cron. `deploy` runs `composer install --no-dev`, generates `APP_KEY` when missing, migrates, caches config, and writes Supervisor `tse-*` workers from `subtitles:runtime-check --json`.
+
+Set `APP_URL` to the public HTTPS origin before deploy. The default worker pool is 31 processes (`SUBTITLE_GENERATION_PRIORITY_WORKERS=8`, `SUBTITLE_BATCH_PRIORITY_WORKERS=20`, plus 3 guarantee workers). Lower those values on a small instance before the first deploy. Keep Postgres and Redis on managed services; workers share local temp audio on this host.
+
+After `https://<host>/v1` works, build the store ZIP on your computer with `scripts/ops/build-extension-release.ps1`. Do not put provider keys in that ZIP.
+
 ## Required Decisions
 
 Record these in the active phase plan before the first real staging deploy:

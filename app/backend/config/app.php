@@ -2,7 +2,7 @@
 
 return [
 
-    'name' => env('APP_NAME', 'Transcribed Subtitle Extension'),
+    'name' => env('APP_NAME', 'Transcribe'),
 
     'env' => env('APP_ENV', 'production'),
 

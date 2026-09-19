@@ -843,7 +843,7 @@ async function sendPanelRequest(
         return false;
       }
       latestAppliedSeq = seq;
-      showRequestError(t("The extension background did not respond. Reload AI Language Subtitles in chrome://extensions, then refresh YouTube and reopen the panel."), errorTarget);
+      showRequestError(t("The extension background did not respond. Reload Transcribe in chrome://extensions, then refresh YouTube and reopen the panel."), errorTarget);
 
       return false;
     }
