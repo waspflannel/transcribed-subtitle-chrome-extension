@@ -17,6 +17,7 @@ describe('settings model', () => {
 
   it('defaults to Transcriber, remembers Transcriber Spark, and rejects unknown providers', () => {
     expect(createExtensionSettingsFromPartial(undefined).aiProvider).toBe('openai');
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'auto' }).aiProvider).toBe('auto');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'cerebras' }).aiProvider).toBe('cerebras');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'hybrid' as never }).aiProvider).toBe('openai');
   });

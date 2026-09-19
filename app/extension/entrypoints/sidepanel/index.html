@@ -94,11 +94,13 @@
             <div class="card">
               <label class="row">
                 <span class="row-key" data-i18n="AI model">AI model</span>
-                <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
+                <select name="aiProvider" aria-describedby="ai-auto-description ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
+                  <option value="auto" data-i18n="Auto">Auto</option>
                   <option value="openai">Transcriber</option>
                   <option value="cerebras">Transcriber Spark</option>
                 </select>
               </label>
+              <p id="ai-auto-description" class="microcopy" data-i18n="Auto chooses Transcriber or Transcriber Spark from the transcript.">Auto chooses Transcriber or Transcriber Spark from the transcript.</p>
               <p id="ai-luna-description" class="microcopy"><strong data-i18n="Transcriber:">Transcriber:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
               <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Transcriber Spark:">Transcriber Spark:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
               <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>

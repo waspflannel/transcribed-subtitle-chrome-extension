@@ -1,4 +1,5 @@
 import { t } from '../../../utils/i18n';
+import { aiProviderLabel } from '../../../utils/settings-model';
 import { escapeHtml } from '../../../utils/html';
 import { groupJobHistoryByMediaKind, jobHistoryMediaKind } from '../../../utils/job-history-media';
 import { languageLabel } from '../../../utils/languages';
@@ -53,7 +54,7 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelS
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
   const meta = [
-    job.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber',
+    aiProviderLabel(job.aiProvider),
     `${languageLabel(job.sourceLanguage)} → ${languageLabel(job.targetLanguage)}`,
     job.detectedSourceLanguage ? t('detected {language}', { language: languageLabel(job.detectedSourceLanguage) }) : null,
     formatDurationSeconds(telemetry.videoDurationSeconds),

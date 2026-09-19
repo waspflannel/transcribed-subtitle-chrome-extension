@@ -1,4 +1,5 @@
 import { t, interfaceLocale } from '../../utils/i18n';
+import { aiProviderLabel } from '../../utils/settings-model';
 import { browser } from 'wxt/browser';
 import type { PanelState, PanelRequest } from '../../utils/messages';
 import type { SubtitleJobHistoryItem } from '../../utils/contracts';
@@ -36,7 +37,7 @@ export function bindSavedGenerations(
       }
       for (const job of jobs) {
         const source = job.sourceLanguage === 'auto' ? t("Auto") : languageLabel(job.sourceLanguage);
-        const model = job.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber';
+        const model = aiProviderLabel(job.aiProvider);
         select.add(option(`${source} → ${languageLabel(job.targetLanguage)} (${model})`, job.jobId));
       }
       if (track) select.add(option(t("Delete selected generation…"), DELETE_GENERATION));

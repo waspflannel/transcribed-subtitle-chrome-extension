@@ -175,6 +175,12 @@ it('cancels generation and saves the model selected for the next generation', as
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' } }));
   expect(selector.value).toBe('cerebras');
   expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Transcriber Spark');
+  selector.value = 'auto';
+  selector.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'auto' } }));
+  expect(selector.value).toBe('auto');
+  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Auto');
 
   const attachInput = dom.window.document.querySelector<HTMLInputElement>('input[name="overlayAttachedToVideo"]')!;
   expect(attachInput.disabled).toBe(false);

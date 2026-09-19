@@ -467,5 +467,6 @@
     "{percent}% captured.": "{percent}%取得済み。",
     "{duration} elapsed": "{duration}経過",
     "{duration} until failure": "失敗まで{duration}",
-    "{duration} total": "合計{duration}"
+    "{duration} total": "合計{duration}",
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自動モードでは、文字起こしの内容に応じてTranscriberまたはTranscriber Sparkを選択します。"
 }

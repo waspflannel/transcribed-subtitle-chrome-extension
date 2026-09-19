@@ -467,5 +467,6 @@
     "{percent}% captured.": "已捕获 {percent}%。",
     "{duration} elapsed": "已用时 {duration}",
     "{duration} until failure": "距离失败还有 {duration}",
-    "{duration} total": "总计 {duration}"
+    "{duration} total": "总计 {duration}",
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自动模式根据转录内容选择 Transcriber 或 Transcriber Spark。"
 }

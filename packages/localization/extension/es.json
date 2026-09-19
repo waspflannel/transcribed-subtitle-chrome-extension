@@ -467,5 +467,6 @@
     "{percent}% captured.": "{percent}% capturado.",
     "{duration} elapsed": "{duration} transcurrido",
     "{duration} until failure": "{duration} hasta el fallo",
-    "{duration} total": "{duration} en total"
+    "{duration} total": "{duration} en total",
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto elige Transcriber o Transcriber Spark a partir de la transcripción."
 }

@@ -33,6 +33,7 @@ describe('SubtitleApiClient', () => {
       progressPercent: 50, createdAt: '2026-09-11T00:00:00Z', updatedAt: '2026-09-11T00:00:00Z',
     };
     const partialTrack = { jobId: job.jobId, youtubeVideoId: job.youtubeVideoId, revision: 1, cues: trackResponse().cues };
+    expect(guardJobResponse({ ...job, aiProvider: 'auto', aiModel: 'pending' }).aiProvider).toBe('auto');
     expect(guardJobResponse({ ...job, partialTrack }).partialTrack).toEqual(partialTrack);
     for (const patch of [{ jobId: 'another-job' }, { youtubeVideoId: 'another-id1' }, { cues: [] }, { revision: 0 }, { revision: 1.5 }, { readyThroughMs: -1 }, { readyThroughMs: NaN }]) {
       expect(() => guardJobResponse({ ...job, partialTrack: { ...partialTrack, ...patch } })).toThrow();

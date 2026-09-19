@@ -467,5 +467,6 @@
     "{percent}% captured.": "{percent}% tertangkap.",
     "{duration} elapsed": "{duration} telah berlalu",
     "{duration} until failure": "{duration} hingga gagal",
-    "{duration} total": "total {duration}"
+    "{duration} total": "total {duration}",
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto memilih Transcriber atau Transcriber Spark berdasarkan transkrip."
 }

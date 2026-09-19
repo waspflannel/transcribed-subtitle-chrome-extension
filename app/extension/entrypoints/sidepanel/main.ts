@@ -17,7 +17,7 @@ import { generationProgress } from '../../utils/panel-progress';
 import { generationConfirmationContext } from '../../utils/generation-confirmation';
 import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
-import { DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
+import { aiProviderLabel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { accountFeatureListHtml, accountBillingLinkHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
@@ -279,7 +279,7 @@ const savedGenerations = bindSavedGenerations(
 
 aiProviderSelect.addEventListener('change', () => {
   const aiProvider = aiProviderSelect.value;
-  if (aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
+  if (aiProvider === 'auto' || aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
 });
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 overlayAttachedToVideoInput.addEventListener('change', () =>
@@ -483,7 +483,7 @@ function openGenerationConfirmation(): void {
   const minutes = typeof duration === 'number'
     ? t("Estimated usage: {value1} plan minutes for the full video", {value1: Math.max(1, Math.ceil(duration / 60))})
     : t("The full video duration counts toward your plan minutes");
-  generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'} · ${minutes}.`;
+  generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${aiProviderLabel(settings.aiProvider)} · ${minutes}.`;
   generationConfirmation.showModal();
 }
 
@@ -1335,7 +1335,7 @@ function renderAccount(accountState: AccountState, settings: ExtensionSettings):
   accountPlan.textContent = authenticated ? accountState.planName : t("Available after sign-in");
   accountSpeed.textContent = authenticated ? t(accountState.tierSpeedLabel) : t("Available after sign-in");
   accountModel.hidden = !authenticated;
-  accountModel.textContent = authenticated ? t("Next generation: {value1}", {value1: settings.aiProvider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber'}) : '';
+  accountModel.textContent = authenticated ? t("Next generation: {value1}", {value1: aiProviderLabel(settings.aiProvider)}) : '';
   accountLoginForm.hidden = authenticated;
   accountEmailInput.disabled = accountRequestBusy || authenticated;
   accountPasswordInput.disabled = accountRequestBusy || authenticated;
