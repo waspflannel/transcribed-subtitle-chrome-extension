@@ -111,6 +111,46 @@ php_has_package() {
     apt-cache policy "$1" 2>/dev/null | grep -q 'Candidate: [0-9]'
 }
 
+ubuntu_codename() {
+    . /etc/os-release
+    printf '%s\n' "${VERSION_CODENAME:-}"
+}
+
+remove_broken_php_ppa() {
+    rm -f /etc/apt/sources.list.d/ondrej-ubuntu-php-*.list \
+        /etc/apt/sources.list.d/ondrej-ubuntu-php-*.sources
+}
+
+select_php_version() {
+    if php_has_package "php${PHP_VERSION}-fpm"; then
+        return
+    fi
+
+    local candidate
+    for candidate in 8.5 8.4 8.3; do
+        if php_has_package "php${candidate}-fpm"; then
+            PHP_VERSION="$candidate"
+            log "Using Ubuntu PHP ${PHP_VERSION}."
+            return
+        fi
+    done
+
+    local codename
+    codename="$(ubuntu_codename)"
+    case "$codename" in
+        jammy|noble|oracular|plucky|questing)
+            need_cmd add-apt-repository
+            add-apt-repository -y ppa:ondrej/php
+            apt-get update -y
+            ;;
+        *)
+            die "PHP ${PHP_VERSION} is not in the Ubuntu repos, and ppa:ondrej/php does not support ${codename}."
+            ;;
+    esac
+
+    php_has_package "php${PHP_VERSION}-fpm" || die "php${PHP_VERSION}-fpm is still not available after adding the PHP PPA."
+}
+
 require_env() {
     [[ -f "$BACKEND/.env" ]] || die "Create $BACKEND/.env from .env.example before deploy."
 
@@ -120,11 +160,7 @@ require_env() {
 }
 
 install_php() {
-    if ! php_has_package "php${PHP_VERSION}-fpm"; then
-        need_cmd add-apt-repository
-        add-apt-repository -y ppa:ondrej/php
-        apt-get update -y
-    fi
+    select_php_version
 
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         "php${PHP_VERSION}-cli" \
@@ -300,6 +336,7 @@ provision() {
     [[ "$(id -u)" -eq 0 ]] || die "provision must run as root (sudo)."
     require_repo
     detect_app_user
+    remove_broken_php_ppa
     apt-get update -y
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         ca-certificates \
