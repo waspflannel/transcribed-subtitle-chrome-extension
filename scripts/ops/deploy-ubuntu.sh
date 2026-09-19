@@ -108,7 +108,7 @@ php_bin() {
 }
 
 php_has_package() {
-    apt-cache policy "$1" 2>/dev/null | grep -q 'Candidate: [0-9]'
+    apt-cache show "$1" >/dev/null 2>&1
 }
 
 ubuntu_codename() {
@@ -122,8 +122,22 @@ remove_broken_php_ppa() {
 }
 
 enable_ubuntu_universe() {
-    need_cmd add-apt-repository
-    add-apt-repository -y universe
+    local file
+    for file in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list.d/*.sources; do
+        [[ -f "$file" ]] || continue
+        if grep -q '^Components:' "$file" && ! grep -qE '^Components:.*\buniverse\b' "$file"; then
+            sed -i 's/^Components:\(.*\)/Components:\1 universe/' "$file"
+        fi
+    done
+    add-apt-repository -y universe || true
+
+    if php_has_package php8.5-fpm || php_has_package php-fpm; then
+        return
+    fi
+
+    log "Refreshing apt lists so universe PHP packages appear."
+    rm -rf /var/lib/apt/lists/*
+    mkdir -p /var/lib/apt/lists/partial
     apt-get update -y
 }
 
@@ -168,7 +182,7 @@ select_php_version() {
             PHP_VERSION="${PHP_VERSION:-8.4}"
             ;;
         *)
-            die "No php-fpm package is available. Enable the universe repo and retry."
+            die "No php-fpm package is available. Check that universe is in /etc/apt/sources.list.d/ubuntu.sources, then run: apt-cache search php-fpm"
             ;;
     esac
 }
