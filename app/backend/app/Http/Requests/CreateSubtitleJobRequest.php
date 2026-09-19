@@ -28,7 +28,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
-            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
+            'aiProvider' => ['sometimes', 'string', Rule::in(['auto', 'openai', 'cerebras'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
             'forceRegenerate' => ['sometimes', 'boolean:strict'],
@@ -78,6 +78,9 @@ class CreateSubtitleJobRequest extends FormRequest
         return [
             function (Validator $validator): void {
                 $provider = $this->input('aiProvider', config('ai.default'));
+                if ($provider === 'auto') {
+                    $provider = 'openai';
+                }
                 if (in_array($provider, ['openai', 'cerebras'], true)) {
                     $key = config("ai.providers.{$provider}.key");
                     $model = config("ai.providers.{$provider}.models.text.default");

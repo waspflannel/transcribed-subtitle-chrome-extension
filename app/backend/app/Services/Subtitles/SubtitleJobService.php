@@ -85,9 +85,13 @@ class SubtitleJobService
         if (! in_array($mode, ['upload', 'youtube_url'], true)) {
             throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
         }
-        $selection = SubtitleModel::configured($payload['aiProvider'] ?? null);
+        $automatic = ($payload['aiProvider'] ?? null) === 'auto';
+        $routing = $automatic ? JevModelRouter::configuration() : null;
+        $selection = $automatic ? new SubtitleModel('auto', 'pending') : SubtitleModel::configured($payload['aiProvider'] ?? null);
         $payload['aiProvider'] = $selection->provider;
         $payload['aiModel'] = $selection->model;
+        $payload['aiSelectionKey'] = $automatic ? hash('sha256', json_encode($routing, JSON_THROW_ON_ERROR)) : 'manual';
+        $payload['aiRouting'] = $automatic ? ['configuration' => $routing] : null;
         $payload['transcriptionIngestionMode'] = $mode;
         $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($mode);
         $includeRomanization = $payload['includeRomanization'];
@@ -322,8 +326,9 @@ class SubtitleJobService
             ->where('source_language', $payload['sourceLanguage'])
             ->where('target_language', $payload['targetLanguage'])
             ->where('transcription_options_hash', $payload['transcriptionOptionsHash'])
-            ->where('ai_provider', $payload['aiProvider'])
-            ->where('ai_model', $payload['aiModel'])
+            ->where('ai_selection_key', $payload['aiSelectionKey'])
+            ->when($payload['aiProvider'] !== 'auto', fn (Builder $query): Builder => $query
+                ->where('ai_provider', $payload['aiProvider'])->where('ai_model', $payload['aiModel']))
             ->where('processing_version', $processingVersion);
     }
 
@@ -355,6 +360,8 @@ class SubtitleJobService
             'processing_version' => $processingVersion,
             'ai_provider' => $payload['aiProvider'],
             'ai_model' => $payload['aiModel'],
+            'ai_selection_key' => $payload['aiSelectionKey'],
+            'ai_routing' => $payload['aiRouting'],
             'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
             'transcription_options_hash' => $payload['transcriptionOptionsHash'],
             'generation_tier' => $generationTier,
@@ -408,6 +415,10 @@ class SubtitleJobService
             'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'paid_work_started_at' => null,
+            'ai_provider' => $payload['aiProvider'],
+            'ai_model' => $payload['aiModel'],
+            'ai_selection_key' => $payload['aiSelectionKey'],
+            'ai_routing' => $payload['aiRouting'],
             'detected_source_language' => null,
             'generation_tier' => $generationTier,
             'include_romanization' => $includeRomanization,

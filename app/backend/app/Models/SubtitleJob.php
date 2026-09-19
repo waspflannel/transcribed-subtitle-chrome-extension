@@ -27,6 +27,8 @@ class SubtitleJob extends Model
         'processing_version',
         'ai_provider',
         'ai_model',
+        'ai_selection_key',
+        'ai_routing',
         'generation_tier',
         'include_romanization',
         'include_translation',
@@ -86,6 +88,7 @@ class SubtitleJob extends Model
     protected function casts(): array
     {
         return [
+            'ai_routing' => 'array',
             'expires_at' => 'immutable_datetime',
             'paid_work_started_at' => 'immutable_datetime',
             'estimated_provider_cost_microusd' => 'integer',

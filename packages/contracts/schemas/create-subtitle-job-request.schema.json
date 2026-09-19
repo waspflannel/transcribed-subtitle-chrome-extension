@@ -244,10 +244,11 @@
     "aiProvider": {
       "type": "string",
       "enum": [
+        "auto",
         "openai",
         "cerebras"
       ],
-      "description": "AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model."
+      "description": "Auto chooses one analysis model from the transcript; explicit providers remain pinned."
     }
   }
 }

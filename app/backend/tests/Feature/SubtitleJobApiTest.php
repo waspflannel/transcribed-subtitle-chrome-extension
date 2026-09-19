@@ -51,6 +51,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -62,6 +63,50 @@ use Tests\TestCase;
 class SubtitleJobApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_auto_reuses_its_resolved_generation_separately_from_manual_and_routes_again_on_reset(): void
+    {
+        config(['typesafe.key' => 'test-only-key']);
+        Http::fake(['api.typesafe.ai/*' => Http::response([
+            'model' => 'jev-1.13.0', 'answers' => ['route' => ['type' => 'choice', 'choice' => 'spark',
+                'confidence' => 0.99, 'probabilities' => ['spark' => 0.99, 'transcriber' => 0.01]]],
+            'usage' => ['input_tokens' => 500, 'output_tokens' => 30],
+        ])]);
+        $payload = $this->validPayload(['aiProvider' => 'auto']);
+        $automatic = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)
+            ->assertOk()->assertJsonPath('aiProvider', 'cerebras');
+        $manual = $this->postJson('/v1/subtitle-jobs', [...$payload, 'aiProvider' => 'cerebras'])->assertOk();
+        $this->assertNotSame($automatic->json('jobId'), $manual->json('jobId'));
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $automatic->json('jobId'));
+        Http::assertSentCount(1);
+        $job = SubtitleJob::where('public_id', $automatic->json('jobId'))->firstOrFail();
+        $originalRun = $job->run_id;
+        $this->postJson('/v1/subtitle-jobs', [...$payload, 'forceRegenerate' => true])->assertOk()
+            ->assertJsonPath('jobId', $automatic->json('jobId'))->assertJsonPath('aiProvider', 'cerebras');
+        $this->assertNotSame($originalRun, $job->refresh()->run_id);
+        Http::assertSentCount(2);
+        $this->assertSame(1, $this->transcriptionService->chunkCalls);
+        $this->assertSame(['cerebras', 'cerebras', 'cerebras'], array_column($this->translationAnalysis->selections, 0));
+        $this->assertDatabaseCount('subtitle_jobs', 2);
+    }
+
+    public function test_pending_auto_is_reused_and_pins_candidate_models_before_queueing(): void
+    {
+        config(['subtitles.queue.connection' => 'database', 'ai.providers.openai.models.text.default' => 'original-luna', 'typesafe.key' => '']);
+        $payload = $this->validPayload(['aiProvider' => 'auto']);
+        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)
+            ->assertAccepted()->assertJsonPath('aiProvider', 'auto')->assertJsonPath('aiModel', 'pending');
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertAccepted()->assertJsonPath('jobId', $response->json('jobId'));
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        config(['ai.providers.openai.models.text.default' => 'updated-luna', 'subtitles.queue.connection' => 'sync']);
+        (new AcquireSubtitleAudio($job->id, $job->run_id))->handle(app(SubtitleGenerationPipeline::class));
+        $this->assertSame('completed', $job->refresh()->status);
+        $this->assertSame('original-luna', $job->ai_model);
+        $this->assertSame('missing_key', $job->ai_routing['decision']['reason']);
+        $new = $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('aiModel', 'updated-luna');
+        $this->assertNotSame($response->json('jobId'), $new->json('jobId'));
+        Http::assertNothingSent();
+    }
 
     public function test_provider_and_exact_model_separate_jobs_but_share_transcription(): void
     {

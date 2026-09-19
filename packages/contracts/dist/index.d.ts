@@ -242,9 +242,9 @@ export interface CreateSubtitleJobRequest {
    */
   forceRegenerate?: boolean;
   /**
-   * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
+   * Auto chooses one analysis model from the transcript; explicit providers remain pinned.
    */
-  aiProvider?: 'openai' | 'cerebras';
+  aiProvider?: 'auto' | 'openai' | 'cerebras';
 }
 
 // Source: schemas/extension-login-request.schema.json
@@ -704,9 +704,9 @@ export type JobResponse = {
     | 'lyrics_correction_failed'
     | 'internal_error';
   /**
-   * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
+   * Selected analysis provider. Auto means selection is still pending; resolved generations report the chosen provider.
    */
-  aiProvider: 'openai' | 'cerebras';
+  aiProvider: 'auto' | 'openai' | 'cerebras';
   /**
    * Exact text model saved on this job.
    */
@@ -1065,9 +1065,9 @@ export type SubtitleJobHistoryItem = {
     | 'yor'
     | 'zul';
   /**
-   * AI provider for this generation: openai selects Luna; cerebras selects Cerebras. The backend resolves and pins the exact model.
+   * Selected analysis provider. Auto means selection is still pending; resolved generations report the chosen provider.
    */
-  aiProvider: 'openai' | 'cerebras';
+  aiProvider: 'auto' | 'openai' | 'cerebras';
   /**
    * Exact text model saved on this job.
    */
