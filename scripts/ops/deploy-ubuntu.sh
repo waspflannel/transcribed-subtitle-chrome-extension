@@ -121,34 +121,66 @@ remove_broken_php_ppa() {
         /etc/apt/sources.list.d/ondrej-ubuntu-php-*.sources
 }
 
-select_php_version() {
-    if php_has_package "php${PHP_VERSION}-fpm"; then
-        return
-    fi
+enable_ubuntu_universe() {
+    need_cmd add-apt-repository
+    add-apt-repository -y universe
+    apt-get update -y
+}
 
+php_extensions() {
+    local prefix="$1"
+    local packages=()
+    local name
+    for name in cli fpm bcmath curl gd intl mbstring pgsql xml zip; do
+        packages+=("${prefix}${name}")
+    done
+    if php_has_package "${prefix}redis"; then
+        packages+=("${prefix}redis")
+    else
+        packages+=("php-redis")
+    fi
+    printf '%s\n' "${packages[@]}"
+}
+
+select_php_version() {
     local candidate
-    for candidate in 8.5 8.4 8.3; do
+    for candidate in "$PHP_VERSION" 8.5 8.4 8.3; do
         if php_has_package "php${candidate}-fpm"; then
             PHP_VERSION="$candidate"
-            log "Using Ubuntu PHP ${PHP_VERSION}."
+            log "Using PHP ${PHP_VERSION}."
             return
         fi
     done
+
+    if php_has_package php-fpm; then
+        PHP_VERSION=""
+        log "Using the Ubuntu php-fpm metapackage."
+        return
+    fi
 
     local codename
     codename="$(ubuntu_codename)"
     case "$codename" in
         jammy|noble|oracular|plucky|questing)
-            need_cmd add-apt-repository
             add-apt-repository -y ppa:ondrej/php
             apt-get update -y
+            php_has_package "php${PHP_VERSION:-8.4}-fpm" || die "php-fpm is still not available after adding the PHP PPA."
+            PHP_VERSION="${PHP_VERSION:-8.4}"
             ;;
         *)
-            die "PHP ${PHP_VERSION} is not in the Ubuntu repos, and ppa:ondrej/php does not support ${codename}."
+            die "No php-fpm package is available. Enable the universe repo and retry."
             ;;
     esac
+}
 
-    php_has_package "php${PHP_VERSION}-fpm" || die "php${PHP_VERSION}-fpm is still not available after adding the PHP PPA."
+detect_installed_php_version() {
+    if [[ -n "$PHP_VERSION" ]]; then
+        return
+    fi
+
+    PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION, ".", PHP_MINOR_VERSION;')"
+    [[ -n "$PHP_VERSION" ]] || die "Could not detect the installed PHP version."
+    log "Detected PHP ${PHP_VERSION}."
 }
 
 require_env() {
@@ -160,20 +192,19 @@ require_env() {
 }
 
 install_php() {
+    enable_ubuntu_universe
     select_php_version
 
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        "php${PHP_VERSION}-cli" \
-        "php${PHP_VERSION}-fpm" \
-        "php${PHP_VERSION}-bcmath" \
-        "php${PHP_VERSION}-curl" \
-        "php${PHP_VERSION}-gd" \
-        "php${PHP_VERSION}-intl" \
-        "php${PHP_VERSION}-mbstring" \
-        "php${PHP_VERSION}-pgsql" \
-        "php${PHP_VERSION}-redis" \
-        "php${PHP_VERSION}-xml" \
-        "php${PHP_VERSION}-zip"
+    local prefix
+    if [[ -n "$PHP_VERSION" ]]; then
+        prefix="php${PHP_VERSION}-"
+    else
+        prefix="php-"
+    fi
+
+    # shellcheck disable=SC2046
+    DEBIAN_FRONTEND=noninteractive apt-get install -y $(php_extensions "$prefix")
+    detect_installed_php_version
 }
 
 configure_php_fpm() {
@@ -338,12 +369,13 @@ provision() {
     detect_app_user
     remove_broken_php_ppa
     apt-get update -y
+    DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common
+    enable_ubuntu_universe
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         ca-certificates \
         curl \
         git \
         unzip \
-        software-properties-common \
         nginx \
         supervisor \
         ffmpeg \
