@@ -88,6 +88,8 @@ Progressive subtitle runs serialize local prefix assembly under the job/run lock
 
 Processing versions, including mode and feature suffixes, must fit the 64-character columns on both jobs and tracks. The unit test checks all eight combinations explicitly because the SQLite test database does not enforce this PostgreSQL limit.
 
+Scribe words with strictly overlapping timestamps form an inseparable group before cue splitting and streaming cutoff filtering. Groups preserve every word and their combined provider time span; touching timestamps remain separate. An overlap group may exceed ordinary cue size limits because splitting it would create conflicting timings. A group crossing the stable boundary is held back in full, so final assembly does not rewrite already-published cues.
+
 ## Recovery and diagnostics (2026-09-15)
 
 Optimization uses a per-run overlap lock (1260 seconds for a 1200-second job), an expected-stage guard, and a durable transcription plan. A missing publication can replay that plan without rerunning FFmpeg; an already-published plan or downstream-stage replay is a no-op. A crash immediately after batch publication can duplicate batch metadata; chunk locks, run fences and artifacts prevent duplicate completed work.

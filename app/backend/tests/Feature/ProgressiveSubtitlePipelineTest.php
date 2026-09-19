@@ -560,6 +560,45 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             array_column($job->fresh()->track->cues, 'sourceText'));
     }
 
+    public function test_overlapping_words_finalize_without_changing_published_cues(): void
+    {
+        $job = $this->job();
+        $this->transcribe($job, 0, ['language_code' => 'ara', 'words' => [
+            ['text' => 'Earlier.', 'start' => 0.5, 'end' => 1, 'type' => 'word'],
+            ['text' => 'أهلا؟', 'start' => 2, 'end' => 4, 'type' => 'word'],
+            ['text' => 'وسهلا.', 'start' => 3, 'end' => 3.5, 'type' => 'word'],
+            ['text' => 'Across.', 'start' => 16, 'end' => 17.5, 'type' => 'word'],
+            ['text' => 'boundary.', 'start' => 17, 'end' => 19, 'type' => 'word'],
+        ]]);
+        $this->assertSame(['Earlier.', 'أهلا؟ وسهلا.'], array_column($this->preview($job)['cues'], 'sourceText'));
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id);
+        $opening = $this->preview($job)['cues'];
+
+        $this->transcribe($job, 1, ['language_code' => 'ara', 'words' => [
+            ['text' => 'Next.', 'start' => 3, 'end' => 5, 'type' => 'word'],
+            ['text' => 'contained.', 'start' => 4, 'end' => 4.5, 'type' => 'word'],
+        ]]);
+        $this->transcribe($job, 2, ['words' => [
+            ['text' => 'Final.', 'start' => 2, 'end' => 5, 'type' => 'word'],
+            ['text' => 'overlap.', 'start' => 3, 'end' => 4, 'type' => 'word'],
+        ]]);
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+        foreach (app(SubtitleJobArtifactStore::class)->pendingAnalysisIndexes($job) as $index) {
+            app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, $index, $job->run_id);
+        }
+        $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
+        $job->refresh()->load('track');
+
+        $this->assertSame('completed', $job->status);
+        $this->assertSame(['Earlier.', 'أهلا؟ وسهلا.', 'Across. boundary.', 'Next. contained.', 'Final. overlap.'], array_column($job->track->cues, 'sourceText'));
+        $this->assertSame($opening, array_map(
+            fn (array $cue): array => Arr::only($cue, array_keys($opening[0])),
+            array_slice($job->track->cues, 0, count($opening)),
+        ));
+        $this->assertSame([1000, 4000, 19000, 23000, 43000], array_column($job->track->cues, 'endMs'));
+    }
+
     public function test_final_merge_requeues_an_early_analysis_dispatch_lost_after_commit(): void
     {
         $job = $this->job();

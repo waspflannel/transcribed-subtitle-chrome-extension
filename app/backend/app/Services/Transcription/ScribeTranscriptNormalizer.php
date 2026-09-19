@@ -153,7 +153,20 @@ class ScribeTranscriptNormalizer
             $this->failInvalidScribeResponse($untimedWordCount > 0 ? 'invalid_word_timing' : 'empty_words');
         }
 
-        return $words;
+        // Overlapping words cannot be split into separate non-overlapping cues.
+        // Group before the streaming cutoff so connected words stay unpublished together.
+        $groups = [];
+        foreach ($words as $word) {
+            $last = array_key_last($groups);
+            if ($last !== null && $word['start'] < $groups[$last]['end']) {
+                $groups[$last]['text'] .= ' '.$word['text'];
+                $groups[$last]['end'] = max($groups[$last]['end'], $word['end']);
+            } else {
+                $groups[] = $word;
+            }
+        }
+
+        return $groups;
     }
 
     /**
@@ -283,8 +296,10 @@ class ScribeTranscriptNormalizer
     {
         $count = 0;
         foreach ($currentWords as $word) {
-            if ($this->countsAsLogicalWord($word['text'])) {
-                $count++;
+            foreach (explode(' ', $word['text']) as $text) {
+                if ($this->countsAsLogicalWord($text)) {
+                    $count++;
+                }
             }
         }
 

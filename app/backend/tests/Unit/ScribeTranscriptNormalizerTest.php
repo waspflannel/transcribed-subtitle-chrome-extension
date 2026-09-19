@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class ScribeTranscriptNormalizerTest extends TestCase
@@ -195,6 +196,69 @@ class ScribeTranscriptNormalizerTest extends TestCase
             $this->assertSame('transcription_failed', $exception->publicCode);
             $this->assertSame('invalid_word_timing', $exception->context['reason']);
         }
+    }
+
+    #[TestWith([2.0])]
+    #[TestWith([3.0])]
+    #[TestWith([4.0])]
+    public function test_overlapping_sentences_keep_all_text_in_their_combined_time_span(float $secondEnd): void
+    {
+        $end = max(3.0, $secondEnd);
+        $transcript = $this->normalizer()->normalize(['words' => [
+            ['text' => 'أهلا؟', 'start' => 0.5, 'end' => 3, 'type' => 'word'],
+            ['text' => 'وسهلا.', 'start' => 1, 'end' => $secondEnd, 'type' => 'word'],
+            ['text' => 'Next.', 'start' => $end, 'end' => $end + 1, 'type' => 'word'],
+        ]], 'ara', 10);
+
+        $this->assertSame(['أهلا؟ وسهلا.', 'Next.'], array_column($transcript->segments, 'text'));
+        $this->assertSame(0.5, $transcript->segments[0]->startSeconds);
+        $this->assertSame($end, $transcript->segments[0]->endSeconds);
+        $this->assertSame($end, $transcript->segments[1]->startSeconds);
+    }
+
+    public function test_hard_limits_cannot_split_words_with_identical_timestamps(): void
+    {
+        $texts = array_fill(0, 20, 'overlapping');
+        $transcript = $this->normalizer()->normalize(['words' => array_map(fn (string $text): array => [
+            'text' => $text, 'start' => 1, 'end' => 8, 'type' => 'word',
+        ], $texts)], 'eng', 10);
+
+        $this->assertCount(1, $transcript->segments);
+        $this->assertSame(implode(' ', $texts), $transcript->segments[0]->text);
+        $this->assertSame(1.0, $transcript->segments[0]->startSeconds);
+        $this->assertSame(8.0, $transcript->segments[0]->endSeconds);
+    }
+
+    public function test_streaming_holds_a_connected_overlap_group_until_every_word_is_stable(): void
+    {
+        $payload = ['words' => [
+            ['text' => 'Earlier.', 'start' => 0, 'end' => 1, 'type' => 'word'],
+            ['text' => 'One.', 'start' => 2, 'end' => 4, 'type' => 'word'],
+            ['text' => 'Two.', 'start' => 3, 'end' => 6, 'type' => 'word'],
+            ['text' => 'Three.', 'start' => 5, 'end' => 7, 'type' => 'word'],
+            ['text' => 'Last.', 'start' => 8, 'end' => 9, 'type' => 'word'],
+        ]];
+        $early = $this->normalizer()->normalize($payload, 'eng', 10, stableBeforeSeconds: 5);
+        $later = $this->normalizer()->normalize($payload, 'eng', 10, stableBeforeSeconds: 8);
+        $complete = $this->normalizer()->normalize($payload, 'eng', 10);
+
+        $this->assertSame(['Earlier.'], array_column($early->segments, 'text'));
+        $this->assertSame(['Earlier.', 'One. Two. Three.'], array_column($later->segments, 'text'));
+        $this->assertEquals($early->segments, array_slice($later->segments, 0, 1));
+        $this->assertEquals($later->segments, array_slice($complete->segments, 0, 2));
+        $this->assertSame(2.0, $complete->segments[1]->startSeconds);
+        $this->assertSame(7.0, $complete->segments[1]->endSeconds);
+    }
+
+    public function test_grouped_words_still_count_toward_the_cue_word_limit(): void
+    {
+        $words = array_fill(0, 12, ['text' => 'word', 'start' => 1, 'end' => 2, 'type' => 'word']);
+        for ($index = 0; $index < 3; $index++) {
+            $words[] = ['text' => 'word', 'start' => 2 + $index * 0.2, 'end' => 2.1 + $index * 0.2, 'type' => 'word'];
+        }
+        $transcript = $this->normalizer()->normalize(['words' => $words], 'eng', 5);
+
+        $this->assertSame([implode(' ', array_fill(0, 14, 'word')), 'word'], array_column($transcript->segments, 'text'));
     }
 
     private function normalizer(): ScribeTranscriptNormalizer
