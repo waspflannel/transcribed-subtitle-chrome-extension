@@ -482,5 +482,6 @@
     "Enter a title and lyrics (up to 25,000 characters).": "Saisissez un titre et des paroles (25 000 caractères maximum).",
     "Lyrics saved.": "Paroles enregistrées.",
     "Could not save lyrics. Your draft is still here. Try again.": "Impossible d’enregistrer les paroles. Votre brouillon est conservé. Réessayez.",
-    "Delete": "Supprimer"
+    "Delete": "Supprimer",
+    "Add lyrics": "Ajouter des paroles"
 }

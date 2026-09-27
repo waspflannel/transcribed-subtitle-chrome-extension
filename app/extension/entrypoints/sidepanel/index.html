@@ -143,11 +143,14 @@
               <section id="panel-known-lyrics" aria-labelledby="known-lyrics-heading" hidden>
                 <h2 id="known-lyrics-heading" data-i18n="Known Lyrics">Known Lyrics</h2>
                 <p class="card-copy" data-i18n="Save lyrics in this browser. Copy them into Lyric correction whenever you need them.">Save lyrics in this browser. Copy them into Lyric correction whenever you need them.</p>
-                <form class="card lyrics-correction-form" data-known-lyrics-form>
-                  <label class="field"><span data-i18n="Song title">Song title</span><input type="text" name="title" maxlength="200" required></label>
-                  <label class="field"><span data-i18n="Lyrics">Lyrics</span><textarea name="lyrics" rows="8" maxlength="25000" required></textarea></label>
-                  <button class="btn-primary" type="submit" data-i18n="Save lyrics">Save lyrics</button>
-                </form>
+                <details class="card known-lyrics-create" data-known-lyrics-create>
+                  <summary data-i18n="Add lyrics">Add lyrics</summary>
+                  <form class="lyrics-correction-form" data-known-lyrics-form>
+                    <label class="field"><span data-i18n="Song title">Song title</span><input type="text" name="title" maxlength="200" required></label>
+                    <label class="field"><span data-i18n="Lyrics">Lyrics</span><textarea name="lyrics" rows="8" maxlength="25000" required></textarea></label>
+                    <button class="btn-primary" type="submit" data-i18n="Save lyrics">Save lyrics</button>
+                  </form>
+                </details>
                 <p data-known-lyrics-status role="status" aria-live="polite"></p>
                 <div data-known-lyrics-list></div>
               </section>

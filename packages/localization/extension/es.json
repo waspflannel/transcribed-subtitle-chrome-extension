@@ -482,5 +482,6 @@
     "Enter a title and lyrics (up to 25,000 characters).": "Introduce un título y una letra (hasta 25.000 caracteres).",
     "Lyrics saved.": "Letra guardada.",
     "Could not save lyrics. Your draft is still here. Try again.": "No se pudo guardar la letra. Tu borrador sigue aquí. Inténtalo de nuevo.",
-    "Delete": "Eliminar"
+    "Delete": "Eliminar",
+    "Add lyrics": "Añadir letra"
 }

@@ -482,5 +482,6 @@
     "Enter a title and lyrics (up to 25,000 characters).": "제목과 가사(최대 25,000자)를 입력하세요.",
     "Lyrics saved.": "가사를 저장했습니다.",
     "Could not save lyrics. Your draft is still here. Try again.": "가사를 저장하지 못했습니다. 초안은 그대로 있습니다. 다시 시도하세요.",
-    "Delete": "삭제"
+    "Delete": "삭제",
+    "Add lyrics": "가사 추가"
 }

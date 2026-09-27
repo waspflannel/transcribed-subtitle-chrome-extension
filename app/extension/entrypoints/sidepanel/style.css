@@ -151,7 +151,20 @@ a {
   border-right: 0;
 }
 
-.known-lyrics-entry h3 { overflow-wrap: anywhere; }
+.known-lyrics-entry summary,
+.known-lyrics-create summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  padding: 4px 0;
+}
+.known-lyrics-entry summary:focus-visible,
+.known-lyrics-create summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.known-lyrics-create[open] summary { margin-bottom: 12px; }
+.known-lyrics-entry .transcript-actions { margin-top: 8px; }
+[data-known-lyrics-status]:empty { margin: 0; }
 .known-lyrics-entry pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

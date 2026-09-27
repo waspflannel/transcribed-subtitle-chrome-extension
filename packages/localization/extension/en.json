@@ -482,5 +482,6 @@
   "Enter a title and lyrics (up to 25,000 characters).": "Enter a title and lyrics (up to 25,000 characters).",
   "Lyrics saved.": "Lyrics saved.",
   "Could not save lyrics. Your draft is still here. Try again.": "Could not save lyrics. Your draft is still here. Try again.",
-  "Delete": "Delete"
+  "Delete": "Delete",
+  "Add lyrics": "Add lyrics"
 }

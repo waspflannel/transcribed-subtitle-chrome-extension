@@ -482,5 +482,6 @@
     "Enter a title and lyrics (up to 25,000 characters).": "请输入歌曲名称和歌词（最多25,000个字符）。",
     "Lyrics saved.": "歌词已保存。",
     "Could not save lyrics. Your draft is still here. Try again.": "无法保存歌词。草稿仍然保留。请重试。",
-    "Delete": "删除"
+    "Delete": "删除",
+    "Add lyrics": "添加歌词"
 }

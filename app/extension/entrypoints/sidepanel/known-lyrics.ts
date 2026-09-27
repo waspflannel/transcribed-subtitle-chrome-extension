@@ -18,12 +18,16 @@ export function bindKnownLyrics(root: Document): void {
   const save = form.querySelector<HTMLButtonElement>('button')!;
   const list = root.querySelector<HTMLElement>('[data-known-lyrics-list]')!;
   const status = root.querySelector<HTMLElement>('[data-known-lyrics-status]')!;
+  const create = root.querySelector<HTMLDetailsElement>('[data-known-lyrics-create]')!;
   let busy = false;
   let revision = 0;
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function announce(message: string): void {
+  function announce(message: string, temporary = false): void {
+    clearTimeout(noticeTimer);
     status.dataset.i18n = message;
     status.textContent = t(message);
+    if (temporary) noticeTimer = setTimeout(() => announce(''), 2500);
   }
 
   async function refresh(): Promise<void> {
@@ -32,12 +36,16 @@ export function bindKnownLyrics(root: Document): void {
       const stored = await browser.storage.local.get(null);
       if (request !== revision) return;
       if (status.dataset.i18n === 'Could not load lyrics. Reopen Known Lyrics to retry.') announce('');
+      const expanded = new Set([...list.querySelectorAll<HTMLDetailsElement>('details[open]')].map(details => details.dataset.key));
       list.replaceChildren();
       for (const [key, entry] of Object.entries(stored)) {
         if (!key.startsWith(prefix) || !isKnownLyrics(entry)) continue;
         const card = root.createElement('article');
         card.className = 'card known-lyrics-entry';
-        const heading = root.createElement('h3');
+        const details = root.createElement('details');
+        details.dataset.key = key;
+        details.open = expanded.has(key);
+        const heading = root.createElement('summary');
         heading.textContent = entry.title;
         const preview = root.createElement('pre');
         preview.textContent = entry.lyrics;
@@ -54,14 +62,15 @@ export function bindKnownLyrics(root: Document): void {
             try {
               if (action === 'Copy') {
                 await navigator.clipboard.writeText(entry.lyrics);
-                announce('Lyrics copied.');
+                announce('Lyrics copied.', true);
               } else {
                 await browser.storage.local.remove(key);
+                announce('Lyrics deleted.', true);
                 await refresh();
-                announce('Lyrics deleted.');
-                title.focus();
+                (list.querySelector('summary') ?? create.querySelector('summary'))?.focus();
               }
             } catch {
+              if (action === 'Copy') details.open = true;
               announce(action === 'Copy' ? 'Could not copy lyrics. Select the text and copy it manually.' : 'Could not delete lyrics. Try again.');
             } finally {
               button.disabled = false;
@@ -69,7 +78,8 @@ export function bindKnownLyrics(root: Document): void {
           });
           actions.append(button);
         }
-        card.append(heading, preview, actions);
+        details.append(heading, preview);
+        card.append(details, actions);
         list.append(card);
       }
       if (!list.childElementCount) {
@@ -97,7 +107,9 @@ export function bindKnownLyrics(root: Document): void {
       // Separate keys keep saves from different browser windows from overwriting one another.
       await browser.storage.local.set({ [`${prefix}${crypto.randomUUID()}`]: entry });
       form.reset();
-      announce('Lyrics saved.');
+      create.open = false;
+      create.querySelector('summary')!.focus();
+      announce('Lyrics saved.', true);
       await refresh();
     } catch {
       announce('Could not save lyrics. Your draft is still here. Try again.');
@@ -110,6 +122,7 @@ export function bindKnownLyrics(root: Document): void {
   const toggle = root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!;
   const panel = root.querySelector<HTMLElement>('#panel-known-lyrics')!;
   toggle.addEventListener('click', () => {
+    announce('');
     panel.hidden = !panel.hidden;
     toggle.setAttribute('aria-expanded', String(!panel.hidden));
     if (!panel.hidden) void refresh();

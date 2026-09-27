@@ -482,5 +482,6 @@
     "Enter a title and lyrics (up to 25,000 characters).": "Masukkan judul dan lirik (maksimal 25.000 karakter).",
     "Lyrics saved.": "Lirik disimpan.",
     "Could not save lyrics. Your draft is still here. Try again.": "Tidak dapat menyimpan lirik. Draf Anda masih ada. Coba lagi.",
-    "Delete": "Hapus"
+    "Delete": "Hapus",
+    "Add lyrics": "Tambah lirik"
 }

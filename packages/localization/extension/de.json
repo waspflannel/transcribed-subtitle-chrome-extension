@@ -482,5 +482,6 @@
   "Enter a title and lyrics (up to 25,000 characters).": "Gib einen Titel und Liedtext ein (bis zu 25.000 Zeichen).",
   "Lyrics saved.": "Liedtext gespeichert.",
   "Could not save lyrics. Your draft is still here. Try again.": "Liedtext konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten. Versuche es erneut.",
-  "Delete": "Löschen"
+  "Delete": "Löschen",
+  "Add lyrics": "Liedtext hinzufügen"
 }

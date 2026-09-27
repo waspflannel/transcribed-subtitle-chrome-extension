@@ -19,7 +19,7 @@ beforeEach(() => {
   mocks.copy.mockResolvedValue(undefined);
   vi.stubGlobal('navigator', { clipboard: { writeText: mocks.copy } });
 });
-afterEach(() => { windows.forEach(dom => dom.window.close()); windows.length = 0; vi.unstubAllGlobals(); });
+afterEach(() => { windows.forEach(dom => dom.window.close()); windows.length = 0; vi.useRealTimers(); vi.unstubAllGlobals(); });
 async function flush() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 function open() {
   const dom = new JSDOM(markup);
@@ -47,7 +47,7 @@ it('saves, reopens, safely previews, copies exact text, and deletes only the cho
   first.title.value = 'Another song'; first.lyrics.value = 'Keep this'; await first.submit();
   const reopened = open(); await flush();
   expect(reopened.root.querySelectorAll('.known-lyrics-entry')).toHaveLength(2);
-  expect(reopened.root.querySelector('.known-lyrics-entry h3')!.textContent).toBe('<img src=x onerror=alert(1)>');
+  expect(reopened.root.querySelector('.known-lyrics-entry summary')!.textContent).toBe('<img src=x onerror=alert(1)>');
   expect(reopened.root.querySelector('.known-lyrics-entry img')).toBeNull();
   reopened.root.querySelector<HTMLButtonElement>('.known-lyrics-entry button')!.click(); await flush();
   expect(mocks.copy).toHaveBeenCalledWith('  First line\n第二行\n');
@@ -101,4 +101,44 @@ it('opens beside lyric correction only inside the completed transcript toolbar a
   toggle.click(); await flush();
   expect(toggle.getAttribute('aria-expanded')).toBe('true');
   expect(view.lyrics.value).toBe('Unfinished draft');
+});
+
+it('starts with compact entries and a collapsed form, then collapses the form after saving', async () => {
+  stored = { 'knownLyrics:one': { title: 'Song', lyrics: 'Words' } };
+  const view = open(); await flush();
+  const create = view.root.querySelector<HTMLDetailsElement>('[data-known-lyrics-create]')!;
+  const entry = view.root.querySelector<HTMLDetailsElement>('.known-lyrics-entry details')!;
+  expect(create.open).toBe(false);
+  expect(entry.open).toBe(false);
+  entry.querySelector('summary')!.click();
+  expect(entry.open).toBe(true);
+  create.querySelector('summary')!.click();
+  view.title.value = 'New song'; view.lyrics.value = 'New words';
+  await view.submit();
+  expect(create.open).toBe(false);
+  expect(view.root.activeElement).toBe(create.querySelector('summary'));
+  expect(view.root.querySelector<HTMLDetailsElement>('.known-lyrics-entry details')!.open).toBe(true);
+});
+
+it('expires copy notices, restarts their timer, and never lets an old timer clear a new error', async () => {
+  vi.useFakeTimers();
+  stored = { 'knownLyrics:one': { title: 'Song', lyrics: 'Words' } };
+  const view = open(); await flush();
+  const copy = view.root.querySelector<HTMLButtonElement>('.known-lyrics-entry button')!;
+  const status = view.root.querySelector('[data-known-lyrics-status]')!;
+  copy.click(); await flush();
+  expect(status.textContent).toBe('Lyrics copied.');
+  await vi.advanceTimersByTimeAsync(2000);
+  copy.click(); await flush();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(status.textContent).toBe('Lyrics copied.');
+  await vi.advanceTimersByTimeAsync(1500);
+  expect(status.textContent).toBe('');
+  expect(status.getAttribute('data-i18n')).toBe('');
+  copy.click(); await flush();
+  mocks.copy.mockRejectedValueOnce(new Error('Denied'));
+  copy.click(); await flush();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(status.textContent).toContain('copy it manually');
+  expect(view.root.querySelector<HTMLDetailsElement>('.known-lyrics-entry details')!.open).toBe(true);
 });

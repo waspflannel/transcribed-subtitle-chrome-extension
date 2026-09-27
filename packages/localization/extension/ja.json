@@ -482,5 +482,6 @@
     "Enter a title and lyrics (up to 25,000 characters).": "曲名と歌詞（25,000文字以内）を入力してください。",
     "Lyrics saved.": "歌詞を保存しました。",
     "Could not save lyrics. Your draft is still here. Try again.": "歌詞を保存できませんでした。下書きは残っています。もう一度お試しください。",
-    "Delete": "削除"
+    "Delete": "削除",
+    "Add lyrics": "歌詞を追加"
 }
