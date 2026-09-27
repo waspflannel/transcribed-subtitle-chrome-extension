@@ -107,8 +107,11 @@ export function bindKnownLyrics(root: Document): void {
     }
   });
 
-  // Focus also covers arrow-key navigation through the existing tab bar.
-  const tab = root.querySelector<HTMLButtonElement>('[data-tab="known-lyrics"]')!;
-  tab.addEventListener('click', () => void refresh());
-  tab.addEventListener('focus', () => void refresh());
+  const toggle = root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!;
+  const panel = root.querySelector<HTMLElement>('#panel-known-lyrics')!;
+  toggle.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute('aria-expanded', String(!panel.hidden));
+    if (!panel.hidden) void refresh();
+  });
 }

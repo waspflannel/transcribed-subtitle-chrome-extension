@@ -27,10 +27,11 @@ function open() {
   const root = dom.window.document;
   setupTabs([...root.querySelectorAll<HTMLButtonElement>('[data-tab]')], [...root.querySelectorAll<HTMLElement>('[data-panel]')]);
   bindKnownLyrics(root);
+  root.querySelector<HTMLElement>('[data-watch-ready]')!.hidden = false;
   const form = root.querySelector<HTMLFormElement>('[data-known-lyrics-form]')!;
   const title = form.elements.namedItem('title') as HTMLInputElement;
   const lyrics = form.elements.namedItem('lyrics') as HTMLTextAreaElement;
-  root.querySelector<HTMLButtonElement>('[data-tab="known-lyrics"]')!.click();
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!.click();
   return { root, title, lyrics, submit: async () => {
     form.dispatchEvent(new dom.window.Event('submit', { cancelable: true })); await flush();
   } };
@@ -75,7 +76,8 @@ it('keeps saved lyrics on copy/delete failures and allows retry after load failu
   mocks.get.mockRejectedValueOnce(new Error('Unavailable'));
   const view = open(); await flush();
   expect(view.root.querySelector('[data-known-lyrics-status]')!.textContent).toContain('Could not load');
-  view.root.querySelector<HTMLButtonElement>('[data-tab="known-lyrics"]')!.click(); await flush();
+  view.root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!.click();
+  view.root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!.click(); await flush();
   mocks.copy.mockRejectedValueOnce(new Error('Denied'));
   view.root.querySelector<HTMLButtonElement>('.known-lyrics-entry button')!.click(); await flush();
   expect(view.root.querySelector('[data-known-lyrics-status]')!.textContent).toContain('copy it manually');
@@ -83,4 +85,20 @@ it('keeps saved lyrics on copy/delete failures and allows retry after load failu
   view.root.querySelector<HTMLButtonElement>('.known-lyrics-entry button:last-child')!.click(); await flush();
   expect(view.root.querySelectorAll('.known-lyrics-entry')).toHaveLength(1);
   expect(Object.keys(stored)).toHaveLength(1);
+});
+
+it('opens beside lyric correction only inside the completed transcript toolbar and closes without losing drafts', async () => {
+  const view = open(); await flush();
+  expect([...view.root.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(['Watch', 'Study', 'History', 'Account']);
+  const toggle = view.root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!;
+  expect(toggle.previousElementSibling?.getAttribute('data-action')).toBe('toggle-lyrics-edit');
+  expect(toggle.closest('.ready-toolbar')?.closest('[data-watch-ready]')).not.toBeNull();
+  expect(view.root.querySelector('#panel-known-lyrics')!.closest('.ready-toolbar')).not.toBeNull();
+  view.lyrics.value = 'Unfinished draft';
+  toggle.click();
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  expect(view.root.querySelector<HTMLElement>('#panel-known-lyrics')!.hidden).toBe(true);
+  toggle.click(); await flush();
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  expect(view.lyrics.value).toBe('Unfinished draft');
 });
