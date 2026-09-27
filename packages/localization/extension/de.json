@@ -468,5 +468,19 @@
   "{duration} elapsed": "{duration} vergangen",
   "{duration} until failure": "{duration} bis zum Fehler",
   "{duration} total": "{duration} insgesamt",
-  "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto wählt anhand des Transkripts Transcriber oder Transcriber Spark aus."
+  "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto wählt anhand des Transkripts Transcriber oder Transcriber Spark aus.",
+  "Known Lyrics": "Bekannte Liedtexte",
+  "Song title": "Songtitel",
+  "Save lyrics": "Liedtext speichern",
+  "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "Speichere Liedtexte in diesem Browser. Kopiere sie bei Bedarf in die Liedtextkorrektur.",
+  "Lyrics copied.": "Liedtext kopiert.",
+  "Lyrics deleted.": "Liedtext gelöscht.",
+  "Could not copy lyrics. Select the text and copy it manually.": "Liedtext konnte nicht kopiert werden. Markiere den Text und kopiere ihn manuell.",
+  "Could not delete lyrics. Try again.": "Liedtext konnte nicht gelöscht werden. Versuche es erneut.",
+  "No saved lyrics yet.": "Noch keine gespeicherten Liedtexte.",
+  "Could not load lyrics. Reopen Known Lyrics to retry.": "Liedtexte konnten nicht geladen werden. Öffne Bekannte Liedtexte erneut.",
+  "Enter a title and lyrics (up to 25,000 characters).": "Gib einen Titel und Liedtext ein (bis zu 25.000 Zeichen).",
+  "Lyrics saved.": "Liedtext gespeichert.",
+  "Could not save lyrics. Your draft is still here. Try again.": "Liedtext konnte nicht gespeichert werden. Dein Entwurf bleibt erhalten. Versuche es erneut.",
+  "Delete": "Löschen"
 }

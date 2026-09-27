@@ -468,5 +468,19 @@
     "{duration} elapsed": "{duration} transcorrido",
     "{duration} until failure": "{duration} até a falha",
     "{duration} total": "{duration} no total",
-    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto escolhe Transcriber ou Transcriber Spark com base na transcrição."
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto escolhe Transcriber ou Transcriber Spark com base na transcrição.",
+    "Known Lyrics": "Letras conhecidas",
+    "Song title": "Título da música",
+    "Save lyrics": "Salvar letra",
+    "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "Salve letras neste navegador. Copie para Correção de letras quando precisar.",
+    "Lyrics copied.": "Letra copiada.",
+    "Lyrics deleted.": "Letra excluída.",
+    "Could not copy lyrics. Select the text and copy it manually.": "Não foi possível copiar a letra. Selecione o texto e copie manualmente.",
+    "Could not delete lyrics. Try again.": "Não foi possível excluir a letra. Tente novamente.",
+    "No saved lyrics yet.": "Nenhuma letra salva ainda.",
+    "Could not load lyrics. Reopen Known Lyrics to retry.": "Não foi possível carregar as letras. Reabra Letras conhecidas para tentar novamente.",
+    "Enter a title and lyrics (up to 25,000 characters).": "Insira um título e a letra (até 25.000 caracteres).",
+    "Lyrics saved.": "Letra salva.",
+    "Could not save lyrics. Your draft is still here. Try again.": "Não foi possível salvar a letra. Seu rascunho continua aqui. Tente novamente.",
+    "Delete": "Excluir"
 }

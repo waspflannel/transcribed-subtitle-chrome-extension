@@ -151,6 +151,16 @@ a {
   border-right: 0;
 }
 
+.known-lyrics-entry h3 { overflow-wrap: anywhere; }
+.known-lyrics-entry pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow-y: auto;
+  font: inherit;
+  user-select: text;
+}
+
 .tab:hover {
   background: rgba(245, 243, 234, 0.04);
   color: var(--text);

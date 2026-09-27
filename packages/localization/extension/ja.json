@@ -468,5 +468,19 @@
     "{duration} elapsed": "{duration}経過",
     "{duration} until failure": "失敗まで{duration}",
     "{duration} total": "合計{duration}",
-    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自動モードでは、文字起こしの内容に応じてTranscriberまたはTranscriber Sparkを選択します。"
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自動モードでは、文字起こしの内容に応じてTranscriberまたはTranscriber Sparkを選択します。",
+    "Known Lyrics": "既知の歌詞",
+    "Song title": "曲名",
+    "Save lyrics": "歌詞を保存",
+    "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "歌詞をこのブラウザーに保存します。必要なときに歌詞修正にコピーできます。",
+    "Lyrics copied.": "歌詞をコピーしました。",
+    "Lyrics deleted.": "歌詞を削除しました。",
+    "Could not copy lyrics. Select the text and copy it manually.": "歌詞をコピーできませんでした。テキストを選択して手動でコピーしてください。",
+    "Could not delete lyrics. Try again.": "歌詞を削除できませんでした。もう一度お試しください。",
+    "No saved lyrics yet.": "保存された歌詞はまだありません。",
+    "Could not load lyrics. Reopen Known Lyrics to retry.": "歌詞を読み込めませんでした。「既知の歌詞」を開き直してください。",
+    "Enter a title and lyrics (up to 25,000 characters).": "曲名と歌詞（25,000文字以内）を入力してください。",
+    "Lyrics saved.": "歌詞を保存しました。",
+    "Could not save lyrics. Your draft is still here. Try again.": "歌詞を保存できませんでした。下書きは残っています。もう一度お試しください。",
+    "Delete": "削除"
 }

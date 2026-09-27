@@ -468,5 +468,19 @@
     "{duration} elapsed": "已用时 {duration}",
     "{duration} until failure": "距离失败还有 {duration}",
     "{duration} total": "总计 {duration}",
-    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自动模式根据转录内容选择 Transcriber 或 Transcriber Spark。"
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "自动模式根据转录内容选择 Transcriber 或 Transcriber Spark。",
+    "Known Lyrics": "已知歌词",
+    "Song title": "歌曲名称",
+    "Save lyrics": "保存歌词",
+    "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "将歌词保存在此浏览器中。需要时可复制到歌词修正中。",
+    "Lyrics copied.": "歌词已复制。",
+    "Lyrics deleted.": "歌词已删除。",
+    "Could not copy lyrics. Select the text and copy it manually.": "无法复制歌词。请选择文本并手动复制。",
+    "Could not delete lyrics. Try again.": "无法删除歌词。请重试。",
+    "No saved lyrics yet.": "尚无已保存的歌词。",
+    "Could not load lyrics. Reopen Known Lyrics to retry.": "无法加载歌词。请重新打开已知歌词以重试。",
+    "Enter a title and lyrics (up to 25,000 characters).": "请输入歌曲名称和歌词（最多25,000个字符）。",
+    "Lyrics saved.": "歌词已保存。",
+    "Could not save lyrics. Your draft is still here. Try again.": "无法保存歌词。草稿仍然保留。请重试。",
+    "Delete": "删除"
 }

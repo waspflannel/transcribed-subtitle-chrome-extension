@@ -468,5 +468,19 @@
     "{duration} elapsed": "{duration} telah berlalu",
     "{duration} until failure": "{duration} hingga gagal",
     "{duration} total": "total {duration}",
-    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto memilih Transcriber atau Transcriber Spark berdasarkan transkrip."
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto memilih Transcriber atau Transcriber Spark berdasarkan transkrip.",
+    "Known Lyrics": "Lirik yang dikenal",
+    "Song title": "Judul lagu",
+    "Save lyrics": "Simpan lirik",
+    "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "Simpan lirik di browser ini. Salin ke Koreksi lirik saat diperlukan.",
+    "Lyrics copied.": "Lirik disalin.",
+    "Lyrics deleted.": "Lirik dihapus.",
+    "Could not copy lyrics. Select the text and copy it manually.": "Tidak dapat menyalin lirik. Pilih teks dan salin secara manual.",
+    "Could not delete lyrics. Try again.": "Tidak dapat menghapus lirik. Coba lagi.",
+    "No saved lyrics yet.": "Belum ada lirik tersimpan.",
+    "Could not load lyrics. Reopen Known Lyrics to retry.": "Tidak dapat memuat lirik. Buka kembali Lirik yang dikenal untuk mencoba lagi.",
+    "Enter a title and lyrics (up to 25,000 characters).": "Masukkan judul dan lirik (maksimal 25.000 karakter).",
+    "Lyrics saved.": "Lirik disimpan.",
+    "Could not save lyrics. Your draft is still here. Try again.": "Tidak dapat menyimpan lirik. Draf Anda masih ada. Coba lagi.",
+    "Delete": "Hapus"
 }

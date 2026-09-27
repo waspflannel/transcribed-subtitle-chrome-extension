@@ -468,5 +468,19 @@
     "{duration} elapsed": "{duration} écoulé",
     "{duration} until failure": "{duration} avant l’échec",
     "{duration} total": "{duration} au total",
-    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto choisit Transcriber ou Transcriber Spark à partir de la transcription."
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto choisit Transcriber ou Transcriber Spark à partir de la transcription.",
+    "Known Lyrics": "Paroles connues",
+    "Song title": "Titre de la chanson",
+    "Save lyrics": "Enregistrer les paroles",
+    "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "Enregistrez les paroles dans ce navigateur. Copiez-les dans Correction des paroles au besoin.",
+    "Lyrics copied.": "Paroles copiées.",
+    "Lyrics deleted.": "Paroles supprimées.",
+    "Could not copy lyrics. Select the text and copy it manually.": "Impossible de copier les paroles. Sélectionnez le texte et copiez-le manuellement.",
+    "Could not delete lyrics. Try again.": "Impossible de supprimer les paroles. Réessayez.",
+    "No saved lyrics yet.": "Aucune parole enregistrée.",
+    "Could not load lyrics. Reopen Known Lyrics to retry.": "Impossible de charger les paroles. Rouvrez Paroles connues pour réessayer.",
+    "Enter a title and lyrics (up to 25,000 characters).": "Saisissez un titre et des paroles (25 000 caractères maximum).",
+    "Lyrics saved.": "Paroles enregistrées.",
+    "Could not save lyrics. Your draft is still here. Try again.": "Impossible d’enregistrer les paroles. Votre brouillon est conservé. Réessayez.",
+    "Delete": "Supprimer"
 }

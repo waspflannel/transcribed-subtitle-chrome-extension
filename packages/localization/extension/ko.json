@@ -468,5 +468,19 @@
     "{duration} elapsed": "{duration} 경과",
     "{duration} until failure": "실패까지 {duration}",
     "{duration} total": "총 {duration}",
-    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "자동 모드는 전사 내용을 바탕으로 Transcriber 또는 Transcriber Spark를 선택합니다."
+    "Auto chooses Transcriber or Transcriber Spark from the transcript.": "자동 모드는 전사 내용을 바탕으로 Transcriber 또는 Transcriber Spark를 선택합니다.",
+    "Known Lyrics": "알고 있는 가사",
+    "Song title": "노래 제목",
+    "Save lyrics": "가사 저장",
+    "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "이 브라우저에 가사를 저장하세요. 필요할 때 가사 수정에 복사할 수 있습니다.",
+    "Lyrics copied.": "가사를 복사했습니다.",
+    "Lyrics deleted.": "가사를 삭제했습니다.",
+    "Could not copy lyrics. Select the text and copy it manually.": "가사를 복사하지 못했습니다. 텍스트를 선택하여 직접 복사하세요.",
+    "Could not delete lyrics. Try again.": "가사를 삭제하지 못했습니다. 다시 시도하세요.",
+    "No saved lyrics yet.": "아직 저장된 가사가 없습니다.",
+    "Could not load lyrics. Reopen Known Lyrics to retry.": "가사를 불러오지 못했습니다. 알고 있는 가사를 다시 열어 주세요.",
+    "Enter a title and lyrics (up to 25,000 characters).": "제목과 가사(최대 25,000자)를 입력하세요.",
+    "Lyrics saved.": "가사를 저장했습니다.",
+    "Could not save lyrics. Your draft is still here. Try again.": "가사를 저장하지 못했습니다. 초안은 그대로 있습니다. 다시 시도하세요.",
+    "Delete": "삭제"
 }

@@ -1,6 +1,7 @@
 import { t, INTERFACE_LOCALES, isInterfaceLocale, setInterfaceLocale, localizeDocument, interfaceLocale } from '../../utils/i18n';
 import './style.css';
 import { bindSavedGenerations } from './saved-generations';
+import { bindKnownLyrics } from './known-lyrics';
 
 import { browser } from 'wxt/browser';
 
@@ -323,6 +324,7 @@ let lastFullBackendRefresh = 0;
 const IDLE_POLL_INTERVAL_MS = 30_000;
 
 setupTabs(tabButtons, panels);
+bindKnownLyrics(document);
 accountBillingLink.innerHTML = accountBillingLinkHtml();
 let cueSnapshotRequest = 0;
 const transcriptView = bindTranscriptView({

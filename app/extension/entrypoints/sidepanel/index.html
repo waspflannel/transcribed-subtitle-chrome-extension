@@ -8,6 +8,7 @@
     <div id="app" class="panel">
       <nav class="tab-bar" aria-label="Sections" role="tablist" data-i18n-aria-label="Sections">
         <button class="tab" type="button" data-tab="watch" id="tab-watch" role="tab" aria-selected="true" aria-controls="panel-watch" data-i18n="Watch">Watch</button>
+        <button class="tab" type="button" data-tab="known-lyrics" id="tab-known-lyrics" role="tab" aria-selected="false" aria-controls="panel-known-lyrics" data-i18n="Known Lyrics">Known Lyrics</button>
         <button class="tab" type="button" data-tab="study" id="tab-study" role="tab" aria-selected="false" aria-controls="panel-study" data-i18n="Study">Study</button>
         <button class="tab" type="button" data-tab="history" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history" data-i18n="History">History</button>
         <button class="tab" type="button" data-tab="account" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" data-i18n="Account">Account</button>
@@ -25,6 +26,17 @@
       </header>
 
       <main class="scroll">
+        <section class="view" data-panel="known-lyrics" id="panel-known-lyrics" role="tabpanel" aria-labelledby="tab-known-lyrics" tabindex="0" hidden>
+          <h2 data-i18n="Known Lyrics">Known Lyrics</h2>
+          <p class="card-copy" data-i18n="Save lyrics in this browser. Copy them into Lyric correction whenever you need them.">Save lyrics in this browser. Copy them into Lyric correction whenever you need them.</p>
+          <form class="card lyrics-correction-form" data-known-lyrics-form>
+            <label class="field"><span data-i18n="Song title">Song title</span><input type="text" name="title" maxlength="200" required></label>
+            <label class="field"><span data-i18n="Lyrics">Lyrics</span><textarea name="lyrics" rows="8" maxlength="25000" required></textarea></label>
+            <button class="btn-primary" type="submit" data-i18n="Save lyrics">Save lyrics</button>
+          </form>
+          <p data-known-lyrics-status role="status" aria-live="polite"></p>
+          <div data-known-lyrics-list></div>
+        </section>
         <!-- ============================= WATCH ============================= -->
         <section class="view" data-panel="watch" id="panel-watch" role="tabpanel" aria-labelledby="tab-watch" tabindex="0">
           <p class="status-banner" data-status="" role="status" aria-live="polite" hidden="" data-i18n="Loading">Loading</p>

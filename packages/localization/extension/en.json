@@ -468,5 +468,19 @@
   "{duration} elapsed": "{duration} elapsed",
   "{duration} until failure": "{duration} until failure",
   "{duration} total": "{duration} total",
-  "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto chooses Transcriber or Transcriber Spark from the transcript."
+  "Auto chooses Transcriber or Transcriber Spark from the transcript.": "Auto chooses Transcriber or Transcriber Spark from the transcript.",
+  "Known Lyrics": "Known Lyrics",
+  "Song title": "Song title",
+  "Save lyrics": "Save lyrics",
+  "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.": "Save lyrics in this browser. Copy them into Lyric correction whenever you need them.",
+  "Lyrics copied.": "Lyrics copied.",
+  "Lyrics deleted.": "Lyrics deleted.",
+  "Could not copy lyrics. Select the text and copy it manually.": "Could not copy lyrics. Select the text and copy it manually.",
+  "Could not delete lyrics. Try again.": "Could not delete lyrics. Try again.",
+  "No saved lyrics yet.": "No saved lyrics yet.",
+  "Could not load lyrics. Reopen Known Lyrics to retry.": "Could not load lyrics. Reopen Known Lyrics to retry.",
+  "Enter a title and lyrics (up to 25,000 characters).": "Enter a title and lyrics (up to 25,000 characters).",
+  "Lyrics saved.": "Lyrics saved.",
+  "Could not save lyrics. Your draft is still here. Try again.": "Could not save lyrics. Your draft is still here. Try again.",
+  "Delete": "Delete"
 }
