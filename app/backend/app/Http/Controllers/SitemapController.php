@@ -10,20 +10,9 @@ class SitemapController extends Controller
 {
     public function __invoke(Request $request): Response
     {
-        $routes = [
-            'marketing.home',
-            'marketing.pricing',
-            'marketing.how-to-use',
-            'marketing.support',
-            'marketing.privacy',
-            'marketing.terms',
-        ];
-
         $variants = [];
-        foreach ($routes as $route) {
-            foreach (array_keys(config('localization.locales')) as $locale) {
-                $variants[] = WebsiteLocale::route($route, locale: $locale);
-            }
+        foreach (array_keys(config('localization.locales')) as $locale) {
+            $variants[] = WebsiteLocale::route('marketing.home', locale: $locale);
         }
 
         $urls = array_map(

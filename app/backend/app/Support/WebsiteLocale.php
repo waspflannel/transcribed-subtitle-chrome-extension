@@ -5,11 +5,10 @@ namespace App\Support;
 final class WebsiteLocale
 {
     public const REDIRECTS = [
-        'desktop' => '/how-to-use#how-to-install',
-        'extension' => '/how-to-use#how-to-install',
-        'languages' => '/#languages',
-        'how-it-works' => '/how-to-use',
-        'faq' => '/#faq',
+        'how-to-use' => '/',
+        'desktop' => '/#how-to-install',
+        'extension' => '/#how-to-install',
+        'how-it-works' => '/',
     ];
 
     public static function route(string $name, array $parameters = [], ?string $locale = null): string
@@ -25,7 +24,7 @@ final class WebsiteLocale
                 ? route(($locale === 'en' ? '' : $locale.'.').$name, $parameters, false)
                 : ($prefix === '' ? '' : '/'.$prefix).$alias;
             if ($alias !== null && $prefix !== '') {
-                $path = str_replace('/#', '#', $path);
+                $path = rtrim(str_replace('/#', '#', $path), '/');
             }
 
             return rtrim(config('app.url'), '/').$path;

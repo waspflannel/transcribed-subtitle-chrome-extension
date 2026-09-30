@@ -1,10 +1,6 @@
 .site-header,
-.site-footer,
 .section,
-.page-hero,
-.workspace,
-.auth-header,
-.auth-shell {
+.page-hero {
     padding-left: max(22px, calc((100vw - var(--content)) / 2));
     padding-right: max(22px, calc((100vw - var(--content)) / 2));
 }
@@ -22,7 +18,6 @@
     white-space: nowrap;
 }
 
-.on-night .locale-switcher { color: var(--night-text); }
 .locale-switcher nav {
     position: absolute;
     top: calc(100% + 8px);
@@ -48,8 +43,6 @@
 }
 .locale-switcher a:hover,
 .locale-switcher a[aria-current] { background: var(--ink); color: var(--paper); }
-.auth-header { display: flex; align-items: center; gap: 20px; }
-.auth-header .locale-switcher { order: 1; margin-left: auto; }
 
 
 
@@ -76,7 +69,7 @@
     border-bottom: 2px solid transparent;
     display: grid;
     gap: 18px;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     left: 0;
     min-height: 68px;
     position: fixed;
@@ -91,27 +84,6 @@
     box-shadow: 0 4px 0 rgba(20, 20, 20, 0.08);
 }
 
-/* Dark header variant used above the night hero */
-.site-header.on-night {
-    background: var(--night);
-}
-
-.site-header.on-night.scrolled {
-    border-bottom-color: var(--accent);
-    box-shadow: none;
-}
-
-.site-header.on-night .brand,
-.site-header.on-night .site-nav a,
-.site-header.on-night .text-link {
-    color: var(--night-text);
-}
-
-.site-header.on-night .site-nav a:hover,
-.site-header.on-night .text-link:hover {
-    color: var(--accent);
-}
-
 .site-header > *,
 .brand > span,
 .site-actions {
@@ -119,10 +91,7 @@
 }
 
 .brand,
-.site-nav,
-.site-actions,
-.action-stack,
-.horizontal-actions {
+.site-actions {
     align-items: center;
     display: flex;
 }
@@ -156,43 +125,14 @@
     width: 34px;
 }
 
-.site-nav {
-    gap: 26px;
-    justify-content: center;
-}
-
-.site-nav a,
-.site-footer a,
-.text-link,
-.button-link {
+.text-link {
     color: var(--ink-soft);
     font-weight: 550;
     text-decoration: none;
-    transition: color 140ms ease;
 }
 
-.site-nav a:hover,
-.site-footer a:hover,
-.text-link:hover,
-.button-link:hover {
+.text-link:hover {
     color: var(--accent);
-}
-
-/* Text-styled form buttons (e.g. the header logout) must shed the solid button chrome. */
-button.text-link {
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-    font-size: inherit;
-    min-height: auto;
-    padding: 0;
-}
-
-button.text-link:hover,
-button.text-link:active {
-    background: transparent;
-    box-shadow: none;
-    transform: none;
 }
 
 .strong-link {
@@ -204,34 +144,5 @@ button.text-link:active {
 
 .site-actions {
     gap: 16px;
-    justify-content: end;
-}
-
-.site-footer {
-    align-items: center;
-    background: var(--paper);
-    border-top: 2px solid var(--ink);
-    display: grid;
-    gap: 20px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    padding-bottom: 44px;
-    padding-top: 44px;
-}
-
-.site-footer strong {
-    font-family: var(--font-display);
-}
-
-.site-footer p {
-    color: var(--ink-faint);
-    font-size: 0.94rem;
-    margin-top: 6px;
-    max-width: 46ch;
-}
-
-.site-footer nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 18px;
     justify-content: end;
 }

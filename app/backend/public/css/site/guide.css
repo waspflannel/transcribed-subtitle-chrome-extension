@@ -55,12 +55,6 @@
     color: var(--ink);
 }
 
-.guide-support {
-    display: inline-block;
-    font-size: 0.88rem;
-    margin-top: 24px;
-}
-
 .guide-copy {
     line-height: 1.75;
     max-width: 74ch;

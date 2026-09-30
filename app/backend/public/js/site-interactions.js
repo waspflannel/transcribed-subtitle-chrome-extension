@@ -1,8 +1,4 @@
 (() => {
-    document.documentElement.classList.add('has-js');
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
     const navbar = document.getElementById('navbar');
 
     if (navbar) {
@@ -12,32 +8,6 @@
 
         updateNavbar();
         window.addEventListener('scroll', updateNavbar, { passive: true });
-    }
-
-    const revealables = document.querySelectorAll('[data-reveal]');
-
-    if (reduceMotion || !('IntersectionObserver' in window)) {
-        revealables.forEach((el) => el.classList.add('is-visible'));
-    } else {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                if (!entry.isIntersecting) {
-                    return;
-                }
-
-                const el = entry.target;
-                const delay = el.getAttribute('data-reveal-delay');
-
-                if (delay) {
-                    el.style.setProperty('--reveal-delay', `${delay}ms`);
-                }
-
-                el.classList.add('is-visible');
-                observer.unobserve(el);
-            });
-        }, { threshold: 0, rootMargin: '0px 0px -24px 0px' });
-
-        revealables.forEach((el) => observer.observe(el));
     }
 
     const guideLinks = [...document.querySelectorAll('.guide-contents a[href^="#"]')];
@@ -58,15 +28,4 @@
         updateGuideLocation();
         window.addEventListener('scroll', updateGuideLocation, { passive: true });
     }
-
-    document.querySelectorAll('form[data-confirm]').forEach((form) => {
-        form.addEventListener('submit', (event) => {
-            const message = form.getAttribute('data-confirm') || 'Are you sure?';
-
-            if (!window.confirm(message)) {
-                event.preventDefault();
-            }
-        });
-    });
-
 })();

@@ -11,11 +11,7 @@ class RobotsController extends Controller
     {
         $body = implode("\n", [
             'User-agent: *',
-            'Allow: /',
-            'Disallow: /dashboard',
-            'Disallow: /billing',
-            'Disallow: /stripe',
-            'Sitemap: '.rtrim(config('app.url'), '/').route('sitemap', absolute: false),
+            'Disallow: /',
             '',
         ]);
 
