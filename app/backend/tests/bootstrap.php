@@ -38,8 +38,6 @@ foreach ([
     'OPENAI_API_KEY' => 'test-openai-key',
     'CEREBRAS_API_KEY' => 'test-cerebras-key',
     'ELEVENLABS_API_KEY' => 'test-elevenlabs-key',
-    'STRIPE_SECRET' => 'sk_test_isolated',
-    'STRIPE_WEBHOOK_SECRET' => 'whsec_isolated',
 ] as $name => $value) {
     putenv($name.'='.$value);
     $_ENV[$name] = $_SERVER[$name] = $value;

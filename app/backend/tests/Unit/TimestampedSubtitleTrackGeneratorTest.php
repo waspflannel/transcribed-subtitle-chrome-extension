@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Services\InstanceSettings;
 use App\Services\Subtitles\TimestampedSubtitleTrackGenerator;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
@@ -52,7 +53,15 @@ class TimestampedSubtitleTrackGeneratorTest extends TestCase
         $this->assertSame('cue-0002', $track->cues[1]['cueId']);
         $this->assertSame('second segment', $track->cues[1]['sourceText']);
         $this->assertSame('third segment', $track->cues[2]['sourceText']);
-        $this->assertTrue($track->expires_at->isSameSecond(Carbon::parse('2026-06-01 12:00:00')));
+        $this->assertNull($track->expires_at);
+        $this->assertFalse($track->isExpired());
+    }
+
+    public function test_retention_is_optional_and_uses_the_instance_setting(): void
+    {
+        app(InstanceSettings::class)->update(['retentionDays' => 7]);
+        $track = $this->generateTrack([new TimestampedTranscriptSegment(0, 2, 'Hello world')]);
+        $this->assertTrue($track->expires_at->isSameSecond($track->generated_at->addDays(7)));
     }
 
     public function test_webvtt_is_built_from_analyzed_cues_without_requiring_transcript_webvtt(): void

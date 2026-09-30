@@ -5,6 +5,7 @@ namespace App\Services\Subtitles;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Services\InstanceSettings;
 use App\Services\Text\SubtitleText;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
@@ -26,7 +27,7 @@ class TimestampedSubtitleTrackGenerator
             'target_language' => $job->target_language,
             'processing_version' => $job->processing_version,
             'generated_at' => $generatedAt,
-            'expires_at' => $generatedAt->copy()->addDays(30),
+            'expires_at' => ($days = app(InstanceSettings::class)->retentionDays()) === null ? null : $generatedAt->copy()->addDays($days),
             'web_vtt' => SubtitleWebVttFormatter::fromCues($cues),
             'cues' => $cues,
         ]);

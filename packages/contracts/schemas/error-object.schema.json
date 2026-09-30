@@ -13,18 +13,9 @@
       "type": "string",
       "enum": [
         "validation_failed",
-        "invalid_credentials",
-        "unauthenticated",
         "unauthorized",
-        "email_not_verified",
-        "insecure_transport",
-        "payment_required",
-        "usage_exhausted",
-        "feature_unavailable",
-        "queue_full",
         "unsupported_video",
         "audio_unavailable",
-        "video_too_long",
         "audio_acquisition_failed",
         "queue_publication_failed",
         "generation_cancelled",
@@ -38,7 +29,8 @@
         "lyrics_incomplete",
         "lyrics_do_not_match",
         "lyrics_correction_failed",
-        "internal_error"
+        "internal_error",
+        "provider_not_configured"
       ]
     },
     "message": {
@@ -51,7 +43,9 @@
       "properties": {
         "reason": {
           "type": "string",
-          "enum": ["stale_track"]
+          "enum": [
+            "stale_track"
+          ]
         }
       }
     }

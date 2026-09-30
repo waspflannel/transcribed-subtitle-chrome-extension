@@ -4,14 +4,11 @@ namespace App\Services\Subtitles;
 
 use App\Ai\Agents\LyricsAlignmentAgent;
 use App\Ai\SubtitleModel;
-use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
-use App\Models\User;
-use App\Services\Billing\BillingEntitlementService;
 use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -29,7 +26,6 @@ final class LyricsCorrectionService
     private const STAGES = ['aligning', 'analyzing', 'finalizing'];
 
     public function __construct(
-        private readonly BillingEntitlementService $billing,
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
         private readonly SubtitleProviderCostRecorder $costs,
@@ -58,37 +54,31 @@ final class LyricsCorrectionService
         return $normalizedLyrics;
     }
 
-    public function submit(SubtitleJob $job, User $user, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
+    public function submit(SubtitleJob $job, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
     {
-        $lock = Cache::store(SubtitleTier::concurrencyCacheStore())->lock('subtitle-track-edit:'.$job->id, 30);
+        $lock = Cache::store(SubtitleQueue::concurrencyCacheStore())->lock('subtitle-track-edit:'.$job->id, 30);
         if (! $lock->get()) {
             throw SubtitleProcessingException::lyricsCorrectionInProgress(['reason' => 'track_edit_in_progress']);
         }
         try {
-            return $this->submitLocked($job, $user, $lyrics, $expectedTrackId);
+            return $this->submitLocked($job, $lyrics, $expectedTrackId);
         } finally {
             $lock->release();
         }
     }
 
-    private function submitLocked(SubtitleJob $job, User $user, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
+    private function submitLocked(SubtitleJob $job, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
     {
         $trackId = $job->track?->getKey();
         $attemptId = (string) Str::uuid();
 
-        $correction = DB::transaction(function () use ($job, $user, $lyrics, $trackId, $attemptId, $expectedTrackId): SubtitleTrackLyricsCorrection {
-            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
-
-            $job = SubtitleJob::query()->whereKey($job->id)->whereBelongsTo($lockedUser)->lockForUpdate()->firstOrFail();
-
-            if ($this->billing->activePlan($lockedUser) === null) {
-                throw BillingEntitlementException::paymentRequired();
-            }
+        $correction = DB::transaction(function () use ($job, $lyrics, $trackId, $attemptId, $expectedTrackId): SubtitleTrackLyricsCorrection {
+            $job = SubtitleJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
 
             $track = SubtitleTrack::query()
                 ->whereKey($trackId)
                 ->whereBelongsTo($job, 'job')
-                ->where('expires_at', '>', now())
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->lockForUpdate()
                 ->first();
 
@@ -100,12 +90,7 @@ final class LyricsCorrectionService
                 throw SubtitleProcessingException::lyricsTrackChanged();
             }
 
-            $inProgress = SubtitleTrackLyricsCorrection::query()
-                ->whereIn('status', ['queued', 'running'])
-                ->whereHas('track.job', fn ($query) => $query->whereBelongsTo($lockedUser))
-                ->exists();
-
-            if ($inProgress) {
+            if ($track->lyricsCorrection()->whereIn('status', ['queued', 'running'])->exists()) {
                 throw SubtitleProcessingException::lyricsCorrectionInProgress();
             }
 
@@ -160,16 +145,12 @@ final class LyricsCorrectionService
         return $correction->fresh(['track.job']);
     }
 
-    public function cancel(SubtitleJob $job, User $user, string $attemptId): SubtitleTrackLyricsCorrection
+    public function cancel(SubtitleJob $job, string $attemptId): SubtitleTrackLyricsCorrection
     {
-        if ((int) $job->user_id !== (int) $user->id) {
-            abort(404);
-        }
-
         return DB::transaction(function () use ($job, $attemptId): SubtitleTrackLyricsCorrection {
             $track = SubtitleTrack::query()
                 ->where('subtitle_job_id', $job->getKey())
-                ->where('expires_at', '>', now())
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->whereHas('job', fn ($query) => $query->where('status', 'completed'))
                 ->lockForUpdate()
                 ->firstOrFail();
@@ -202,16 +183,11 @@ final class LyricsCorrectionService
      */
     public function quickFix(
         SubtitleJob $job,
-        User $user,
         string $cueId,
         int $tokenIndex,
         array $payload,
     ): SubtitleTrack {
-        if ((int) $job->user_id !== (int) $user->id) {
-            abort(404);
-        }
-
-        $lock = Cache::store(SubtitleTier::concurrencyCacheStore())->lock(
+        $lock = Cache::store(SubtitleQueue::concurrencyCacheStore())->lock(
             'subtitle-track-edit:'.$job->id,
             max(60, (int) config('subtitles.enrichment.timeout_seconds', 120) + 60),
         );
@@ -331,14 +307,11 @@ final class LyricsCorrectionService
 
     private function lockQuickFixTrack(SubtitleJob $job, string $expectedTrackId): SubtitleTrack
     {
-        $user = User::query()->whereKey($job->user_id)->lockForUpdate()->firstOrFail();
-        if ($this->billing->activePlan($user) === null) {
-            throw BillingEntitlementException::paymentRequired();
-        }
-
+        // Cost recording and retention updates also acquire the job before its track.
+        SubtitleJobLock::current($job->id, $job->run_id);
         $track = SubtitleTrack::query()
             ->where('subtitle_job_id', $job->getKey())
-            ->where('expires_at', '>', now())
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->whereHas('job', fn ($query) => $query->where('status', 'completed')->where('run_id', $job->run_id))
             ->lockForUpdate()
             ->firstOrFail();
@@ -403,10 +376,7 @@ final class LyricsCorrectionService
             $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', $message, expectedRevision: $expectedRevision, batchIndex: $batchIndex);
 
             return;
-        } catch (BillingEntitlementException $exception) {
-            $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'Pasted lyrics could not be applied. Your current subtitles are unchanged. Try again.', expectedRevision: $expectedRevision, batchIndex: $batchIndex);
 
-            return;
         } catch (Throwable $exception) {
             Log::error('backend.lyrics_correction_failed', [
                 'track_id' => $trackId,
@@ -422,7 +392,7 @@ final class LyricsCorrectionService
 
         $this->commitProgress($trackId, $attemptId, $expectedRevision, $job, $processedStage, $nextState);
         $selection = match ($processedStage) {
-            'aligning', 'analyzing' => SubtitleModel::configured('openai'),
+            'aligning', 'analyzing' => SubtitleModel::forJob($job),
             default => null,
         };
         Log::info('backend.lyrics_correction_unit_finished', [
@@ -647,14 +617,12 @@ final class LyricsCorrectionService
             throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'empty_batch']);
         }
 
-        $this->requireActivePlan($job);
-
         $this->ensureCorrectionCurrent($correction);
         $result = $this->translationAnalysis->analyzeCueBatch(
             $batch, $cues, $job->source_language, $job->target_language,
             includeTranslation: $this->translationRequested($job),
             includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
-            selection: SubtitleModel::configured('openai'),
+            selection: SubtitleModel::forJob($job),
             validateOutput: false,
             job: $job,
         );
@@ -703,7 +671,6 @@ final class LyricsCorrectionService
     {
         $nextRevision = DB::transaction(function () use ($trackId, $attemptId, $expectedRevision, $job, $processedStage, $nextState): ?int {
             // Match submission's lock order; publication must validate current DB state.
-            $user = User::query()->whereKey($job->user_id)->lockForUpdate()->first();
             $currentJob = SubtitleJob::query()->whereKey($job->id)->lockForUpdate()->first();
             $track = SubtitleTrack::query()->whereKey($trackId)->lockForUpdate()->first();
             $locked = SubtitleTrackLyricsCorrection::query()
@@ -719,12 +686,11 @@ final class LyricsCorrectionService
                 return null;
             }
 
-            if (! $user instanceof User || $this->billing->activePlan($user) === null
-                || ! $currentJob instanceof SubtitleJob || $currentJob->status !== 'completed'
-                || ! $track instanceof SubtitleTrack || $track->expires_at->isPast()
+            if (! $currentJob instanceof SubtitleJob || $currentJob->status !== 'completed'
+                || ! $track instanceof SubtitleTrack || $track->isExpired()
                 || $currentJob->run_id !== ($locked->work_state['runId'] ?? null)
                 || $track->public_id !== ($locked->work_state['trackId'] ?? null)) {
-                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'The track or account changed during replacement. Your current subtitles are unchanged.', $expectedRevision);
+                $this->failAttempt($trackId, $attemptId, 'lyrics_correction_failed', 'The track changed during replacement. Your current subtitles are unchanged.', $expectedRevision);
 
                 return null;
             }
@@ -735,7 +701,7 @@ final class LyricsCorrectionService
                 if (in_array($batchIndex, $state['completedBatches'], true)) {
                     return null;
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::configured('openai'));
+                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::forJob($job));
                 // Merge only this result into current state, preserving other workers' results.
                 $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
                 $state['completedBatches'][] = $batchIndex;
@@ -753,7 +719,6 @@ final class LyricsCorrectionService
             if (($nextState['stage'] ?? null) === 'completed') {
                 $track->update([
                     'public_id' => (string) Str::uuid(),
-                    'generated_at' => now(),
                     'cues' => $nextState['cues'],
                     'web_vtt' => $nextState['webVtt'],
                 ]);
@@ -835,8 +800,7 @@ final class LyricsCorrectionService
         ];
 
         $this->ensureCorrectionCurrent($correction);
-        $this->requireActivePlan($job);
-        $selection = SubtitleModel::configured('openai');
+        $selection = SubtitleModel::forJob($job);
         $output = $this->promptAlignment($input, $selection, $job);
         $this->costs->recordCorrectionAlignment($job, $selection);
         $this->ensureCorrectionCurrent($correction);
@@ -858,7 +822,7 @@ final class LyricsCorrectionService
         }
 
         $track = $correction->track;
-        if (! $track instanceof SubtitleTrack || $track->expires_at->isPast()
+        if (! $track instanceof SubtitleTrack || $track->isExpired()
             || $track->public_id !== ($correction->work_state['trackId'] ?? null)
             || $track->job?->status !== 'completed'
             || $track->job?->run_id !== ($correction->work_state['runId'] ?? null)) {
@@ -1086,14 +1050,5 @@ final class LyricsCorrectionService
         }
 
         return SubtitleWebVttFormatter::fromCues($cues);
-    }
-
-    private function requireActivePlan(SubtitleJob $job): void
-    {
-        $user = User::query()->find($job->user_id);
-
-        if (! $user instanceof User || $this->billing->activePlan($user) === null) {
-            throw BillingEntitlementException::paymentRequired();
-        }
     }
 }

@@ -6,11 +6,9 @@ describe('runtime message validation', () => {
   it('accepts concrete extension messages with required payload fields', () => {
     expect(isRuntimeMessage({ type: 'content.getState' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false })).toBe(true);
-    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', confirmationContext: 'confirmed-details' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', youtubeVideoId: 'dQw4w9WgXcQ', tabId: 1 })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.updateSettings', patch: { showTranslation: true } })).toBe(true);
     expect(isRuntimeMessage({ type: 'content.updateSettings', patch: { blurSourceWords: true } })).toBe(true);
-    expect(isRuntimeMessage({ type: 'panel.login', email: 'learner@example.com', password: 'secret' })).toBe(true);
-    expect(isRuntimeMessage({ type: 'panel.logout' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.cancelSubtitleJob', jobId: 'job', youtubeVideoId: 'video', tabId: 12, windowId: 4 })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.cancelSubtitleJob', jobId: 'old-job', youtubeVideoId: 'video' })).toBe(true);
     expect(isRuntimeMessage({

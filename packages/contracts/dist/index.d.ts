@@ -1,23 +1,36 @@
-// Source: schemas/account-summary.schema.json
-export interface AccountSummary {
-  /**
-   * Currently configured backend analysis model; not the provenance of saved tracks.
-   */
-  aiModel?: string;
-  status: 'authenticated';
-  id: string;
-  email: string;
-  name: string;
-  emailVerified: boolean;
-  planName: string;
-  tierName: string;
-  tierSpeedLabel: string;
-  monthlyMinuteLimit: number;
-  monthlyMinutesUsed: number;
-  monthlyMinutesPending: number;
-  monthlyMinutesRemaining: number;
-  resetAt: string;
-  upgradeAvailable: boolean;
+// Source: schemas/instance-settings.schema.json
+export interface InstanceSettings {
+  providers: {
+    openai: {
+      configured: boolean;
+      model: string;
+    };
+    cerebras: {
+      configured: boolean;
+      model: string;
+    };
+    elevenlabs: {
+      configured: boolean;
+      model: string;
+    };
+  };
+  retentionDays: number | null;
+}
+
+// Source: schemas/update-instance-settings.schema.json
+export interface UpdateInstanceSettings {
+  providers?: {
+    openai?: {
+      apiKey?: string | null;
+    };
+    cerebras?: {
+      apiKey?: string | null;
+    };
+    elevenlabs?: {
+      apiKey?: string | null;
+    };
+  };
+  retentionDays?: number | null;
 }
 
 // Source: schemas/create-subtitle-job-request.schema.json
@@ -31,7 +44,7 @@ export interface CreateSubtitleJobRequest {
    */
   youtubeUrl: string;
   /**
-   * Known YouTube video duration. Backend must still enforce the 60 minute limit.
+   * Video duration in seconds.
    */
   videoDurationSeconds?: number;
   /**
@@ -242,37 +255,9 @@ export interface CreateSubtitleJobRequest {
    */
   forceRegenerate?: boolean;
   /**
-   * Auto chooses one analysis model from the transcript; explicit providers remain pinned.
+   * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider?: 'auto' | 'openai' | 'cerebras';
-}
-
-// Source: schemas/extension-login-request.schema.json
-export interface ExtensionLoginRequest {
-  email: string;
-  password: string;
-}
-
-// Source: schemas/extension-auth-response.schema.json
-export interface ExtensionAuthResponse {
-  account: AccountSummary;
-  token: {
-    plainTextToken: string;
-    tokenType: 'Bearer';
-    expiresAt: string;
-    /**
-     * @minItems 1
-     */
-    abilities: [
-      'extension:account:read' | 'extension:subtitles:write' | 'extension:tokens:revoke',
-      ...('extension:account:read' | 'extension:subtitles:write' | 'extension:tokens:revoke')[]
-    ];
-  };
-}
-
-// Source: schemas/extension-account-response.schema.json
-export interface ExtensionAccountResponse {
-  account: AccountSummary;
+  aiProvider?: 'openai' | 'cerebras';
 }
 
 // Source: schemas/learning-token-request.schema.json
@@ -362,7 +347,7 @@ export type JobResponse = {
   jobId: string;
   youtubeVideoId: string;
   /**
-   * Known video duration in seconds when measured or supplied by the extension. Safe for usage and timing displays.
+   * Video duration in seconds.
    */
   videoDurationSeconds?: number;
   sourceLanguage:
@@ -576,7 +561,7 @@ export type JobResponse = {
   track?: TrackResponse;
   createdAt: string;
   updatedAt: string;
-  expiresAt?: string;
+  expiresAt?: string | null;
   /**
    * Provider-detected source language when sourceLanguage was auto and detection produced a catalog language.
    */
@@ -677,18 +662,9 @@ export type JobResponse = {
   message?: string;
   errorCode?:
     | 'validation_failed'
-    | 'invalid_credentials'
-    | 'unauthenticated'
     | 'unauthorized'
-    | 'email_not_verified'
-    | 'insecure_transport'
-    | 'payment_required'
-    | 'usage_exhausted'
-    | 'feature_unavailable'
-    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
-    | 'video_too_long'
     | 'audio_acquisition_failed'
     | 'queue_publication_failed'
     | 'generation_cancelled'
@@ -702,11 +678,12 @@ export type JobResponse = {
     | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
-    | 'internal_error';
+    | 'internal_error'
+    | 'provider_not_configured';
   /**
-   * Selected analysis provider. Auto means selection is still pending; resolved generations report the chosen provider.
+   * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'auto' | 'openai' | 'cerebras';
+  aiProvider: 'openai' | 'cerebras';
   /**
    * Exact text model saved on this job.
    */
@@ -720,7 +697,7 @@ export type SubtitleJobHistoryItem = {
 } & {
   youtubeVideoId: string;
   /**
-   * Known video duration in seconds when measured or supplied by the extension. Safe for usage and timing displays.
+   * Video duration in seconds.
    */
   videoDurationSeconds?: number;
   youtubeUrl: string;
@@ -843,22 +820,13 @@ export type SubtitleJobHistoryItem = {
   includeTranslation: boolean;
   jobId: string;
   trackId?: string;
-  expiresAt?: string;
+  expiresAt?: string | null;
   message?: string;
   errorCode?:
     | 'validation_failed'
-    | 'invalid_credentials'
-    | 'unauthenticated'
     | 'unauthorized'
-    | 'email_not_verified'
-    | 'insecure_transport'
-    | 'payment_required'
-    | 'usage_exhausted'
-    | 'feature_unavailable'
-    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
-    | 'video_too_long'
     | 'audio_acquisition_failed'
     | 'queue_publication_failed'
     | 'generation_cancelled'
@@ -872,7 +840,8 @@ export type SubtitleJobHistoryItem = {
     | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
-    | 'internal_error';
+    | 'internal_error'
+    | 'provider_not_configured';
   targetLanguage:
     | 'bel'
     | 'bos'
@@ -1065,9 +1034,9 @@ export type SubtitleJobHistoryItem = {
     | 'yor'
     | 'zul';
   /**
-   * Selected analysis provider. Auto means selection is still pending; resolved generations report the chosen provider.
+   * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'auto' | 'openai' | 'cerebras';
+  aiProvider: 'openai' | 'cerebras';
   /**
    * Exact text model saved on this job.
    */
@@ -1273,7 +1242,7 @@ export interface TrackResponse {
     | 'yor'
     | 'zul';
   generatedAt: string;
-  expiresAt: string;
+  expiresAt: string | null;
   webVtt: string;
   /**
    * @minItems 1
@@ -1453,18 +1422,9 @@ export interface ApiError {
 export interface ErrorObject {
   code:
     | 'validation_failed'
-    | 'invalid_credentials'
-    | 'unauthenticated'
     | 'unauthorized'
-    | 'email_not_verified'
-    | 'insecure_transport'
-    | 'payment_required'
-    | 'usage_exhausted'
-    | 'feature_unavailable'
-    | 'queue_full'
     | 'unsupported_video'
     | 'audio_unavailable'
-    | 'video_too_long'
     | 'audio_acquisition_failed'
     | 'queue_publication_failed'
     | 'generation_cancelled'
@@ -1478,7 +1438,8 @@ export interface ErrorObject {
     | 'lyrics_incomplete'
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
-    | 'internal_error';
+    | 'internal_error'
+    | 'provider_not_configured';
   message: string;
   details?: {
     reason?: 'stale_track';

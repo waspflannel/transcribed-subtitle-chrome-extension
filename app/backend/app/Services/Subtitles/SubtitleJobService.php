@@ -6,13 +6,10 @@ use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Models\SubtitleJob;
-use App\Models\User;
-use App\Services\Analytics\FunnelAnalytics;
 use App\Services\Audio\SubtitleAudioWorkspace;
-use App\Services\Billing\BillingEntitlementService;
+use App\Services\InstanceSettings;
 use App\Support\PostgresErrors;
 use App\Support\SubtitleProcessingVersion;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -41,11 +38,8 @@ class SubtitleJobService
     public function __construct(
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleRuntimeTracer $tracer,
-        private readonly BillingEntitlementService $billing,
-        private readonly FunnelAnalytics $analytics,
         private readonly SubtitleJobFailureHandler $failureHandler,
         private readonly SubtitleJobArtifactStore $artifacts,
-        private readonly SubtitleJobAdmission $admission,
     ) {}
 
     /**
@@ -77,47 +71,45 @@ class SubtitleJobService
      */
     public function generate(
         array $payload,
-        User $user,
         string $installId,
-        ?string $generationTier = null,
     ): SubtitleJob {
         $mode = (string) config('subtitles.transcription.ingestion_mode', 'upload');
         if (! in_array($mode, ['upload', 'youtube_url'], true)) {
             throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
         }
-        $automatic = ($payload['aiProvider'] ?? null) === 'auto';
-        $routing = $automatic ? JevModelRouter::configuration() : null;
-        $selection = $automatic ? new SubtitleModel('auto', 'pending') : SubtitleModel::configured($payload['aiProvider'] ?? null);
+        $selection = SubtitleModel::configured($payload['aiProvider'] ?? null);
         $payload['aiProvider'] = $selection->provider;
         $payload['aiModel'] = $selection->model;
-        $payload['aiSelectionKey'] = $automatic ? hash('sha256', json_encode($routing, JSON_THROW_ON_ERROR)) : 'manual';
-        $payload['aiRouting'] = $automatic ? ['configuration' => $routing] : null;
         $payload['transcriptionIngestionMode'] = $mode;
         $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($mode);
         $includeRomanization = $payload['includeRomanization'];
         $includeTranslation = $payload['includeTranslation'];
         $processingVersion = $this->processingVersion($includeRomanization, $includeTranslation);
+        $payload['reuseKey'] = hash('sha256', json_encode([
+            $payload['youtubeVideoId'], $payload['sourceLanguage'], $payload['targetLanguage'],
+            $processingVersion, $payload['transcriptionOptionsHash'],
+            $payload['aiProvider'], $payload['aiModel'],
+        ], JSON_THROW_ON_ERROR));
         $dispatchState = self::DISPATCH_STATE_REUSED;
-        $previousJobCount = null;
 
         try {
             $job = DB::transaction(function () use (
                 $payload,
-                $user,
                 $installId,
                 $processingVersion,
                 $includeRomanization,
                 $includeTranslation,
                 &$dispatchState,
-                &$previousJobCount,
             ): SubtitleJob {
-                User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
-                $job = $this->compatibleJobQuery($payload, $user, $processingVersion)
+                $job = $this->compatibleJobQuery($payload, $processingVersion)
                     ->with('track')
                     ->lockForUpdate()
                     ->first();
 
                 if ($job) {
+                    if ($job->reuse_key === null) {
+                        SubtitleJob::withoutTimestamps(fn () => $job->updateQuietly(['reuse_key' => $payload['reuseKey']]));
+                    }
                     if ($job->hasReadyTrack() && ! ($payload['forceRegenerate'] ?? false)) {
                         $dispatchState = self::DISPATCH_STATE_REUSED;
 
@@ -134,40 +126,28 @@ class SubtitleJobService
                         throw SubtitleProcessingException::lyricsCorrectionInProgress();
                     }
 
-                    $this->billing->releaseJobReservation($job, 'reset');
-                    $entitlement = $this->billing->authorizeForGeneration($user, $payload, $job->id);
+                    app(InstanceSettings::class)->requireGenerationKeys($payload['aiProvider']);
                     $this->logger->incompleteJobReused($job);
                     $this->resetJob(
                         job: $job,
                         payload: $payload,
-                        user: $user,
                         installId: $installId,
-                        generationTier: $entitlement->generationTier,
                         includeRomanization: $includeRomanization,
                         includeTranslation: $includeTranslation,
-                        startImmediately: $entitlement->startImmediately,
                     );
-                    $this->billing->reserveForJob($job->refresh()->load('user'), $entitlement);
                     $dispatchState = self::DISPATCH_STATE_RESET;
 
                     return $job->refresh();
                 }
 
-                $entitlement = $this->billing->authorizeForGeneration($user, $payload);
-                $previousJobCount = SubtitleJob::query()
-                    ->whereBelongsTo($user)
-                    ->count();
+                app(InstanceSettings::class)->requireGenerationKeys($payload['aiProvider']);
                 $job = $this->createJob(
                     payload: $payload,
-                    user: $user,
                     installId: $installId,
                     processingVersion: $processingVersion,
-                    generationTier: $entitlement->generationTier,
                     includeRomanization: $includeRomanization,
                     includeTranslation: $includeTranslation,
-                    startImmediately: $entitlement->startImmediately,
                 );
-                $this->billing->reserveForJob($job->load('user'), $entitlement);
                 $this->logger->jobCreated($job);
                 $dispatchState = self::DISPATCH_STATE_CREATED;
 
@@ -178,10 +158,8 @@ class SubtitleJobService
                 throw $exception;
             }
 
-            $job = DB::transaction(function () use ($payload, $user, $processingVersion): ?SubtitleJob {
-                User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
-
-                return $this->compatibleJobQuery($payload, $user, $processingVersion)
+            $job = DB::transaction(function () use ($payload, $processingVersion): ?SubtitleJob {
+                return $this->compatibleJobQuery($payload, $processingVersion)
                     ->with('track')
                     ->lockForUpdate()
                     ->first();
@@ -196,25 +174,12 @@ class SubtitleJobService
 
         $job = $job->refresh()->load('track');
 
-        if ($dispatchState === self::DISPATCH_STATE_CREATED && $previousJobCount !== null) {
-            $this->analytics->generationStarted($job->load('user'), $previousJobCount);
-        }
-
         if ($job->hasReadyTrack()) {
             $this->logger->trackReused($job);
 
             return $job;
         }
 
-        if ($job->status === 'queued'
-            && in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
-            $this->admission->promoteQueuedJobs($user->id);
-
-            return $job->refresh()->load('track');
-        }
-
-        // Queued jobs are dispatched later by SubtitleJobAdmission when a
-        // running slot frees up.
         if ($job->status === 'running'
             && in_array($dispatchState, [self::DISPATCH_STATE_CREATED, self::DISPATCH_STATE_RESET], true)) {
             try {
@@ -235,7 +200,6 @@ class SubtitleJobService
                     ),
                     runId: (string) $job->run_id,
                     context: ['reason' => 'queue_publication_failed'],
-                    promoteQueued: false,
                 );
             }
 
@@ -248,14 +212,10 @@ class SubtitleJobService
     public function delete(SubtitleJob $job, bool $completedOnly = false): bool
     {
         return DB::transaction(function () use ($job, $completedOnly): bool {
-            $current = SubtitleJobLock::current($job->id, userId: $job->user_id);
+            $current = SubtitleJobLock::current($job->id);
 
             if ($current === null || ($completedOnly && $current->status !== 'completed')) {
                 return false;
-            }
-
-            if ($current->status !== 'completed') {
-                $this->billing->releaseJobReservation($current, 'deleted');
             }
 
             $runId = $current->run_id;
@@ -266,12 +226,10 @@ class SubtitleJobService
         }, attempts: 5);
     }
 
-    public function cancel(SubtitleJob $job, User $user): SubtitleJob
+    public function cancel(SubtitleJob $job): SubtitleJob
     {
-        $promoteQueued = false;
-
-        $cancelled = DB::transaction(function () use ($job, $user, &$promoteQueued): SubtitleJob {
-            $current = SubtitleJobLock::current($job->id, $job->run_id, $user->id);
+        $cancelled = DB::transaction(function () use ($job): SubtitleJob {
+            $current = SubtitleJobLock::current($job->id, $job->run_id);
 
             if ($current === null) {
                 throw (new ModelNotFoundException)->setModel(SubtitleJob::class, [$job->id]);
@@ -287,9 +245,7 @@ class SubtitleJobService
                 ]);
             }
 
-            $promoteQueued = $current->status === 'running';
             $runId = (string) $current->run_id;
-            $this->billing->releaseJobReservation($current, 'cancelled');
             $this->artifacts->deleteForJob($current);
             $current->forceFill([
                 'status' => 'cancelled',
@@ -307,10 +263,6 @@ class SubtitleJobService
             return $current->refresh()->load('track');
         }, attempts: 5);
 
-        if ($promoteQueued) {
-            $this->admission->promoteQueuedJobs($user->id);
-        }
-
         return $cancelled;
     }
 
@@ -318,18 +270,21 @@ class SubtitleJobService
      * @param  array<string, mixed>  $payload
      * @return Builder<SubtitleJob>
      */
-    private function compatibleJobQuery(array $payload, User $user, string $processingVersion): Builder
+    private function compatibleJobQuery(array $payload, string $processingVersion): Builder
     {
         return SubtitleJob::query()
-            ->whereBelongsTo($user)
+            ->withExists(['track as has_reusable_track' => fn ($query) => $query
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))])
             ->where('youtube_video_id', $payload['youtubeVideoId'])
             ->where('source_language', $payload['sourceLanguage'])
             ->where('target_language', $payload['targetLanguage'])
             ->where('transcription_options_hash', $payload['transcriptionOptionsHash'])
-            ->where('ai_selection_key', $payload['aiSelectionKey'])
-            ->when($payload['aiProvider'] !== 'auto', fn (Builder $query): Builder => $query
-                ->where('ai_provider', $payload['aiProvider'])->where('ai_model', $payload['aiModel']))
-            ->where('processing_version', $processingVersion);
+            ->where('ai_provider', $payload['aiProvider'])
+            ->where('ai_model', $payload['aiModel'])
+            ->where('processing_version', $processingVersion)
+            ->orderByRaw('case when reuse_key is null then 1 else 0 end')
+            ->orderByDesc('has_reusable_track')
+            ->orderByDesc('id');
     }
 
     /**
@@ -337,19 +292,16 @@ class SubtitleJobService
      */
     private function createJob(
         array $payload,
-        User $user,
         string $installId,
         string $processingVersion,
-        string $generationTier,
         bool $includeRomanization,
         bool $includeTranslation,
-        bool $startImmediately,
     ): SubtitleJob {
-        $createdAt = $startImmediately ? now() : $this->nextQueuedSubmissionAt($user);
+        $createdAt = now();
 
         $job = SubtitleJob::create([
             'public_id' => (string) Str::uuid(),
-            'user_id' => $user->id,
+            'reuse_key' => $payload['reuseKey'],
             'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $payload['youtubeVideoId'],
             'youtube_url' => $payload['youtubeUrl'],
@@ -360,16 +312,13 @@ class SubtitleJobService
             'processing_version' => $processingVersion,
             'ai_provider' => $payload['aiProvider'],
             'ai_model' => $payload['aiModel'],
-            'ai_selection_key' => $payload['aiSelectionKey'],
-            'ai_routing' => $payload['aiRouting'],
             'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
             'transcription_options_hash' => $payload['transcriptionOptionsHash'],
-            'generation_tier' => $generationTier,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
-            'status' => $startImmediately ? 'running' : 'queued',
+            'status' => 'running',
             'stage' => 'preparing',
-            'progress_percent' => $startImmediately ? 5 : 0,
+            'progress_percent' => 5,
             'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
         ]);
@@ -380,7 +329,6 @@ class SubtitleJobService
             'status' => $job->status,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'generation_tier' => $job->generation_tier,
             'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
 
@@ -393,12 +341,9 @@ class SubtitleJobService
     private function resetJob(
         SubtitleJob $job,
         array $payload,
-        User $user,
         string $installId,
-        string $generationTier,
         bool $includeRomanization,
         bool $includeTranslation,
-        bool $startImmediately,
     ): void {
         $job->track()->delete();
         $job->artifacts()->delete();
@@ -407,25 +352,20 @@ class SubtitleJobService
         // old run's audio workspace is reclaimed here.
         $oldRunId = (string) $job->run_id;
         DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($oldRunId));
-        $createdAt = $startImmediately ? now() : $this->nextQueuedSubmissionAt($user);
+        $createdAt = now();
 
         $job->forceFill([
             'youtube_url' => $payload['youtubeUrl'],
-            'user_id' => $user->id,
             'run_id' => (string) Str::uuid(),
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
-            'paid_work_started_at' => null,
             'ai_provider' => $payload['aiProvider'],
             'ai_model' => $payload['aiModel'],
-            'ai_selection_key' => $payload['aiSelectionKey'],
-            'ai_routing' => $payload['aiRouting'],
             'detected_source_language' => null,
-            'generation_tier' => $generationTier,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
-            'status' => $startImmediately ? 'running' : 'queued',
+            'status' => 'running',
             'stage' => 'preparing',
-            'progress_percent' => $startImmediately ? 5 : 0,
+            'progress_percent' => 5,
             'estimated_provider_cost_microusd' => 0,
             'error_code' => null,
             'error_message' => null,
@@ -439,29 +379,8 @@ class SubtitleJobService
             'status' => $job->status,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'generation_tier' => $job->generation_tier,
             'queue' => SubtitleQueue::generationNameForJob($job),
         ]);
-    }
-
-    private function nextQueuedSubmissionAt(User $user): Carbon
-    {
-        $createdAt = now();
-        $latestQueuedAt = SubtitleJob::query()
-            ->whereBelongsTo($user)
-            ->where('status', 'queued')
-            ->max('created_at');
-
-        if ($latestQueuedAt === null) {
-            return $createdAt;
-        }
-
-        $latestQueuedAt = Carbon::parse($latestQueuedAt);
-
-        // Keep new and reset rows ordered behind waiting submissions at database precision.
-        return $latestQueuedAt->greaterThanOrEqualTo($createdAt->copy()->startOfSecond())
-            ? $latestQueuedAt->addSecond()
-            : $createdAt;
     }
 
     private function processingVersion(bool $includeRomanization, bool $includeTranslation): string
@@ -471,8 +390,7 @@ class SubtitleJobService
 
     private function isStalePreparingJob(SubtitleJob $job): bool
     {
-        // Queued jobs also sit at stage "preparing", but they wait for a
-        // running slot by design and are never stale.
+        // Legacy queued jobs are not running and cannot be stale workers.
         if ($job->status !== 'running' || $job->stage !== 'preparing') {
             return false;
         }

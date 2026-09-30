@@ -50,7 +50,7 @@ export function bindSavedGenerations(
   const load = async (): Promise<void> => {
     const requestRevision = ++revision;
     const page = latest?.pageStatus;
-    if (!page?.supported || latest.accountState.status !== 'authenticated') return;
+    if (!page?.supported) return;
     loading = true;
     status.textContent = t("Loading saved generations…");
     draw();
@@ -76,7 +76,7 @@ export function bindSavedGenerations(
     if (jobId === track.jobId) return;
     const deleting = jobId === DELETE_GENERATION;
     select.value = track.jobId;
-    if (deleting && !window.confirm(t("Delete this saved generation? This cannot be undone. Used minutes will not be refunded."))) return;
+    if (deleting && !window.confirm(t("Delete this saved generation? This cannot be undone."))) return;
     switching = true;
     status.textContent = deleting ? t("Deleting generation…") : t("Loading transcript…");
     draw();
@@ -91,8 +91,8 @@ export function bindSavedGenerations(
     render(state): void {
       latest = state;
       const track = state.subtitleState.type === 'ready' ? state.subtitleState.track : null;
-      const nextContext = track && state.accountState.status === 'authenticated'
-        ? `${state.accountState.id}:${state.activeTabId}:${track.youtubeVideoId}:${track.trackId}` : '';
+      const nextContext = track
+        ? `${state.backendUrl}:${state.activeTabId}:${track.youtubeVideoId}:${track.trackId}` : '';
       if (nextContext !== context) {
         context = nextContext;
         revision += 1;

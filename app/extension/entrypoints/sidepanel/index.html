@@ -10,7 +10,7 @@
         <button class="tab" type="button" data-tab="watch" id="tab-watch" role="tab" aria-selected="true" aria-controls="panel-watch" data-i18n="Watch">Watch</button>
         <button class="tab" type="button" data-tab="study" id="tab-study" role="tab" aria-selected="false" aria-controls="panel-study" data-i18n="Study">Study</button>
         <button class="tab" type="button" data-tab="history" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history" data-i18n="History">History</button>
-        <button class="tab" type="button" data-tab="account" id="tab-account" role="tab" aria-selected="false" aria-controls="panel-account" data-i18n="Account">Account</button>
+        <button class="tab" type="button" data-tab="settings" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" data-i18n="Settings">Settings</button>
       </nav>
 
       <label class="interface-language"><span data-i18n="Interface language">Interface language</span><select data-interface-language aria-label="Interface language" data-i18n-aria-label="Interface language"></select></label>
@@ -35,12 +35,6 @@
             <p class="empty-copy" data-i18n="Open a public YouTube video or Short in this window and the panel picks it up automatically.">Open a public YouTube video or Short in this window and the panel picks it up automatically.</p>
           </div>
 
-          <!-- Signed out: inline prompt instead of dumping users on the Account tab. -->
-          <div class="card" data-watch-signin="" hidden="">
-            <p class="card-label" data-i18n="Sign in to generate">Sign in to generate</p>
-            <p class="card-copy" data-i18n="Subtitle generation runs on your verified beta account. Your plan minutes and job history live there too.">Subtitle generation runs on your verified beta account. Your plan minutes and job history live there too.</p>
-            <button type="button" class="btn-primary" data-action="open-account" data-i18n="Go to sign in">Go to sign in</button>
-          </div>
 
           <button type="button" class="link-button watch-back" data-action="back-transcript" hidden="" data-i18n="← Back to transcript">← Back to transcript</button>
 
@@ -94,21 +88,18 @@
             <div class="card">
               <label class="row">
                 <span class="row-key" data-i18n="AI model">AI model</span>
-                <select name="aiProvider" aria-describedby="ai-auto-description ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
-                  <option value="auto" data-i18n="Auto">Auto</option>
-                  <option value="openai">Transcriber</option>
-                  <option value="cerebras">Transcriber Spark</option>
+                <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
+                  <option value="openai">OpenAI</option>
+                  <option value="cerebras">Cerebras</option>
                 </select>
               </label>
-              <p id="ai-auto-description" class="microcopy" data-i18n="Auto chooses Transcriber or Transcriber Spark from the transcript.">Auto chooses Transcriber or Transcriber Spark from the transcript.</p>
-              <p id="ai-luna-description" class="microcopy"><strong data-i18n="Transcriber:">Transcriber:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
-              <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Transcriber Spark:">Transcriber Spark:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
+              <p id="ai-luna-description" class="microcopy"><strong data-i18n="OpenAI:">OpenAI:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
+              <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Cerebras:">Cerebras:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
               <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
             </div>
 
             <button type="button" class="btn-primary" data-action="generate" disabled="" data-i18n="Generate subtitles">Generate subtitles</button>
             <p class="microcopy" data-generate-note=""></p>
-            <p class="microcopy" data-i18n="Review and confirm before generation starts.">Review and confirm before generation starts.</p>
           </div>
 
           <!-- Generating / replacing: one progress surface with named stages. -->
@@ -167,7 +158,7 @@
               <div data-lyrics-replace-panel="">
                 <form class="lyrics-correction-form" data-lyrics-correction-form="">
                   <p id="lyrics-paste-instructions" class="card-copy" data-i18n="For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.">For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.</p>
-                  <p id="lyrics-paste-warning" class="microcopy" data-i18n="This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles. Regeneration uses your plan minutes.">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles. Regeneration uses your plan minutes.</p>
+                  <p id="lyrics-paste-warning" class="microcopy" data-i18n="This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.</p>
                   <label class="field">
                     <span data-i18n="Lyrics">Lyrics</span>
                     <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea="" rows="6" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error" data-i18n-placeholder="Paste the full lyrics without section tags"></textarea>
@@ -301,80 +292,25 @@
           <p class="jobs-error" data-jobs-error="" hidden=""></p>
         </section>
 
-        <!-- ============================ ACCOUNT ============================ -->
-        <section class="view" data-panel="account" id="panel-account" role="tabpanel" aria-labelledby="tab-account" tabindex="0">
-          <div class="card">
-            <p class="card-label" data-i18n="Account">Account</p>
-            <p class="account-feedback" data-account-feedback="" role="status" aria-live="polite" hidden=""></p>
-            <dl class="facts">
-              <div class="fact">
-                <dt data-i18n="Status">Status</dt>
-                <dd data-account-status="" data-i18n="Account">Account</dd>
-              </div>
-              <div class="fact">
-                <dt data-i18n="Plan">Plan</dt>
-                <dd data-account-plan="" data-i18n="Available after sign-in">Available after sign-in</dd>
-              </div>
-              <div class="fact">
-                <dt data-i18n="Queue">Queue</dt>
-                <dd data-account-speed="" data-i18n="Available after sign-in">Available after sign-in</dd>
-              </div>
-            </dl>
-            <form class="account-form" data-account-login-form="">
-              <label class="field">
-                <span data-i18n="Email">Email</span>
-                <input type="email" name="accountEmail" autocomplete="email" required="">
-              </label>
-              <label class="field">
-                <span data-i18n="Password">Password</span>
-                <input type="password" name="accountPassword" autocomplete="current-password" required="">
-              </label>
-              <button type="submit" class="btn-primary" data-action="login" data-i18n="Sign in">Sign in</button>
-            </form>
-            <div class="feature-list" data-feature-list=""></div>
-            <p class="muted" data-i18n="Selections are preferences, not a guarantee of access. Generation depends on your plan and remaining minutes.">Selections are preferences, not a guarantee of access. Generation depends on your plan and remaining minutes.</p>
-            <nav class="account-billing" aria-label="Account and billing" data-account-billing="" data-i18n-aria-label="Account and billing"></nav>
-            <p class="muted" data-i18n="This link opens the website, which may require a separate sign-in. Use the same email as the extension.">This link opens the website, which may require a separate sign-in. Use the same email as the extension.</p>
-            <button type="button" class="btn-ghost" data-action="logout" disabled="" data-i18n="Sign out">Sign out</button>
-          </div>
-
-          <div class="card">
-            <p class="card-label" data-i18n="This month">This month</p>
-            <div class="usage-meter">
-              <div class="usage-meter-label">
-                <span data-usage-summary="" data-i18n="Sign in to see usage">Sign in to see usage</span>
-                <strong data-usage-remaining="" data-i18n="Usage unavailable">Usage unavailable</strong>
-              </div>
-              <div class="progress-bar usage-bar" aria-hidden="true"><span data-usage-bar=""></span></div>
+        <section class="view" data-panel="settings" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" tabindex="0">
+          <form data-instance-settings-form class="instance-settings-form">
+            <div class="card">
+              <h2 data-i18n="Provider settings">Provider settings</h2>
+              <p class="microcopy" data-i18n="Keys are saved on your backend. Provider usage is billed to your keys.">Keys are saved on your backend. Provider usage is billed to your keys.</p>
+              <div data-provider-fields></div>
+              <button type="submit" class="btn-primary" data-i18n="Set">Set</button>
+              <p role="status" aria-live="polite" data-instance-settings-status></p>
             </div>
-            <dl class="facts">
-              <div class="fact">
-                <dt data-i18n="Current plan">Current plan</dt>
-                <dd data-usage-plan="" data-i18n="Not signed in">Not signed in</dd>
-              </div>
-              <div class="fact">
-                <dt data-i18n="Pending jobs">Pending jobs</dt>
-                <dd data-usage-pending="" data-i18n="0 min pending">0 min pending</dd>
-              </div>
-              <div class="fact">
-                <dt data-i18n="Reset date">Reset date</dt>
-                <dd data-usage-reset="" data-i18n="Unavailable">Unavailable</dd>
-              </div>
-            </dl>
-          </div>
-          <p class="muted" data-account-model="" hidden=""></p>
+            <div class="card">
+              <label class="field"><span data-i18n="Delete saved tracks after days (blank keeps forever)">Delete saved tracks after days (blank keeps forever)</span><input type="number" min="1" max="36500" step="1" name="retentionDays"></label>
+              <p class="microcopy" data-i18n="Applies to existing and future tracks from their generation date.">Applies to existing and future tracks from their generation date.</p>
+              <button type="submit" class="btn-ghost" data-i18n="Save settings">Save settings</button>
+            </div>
+          </form>
+          <div class="card"><p class="card-label" data-i18n="Backend address">Backend address</p><code data-backend-url></code><p class="microcopy" data-i18n="To use another server, build the extension with its backend address.">To use another server, build the extension with its backend address.</p></div>
         </section>
       </main>
     </div>
-    <dialog class="generation-confirmation" data-generation-confirmation="" aria-labelledby="generation-confirmation-title" aria-describedby="generation-confirmation-copy generation-confirmation-summary">
-      <h2 id="generation-confirmation-title" data-i18n="Start generation?">Start generation?</h2>
-      <p id="generation-confirmation-summary" class="muted" data-generation-confirmation-summary=""></p>
-      <p id="generation-confirmation-copy" data-i18n="You can cancel at any time, but the minutes for the entire video will still be used and won't be refunded. Would you like to proceed?">You can cancel at any time, but the minutes for the entire video will still be used and won't be refunded. Would you like to proceed?</p>
-      <div class="generation-confirmation-actions">
-        <button type="button" class="btn-ghost" data-action="cancel-generation-confirmation" autofocus="" data-i18n="Go back">Go back</button>
-        <button type="button" class="btn-primary" data-action="confirm-generation" data-i18n="Start generation">Start generation</button>
-      </div>
-    </dialog>
     <script type="module" src="./main.ts"></script>
 
 

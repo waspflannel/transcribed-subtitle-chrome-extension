@@ -3,11 +3,10 @@
 namespace Tests\Feature;
 
 use App\Ai\SubtitleModel;
-use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Models\SubtitleJob;
-use App\Models\User;
+use App\Services\InstanceSettings;
 use App\Services\Subtitles\ProviderAdmission;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
@@ -30,7 +29,7 @@ class ProviderControlsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['ai.providers.openai.url' => 'https://api.openai.com/v1', 'ai.providers.openai.key' => 'fake-key', 'subtitles.tiers.plans.base.batch_concurrency' => 1]);
+        config(['ai.providers.openai.url' => 'https://api.openai.com/v1', 'ai.providers.openai.key' => 'fake-key']);
         Http::preventStrayRequests();
     }
 
@@ -120,14 +119,14 @@ class ProviderControlsTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_provider_and_account_concurrency_release_permits_even_after_failure(): void
+    public function test_provider_concurrency_releases_permits_even_after_failure(): void
     {
         config(['subtitles.providers.global_concurrency' => 1]);
         $job = SubtitleJob::factory()->create();
         $other = SubtitleJob::factory()->create();
         $gate = app(ProviderAdmission::class);
-        $gate->run('openai', $job, function () use ($gate, $job, $other): void {
-            foreach ([['openai', $other], ['cerebras', $job]] as [$provider, $blocked]) {
+        $gate->run('openai', $job, function () use ($gate, $other): void {
+            foreach ([['openai', $other]] as [$provider, $blocked]) {
                 try {
                     $gate->run($provider, $blocked, fn () => $this->fail('Overlapping provider work was admitted.'));
                     $this->fail('Expected capacity rejection.');
@@ -141,17 +140,6 @@ class ProviderControlsTest extends TestCase
         } catch (\RuntimeException) {
         }
         $this->assertSame('released', $gate->run('openai', $job, fn () => 'released'));
-    }
-
-    public function test_account_request_limit_is_shared_across_providers_and_jobs(): void
-    {
-        config(['subtitles.providers.account_requests_per_minute' => 1]);
-        $job = SubtitleJob::factory()->create();
-        $other = SubtitleJob::factory()->create(['user_id' => $job->user_id]);
-        $gate = app(ProviderAdmission::class);
-        $gate->run('openai', $job, fn () => null);
-        $this->expectException(SubtitleProcessingException::class);
-        $gate->run('cerebras', $other, fn () => $this->fail('Account request limit was bypassed.'));
     }
 
     public function test_local_admission_backpressure_releases_queue_work_without_a_failed_attempt(): void
@@ -170,50 +158,35 @@ class ProviderControlsTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function test_new_work_on_completed_tracks_uses_current_plan_while_admitted_generation_keeps_its_tier(): void
+    public function test_different_providers_have_independent_capacity_without_an_account(): void
     {
-        config(['subtitles.tiers.plans.base.batch_concurrency' => 1, 'subtitles.tiers.plans.pro.batch_concurrency' => 3]);
-        $user = User::factory()->create([
-            'billing_subscription_status' => 'active', 'billing_plan_code' => 'base',
-            'billing_current_period_end' => now()->addMonth(),
-        ]);
-        $saved = SubtitleJob::factory()->create(['user_id' => $user->id, 'status' => 'completed', 'generation_tier' => 'pro']);
+        config(['subtitles.providers.global_concurrency' => 1]);
+        $job = SubtitleJob::factory()->create(['status' => 'completed']);
         $gate = app(ProviderAdmission::class);
-        $gate->run('openai', $saved, function () use ($gate, $saved): void {
-            try {
-                $gate->run('cerebras', $saved, fn () => $this->fail('Historical Pro tier bypassed current Base limit.'));
-                $this->fail('Expected current-plan admission rejection.');
-            } catch (SubtitleProcessingException $exception) {
-                $this->assertSame('provider_admission', $exception->context['reason']);
-            }
-        });
-        $running = SubtitleJob::factory()->create(['user_id' => $user->id, 'generation_tier' => 'pro']);
-        $this->assertSame('admitted', $gate->run('openai', $running,
-            fn () => $gate->run('openai', $running, fn () => 'admitted')));
+        $this->assertSame('admitted', $gate->run('openai', $job,
+            fn () => $gate->run('cerebras', $job, fn () => 'admitted')));
     }
 
-    public function test_adapter_preserves_payment_required_and_does_not_leak_provider_permits(): void
+    public function test_clearing_a_provider_key_prevents_new_work_on_a_saved_track(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
-        try {
-            app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch(
-                [$this->cue()], [$this->cue()], 'eng', 'eng', false, false, job: $job,
-            );
-            $this->fail('Expected payment-required rejection before a provider request.');
-        } catch (BillingEntitlementException $exception) {
-            $this->assertSame('payment_required', $exception->publicCode);
-        }
-        Http::assertNothingSent();
-        $job->user->update([
-            'billing_subscription_status' => 'active', 'billing_plan_code' => 'base',
-            'billing_current_period_end' => now()->addMonth(),
-        ]);
         $gate = app(ProviderAdmission::class);
+        $this->assertSame('ready', $gate->run('openai', $job, fn () => 'ready'));
+        app(InstanceSettings::class)->update(['providers' => ['openai' => ['apiKey' => null]]]);
         try {
-            $gate->run('openai', $job, fn () => throw BillingEntitlementException::paymentRequired());
-        } catch (BillingEntitlementException) {
+            $gate->run('openai', $job, fn () => $this->fail('Cleared key was reused.'));
+            $this->fail('Expected provider setup error.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_not_configured', $exception->publicCode);
+            $this->assertSame(422, $exception->status);
         }
-        $this->assertSame('released', $gate->run('openai', $job, fn () => 'released'));
+    }
+
+    public function test_a_cancelled_run_cannot_start_another_provider_request(): void
+    {
+        $job = SubtitleJob::factory()->create(['status' => 'cancelled']);
+        $this->expectException(SubtitleProcessingException::class);
+        app(ProviderAdmission::class)->run('openai', $job, fn () => $this->fail('Cancelled work started.'));
     }
 
     private function analyze(): void

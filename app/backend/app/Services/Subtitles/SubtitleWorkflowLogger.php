@@ -39,7 +39,6 @@ class SubtitleWorkflowLogger
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'generation_tier' => $job->generation_tier,
         ]);
     }
 
@@ -49,7 +48,6 @@ class SubtitleWorkflowLogger
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'generation_tier' => $job->generation_tier,
         ]);
     }
 
@@ -60,7 +58,6 @@ class SubtitleWorkflowLogger
             'track_id' => $job->track->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'generation_tier' => $job->generation_tier,
         ]);
     }
 
@@ -174,7 +171,7 @@ class SubtitleWorkflowLogger
             'track_duration_seconds' => round($trackDurationSeconds, 3),
             'audio_duration_seconds' => $audioDurationSeconds,
             'processing_version' => $job->processing_version,
-            'expires_at' => $track->expires_at->toJSON(),
+            'expires_at' => $track->expires_at?->toJSON(),
         ]);
 
         if ($trackOverrunSeconds > 5) {
@@ -219,7 +216,6 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'duration_ms' => $durationMs,
             'processing_version' => $job->processing_version,
-            'generation_tier' => $job->generation_tier,
             'estimated_provider_cost_microusd' => $job->estimated_provider_cost_microusd,
         ]);
     }

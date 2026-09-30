@@ -30,9 +30,11 @@ function Write-FixtureArchive([hashtable]$Manifest, [string]$ExtraFile = '') {
 
 try {
     & $Check -ApiBaseUrl $ApiUrl
+    & $Check -ApiBaseUrl 'http://127.0.0.1:8001/v1'
+    & $Check -ApiBaseUrl 'http://localhost:8001/v1'
+    & $Check -ApiBaseUrl 'https://subtitles.internal/v1'
     foreach ($invalidUrl in @(
-        'http://api.example.com/v1', 'https://localhost/v1', 'https://localhost./v1', 'https://api.localhost./v1', 'https://127.0.0.1/v1',
-        'https://[::1]/v1', 'https://api.localhost/v1', 'https://user:password@api.example.com/v1',
+        'http://api.example.com/v1', 'ftp://localhost/v1', 'https://user:password@api.example.com/v1',
         'https://api.example.com/v1?key=test', 'https://api.example.com/v1#token', 'https://api.example.com/',
         'https://api.example.com/v1//', 'https://api.example.com/v1///', 'https://api.example.com/V1'
     )) {

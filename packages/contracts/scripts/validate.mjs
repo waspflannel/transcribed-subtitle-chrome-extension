@@ -43,9 +43,6 @@ for (const [file, schema] of schemas) {
 
 const fixtures = [
   ['create-subtitle-job-request.schema.json', 'valid-create-subtitle-job-request.json'],
-  ['extension-login-request.schema.json', 'valid-extension-login-request.json'],
-  ['extension-auth-response.schema.json', 'valid-extension-auth-response.json'],
-  ['extension-account-response.schema.json', 'valid-extension-account-response.json'],
   ['learning-token-request.schema.json', 'valid-learning-token-request.json'],
   ['learning-token-response.schema.json', 'valid-learning-token-response.json'],
   ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request.json'],
@@ -75,10 +72,10 @@ const lyricsCorrectionStatus = ajv.getSchema('lyrics-correction-status.schema.js
 
 const generationRequest = ajv.getSchema('create-subtitle-job-request.schema.json');
 const generationFixture = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-create-subtitle-job-request.json'), 'utf8'));
-for (const aiProvider of ['auto', 'openai', 'cerebras']) {
+for (const aiProvider of ['openai', 'cerebras']) {
   if (!generationRequest({ ...generationFixture, aiProvider })) throw new Error('Valid AI provider rejected.');
 }
-for (const aiProvider of ['hybrid', 'invalid', null, 1]) {
+for (const aiProvider of ['auto', 'hybrid', 'invalid', null, 1]) {
   if (generationRequest({ ...generationFixture, aiProvider })) throw new Error('Invalid AI provider accepted.');
 }
 const unavailableTranslation = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-track-response.json'), 'utf8'));

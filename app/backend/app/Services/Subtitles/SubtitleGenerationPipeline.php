@@ -13,8 +13,7 @@ use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Billing\BillingEntitlementService;
-use App\Services\Billing\UsageLedger;
+use App\Services\InstanceSettings;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
@@ -38,9 +37,6 @@ class SubtitleGenerationPipeline
         private readonly SubtitleProviderCostRecorder $costs,
         private readonly SubtitleBatchDispatcher $batchDispatcher,
         private readonly SubtitleJobFailureHandler $failureHandler,
-        private readonly BillingEntitlementService $billing,
-        private readonly UsageLedger $usageLedger,
-        private readonly SubtitleJobAdmission $admission,
     ) {}
 
     /**
@@ -88,7 +84,6 @@ class SubtitleGenerationPipeline
                 youtubeUrl: $job->youtube_url,
                 requestDurationSeconds: $job->video_duration_seconds,
                 workDirectory: SubtitleAudioWorkspace::directory($runId),
-                userId: (int) $job->user_id,
                 videoId: $job->youtube_video_id,
             );
 
@@ -100,8 +95,6 @@ class SubtitleGenerationPipeline
                 }
 
                 $currentJob->update(['video_duration_seconds' => $audio->durationSeconds]);
-                $currentJob->load('user');
-                $this->billing->syncJobReservationToActualDuration($currentJob);
                 $this->logger->audioAcquisitionCompleted($currentJob, $audio);
                 $this->telemetry->recordStageCompleted($currentJob, 'acquiring-audio', $audioStartedAtMs);
                 $this->markJobRunning($currentJob, 'optimizing-audio', 35);
@@ -135,8 +128,6 @@ class SubtitleGenerationPipeline
                 return;
             }
             $currentJob->update(['video_duration_seconds' => $duration]);
-            $currentJob->load('user');
-            $this->billing->syncJobReservationToActualDuration($currentJob);
             $this->telemetry->recordStageCompleted($currentJob, 'acquiring-audio', $startedAtMs);
             $this->markJobRunning($currentJob, 'transcribing', 50);
             $this->logger->transcriptionStarted($currentJob);
@@ -484,9 +475,8 @@ class SubtitleGenerationPipeline
 
     /**
      * Cache-hit continuation: the transcript already exists for this video,
-     * so the job goes straight from claiming to analysis dispatch. Billing
-     * still syncs the reservation to the cached duration, but no provider
-     * transcription cost is recorded -- no provider call happened.
+     * so the job goes straight from claiming to analysis dispatch.
+     * No transcription cost is recorded because no provider call happened.
      */
     private function continueWithCachedTranscript(SubtitleJob $job, CachedVideoTranscript $cached): void
     {
@@ -502,7 +492,6 @@ class SubtitleGenerationPipeline
 
             $this->telemetry->recordTranscriptCacheHit($job);
             $job->update(['video_duration_seconds' => $cached->audio_duration_seconds]);
-            $this->billing->syncJobReservationToActualDuration($job);
             $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
             $this->artifacts->putTranscript($job, $transcript);
             $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
@@ -548,6 +537,8 @@ class SubtitleGenerationPipeline
         $enrichment = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::MERGED_CUES);
 
         $track = DB::transaction(function () use ($subtitleJobId, $runId, $enrichment) {
+            // Retention changes and publication share settings -> job -> track order.
+            app(InstanceSettings::class)->lockForUpdate();
             $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
 
             if (! $currentJob instanceof SubtitleJob) {
@@ -565,8 +556,7 @@ class SubtitleGenerationPipeline
                 'error_message' => null,
                 'expires_at' => $track->expires_at,
             ]);
-            $completedJob = $currentJob->refresh()->load('user');
-            $this->usageLedger->debitCompletedJob($completedJob, $track);
+            $completedJob = $currentJob->refresh();
             $this->artifacts->deleteForJob($completedJob);
 
             return $track;
@@ -586,7 +576,6 @@ class SubtitleGenerationPipeline
         $this->telemetry->recordStageCompleted($job, 'finalizing', $startedAtMs);
         $this->logger->completedTrackTiming($job, (int) abs(now()->diffInMilliseconds($job->created_at)));
         $this->telemetry->recordJobCompleted($job);
-        $this->admission->promoteQueuedJobs($job->user_id);
     }
 
     private function dispatchAnalysisBatches(SubtitleJob $job): void

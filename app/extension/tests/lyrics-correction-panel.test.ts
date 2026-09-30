@@ -25,12 +25,7 @@ it('shows a failure recovered on opening, preserves dismissal across navigation,
   const state: PanelState = {
     installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS, activeTabId: 1,
     pageStatus: { supported: true, videoId: track.youtubeVideoId, url: `https://www.youtube.com/watch?v=${track.youtubeVideoId}`, mediaKind: 'video' },
-    accountState: {
-      status: 'authenticated', id: 'user', email: 'test@example.com', name: 'Test', emailVerified: true,
-      planName: 'Pro', tierName: 'pro', tierSpeedLabel: 'Fast', monthlyMinuteLimit: 100,
-      monthlyMinutesUsed: 0, monthlyMinutesPending: 0, monthlyMinutesRemaining: 100,
-      resetAt: '2026-10-01T00:00:00Z', upgradeAvailable: false,
-    },
+    backendUrl: 'http://127.0.0.1:8001/v1',
     subtitleState: { type: 'ready', track }, jobHistory: [],
     lyricsCorrection: { attemptId: 'attempt-1', status: 'failed', stage: 'failed', errorCode: 'lyrics_correction_failed', message: 'Replacement failed.', updatedAt: '2026-09-07T13:50:43Z' },
   };

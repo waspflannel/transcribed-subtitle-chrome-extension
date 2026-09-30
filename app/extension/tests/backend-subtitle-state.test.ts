@@ -184,7 +184,7 @@ function jobHistory(overrides: Partial<SubtitleJobHistoryItem>): SubtitleJobHist
     targetLanguage: 'eng',
     ...overrides,
     aiProvider: 'openai',
-    aiModel: 'gpt-5.6-luna',
+    aiModel: 'gpt-6-luna',
     includeRomanization: overrides.includeRomanization ?? true,
     includeTranslation: overrides.includeTranslation ?? false,
   };
@@ -197,7 +197,7 @@ function completedJobResponse(track: TrackResponse): JobResponse {
     sourceLanguage: track.sourceLanguage,
     targetLanguage: track.targetLanguage,
     aiProvider: 'openai',
-    aiModel: 'gpt-5.6-luna',
+    aiModel: 'gpt-6-luna',
     includeRomanization: true,
     includeTranslation: false,
     status: 'completed',

@@ -1,13 +1,13 @@
 <?php
 
-use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
+use App\Http\Middleware\LoadInstanceSettings;
 use App\Http\Middleware\RequireExtensionInstallId;
+use App\Http\Middleware\RequirePrivateInstance;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetWebsiteLocale;
 use App\Http\Responses\ApiErrorResponse;
 use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,9 +16,10 @@ use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Middleware\ThrottleRequestsWithRedis;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use Laravel\Sanctum\Exceptions\MissingAbilityException;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -30,14 +31,17 @@ $app = Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->web(append: [SetWebsiteLocale::class]);
-        $middleware->append(SecurityHeaders::class);
+        // The read-only website uses locale cookies, never account sessions.
+        $middleware->web(
+            append: [SetWebsiteLocale::class, LoadInstanceSettings::class],
+            remove: [StartSession::class, ShareErrorsFromSession::class],
+        );
+        $middleware->append([SecurityHeaders::class, RequirePrivateInstance::class]);
+        $middleware->api(append: [LoadInstanceSettings::class]);
         // Validate pasted lyrics before trimming can hide boundary control characters.
         $middleware->trimStrings(except: ['lyrics']);
 
-        $middleware->preventRequestForgery(except: [
-            'stripe/*',
-        ]);
+        $middleware->preventRequestForgery(originOnly: true);
 
         $middleware->prependToPriorityList(
             [AuthenticatesRequests::class, ThrottleRequests::class, ThrottleRequestsWithRedis::class],
@@ -45,27 +49,15 @@ $app = Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->render(function (AuthenticationException $exception, Request $request) {
-            if (! $request->is('v1/*')) {
-                return null;
-            }
-
-            return ApiErrorResponse::make(
-                'unauthenticated',
-                'A valid extension API token is required.',
-                401,
-                request: $request,
-            );
-        });
-
-        $exceptions->render(function (MissingAbilityException|AuthorizationException|AccessDeniedHttpException $exception, Request $request) {
+        $exceptions->dontFlash(['providers', 'apiKey']);
+        $exceptions->render(function (AuthorizationException|AccessDeniedHttpException $exception, Request $request) {
             if (! $request->is('v1/*')) {
                 return null;
             }
 
             return ApiErrorResponse::make(
                 'unauthorized',
-                'The extension API token is not allowed to access this resource.',
+                'This request is not allowed to access this resource.',
                 403,
                 request: $request,
             );
@@ -126,14 +118,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 : [];
 
             return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status, details: $details, request: $request);
-        });
-
-        $exceptions->render(function (BillingEntitlementException $exception, Request $request) {
-            if (! $request->is('v1/*')) {
-                return null;
-            }
-
-            return ApiErrorResponse::make($exception->publicCode, $exception->getMessage(), $exception->status, request: $request);
         });
 
         $exceptions->render(function (Throwable $exception, Request $request) {

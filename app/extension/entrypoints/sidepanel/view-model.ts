@@ -1,6 +1,6 @@
 import { t } from '../../utils/i18n';
-import type { AccountState, PanelState } from '../../utils/messages';
-import { formatDurationSeconds } from '../../utils/account-state';
+import type { PanelState } from '../../utils/messages';
+import { formatDurationSeconds } from '../../utils/job-telemetry';
 
 export function videoDurationLabel(state: PanelState): string {
   const duration = videoDurationForState(state);
@@ -36,16 +36,12 @@ export function nowPlayingTitleLabel(state: PanelState): string {
 }
 
 export function generateButtonLabel(
-  accountState: AccountState,
   subtitleStateType: PanelState['subtitleState']['type'],
 ): string {
   if (subtitleStateType === 'loading') {
     return t("Generating...");
   }
 
-  if (accountState.status !== 'authenticated') {
-    return t("Sign in to generate");
-  }
 
   return t("Generate subtitles");
 }

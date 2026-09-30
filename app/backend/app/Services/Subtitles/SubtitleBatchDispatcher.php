@@ -20,7 +20,7 @@ class SubtitleBatchDispatcher
     {
         $this->dispatchBatch(
             job: $job,
-            jobs: $this->windowedBatchMembers($job, $jobs),
+            jobs: $jobs,
             batchName: 'subtitle analysis '.$job->public_id,
             stage: 'analysis',
             completionJobClass: PrepareSubtitleCuesAfterAnalysisBatches::class,
@@ -29,9 +29,7 @@ class SubtitleBatchDispatcher
     }
 
     /**
-     * Transcription chunks ride the tier's generation queue, not the AI
-     * batch queue: they are provider uploads bounded per job by the chunk
-     * plan, so the per-user AI batch concurrency cap does not apply.
+     * Transcription chunks use the generation queue and are bounded by the chunk plan.
      *
      * @param  array<int, object>  $jobs
      */
@@ -45,38 +43,6 @@ class SubtitleBatchDispatcher
             completionJobClass: MergeSubtitleTranscript::class,
             completionJobArguments: [$job->id, $job->run_id, $transcribingStartedAtMs],
             batchQueueName: SubtitleQueue::generationNameForJob($job),
-        );
-    }
-
-    /**
-     * Partition AI batch members into at most batch_concurrency chains so the
-     * queue only ever holds work this job is allowed to run: a chain link is
-     * enqueued when its predecessor finishes, instead of enqueueing every
-     * member up front and rejecting the over-cap ones at pop time.
-     *
-     * @param  array<int, object>  $jobs
-     * @return array<int, object|array<int, object>>
-     */
-    private function windowedBatchMembers(SubtitleJob $job, array $jobs): array
-    {
-        $window = SubtitleTier::batchConcurrency($job->generation_tier);
-        $jobs = array_values($jobs);
-
-        if (count($jobs) <= $window) {
-            return $jobs;
-        }
-
-        $chains = array_fill(0, $window, []);
-
-        foreach ($jobs as $index => $member) {
-            $slot = $index % $window;
-
-            $chains[$slot][] = $member;
-        }
-
-        return array_map(
-            fn (array $chain): object|array => count($chain) === 1 ? $chain[0] : $chain,
-            $chains,
         );
     }
 

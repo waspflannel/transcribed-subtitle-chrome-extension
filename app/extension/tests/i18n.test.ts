@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { INTERFACE_LOCALES, localizeDocument, resolveInterfaceLocale, setInterfaceLocale, t } from '../utils/i18n';
 import { createExtensionSettingsFromPartial } from '../utils/settings-model';
-import { accountBillingLinkHtml } from '../entrypoints/sidepanel/render/account';
 
 afterEach(() => setInterfaceLocale('en'));
 
@@ -16,19 +15,18 @@ it('matches browser languages in preference order and validates saved locale val
 });
 
 it('translates marked interface copy and attributes without changing learning content or inputs', () => {
-  const dom = new JSDOM('<button data-i18n="Sign in">Sign in</button><input value="user draft" data-i18n-placeholder="Search transcript…"><p>Sign in</p><span data-i18n="Sign in"> Sign in </span>');
+  const dom = new JSDOM('<button data-i18n="Settings">Settings</button><input value="user draft" data-i18n-placeholder="Search transcript…"><p>Settings</p><span data-i18n="Settings"> Settings </span>');
   setInterfaceLocale('es');
   localizeDocument(dom.window.document);
   expect(dom.window.document.documentElement.lang).toBe('es');
-  expect(dom.window.document.querySelector('button')!.textContent).toBe(t('Sign in'));
-  expect(dom.window.document.querySelector('p')!.textContent).toBe('Sign in');
+  expect(dom.window.document.querySelector('button')!.textContent).toBe(t('Settings'));
+  expect(dom.window.document.querySelector('p')!.textContent).toBe('Settings');
   expect(dom.window.document.querySelector('input')!.value).toBe('user draft');
-  expect(dom.window.document.querySelector('span')!.textContent).toBe(` ${t('Sign in')} `);
+  expect(dom.window.document.querySelector('span')!.textContent).toBe(` ${t('Settings')} `);
   setInterfaceLocale('ja');
   localizeDocument(dom.window.document);
-  expect(dom.window.document.querySelector('button')!.textContent).toBe(t('Sign in'));
-  expect(dom.window.document.querySelector('span')!.textContent).toBe(` ${t('Sign in')} `);
-  expect(accountBillingLinkHtml('https://example.test/v1')).toContain('/dashboard?lang=ja');
+  expect(dom.window.document.querySelector('button')!.textContent).toBe(t('Settings'));
+  expect(dom.window.document.querySelector('span')!.textContent).toBe(` ${t('Settings')} `);
   dom.window.close();
 });
 
@@ -36,7 +34,7 @@ it('renders all supported languages and preserves interpolation and English fall
   for (const locale of Object.keys(INTERFACE_LOCALES)) {
     setInterfaceLocale(locale);
     expect(t('Interface language').length).toBeGreaterThan(0);
-    if (locale !== 'en') expect(t('Sign in')).not.toBe('Sign in');
+    if (locale !== 'en') expect(t('Settings')).not.toBe('Settings');
     expect(t('Copy cue {number}', { number: 12 })).toContain('12');
     expect(t('Unknown future message')).toBe('Unknown future message');
     expect(t('__proto__')).toBe('__proto__');

@@ -26,8 +26,7 @@
     "videoDurationSeconds": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 3600,
-      "description": "Known YouTube video duration. Backend must still enforce the 60 minute limit."
+      "description": "Video duration in seconds."
     },
     "sourceLanguage": {
       "type": "string",
@@ -244,11 +243,10 @@
     "aiProvider": {
       "type": "string",
       "enum": [
-        "auto",
         "openai",
         "cerebras"
       ],
-      "description": "Auto chooses one analysis model from the transcript; explicit providers remain pinned."
+      "description": "The selected analysis provider stays pinned for this generation."
     }
   }
 }

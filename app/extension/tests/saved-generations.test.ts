@@ -9,7 +9,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage: mocks.sendMes
 afterEach(() => { vi.unstubAllGlobals(); setInterfaceLocale('en'); });
 
 function state(jobId = 'luna'): PanelState {
-  return { activeTabId: 1, accountState: { status: 'authenticated', id: 'account' },
+  return { activeTabId: 1, backendUrl: 'http://127.0.0.1:8001/v1',
     pageStatus: { supported: true, videoId: 'dQw4w9WgXcQ' },
     subtitleState: { type: 'ready', track: { jobId, trackId: `track-${jobId}`, youtubeVideoId: 'dQw4w9WgXcQ' } },
   } as PanelState;
@@ -51,7 +51,7 @@ it('keeps matching language pairs separate by job and selects the exact generati
   view.render(state());
   await flush();
   expect(Array.from(select.options, option => option.textContent)).toEqual([
-    'Auto → English (Transcriber)', 'Auto → English (Transcriber Spark)', 'Auto → Spanish (Transcriber Spark)',
+    'Auto → English (OpenAI)', 'Auto → English (Cerebras)', 'Auto → Spanish (Cerebras)',
     'Delete selected generation…',
   ]);
   expect(select.value).toBe('luna');
@@ -131,7 +131,7 @@ it('ignores a list response after the account or video changes', async () => {
   mocks.sendMessage.mockReturnValue(new Promise(done => { resolve = done; }));
   const { dom, select, view } = setup();
   view.render(state());
-  view.render({ ...state(), accountState: { status: 'anonymous' }, subtitleState: { type: 'no-track' } });
+  view.render({ ...state(), backendUrl: 'http://127.0.0.1:8001/v1', subtitleState: { type: 'no-track' } });
   resolve({ jobs: jobs() });
   await flush();
   expect(select.options).toHaveLength(0);

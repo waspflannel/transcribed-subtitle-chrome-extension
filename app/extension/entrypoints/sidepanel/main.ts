@@ -2,6 +2,7 @@ import { t, INTERFACE_LOCALES, isInterfaceLocale, setInterfaceLocale, localizeDo
 import './style.css';
 import { bindSavedGenerations } from './saved-generations';
 import { bindKnownLyrics } from './known-lyrics';
+import { bindInstanceSettings } from './instance-settings';
 
 import { browser } from 'wxt/browser';
 
@@ -13,13 +14,10 @@ import {
   languageLabel,
 } from '../../utils/languages';
 import { isRuntimeMessage } from '../../utils/messages';
-import type { AccountState, PanelRequest, PanelState } from '../../utils/messages';
+import type { PanelRequest, PanelState } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
-import { generationConfirmationContext } from '../../utils/generation-confirmation';
-import { anonymousAccountState, formatResetDate } from '../../utils/account-state';
 import { escapeHtml } from '../../utils/html';
 import { aiProviderLabel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
-import { accountFeatureListHtml, accountBillingLinkHtml } from './render/account';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
@@ -45,8 +43,7 @@ import {
 
 type PanelErrorResponse = { ok: false; error: string; errorCode?: string; details?: { reason?: string } };
 type PanelResponse = PanelState | PanelErrorResponse;
-type RequestErrorTarget = 'global' | 'account' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-start' | 'generation-cancel' | 'generation-selection';
-type AccountFeedbackKind = 'info' | 'success' | 'error';
+type RequestErrorTarget = 'global' | 'settings' | 'correction' | 'quickfix' | 'cancel' | 'generation-start' | 'generation-cancel' | 'generation-selection';
 type GenerationCancelFeedback = { kind: 'success' | 'error'; message: string };
 
 const {
@@ -66,7 +63,6 @@ const {
   nowPlayingMeta,
   statusBanner,
   watchUnsupported,
-  watchSignin,
   watchSetup,
   watchReady,
   correctionTerminalStatus,
@@ -88,7 +84,6 @@ const {
   cancelLyricsCorrectionButton,
   cancelGenerationButton,
   quickFixStatus,
-  openAccountButton,
   toggleLanguagesButton,
   languageExpand,
   toggleSetupButton,
@@ -97,10 +92,6 @@ const {
   pairTargetCode,
   pairTargetName,
   generateButton,
-  generationConfirmation,
-  generationConfirmationSummary,
-  confirmGenerationButton,
-  cancelGenerationConfirmationButton,
   generateNote,
   clearStateButton,
   resetTimingButton,
@@ -137,24 +128,6 @@ const {
   progressCopy,
   jobsList,
   jobsError,
-  usageSummary,
-  usageRemaining,
-  usageBar,
-  usagePlan,
-  usagePending,
-  usageReset,
-  accountStatus,
-  accountPlan,
-  accountSpeed,
-  accountModel,
-  accountLoginForm,
-  accountEmailInput,
-  accountPasswordInput,
-  accountLoginButton,
-  logoutButton,
-  accountFeedback,
-  featureList,
-  accountBillingLink,
   settingsLanguageSummary,
   shortcutHelpList,
 } = getPanelDom();
@@ -174,9 +147,7 @@ let currentSettings: ExtensionSettings | null = null;
 let latestState: PanelState | null = null;
 let sourceLanguageQuery = '';
 let targetLanguageQuery = '';
-let accountRequestBusy = false;
 let generationRequestBusy = false;
-let confirmedGenerationContext: string | null = null;
 let settingsRequestsInFlight = 0;
 let lyricsCorrectionRequestBusy = false;
 let quickFixRequestBusy = false;
@@ -189,8 +160,6 @@ let tabChangeTimer: ReturnType<typeof setTimeout> | undefined;
 let stateSeq = 0;
 let latestAppliedSeq = 0;
 let panelRequestState: PanelRequestOrder = panelRequestOrder();
-let accountActionVersion = 0;
-let accountActionsInFlight = 0;
 let lastProgressAnnouncement: string | null = null;
 
 /* Watch opens on the transcript; whole-track tasks each occupy one screen. */
@@ -206,13 +175,7 @@ let quickFixNotice: string | null = null;
 collapseButton.addEventListener('click', () => {
   window.close();
 });
-generateButton.addEventListener('click', openGenerationConfirmation);
-confirmGenerationButton.addEventListener('click', () => void generateSubtitles());
-cancelGenerationConfirmationButton.addEventListener('click', dismissGenerationConfirmation);
-generationConfirmation.addEventListener('cancel', (event) => {
-  event.preventDefault();
-  dismissGenerationConfirmation();
-});
+generateButton.addEventListener('click', () => void generateSubtitles());
 lyricsCorrectionForm.addEventListener('submit', (event) => void submitLyricsCorrection(event));
 lyricsCorrectionTextarea.addEventListener('input', () => {
   /* Editing the paste after Continue drops back out of the confirmation step. */
@@ -249,18 +212,10 @@ jobsList.addEventListener('click', (event) => {
   if (button) void cancelGeneration(button);
 });
 clearStateButton.addEventListener('click', () => void clearLocalState());
-openAccountButton.addEventListener('click', () => {
-  showTab(tabButtons, panels, 'account');
-  accountEmailInput.focus();
-});
 toggleLanguagesButton.addEventListener('click', () => {
   setLanguagesExpanded(!languagesExpanded);
 });
 toggleSetupButton.addEventListener('click', () => openWatchScreen('generate'));
-accountLoginForm.addEventListener('submit', (event) => void loginFromAccountForm(event));
-logoutButton.addEventListener('click', () => void logoutAccount());
-accountEmailInput.addEventListener('input', clearAccountFeedback);
-accountPasswordInput.addEventListener('input', clearAccountFeedback);
 sourceLanguageSearchInput.addEventListener('input', handleSourceLanguageSearch);
 targetLanguageSearchInput.addEventListener('input', handleTargetLanguageSearch);
 sourceLanguageList.addEventListener('click', handleSourceLanguageClick);
@@ -280,7 +235,7 @@ const savedGenerations = bindSavedGenerations(
 
 aiProviderSelect.addEventListener('change', () => {
   const aiProvider = aiProviderSelect.value;
-  if (aiProvider === 'auto' || aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
+  if (aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
 });
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 overlayAttachedToVideoInput.addEventListener('change', () =>
@@ -325,7 +280,7 @@ const IDLE_POLL_INTERVAL_MS = 30_000;
 
 setupTabs(tabButtons, panels);
 bindKnownLyrics(document);
-accountBillingLink.innerHTML = accountBillingLinkHtml();
+const instanceSettings = bindInstanceSettings(document, patch => sendPanelRequest({ type: 'panel.saveInstanceSettings', patch }, 'settings', 'mutation'));
 let cueSnapshotRequest = 0;
 const transcriptView = bindTranscriptView({
   transcriptSearch,
@@ -440,7 +395,7 @@ function attachTabListeners(): void {
 }
 
 function scheduleTabChangeRefresh(): void {
-  dismissGenerationConfirmation();
+
   if (tabChangeTimer) clearTimeout(tabChangeTimer);
   tabChangeTimer = setTimeout(() => void onActiveTabChanged(), 60);
 }
@@ -467,38 +422,22 @@ async function refreshBackendState(lyricsOnly = false): Promise<void> {
 
 function currentGenerationContext(): string | null {
   const state = latestState;
-  if (!state?.pageStatus?.supported || state.accountState.status !== 'authenticated' || state.activeTabId === undefined) return null;
-  return generationConfirmationContext(state.activeTabId, state.pageStatus.videoId, state.accountState.id);
+  if (!state?.pageStatus?.supported || state.activeTabId === undefined) return null;
+  return JSON.stringify([state.activeTabId, state.pageStatus.videoId]);
 }
 
 function generationUnavailable(): boolean {
-  return generationRequestBusy || generationCancellationRequestBusy || accountRequestBusy || settingsRequestsInFlight > 0
+  return generationRequestBusy || generationCancellationRequestBusy || settingsRequestsInFlight > 0
     || lyricsCorrectionRequestBusy || quickFixRequestBusy || lyricsCancellationRequestBusy
     || latestState?.subtitleState.type === 'loading' || isActiveLyricsCorrection(latestState?.lyricsCorrection)
     || currentGenerationContext() === null;
 }
 
-function openGenerationConfirmation(): void {
-  if (generationUnavailable() || generationConfirmation.open || !latestState) return;
-  confirmedGenerationContext = currentGenerationContext();
-  const { settings, pageVideoDurationSeconds: duration } = latestState;
-  const minutes = typeof duration === 'number'
-    ? t("Estimated usage: {value1} plan minutes for the full video", {value1: Math.max(1, Math.ceil(duration / 60))})
-    : t("The full video duration counts toward your plan minutes");
-  generationConfirmationSummary.textContent = `${nowPlayingTitleLabel(latestState)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)} · ${aiProviderLabel(settings.aiProvider)} · ${minutes}.`;
-  generationConfirmation.showModal();
-}
 
-function dismissGenerationConfirmation(): void {
-  confirmedGenerationContext = null;
-  if (generationConfirmation.open) generationConfirmation.close();
-}
 
 async function generateSubtitles(): Promise<void> {
-  const confirmationContext = confirmedGenerationContext;
-  if (!generationConfirmation.open || !confirmationContext) return;
-  dismissGenerationConfirmation();
-  if (generationUnavailable() || confirmationContext !== currentGenerationContext()) return;
+  const state = latestState;
+  if (generationUnavailable() || !state?.pageStatus?.supported || state.activeTabId === undefined) return;
 
   generationCancelFeedback = null;
   generationRequestBusy = true;
@@ -506,7 +445,7 @@ async function generateSubtitles(): Promise<void> {
   generateButton.textContent = t("Starting...");
 
   try {
-    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles', confirmationContext }, 'generation-start', 'mutation');
+    const applied = await sendPanelRequest({ type: 'panel.generateSubtitles', youtubeVideoId: state.pageStatus.videoId, tabId: state.activeTabId }, 'generation-start', 'mutation');
     if (applied) {
       openWatchScreen('transcript');
     } else {
@@ -711,7 +650,7 @@ function isActiveLyricsCorrection(status: LyricsCorrectionStatus | null | undefi
 }
 
 function renderLyricsEditState(): void {
-  const ready = latestState?.subtitleState.type === 'ready' && Date.parse(latestState.subtitleState.track.expiresAt) > Date.now();
+  const ready = latestState?.subtitleState.type === 'ready' && (latestState.subtitleState.track.expiresAt === null || Date.parse(latestState.subtitleState.track.expiresAt) > Date.now());
   const activeCorrection = isActiveLyricsCorrection(latestState?.lyricsCorrection);
   const editOpen = watchScreen === 'replace' && ready;
   const quickActive = ready && !activeCorrection;
@@ -750,7 +689,7 @@ function renderLyricsEditState(): void {
 }
 
 async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> {
-  dismissGenerationConfirmation();
+
   settingsRequestsInFlight += 1;
   generateButton.disabled = true;
   try {
@@ -762,57 +701,16 @@ async function updateSettings(patch: Partial<ExtensionSettings>): Promise<void> 
 }
 
 async function clearLocalState(): Promise<void> {
-  dismissGenerationConfirmation();
+
   await sendPanelRequest({ type: 'panel.clearLocalState' }, 'global', 'mutation');
 }
 
-async function loginFromAccountForm(event: SubmitEvent): Promise<void> {
-  event.preventDefault();
 
-  setAccountRequestBusy(true, t("Signing in..."));
-
-  try {
-    const signedIn = await sendPanelRequest(
-      {
-        type: 'panel.login',
-        email: accountEmailInput.value,
-        password: accountPasswordInput.value,
-        ...(typeof panelWindowId === 'number' ? { windowId: panelWindowId } : {}),
-      },
-      'account',
-      'mutation',
-      true,
-    );
-
-    accountPasswordInput.value = '';
-
-    if (signedIn) {
-      showAccountFeedback('success', t("Signed in."));
-    }
-  } finally {
-    setAccountRequestBusy(false);
-  }
-}
-
-async function logoutAccount(): Promise<void> {
-  setAccountRequestBusy(true, t("Signing out..."));
-
-  try {
-    const signedOut = await sendPanelRequest({ type: 'panel.logout' }, 'account', 'mutation', true);
-
-    if (signedOut) {
-      showAccountFeedback('success', t("Signed out."));
-    }
-  } finally {
-    setAccountRequestBusy(false);
-  }
-}
 
 async function sendPanelRequest(
   request: PanelRequest,
   errorTarget: RequestErrorTarget = 'global',
   kind: 'normal' | 'mutation' = 'normal',
-  accountAction = false,
 ): Promise<boolean> {
   const requestWithWindow = typeof panelWindowId === 'number'
     ? { ...request, windowId: panelWindowId }
@@ -821,15 +719,7 @@ async function sendPanelRequest(
   const isMutation = kind === 'mutation';
   const ordering = beginPanelRequest(panelRequestState, kind);
   panelRequestState = ordering.state;
-  const startedDuringAccountAction = accountActionsInFlight > 0;
-  const requestAccountId = latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null;
-  const actionVersion = accountAction ? ++accountActionVersion : accountActionVersion;
-  if (accountAction) accountActionsInFlight += 1;
-  const canApply = (): boolean => accountAction
-    ? actionVersion === accountActionVersion
-    : !startedDuringAccountAction && accountActionsInFlight === 0
-      && (latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null) === requestAccountId
-      && canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
+  const canApply = (): boolean => canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
@@ -882,7 +772,7 @@ async function sendPanelRequest(
     if (isMutation) {
       panelRequestState = finishPanelRequest(panelRequestState);
     }
-    if (accountAction) accountActionsInFlight = Math.max(0, accountActionsInFlight - 1);
+
   }
 }
 
@@ -972,9 +862,9 @@ function showPanelState(state: PanelState): void {
   }
   interfaceLanguageSelect.value = state.settings.interfaceLocale;
   renderShortcutHelp();
-  accountBillingLink.innerHTML = accountBillingLinkHtml();
-  const previousAccountId = latestState?.accountState.status === 'authenticated' ? latestState.accountState.id : null;
-  const nextAccountId = state.accountState.status === 'authenticated' ? state.accountState.id : null;
+
+  const previousInstanceId = latestState?.backendUrl;
+  const nextInstanceId = state.backendUrl;
   const previousStateType = latestState?.subtitleState.type;
   const previousCorrectionStatus = latestState?.lyricsCorrection?.status;
   const previousTrackId = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track.trackId : null;
@@ -987,12 +877,10 @@ function showPanelState(state: PanelState): void {
     sourceLanguageSearchInput.value = '';
     if (state.settings.sourceLanguage !== 'auto') void updateSettings({ sourceLanguage: 'auto' });
   }
-  const confirmationChanged = generationConfirmation.open
-    && (generationUnavailable() || confirmedGenerationContext !== currentGenerationContext());
-  if (confirmationChanged) dismissGenerationConfirmation();
   savedGenerations.render(state);
+  instanceSettings.render(state);
 
-  if (previousAccountId !== nextAccountId) {
+  if (previousInstanceId !== nextInstanceId) {
     correctionCancelError.hidden = true;
     correctionCancelError.textContent = '';
     generationCancelFeedback = null;
@@ -1001,8 +889,6 @@ function showPanelState(state: PanelState): void {
   const pageStatus = state.pageStatus;
   const settings = state.settings;
   const supported = Boolean(pageStatus?.supported);
-  const { accountState } = state;
-  const authenticated = accountState.status === 'authenticated';
   const subtitleState = state.subtitleState;
   const nextTrackId = subtitleState.type === 'ready' ? subtitleState.track.trackId : null;
 
@@ -1031,7 +917,7 @@ function showPanelState(state: PanelState): void {
   }
 
   showStatusBanner(state);
-  showWatchState(state, supported, authenticated);
+  showWatchState(state, supported);
   if (subtitleState.type === 'ready') {
     transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
     void pullActiveCue(state);
@@ -1042,19 +928,14 @@ function showPanelState(state: PanelState): void {
     transcriptView.setData(null, [], settings);
   }
   renderJobHistory(state, { jobsList, jobsError, cancellationBusy: generationCancellationRequestBusy });
-  renderUsage(accountState);
-  renderAccount(accountState, settings);
+
   renderSettingsSummary(settings);
 
   generateButton.disabled = generationUnavailable();
   renderLyricsEditState();
   renderLyricsCorrectionState(state);
-  generateButton.textContent = generateButtonLabel(accountState, subtitleState.type);
+  generateButton.textContent = generateButtonLabel(subtitleState.type);
   renderGenerateNote(state, supported);
-  if (confirmationChanged) {
-    statusBanner.hidden = false;
-    statusBanner.textContent = t("The selected video, account, or generation availability changed.");
-  }
 
   renderLanguagePair(settings);
   renderLanguagePickers(settings);
@@ -1176,8 +1057,8 @@ async function pullActiveCue(state: PanelState): Promise<void> {
   }
 }
 
-/** Toggle the Watch tab's mutually exclusive states: unsupported page, sign-in prompt, setup, progress, transcript. */
-function showWatchState(state: PanelState, supported: boolean, authenticated: boolean): void {
+/** Toggle the Watch tab's mutually exclusive states: unsupported page, setup, progress, transcript. */
+function showWatchState(state: PanelState, supported: boolean): void {
   const subtitleState = state.subtitleState;
   const loading = subtitleState.type === 'loading';
   const partial = loading && (subtitleState.partialTrack?.cues.length ?? 0) > 0;
@@ -1188,8 +1069,7 @@ function showWatchState(state: PanelState, supported: boolean, authenticated: bo
   const canCancelGeneration = generationInProgress && subtitleState.jobId !== undefined;
 
   watchUnsupported.hidden = supported;
-  watchSignin.hidden = !supported || authenticated;
-  watchSetup.hidden = !supported || !authenticated || loading || (ready && watchScreen !== 'generate');
+  watchSetup.hidden = !supported || loading || (ready && watchScreen !== 'generate');
   if (watchScreen === 'progress' && !loading && !correctionRunning) watchScreen = 'transcript';
   progressContainer.hidden = (!loading && !correctionRunning) || (ready && watchScreen !== 'progress');
   progressSummary.hidden = !ready || !correctionRunning || watchScreen !== 'transcript';
@@ -1267,16 +1147,8 @@ function lyricsCorrectionStageChecklistHtml(stage: LyricsCorrectionStatus['stage
 }
 
 function renderGenerateNote(state: PanelState, supported: boolean): void {
-  if (!supported) {
-    generateNote.textContent = '';
-
-    return;
-  }
-
-  const duration = videoDurationForState(state);
-  generateNote.textContent = typeof duration === 'number'
-    ? t("Estimated usage: {value1} plan minutes for the full video", {value1: Math.max(1, Math.ceil(duration / 60))})
-    : t("The full video duration counts toward your plan minutes.");
+  generateNote.textContent = supported && (videoDurationForState(state) ?? 0) > 1800
+    ? t("Long videos can take longer and use more provider credits. Generation is still available.") : '';
 }
 
 function renderLanguagePair(settings: ExtensionSettings | null): void {
@@ -1305,48 +1177,7 @@ function renderLanguagePickers(settings: ExtensionSettings | null): void {
   });
 }
 
-function renderUsage(accountState: AccountState): void {
-  if (accountState.status !== 'authenticated') {
-    usageSummary.textContent = t("Sign in to see usage");
-    usageRemaining.textContent = t("Usage unavailable");
-    usageBar.style.width = '0%';
-    usagePlan.textContent = t("Not signed in");
-    usagePending.textContent = t("Sign in required");
-    usageReset.textContent = t("Unavailable");
 
-    return;
-  }
-
-  const totalCommitted = accountState.monthlyMinutesUsed + accountState.monthlyMinutesPending;
-  const percent = accountState.monthlyMinuteLimit === 0
-    ? 0
-    : Math.min(100, Math.round((totalCommitted / accountState.monthlyMinuteLimit) * 100));
-
-  usageSummary.textContent = t("{value1} of {value2} min used", {value1: accountState.monthlyMinutesUsed, value2: accountState.monthlyMinuteLimit});
-  usageRemaining.textContent = t("{value1} min left", {value1: accountState.monthlyMinutesRemaining});
-  usageBar.style.width = `${percent}%`;
-  usagePlan.textContent = `${accountState.planName} (${accountState.tierName})`;
-  usagePending.textContent = t("{value1} min pending", {value1: accountState.monthlyMinutesPending});
-  usageReset.textContent = formatResetDate(accountState.resetAt);
-}
-
-function renderAccount(accountState: AccountState, settings: ExtensionSettings): void {
-  const authenticated = accountState.status === 'authenticated';
-
-  accountStatus.textContent = authenticated ? accountState.email : t("Account");
-  accountPlan.textContent = authenticated ? accountState.planName : t("Available after sign-in");
-  accountSpeed.textContent = authenticated ? t(accountState.tierSpeedLabel) : t("Available after sign-in");
-  accountModel.hidden = !authenticated;
-  accountModel.textContent = authenticated ? t("Next generation: {value1}", {value1: aiProviderLabel(settings.aiProvider)}) : '';
-  accountLoginForm.hidden = authenticated;
-  accountEmailInput.disabled = accountRequestBusy || authenticated;
-  accountPasswordInput.disabled = accountRequestBusy || authenticated;
-  accountLoginButton.disabled = accountRequestBusy || authenticated;
-  accountLoginButton.textContent = accountRequestBusy ? t("Signing in...") : t("Sign in");
-  logoutButton.disabled = accountRequestBusy || !authenticated;
-  logoutButton.hidden = !authenticated;
-  featureList.innerHTML = accountFeatureListHtml(accountState, settings);
-}
 
 function renderSettingsSummary(settings: ExtensionSettings): void {
   settingsLanguageSummary.textContent = `${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)}`;
@@ -1357,8 +1188,7 @@ function renderShortcutHelp(): void {
 }
 
 function showError(error: unknown): void {
-  dismissGenerationConfirmation();
-  const emptyAccountState = anonymousAccountState();
+
 
   latestState = null;
   currentSettings = null;
@@ -1371,7 +1201,6 @@ function showError(error: unknown): void {
   nowPlayingTitle.textContent = t("Open a YouTube video");
   nowPlayingMeta.textContent = '';
   watchUnsupported.hidden = false;
-  watchSignin.hidden = true;
   watchSetup.hidden = true;
   progressContainer.hidden = true;
   progressSummary.hidden = true;
@@ -1380,8 +1209,7 @@ function showError(error: unknown): void {
   jobsList.innerHTML = `<p class="empty-state">${escapeHtml(t("Unable to load jobs."))}</p>`;
   renderLanguagePair(null);
   renderLanguagePickers(null);
-  renderUsage(emptyAccountState);
-  renderAccount(emptyAccountState, DEFAULT_EXTENSION_SETTINGS);
+
   settingsLanguageSummary.textContent = t("Unavailable");
   generateButton.disabled = true;
   generateButton.textContent = t("Generate subtitles");
@@ -1409,11 +1237,6 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
     return;
   }
 
-  if (errorTarget === 'account') {
-    showAccountFeedback('error', message);
-
-    return;
-  }
 
   if (errorTarget === 'settings') {
     statusBanner.hidden = false;
@@ -1454,35 +1277,8 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
   showError(error);
 }
 
-function showAccountFeedback(kind: AccountFeedbackKind, message: string): void {
-  accountFeedback.hidden = false;
-  accountFeedback.className = `account-feedback ${kind}`;
-  accountFeedback.textContent = t(message);
-}
 
-function clearAccountFeedback(): void {
-  accountFeedback.hidden = true;
-  accountFeedback.className = 'account-feedback';
-  accountFeedback.textContent = '';
-}
 
-function setAccountRequestBusy(busy: boolean, message?: string): void {
-  accountRequestBusy = busy;
-  if (busy) dismissGenerationConfirmation();
-  generateButton.disabled = generationUnavailable();
-
-  if (message) {
-    showAccountFeedback('info', message);
-  }
-
-  const authenticated = latestState?.accountState.status === 'authenticated';
-
-  accountEmailInput.disabled = busy || authenticated;
-  accountPasswordInput.disabled = busy || authenticated;
-  accountLoginButton.disabled = busy || authenticated;
-  accountLoginButton.textContent = busy ? t("Signing in...") : t("Sign in");
-  logoutButton.disabled = busy || !authenticated;
-}
 
 function setSettingsDisabled(disabled: boolean): void {
   sourceLanguageSearchInput.disabled = disabled;
@@ -1505,11 +1301,11 @@ function setSettingsDisabled(disabled: boolean): void {
   blurTranslationInput.disabled = disabled;
   pauseOnWordHoverInput.disabled = disabled;
   keyboardShortcutsEnabledInput.disabled = disabled;
-  const authenticated = latestState?.accountState.status === 'authenticated';
-  accountEmailInput.disabled = disabled || accountRequestBusy || authenticated;
-  accountPasswordInput.disabled = disabled || accountRequestBusy || authenticated;
-  accountLoginButton.disabled = disabled || accountRequestBusy || authenticated;
-  logoutButton.disabled = disabled || accountRequestBusy || !authenticated;
+
+
+
+
+
   clearStateButton.disabled = disabled;
   resetTimingButton.disabled = disabled;
   timingOffsetRangeInput.disabled = disabled;

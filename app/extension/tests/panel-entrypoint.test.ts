@@ -69,23 +69,7 @@ it('cancels generation and saves the model selected for the next generation', as
       url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
       mediaKind: 'video',
     },
-    accountState: {
-      status: 'authenticated',
-      id: 'account-1',
-      email: 'learner@example.test',
-      aiModel: 'gpt-oss-120b',
-      name: 'Learner',
-      emailVerified: true,
-      planName: 'Starter',
-      tierName: 'Starter',
-      tierSpeedLabel: 'Standard',
-      monthlyMinuteLimit: 100,
-      monthlyMinutesUsed: 0,
-      monthlyMinutesPending: 0,
-      monthlyMinutesRemaining: 100,
-      resetAt: '2099-01-01T00:00:00.000Z',
-      upgradeAvailable: false,
-    },
+    backendUrl: 'http://127.0.0.1:8001/v1',
     subtitleState: {
       type: 'loading',
       status: 'running',
@@ -127,8 +111,6 @@ it('cancels generation and saves the model selected for the next generation', as
   expect(cancelButton?.hidden).toBe(false);
   expect(cancelButton?.disabled).toBe(true);
   expect(cancelButton?.textContent).toBe('Cancel generation');
-  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Transcriber');
-  expect(dom.window.document.querySelector<HTMLElement>('[data-account-model]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-panel="watch"]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector<HTMLElement>('[data-progress]')?.hidden).toBe(false);
   expect(dom.window.document.querySelector('[data-progress-activity]')?.textContent).toBe('Preparing request');
@@ -174,13 +156,7 @@ it('cancels generation and saves the model selected for the next generation', as
   await vi.advanceTimersByTimeAsync(0);
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' } }));
   expect(selector.value).toBe('cerebras');
-  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Transcriber Spark');
-  selector.value = 'auto';
-  selector.dispatchEvent(new dom.window.Event('change'));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'auto' } }));
-  expect(selector.value).toBe('auto');
-  expect(dom.window.document.querySelector('[data-account-model]')?.textContent).toBe('Next generation: Auto');
+  expect([...selector.options].map(option => option.value)).toEqual(['openai', 'cerebras']);
 
   const attachInput = dom.window.document.querySelector<HTMLInputElement>('input[name="overlayAttachedToVideo"]')!;
   expect(attachInput.disabled).toBe(false);
@@ -207,7 +183,7 @@ it('resets video language on panel startup and video changes, but preserves manu
     installId: 'install_test', activeTabId: 1,
     settings: { ...DEFAULT_EXTENSION_SETTINGS, sourceLanguage: 'jpn', targetLanguage: 'fra' },
     pageStatus: { supported: true, videoId: 'dQw4w9WgXcQ', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', mediaKind: 'video' },
-    accountState: { status: 'anonymous' }, subtitleState: { type: 'no-track' }, jobHistory: [],
+    backendUrl: 'http://127.0.0.1:8001/v1', subtitleState: { type: 'no-track' }, jobHistory: [],
   };
   mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; patch?: Partial<PanelState['settings']> }) => {
     if (request?.type === 'panel.listGenerations') return { jobs: [] };
@@ -244,9 +220,9 @@ it('resets video language on panel startup and video changes, but preserves manu
     expect(interfaceSelector.value).toBe(locale);
     expect(state.settings.sourceLanguage).toBe('jpn');
     expect(state.settings.targetLanguage).toBe('fra');
-    const signIn = dom.window.document.querySelector('[data-i18n="Sign in"]')?.textContent?.trim();
-    if (locale === 'en') expect(signIn).toBe('Sign in');
-    else expect(signIn).not.toBe('Sign in');
+    const settingsTab = dom.window.document.querySelector('[data-i18n="Settings"]')?.textContent?.trim();
+    if (locale === 'en') expect(settingsTab).toBe('Settings');
+    else expect(settingsTab).not.toBe('Settings');
   }
 
   state.pageStatus = { supported: true, videoId: 'M7lc1UVf-VE', url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE', mediaKind: 'video' };

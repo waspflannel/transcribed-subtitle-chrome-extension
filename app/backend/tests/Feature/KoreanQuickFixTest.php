@@ -44,7 +44,7 @@ class KoreanQuickFixTest extends TestCase
             )]]];
         })->preventStrayPrompts();
 
-        $this->withExtensionAuth($job->install_id, $job->user)
+        $this->withExtensionInstall($job->install_id)
             ->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/korean-cue/tokens/1', [
                 'expectedTrackId' => $track->public_id, 'text' => '친구',
             ])->assertOk()->assertJsonPath('cues.0.sourceText', '안녕 친구')

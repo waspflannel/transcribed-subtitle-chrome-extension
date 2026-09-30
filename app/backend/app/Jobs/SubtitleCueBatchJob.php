@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Exceptions\SubtitleProcessingException;
-use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
@@ -48,7 +47,7 @@ abstract class SubtitleCueBatchJob implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new LimitSubtitleBatchConcurrency, new SkipIfBatchCancelled];
+        return [new SkipIfBatchCancelled];
     }
 
     /**

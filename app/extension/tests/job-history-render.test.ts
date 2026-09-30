@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
 
 import { renderJobHistory } from '../entrypoints/sidepanel/render/job-history';
-import { anonymousAccountState } from '../utils/account-state';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { PanelState } from '../utils/messages';
 import type { SubtitleJobHistoryItem } from '../utils/contracts';
@@ -24,7 +23,7 @@ function makeJob(overrides: Partial<SubtitleJobHistoryItem> = {}): SubtitleJobHi
     detectedSourceLanguage: 'spa',
     targetLanguage: 'eng',
     aiProvider: 'openai',
-    aiModel: 'gpt-5.6-luna',
+    aiModel: 'gpt-6-luna',
     includeRomanization: true,
     includeTranslation: false,
     ...overrides,
@@ -36,7 +35,7 @@ function stateWithJob(): PanelState {
   return {
     installId: 'i',
     settings: DEFAULT_EXTENSION_SETTINGS,
-    accountState: anonymousAccountState(),
+    backendUrl: 'http://127.0.0.1:8001/v1',
     subtitleState: { type: 'no-track' },
     jobHistory: jobs,
   };
@@ -68,8 +67,8 @@ describe('renderJobHistory links', () => {
       expect(link.rel).toContain('noopener');
     }
     expect(jobsList.querySelector('button, form, [data-action]')).toBeNull();
-    expect(jobsList.textContent).toContain('Transcriber');
-    expect(jobsList.textContent).not.toContain('Transcriber Spark');
+    expect(jobsList.textContent).toContain('OpenAI');
+    expect(jobsList.textContent).not.toContain('Cerebras');
     expect(jobsList.textContent).not.toContain('Retry');
     expect(jobsList.textContent).toContain("This job's options are not restored.");
     expect(jobsList.textContent).toContain('review Watch settings');

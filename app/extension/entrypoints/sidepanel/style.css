@@ -84,35 +84,10 @@ a {
 }
 
 /* ============================== Layout ============================== */
-.generation-confirmation {
-  background: var(--night-high);
-  border: 2px solid var(--line);
-  color: var(--text);
-  margin: auto;
-  max-height: calc(100% - 32px);
-  padding: 20px;
-  width: min(420px, calc(100% - 32px));
-}
 
-.generation-confirmation::backdrop {
-  background: rgba(0, 0, 0, 0.8);
-}
 
-.generation-confirmation h2 {
-  font-family: var(--display);
-  font-size: 24px;
-}
 
-.generation-confirmation p {
-  margin-top: 14px;
-  overflow-wrap: anywhere;
-}
 
-.generation-confirmation-actions {
-  display: grid;
-  gap: 12px;
-  margin-top: 24px;
-}
 
 .panel {
   display: flex;
@@ -1532,7 +1507,7 @@ output {
   text-align: center;
 }
 
-/* ============================== Facts / usage / account ============================== */
+/* ============================== Facts / settings ============================== */
 .facts {
   display: grid;
   gap: 7px;
@@ -1564,64 +1539,22 @@ output {
   overflow-wrap: anywhere;
 }
 
-.usage-meter {
-  display: grid;
-  gap: 7px;
-}
 
-.usage-meter-label {
-  align-items: baseline;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
-}
 
-.usage-meter-label span {
-  color: var(--muted);
-  font-size: 12px;
-}
 
-.usage-meter-label strong {
-  color: var(--accent-bright);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  text-align: right;
-}
 
 .usage-bar {
   height: 12px;
 }
 
-.account-form,
-.account-billing {
+.instance-settings-form {
   display: grid;
   gap: 10px;
 }
 
-.account-feedback {
-  border: 1.5px solid var(--line);
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 8px 11px;
-}
 
-.account-feedback.info {
-  color: var(--muted);
-}
 
-.account-feedback.success {
-  background: var(--green-tint);
-  border-color: rgba(44, 122, 75, 0.5);
-  color: var(--green);
-}
 
-.account-feedback.error {
-  background: var(--accent-tint);
-  border-color: var(--accent);
-  color: var(--accent-bright);
-}
 
 .feature-list {
   display: flex;
@@ -1786,3 +1719,13 @@ output {
 .tab { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .interface-language > span { min-width: 0; overflow-wrap: anywhere; }
 .pair-name { white-space: normal; overflow-wrap: anywhere; }
+
+[data-provider-fields] { display: grid; gap: 18px; }
+[data-provider-fields] .provider-field { display: grid; gap: 6px; min-width: 0; }
+.provider-heading { display: flex; align-items: center; justify-content: space-between; font-weight: 600; }
+[data-provider-status] { font-size: 16px; }
+[data-provider-status][data-configured="true"] { color: var(--green); }
+[data-provider-status][data-configured="false"] { color: var(--accent-bright); }
+.provider-remove { justify-self: end; padding: 2px 0; background: transparent; border: 0; color: var(--muted); font-size: 11px; }
+.provider-remove[aria-pressed="true"] { color: var(--accent-bright); text-decoration: line-through; }
+[data-backend-url] { display: block; overflow-wrap: anywhere; }

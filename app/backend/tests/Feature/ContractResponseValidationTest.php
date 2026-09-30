@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Ai\Agents\EditedCueAgent;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
-use App\Models\User;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,7 +20,6 @@ class ContractResponseValidationTest extends TestCase
     public function test_job_and_track_responses_match_contract_schemas(): void
     {
         $installId = $this->installId();
-        $user = User::factory()->create();
 
         config([
             'queue.default' => 'database',
@@ -31,7 +29,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->postJson('/v1/subtitle-jobs', [
                     'youtubeVideoId' => 'create00001',
                     'youtubeUrl' => 'https://www.youtube.com/watch?v=create00001',
@@ -46,7 +44,6 @@ class ContractResponseValidationTest extends TestCase
         );
 
         $runningJob = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'runvalid001',
             'youtube_url' => 'https://www.youtube.com/watch?v=runvalid001',
@@ -57,7 +54,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id)
                 ->assertOk(),
             'job-response.schema.json',
@@ -72,16 +69,16 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->getJson('/v1/subtitle-jobs/'.$runningJob->public_id)
                 ->assertOk(),
             'job-response.schema.json',
         );
 
-        $completedTrack = $this->completedTrack($installId, $user, 'complete001');
+        $completedTrack = $this->completedTrack($installId, 'complete001');
 
         $completedResponse = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs/'.$completedTrack->job->public_id)
             ->assertOk();
 
@@ -89,7 +86,6 @@ class ContractResponseValidationTest extends TestCase
         $this->assertPayloadMatchesSchema($completedResponse->json('track'), 'track-response.schema.json');
 
         $failedJob = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'failvalid01',
             'youtube_url' => 'https://www.youtube.com/watch?v=failvalid01',
@@ -102,7 +98,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->getJson('/v1/subtitle-jobs/'.$failedJob->public_id)
                 ->assertOk(),
             'job-response.schema.json',
@@ -111,11 +107,9 @@ class ContractResponseValidationTest extends TestCase
 
     public function test_filtered_generation_list_can_exceed_twenty_five_items(): void
     {
-        $user = User::factory()->create();
         $installId = $this->installId();
         for ($index = 0; $index < 26; $index++) {
             $job = SubtitleJob::factory()->create([
-                'user_id' => $user->id,
                 'youtube_video_id' => 'history0001',
                 'status' => 'completed',
                 'transcription_options_hash' => hash('sha256', (string) $index),
@@ -123,7 +117,7 @@ class ContractResponseValidationTest extends TestCase
             SubtitleTrack::factory()->for($job, 'job')->create(['expires_at' => now()->addDay()]);
         }
         $this->assertResponseMatchesSchema(
-            $this->withExtensionAuth($installId, $user)->getJson('/v1/subtitle-jobs?youtubeVideoId=history0001')
+            $this->withExtensionInstall($installId)->getJson('/v1/subtitle-jobs?youtubeVideoId=history0001')
                 ->assertOk()->assertJsonCount(26, 'jobs'),
             'subtitle-job-history-response.schema.json',
         );
@@ -132,11 +126,9 @@ class ContractResponseValidationTest extends TestCase
     public function test_history_learning_token_and_error_responses_match_contract_schemas(): void
     {
         $installId = $this->installId('b');
-        $user = User::factory()->create();
 
-        $this->completedTrack($installId, $user, 'history0001');
+        $this->completedTrack($installId, 'history0001');
         SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'history0002',
             'youtube_url' => 'https://www.youtube.com/watch?v=history0002',
@@ -145,7 +137,6 @@ class ContractResponseValidationTest extends TestCase
             'progress_percent' => 55,
         ]);
         SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => 'history0003',
             'youtube_url' => 'https://www.youtube.com/watch?v=history0003',
@@ -158,13 +149,13 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->getJson('/v1/subtitle-jobs')
                 ->assertOk(),
             'subtitle-job-history-response.schema.json',
         );
 
-        $trackWithLearningMetadata = $this->completedTrack($installId, $user, 'learntok001', [
+        $trackWithLearningMetadata = $this->completedTrack($installId, 'learntok001', [
             'source_language' => 'eng',
             'detected_source_language' => 'eng',
             'target_language' => 'eng',
@@ -172,7 +163,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->postJson('/v1/learning-tokens', [
                     'trackId' => $trackWithLearningMetadata->public_id,
                     'cueId' => 'cue-0001',
@@ -184,7 +175,7 @@ class ContractResponseValidationTest extends TestCase
 
         $this->assertResponseMatchesSchema(
             $this
-                ->withExtensionAuth($installId, $user)
+                ->withExtensionInstall($installId)
                 ->getJson('/v1/subtitle-jobs/00000000-0000-4000-8000-000000000000')
                 ->assertNotFound(),
             'api-error.schema.json',
@@ -194,7 +185,6 @@ class ContractResponseValidationTest extends TestCase
     public function test_lyrics_editing_responses_match_canonical_contract_schemas(): void
     {
         $installId = $this->installId('c');
-        $user = User::factory()->create();
         EditedCueAgent::fake(function ($prompt): array {
             $input = json_decode($prompt, true);
             $cue = $input['cues'][0];
@@ -208,7 +198,7 @@ class ContractResponseValidationTest extends TestCase
                 )]],
             ];
         })->preventStrayPrompts();
-        $track = $this->completedTrack($installId, $user, 'editcontr01');
+        $track = $this->completedTrack($installId, 'editcontr01');
         $attemptId = '018f9e2f-0d8c-7500-8f38-9f4c5d1b3020';
         $track->lyricsCorrection()->create([
             'attempt_id' => $attemptId,
@@ -218,26 +208,26 @@ class ContractResponseValidationTest extends TestCase
         ]);
 
         $invalidCancellation = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics')
             ->assertUnprocessable();
         $this->assertResponseMatchesSchema($invalidCancellation, 'api-error.schema.json');
 
         $staleCancellation = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics', ['attemptId' => '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041'])
             ->assertStatus(409);
         $this->assertResponseMatchesSchema($staleCancellation, 'api-error.schema.json');
 
         $cancelled = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->deleteJson('/v1/subtitle-jobs/'.$track->job->public_id.'/lyrics', ['attemptId' => $attemptId])
             ->assertOk();
         $this->assertResponseMatchesSchema($cancelled, 'lyrics-correction-status.schema.json');
 
         $cue = $track->fresh()->cues[0];
         $quickFix = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->patchJson('/v1/subtitle-jobs/'.$track->job->public_id.'/cues/'.$cue['cueId'].'/tokens/0', [
                 'expectedTrackId' => $track->public_id,
                 'text' => 'changed',
@@ -246,14 +236,13 @@ class ContractResponseValidationTest extends TestCase
         $this->assertResponseMatchesSchema($quickFix, 'track-response.schema.json');
     }
 
-    private function completedTrack(string $installId, User $user, string $videoId, array $overrides = []): SubtitleTrack
+    private function completedTrack(string $installId, string $videoId, array $overrides = []): SubtitleTrack
     {
         $sourceLanguage = $overrides['source_language'] ?? 'auto';
         $detectedSourceLanguage = $overrides['detected_source_language'] ?? 'spa';
         $targetLanguage = $overrides['target_language'] ?? 'eng';
 
         $job = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'install_id' => $installId,
             'youtube_video_id' => $videoId,
             'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,

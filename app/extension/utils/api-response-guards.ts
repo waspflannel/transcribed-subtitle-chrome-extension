@@ -1,7 +1,5 @@
 import type {
-  AccountSummary,
-  ExtensionAccountResponse,
-  ExtensionAuthResponse,
+  InstanceSettings,
   JobResponse,
   LearningToken,
   LearningTokenResponse,
@@ -13,30 +11,7 @@ import type {
   TrackResponse,
 } from './contracts';
 
-export function guardExtensionAuthResponse(value: unknown): ExtensionAuthResponse {
-  const response = record(value, 'extension auth response');
-  const token = record(response.token, 'extension auth token');
 
-  guardAccountSummary(response.account);
-  requiredString(token, 'plainTextToken');
-  literal(token, 'tokenType', 'Bearer');
-  requiredString(token, 'expiresAt');
-  nonEmptyArray(token.abilities, 'token abilities').forEach((ability) => {
-    if (typeof ability !== 'string') {
-      throw invalid('token ability must be a string');
-    }
-  });
-
-  return response as unknown as ExtensionAuthResponse;
-}
-
-export function guardExtensionAccountResponse(value: unknown): ExtensionAccountResponse {
-  const response = record(value, 'extension account response');
-
-  guardAccountSummary(response.account);
-
-  return response as unknown as ExtensionAccountResponse;
-}
 
 export function guardOkResponse(value: unknown): { ok: true } {
   const response = record(value, 'ok response');
@@ -52,7 +27,7 @@ export function guardJobResponse(value: unknown): JobResponse {
   guardJobCore(response);
   requiredString(response, 'createdAt');
   requiredString(response, 'updatedAt');
-  optionalString(response, 'expiresAt');
+  if (response.expiresAt !== null) optionalString(response, 'expiresAt');
   optionalString(response, 'message');
   optionalString(response, 'errorCode');
 
@@ -95,7 +70,7 @@ export function guardTrackResponse(value: unknown): TrackResponse {
   requiredString(response, 'sourceLanguage');
   requiredString(response, 'targetLanguage');
   requiredString(response, 'generatedAt');
-  requiredString(response, 'expiresAt');
+  if (response.expiresAt !== null) requiredString(response, 'expiresAt');
   requiredString(response, 'webVtt');
   optionalString(response, 'detectedSourceLanguage');
   cues.forEach(guardSubtitleCue);
@@ -169,27 +144,6 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   return response as LyricsCorrectionStatus;
 }
 
-function guardAccountSummary(value: unknown): AccountSummary {
-  const account = record(value, 'account summary');
-
-  literal(account, 'status', 'authenticated');
-  optionalString(account, 'aiModel');
-  requiredString(account, 'id');
-  requiredString(account, 'email');
-  requiredString(account, 'name');
-  requiredBoolean(account, 'emailVerified');
-  requiredString(account, 'planName');
-  requiredString(account, 'tierName');
-  requiredString(account, 'tierSpeedLabel');
-  requiredNumber(account, 'monthlyMinuteLimit');
-  requiredNumber(account, 'monthlyMinutesUsed');
-  requiredNumber(account, 'monthlyMinutesPending');
-  requiredNumber(account, 'monthlyMinutesRemaining');
-  requiredString(account, 'resetAt');
-  requiredBoolean(account, 'upgradeAvailable');
-
-  return account as unknown as AccountSummary;
-}
 
 function guardSubtitleJobHistoryItem(value: unknown): SubtitleJobHistoryItem {
   const item = record(value, 'subtitle job history item');
@@ -201,7 +155,7 @@ function guardSubtitleJobHistoryItem(value: unknown): SubtitleJobHistoryItem {
   requiredString(item, 'jobId');
   optionalString(item, 'completedAt');
   optionalString(item, 'trackId');
-  optionalString(item, 'expiresAt');
+  if (item.expiresAt !== null) optionalString(item, 'expiresAt');
   optionalString(item, 'message');
   optionalString(item, 'errorCode');
 
@@ -219,7 +173,7 @@ function guardJobCore(value: Record<string, unknown>): void {
   requiredString(value, 'sourceLanguage');
   optionalString(value, 'detectedSourceLanguage');
   requiredString(value, 'targetLanguage');
-  oneOf(value, 'aiProvider', ['auto', 'openai', 'cerebras']);
+  oneOf(value, 'aiProvider', ['openai', 'cerebras']);
   requiredString(value, 'aiModel');
   requiredBoolean(value, 'includeRomanization');
   requiredBoolean(value, 'includeTranslation');
@@ -359,4 +313,19 @@ function oneOf<TValue extends string>(value: Record<string, unknown>, key: strin
 
 function invalid(message: string): TypeError {
   return new TypeError(message);
+}
+
+export function guardInstanceSettings(value: unknown): InstanceSettings {
+  const settings = record(value, 'instance settings');
+  const providers = record(settings.providers, 'providers');
+  if (Object.keys(settings).some(key => key !== 'providers' && key !== 'retentionDays')) throw invalid('Unexpected settings fields');
+  if (Object.keys(providers).some(key => !['openai', 'cerebras', 'elevenlabs'].includes(key))) throw invalid('Unexpected provider');
+  for (const name of ['openai', 'cerebras', 'elevenlabs']) {
+    const provider = record(providers[name], name);
+    requiredBoolean(provider, 'configured');
+    requiredString(provider, 'model');
+    if (Object.keys(provider).some(key => key !== 'configured' && key !== 'model')) throw invalid('Provider response contains unexpected fields');
+  }
+  if (settings.retentionDays !== null && (!Number.isInteger(settings.retentionDays) || Number(settings.retentionDays) < 1)) throw invalid('Invalid retention');
+  return settings as unknown as InstanceSettings;
 }

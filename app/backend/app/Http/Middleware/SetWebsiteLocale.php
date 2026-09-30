@@ -43,12 +43,6 @@ class SetWebsiteLocale
 
         $originalLocale = app()->getLocale();
         app()->setLocale($locale);
-        app('translator')->addLines([
-            'validation.attributes.name' => __('Name'),
-            'validation.attributes.email' => __('Email'),
-            'validation.attributes.password' => __('Password'),
-            'validation.attributes.password_confirmation' => __('Confirm password'),
-        ], $locale);
         try {
             $response = $next($request);
         } finally {

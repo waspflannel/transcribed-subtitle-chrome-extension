@@ -5,13 +5,17 @@ Owner: product
 Created: 2026-08-16
 Implementation status: Quick fix AI refresh supersedes the original provider-free design as of 2026-09-06. Older builder/reviewer instructions below are historical; current work is tracked in [Learning and editing](../exec-plans/active/2026-09-09-whole-project-review/learning-and-editing.md).
 
+## BYOK provider selection (2026-09-30)
+
+Full lyrics alignment, analysis and Quick Fix use the saved generation provider/model, including Cerebras. Required keys are checked before provider work. There are no accounts, entitlements, minute charges or account throttles. Technical provider/install limits, cancellation, stale-track checks and atomic publication remain. Retention is optional and defaults to forever. This section supersedes historical account and OpenAI-only requirements below.
+
 ## Current replacement validation (2026-09-15)
 
-This section supersedes the older replacement validation and partial-merge requirements below. Replacement uses configured OpenAI/Luna for alignment and derived analysis. Song-match, song-completeness, and derived-learning quality gates remain disabled; `allowPartial` is accepted for compatibility and ignored.
+This section supersedes the older replacement validation and partial-merge requirements below. Replacement uses the saved generation provider/model for alignment and derived analysis. Song-match, song-completeness, and derived-learning quality gates remain disabled; `allowPartial` is accepted for compatibility and ignored.
 
 - Before queueing, lyrics must be a nonempty string of at most 25,000 raw Unicode code points, contain at least one Unicode letter, and contain no C0/C1 controls except tab, LF, and CR. HTTP(S)/www link-only pastes are rejected. Framework trimming is skipped for lyrics so boundary controls and oversize padding cannot disappear before validation; existing whitespace normalization follows validation.
 - The panel mirrors these rules with inline feedback and disabled submission. Combining marks, script joiners, all writing systems, repetition, punctuation, emoji mixed with words, and links within lyrics remain allowed. Input is never fetched as a URL or interpreted as code.
-- Replacement POST permits five requests per authenticated account per minute, shared across devices and IPs, in addition to the existing install/IP throttle. Invalid/conflicting POST attempts count. GET status and DELETE cancellation keep their existing separate limits.
+- Replacement requests retain technical install/IP throttles and provider concurrency limits; there is no account throttle.
 - The alignment prompt treats lyricsParts and cue text as untrusted data. Server reconstruction requires known cue IDs in source order, nonempty pasted segments, increasing integer endpoints within the supplied parts, and consumption of every pasted part. Timing slots may be omitted. Invalid allocations fail before derived analysis, clear private attempt state, and leave the existing track active.
 - These checks reject obvious junk and malformed allocations. They do not establish whether words are meaningful, whether the paste belongs to the song, or whether prompt injection affected interpretation.
 
@@ -21,7 +25,7 @@ The replacement form asks for complete lyrics in song order, including repetitio
 
 Generate again from an existing track sends `forceRegenerate: true`. A compatible completed job starts a new run and replaces its saved track instead of returning edited subtitles. The original transcription cache is independent of lyric edits and remains reusable; tokens, romanization, and translation are generated again according to the selected settings. Audio transcription runs again only when no compatible original transcript is cached. Ordinary generation requests retain completed-track reuse, and duplicate requests reuse an active run.
 
-Regeneration uses normal plan minutes. Billing rejection preserves the existing track, and active lyric replacement blocks regeneration. Once regeneration is accepted, the old track is removed while the new run completes.
+Regeneration uses the configured provider keys. Missing keys preserve the existing track, and active lyric replacement blocks regeneration. Once regeneration is accepted, the old track is removed while the new run completes.
 
 ## Problem
 
@@ -75,7 +79,7 @@ The hard input, maximum capacity, per-cue length, timing, authorization, expiry,
 
 ### Reliability update (2026-09-07)
 
-The local text-processing model and example environment use `gpt-5.6-luna` with `xhigh` reasoning effort. Fast mode is enabled by default and sends `service_tier: fast`. This applies to tokenization, combined analysis and translation, romanization, word cards, quick fixes, and lyrics alignment. Fast processing carries a premium and does not guarantee latency. Audio transcription retains its existing provider and model.
+The local text-processing model and example environment use `gpt-6-luna` with `high` reasoning effort. Fast mode is enabled by default and sends `service_tier: fast`. This applies to tokenization, combined analysis and translation, romanization, word cards, quick fixes, and lyrics alignment. Fast processing carries a premium and does not guarantee latency. Audio transcription retains its existing provider and model.
 
 The POST requires `expectedTrackId`; stale identities return the existing conflict response. The correction retains its source track and job-run identities in encrypted work state and rechecks them, expiry, and entitlement before committing progress or publication.
 

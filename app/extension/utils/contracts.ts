@@ -1,10 +1,8 @@
 export type {
-  AccountSummary,
+  InstanceSettings,
+  UpdateInstanceSettings,
   ApiError,
   CreateSubtitleJobRequest,
-  ExtensionAccountResponse,
-  ExtensionAuthResponse,
-  ExtensionLoginRequest,
   JobResponse,
   LearningToken,
   LearningTokenRequest,

@@ -7,16 +7,12 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\TranscribeSubtitleAudioChunk;
-use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobArtifact;
 use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
-use App\Services\Billing\BillingEntitlementService;
-use App\Services\Billing\BillingPlanCatalog;
-use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
@@ -356,7 +352,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         Bus::assertNotDispatched(FinalizeSubtitleJob::class);
         $this->assertDatabaseCount('subtitle_tracks', 0);
-        $this->assertSame(0, BillingUsageEvent::where('event_type', 'debit')->count());
 
         $this->transcribe($job, 1);
         $expanded = $this->preview($job);
@@ -392,7 +387,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $job->refresh()->load('track');
         $this->assertSame('completed', $job->status);
-        $this->assertSame(1, BillingUsageEvent::where('event_type', 'debit')->count());
         $this->assertSame(0, SubtitleJobArtifact::where('subtitle_job_id', $job->id)->count());
         $this->assertSame($opening['cues'], array_map(
             fn (array $cue): array => Arr::only($cue, array_keys($opening['cues'][0])),
@@ -496,18 +490,18 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertSame('completed', $job->fresh()->status);
         $this->assertCount(1200, $job->fresh()->track->cues);
         $this->assertDatabaseCount('jobs', 0);
-        $this->assertSame(60, (int) BillingUsageEvent::where('event_type', 'debit')->sum('used_minutes_delta'));
+
+        $this->assertDatabaseCount('subtitle_tracks', 1);
 
         // Old serialized finalizers and duplicate continuations remain harmless.
         (new FinalizeSubtitleJob($job->id, $job->run_id))->handle($pipeline);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        $this->assertSame(1, BillingUsageEvent::where('event_type', 'debit')->count());
         $this->travel(8)->minutes();
         $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
         $this->assertSame('completed', $job->fresh()->status);
     }
 
-    public function test_synchronous_finalizer_failure_releases_its_reservation_and_cleans_artifacts(): void
+    public function test_synchronous_finalizer_failure_cleans_artifacts(): void
     {
         $job = $this->completedAnalysisJob();
         $this->mock(TimestampedSubtitleTrackGenerator::class)
@@ -524,8 +518,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertSame('finalizing', $job->fresh()->stage);
         $this->assertDatabaseCount('subtitle_tracks', 0);
         $this->assertDatabaseCount('subtitle_job_artifacts', 0);
-        $this->assertSame(0, BillingUsageEvent::where('event_type', 'debit')->count());
-        $this->assertSame(1, BillingUsageEvent::where('event_type', 'refund')->count());
     }
 
     #[TestWith([false])]
@@ -647,7 +639,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
     {
         $job = $this->job();
         $job->update(['stage' => 'tokenizing', 'video_duration_seconds' => $cueCount * 3]);
-        app(BillingEntitlementService::class)->syncJobReservationToActualDuration($job);
         $cues = array_map(fn (int $index): array => [
             'cueId' => sprintf('cue-%04d', $index + 1), 'index' => $index,
             'startMs' => $index * 3000, 'endMs' => ($index + 1) * 3000,
@@ -671,8 +662,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             'stage' => 'transcribing', 'progress_percent' => 50, 'video_duration_seconds' => 60,
             'include_translation' => true, 'include_romanization' => false, 'target_language' => 'fra',
         ]);
-        $this->withExtensionAuth($job->install_id, $job->user);
-        app(UsageLedger::class)->reserveForJob($job, $job->user->refresh(), app(BillingPlanCatalog::class)->requirePlan('base'), 1);
+        $this->withExtensionInstall($job->install_id);
         $this->workspaces[] = $job->run_id;
 
         return $job;

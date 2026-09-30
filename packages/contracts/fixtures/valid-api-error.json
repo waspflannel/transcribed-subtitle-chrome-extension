@@ -1,7 +1,7 @@
 {
   "error": {
-    "code": "video_too_long",
-    "message": "Videos longer than 60 minutes are not supported."
+    "code": "provider_not_configured",
+    "message": "Configure the required provider keys before generating subtitles."
   },
   "requestId": "req_018f9e2f0d8c75008f389f4c5d1b3003"
 }

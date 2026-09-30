@@ -11,8 +11,7 @@ return static function (int $port, string $prefix): void {
         'database.redis.options.prefix' => $prefix,
         'database.redis.provider_review' => ['host' => '127.0.0.1', 'port' => $port, 'database' => 0, 'password' => null, 'timeout' => 2, 'read_timeout' => 2],
         'cache.stores.provider_review' => ['driver' => 'redis', 'connection' => 'provider_review', 'lock_connection' => 'provider_review', 'prefix' => $prefix],
-        'subtitles.tiers.concurrency_cache_store' => 'provider_review',
-        'subtitles.tiers.plans.base.batch_concurrency' => 1,
+        'subtitles.providers.concurrency_cache_store' => 'provider_review',
         'subtitles.providers.global_concurrency' => 1,
     ]);
     Cache::forgetDriver('provider_review');

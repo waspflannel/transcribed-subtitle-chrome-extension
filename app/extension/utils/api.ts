@@ -1,10 +1,9 @@
 import { t } from './i18n';
 import type {
+  InstanceSettings,
+  UpdateInstanceSettings,
   ApiError,
   CreateSubtitleJobRequest,
-  ExtensionAccountResponse,
-  ExtensionAuthResponse,
-  ExtensionLoginRequest,
   JobResponse,
   LearningTokenRequest,
   LearningTokenResponse,
@@ -17,8 +16,7 @@ import type {
 } from './contracts';
 import { resolveBackendApiBaseUrl } from './api-config';
 import {
-  guardExtensionAccountResponse,
-  guardExtensionAuthResponse,
+  guardInstanceSettings,
   guardJobResponse,
   guardLearningTokenResponse,
   guardLyricsCorrectionStatus,
@@ -51,92 +49,73 @@ export class SubtitleApiClient {
     private readonly fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
 
-  public async loginExtension(installId: string, payload: ExtensionLoginRequest): Promise<ExtensionAuthResponse> {
-    return this.request<ExtensionAuthResponse>('extension-auth/login', installId, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }, guardExtensionAuthResponse);
+
+
+  public async getInstanceSettings(installId: string): Promise<InstanceSettings> {
+    return this.request('settings', installId, { method: 'GET' }, guardInstanceSettings);
   }
 
-  public async getExtensionAccount(installId: string, authToken: string): Promise<ExtensionAccountResponse> {
-    return this.request<ExtensionAccountResponse>('extension-auth/account', installId, {
-      method: 'GET',
-      authToken,
-    }, guardExtensionAccountResponse);
+  public async updateInstanceSettings(installId: string, patch: UpdateInstanceSettings): Promise<InstanceSettings> {
+    return this.request('settings', installId, { method: 'PUT', body: JSON.stringify(patch) }, guardInstanceSettings);
   }
 
-  public async prefetchSubtitleAudio(installId: string, authToken: string, youtubeVideoId: string): Promise<{ ok: true }> {
+  public async prefetchSubtitleAudio(installId: string, youtubeVideoId: string): Promise<{ ok: true }> {
     return this.request('subtitle-audio/prefetch', installId, {
-      method: 'POST', authToken, body: JSON.stringify({ youtubeVideoId }),
+      method: 'POST', body: JSON.stringify({ youtubeVideoId }),
     }, guardOkResponse);
   }
 
-  public async logoutExtension(installId: string, authToken: string): Promise<{ ok: true }> {
-    return this.request<{ ok: true }>('extension-auth/logout', installId, {
-      method: 'POST',
-      authToken,
-    }, guardOkResponse);
-  }
 
   public async createSubtitleJob(
     installId: string,
-    authToken: string,
     payload: CreateSubtitleJobRequest,
   ): Promise<JobResponse> {
     return this.request<JobResponse>('subtitle-jobs', installId, {
       method: 'POST',
       body: JSON.stringify(payload),
-      authToken,
     }, guardJobResponse);
   }
 
-  public async getSubtitleJob(installId: string, authToken: string, jobId: string): Promise<JobResponse> {
+  public async getSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
     return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
       method: 'GET',
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
-      authToken,
     }, guardJobResponse);
   }
 
-  public async cancelSubtitleJob(installId: string, authToken: string, jobId: string): Promise<JobResponse> {
+  public async cancelSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
     return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
       method: 'DELETE',
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
-      authToken,
     }, guardJobResponse);
   }
 
-  public async deleteSavedGeneration(installId: string, authToken: string, jobId: string): Promise<{ ok: true }> {
+  public async deleteSavedGeneration(installId: string, jobId: string): Promise<{ ok: true }> {
     return this.request(`subtitle-generations/${encodeURIComponent(jobId)}`, installId, {
       method: 'DELETE',
-      authToken,
     }, guardOkResponse);
   }
 
-  public async listSubtitleJobs(installId: string, authToken: string, youtubeVideoId?: string): Promise<SubtitleJobHistoryResponse> {
+  public async listSubtitleJobs(installId: string, youtubeVideoId?: string): Promise<SubtitleJobHistoryResponse> {
     return this.request<SubtitleJobHistoryResponse>(youtubeVideoId ? `subtitle-jobs?youtubeVideoId=${encodeURIComponent(youtubeVideoId)}` : 'subtitle-jobs', installId, {
       method: 'GET',
       timeoutMs: JOB_HISTORY_TIMEOUT_MS,
-      authToken,
     }, guardSubtitleJobHistoryResponse);
   }
 
   public async enrichLearningToken(
     installId: string,
-    authToken: string,
     payload: LearningTokenRequest,
   ): Promise<LearningTokenResponse> {
     return this.request<LearningTokenResponse>('learning-tokens', installId, {
       method: 'POST',
       body: JSON.stringify(payload),
       timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
-      authToken,
     }, guardLearningTokenResponse);
   }
 
   public async startLyricsCorrection(
     installId: string,
-    authToken: string,
     jobId: string,
     payload: LyricsCorrectionRequest,
   ): Promise<LyricsCorrectionStatus> {
@@ -144,25 +123,21 @@ export class SubtitleApiClient {
       method: 'POST',
       body: JSON.stringify(payload),
       timeoutMs: LEARNING_TOKEN_TIMEOUT_MS,
-      authToken,
     }, guardLyricsCorrectionStatus);
   }
 
   public async getLyricsCorrectionStatus(
     installId: string,
-    authToken: string,
     jobId: string,
   ): Promise<LyricsCorrectionStatus> {
     return this.request<LyricsCorrectionStatus>(`subtitle-jobs/${encodeURIComponent(jobId)}/lyrics`, installId, {
       method: 'GET',
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
-      authToken,
     }, guardLyricsCorrectionStatus);
   }
 
   public async cancelLyricsCorrection(
     installId: string,
-    authToken: string,
     jobId: string,
     payload: LyricsCorrectionCancelRequest,
   ): Promise<LyricsCorrectionStatus> {
@@ -170,13 +145,11 @@ export class SubtitleApiClient {
       method: 'DELETE',
       body: JSON.stringify(payload),
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
-      authToken,
     }, guardLyricsCorrectionStatus);
   }
 
   public async quickFixToken(
     installId: string,
-    authToken: string,
     jobId: string,
     cueId: string,
     tokenIndex: number,
@@ -189,8 +162,7 @@ export class SubtitleApiClient {
         method: 'PATCH',
         body: JSON.stringify(payload),
         timeoutMs: 60000,
-        authToken,
-      },
+        },
       guardTrackResponse,
     );
   }
@@ -198,7 +170,7 @@ export class SubtitleApiClient {
   private async request<TResponse>(
     path: string,
     installId: string,
-    init: Pick<RequestInit, 'method' | 'body'> & { timeoutMs?: number; authToken?: string },
+    init: Pick<RequestInit, 'method' | 'body'> & { timeoutMs?: number },
     guardResponse: (body: unknown) => TResponse,
   ): Promise<TResponse> {
     const baseUrl = this.baseUrl.endsWith('/') ? this.baseUrl : `${this.baseUrl}/`;
@@ -213,9 +185,6 @@ export class SubtitleApiClient {
         'X-Extension-Install-Id': installId,
       };
 
-      if (init.authToken) {
-        headers.Authorization = `Bearer ${init.authToken}`;
-      }
 
       const response = await this.fetchImpl(new URL(path, baseUrl).toString(), {
         method: init.method,
@@ -276,42 +245,27 @@ export function publicSubtitleErrorMessage(error: unknown): string {
 
 function messageForApiErrorCode(code: ApiError['error']['code']): string {
   switch (code) {
+    case 'provider_not_configured':
+      return t("Add the required provider keys in Settings before generating subtitles.");
+
     case 'validation_failed':
       return t("The video details could not be validated. Refresh the YouTube tab and try again.");
 
-    case 'invalid_credentials':
-      return t("The email or password was not accepted.");
 
-    case 'unauthenticated':
-      return t("Sign in to the extension before generating subtitles.");
 
     case 'unauthorized':
-      return t("This extension session is not allowed to access that subtitle job.");
+      return t("This backend is not available from this connection.");
 
-    case 'email_not_verified':
-      return t("Verify your email address before generating subtitles.");
 
-    case 'insecure_transport':
-      return t("Extension sign-in requires HTTPS in production.");
 
-    case 'payment_required':
-      return t("Choose an active billing plan before generating subtitles. Open Account and choose Account and billing.");
 
-    case 'usage_exhausted':
-      return t("This billing period does not have enough subtitle minutes left. Check usage and plans through Account and billing in Account.");
 
-    case 'feature_unavailable':
-      return t("Your current plan does not include that generation option. Change your Watch selections or review plans through Account and billing in Account.");
 
-    case 'queue_full':
-      return t("Your generation queue is full. Wait for a queued video to finish before adding more.");
 
     case 'unsupported_video':
     case 'audio_unavailable':
       return t("This video is not available for subtitle generation. Use a public non-live YouTube video.");
 
-    case 'video_too_long':
-      return t("This video is over the 60 minute release limit.");
 
     case 'audio_acquisition_failed':
       return t("The backend could not extract audio from this video. Try another public video or check local backend setup.");

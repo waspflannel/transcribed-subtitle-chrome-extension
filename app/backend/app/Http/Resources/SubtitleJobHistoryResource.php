@@ -66,7 +66,7 @@ class SubtitleJobHistoryResource extends JsonResource
         if ($track !== null) {
             $item['completedAt'] = $track->generated_at->toJSON();
             $item['trackId'] = $track->public_id;
-            $item['expiresAt'] = $track->expires_at->toJSON();
+            $item['expiresAt'] = $track->expires_at?->toJSON();
         }
 
         if (in_array($status, ['failed', 'cancelled'], true)) {

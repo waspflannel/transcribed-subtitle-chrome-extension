@@ -2,11 +2,9 @@
 
 namespace App\Services\Subtitles;
 
-use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Services\Audio\SubtitleAudioWorkspace;
-use App\Services\Billing\UsageLedger;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -17,8 +15,6 @@ class SubtitleJobFailureHandler
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitlePipelineTelemetry $telemetry,
-        private readonly UsageLedger $usageLedger,
-        private readonly SubtitleJobAdmission $admission,
     ) {}
 
     /**
@@ -30,7 +26,6 @@ class SubtitleJobFailureHandler
         Throwable $exception,
         string $runId,
         array $context = [],
-        bool $promoteQueued = true,
         ?CarbonInterface $expectedUpdatedAt = null,
         ?string $expectedStage = null,
     ): bool {
@@ -77,7 +72,6 @@ class SubtitleJobFailureHandler
                 'error_message' => $errorMessage,
                 'expires_at' => now()->addDays(30),
             ]);
-            $this->usageLedger->releaseReservation($current, 'failure');
             $this->artifacts->deleteForJob($current);
             DB::afterCommit(fn () => SubtitleAudioWorkspace::delete($runId));
 
@@ -86,16 +80,6 @@ class SubtitleJobFailureHandler
 
         if ($job === null) {
             return false;
-        }
-
-        if ($promoteQueued) {
-            $this->admission->promoteQueuedJobs($job->user_id);
-        }
-
-        if ($exception instanceof BillingEntitlementException) {
-            $this->recordExpectedFailure($job, $stage, $exception, $context);
-
-            return true;
         }
 
         if ($exception instanceof SubtitleProcessingException) {
@@ -119,7 +103,7 @@ class SubtitleJobFailureHandler
      */
     private function resolveErrorPayload(Throwable $exception): array
     {
-        if ($exception instanceof BillingEntitlementException || $exception instanceof SubtitleProcessingException) {
+        if ($exception instanceof SubtitleProcessingException) {
             return [$exception->publicCode, $exception->getMessage()];
         }
 
@@ -132,7 +116,7 @@ class SubtitleJobFailureHandler
     private function recordExpectedFailure(
         SubtitleJob $job,
         string $stage,
-        BillingEntitlementException|SubtitleProcessingException $exception,
+        SubtitleProcessingException $exception,
         array $context,
     ): void {
         $this->logger->processingFailed($job, $stage, $exception);

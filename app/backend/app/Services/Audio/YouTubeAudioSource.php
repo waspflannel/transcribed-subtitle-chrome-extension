@@ -14,14 +14,14 @@ use Throwable;
 
 class YouTubeAudioSource
 {
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?int $userId = null, ?string $videoId = null): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
     {
         File::ensureDirectoryExists($workDirectory, 0700);
 
         try {
-            $cached = $this->prefetchedMetadata($userId, $videoId);
+            $cached = $this->prefetchedMetadata($videoId);
             if ($cached !== null) {
-                $durationSeconds = $this->durationSeconds($cached, (int) config('subtitles.max_video_duration_seconds'));
+                $durationSeconds = $this->durationSeconds($cached);
                 $metadata = $cached;
             } else {
                 [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
@@ -33,7 +33,7 @@ class YouTubeAudioSource
                 if ($cached === null) {
                     throw $exception;
                 }
-                Cache::forget($this->prefetchKey($userId, $videoId));
+                Cache::forget($this->prefetchKey($videoId));
                 [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
                 $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
             }
@@ -64,19 +64,19 @@ class YouTubeAudioSource
         }
     }
 
-    public function prefetch(int $userId, string $videoId): void
+    public function prefetch(string $videoId): void
     {
         if (! config('subtitles.youtube.metadata_prefetch', false)) {
             return;
         }
-        $key = $this->prefetchKey($userId, $videoId);
-        if ($this->prefetchedMetadata($userId, $videoId) !== null) {
+        $key = $this->prefetchKey($videoId);
+        if ($this->prefetchedMetadata($videoId) !== null) {
             return;
         }
         try {
             $metadata = $this->metadata('https://www.youtube.com/watch?v='.$videoId, 8);
             $this->assertSupportedVideo($metadata);
-            $this->durationSeconds($metadata, (int) config('subtitles.max_video_duration_seconds'));
+            $this->durationSeconds($metadata);
             if (($metadata['id'] ?? null) !== $videoId) {
                 return;
             }
@@ -86,18 +86,18 @@ class YouTubeAudioSource
         }
     }
 
-    private function prefetchKey(int $userId, string $videoId): string
+    private function prefetchKey(string $videoId): string
     {
-        return 'youtube-prefetch:v1:'.$userId.':'.$videoId;
+        return 'youtube-prefetch:v2:'.$videoId;
     }
 
-    private function prefetchedMetadata(?int $userId, ?string $videoId): ?array
+    private function prefetchedMetadata(?string $videoId): ?array
     {
-        if (! config('subtitles.youtube.metadata_prefetch', false) || $userId === null || $videoId === null) {
+        if (! config('subtitles.youtube.metadata_prefetch', false) || $videoId === null) {
             return null;
         }
         try {
-            $encrypted = Cache::get($this->prefetchKey($userId, $videoId));
+            $encrypted = Cache::get($this->prefetchKey($videoId));
             if (! is_string($encrypted)) {
                 return null;
             }
@@ -106,7 +106,7 @@ class YouTubeAudioSource
                 return null;
             }
             $this->assertSupportedVideo($metadata);
-            $this->durationSeconds($metadata, (int) config('subtitles.max_video_duration_seconds'));
+            $this->durationSeconds($metadata);
 
             return $metadata;
         } catch (Throwable) {
@@ -167,12 +167,8 @@ class YouTubeAudioSource
     /** @return array{array<string, mixed>, int} */
     private function validatedMetadata(string $youtubeUrl, ?int $requestDurationSeconds): array
     {
-        $maxDurationSeconds = (int) config('subtitles.max_video_duration_seconds');
-        if ($requestDurationSeconds !== null && $requestDurationSeconds > $maxDurationSeconds) {
-            throw SubtitleProcessingException::videoTooLong($requestDurationSeconds, $maxDurationSeconds);
-        }
         $metadata = $this->metadata($youtubeUrl);
-        $duration = $this->durationSeconds($metadata, $maxDurationSeconds);
+        $duration = $this->durationSeconds($metadata);
         $this->assertSupportedVideo($metadata);
 
         return [$metadata, $duration];
@@ -217,7 +213,7 @@ class YouTubeAudioSource
     /**
      * @param  array<string, mixed>  $metadata
      */
-    private function durationSeconds(array $metadata, int $maxDurationSeconds): int
+    private function durationSeconds(array $metadata): int
     {
         $duration = $metadata['duration'] ?? null;
 
@@ -229,10 +225,6 @@ class YouTubeAudioSource
 
         if ($durationSeconds < 1) {
             throw SubtitleProcessingException::audioUnavailable('Video duration could not be determined.');
-        }
-
-        if ($durationSeconds > $maxDurationSeconds) {
-            throw SubtitleProcessingException::videoTooLong($durationSeconds, $maxDurationSeconds);
         }
 
         return $durationSeconds;

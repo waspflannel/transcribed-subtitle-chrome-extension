@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Api\Concerns\ResolvesExtensionUser;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelSubtitleLyricsRequest;
 use App\Http\Requests\CorrectSubtitleLyricsRequest;
@@ -24,12 +23,10 @@ use Illuminate\Http\Request;
 
 class SubtitleJobController extends Controller
 {
-    use ResolvesExtensionUser;
-
     public function prefetchAudio(PrefetchSubtitleAudioRequest $request): JsonResponse
     {
         if (config('subtitles.youtube.metadata_prefetch', false)) {
-            PrefetchSubtitleAudio::dispatch((int) $this->extensionUser($request)->id, $request->validated('youtubeVideoId'));
+            PrefetchSubtitleAudio::dispatch($request->validated('youtubeVideoId'));
         }
 
         return response()->json(['ok' => true]);
@@ -39,17 +36,15 @@ class SubtitleJobController extends Controller
     {
         $now = now();
         $terminalCutoff = now()->subDays(30);
-        $user = $this->extensionUser($request);
         $videoId = $request->validated('youtubeVideoId');
         $query = SubtitleJob::query()
-            ->with('track:id,subtitle_job_id,public_id,generated_at,expires_at')
-            ->whereBelongsTo($user);
+            ->with('track:id,subtitle_job_id,public_id,generated_at,expires_at');
 
         if ($videoId !== null) {
             $query->where('youtube_video_id', $videoId)
                 ->where('status', 'completed')
                 ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
-                ->whereHas('track', fn ($query) => $query->where('expires_at', '>', $now));
+                ->whereHas('track', fn ($query) => $query->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', $now)));
         } else {
             $query
                 ->where(function ($query) use ($now, $terminalCutoff): void {
@@ -61,7 +56,7 @@ class SubtitleJobController extends Controller
                         ->orWhere(function ($query) use ($now): void {
                             $query
                                 ->where('status', 'completed')
-                                ->whereHas('track', fn ($query) => $query->where('expires_at', '>', $now));
+                                ->whereHas('track', fn ($query) => $query->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', $now)));
                         })
                         ->orWhere(function ($query) use ($terminalCutoff): void {
                             $query
@@ -85,7 +80,6 @@ class SubtitleJobController extends Controller
     {
         $job = $subtitleJobs->generate(
             payload: $request->subtitlePayload(),
-            user: $this->extensionUser($request),
             installId: $request->extensionInstallId(),
         );
 
@@ -100,7 +94,6 @@ class SubtitleJobController extends Controller
         $job = SubtitleJob::query()
             ->with('track')
             ->where('public_id', $jobId)
-            ->whereBelongsTo($this->extensionUser($request))
             ->where(function ($query): void {
                 $query
                     ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
@@ -119,7 +112,6 @@ class SubtitleJobController extends Controller
     {
         $job = SubtitleJob::query()
             ->where('public_id', $jobId)
-            ->whereBelongsTo($this->extensionUser($request))
             ->where('status', 'completed')
             ->firstOrFail();
 
@@ -133,14 +125,12 @@ class SubtitleJobController extends Controller
         string $jobId,
         SubtitleJobService $subtitleJobs,
     ): JsonResponse {
-        $user = $this->extensionUser($request);
         $job = SubtitleJob::query()
             ->with('track')
             ->where('public_id', $jobId)
-            ->whereBelongsTo($user)
             ->firstOrFail();
 
-        $cancelled = $subtitleJobs->cancel($job, $user);
+        $cancelled = $subtitleJobs->cancel($job);
 
         return response()->json(SubtitleJobResource::make($cancelled)->resolve());
     }
@@ -150,11 +140,10 @@ class SubtitleJobController extends Controller
         string $jobId,
         LyricsCorrectionService $corrections,
     ): JsonResponse {
-        $job = $this->ownedJob($request, $jobId);
+        $job = $this->findJob($jobId);
 
         $correction = $corrections->submit(
             job: $job,
-            user: $this->extensionUser($request),
             lyrics: $request->lyrics(),
             expectedTrackId: (string) $request->validated('expectedTrackId'),
         );
@@ -165,12 +154,8 @@ class SubtitleJobController extends Controller
     public function lyricsCorrectionStatus(Request $request, string $jobId): JsonResponse
     {
         $correction = SubtitleTrackLyricsCorrection::query()
-            ->whereHas('track', fn ($query) => $query->where('expires_at', '>', now()))
-            ->whereHas('track.job', function ($query) use ($request, $jobId): void {
-                $query
-                    ->where('public_id', $jobId)
-                    ->whereBelongsTo($this->extensionUser($request));
-            })
+            ->whereHas('track', fn ($query) => $query->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now())))
+            ->whereHas('track.job', fn ($query) => $query->where('public_id', $jobId))
             ->firstOrFail();
 
         if ($correction->status === 'completed') {
@@ -185,8 +170,8 @@ class SubtitleJobController extends Controller
         string $jobId,
         LyricsCorrectionService $corrections,
     ): JsonResponse {
-        $job = $this->ownedJob($request, $jobId);
-        $correction = $corrections->cancel($job, $this->extensionUser($request), (string) $request->validated('attemptId'));
+        $job = $this->findJob($jobId);
+        $correction = $corrections->cancel($job, (string) $request->validated('attemptId'));
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());
     }
@@ -198,10 +183,9 @@ class SubtitleJobController extends Controller
         int $tokenIndex,
         LyricsCorrectionService $corrections,
     ): JsonResponse {
-        $job = $this->ownedJob($request, $jobId);
+        $job = $this->findJob($jobId);
         $track = $corrections->quickFix(
             job: $job,
-            user: $this->extensionUser($request),
             cueId: $cueId,
             tokenIndex: $tokenIndex,
             payload: $request->validated(),
@@ -210,12 +194,11 @@ class SubtitleJobController extends Controller
         return response()->json(SubtitleTrackResource::make($track)->resolve());
     }
 
-    private function ownedJob(Request $request, string $jobId): SubtitleJob
+    private function findJob(string $jobId): SubtitleJob
     {
         return SubtitleJob::query()
             ->with('track')
             ->where('public_id', $jobId)
-            ->whereBelongsTo($this->extensionUser($request))
             ->whereIn('processing_version', SubtitleJobService::currentProcessingVersions())
             ->firstOrFail();
     }

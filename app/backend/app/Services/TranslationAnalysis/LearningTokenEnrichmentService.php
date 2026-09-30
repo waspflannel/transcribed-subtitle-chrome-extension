@@ -3,12 +3,9 @@
 namespace App\Services\TranslationAnalysis;
 
 use App\Ai\SubtitleModel;
-use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
-use App\Models\User;
-use App\Services\Billing\BillingEntitlementService;
-use App\Services\Subtitles\SubtitleTier;
+use App\Services\Subtitles\SubtitleQueue;
 use App\Support\SubtitleProcessingVersion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -19,26 +16,21 @@ class LearningTokenEnrichmentService
 {
     public function __construct(
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
-        private readonly BillingEntitlementService $billing,
     ) {}
 
     /**
      * @param  array{trackId: string, cueId: string, tokenIndex: int}  $payload
      * @return array{trackId: string, cueId: string, token: array<string, mixed>}
      */
-    public function enrich(array $payload, User $user): array
+    public function enrich(array $payload): array
     {
-        $track = $this->track($payload['trackId'], $user);
+        $track = $this->track($payload['trackId']);
         $cues = $track->cues;
         [, $cue] = $this->cue($cues, $payload['cueId']);
         [, $token] = $this->token($cue, $payload['tokenIndex']);
 
         if ($this->hasLearningMetadata($token)) {
             return $this->response($track, $cue, $token);
-        }
-
-        if ($this->billing->activePlan($user) === null) {
-            throw BillingEntitlementException::paymentRequired();
         }
 
         Log::info('backend.learning_token_enrichment_started', [
@@ -50,7 +42,7 @@ class LearningTokenEnrichmentService
         ]);
 
         $cacheKey = $this->cacheKey($track, $cue, $token);
-        $lock = Cache::store(SubtitleTier::concurrencyCacheStore())->lock(
+        $lock = Cache::store(SubtitleQueue::concurrencyCacheStore())->lock(
             $cacheKey.':lock', max(60, (int) config('subtitles.enrichment.timeout_seconds', 120) + 60),
         );
         if (! $lock->get()) {
@@ -73,12 +65,11 @@ class LearningTokenEnrichmentService
             $lock->release();
         }
 
-        $response = DB::transaction(function () use ($track, $user, $payload, $enrichedToken): array {
+        $response = DB::transaction(function () use ($track, $payload, $enrichedToken): array {
             $lockedTrack = SubtitleTrack::query()
                 ->with('job')
                 ->whereKey($track->getKey())
-                ->where('expires_at', '>', now())
-                ->whereHas('job', fn ($query) => $query->whereBelongsTo($user))
+                ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
                 ->lockForUpdate()
                 ->first();
 
@@ -113,13 +104,12 @@ class LearningTokenEnrichmentService
         return $response;
     }
 
-    private function track(string $trackId, User $user): SubtitleTrack
+    private function track(string $trackId): SubtitleTrack
     {
         $track = SubtitleTrack::query()
             ->with('job')
             ->where('public_id', $trackId)
-            ->where('expires_at', '>', now())
-            ->whereHas('job', fn ($query) => $query->whereBelongsTo($user))
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->first();
 
         if (! $track instanceof SubtitleTrack) {

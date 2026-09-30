@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8000",
+      "url": "http://127.0.0.1:8001",
       "description": "Local Laravel development server"
     }
   ],
@@ -15,33 +15,7 @@
     "/v1/subtitle-audio/prefetch": {
       "post": {
         "operationId": "prefetchSubtitleAudio",
-        "summary": "Prepare short-lived account-scoped YouTube metadata without creating a generation. Disabled by default; best effort.",
-        "parameters": [
-          { "$ref": "#/components/parameters/ExtensionInstallId" },
-          { "$ref": "#/components/parameters/ExtensionAuthorization" }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": { "application/json": { "schema": {
-            "type": "object", "required": ["youtubeVideoId"],
-            "properties": { "youtubeVideoId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{11}$" } }
-          } } }
-        },
-        "responses": {
-          "200": { "description": "Best-effort prefetch queued when enabled. Does not guarantee a cache hit or start paid work.", "content": { "application/json": { "schema": {
-            "type": "object", "additionalProperties": false, "required": ["ok"], "properties": { "ok": { "type": "boolean", "const": true } }
-          } } } },
-          "401": { "$ref": "#/components/responses/Unauthenticated" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "429": { "$ref": "#/components/responses/RateLimited" },
-          "422": { "description": "Invalid YouTube video ID." }
-        }
-      }
-    },
-    "/v1/extension-auth/login": {
-      "post": {
-        "operationId": "loginExtension",
-        "summary": "Issue a scoped extension API token for a verified account.",
+        "summary": "Prepare short-lived instance-local YouTube metadata without creating a generation. Disabled by default; best effort.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
@@ -52,87 +26,23 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "./schemas/extension-login-request.schema.json"
+                "type": "object",
+                "required": [
+                  "youtubeVideoId"
+                ],
+                "properties": {
+                  "youtubeVideoId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{11}$"
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Extension token and safe account summary.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./schemas/extension-auth-response.schema.json"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/BadRequest"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "422": {
-            "$ref": "#/components/responses/ValidationError"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/extension-auth/account": {
-      "get": {
-        "operationId": "getExtensionAccount",
-        "summary": "Return the current extension account summary.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Safe account summary.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "./schemas/extension-account-response.schema.json"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "429": {
-            "$ref": "#/components/responses/RateLimited"
-          }
-        }
-      }
-    },
-    "/v1/extension-auth/logout": {
-      "post": {
-        "operationId": "logoutExtension",
-        "summary": "Revoke the active extension API token.",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The token was revoked.",
+            "description": "Best-effort prefetch queued when enabled. Does not guarantee a cache hit or start provider work.",
             "content": {
               "application/json": {
                 "schema": {
@@ -151,14 +61,14 @@
               }
             }
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
           "429": {
             "$ref": "#/components/responses/RateLimited"
+          },
+          "422": {
+            "description": "Invalid YouTube video ID."
           }
         }
       }
@@ -166,20 +76,20 @@
     "/v1/subtitle-jobs": {
       "get": {
         "operationId": "listSubtitleJobs",
-        "summary": "List recent subtitle jobs for the authenticated account.",
+        "summary": "List recent subtitle jobs on this instance.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
           },
           {
             "name": "youtubeVideoId",
             "in": "query",
             "required": false,
             "description": "Return all completed, unexpired, readable generations for this video. Unfiltered history remains limited to 25 entries.",
-            "schema": { "type": "string", "pattern": "^[A-Za-z0-9_-]{11}$" }
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{11}$"
+            }
           }
         ],
         "responses": {
@@ -196,9 +106,6 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
@@ -213,9 +120,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
           }
         ],
         "requestBody": {
@@ -255,9 +159,6 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
@@ -274,9 +175,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
           },
           {
             "name": "jobId",
@@ -302,9 +200,6 @@
           "404": {
             "$ref": "#/components/responses/NotFound"
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
@@ -319,13 +214,10 @@
       "delete": {
         "operationId": "cancelSubtitleJob",
         "summary": "Cancel one queued or running subtitle generation.",
-        "description": "Cancels the owned generation run, releases its reserved minutes once, and returns the cancellation snapshot. A queued run never reaches a provider. A running provider request may finish externally, but its late result is ignored by the immutable run and terminal status guards. Repeating cancellation for an already-cancelled run is idempotent.",
+        "description": "Cancels the generation run, returns the cancellation snapshot. A queued run never reaches a provider. A running provider request may finish externally, but its late result is ignored by the immutable run and terminal status guards. Repeating cancellation for an already-cancelled run is idempotent.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
           },
           {
             "name": "jobId",
@@ -348,9 +240,6 @@
               }
             }
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
@@ -372,16 +261,20 @@
     "/v1/subtitle-generations/{jobId}": {
       "delete": {
         "operationId": "deleteSubtitleGeneration",
-        "summary": "Delete one completed subtitle generation owned by the authenticated account.",
-        "description": "Removes the saved job, track, and associated correction data, including the account's only generation for a video. Completed usage is not refunded. Missing, unowned, and noncompleted jobs return 404. Queued or running jobs must use the cancellation endpoint.",
+        "summary": "Delete one completed subtitle generation.",
+        "description": "Removes the saved job, track, and associated correction data, including the only generation for a video. Missing and noncompleted jobs return 404. Queued or running jobs must use the cancellation endpoint.",
         "parameters": [
-          { "$ref": "#/components/parameters/ExtensionInstallId" },
-          { "$ref": "#/components/parameters/ExtensionAuthorization" },
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
           {
             "name": "jobId",
             "in": "path",
             "required": true,
-            "schema": { "type": "string", "format": "uuid" }
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -392,17 +285,31 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["ok"],
-                  "properties": { "ok": { "type": "boolean", "const": true } }
+                  "required": [
+                    "ok"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
                 }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/BadRequest" },
-          "401": { "$ref": "#/components/responses/Unauthenticated" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "429": { "$ref": "#/components/responses/RateLimited" }
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
         }
       }
     },
@@ -412,20 +319,26 @@
         "summary": "Queue a correction from pasted plain-text lyrics.",
         "description": "Requires expectedTrackId to match the current track. Rejects stale track identity and lyrics that cannot fit the existing timing slots before queueing. Set allowPartial to true to continue after suspected incomplete lyrics and have the AI merge the supplied lyrics with the generated transcript.",
         "parameters": [
-          {"$ref": "#/components/parameters/ExtensionInstallId"},
-          {"$ref": "#/components/parameters/ExtensionAuthorization"},
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
           {
             "name": "jobId",
             "in": "path",
             "required": true,
-            "schema": {"type": "string", "format": "uuid"}
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "./schemas/lyrics-correction-request.schema.json"}
+              "schema": {
+                "$ref": "./schemas/lyrics-correction-request.schema.json"
+              }
             }
           }
         },
@@ -434,30 +347,44 @@
             "description": "Lyrics correction accepted for asynchronous processing.",
             "content": {
               "application/json": {
-                "schema": {"$ref": "./schemas/lyrics-correction-status.schema.json"}
+                "schema": {
+                  "$ref": "./schemas/lyrics-correction-status.schema.json"
+                }
               }
             }
           },
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "402": {"$ref": "#/components/responses/PaymentRequired"},
-          "409": {"$ref": "#/components/responses/Conflict"},
-          "401": {"$ref": "#/components/responses/Unauthenticated"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "422": {"$ref": "#/components/responses/ValidationError"},
-          "429": {"$ref": "#/components/responses/RateLimited"}
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
         }
       },
       "get": {
         "operationId": "getLyricsCorrectionStatus",
         "summary": "Get the current pasted-lyrics correction status.",
         "parameters": [
-          {"$ref": "#/components/parameters/ExtensionInstallId"},
-          {"$ref": "#/components/parameters/ExtensionAuthorization"},
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
           {
             "name": "jobId",
             "in": "path",
             "required": true,
-            "schema": {"type": "string", "format": "uuid"}
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -465,34 +392,47 @@
             "description": "Current pasted-lyrics correction status.",
             "content": {
               "application/json": {
-                "schema": {"$ref": "./schemas/lyrics-correction-status.schema.json"}
+                "schema": {
+                  "$ref": "./schemas/lyrics-correction-status.schema.json"
+                }
               }
             }
           },
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "401": {"$ref": "#/components/responses/Unauthenticated"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "429": {"$ref": "#/components/responses/RateLimited"}
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
         }
       },
       "delete": {
         "operationId": "cancelLyricsCorrection",
         "summary": "Cancel a queued or running pasted-lyrics correction.",
         "parameters": [
-          {"$ref": "#/components/parameters/ExtensionInstallId"},
-          {"$ref": "#/components/parameters/ExtensionAuthorization"},
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
           {
             "name": "jobId",
             "in": "path",
             "required": true,
-            "schema": {"type": "string", "format": "uuid"}
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "./schemas/lyrics-correction-cancel-request.schema.json"}
+              "schema": {
+                "$ref": "./schemas/lyrics-correction-cancel-request.schema.json"
+              }
             }
           }
         },
@@ -501,16 +441,27 @@
             "description": "Current correction status after cancellation.",
             "content": {
               "application/json": {
-                "schema": {"$ref": "./schemas/lyrics-correction-status.schema.json"}
+                "schema": {
+                  "$ref": "./schemas/lyrics-correction-status.schema.json"
+                }
               }
             }
           },
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"},
-          "422": {"$ref": "#/components/responses/ValidationError"},
-          "401": {"$ref": "#/components/responses/Unauthenticated"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "429": {"$ref": "#/components/responses/RateLimited"}
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
         }
       }
     },
@@ -520,32 +471,45 @@
         "operationId": "quickFixSubtitleToken",
         "summary": "Correct one source token and refresh its learning data.",
         "parameters": [
-          {"$ref": "#/components/parameters/ExtensionInstallId"},
-          {"$ref": "#/components/parameters/ExtensionAuthorization"},
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          },
           {
             "name": "jobId",
             "in": "path",
             "required": true,
-            "schema": {"type": "string", "format": "uuid"}
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           {
             "name": "cueId",
             "in": "path",
             "required": true,
-            "schema": {"type": "string", "minLength": 1}
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
           },
           {
             "name": "tokenIndex",
             "in": "path",
             "required": true,
-            "schema": {"type": "integer", "minimum": 0, "maximum": 9999}
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9999
+            }
           }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": {"$ref": "./schemas/quick-fix-token-request.schema.json"}
+              "schema": {
+                "$ref": "./schemas/quick-fix-token-request.schema.json"
+              }
             }
           }
         },
@@ -554,24 +518,46 @@
             "description": "The updated canonical subtitle track.",
             "content": {
               "application/json": {
-                "schema": {"$ref": "./schemas/track-response.schema.json"}
+                "schema": {
+                  "$ref": "./schemas/track-response.schema.json"
+                }
               }
             }
           },
-          "404": {"$ref": "#/components/responses/NotFound"},
-          "409": {"$ref": "#/components/responses/Conflict"},
-          "401": {"$ref": "#/components/responses/Unauthenticated"},
-          "402": {"$ref": "#/components/responses/PaymentRequired"},
-          "403": {"$ref": "#/components/responses/Forbidden"},
-          "422": {"$ref": "#/components/responses/ValidationError"},
-          "429": {"$ref": "#/components/responses/RateLimited"},
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
           "502": {
             "description": "AI enrichment failed; the existing track is unchanged.",
-            "content": {"application/json": {"schema": {"$ref": "./schemas/api-error.schema.json"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/api-error.schema.json"
+                }
+              }
+            }
           },
           "503": {
             "description": "AI provider unavailable; the existing track is unchanged.",
-            "content": {"application/json": {"schema": {"$ref": "./schemas/api-error.schema.json"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/api-error.schema.json"
+                }
+              }
+            }
           }
         }
       }
@@ -583,9 +569,6 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"
-          },
-          {
-            "$ref": "#/components/parameters/ExtensionAuthorization"
           }
         ],
         "requestBody": {
@@ -611,9 +594,6 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
@@ -654,6 +634,58 @@
           }
         }
       }
+    },
+    "/v1/settings": {
+      "get": {
+        "summary": "Read instance provider settings without secrets",
+        "responses": {
+          "200": {
+            "description": "Instance settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/instance-settings.schema.json"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ]
+      },
+      "put": {
+        "summary": "Update encrypted instance provider keys, models and retention",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "./schemas/update-instance-settings.schema.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated instance settings without secrets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/instance-settings.schema.json"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -662,22 +694,12 @@
         "name": "X-Extension-Install-Id",
         "in": "header",
         "required": true,
-        "description": "Anonymous extension installation identifier used for abuse controls. This is not a user account identifier.",
+        "description": "Browser installation identifier for local request tracing. It is not an authentication credential or an ownership boundary.",
         "schema": {
           "type": "string",
           "minLength": 16,
           "maxLength": 128,
           "pattern": "^[A-Za-z0-9_-]+$"
-        }
-      },
-      "ExtensionAuthorization": {
-        "name": "Authorization",
-        "in": "header",
-        "required": true,
-        "description": "Bearer extension API token issued by /v1/extension-auth/login.",
-        "schema": {
-          "type": "string",
-          "pattern": "^Bearer .+$"
         }
       }
     },
@@ -702,18 +724,8 @@
           }
         }
       },
-      "Unauthenticated": {
-        "description": "Missing, invalid, revoked, or expired extension token.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "./schemas/api-error.schema.json"
-            }
-          }
-        }
-      },
       "Forbidden": {
-        "description": "Authenticated token or account cannot perform the requested action.",
+        "description": "This request is not allowed on this private instance.",
         "content": {
           "application/json": {
             "schema": {
@@ -742,16 +754,6 @@
       },
       "NotFound": {
         "description": "Resource not found.",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "./schemas/api-error.schema.json"
-            }
-          }
-        }
-      },
-      "PaymentRequired": {
-        "description": "An active billing plan is required.",
         "content": {
           "application/json": {
             "schema": {

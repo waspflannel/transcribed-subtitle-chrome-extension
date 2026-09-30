@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Ai\SubtitleModel;
 use App\Models\SubtitleJob;
-use App\Models\User;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -23,7 +22,6 @@ class SubtitleJobFactory extends Factory
 
         return [
             'public_id' => (string) Str::uuid(),
-            'user_id' => User::factory(),
             'run_id' => (string) Str::uuid(),
             'youtube_video_id' => $videoId,
             'youtube_url' => 'https://www.youtube.com/watch?v='.$videoId,
@@ -31,10 +29,9 @@ class SubtitleJobFactory extends Factory
             'source_language' => 'auto',
             'detected_source_language' => null,
             'target_language' => 'eng',
-            'processing_version' => SubtitleJobService::processingVersionFor('on_demand', false, false),
+            'processing_version' => SubtitleJobService::processingVersionFor(true, false),
             'ai_provider' => SubtitleModel::provider(),
             'ai_model' => SubtitleModel::model(),
-            'generation_tier' => 'base',
             'include_romanization' => true,
             'include_translation' => false,
             'status' => 'running',

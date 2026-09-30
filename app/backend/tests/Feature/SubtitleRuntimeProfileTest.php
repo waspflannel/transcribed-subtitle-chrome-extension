@@ -44,7 +44,7 @@ class SubtitleRuntimeProfileTest extends TestCase
             'database.default' => 'pgsql',
             'queue.default' => 'redis',
             'subtitles.queue.connection' => 'redis',
-            'subtitles.tiers.concurrency_cache_store' => 'array',
+            'subtitles.providers.concurrency_cache_store' => 'array',
         ]);
 
         $this->assertSame(1, Artisan::call('subtitles:runtime-check', ['--json' => true, '--strict' => true]));

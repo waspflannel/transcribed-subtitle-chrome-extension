@@ -12,7 +12,7 @@ return [
             'driver' => 'cerebras',
             'key' => env('CEREBRAS_API_KEY'),
             'url' => env('CEREBRAS_URL', 'https://api.cerebras.ai/v1'),
-            'models' => ['text' => ['default' => env('CEREBRAS_MODEL', 'gpt-oss-120b')]],
+            'models' => ['text' => ['default' => 'gpt-oss-120b']],
         ],
 
         'eleven' => [
@@ -21,7 +21,7 @@ return [
             'url' => env('ELEVENLABS_URL'),
             'models' => [
                 'transcription' => [
-                    'default' => env('ELEVENLABS_TRANSCRIPTION_MODEL'),
+                    'default' => 'scribe_v2',
                 ],
             ],
         ],
@@ -31,10 +31,10 @@ return [
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL'),
             'provider_options' => [
-                'reasoning' => ['effort' => 'low'],
+                'reasoning' => ['effort' => env('OPENAI_REASONING_EFFORT', 'high')],
                 ...(env('OPENAI_FAST_MODE_ENABLED', true) ? ['service_tier' => 'fast'] : []),
             ],
-            'models' => ['text' => ['default' => env('OPENAI_MODEL', 'gpt-5.6-luna')]],
+            'models' => ['text' => ['default' => 'gpt-6-luna']],
         ],
     ],
 

@@ -15,9 +15,10 @@ describe('settings model', () => {
     expect(createExtensionSettingsFromPartial({ overlayAttachedToVideo: 'false' as never }).overlayAttachedToVideo).toBe(true);
   });
 
-  it('defaults to Transcriber, remembers Transcriber Spark, and rejects unknown providers', () => {
+  it('defaults to OpenAI, remembers Cerebras, and resets retired Auto and unknown providers', () => {
     expect(createExtensionSettingsFromPartial(undefined).aiProvider).toBe('openai');
-    expect(createExtensionSettingsFromPartial({ aiProvider: 'auto' }).aiProvider).toBe('auto');
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'auto' as never }).aiProvider).toBe('openai');
+    expect(createExtensionSettingsFromPartial({ sourceLanguage: 'auto' }).sourceLanguage).toBe('auto');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'cerebras' }).aiProvider).toBe('cerebras');
     expect(createExtensionSettingsFromPartial({ aiProvider: 'hybrid' as never }).aiProvider).toBe('openai');
   });

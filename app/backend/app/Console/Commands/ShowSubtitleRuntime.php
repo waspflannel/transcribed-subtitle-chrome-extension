@@ -32,7 +32,6 @@ class ShowSubtitleRuntime extends Command
                 'jobId' => $job->public_id,
                 'runId' => $job->run_id,
                 'videoId' => $job->youtube_video_id,
-                'tier' => $job->generation_tier,
                 'stage' => $job->stage,
                 'progress' => $job->progress_percent,
                 'updatedAt' => $job->updated_at->toJSON(),
@@ -109,7 +108,7 @@ class ShowSubtitleRuntime extends Command
             ])
             ->values()
             ->all());
-        $this->table(['job_id', 'run_id', 'video', 'tier', 'stage', 'progress', 'updated'], $activeJobs->all());
+        $this->table(['job_id', 'run_id', 'video', 'stage', 'progress', 'updated'], $activeJobs->all());
         $this->table(['batch_id', 'name', 'total', 'pending', 'failed', 'finished_at'], $batches->all());
         $this->table(['time', 'job_id', 'event', 'stage', 'error', 'exception'], $failures->all());
 

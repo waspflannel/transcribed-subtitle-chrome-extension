@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\InstanceSettings;
 use App\Services\Subtitles\SubtitleRuntimeTracer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -16,7 +17,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Providers\GroqProvider;
 use LogicException;
@@ -36,12 +36,9 @@ class AppServiceProvider extends ServiceProvider
         $this->registerOpenAiResponseTracing();
 
         RateLimiter::for('subtitle-prefetch', fn (Request $request): array => [
-            Limit::perMinute(6)->by('prefetch-user:'.$request->user()?->id),
+            Limit::perMinute(6)->by('prefetch-install:'.$this->validatedInstallId($request, 'subtitle-prefetch')),
             Limit::perMinute(30)->by('prefetch-ip:'.$request->ip()),
         ]);
-
-        RateLimiter::for('lyrics-replacement', fn (Request $request): Limit => Limit::perMinute(5)
-            ->by('lyrics-user:'.$request->user()->id));
 
         RateLimiter::for('subtitle-api', function (Request $request): array {
             return [
@@ -61,15 +58,6 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
-        RateLimiter::for('extension-auth', function (Request $request): array {
-            $email = $request->input('email');
-            $emailKey = is_string($email) ? Str::lower($email) : 'invalid-email';
-
-            return [
-                Limit::perMinute(5)->by('extension-auth-email:'.$emailKey),
-                Limit::perMinute(20)->by('extension-auth-ip:'.$request->ip()),
-            ];
-        });
     }
 
     private function registerOpenAiResponseTracing(): void
@@ -116,6 +104,7 @@ class AppServiceProvider extends ServiceProvider
     private function registerSubtitleQueueTracing(): void
     {
         Queue::before(function (JobProcessing $event): void {
+            app(InstanceSettings::class)->apply();
             app(SubtitleRuntimeTracer::class)->queueJobProcessing($event);
         });
 

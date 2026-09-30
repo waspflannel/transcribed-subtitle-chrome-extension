@@ -2,7 +2,6 @@
 
 namespace App\Services\Subtitles;
 
-use App\Exceptions\BillingEntitlementException;
 use App\Exceptions\SubtitleProcessingException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -16,9 +15,6 @@ final class ProviderExceptionPolicy
 
     public static function classify(Throwable $exception, array $context = []): SubtitleProcessingException
     {
-        if ($exception instanceof BillingEntitlementException) {
-            throw $exception;
-        }
         if ($exception instanceof SubtitleProcessingException) {
             return $exception;
         }

@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Exceptions\SubtitleProcessingException;
-use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Bus\Queueable;
@@ -53,7 +52,6 @@ class LyricsCorrectionJob implements ShouldQueue
     public function middleware(): array
     {
         return [
-            new LimitSubtitleBatchConcurrency,
             (new WithoutOverlapping('lyrics-correction:'.$this->attemptId.':'.($this->batchIndex ?? 'alignment')))
                 ->expireAfter(self::timeoutSeconds() + 60)
                 ->releaseAfter(5),

@@ -1,7 +1,6 @@
 <?php
 
 return [
-    'max_video_duration_seconds' => (int) env('SUBTITLE_MAX_VIDEO_DURATION_SECONDS', 3600),
     'processing_timeout_seconds' => (int) env('SUBTITLE_PROCESSING_TIMEOUT_SECONDS', 0),
 
     'rate_limits' => [
@@ -15,95 +14,10 @@ return [
         'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'redis'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
-        'worker_groups' => [
-            'generation-priority' => [
-                'queue_family' => 'generation',
-                'tiers' => ['pro', 'plus', 'base'],
-                // Generation work runs as chained stage jobs (acquire ->
-                // optimize -> per-chunk transcribe -> merge), so a worker is
-                // held only for one stage at a time and tier priority applies
-                // at every stage boundary. Each concurrent acquire/optimize/
-                // transcribe stage is still a yt-dlp, ffmpeg, or Scribe-upload
-                // process, so raise this in step with memory and Scribe rate
-                // limits.
-                'worker_count' => (int) env('SUBTITLE_GENERATION_PRIORITY_WORKERS', 8),
-            ],
-            'batch-priority' => [
-                'queue_family' => 'batch',
-                'tiers' => ['pro', 'plus', 'base'],
-                'worker_count' => (int) env('SUBTITLE_BATCH_PRIORITY_WORKERS', 20),
-            ],
-            'base-generation-guarantee' => [
-                'queue_family' => 'generation',
-                'tiers' => ['base'],
-                'worker_count' => (int) env('SUBTITLE_BASE_GENERATION_GUARANTEE_WORKERS', 1),
-            ],
-            'base-batch-guarantee' => [
-                'queue_family' => 'batch',
-                'tiers' => ['base'],
-                'worker_count' => (int) env('SUBTITLE_BASE_BATCH_GUARANTEE_WORKERS', 2),
-            ],
-        ],
-    ],
-
-    'tiers' => [
-        'default' => env('SUBTITLE_DEFAULT_GENERATION_TIER', 'base'),
-        'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
-        // Batch slots turn over every ~2-4s, so a rejected batch that sleeps
-        // longer than that just pays a quantized wait for a slot that already
-        // freed. Kept short (with ±1s jitter at the release site) so the
-        // re-check tracks real slot turnover; the concurrency cap is unchanged,
-        // so this adds no 429 risk.
-        'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 2),
-        'lock_seconds' => (int) env('SUBTITLE_CONCURRENCY_LOCK_SECONDS', 10),
-        // ~2x the batch job timeout (300s): a slot leaked by a SIGKILLed worker
-        // recovers in minutes instead of wedging the user for half an hour.
-        'counter_seconds' => (int) env('SUBTITLE_CONCURRENCY_COUNTER_SECONDS', 600),
-        // generation_concurrency caps how many of a user's jobs *process* at
-        // once; submission_limit caps how many they can have waiting overall
-        // (running + queued). Submissions between the two caps are accepted
-        // as queued jobs and promoted FIFO as running slots free up.
-        'plans' => [
-            'base' => [
-                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_BASE', 'subtitle-generation-base'),
-                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_BASE', 'subtitle-batch-base'),
-                'generation_concurrency' => (int) env('SUBTITLE_BASE_GENERATION_CONCURRENCY', 1),
-                'batch_concurrency' => (int) env('SUBTITLE_BASE_BATCH_CONCURRENCY', 3),
-                'submission_limit' => (int) env('SUBTITLE_BASE_SUBMISSION_LIMIT', 3),
-                'budgets_seconds' => [
-                    'short' => (int) env('SUBTITLE_BASE_SHORT_BUDGET_SECONDS', 240),
-                    'medium' => (int) env('SUBTITLE_BASE_MEDIUM_BUDGET_SECONDS', 600),
-                    'near_limit' => (int) env('SUBTITLE_BASE_NEAR_LIMIT_BUDGET_SECONDS', 1800),
-                ],
-            ],
-            'plus' => [
-                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PLUS', 'subtitle-generation-plus'),
-                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PLUS', 'subtitle-batch-plus'),
-                'generation_concurrency' => (int) env('SUBTITLE_PLUS_GENERATION_CONCURRENCY', 2),
-                'batch_concurrency' => (int) env('SUBTITLE_PLUS_BATCH_CONCURRENCY', 12),
-                'submission_limit' => (int) env('SUBTITLE_PLUS_SUBMISSION_LIMIT', 6),
-                'budgets_seconds' => [
-                    'short' => (int) env('SUBTITLE_PLUS_SHORT_BUDGET_SECONDS', 180),
-                    'medium' => (int) env('SUBTITLE_PLUS_MEDIUM_BUDGET_SECONDS', 420),
-                    'near_limit' => (int) env('SUBTITLE_PLUS_NEAR_LIMIT_BUDGET_SECONDS', 1320),
-                ],
-            ],
-            'pro' => [
-                'generation_queue' => env('SUBTITLE_GENERATION_QUEUE_PRO', 'subtitle-generation-pro'),
-                'batch_queue' => env('SUBTITLE_BATCH_QUEUE_PRO', 'subtitle-batch-pro'),
-                'generation_concurrency' => (int) env('SUBTITLE_PRO_GENERATION_CONCURRENCY', 3),
-                // Kept at/under SUBTITLE_BATCH_PRIORITY_WORKERS (20): a per-user
-                // cap above the shared worker count buys nothing. Raise workers
-                // in step before pushing this higher.
-                'batch_concurrency' => (int) env('SUBTITLE_PRO_BATCH_CONCURRENCY', 20),
-                'submission_limit' => (int) env('SUBTITLE_PRO_SUBMISSION_LIMIT', 10),
-                'budgets_seconds' => [
-                    'short' => (int) env('SUBTITLE_PRO_SHORT_BUDGET_SECONDS', 120),
-                    'medium' => (int) env('SUBTITLE_PRO_MEDIUM_BUDGET_SECONDS', 300),
-                    'near_limit' => (int) env('SUBTITLE_PRO_NEAR_LIMIT_BUDGET_SECONDS', 900),
-                ],
-            ],
-        ],
+        'generation_name' => env('SUBTITLE_GENERATION_QUEUE', 'subtitle-generation'),
+        'batch_name' => env('SUBTITLE_BATCH_QUEUE', 'subtitle-batch'),
+        'generation_workers' => (int) env('SUBTITLE_GENERATION_WORKERS', 9),
+        'batch_workers' => (int) env('SUBTITLE_BATCH_WORKERS', 22),
     ],
 
     'tracing' => [
@@ -190,7 +104,9 @@ return [
 
     'providers' => [
         'global_concurrency' => (int) env('SUBTITLE_PROVIDER_GLOBAL_CONCURRENCY', 30),
-        'account_requests_per_minute' => (int) env('SUBTITLE_PROVIDER_ACCOUNT_REQUESTS_PER_MINUTE', 60),
+        'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
+        'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 2),
+        'lease_seconds' => (int) env('SUBTITLE_CONCURRENCY_LEASE_SECONDS', 660),
     ],
 
     'stalled_job' => [

@@ -130,7 +130,6 @@ class SubtitlePipelineTelemetry
             'status' => 'completed',
             'duration_ms' => $durationMs,
         ]);
-        $this->recordPerformanceBudget($job, $durationMs);
     }
 
     public function recordStaleRunSkipped(SubtitleJob $job, string $queuedRunId, string $stage): void
@@ -305,34 +304,6 @@ class SubtitlePipelineTelemetry
             'threshold_ms' => $thresholdMs,
             'slow_type' => 'stage_duration',
         ], $batchIndex), 'warning');
-    }
-
-    private function recordPerformanceBudget(SubtitleJob $job, int $durationMs): void
-    {
-        $tier = SubtitleTier::normalize($job->generation_tier);
-        $bucket = SubtitleTier::budgetBucket($job->video_duration_seconds);
-        $budgetSeconds = SubtitleTier::budgetSeconds($tier, $job->video_duration_seconds);
-
-        if ($budgetSeconds === 0) {
-            return;
-        }
-
-        $budgetMs = $budgetSeconds * 1000;
-        $context = [
-            'stage' => 'finalizing',
-            'status' => 'completed',
-            'generation_tier' => $tier,
-            'duration_bucket' => $bucket,
-            'duration_ms' => $durationMs,
-            'budget_ms' => $budgetMs,
-            'video_duration_seconds' => $job->video_duration_seconds,
-        ];
-
-        $this->tracer->jobEvent($job, 'performance.budget_checked', $context);
-
-        if ($durationMs > $budgetMs) {
-            $this->tracer->jobEvent($job, 'performance.budget_exceeded', $context, 'warning');
-        }
     }
 
     private function durationMs(int $startedAtMs): int

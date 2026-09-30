@@ -9,7 +9,7 @@ These guardrails apply to Transcribe. Use them when implementing phases, reviewi
 ## Product Guardrails
 
 - Build the first product path only: public YouTube video -> generated subtitle track -> synchronized language-to-language overlay.
-- Keep Netflix, other platforms, live captioning, vocabulary review, and general subtitle editing out of the first release. Paid-beta accounts, billing and account-owned history are implemented. The narrow pasted-lyrics correction flow is the documented exception for completed generated tracks.
+- Keep Netflix, other platforms, live captioning, vocabulary review, and general subtitle editing out of the first release. The local/self-hosted BYOK application has no accounts or billing; history belongs to the private instance. The narrow pasted-lyrics correction flow is the documented exception for completed generated tracks.
 - The user must explicitly start AI subtitle generation.
 - Extension code must never call OpenAI or any AI provider directly.
 - Raw audio is temporary processing data and must be deleted after processing succeeds or fails.
@@ -109,7 +109,7 @@ WXT extension
 ## Review Guardrails
 
 - Block changes that bypass canonical contracts.
-- Block changes that expose provider keys to the extension.
+- Block changes that return stored provider keys to the extension or persist submitted keys in browser storage. Settings may send keys once to the private backend for encrypted storage.
 - Block changes that keep raw audio after processing.
 - Block changes that make YouTube captions the primary source of truth.
 - Challenge abstractions that exist only for imagined future use.

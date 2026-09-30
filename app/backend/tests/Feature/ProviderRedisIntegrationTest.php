@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
-use App\Models\User;
 use App\Services\Subtitles\ProviderAdmission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\RedisQueue;
@@ -39,8 +38,7 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
 (require 'tests/Fixtures/provider-redis.php')((int) $argv[1], $argv[2]);
 $cache = Illuminate\Support\Facades\Cache::store('provider_review');
-App\Models\User::factory()->create(['id' => 17]);
-$job = App\Models\SubtitleJob::factory()->create(['user_id' => 17, 'generation_tier' => 'base']);
+$job = App\Models\SubtitleJob::factory()->create();
 app(App\Services\Subtitles\ProviderAdmission::class)->run('openai', $job, function () use ($cache) {
     $cache->put('started', true, 20);
     $deadline = microtime(true) + 10;
@@ -49,8 +47,6 @@ app(App\Services\Subtitles\ProviderAdmission::class)->run('openai', $job, functi
 });
 PHP;
         $worker = new Process([PHP_BINARY, '-r', $script, getenv('SUBTITLE_TEST_REDIS_PORT'), $this->prefix], base_path());
-        User::factory()->create(['id' => 17]);
-        User::factory()->create(['id' => 18]);
         $worker->setTimeout(15)->start();
         $cache = Cache::store('provider_review');
         try {
@@ -59,9 +55,9 @@ PHP;
                 usleep(20000);
             }
             $this->assertTrue($cache->get('started') === true, $worker->getErrorOutput());
-            foreach ([['cerebras', 17], ['openai', 18]] as [$provider, $user]) {
+            foreach (['openai'] as $provider) {
                 try {
-                    app(ProviderAdmission::class)->run($provider, SubtitleJob::factory()->create(['user_id' => $user, 'generation_tier' => 'base']), fn () => $this->fail('Concurrent process bypassed capacity.'));
+                    app(ProviderAdmission::class)->run($provider, SubtitleJob::factory()->create(), fn () => $this->fail('Concurrent process bypassed capacity.'));
                     $this->fail('Expected admission rejection.');
                 } catch (SubtitleProcessingException $exception) {
                     $this->assertSame('provider_admission', $exception->context['reason']);
@@ -70,7 +66,7 @@ PHP;
             $cache->put('release', true, 20);
             $worker->wait();
             $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput());
-            $this->assertSame('released', app(ProviderAdmission::class)->run('openai', SubtitleJob::factory()->create(['user_id' => 17, 'generation_tier' => 'base']), fn () => 'released'));
+            $this->assertSame('released', app(ProviderAdmission::class)->run('openai', SubtitleJob::factory()->create(), fn () => 'released'));
         } finally {
             $cache->put('release', true, 20);
             if ($worker->isRunning()) {

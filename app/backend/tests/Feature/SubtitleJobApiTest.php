@@ -11,24 +11,19 @@ use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\LyricsCorrectionJob;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\TranscribeSubtitleAudioChunk;
-use App\Models\BillingUsageEvent;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
-use App\Models\User;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
 use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
-use App\Services\Billing\BillingPlanCatalog;
-use App\Services\Billing\UsageLedger;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
-use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleJobService;
@@ -46,7 +41,6 @@ use App\Support\SubtitleProcessingVersion;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\NullQueue;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -64,47 +58,15 @@ class SubtitleJobApiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_auto_reuses_its_resolved_generation_separately_from_manual_and_routes_again_on_reset(): void
+    #[TestWith(['auto'])]
+    #[TestWith(['typesafe'])]
+    public function test_generation_rejects_retired_model_routing(string $provider): void
     {
-        config(['typesafe.key' => 'test-only-key']);
-        Http::fake(['api.typesafe.ai/*' => Http::response([
-            'model' => 'jev-1.13.0', 'answers' => ['route' => ['type' => 'choice', 'choice' => 'spark',
-                'confidence' => 0.99, 'probabilities' => ['spark' => 0.99, 'transcriber' => 0.01]]],
-            'usage' => ['input_tokens' => 500, 'output_tokens' => 30],
-        ])]);
-        $payload = $this->validPayload(['aiProvider' => 'auto']);
-        $automatic = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)
-            ->assertOk()->assertJsonPath('aiProvider', 'cerebras');
-        $manual = $this->postJson('/v1/subtitle-jobs', [...$payload, 'aiProvider' => 'cerebras'])->assertOk();
-        $this->assertNotSame($automatic->json('jobId'), $manual->json('jobId'));
-        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $automatic->json('jobId'));
-        Http::assertSentCount(1);
-        $job = SubtitleJob::where('public_id', $automatic->json('jobId'))->firstOrFail();
-        $originalRun = $job->run_id;
-        $this->postJson('/v1/subtitle-jobs', [...$payload, 'forceRegenerate' => true])->assertOk()
-            ->assertJsonPath('jobId', $automatic->json('jobId'))->assertJsonPath('aiProvider', 'cerebras');
-        $this->assertNotSame($originalRun, $job->refresh()->run_id);
-        Http::assertSentCount(2);
-        $this->assertSame(1, $this->transcriptionService->chunkCalls);
-        $this->assertSame(['cerebras', 'cerebras', 'cerebras'], array_column($this->translationAnalysis->selections, 0));
-        $this->assertDatabaseCount('subtitle_jobs', 2);
-    }
-
-    public function test_pending_auto_is_reused_and_pins_candidate_models_before_queueing(): void
-    {
-        config(['subtitles.queue.connection' => 'database', 'ai.providers.openai.models.text.default' => 'original-luna', 'typesafe.key' => '']);
-        $payload = $this->validPayload(['aiProvider' => 'auto']);
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)
-            ->assertAccepted()->assertJsonPath('aiProvider', 'auto')->assertJsonPath('aiModel', 'pending');
-        $this->postJson('/v1/subtitle-jobs', $payload)->assertAccepted()->assertJsonPath('jobId', $response->json('jobId'));
-        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
-        config(['ai.providers.openai.models.text.default' => 'updated-luna', 'subtitles.queue.connection' => 'sync']);
-        (new AcquireSubtitleAudio($job->id, $job->run_id))->handle(app(SubtitleGenerationPipeline::class));
-        $this->assertSame('completed', $job->refresh()->status);
-        $this->assertSame('original-luna', $job->ai_model);
-        $this->assertSame('missing_key', $job->ai_routing['decision']['reason']);
-        $new = $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('aiModel', 'updated-luna');
-        $this->assertNotSame($response->json('jobId'), $new->json('jobId'));
+        $this->withExtensionInstall($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => $provider]))
+            ->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed');
+        $this->assertDatabaseCount('subtitle_jobs', 0);
+        $this->assertSame(0, $this->transcriptionService->chunkCalls);
         Http::assertNothingSent();
     }
 
@@ -112,7 +74,7 @@ class SubtitleJobApiTest extends TestCase
     {
         config(['ai.providers.openai.models.text.default' => 'luna-original', 'ai.providers.cerebras.models.text.default' => 'cerebras-original']);
         $payload = $this->validPayload(['aiProvider' => 'openai']);
-        $luna = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk()
+        $luna = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk()
             ->assertJsonPath('aiProvider', 'openai')->assertJsonPath('aiModel', 'luna-original');
         $cerebras = $this->postJson('/v1/subtitle-jobs', [...$payload, 'aiProvider' => 'cerebras'])->assertOk()
             ->assertJsonPath('aiProvider', 'cerebras')->assertJsonPath('aiModel', 'cerebras-original');
@@ -132,7 +94,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_queued_job_keeps_its_model_after_configuration_changes(): void
     {
         config(['subtitles.queue.connection' => 'database', 'ai.providers.cerebras.models.text.default' => 'pinned-model']);
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertAccepted();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertAccepted();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-model', 'subtitles.queue.connection' => 'sync']);
         (new AcquireSubtitleAudio($job->id, $job->run_id))->handle(app(SubtitleGenerationPipeline::class));
@@ -146,10 +108,9 @@ class SubtitleJobApiTest extends TestCase
         }
     }
 
-    public function test_invalid_or_unconfigured_provider_cannot_create_jobs_or_reserve_usage(): void
+    public function test_invalid_or_unconfigured_provider_cannot_create_jobs(): void
     {
-        $this->withExtensionAuth($this->installId());
-        $usageCount = BillingUsageEvent::count();
+        $this->withExtensionInstall($this->installId());
         foreach (['hybrid', 'unknown', null, 123] as $provider) {
             $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => $provider]))->assertUnprocessable();
         }
@@ -157,14 +118,13 @@ class SubtitleJobApiTest extends TestCase
         $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertUnprocessable();
         $this->assertSame(0, SubtitleJob::count());
         $this->assertSame(0, $this->audioSource->calls);
-        $this->assertSame($usageCount, BillingUsageEvent::count());
     }
 
     public function test_legacy_vocabulary_hints_are_ignored_without_changing_price_or_job_reuse(): void
     {
         config(['subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000]);
         $payload = $this->validPayload(['youtubeVideoId' => 'hintstest01', 'vocabularyHints' => ['Marie Curie', 'ElevenLabs', 'Marie Curie']]);
-        $created = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $created = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
         $this->assertArrayNotHasKey('vocabulary_hints', SubtitleJob::query()->firstOrFail()->getAttributes());
         $transcriptionCost = SubtitleJobEvent::query()->where('event', 'provider.cost_estimated')->where('stage', 'transcribing')->firstOrFail();
         $this->assertSame(1000, $transcriptionCost->context['unit_price_microusd']);
@@ -180,7 +140,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_url_mode_validates_metadata_and_completes_without_download_or_encoding(): void
     {
         config(['subtitles.transcription.ingestion_mode' => 'youtube_url']);
-        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
 
         $this->assertSame(1, $this->audioSource->metadataCalls);
         $this->assertSame(0, $this->audioSource->calls);
@@ -193,7 +153,7 @@ class SubtitleJobApiTest extends TestCase
     {
         config(['subtitles.transcription.ingestion_mode' => 'youtube_url']);
         $this->audioSource->rejectMetadata = true;
-        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload());
+        $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $this->assertSame(0, $this->transcriptionService->urlCalls);
         $this->assertSame('failed', SubtitleJob::query()->firstOrFail()->status);
@@ -202,7 +162,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_jobs_reuse_only_the_same_transcription_ingestion_mode(): void
     {
         $payload = $this->validPayload();
-        $upload = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $upload = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
         config(['subtitles.transcription.ingestion_mode' => 'youtube_url']);
         $url = $this->postJson('/v1/subtitle-jobs', $payload)->assertOk();
 
@@ -234,6 +194,43 @@ class SubtitleJobApiTest extends TestCase
         foreach ([$upload, $url] as $entry) {
             $this->assertLessThanOrEqual(64, strlen($entry->transcription_model));
         }
+    }
+
+    public function test_generation_accepts_long_videos_without_paid_tiers_or_a_subscription(): void
+    {
+        Queue::fake();
+        $this->withExtensionInstall($this->installId());
+        for ($index = 0; $index < 12; $index++) {
+            $response = $this->postJson('/v1/subtitle-jobs', $this->validPayload([
+                'youtubeVideoId' => sprintf('longvid%04d', $index),
+                'videoDurationSeconds' => 7200,
+            ]))->assertAccepted()->assertJsonPath('status', 'running');
+            $response->assertJsonMissingPath('generationTier');
+        }
+        Queue::assertPushed(AcquireSubtitleAudio::class, 12);
+    }
+
+    public function test_generation_requires_elevenlabs_and_only_the_selected_analysis_key(): void
+    {
+        $this->withExtensionInstall($this->installId());
+        config(['ai.providers.eleven.key' => '']);
+        $this->postJson('/v1/subtitle-jobs', $this->validPayload())->assertUnprocessable();
+        $this->assertDatabaseCount('subtitle_jobs', 0);
+        $this->assertSame(0, $this->audioSource->calls);
+        config(['ai.providers.eleven.key' => 'test-elevenlabs-key', 'ai.providers.openai.key' => '']);
+        $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertOk();
+    }
+
+    public function test_saved_tracks_have_no_expiry_by_default_and_optional_retention_is_applied(): void
+    {
+        $this->withExtensionInstall($this->installId());
+        $saved = $this->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk()
+            ->assertJsonPath('expiresAt', null)->assertJsonPath('track.expiresAt', null);
+        $this->getJson('/v1/subtitle-jobs')->assertOk()->assertJsonPath('jobs.0.expiresAt', null);
+        $this->putJson('/v1/settings', ['retentionDays' => 7])->assertOk();
+        $next = $this->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'retention01']))->assertOk();
+        $this->assertNotNull($next->json('expiresAt'));
+        $this->getJson('/v1/subtitle-jobs/'.$saved->json('jobId'))->assertOk();
     }
 
     private RecordingYouTubeAudioSource $audioSource;
@@ -273,9 +270,6 @@ class SubtitleJobApiTest extends TestCase
         config([
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
-            'subtitles.tiers.default' => 'base',
-            'subtitles.tiers.plans.base.generation_concurrency' => 20,
-            'subtitles.tiers.plans.base.batch_concurrency' => 20,
         ]);
     }
 
@@ -288,7 +282,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
@@ -311,12 +305,12 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $first = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertAccepted();
 
         $second = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertAccepted();
 
@@ -324,132 +318,51 @@ class SubtitleJobApiTest extends TestCase
         Queue::assertPushed(AcquireSubtitleAudio::class, 1);
     }
 
-    public function test_cancelling_running_job_releases_minutes_promotes_queue_and_is_idempotent(): void
+    public function test_cancelling_before_worker_pickup_prevents_provider_calls(): void
     {
         $this->travelTo(now()->startOfSecond());
-        config([
-            'subtitles.tiers.plans.base.generation_concurrency' => 1,
-            'subtitles.tiers.plans.base.submission_limit' => 3,
-            'queue.default' => 'database',
-            'subtitles.queue.connection' => 'database',
-        ]);
         Queue::fake();
-        $user = User::factory()->create();
-        $installId = $this->installId('c');
-
-        $runningResponse = $this
-            ->withExtensionAuth($installId, $user)
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'canrun00001']))
-            ->assertAccepted()
-            ->assertJsonPath('status', 'running');
-        $queuedResponse = $this
-            ->withExtensionAuth($installId, $user)
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'canque00001']))
-            ->assertAccepted()
-            ->assertJsonPath('status', 'queued');
-
-        $running = SubtitleJob::query()->where('public_id', $runningResponse->json('jobId'))->firstOrFail();
-        $queued = SubtitleJob::query()->where('public_id', $queuedResponse->json('jobId'))->firstOrFail();
-        $ledger = app(UsageLedger::class);
-        $this->assertSame(4, $ledger->reservedMinutesForJob($running));
-
-        $this
-            ->withExtensionAuth($installId, $user)
-            ->deleteJson('/v1/subtitle-jobs/'.$running->public_id)
-            ->assertOk()
-            ->assertJsonPath('status', 'cancelled')
-            ->assertJsonPath('errorCode', 'generation_cancelled');
-
-        $this->assertSame('cancelled', $running->fresh()->status);
-        $expiry = now()->addDays(30);
-        $this->assertTrue($running->fresh()->expires_at->equalTo($expiry));
-        $this->assertSame(0, $ledger->reservedMinutesForJob($running));
-        $this->assertSame('running', $queued->fresh()->status);
-        $this->assertSame(1, (int) BillingUsageEvent::query()
-            ->where('subtitle_job_id', $running->id)
-            ->where('event_type', 'refund')
-            ->count());
-        Queue::assertPushed(AcquireSubtitleAudio::class, 2);
-
-        app(SubtitleJobFailureHandler::class)->failJob(
-            $running->id,
-            'acquiring-audio',
-            SubtitleProcessingException::audioAcquisitionFailed(),
-            $running->run_id,
-        );
-
-        $this->assertSame('cancelled', $running->fresh()->status);
-        $this->assertSame(1, (int) BillingUsageEvent::query()
-            ->where('subtitle_job_id', $running->id)
-            ->where('event_type', 'refund')
-            ->count());
-
-        (new AcquireSubtitleAudio($running->id, (string) $running->run_id))
-            ->handle(app(SubtitleGenerationPipeline::class));
-
-        $this->assertSame(0, $this->audioSource->calls);
-        $this->assertDatabaseMissing('subtitle_job_artifacts', ['subtitle_job_id' => $running->id]);
-        $this->assertDatabaseMissing('subtitle_tracks', ['subtitle_job_id' => $running->id]);
-        $this->assertSame(0, $ledger->usageForJob($running->fresh())['chargedMinutes']);
-
-        $this->travel(1)->hours();
-        $this
-            ->withExtensionAuth($installId, $user)
-            ->deleteJson('/v1/subtitle-jobs/'.$running->public_id)
-            ->assertOk()
-            ->assertJsonPath('status', 'cancelled')
-            ->assertJsonPath('errorCode', 'generation_cancelled');
-        $this->assertTrue($running->fresh()->expires_at->equalTo($expiry));
-    }
-
-    public function test_cancelling_queued_job_does_not_dispatch_or_call_provider(): void
-    {
-        $this->travelTo(now()->startOfSecond());
-        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
-        Queue::fake();
-        $user = User::factory()->create();
         $installId = $this->installId('q');
-        SubtitleJob::factory()->for($user)->create(['status' => 'running']);
+        SubtitleJob::factory()->create(['status' => 'running']);
 
         $response = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'canq0000001']))
             ->assertAccepted()
-            ->assertJsonPath('status', 'queued');
+            ->assertJsonPath('status', 'running');
         $job = SubtitleJob::query()->where('public_id', $response->json('jobId'))->firstOrFail();
 
         $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->deleteJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertOk()
             ->assertJsonPath('status', 'cancelled');
 
         $this->assertSame('cancelled', $job->fresh()->status);
         $this->assertTrue($job->fresh()->expires_at->equalTo(now()->addDays(30)));
-        Queue::assertNothingPushed();
+        Queue::assertPushed(AcquireSubtitleAudio::class, 1);
+        (new AcquireSubtitleAudio($job->id, $job->run_id))->handle(app(SubtitleGenerationPipeline::class));
         $this->assertSame(0, $this->audioSource->calls);
     }
 
-    public function test_generation_cancellation_is_owner_scoped_and_rejects_terminal_jobs(): void
+    public function test_generation_cancellation_is_shared_and_rejects_terminal_jobs(): void
     {
-        $owner = User::factory()->create();
-        $intruder = User::factory()->create();
         $ownerInstallId = $this->installId('o');
         $intruderInstallId = $this->installId('i');
-        $ownedJob = SubtitleJob::factory()->for($owner)->create([
+        $ownedJob = SubtitleJob::factory()->create([
             'install_id' => $ownerInstallId,
             'status' => 'running',
             'stage' => 'preparing',
         ]);
 
         $this
-            ->withExtensionAuth($intruderInstallId, $intruder)
+            ->withExtensionInstall($intruderInstallId)
             ->deleteJson('/v1/subtitle-jobs/'.$ownedJob->public_id)
-            ->assertNotFound();
+            ->assertOk();
 
-        $this->assertSame('running', $ownedJob->fresh()->status);
+        $this->assertSame('cancelled', $ownedJob->fresh()->status);
 
-        $completedJob = SubtitleJob::factory()->for($owner)->create([
+        $completedJob = SubtitleJob::factory()->create([
             'install_id' => $ownerInstallId,
             'status' => 'completed',
             'stage' => 'finalizing',
@@ -457,7 +370,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $this
-            ->withExtensionAuth($ownerInstallId, $owner)
+            ->withExtensionInstall($ownerInstallId)
             ->deleteJson('/v1/subtitle-jobs/'.$completedJob->public_id)
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'generation_not_cancellable');
@@ -466,12 +379,11 @@ class SubtitleJobApiTest extends TestCase
     public function test_generation_publication_failure_settles_created_run_and_retry_dispatches_once(): void
     {
         $queue = $this->configureThrowingQueue();
-        $user = User::factory()->create();
         $installId = $this->installId('p');
         $payload = $this->validPayload(['youtubeVideoId' => 'pubfail0001']);
 
         $failedResponse = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs', $payload)
             ->assertAccepted()
             ->assertJsonPath('status', 'failed')
@@ -479,12 +391,9 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('message', 'Generation could not be queued. Try again.');
 
         $job = SubtitleJob::query()->where('public_id', $failedResponse->json('jobId'))->firstOrFail();
-        $ledger = app(UsageLedger::class);
 
         $this->assertSame('failed', $job->status);
-        $this->assertSame(0, $ledger->reservedMinutesForJob($job));
         $this->assertSame(0, (int) SubtitleJob::query()
-            ->whereBelongsTo($user)
             ->where('status', 'running')
             ->count());
         $this->assertSame(1, $queue->pushes);
@@ -493,7 +402,7 @@ class SubtitleJobApiTest extends TestCase
         $queue->shouldThrow = false;
 
         $retryResponse = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs', $payload)
             ->assertAccepted()
             ->assertJsonPath('jobId', $job->public_id)
@@ -502,180 +411,10 @@ class SubtitleJobApiTest extends TestCase
         $retryJob = $job->fresh();
         $this->assertNotSame($failedRunId, $retryJob->run_id);
         $this->assertSame($retryJob->public_id, $retryResponse->json('jobId'));
-        $this->assertSame(4, $ledger->reservedMinutesForJob($retryJob));
         $this->assertSame(1, (int) SubtitleJob::query()
-            ->whereBelongsTo($user)
             ->where('status', 'running')
             ->count());
         $this->assertSame(2, $queue->pushes);
-    }
-
-    public function test_promotion_publication_failure_settles_only_the_promoted_run_and_retry_dispatches_once(): void
-    {
-        $queue = $this->configureThrowingQueue();
-        config(['subtitles.tiers.plans.base.generation_concurrency' => 1]);
-
-        $user = User::factory()->create();
-        $installId = $this->installId('m');
-        $this->withExtensionAuth($installId, $user);
-        $ledger = app(UsageLedger::class);
-        $plans = app(BillingPlanCatalog::class);
-        $period = $ledger->periodForUser($user);
-        $this->assertNotNull($period);
-        $running = SubtitleJob::factory()->for($user)->create([
-            'install_id' => $installId,
-            'status' => 'running',
-            'stage' => 'preparing',
-            'video_duration_seconds' => 213,
-        ]);
-        $ledger->reserveForJob($running, $user, $plans->requirePlan('base'), 4);
-        $firstPayload = $this->validPayload(['youtubeVideoId' => 'promofail01']);
-        $secondPayload = $this->validPayload(['youtubeVideoId' => 'promofail02']);
-
-        $firstResponse = $this
-            ->withExtensionAuth($installId, $user)
-            ->postJson('/v1/subtitle-jobs', $firstPayload)
-            ->assertAccepted()
-            ->assertJsonPath('status', 'queued');
-        $secondResponse = $this
-            ->withExtensionAuth($installId, $user)
-            ->postJson('/v1/subtitle-jobs', $secondPayload)
-            ->assertAccepted()
-            ->assertJsonPath('status', 'queued');
-        $first = SubtitleJob::query()->where('public_id', $firstResponse->json('jobId'))->firstOrFail();
-        $second = SubtitleJob::query()->where('public_id', $secondResponse->json('jobId'))->firstOrFail();
-
-        $running->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
-        $ledger->releaseReservation($running, 'test');
-
-        app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
-
-        $this->assertSame('failed', $first->fresh()->status);
-        $this->assertSame('queue_publication_failed', $first->fresh()->error_code);
-        $this->assertSame(0, $ledger->reservedMinutesForJob($first));
-        $this->assertSame('queued', $second->fresh()->status);
-        $this->assertSame(0, (int) SubtitleJob::query()
-            ->whereBelongsTo($user)
-            ->where('status', 'running')
-            ->count());
-        $this->assertSame(1, $queue->pushes);
-
-        $queue->shouldThrow = false;
-
-        $retry = $this
-            ->withExtensionAuth($installId, $user)
-            ->postJson('/v1/subtitle-jobs', $firstPayload)
-            ->assertAccepted()
-            ->assertJsonPath('jobId', $first->public_id)
-            ->assertJsonPath('status', 'queued');
-
-        $this->assertSame('queued', $first->fresh()->status);
-        $this->assertSame($first->public_id, $retry->json('jobId'));
-        $this->assertSame('running', $second->fresh()->status);
-        $this->assertSame(4, $ledger->reservedMinutesForJob($first->fresh()));
-        $this->assertSame(2, $queue->pushes);
-
-        $second->fresh()->forceFill([
-            'status' => 'completed',
-            'stage' => 'finalizing',
-            'progress_percent' => 100,
-        ])->save();
-        $ledger->releaseReservation($second->fresh(), 'test');
-        app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
-
-        $this->assertSame('running', $first->fresh()->status);
-        $this->assertSame(3, $queue->pushes);
-    }
-
-    public function test_retry_and_new_submission_keep_fifo_within_one_clock_second(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.generation_concurrency' => 1,
-            'subtitles.tiers.plans.base.submission_limit' => 5,
-        ]);
-        Queue::fake();
-        Carbon::setTestNow('2026-09-08 12:00:00');
-
-        try {
-            $user = User::factory()->create();
-            $installId = $this->installId('f');
-            $retryPayload = $this->validPayload(['youtubeVideoId' => 'retry000001']);
-            $oldQueuedPayload = $this->validPayload(['youtubeVideoId' => 'older000001']);
-            $newPayload = $this->validPayload(['youtubeVideoId' => 'newer000001']);
-            $processingVersion = SubtitleJobService::processingVersionFor(
-                $retryPayload['includeRomanization'],
-                $retryPayload['includeTranslation'],
-            );
-
-            SubtitleJob::factory()->for($user)->create([
-                'install_id' => $installId,
-                'status' => 'running',
-                'stage' => 'preparing',
-            ]);
-            $failedLowId = SubtitleJob::factory()->for($user)->create([
-                'install_id' => $installId,
-                'youtube_video_id' => $retryPayload['youtubeVideoId'],
-                'youtube_url' => $retryPayload['youtubeUrl'],
-                'processing_version' => $processingVersion,
-                'include_romanization' => $retryPayload['includeRomanization'],
-                'status' => 'failed',
-                'stage' => 'acquiring-audio',
-                'error_code' => 'internal_error',
-            ]);
-            $olderQueued = SubtitleJob::factory()->for($user)->create([
-                'install_id' => $installId,
-                'youtube_video_id' => $oldQueuedPayload['youtubeVideoId'],
-                'youtube_url' => $oldQueuedPayload['youtubeUrl'],
-                'processing_version' => $processingVersion,
-                'include_romanization' => $oldQueuedPayload['includeRomanization'],
-                'status' => 'queued',
-                'progress_percent' => 0,
-            ]);
-
-            $this
-                ->withExtensionAuth($installId, $user)
-                ->postJson('/v1/subtitle-jobs', $retryPayload)
-                ->assertAccepted()
-                ->assertJsonPath('jobId', $failedLowId->public_id)
-                ->assertJsonPath('status', 'queued');
-
-            $newResponse = $this
-                ->withExtensionAuth($installId, $user)
-                ->postJson('/v1/subtitle-jobs', $newPayload)
-                ->assertAccepted()
-                ->assertJsonPath('status', 'queued');
-            $newQueued = SubtitleJob::query()->where('public_id', $newResponse->json('jobId'))->firstOrFail();
-
-            $this->assertTrue($failedLowId->id < $olderQueued->id);
-            $this->assertTrue($olderQueued->created_at->lt($failedLowId->fresh()->created_at));
-            $this->assertTrue($failedLowId->fresh()->created_at->lt($newQueued->created_at));
-
-            $blocker = SubtitleJob::query()
-                ->whereBelongsTo($user)
-                ->where('status', 'running')
-                ->firstOrFail();
-            $blocker->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
-            app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
-
-            $this->assertSame('running', $olderQueued->fresh()->status);
-            $this->assertSame('queued', $failedLowId->fresh()->status);
-            $this->assertSame('queued', $newQueued->fresh()->status);
-
-            $olderQueued->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
-            app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
-
-            $this->assertSame('running', $failedLowId->fresh()->status);
-            $this->assertSame('queued', $newQueued->fresh()->status);
-
-            $retryJob = $failedLowId->fresh();
-            $retryJob->forceFill(['status' => 'completed', 'stage' => 'finalizing', 'progress_percent' => 100])->save();
-            app(UsageLedger::class)->releaseReservation($retryJob, 'test');
-            app(SubtitleJobAdmission::class)->promoteQueuedJobs($user->id);
-
-            $this->assertSame('running', $newQueued->fresh()->status);
-        } finally {
-            Carbon::setTestNow();
-        }
     }
 
     public function test_new_subtitle_request_uses_configured_subtitle_queue_connection(): void
@@ -687,7 +426,7 @@ class SubtitleJobApiTest extends TestCase
         Queue::fake();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'bgqueue0001']))
             ->assertAccepted();
 
@@ -695,44 +434,6 @@ class SubtitleJobApiTest extends TestCase
             return $job->connection === 'background'
                 && $job->queue === SubtitleQueue::generationName();
         });
-    }
-
-    public function test_new_subtitle_request_uses_configured_generation_tier_queue(): void
-    {
-        config([
-            'queue.default' => 'database',
-            'subtitles.queue.connection' => 'database',
-            'subtitles.tiers.default' => 'pro',
-            'subtitles.tiers.plans.pro.generation_queue' => 'subtitle-generation-pro',
-            'billing.plans.base.generation_tier' => 'pro',
-        ]);
-        Queue::fake();
-
-        $response = $this
-            ->withExtensionAuth($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tierqueue01']))
-            ->assertAccepted();
-
-        $this->assertDatabaseHas('subtitle_jobs', [
-            'public_id' => $response->json('jobId'),
-            'generation_tier' => 'pro',
-        ]);
-        Queue::assertPushed(AcquireSubtitleAudio::class, function (AcquireSubtitleAudio $job): bool {
-            return $job->connection === 'database'
-                && $job->queue === 'subtitle-generation-pro';
-        });
-    }
-
-    public function test_queue_name_uses_job_generation_tier_not_current_default(): void
-    {
-        config([
-            'subtitles.tiers.default' => 'base',
-            'subtitles.tiers.plans.pro.generation_queue' => 'subtitle-generation-pro',
-        ]);
-
-        $job = SubtitleJob::factory()->make(['generation_tier' => 'pro']);
-
-        $this->assertSame('subtitle-generation-pro', SubtitleQueue::generationNameForJob($job));
     }
 
     public function test_queue_retry_after_defaults_exceed_subtitle_worker_timeout(): void
@@ -775,7 +476,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $response = $this
-            ->withExtensionAuth($installId)
+            ->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'stalejob001']))
             ->assertAccepted();
 
@@ -792,7 +493,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'translate01',
                 'includeTranslation' => true,
@@ -843,7 +544,7 @@ class SubtitleJobApiTest extends TestCase
             'tokens' => array_map(fn (string $text, int $i): array => ['index' => $i, 'text' => $text],
                 [$prefix, 'transcript', 'segment'], range(0, 2)),
         ], ['first', 'second'], [0, 1])]])->preventStrayPrompts();
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertOk()->assertJsonCount(2, 'track.cues')
             ->assertJsonPath('track.cues.0.startMs', 500)->assertJsonPath('track.cues.1.endMs', 4000)
             ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
@@ -1003,7 +704,7 @@ class SubtitleJobApiTest extends TestCase
         };
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertOk()
             ->assertJsonPath('status', 'completed');
@@ -1020,7 +721,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
         Queue::fake();
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'deleted0001']))
             ->assertAccepted();
         $job = SubtitleJob::query()->where('public_id', $response->json('jobId'))->firstOrFail();
@@ -1143,7 +844,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_default_generation_returns_transcript_first_track_without_full_card_enrichment(): void
     {
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
@@ -1182,11 +883,11 @@ class SubtitleJobApiTest extends TestCase
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
         ]);
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
 
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "first transcript segment\nsecond transcript segment",
         ]);
 
@@ -1204,12 +905,12 @@ class SubtitleJobApiTest extends TestCase
                 ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
             ]],
         ]);
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         config(['ai.default' => 'openai', 'ai.providers.openai.models.text.default' => 'alignment-luna', 'ai.providers.cerebras.models.text.default' => 'changed-cerebras']);
         $this->translationAnalysis->selections = [];
         $oldTrackId = $job->track->public_id;
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $correction = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "First lyric line\nSecond lyric line",
         ])->assertAccepted();
 
@@ -1222,27 +923,26 @@ class SubtitleJobApiTest extends TestCase
         $this->assertStringContainsString('First lyric line', $job->track->web_vtt);
         $this->assertNull($job->track->lyricsCorrection->lyrics);
         $this->assertSame('completed', $job->track->lyricsCorrection->status);
-        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'alignment-luna');
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'cerebras' && $prompt->model === 'saved-cerebras');
         foreach ($this->translationAnalysis->selections as $selection) {
-            $this->assertSame(['openai', 'alignment-luna'], $selection);
+            $this->assertSame(['cerebras', 'saved-cerebras'], $selection);
         }
     }
 
     public function test_quick_fix_replaces_one_token_and_refreshes_derived_cue_data(): void
     {
         config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.text.default' => 'saved-cerebras']);
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-cerebras']);
         $oldTrackId = $job->track->public_id;
         $oldCueId = $job->track->cues[0]['cueId'];
         $oldGeneratedAt = $job->track->generated_at->toJSON();
-        $oldExpiresAt = $job->track->expires_at->toJSON();
+        $oldExpiresAt = $job->track->expires_at?->toJSON();
         $unchangedCue = $job->track->cues[1];
-        $ledgerCount = BillingUsageEvent::count();
         $tokenizationCalls = $this->translationAnalysis->tokenizationCalls;
 
-        $response = $this->withExtensionAuth($this->installId())->patchJson(
+        $response = $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$oldCueId.'/tokens/0',
             ['expectedTrackId' => $oldTrackId, 'text' => 'updated'],
         );
@@ -1261,16 +961,15 @@ class SubtitleJobApiTest extends TestCase
         $this->assertNotSame($oldTrackId, $job->track->public_id);
         $this->assertNotSame($oldCueId, $job->track->cues[0]['cueId']);
         $this->assertSame($oldGeneratedAt, $job->track->generated_at->toJSON());
-        $this->assertSame($oldExpiresAt, $job->track->expires_at->toJSON());
+        $this->assertSame($oldExpiresAt, $job->track->expires_at?->toJSON());
         $this->assertSame($unchangedCue, $job->track->cues[1]);
-        $this->assertSame($ledgerCount, BillingUsageEvent::count());
         $this->assertSame($tokenizationCalls, $this->translationAnalysis->tokenizationCalls);
         EditedCueAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'cerebras' && $prompt->model === 'saved-cerebras');
     }
 
     public function test_quick_fix_refreshes_translation_and_preserves_a_replacement_phrase(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload([
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload([
             'includeTranslation' => true,
         ]))->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
@@ -1296,7 +995,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_provider_failure_keeps_the_entire_original_track(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $track = $job->track;
         $original = $track->getAttributes();
@@ -1312,7 +1011,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_rechecks_track_identity_after_provider_work(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $track = $job->track;
         $originalCues = $track->cues;
@@ -1335,19 +1034,14 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame($originalCues, $track->fresh()->cues);
     }
 
-    public function test_quick_fix_rechecks_entitlement_and_replacement_before_publication(): void
+    public function test_quick_fix_rechecks_replacement_before_publication(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $track = $job->track;
         $original = $track->getAttributes();
         $url = '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0';
         $payload = ['expectedTrackId' => $track->public_id, 'text' => 'updated'];
-        $this->duringQuickFix = fn () => $job->user->update(['billing_subscription_status' => 'canceled']);
-        $this->patchJson($url, $payload)->assertStatus(402);
-        $this->assertSame($original, $track->fresh()->getAttributes());
-
-        $job->user->update(['billing_subscription_status' => 'active']);
         $this->duringQuickFix = fn () => $track->lyricsCorrection()->create([
             'attempt_id' => (string) Str::uuid(), 'status' => 'queued', 'lyrics' => 'full replacement',
             'work_state' => ['stage' => 'aligning'],
@@ -1358,7 +1052,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_preserves_concurrent_word_card_updates_to_other_cues(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $track = $job->track;
         $this->duringQuickFix = function () use ($track): void {
@@ -1371,17 +1065,17 @@ class SubtitleJobApiTest extends TestCase
         ])->assertOk()->assertJsonPath('cues.1.tokens.0.gloss', 'concurrent word card');
     }
 
-    public function test_overlapping_quick_fix_and_full_replacement_are_rejected_before_paid_work(): void
+    public function test_overlapping_quick_fix_and_full_replacement_are_rejected_before_provider_work(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $track = $job->track;
         $payload = ['expectedTrackId' => $track->public_id, 'text' => 'updated'];
         $this->duringQuickFix = function () use ($job, $track, $payload): void {
             $corrections = app(LyricsCorrectionService::class);
             foreach ([
-                fn () => $corrections->quickFix($job, $job->user, $track->cues[0]['cueId'], 0, $payload),
-                fn () => $corrections->submit($job, $job->user, 'New lyric words', $track->public_id),
+                fn () => $corrections->quickFix($job, $track->cues[0]['cueId'], 0, $payload),
+                fn () => $corrections->submit($job, 'New lyric words', $track->public_id),
             ] as $overlap) {
                 try {
                     $overlap();
@@ -1397,22 +1091,9 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseCount('subtitle_track_lyrics_corrections', 0);
     }
 
-    public function test_quick_fix_requires_current_entitlement_before_provider_work(): void
-    {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
-        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
-        $track = $job->track;
-        $job->user->update(['billing_current_period_end' => now()->subMinute()]);
-
-        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$track->cues[0]['cueId'].'/tokens/0', [
-            'expectedTrackId' => $track->public_id, 'text' => 'updated',
-        ])->assertStatus(402);
-        EditedCueAgent::assertNeverPrompted();
-    }
-
     public function test_quick_fix_uses_the_selected_repeated_token_occurrence(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
         $cue['sourceText'] = 'one two one';
@@ -1424,7 +1105,7 @@ class SubtitleJobApiTest extends TestCase
         ];
         $job->track->update(['cues' => [$cue]]);
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/2',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'last'],
         )->assertOk()->assertJsonPath('cues.0.sourceText', 'one two last');
@@ -1432,11 +1113,11 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_rejects_stale_track_and_active_replacement(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => (string) Str::uuid(), 'text' => 'updated'],
         )->assertStatus(409)
@@ -1444,11 +1125,11 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('error.details.reason', 'stale_track');
 
         Queue::fake();
-        $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
         )->assertStatus(409)
@@ -1458,12 +1139,12 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_rejects_a_replacement_with_the_same_normalized_token(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $trackId = $job->track->public_id;
         $cue = $job->track->cues[0];
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $trackId, 'text' => ' FIRST '],
         )->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed');
@@ -1473,7 +1154,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_matches_case_normalized_persisted_token_spans(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
         $cue['sourceText'] = 'Hello world';
@@ -1484,7 +1165,7 @@ class SubtitleJobApiTest extends TestCase
         ];
         $job->track->update(['cues' => [$cue]]);
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'Hi'],
         )->assertOk()->assertJsonPath('cues.0.sourceText', 'Hi world');
@@ -1492,7 +1173,7 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_returns_validation_failure_when_the_resulting_cue_overflows(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
         $cue['sourceText'] = str_repeat('a', 40).' '.str_repeat('b', 40);
@@ -1504,7 +1185,7 @@ class SubtitleJobApiTest extends TestCase
         $job->track->update(['cues' => [$cue]]);
         $trackId = $job->track->public_id;
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $trackId, 'text' => str_repeat('c', 50)],
         )->assertUnprocessable()
@@ -1516,53 +1197,47 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_quick_fix_rejects_an_out_of_range_token_index_at_the_route_boundary(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/123456789',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
         )->assertNotFound();
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/9999',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
         )->assertNotFound();
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/-1',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
         )->assertNotFound();
     }
 
-    public function test_quick_fix_rejects_empty_missing_owner_and_expired_targets(): void
+    public function test_quick_fix_rejects_empty_missing_and_expired_targets(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $job->track->public_id, 'text' => ''],
         )->assertUnprocessable();
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $job->track->public_id, 'text' => " \n\t"],
         )->assertUnprocessable();
 
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/missing-cue/tokens/0',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
         )->assertNotFound();
 
-        $otherUser = User::factory()->create();
-        $this->withExtensionAuth($this->installId('b'), $otherUser)->patchJson(
-            '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
-            ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
-        )->assertNotFound();
-
         $job->track->update(['expires_at' => now()->subMinute()]);
-        $this->withExtensionAuth($this->installId())->patchJson(
+        $this->withExtensionInstall($this->installId())->patchJson(
             '/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/0',
             ['expectedTrackId' => $job->track->public_id, 'text' => 'updated'],
         )->assertNotFound();
@@ -1570,14 +1245,14 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_correction_can_be_cancelled_and_exposes_safe_stage(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $correction = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
-        $this->withExtensionAuth($this->installId())
+        $this->withExtensionInstall($this->installId())
             ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => $correction->json('attemptId')])
             ->assertOk()
             ->assertJsonPath('attemptId', $correction->json('attemptId'))
@@ -1589,34 +1264,29 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_cancellation_rejects_invalid_attempts_and_wrong_or_expired_tracks(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $correction = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
-        $this->withExtensionAuth($this->installId())
+        $this->withExtensionInstall($this->installId())
             ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics')
             ->assertUnprocessable();
-        $this->withExtensionAuth($this->installId())
+        $this->withExtensionInstall($this->installId())
             ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => 'not-a-uuid'])
             ->assertUnprocessable();
 
-        $otherUser = User::factory()->create();
-        $this->withExtensionAuth($this->installId('b'), $otherUser)
-            ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => $correction->json('attemptId')])
-            ->assertNotFound();
-
         $job->track->update(['expires_at' => now()->subMinute()]);
-        $this->withExtensionAuth($this->installId())
+        $this->withExtensionInstall($this->installId())
             ->deleteJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['attemptId' => $correction->json('attemptId')])
             ->assertNotFound();
     }
 
     public function test_transient_correction_provider_failure_requeues_and_retry_completes(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         $calls = 0;
         Queue::fake();
@@ -1634,7 +1304,7 @@ class SubtitleJobApiTest extends TestCase
             ]];
         })->preventStrayPrompts();
 
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $correction = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => "First lyric line\nSecond lyric line",
         ])->assertAccepted();
         $queuedJob = new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0);
@@ -1662,27 +1332,6 @@ class SubtitleJobApiTest extends TestCase
         ]);
     }
 
-    public function test_correction_worker_rechecks_entitlement_before_provider_work(): void
-    {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
-        $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
-        Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
-            'lyrics' => 'first transcript segment second transcript segment',
-        ])->assertAccepted();
-
-        $job->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
-        LyricsAlignmentAgent::fake([])->preventStrayPrompts();
-
-        (new LyricsCorrectionJob($job->track->id, $job->id, $correction->json('attemptId'), 0))->handle(app(LyricsCorrectionService::class));
-
-        LyricsAlignmentAgent::assertNeverPrompted();
-        $this->assertDatabaseHas('subtitle_track_lyrics_corrections', [
-            'attempt_id' => $correction->json('attemptId'),
-            'status' => 'failed',
-        ]);
-    }
-
     public function test_correction_timeout_is_bounded_below_real_queue_retry_after(): void
     {
         config([
@@ -1699,31 +1348,30 @@ class SubtitleJobApiTest extends TestCase
         $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
     }
 
-    public function test_correction_status_is_owner_scoped_and_does_not_expose_lyrics(): void
+    public function test_correction_status_is_shared_without_exposing_lyrics(): void
     {
-        $jobResponse = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         Queue::fake();
-        $correction = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
+        $correction = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id,
             'lyrics' => 'first transcript segment second transcript segment',
         ])->assertAccepted();
 
-        $this->withExtensionAuth($this->installId())
+        $this->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics')
             ->assertOk()
             ->assertJsonPath('attemptId', $correction->json('attemptId'))
             ->assertJsonMissingPath('lyrics');
 
-        $otherUser = User::factory()->create();
-        $this->withExtensionAuth($this->installId('b'), $otherUser)
+        $this->withExtensionInstall($this->installId('b'))
             ->getJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics')
-            ->assertNotFound();
+            ->assertOk();
     }
 
-    public function test_correction_rejects_invalid_input_expired_tracks_inactive_plans_and_concurrent_attempts(): void
+    public function test_correction_rejects_invalid_input_expired_tracks_and_concurrent_attempts(): void
     {
         $installId = $this->installId();
-        $jobResponse = $this->withExtensionAuth($installId)->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $jobResponse = $this->withExtensionInstall($installId)->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::query()->where('public_id', $jobResponse->json('jobId'))->firstOrFail();
         config([
             'queue.default' => 'database',
@@ -1731,28 +1379,20 @@ class SubtitleJobApiTest extends TestCase
         ]);
         Queue::fake();
 
-        $this->withExtensionAuth($installId)
+        $this->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => ''])
             ->assertUnprocessable();
 
-        $first = $this->withExtensionAuth($installId)
+        $first = $this->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertAccepted();
-        $this->withExtensionAuth($installId)
+        $this->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'lyrics_correction_in_progress');
 
-        $job->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
-        $job->track->lyricsCorrection()->update(['status' => 'failed', 'lyrics' => null]);
-        $this->withExtensionAuth($installId)
-            ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
-            ->assertStatus(402)
-            ->assertJsonPath('error.code', 'payment_required');
-
-        $job->user->forceFill(['billing_subscription_status' => 'active', 'billing_current_period_end' => now()->addDay()])->save();
         $job->track->update(['expires_at' => now()->subMinute()]);
-        $this->withExtensionAuth($installId)
+        $this->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'first transcript segment second transcript segment'])
             ->assertNotFound();
         $this->assertNotSame('', (string) $first->json('attemptId'));
@@ -1761,7 +1401,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_transcript_first_generation_adds_requested_translation(): void
     {
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'includeTranslation' => true,
             ]));
@@ -1796,7 +1436,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response
@@ -1831,7 +1471,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'noroman0001',
                 'includeRomanization' => false,
@@ -1864,7 +1504,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpn00000001',
@@ -1904,7 +1544,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'nonlatin001']))
             ->assertAccepted()
             ->assertJsonPath('status', 'running');
@@ -1912,7 +1552,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -1936,7 +1576,7 @@ class SubtitleJobApiTest extends TestCase
         $this->translationAnalysis->tokenizationShouldFail = true;
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'tokfail0001']))
             ->assertAccepted()
             ->assertJsonPath('status', 'running');
@@ -1944,7 +1584,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -1967,7 +1607,7 @@ class SubtitleJobApiTest extends TestCase
         $this->translationAnalysis->translationShouldFail = true;
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'trnfail0001',
                 'includeTranslation' => true,
@@ -1978,7 +1618,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -2016,7 +1656,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0001',
@@ -2027,7 +1667,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -2063,7 +1703,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'jpn',
                 'youtubeVideoId' => 'jpnfail0002',
@@ -2074,7 +1714,7 @@ class SubtitleJobApiTest extends TestCase
         $this->runQueuedSubtitleJobs();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$response->json('jobId'))
             ->assertOk()
             ->assertJsonPath('status', 'failed')
@@ -2102,7 +1742,7 @@ class SubtitleJobApiTest extends TestCase
             webVtt: "WEBVTT\n\n",
         );
 
-        $response = $this->withExtensionAuth($this->installId())
+        $response = $this->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'auto',
                 'targetLanguage' => 'eng',
@@ -2125,14 +1765,14 @@ class SubtitleJobApiTest extends TestCase
     public function test_translated_and_untranslated_tracks_are_cached_separately(): void
     {
         $plainResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'transmode01',
                 'includeTranslation' => false,
             ]));
 
         $translatedResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'transmode01',
                 'includeTranslation' => true,
@@ -2159,7 +1799,7 @@ class SubtitleJobApiTest extends TestCase
             segments: [new TimestampedTranscriptSegment(0.5, 2.1, $source)], webVtt: "WEBVTT\n",
         );
         $payload = $this->validPayload(['sourceLanguage' => 'ara', 'includeTranslation' => true]);
-        $original = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
+        $original = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
         $job = SubtitleJob::where('public_id', $original->json('jobId'))->firstOrFail();
         $oldRun = $job->run_id;
         $cues = $job->track->cues;
@@ -2183,12 +1823,11 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(2, $this->translationAnalysis->tokenizationCalls);
         $this->assertSame(2, $this->translationAnalysis->romanizationCalls);
         $this->assertSame(2, $this->translationAnalysis->translationCalls);
-        $this->assertSame(2, BillingUsageEvent::where('subtitle_job_id', $job->id)->where('event_type', 'debit')->count());
     }
 
-    public function test_duplicate_regeneration_reuses_the_active_run_and_its_reservation(): void
+    public function test_duplicate_regeneration_reuses_the_active_run(): void
     {
-        $original = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $original = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $original->json('jobId'))->firstOrFail();
         $oldRun = $job->run_id;
         config(['queue.default' => 'database', 'subtitles.queue.connection' => 'database']);
@@ -2196,10 +1835,8 @@ class SubtitleJobApiTest extends TestCase
         $payload = $this->validPayload(['forceRegenerate' => true]);
         $first = $this->postJson('/v1/subtitle-jobs', $payload)->assertAccepted();
         $run = $job->fresh()->run_id;
-        $ledgerCount = BillingUsageEvent::count();
         $this->postJson('/v1/subtitle-jobs', $payload)->assertAccepted()->assertJsonPath('jobId', $first->json('jobId'));
         $this->assertSame($run, $job->fresh()->run_id);
-        $this->assertSame($ledgerCount, BillingUsageEvent::count());
         Queue::assertPushed(AcquireSubtitleAudio::class, 1);
         (new AcquireSubtitleAudio($job->id, $oldRun))->handle(app(SubtitleGenerationPipeline::class));
         $this->assertSame($run, $job->fresh()->run_id);
@@ -2207,18 +1844,13 @@ class SubtitleJobApiTest extends TestCase
         $this->assertNull($job->fresh()->track);
     }
 
-    #[TestWith(['billing', 402])]
     #[TestWith(['correction', 409])]
     public function test_regeneration_rejection_preserves_the_existing_track(string $reason, int $status): void
     {
-        $original = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $original = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $original->json('jobId'))->firstOrFail();
         $oldRun = $job->run_id;
-        if ($reason === 'billing') {
-            $job->user->update(['billing_subscription_status' => 'past_due']);
-        } else {
-            $job->track->lyricsCorrection()->create(['attempt_id' => (string) Str::uuid(), 'status' => 'queued', 'lyrics' => 'Replacement in progress']);
-        }
+        $job->track->lyricsCorrection()->create(['attempt_id' => (string) Str::uuid(), 'status' => 'queued', 'lyrics' => 'Replacement in progress']);
         $this->postJson('/v1/subtitle-jobs', $this->validPayload(['forceRegenerate' => true]))->assertStatus($status);
         $this->assertSame($oldRun, $job->fresh()->run_id);
         $this->assertSame($original->json('track.trackId'), $job->fresh()->track->public_id);
@@ -2230,7 +1862,7 @@ class SubtitleJobApiTest extends TestCase
     #[TestWith([null])]
     public function test_regeneration_flag_requires_a_json_boolean(mixed $value): void
     {
-        $this->withExtensionAuth($this->installId())
+        $this->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['forceRegenerate' => $value]))->assertUnprocessable();
         $this->assertSame(0, SubtitleJob::count());
     }
@@ -2240,7 +1872,7 @@ class SubtitleJobApiTest extends TestCase
         config(['ai.providers.eleven.models.transcription.default' => 'scribe-test']);
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cachehit001']))
             ->assertOk();
 
@@ -2254,7 +1886,7 @@ class SubtitleJobApiTest extends TestCase
         // A different target language forces a new job while the transcript
         // cache key (video + requested source language + model) is unchanged.
         $secondResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'cachehit001',
                 'targetLanguage' => 'fra',
@@ -2292,14 +1924,14 @@ class SubtitleJobApiTest extends TestCase
         config(['subtitles.transcript_cache.ttl_days' => 0]);
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cacheoff001']))
             ->assertOk();
 
         $this->assertSame(0, CachedVideoTranscript::count());
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'cacheoff001',
                 'targetLanguage' => 'fra',
@@ -2323,7 +1955,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cacheexp001']))
             ->assertOk();
 
@@ -2352,14 +1984,14 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $plainResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'romanmode01',
                 'includeRomanization' => false,
             ]));
 
         $romanizedResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'youtubeVideoId' => 'romanmode01',
                 'includeRomanization' => true,
@@ -2384,7 +2016,7 @@ class SubtitleJobApiTest extends TestCase
             $videoId = 'vid'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
 
             $this
-                ->withExtensionAuth($this->installId(chr(97 + $index)))
+                ->withExtensionInstall($this->installId(chr(97 + $index)))
                 ->postJson('/v1/subtitle-jobs', $this->validPayload([
                     'youtubeVideoId' => $videoId,
                     'sourceLanguage' => $sourceLanguage,
@@ -2403,7 +2035,7 @@ class SubtitleJobApiTest extends TestCase
             $videoId = 'tgt'.str_pad((string) $index, 8, '0', STR_PAD_LEFT);
 
             $this
-                ->withExtensionAuth($this->installId(chr(97 + $index)))
+                ->withExtensionInstall($this->installId(chr(97 + $index)))
                 ->postJson('/v1/subtitle-jobs', $this->validPayload([
                     'youtubeVideoId' => $videoId,
                     'targetLanguage' => $targetLanguage,
@@ -2424,7 +2056,7 @@ class SubtitleJobApiTest extends TestCase
         );
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'auto',
                 'targetLanguage' => 'eng',
@@ -2454,11 +2086,11 @@ class SubtitleJobApiTest extends TestCase
     public function test_duplicate_default_request_reuses_completed_on_demand_track(): void
     {
         $firstResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $secondResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $firstResponse->assertOk();
@@ -2479,7 +2111,7 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'costtrace01']));
 
         $response
@@ -2528,7 +2160,7 @@ class SubtitleJobApiTest extends TestCase
             ]);
 
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $response->assertOk();
@@ -2539,51 +2171,48 @@ class SubtitleJobApiTest extends TestCase
         $this->assertNotSame($oldJob->public_id, $response->json('jobId'));
     }
 
-    public function test_completed_tracks_are_cached_per_install(): void
+    public function test_completed_tracks_are_shared_across_installs_on_the_instance(): void
     {
         $firstResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $secondResponse = $this
-            ->withExtensionAuth($this->installId('b'))
+            ->withExtensionInstall($this->installId('b'))
             ->postJson('/v1/subtitle-jobs', $this->validPayload());
 
         $firstResponse->assertOk();
         $secondResponse->assertOk();
 
-        $this->assertNotSame($firstResponse->json('jobId'), $secondResponse->json('jobId'));
-        $this->assertNotSame($firstResponse->json('track.trackId'), $secondResponse->json('track.trackId'));
-        $this->assertSame(2, SubtitleJob::count());
-        $this->assertSame(2, SubtitleTrack::count());
-        // Each install gets its own job and track, but the transcript is
-        // shared per video, so the second install skips audio acquisition.
+        $this->assertSame($firstResponse->json('jobId'), $secondResponse->json('jobId'));
+        $this->assertSame($firstResponse->json('track.trackId'), $secondResponse->json('track.trackId'));
+        $this->assertSame(1, SubtitleJob::count());
+        $this->assertSame(1, SubtitleTrack::count());
         $this->assertSame(1, $this->audioSource->calls);
     }
 
     public function test_partial_tracks_preview_source_then_overlay_out_of_order_analysis_with_stable_indexes(): void
     {
         config(['subtitles.enrichment.cue_batch_max_cues' => 1]);
-        $user = User::factory()->create();
-        $job = SubtitleJob::factory()->create(['user_id' => $user->id, 'status' => 'running', 'stage' => 'tokenizing']);
+        $job = SubtitleJob::factory()->create(['status' => 'running', 'stage' => 'tokenizing']);
         $installId = $this->installId();
         $url = "/v1/subtitle-jobs/{$job->public_id}";
         $cues = [
             ['cueId' => 'cue-0001', 'index' => 0, 'startMs' => 500, 'endMs' => 2100, 'sourceText' => 'first part', 'translatedText' => 'First translation', 'tokens' => [['index' => 0, 'text' => 'first']]],
             ['cueId' => 'cue-0002', 'index' => 1, 'startMs' => 2400, 'endMs' => 4000, 'sourceText' => 'second part', 'translatedText' => 'Second translation', 'romanization' => 'second', 'tokens' => [['index' => 0, 'text' => 'second']]],
         ];
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()->assertJsonMissingPath('partialTrack');
+        $this->withExtensionInstall($installId)->getJson($url)->assertOk()->assertJsonMissingPath('partialTrack');
         $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
+        $this->withExtensionInstall($installId)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 1)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonMissingPath('partialTrack.cues.0.translatedText')->assertJsonMissingPath('partialTrack.cues.0.tokens');
         $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1, new CueEnrichmentResult([$cues[1]]));
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
+        $this->withExtensionInstall($installId)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 2)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonMissingPath('partialTrack.cues.0.translatedText')
             ->assertJsonPath('partialTrack.cues.1.translatedText', 'Second translation');
         $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult([$cues[0]]));
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()
+        $this->withExtensionInstall($installId)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 3)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonPath('partialTrack.cues.1.cueId', 'cue-0002')->assertJsonPath('partialTrack.cues.1.index', 1)
             ->assertJsonPath('partialTrack.cues.0.translatedText', 'First translation')
@@ -2592,23 +2221,22 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame([0, 1], array_column($merged, 'index'));
         $this->assertSame(['cue-0001', 'cue-0002'], array_column($merged, 'cueId'));
         $job->update(['run_id' => (string) Str::uuid()]);
-        $this->withExtensionAuth($installId, $user)->getJson($url)->assertOk()->assertJsonMissingPath('partialTrack');
+        $this->withExtensionInstall($installId)->getJson($url)->assertOk()->assertJsonMissingPath('partialTrack');
     }
 
-    public function test_partial_track_is_not_served_for_completed_jobs_or_other_users(): void
+    public function test_partial_tracks_are_shared_but_omitted_for_completed_jobs(): void
     {
         $completedResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'partdone001']))
             ->assertOk();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->getJson('/v1/subtitle-jobs/'.$completedResponse->json('jobId'))
             ->assertOk()->assertJsonMissingPath('partialTrack');
 
         $otherUsersJob = SubtitleJob::factory()->create([
-            'user_id' => User::factory()->create()->id,
             'status' => 'running',
             'stage' => 'tokenizing',
             'progress_percent' => 65,
@@ -2616,15 +2244,15 @@ class SubtitleJobApiTest extends TestCase
         $this->artifacts()->putCueCollection($otherUsersJob, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
 
         $this
-            ->withExtensionAuth($this->installId('b'))
+            ->withExtensionInstall($this->installId('b'))
             ->getJson("/v1/subtitle-jobs/{$otherUsersJob->public_id}")
-            ->assertNotFound();
+            ->assertOk();
     }
 
     public function test_generation_records_time_to_first_cue(): void
     {
         $response = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'firstcue001']))
             ->assertOk();
 
@@ -2640,23 +2268,21 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_video_generations_include_both_providers_beyond_the_history_limit(): void
     {
-        $user = User::factory()->create();
         $ids = [];
         for ($index = 0; $index < 27; $index++) {
             $job = SubtitleJob::factory()->create([
-                'user_id' => $user->id,
                 'youtube_video_id' => 'dQw4w9WgXcQ',
                 'status' => 'completed',
                 'transcription_options_hash' => hash('sha256', (string) $index),
                 'ai_provider' => $index % 2 ? 'cerebras' : 'openai',
-                'ai_model' => $index % 2 ? 'gpt-oss-120b' : 'gpt-5.6-luna',
+                'ai_model' => $index % 2 ? 'gpt-oss-120b' : 'gpt-6-luna',
                 'updated_at' => now()->subDays(2),
             ]);
             SubtitleTrack::factory()->for($job, 'job')->create(['expires_at' => now()->addDay()]);
             $ids[] = $job->public_id;
         }
-        SubtitleJob::factory()->count(25)->create(['user_id' => $user->id]);
-        $this->withExtensionAuth($this->installId(), $user);
+        SubtitleJob::factory()->count(25)->create();
+        $this->withExtensionInstall($this->installId());
         $this->getJson('/v1/subtitle-jobs')->assertOk()->assertJsonCount(25, 'jobs');
         $response = $this->getJson('/v1/subtitle-jobs?youtubeVideoId=dQw4w9WgXcQ')
             ->assertOk()->assertJsonCount(27, 'jobs');
@@ -2664,12 +2290,10 @@ class SubtitleJobApiTest extends TestCase
         $this->assertEqualsCanonicalizing(['openai', 'cerebras'], array_unique(array_column($response->json('jobs'), 'aiProvider')));
     }
 
-    public function test_video_generations_exclude_unavailable_or_unowned_jobs_and_validate_filter(): void
+    public function test_video_generations_exclude_unavailable_jobs_and_validate_filter(): void
     {
-        $user = User::factory()->create();
-        foreach (['foreign', 'expired', 'missing', 'running', 'old-version', 'other-video'] as $index => $kind) {
+        foreach (['expired', 'missing', 'running', 'old-version', 'other-video'] as $index => $kind) {
             $job = SubtitleJob::factory()->create([
-                'user_id' => $kind === 'foreign' ? User::factory()->create()->id : $user->id,
                 'youtube_video_id' => $kind === 'other-video' ? 'M7lc1UVf-VE' : 'dQw4w9WgXcQ',
                 'status' => $kind === 'running' ? 'running' : 'completed',
                 'transcription_options_hash' => hash('sha256', (string) $index),
@@ -2681,7 +2305,7 @@ class SubtitleJobApiTest extends TestCase
                 ]);
             }
         }
-        $this->withExtensionAuth($this->installId(), $user);
+        $this->withExtensionInstall($this->installId());
         $this->getJson('/v1/subtitle-jobs?youtubeVideoId=dQw4w9WgXcQ')->assertOk()->assertJsonCount(0, 'jobs');
         $this->getJson('/v1/subtitle-jobs?youtubeVideoId=unknown0001')->assertOk()->assertJsonCount(0, 'jobs');
         foreach (['', 'bad', '%3Cscript%3E', '%5B%5D'] as $value) {
@@ -2693,9 +2317,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_list_subtitle_jobs_returns_current_install_history(): void
     {
         $installId = $this->installId();
-        $user = User::factory()->create();
         $job = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'youtube_video_id' => 'dQw4w9WgXcQ',
             'youtube_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             'install_id' => $installId,
@@ -2716,7 +2338,6 @@ class SubtitleJobApiTest extends TestCase
                 'expires_at' => now()->addDays(30),
             ]);
         $runningJob = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'youtube_video_id' => 'run00000001',
             'install_id' => $installId,
             'expires_at' => null,
@@ -2725,7 +2346,6 @@ class SubtitleJobApiTest extends TestCase
             'updated_at' => now()->subMinute(),
         ]);
         $failedJob = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'youtube_video_id' => 'fail0000001',
             'install_id' => $installId,
             'expires_at' => null,
@@ -2736,14 +2356,9 @@ class SubtitleJobApiTest extends TestCase
             'error_message' => 'Subtitle enrichment is temporarily rate limited.',
             'updated_at' => now()->subMinutes(2),
         ]);
-        SubtitleJob::factory()->create([
-            'youtube_video_id' => 'other000001',
-            'install_id' => $this->installId('b'),
-            'expires_at' => now()->addDays(30),
-        ]);
 
         $response = $this
-            ->withExtensionAuth($installId, $user)
+            ->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs');
 
         $response
@@ -2776,9 +2391,8 @@ class SubtitleJobApiTest extends TestCase
     public function test_history_keeps_old_active_jobs_and_applies_terminal_retention(): void
     {
         $installId = $this->installId('h');
-        $user = User::factory()->create();
         $oldVersion = 'retired-processing-version';
-        $oldRunning = SubtitleJob::factory()->for($user)->create([
+        $oldRunning = SubtitleJob::factory()->create([
             'youtube_video_id' => 'oldrun00001',
             'install_id' => $installId,
             'processing_version' => $oldVersion,
@@ -2786,7 +2400,7 @@ class SubtitleJobApiTest extends TestCase
             'updated_at' => now()->subHours(6),
             'created_at' => now()->subHours(6),
         ]);
-        $recentFailed = SubtitleJob::factory()->for($user)->create([
+        $recentFailed = SubtitleJob::factory()->create([
             'youtube_video_id' => 'olderr00001',
             'install_id' => $installId,
             'processing_version' => $oldVersion,
@@ -2795,7 +2409,7 @@ class SubtitleJobApiTest extends TestCase
             'error_message' => 'Transcription failed.',
             'updated_at' => now()->subDays(2),
         ]);
-        SubtitleJob::factory()->for($user)->create([
+        SubtitleJob::factory()->create([
             'youtube_video_id' => 'expir000001',
             'install_id' => $installId,
             'processing_version' => $oldVersion,
@@ -2805,7 +2419,7 @@ class SubtitleJobApiTest extends TestCase
             'updated_at' => now()->subDays(31),
         ]);
 
-        $this->withExtensionAuth($installId, $user)
+        $this->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs')
             ->assertOk()
             ->assertJsonCount(2, 'jobs')
@@ -2814,7 +2428,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('jobs.1.jobId', $recentFailed->public_id)
             ->assertJsonPath('jobs.1.errorCode', 'transcription_failed');
 
-        $this->withExtensionAuth($installId, $user)
+        $this->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs/'.$oldRunning->public_id)
             ->assertOk()
             ->assertJsonPath('status', 'running');
@@ -2840,24 +2454,24 @@ class SubtitleJobApiTest extends TestCase
         ]);
 
         $this
-            ->withExtensionAuth($installId)
+            ->withExtensionInstall($installId)
             ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'ratelimit01']))
             ->assertAccepted();
 
         $this
-            ->withExtensionAuth($installId)
+            ->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id);
 
         $this
-            ->withExtensionAuth($installId)
+            ->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertOk()
             ->assertJsonPath('jobId', $job->public_id);
 
         $this
-            ->withExtensionAuth($installId)
+            ->withExtensionInstall($installId)
             ->getJson('/v1/subtitle-jobs/'.$job->public_id)
             ->assertStatus(429)
             ->assertJsonPath('error.code', 'rate_limited');
@@ -2866,17 +2480,17 @@ class SubtitleJobApiTest extends TestCase
     public function test_word_card_cache_is_separate_for_each_provider_even_with_the_same_model(): void
     {
         config(['ai.default' => 'openai', 'ai.providers.openai.models.text.default' => 'same-model', 'ai.providers.cerebras.models.text.default' => 'same-model']);
-        $response = $this->withExtensionAuth($this->installId())
+        $response = $this->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $payload = ['trackId' => $response->json('track.trackId'), 'cueId' => 'cue-0001', 'tokenIndex' => 0];
         $track = SubtitleTrack::where('public_id', $payload['trackId'])->firstOrFail();
         $originalCues = $track->cues;
-        $this->withExtensionAuth($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $this->withExtensionInstall($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
         $track->refresh()->update(['cues' => $originalCues]);
         config([
             'ai.default' => 'cerebras',
         ]);
-        $this->withExtensionAuth($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
+        $this->withExtensionInstall($this->installId())->postJson('/v1/learning-tokens', $payload)->assertOk();
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
         $other = $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertOk();
         $this->postJson('/v1/learning-tokens', [...$payload, 'trackId' => $other->json('track.trackId')])->assertOk();
@@ -2887,7 +2501,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_learning_token_enrichment_updates_track_and_skips_duplicate_provider_calls(): void
     {
         $jobResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertOk();
 
@@ -2904,7 +2518,7 @@ class SubtitleJobApiTest extends TestCase
         $track->update(['cues' => $cues]);
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/learning-tokens', $payload)
             ->assertOk()
             ->assertJsonPath('trackId', $payload['trackId'])
@@ -2915,7 +2529,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertJsonPath('token.romanization', 'first romanized');
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/learning-tokens', $payload)
             ->assertOk()
             ->assertJsonPath('token.gloss', 'first gloss');
@@ -2924,42 +2538,6 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame('first gloss', $track->cues[0]['tokens'][0]['gloss']);
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
-    }
-
-    public function test_learning_token_enrichment_requires_an_active_plan_on_a_cache_miss(): void
-    {
-        $installId = $this->installId('p');
-        $user = User::factory()->create();
-        $this->withExtensionAuth($installId, $user);
-        $job = SubtitleJob::factory()->for($user)->create([
-            'install_id' => $installId,
-            'youtube_video_id' => 'learnplan01',
-            'youtube_url' => 'https://www.youtube.com/watch?v=learnplan01',
-            'status' => 'completed',
-            'stage' => 'finalizing',
-            'progress_percent' => 100,
-            'expires_at' => now()->addDays(30),
-        ]);
-        $track = SubtitleTrack::factory()->for($job, 'job')->create([
-            'youtube_video_id' => 'learnplan01',
-            'cues' => [$this->sampleCue()],
-        ]);
-        $user->forceFill([
-            'billing_subscription_status' => 'canceled',
-            'billing_current_period_end' => now()->subSecond(),
-        ])->save();
-
-        $this
-            ->withExtensionAuth($installId, $user)
-            ->postJson('/v1/learning-tokens', [
-                'trackId' => $track->public_id,
-                'cueId' => 'cue-0001',
-                'tokenIndex' => 0,
-            ])
-            ->assertStatus(402)
-            ->assertJsonPath('error.code', 'payment_required');
-
-        $this->assertSame(0, $this->translationAnalysis->tokenCalls);
     }
 
     public function test_learning_token_enrichment_preserves_concurrent_token_updates(): void
@@ -3007,7 +2585,7 @@ class SubtitleJobApiTest extends TestCase
         };
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/learning-tokens', [
                 'trackId' => $track->public_id,
                 'cueId' => 'cue-0001',
@@ -3025,12 +2603,12 @@ class SubtitleJobApiTest extends TestCase
 
     public function test_overlapping_same_card_misses_make_one_provider_call_and_then_reuse_result(): void
     {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $payload = ['trackId' => $job->track->public_id, 'cueId' => $job->track->cues[0]['cueId'], 'tokenIndex' => 0];
-        $this->translationAnalysis->beforeTokenResult = function () use ($job, $payload): void {
+        $this->translationAnalysis->beforeTokenResult = function () use ($payload): void {
             try {
-                app(LearningTokenEnrichmentService::class)->enrich($payload, $job->user);
+                app(LearningTokenEnrichmentService::class)->enrich($payload);
                 $this->fail('Expected identical in-flight lookup to be rejected.');
             } catch (SubtitleProcessingException $exception) {
                 $this->assertSame('learning_token_in_progress', $exception->context['reason']);
@@ -3044,7 +2622,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_learning_token_enrichment_generates_cards_for_same_language_track(): void
     {
         $jobResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload([
                 'sourceLanguage' => 'eng',
                 'targetLanguage' => 'eng',
@@ -3052,7 +2630,7 @@ class SubtitleJobApiTest extends TestCase
             ->assertOk();
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/learning-tokens', [
                 'trackId' => $jobResponse->json('track.trackId'),
                 'cueId' => 'cue-0001',
@@ -3065,22 +2643,21 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
     }
 
-    public function test_learning_token_enrichment_requires_owning_install(): void
+    public function test_learning_token_enrichment_is_shared_across_installs(): void
     {
         $jobResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertOk();
 
         $this
-            ->withExtensionAuth($this->installId('b'))
+            ->withExtensionInstall($this->installId('b'))
             ->postJson('/v1/learning-tokens', [
                 'trackId' => $jobResponse->json('track.trackId'),
                 'cueId' => 'cue-0001',
                 'tokenIndex' => 0,
             ])
-            ->assertNotFound()
-            ->assertJsonPath('error.code', 'not_found');
+            ->assertOk()->assertJsonStructure(['token']);
     }
 
     public function test_transcription_failure_returns_stable_error_and_status(): void
@@ -3088,7 +2665,7 @@ class SubtitleJobApiTest extends TestCase
         $this->transcriptionService->shouldFail = true;
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $this->validPayload())
             ->assertStatus(502)
             ->assertJsonPath('error.code', 'transcription_failed');
@@ -3107,7 +2684,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_create_subtitle_job_returns_stable_validation_errors(): void
     {
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', [
                 'youtubeVideoId' => 'dQw4w9WgXcQ',
                 'sourceLanguage' => 'zz',
@@ -3131,7 +2708,7 @@ class SubtitleJobApiTest extends TestCase
             'youtubeUrl' => 'https://www.youtube.com/shorts/shorts00001?feature=share',
         ]);
         $shortsResponse = $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $shortsPayload)
             ->assertAccepted();
 
@@ -3146,7 +2723,7 @@ class SubtitleJobApiTest extends TestCase
             'youtubeUrl' => 'https://youtu.be/youtu000001',
         ]);
         $shortUrlResponse = $this
-            ->withExtensionAuth($this->installId('b'))
+            ->withExtensionInstall($this->installId('b'))
             ->postJson('/v1/subtitle-jobs', $shortUrlPayload)
             ->assertAccepted();
 
@@ -3167,7 +2744,7 @@ class SubtitleJobApiTest extends TestCase
 
         foreach ($invalidUrls as $url) {
             $this
-                ->withExtensionAuth($this->installId())
+                ->withExtensionInstall($this->installId())
                 ->postJson('/v1/subtitle-jobs', $this->validPayload([
                     'youtubeVideoId' => 'shorts00001',
                     'youtubeUrl' => $url,
@@ -3187,7 +2764,7 @@ class SubtitleJobApiTest extends TestCase
         unset($payload['includeRomanization'], $payload['includeTranslation']);
 
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs', $payload)
             ->assertStatus(422)
             ->assertJsonPath('error.code', 'validation_failed')
@@ -3214,7 +2791,7 @@ class SubtitleJobApiTest extends TestCase
     public function test_no_cancel_route_is_exposed(): void
     {
         $this
-            ->withExtensionAuth($this->installId())
+            ->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs/'.(string) Str::uuid().'/cancel')
             ->assertNotFound()
             ->assertJsonPath('error.code', 'not_found');
@@ -3442,7 +3019,7 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
     public ?\Closure $beforeAcquireResult = null;
 
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?int $userId = null, ?string $videoId = null): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
     {
         $this->calls++;
         parse_str((string) parse_url($youtubeUrl, PHP_URL_QUERY), $query);
@@ -3552,7 +3129,7 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
     public function test_quick_fix_handles_model_tokens_that_differ_from_the_transcript(
         string $sourceText, array $tokenTexts, int $tokenIndex, string $replacement, string $expectedText,
     ): void {
-        $response = $this->withExtensionAuth($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
         $cue = $job->track->cues[0];
         $cue['sourceText'] = $sourceText;

@@ -20,7 +20,7 @@ describe('windowId validation on panel requests', () => {
   });
 
   it('accepts panel.generateSubtitles with a numeric windowId', () => {
-    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', confirmationContext: 'confirmed-details', windowId: 3 })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.generateSubtitles', youtubeVideoId: 'dQw4w9WgXcQ', tabId: 1, windowId: 3 })).toBe(true);
   });
 
   it('accepts panel.updateSettings with a numeric windowId', () => {

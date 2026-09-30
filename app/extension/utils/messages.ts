@@ -1,34 +1,10 @@
 import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
-import type { LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
+import type { InstanceSettings, UpdateInstanceSettings, LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
 export interface PageSnapshot {
   videoDurationSeconds?: number;
 }
-
-export interface AnonymousAccountState {
-  status: 'anonymous';
-}
-
-export interface AuthenticatedAccountState {
-  aiModel?: string;
-  status: 'authenticated';
-  id: string;
-  email: string;
-  name: string;
-  emailVerified: boolean;
-  planName: string;
-  tierName: string;
-  tierSpeedLabel: string;
-  monthlyMinuteLimit: number;
-  monthlyMinutesUsed: number;
-  monthlyMinutesPending: number;
-  monthlyMinutesRemaining: number;
-  resetAt: string;
-  upgradeAvailable: boolean;
-}
-
-export type AccountState = AnonymousAccountState | AuthenticatedAccountState;
 
 /**
  * Cues already available for a still-running job, composed from the
@@ -82,7 +58,9 @@ export interface PanelState {
   pageStatus?: YoutubePageInfo;
   pageTitle?: string;
   pageVideoDurationSeconds?: number;
-  accountState: AccountState;
+  backendUrl: string;
+  instanceSettings?: InstanceSettings;
+  instanceSettingsError?: string;
   subtitleState: SubtitleState;
   jobHistory: SubtitleJobHistoryItem[];
   jobHistoryError?: string;
@@ -114,7 +92,8 @@ export type BackgroundRequest =
     }
   | {
       type: 'panel.generateSubtitles';
-      confirmationContext: string;
+      youtubeVideoId: string;
+      tabId: number;
       windowId?: number;
     }
   | {
@@ -151,16 +130,7 @@ export type BackgroundRequest =
       text: string;
       windowId?: number;
     }
-  | {
-      type: 'panel.login';
-      email: string;
-      password: string;
-      windowId?: number;
-    }
-  | {
-      type: 'panel.logout';
-      windowId?: number;
-    }
+  | { type: 'panel.saveInstanceSettings'; patch: UpdateInstanceSettings; windowId?: number }
   | {
       type: 'content.enrichLearningToken';
       youtubeVideoId: string;
@@ -211,10 +181,9 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'background.getActiveCue':
       return hasString(value, 'youtubeVideoId') && hasString(value, 'trackId');
     case 'panel.generateSubtitles':
-      return hasString(value, 'confirmationContext') && optionalNumber(value, 'windowId');
+      return hasString(value, 'youtubeVideoId') && isNonNegativeInteger(value.tabId) && optionalNumber(value, 'windowId');
     case 'content.getState':
       return optionalBoolean(value, 'revalidateSavedGeneration');
-    case 'panel.logout':
     case 'panel.clearLocalState':
     case 'background.getPageSnapshot':
       return optionalNumber(value, 'windowId');
@@ -249,8 +218,8 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         && hasString(value, 'text')
         && optionalNumber(value, 'windowId');
 
-    case 'panel.login':
-      return hasString(value, 'email') && hasString(value, 'password') && optionalNumber(value, 'windowId');
+    case 'panel.saveInstanceSettings':
+      return isRecord(value.patch) && optionalNumber(value, 'windowId');
 
     case 'panel.getState':
       return optionalBoolean(value, 'syncBackend') && optionalBoolean(value, 'syncLyricsCorrection') && optionalNumber(value, 'windowId');
@@ -320,8 +289,7 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'panel.submitLyricsCorrection':
     case 'panel.cancelLyricsCorrection':
     case 'panel.quickFixToken':
-    case 'panel.login':
-    case 'panel.logout':
+    case 'panel.saveInstanceSettings':
     case 'panel.clearLocalState':
     case 'panel.seekToCue':
       return true;

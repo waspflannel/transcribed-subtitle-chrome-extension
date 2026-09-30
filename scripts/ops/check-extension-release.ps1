@@ -10,11 +10,10 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot '../..')
 $package = Get-Content -Raw -LiteralPath (Join-Path $Root 'app/extension/package.json') | ConvertFrom-Json
 $uri = $null
 if (-not [Uri]::TryCreate($ApiBaseUrl, [UriKind]::Absolute, [ref]$uri) -or
-    $uri.Scheme -ne 'https' -or $uri.IsLoopback -or $uri.HostNameType -ne [UriHostNameType]::Dns -or
-    $uri.DnsSafeHost.TrimEnd('.') -eq 'localhost' -or $uri.DnsSafeHost.TrimEnd('.').EndsWith('.localhost') -or
+    $uri.Scheme -notin @('http', 'https') -or ($uri.Scheme -eq 'http' -and -not $uri.IsLoopback) -or
     $uri.UserInfo -or $uri.Query -or $uri.Fragment -or
     $uri.AbsolutePath -cnotmatch '^/v1/?$') {
-    throw 'Release API URL must be an absolute HTTPS /v1 address on a non-local DNS host, without credentials, query or fragment.'
+    throw 'Release API URL must be an absolute /v1 address using HTTPS or loopback HTTP, without credentials, query or fragment.'
 }
 
 $version = [string]$package.version
@@ -47,7 +46,7 @@ try {
     if ($actualPermissions.Count -ne $expectedPermissions.Count -or
         @(Compare-Object $expectedPermissions $actualPermissions).Count -ne 0 -or
         @($manifest.optional_host_permissions).Where({ $_ }).Count -gt 0) {
-        throw 'Release ZIP host permissions must contain only YouTube and the selected HTTPS API origin.'
+        throw 'Release ZIP host permissions must contain only YouTube and the selected API origin.'
     }
 } finally {
     $archive.Dispose()

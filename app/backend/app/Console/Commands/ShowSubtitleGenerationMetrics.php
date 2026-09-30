@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
-use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -12,7 +11,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 #[Signature('subtitles:metrics {--days=7 : Completed jobs to include by created-at window} {--json : Output machine-readable JSON}')]
-#[Description('Show subtitle generation timing, budget, queue wait, and provider-cost metrics.')]
+#[Description('Show subtitle generation timing, queue wait, and provider-cost metrics.')]
 class ShowSubtitleGenerationMetrics extends Command
 {
     /**
@@ -33,9 +32,9 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values();
 
         $groups = $rows
-            ->groupBy(fn (array $row): string => json_encode(Arr::only($row, ['tier', 'durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit'])))
+            ->groupBy(fn (array $row): string => json_encode(Arr::only($row, ['durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit'])))
             ->map(fn (Collection $group): array => $this->groupMetrics($group))
-            ->sortBy(['tier', 'durationBucket'])
+            ->sortBy('durationBucket')
             ->values();
 
         $summary = [
@@ -61,10 +60,9 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values()
             ->all());
         $this->table(
-            ['tier', 'bucket', 'model', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms', 'budget_ms', 'over_budget', 'cost_per_min_microusd'],
+            ['bucket', 'model', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms', 'cost_per_min_microusd'],
             $groups
                 ->map(fn (array $group): array => [
-                    $group['tier'],
                     $group['durationBucket'],
                     $group['aiProvider'].'/'.$group['aiModel'],
                     $group['transcriptCacheHit'] ? 'yes' : 'no',
@@ -74,8 +72,6 @@ class ShowSubtitleGenerationMetrics extends Command
                     $group['p50DurationMs'],
                     $group['p95DurationMs'],
                     $group['p95QueueWaitMs'],
-                    $group['budgetMs'],
-                    $group['budgetExceededCount'],
                     $group['costPerGeneratedMinuteMicrousd'],
                 ])
                 ->all(),
@@ -97,9 +93,7 @@ class ShowSubtitleGenerationMetrics extends Command
         }
 
         $videoDurationSeconds = max(1, (int) ($job->video_duration_seconds ?? 0));
-        $tier = SubtitleTier::normalize($job->generation_tier);
-        $bucket = SubtitleTier::budgetBucket($job->video_duration_seconds);
-        $budgetMs = SubtitleTier::budgetSeconds($tier, $job->video_duration_seconds) * 1000;
+        $bucket = $videoDurationSeconds <= 300 ? 'short' : ($videoDurationSeconds <= 1800 ? 'medium' : 'long');
         $queueWaits = $events
             ->where('event', 'queue.wait_observed')
             ->pluck('wait_ms')
@@ -107,7 +101,6 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values();
 
         return [
-            'tier' => $tier,
             'durationBucket' => $bucket,
             'aiProvider' => $job->ai_provider,
             'aiModel' => $job->ai_model,
@@ -117,8 +110,6 @@ class ShowSubtitleGenerationMetrics extends Command
             'firstAnnotatedCueMs' => $events->firstWhere('event', 'delivery.first_annotated_cue_available')?->duration_ms,
             'durationMs' => $completed->duration_ms,
             'queueWaitMs' => $queueWaits->max() ?? 0,
-            'budgetMs' => $budgetMs,
-            'budgetExceeded' => $budgetMs > 0 && $completed->duration_ms > $budgetMs,
             'costMicrousd' => (int) $job->estimated_provider_cost_microusd,
             'generatedMinutes' => $videoDurationSeconds / 60,
         ];
@@ -133,7 +124,7 @@ class ShowSubtitleGenerationMetrics extends Command
         $first = $group->first();
 
         return [
-            ...Arr::only($first, ['tier', 'durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit']),
+            ...Arr::only($first, ['durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit']),
             'firstCueSampleCount' => $group->whereNotNull('firstCueMs')->count(),
             'firstAnnotatedCueSampleCount' => $group->whereNotNull('firstAnnotatedCueMs')->count(),
             'p50FirstCueMs' => $this->percentile($group->pluck('firstCueMs'), 50),
@@ -144,8 +135,6 @@ class ShowSubtitleGenerationMetrics extends Command
             'p50DurationMs' => $this->percentile($group->pluck('durationMs'), 50),
             'p95DurationMs' => $this->percentile($group->pluck('durationMs'), 95),
             'p95QueueWaitMs' => $this->percentile($group->pluck('queueWaitMs'), 95),
-            'budgetMs' => $first['budgetMs'],
-            'budgetExceededCount' => $group->where('budgetExceeded', true)->count(),
             'costPerGeneratedMinuteMicrousd' => $this->costPerGeneratedMinute($group),
         ];
     }

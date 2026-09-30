@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-- Product name: Transcribe for website, account, and Chrome Web Store surfaces; repository/package name remains `transcribed-subtitle-extension`.
+- Product name: Transcribe for website and extension surfaces; repository/package name remains `transcribed-subtitle-extension`.
 - Primary user: language learners watching public YouTube videos.
 - Primary problem: YouTube captions are often missing, inaccurate, poorly segmented, or not useful for language study.
 - Core promise: Generate AI subtitle tracks from YouTube audio for a user-selected subtitle language or Auto detect, optionally translate subtitle cues and word cards into a user-selected target language, and render a synchronized overlay with timed subtitles, pronunciation metadata when available, and word-level study data on demand.
@@ -49,27 +49,29 @@ The `docs/history/revamped-design-document.md` and `docs/history/detailed-design
 - Synchronized in-page overlay.
 - Local study controls for blurring token cards, full cue romanization, and translation, revealing token text plus token romanization per token on token hover/focus/pin while revealing full cue romanization and translation by layer on their own hover/focus, temporarily pausing playback on source-word hover by default, replaying/copying the active cue, navigating cues with keyboard shortcuts, and inspecting/searching the generated Transcript view in the side panel.
 - Caption display preferences for local overlay font size, density, and high-contrast rendering.
-- Laravel SaaS web app for beta registration, billing, usage, recent jobs, support-safe job details, and public marketing/legal pages.
+- Personal local/self-hosted backend with encrypted BYOK provider settings, installation-owned history and optional saved-track retention. No registration, payments, subscriptions or speed tiers.
 
 ## Explicit Non-Goals
 
 - Netflix or other platforms.
 - Real-time live captioning.
-- Cloud sync beyond the account, billing, extension-token, usage, and job-history records required for the paid beta.
+- Public multi-user hosting and cloud account sync.
 - General subtitle editing. The first release includes the narrow **Use pasted lyrics** correction flow for a completed generated track; it preserves the pasted words, reuses existing timing, and rebuilds derived learning data before atomic replacement.
 - Direct provider calls from the extension.
 
-## Generation cancellation policy (2026-09-16)
+## BYOK generation and retention
 
-Generate requires confirmation that cancellation is available but the full video's generation minutes will not be refunded. Declining sends no generation request. Confirming starts generation without another prompt for refreshed duration or generation options. Confirmation remains tied to the selected account and video.
+Users configure ElevenLabs and their chosen analysis provider in Settings. Users select OpenAI or Cerebras explicitly; automatic source-language detection remains available. Missing required keys stop new generation before provider work. Provider/model names are shown directly. Corrections and word cards use the generation's saved provider/model.
 
-Voluntary cancellation or deletion after the first paid generation request is admitted consumes the full remaining reservation, even if only part of the transcript was produced. Cancellation before any paid request restores the reservation; this early exception is not advertised in user-facing copy. The backend uses a durable marker for the current run at the actual provider boundary, not a displayed stage. Cached transcription followed by paid analysis also starts billable work. Ordinary failed generations retain the existing refund behavior; completed-track reuse and editing do not add generation-minute charges. No new daily allowance or account-deletion retention is introduced.
+All generations use shared worker pools without commercial admission or concurrency limits. Videos above 30 minutes show an advisory about processing time and provider cost; there is no hard video-length cap. Users can cancel generation without an application minute charge; provider charges for work already performed are controlled by their provider.
+
+Saved tracks are retained until deletion by default. Optional retention days apply to existing and future tracks based on generation time. Temporary audio cleanup remains mandatory. History and edits belong to the private backend installation; Known Lyrics remains browser-local.
 
 ## Deferred Learning Upgrades
 
 The first release does not include a vocabulary review system, sentence mining, Anki export, listening/speaking practice, or AI current-line coaching. These remain accepted post-first-release product work; their old implementation plans were removed on 2026-09-09. Requirements are retained below.
 
-- Saved words and sentences: account-owned, idempotent saves with source/target languages and cue/video identity; filtering, learning states, deletion, safe CSV export and explicit AnkiConnect export with recoverable failures.
+- Saved words and sentences: installation-owned, idempotent saves with source/target languages and cue/video identity; filtering, learning states, deletion, safe CSV export and explicit AnkiConnect export with recoverable failures.
 - Listening and speaking: cue auto-pause, repeat, AB loops and listen-then-reveal must preserve subtitle timing and keyboard access. Recording requires an explicit action, permission, cancellation and bounded clips; backend scoring must validate ownership/input and delete temporary audio on success or failure.
-- Current-line coaching: fixed, structured modes with bounded cue context, account/track/cue ownership, safe errors and versioned response reuse. Keep coaching separate from token enrichment, translation and practice.
-- Beta and public launch: onboarding/support, approved legal and pricing copy, truthful marketing, feedback handling and release evidence remain required. Growth work and public launch follow beta findings and an explicit launch decision.
+- Current-line coaching: fixed, structured modes with bounded cue context, track/cue identity, safe errors and versioned response reuse. Keep coaching separate from token enrichment, translation and practice.
+- Public release: setup/support documentation, truthful provider requirements, feedback handling and release evidence remain required. Publishing is a separate operator action.

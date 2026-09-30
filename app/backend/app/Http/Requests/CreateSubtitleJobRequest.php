@@ -25,10 +25,10 @@ class CreateSubtitleJobRequest extends FormRequest
         return [
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'youtubeUrl' => ['required', 'string', 'url', 'max:2048'],
-            'videoDurationSeconds' => ['sometimes', 'integer', 'min:1', 'max:3600'],
+            'videoDurationSeconds' => ['sometimes', 'integer', 'min:1'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
-            'aiProvider' => ['sometimes', 'string', Rule::in(['auto', 'openai', 'cerebras'])],
+            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
             'forceRegenerate' => ['sometimes', 'boolean:strict'],
@@ -78,16 +78,17 @@ class CreateSubtitleJobRequest extends FormRequest
         return [
             function (Validator $validator): void {
                 $provider = $this->input('aiProvider', config('ai.default'));
-                if ($provider === 'auto') {
-                    $provider = 'openai';
-                }
                 if (in_array($provider, ['openai', 'cerebras'], true)) {
                     $key = config("ai.providers.{$provider}.key");
                     $model = config("ai.providers.{$provider}.models.text.default");
                     if (! is_string($key) || trim($key) === '' || ! is_string($model) || trim($model) === '') {
-                        $label = $provider === 'cerebras' ? 'Cerebras' : 'Luna';
+                        $label = $provider === 'cerebras' ? 'Cerebras' : 'OpenAI';
                         $validator->errors()->add('aiProvider', "{$label} is not configured on the backend.");
                     }
+                }
+
+                if (blank(config('ai.providers.eleven.key'))) {
+                    $validator->errors()->add('providers.elevenlabs', 'Add an ElevenLabs API key in Settings before generating.');
                 }
 
                 $url = $this->input('youtubeUrl');

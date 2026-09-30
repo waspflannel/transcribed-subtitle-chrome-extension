@@ -76,7 +76,7 @@ class SubtitleJobResource extends JsonResource
 
         if ($hasReadyTrack) {
             $resource['track'] = SubtitleTrackResource::make($track)->resolve();
-            $resource['expiresAt'] = $track->expires_at->toJSON();
+            $resource['expiresAt'] = $track->expires_at?->toJSON();
         }
 
         if (in_array($status, ['failed', 'cancelled'], true)) {

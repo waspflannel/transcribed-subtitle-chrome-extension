@@ -15,7 +15,6 @@ export interface PanelDom {
   nowPlayingMeta: HTMLElement;
   statusBanner: HTMLElement;
   watchUnsupported: HTMLElement;
-  watchSignin: HTMLElement;
   watchSetup: HTMLElement;
   watchReady: HTMLElement;
   correctionTerminalStatus: HTMLElement;
@@ -38,7 +37,6 @@ export interface PanelDom {
   cancelGenerationButton: HTMLButtonElement;
   quickFixStatus: HTMLElement;
   progressCopy: HTMLElement;
-  openAccountButton: HTMLButtonElement;
   toggleLanguagesButton: HTMLButtonElement;
   languageExpand: HTMLElement;
   toggleSetupButton: HTMLButtonElement;
@@ -47,10 +45,6 @@ export interface PanelDom {
   pairTargetCode: HTMLElement;
   pairTargetName: HTMLElement;
   generateButton: HTMLButtonElement;
-  generationConfirmation: HTMLDialogElement;
-  generationConfirmationSummary: HTMLElement;
-  confirmGenerationButton: HTMLButtonElement;
-  cancelGenerationConfirmationButton: HTMLButtonElement;
   generateNote: HTMLElement;
   clearStateButton: HTMLButtonElement;
   resetTimingButton: HTMLButtonElement;
@@ -86,24 +80,6 @@ export interface PanelDom {
   progressLabel: HTMLElement;
   jobsList: HTMLElement;
   jobsError: HTMLElement;
-  usageSummary: HTMLElement;
-  usageRemaining: HTMLElement;
-  usageBar: HTMLElement;
-  usagePlan: HTMLElement;
-  usagePending: HTMLElement;
-  usageReset: HTMLElement;
-  accountStatus: HTMLElement;
-  accountPlan: HTMLElement;
-  accountSpeed: HTMLElement;
-  accountModel: HTMLElement;
-  accountLoginForm: HTMLFormElement;
-  accountEmailInput: HTMLInputElement;
-  accountPasswordInput: HTMLInputElement;
-  accountLoginButton: HTMLButtonElement;
-  logoutButton: HTMLButtonElement;
-  accountFeedback: HTMLElement;
-  featureList: HTMLElement;
-  accountBillingLink: HTMLElement;
   settingsLanguageSummary: HTMLElement;
   shortcutHelpList: HTMLElement;
 }
@@ -126,7 +102,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     nowPlayingMeta: query(root, '[data-now-playing-meta]', HTMLElement),
     statusBanner: query(root, '[data-status]', HTMLElement),
     watchUnsupported: query(root, '[data-watch-unsupported]', HTMLElement),
-    watchSignin: query(root, '[data-watch-signin]', HTMLElement),
     watchSetup: query(root, '[data-watch-setup]', HTMLElement),
     watchReady: query(root, '[data-watch-ready]', HTMLElement),
     correctionTerminalStatus: query(root, '[data-correction-terminal-status]', HTMLElement),
@@ -148,7 +123,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     cancelLyricsCorrectionButton: query(root, '[data-action="cancel-lyrics-correction"]', HTMLButtonElement),
     cancelGenerationButton: query(root, '[data-action="cancel-generation"]', HTMLButtonElement),
     quickFixStatus: query(root, '[data-quick-fix-status]', HTMLElement),
-    openAccountButton: query(root, '[data-action="open-account"]', HTMLButtonElement),
     toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),
     languageExpand: query(root, '[data-language-expand]', HTMLElement),
     toggleSetupButton: query(root, '[data-action="toggle-setup"]', HTMLButtonElement),
@@ -157,10 +131,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     pairTargetCode: query(root, '[data-pair-target-code]', HTMLElement),
     pairTargetName: query(root, '[data-pair-target-name]', HTMLElement),
     generateButton: query(root, '[data-action="generate"]', HTMLButtonElement),
-    generationConfirmation: query(root, '[data-generation-confirmation]', HTMLDialogElement),
-    generationConfirmationSummary: query(root, '[data-generation-confirmation-summary]', HTMLElement),
-    confirmGenerationButton: query(root, '[data-action="confirm-generation"]', HTMLButtonElement),
-    cancelGenerationConfirmationButton: query(root, '[data-action="cancel-generation-confirmation"]', HTMLButtonElement),
     generateNote: query(root, '[data-generate-note]', HTMLElement),
     clearStateButton: query(root, '[data-action="clear-state"]', HTMLButtonElement),
     resetTimingButton: query(root, '[data-action="reset-timing"]', HTMLButtonElement),
@@ -197,24 +167,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     progressCopy: query(root, '[data-progress-copy]', HTMLElement),
     jobsList: query(root, '[data-jobs-list]', HTMLElement),
     jobsError: query(root, '[data-jobs-error]', HTMLElement),
-    usageSummary: query(root, '[data-usage-summary]', HTMLElement),
-    usageRemaining: query(root, '[data-usage-remaining]', HTMLElement),
-    usageBar: query(root, '[data-usage-bar]', HTMLElement),
-    usagePlan: query(root, '[data-usage-plan]', HTMLElement),
-    usagePending: query(root, '[data-usage-pending]', HTMLElement),
-    usageReset: query(root, '[data-usage-reset]', HTMLElement),
-    accountStatus: query(root, '[data-account-status]', HTMLElement),
-    accountPlan: query(root, '[data-account-plan]', HTMLElement),
-    accountSpeed: query(root, '[data-account-speed]', HTMLElement),
-    accountModel: query(root, '[data-account-model]', HTMLElement),
-    accountLoginForm: query(root, '[data-account-login-form]', HTMLFormElement),
-    accountEmailInput: query(root, 'input[name="accountEmail"]', HTMLInputElement),
-    accountPasswordInput: query(root, 'input[name="accountPassword"]', HTMLInputElement),
-    accountLoginButton: query(root, '[data-action="login"]', HTMLButtonElement),
-    logoutButton: query(root, '[data-action="logout"]', HTMLButtonElement),
-    accountFeedback: query(root, '[data-account-feedback]', HTMLElement),
-    featureList: query(root, '[data-feature-list]', HTMLElement),
-    accountBillingLink: query(root, '[data-account-billing]', HTMLElement),
     settingsLanguageSummary: query(root, '[data-settings-language-summary]', HTMLElement),
     shortcutHelpList: query(root, '[data-shortcut-help]', HTMLElement),
   };

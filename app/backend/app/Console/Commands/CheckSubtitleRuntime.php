@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Services\Subtitles\SubtitleQueue;
-use App\Services\Subtitles\SubtitleTier;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -21,7 +20,7 @@ class CheckSubtitleRuntime extends Command
         $databaseDriver = (string) config("database.connections.{$databaseConnection}.driver", $databaseConnection);
         $queueConnection = SubtitleQueue::connection();
         $queueDriver = (string) config("queue.connections.{$queueConnection}.driver", $queueConnection);
-        $concurrencyCacheStore = SubtitleTier::concurrencyCacheStore();
+        $concurrencyCacheStore = SubtitleQueue::concurrencyCacheStore();
         $concurrencyCacheDriver = (string) config("cache.stores.{$concurrencyCacheStore}.driver", 'unconfigured');
         $isTesting = app()->environment('testing');
         $enforceRuntime = $this->option('strict') || ! $isTesting;
@@ -40,7 +39,7 @@ class CheckSubtitleRuntime extends Command
             'subtitleBatchQueues' => SubtitleQueue::batchNames(),
             'subtitleWorkerQueues' => SubtitleQueue::workerQueueList(),
             'subtitleWorkerGroups' => SubtitleQueue::workerGroups(),
-            'subtitleConfiguredWorkerCount' => SubtitleTier::workerCount(),
+            'subtitleConfiguredWorkerCount' => SubtitleQueue::workerCount(),
             'subtitleConcurrencyCacheStore' => $concurrencyCacheStore,
             'subtitleConcurrencyCacheDriver' => $concurrencyCacheDriver,
             'subtitleConcurrencyRedisConnection' => (string) config("cache.stores.{$concurrencyCacheStore}.connection", ''),

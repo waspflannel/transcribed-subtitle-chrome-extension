@@ -31,8 +31,7 @@
     "videoDurationSeconds": {
       "type": "integer",
       "minimum": 1,
-      "maximum": 3600,
-      "description": "Known video duration in seconds when measured or supplied by the extension. Safe for usage and timing displays."
+      "description": "Video duration in seconds."
     },
     "sourceLanguage": {
       "type": "string",
@@ -279,7 +278,10 @@
       "format": "date-time"
     },
     "expiresAt": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "format": "date-time"
     },
     "detectedSourceLanguage": {
@@ -391,11 +393,10 @@
     "aiProvider": {
       "type": "string",
       "enum": [
-        "auto",
         "openai",
         "cerebras"
       ],
-      "description": "Selected analysis provider. Auto means selection is still pending; resolved generations report the chosen provider."
+      "description": "The selected analysis provider stays pinned for this generation."
     },
     "aiModel": {
       "type": "string",

@@ -5,7 +5,6 @@ namespace App\Models;
 use Database\Factories\SubtitleJobFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -16,7 +15,7 @@ class SubtitleJob extends Model
 
     protected $fillable = [
         'public_id',
-        'user_id',
+        'reuse_key',
         'run_id',
         'youtube_video_id',
         'youtube_url',
@@ -27,9 +26,6 @@ class SubtitleJob extends Model
         'processing_version',
         'ai_provider',
         'ai_model',
-        'ai_selection_key',
-        'ai_routing',
-        'generation_tier',
         'include_romanization',
         'include_translation',
         'transcription_ingestion_mode',
@@ -47,11 +43,6 @@ class SubtitleJob extends Model
     public function track(): HasOne
     {
         return $this->hasOne(SubtitleTrack::class);
-    }
-
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
     }
 
     public function artifacts(): HasMany
@@ -88,9 +79,7 @@ class SubtitleJob extends Model
     protected function casts(): array
     {
         return [
-            'ai_routing' => 'array',
             'expires_at' => 'immutable_datetime',
-            'paid_work_started_at' => 'immutable_datetime',
             'estimated_provider_cost_microusd' => 'integer',
             'include_romanization' => 'boolean',
             'include_translation' => 'boolean',

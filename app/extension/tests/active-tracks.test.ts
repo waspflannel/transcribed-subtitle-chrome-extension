@@ -22,7 +22,7 @@ vi.mock('wxt/utils/storage', () => ({
 
 import type { TrackResponse } from '../utils/contracts';
 
-describe('account-scoped remembered tracks', () => {
+describe('instance-scoped remembered tracks', () => {
   beforeEach(() => {
     storageState.values.clear();
     vi.useFakeTimers({ now: new Date('2026-05-30T00:00:00Z') });
@@ -30,20 +30,28 @@ describe('account-scoped remembered tracks', () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it('does not return one account\'s track to another account', async () => {
+  it('does not return one instance\'s track to another instance', async () => {
     const { getRememberedTrack, rememberActiveTrack } = await import('../utils/active-tracks');
     const track = trackResponse();
 
-    await rememberActiveTrack(track, 'account-a');
+    await rememberActiveTrack(track, 'instance-a');
 
-    await expect(getRememberedTrack(track.youtubeVideoId, 'account-a')).resolves.toEqual(track);
-    await expect(getRememberedTrack(track.youtubeVideoId, 'account-b')).resolves.toBeNull();
+    await expect(getRememberedTrack(track.youtubeVideoId, 'instance-a')).resolves.toEqual(track);
+    await expect(getRememberedTrack(track.youtubeVideoId, 'instance-b')).resolves.toBeNull();
+  });
+
+  it('keeps a track forever when retention is disabled', async () => {
+    const { getRememberedTrack, rememberActiveTrack } = await import('../utils/active-tracks');
+    const track = { ...trackResponse(), expiresAt: null };
+    await rememberActiveTrack(track, 'instance-a');
+    vi.setSystemTime(new Date('2099-01-01'));
+    await expect(getRememberedTrack(track.youtubeVideoId, 'instance-a')).resolves.toEqual(track);
   });
 
   it('does not clear or update a newer tab operation through an old claim', async () => {
     const { clearTabOperationIfMatches, getTabOperation, setTabOperation, updateTabOperationIfMatches } = await import('../utils/active-tracks');
-    const first = { kind: 'generation' as const, accountId: 'account-a', youtubeVideoId: 'video-1', jobId: 'job-a' };
-    const second = { kind: 'generation' as const, accountId: 'account-b', youtubeVideoId: 'video-2', jobId: 'job-b' };
+    const first = { kind: 'generation' as const, instanceId: 'instance-a', youtubeVideoId: 'video-1', jobId: 'job-a' };
+    const second = { kind: 'generation' as const, instanceId: 'instance-b', youtubeVideoId: 'video-2', jobId: 'job-b' };
 
     await setTabOperation(7, first);
     await setTabOperation(7, second);

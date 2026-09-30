@@ -16,7 +16,7 @@ class SecurityHeadersTest extends TestCase
         $this
             ->get('/')
             ->assertOk()
-            ->assertHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' https://fonts.gstatic.com; form-action 'self' https://checkout.stripe.com https://billing.stripe.com; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com")
+            ->assertHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' https://fonts.gstatic.com; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com")
             ->assertHeader('Cross-Origin-Opener-Policy', 'same-origin')
             ->assertHeader('Permissions-Policy', 'camera=(), geolocation=(), microphone=(), payment=()')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')

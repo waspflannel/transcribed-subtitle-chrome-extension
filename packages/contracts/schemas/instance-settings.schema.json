@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/instance-settings.schema.json",
+  "title": "InstanceSettings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "configured",
+            "model"
+          ],
+          "properties": {
+            "configured": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "cerebras": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "configured",
+            "model"
+          ],
+          "properties": {
+            "configured": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "elevenlabs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "configured",
+            "model"
+          ],
+          "properties": {
+            "configured": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "openai",
+        "cerebras",
+        "elevenlabs"
+      ]
+    },
+    "retentionDays": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 36500
+    }
+  },
+  "required": [
+    "providers",
+    "retentionDays"
+  ]
+}

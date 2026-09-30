@@ -1,5 +1,5 @@
 import type { CreateSubtitleJobRequest } from '@transcribed-subtitle-extension/contracts';
-import { isInterfaceLocale, t, type InterfaceLocale } from './i18n';
+import { isInterfaceLocale, type InterfaceLocale } from './i18n';
 
 import {
   DEFAULT_SOURCE_LANGUAGE,
@@ -68,7 +68,7 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
   const sourceLanguage = normalizeSourceLanguage(value?.sourceLanguage);
   const targetLanguage = normalizeTargetLanguage(value?.targetLanguage);
 
-  if (value?.aiProvider === 'auto' || value?.aiProvider === 'openai' || value?.aiProvider === 'cerebras') {
+  if (value?.aiProvider === 'openai' || value?.aiProvider === 'cerebras') {
     settings.aiProvider = value.aiProvider;
   }
 
@@ -159,7 +159,7 @@ export function normalizeSubtitleTimingOffsetSeconds(value: unknown): number {
 }
 
 export function aiProviderLabel(provider: ExtensionSettings['aiProvider']): string {
-  return provider === 'auto' ? t('Auto') : provider === 'cerebras' ? 'Transcriber Spark' : 'Transcriber';
+  return provider === 'cerebras' ? 'Cerebras' : 'OpenAI';
 }
 
 export function createAnonymousInstallId(): string {

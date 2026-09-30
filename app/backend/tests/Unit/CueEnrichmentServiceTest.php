@@ -255,7 +255,7 @@ class CueEnrichmentServiceTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['*' => Http::response([
             'id' => 'resp_limit', 'status' => 'incomplete', 'incomplete_details' => ['reason' => 'max_output_tokens'],
-            'model' => 'gpt-5.6-luna', 'output' => [], 'usage' => ['input_tokens' => 2000, 'output_tokens' => 9000],
+            'model' => 'gpt-6-luna', 'output' => [], 'usage' => ['input_tokens' => 2000, 'output_tokens' => 9000],
         ])]);
         $part = $this->part(0, 'Hello');
         try {

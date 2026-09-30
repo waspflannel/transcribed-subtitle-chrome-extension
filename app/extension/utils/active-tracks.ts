@@ -6,7 +6,7 @@ import type { PartialSubtitleTrack } from './messages';
 const MAX_STORED_TRACKS = 5;
 
 interface RememberedTrack {
-  accountId: string;
+  instanceId: string;
   track: TrackResponse;
 }
 
@@ -16,7 +16,7 @@ const activeTracksStorage = storage.defineItem<Record<string, RememberedTrack>>(
 
 export interface StoredTabOperation {
   kind: 'generation' | 'correction';
-  accountId: string;
+  instanceId: string;
   youtubeVideoId: string;
   jobId?: string;
   trackId?: string;
@@ -32,7 +32,7 @@ let tabOperationsQueue = Promise.resolve();
 let rememberedTracksEpoch = 0;
 let tabOperationsEpoch = 0;
 
-export async function rememberActiveTrack(track: TrackResponse, accountId: string): Promise<void> {
+export async function rememberActiveTrack(track: TrackResponse, instanceId: string): Promise<void> {
   const epoch = rememberedTracksEpoch;
   const write = rememberedTracksQueue.then(async () => {
     if (epoch !== rememberedTracksEpoch) return;
@@ -40,7 +40,7 @@ export async function rememberActiveTrack(track: TrackResponse, accountId: strin
     const storedTracks = pruneExpiredTracks(await activeTracksStorage.getValue());
     const nextTracks = {
       ...storedTracks,
-      [track.youtubeVideoId]: { accountId, track },
+      [track.youtubeVideoId]: { instanceId, track },
     };
 
     await activeTracksStorage.setValue(limitStoredTracks(nextTracks));
@@ -49,13 +49,13 @@ export async function rememberActiveTrack(track: TrackResponse, accountId: strin
   await write;
 }
 
-export async function getRememberedTrack(youtubeVideoId: string, accountId: string): Promise<TrackResponse | null> {
+export async function getRememberedTrack(youtubeVideoId: string, instanceId: string): Promise<TrackResponse | null> {
   const epoch = rememberedTracksEpoch;
   const readOperation = rememberedTracksQueue.then(async () => {
     const storedTracks = await activeTracksStorage.getValue();
     const remembered = storedTracks[youtubeVideoId];
 
-    if (!isRememberedTrack(remembered) || remembered.accountId !== accountId) {
+    if (!isRememberedTrack(remembered) || remembered.instanceId !== instanceId) {
       return null;
     }
 
@@ -73,11 +73,11 @@ export async function getRememberedTrack(youtubeVideoId: string, accountId: stri
   return readOperation.then((track) => epoch === rememberedTracksEpoch ? track : null);
 }
 
-export async function forgetRememberedTrack(youtubeVideoId: string, expectedTrackId: string, accountId: string): Promise<void> {
+export async function forgetRememberedTrack(youtubeVideoId: string, expectedTrackId: string, instanceId: string): Promise<void> {
   const write = rememberedTracksQueue.then(async () => {
     const storedTracks = await activeTracksStorage.getValue();
 
-    if (storedTracks[youtubeVideoId]?.accountId === accountId && storedTracks[youtubeVideoId]?.track.trackId === expectedTrackId) {
+    if (storedTracks[youtubeVideoId]?.instanceId === instanceId && storedTracks[youtubeVideoId]?.track.trackId === expectedTrackId) {
       delete storedTracks[youtubeVideoId];
       await activeTracksStorage.setValue(storedTracks);
     }
@@ -189,13 +189,14 @@ function isRememberedTrack(value: unknown): value is RememberedTrack {
 
   const remembered = value as Partial<RememberedTrack>;
 
-  return typeof remembered.accountId === 'string'
-    && remembered.accountId !== ''
+  return typeof remembered.instanceId === 'string'
+    && remembered.instanceId !== ''
     && typeof remembered.track === 'object'
     && remembered.track !== null;
 }
 
 function isExpired(track: TrackResponse): boolean {
+  if (track.expiresAt === null) return false;
   const expiresAtMs = Date.parse(track.expiresAt);
 
   return !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now();

@@ -8,7 +8,6 @@ use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
-use App\Jobs\Middleware\LimitSubtitleBatchConcurrency;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\TranscribeSubtitleAudioChunk;
@@ -20,7 +19,6 @@ use App\Services\Subtitles\SubtitleBatchDispatcher;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
-use App\Services\Subtitles\SubtitlePipelineTelemetry;
 use App\Services\Subtitles\SubtitleProviderCostRecorder;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
@@ -29,8 +27,6 @@ use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -53,8 +49,7 @@ class SubtitleRuntimeTracingTest extends TestCase
             ],
             'queue.default' => 'database',
             'subtitles.queue.connection' => 'database',
-            'subtitles.tiers.default' => 'base',
-            'subtitles.tiers.concurrency_cache_store' => 'subtitle_concurrency_test',
+            'subtitles.providers.concurrency_cache_store' => 'subtitle_concurrency_test',
         ]);
     }
 
@@ -188,64 +183,20 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame(57, $job->refresh()->progress_percent);
     }
 
-    public function test_analysis_members_over_the_tier_cap_are_windowed_into_chains(): void
+    public function test_analysis_members_dispatch_together_without_tier_windows(): void
     {
-        config(['subtitles.tiers.plans.base.batch_concurrency' => 2]);
         $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
             'stage' => 'tokenizing',
         ]);
         Bus::fake();
 
-        app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
-            new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id),
-            new AnalyzeSubtitleCueBatch($job->id, 1, $job->run_id),
-            new AnalyzeSubtitleCueBatch($job->id, 2, $job->run_id),
-        ]);
+        app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, array_map(
+            fn (int $index) => new AnalyzeSubtitleCueBatch($job->id, $index, $job->run_id),
+            range(0, 23),
+        ));
 
-        Bus::assertBatched(function ($batch): bool {
-            $members = $batch->jobs->all();
-
-            if (count($members) !== 2) {
-                return false;
-            }
-
-            [$firstChain, $secondChain] = $members;
-
-            // Round-robin partition: [A0, A2] and A1.
-            return is_array($firstChain)
-                && array_map('get_class', $firstChain) === [
-                    AnalyzeSubtitleCueBatch::class,
-                    AnalyzeSubtitleCueBatch::class,
-                ]
-                && $firstChain[0]->batchIndex === 0
-                && $firstChain[1]->batchIndex === 2
-                && $secondChain instanceof AnalyzeSubtitleCueBatch
-                && $secondChain->batchIndex === 1;
-        });
-    }
-
-    public function test_analysis_members_at_or_under_the_tier_cap_dispatch_unchanged(): void
-    {
-        config(['subtitles.tiers.plans.base.batch_concurrency' => 2]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        Bus::fake();
-
-        app(SubtitleBatchDispatcher::class)->dispatchAnalysis($job, [
-            new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id),
-            new AnalyzeSubtitleCueBatch($job->id, 1, $job->run_id),
-        ]);
-
-        Bus::assertBatched(function ($batch): bool {
-            $members = $batch->jobs->all();
-
-            return count($members) === 2
-                && $members[0] instanceof AnalyzeSubtitleCueBatch
-                && $members[1] instanceof AnalyzeSubtitleCueBatch;
-        });
+        Bus::assertBatched(fn ($batch): bool => $batch->jobs->count() === 24
+            && $batch->jobs->every(fn ($member): bool => $member instanceof AnalyzeSubtitleCueBatch));
     }
 
     public function test_pipeline_records_queue_wait_stage_timing_and_slow_warning(): void
@@ -290,382 +241,6 @@ class SubtitleRuntimeTracingTest extends TestCase
         ]);
     }
 
-    public function test_batch_concurrency_middleware_releases_jobs_over_the_account_tier_limit(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.batch_concurrency' => 1,
-            'subtitles.tiers.release_delay_seconds' => 7,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        Cache::store('subtitle_concurrency_test')->put(
-            $counterKey,
-            json_encode([['token' => 'occupied', 'expiresAt' => time() + 60]]),
-            now()->addMinute(),
-        );
-        $queuedJob = new class($job->id)
-        {
-            public bool $released = false;
-
-            public int $releaseDelay = 0;
-
-            public function __construct(public readonly int $subtitleJobId) {}
-
-            public function release(int $delay): void
-            {
-                $this->released = true;
-                $this->releaseDelay = $delay;
-            }
-        };
-
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function (): never {
-                $this->fail('Expected over-limit job to be released before processing.');
-            },
-        );
-
-        $this->assertTrue($queuedJob->released);
-        // The release site applies ±1s jitter around the configured delay to
-        // avoid a thundering herd on the cache lock; the traced value below
-        // still records the un-jittered configured base.
-        $this->assertGreaterThanOrEqual(6, $queuedJob->releaseDelay);
-        $this->assertLessThanOrEqual(8, $queuedJob->releaseDelay);
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'event' => 'queue.concurrency_delayed',
-            'stage' => 'tokenizing',
-        ]);
-        $event = SubtitleJobEvent::query()
-            ->where('subtitle_job_id', $job->id)
-            ->where('event', 'queue.concurrency_delayed')
-            ->firstOrFail();
-        $this->assertSame('limit_reached', $event->context['delay_reason']);
-        $this->assertSame('batch', $event->context['queue_family']);
-        $this->assertSame('ai_batch', $event->context['limiter_type']);
-        $this->assertSame('subtitle_concurrency_test', $event->context['cache_store']);
-        $this->assertSame(1, $event->context['concurrency_limit']);
-        $this->assertSame(1, $event->context['observed_active_count']);
-        $this->assertSame(7, $event->context['release_delay_seconds']);
-        $this->assertArrayNotHasKey('user_id', $event->context);
-        $this->assertArrayNotHasKey('install_id', $event->context);
-    }
-
-    public function test_batch_concurrency_claim_waits_for_brief_lock_contention_without_requeuing(): void
-    {
-        $cache = Cache::store('subtitle_concurrency_test');
-        $counterKey = 'brief-lock-contention';
-        $otherWorkerLock = $cache->lock($counterKey.':lock', 10);
-        $this->assertTrue($otherWorkerLock->get());
-        Sleep::fake(syncWithCarbon: true);
-        Sleep::whenFakingSleep(fn () => $otherWorkerLock->release());
-        $middleware = app(LimitSubtitleBatchConcurrency::class);
-
-        $claim = (new \ReflectionMethod($middleware, 'claimSlot'))->invoke($middleware, $counterKey, 1);
-
-        $this->assertTrue($claim['claimed']);
-        $this->assertNull($claim['delay_reason']);
-        $this->assertSame(0, $claim['observed_active_count']);
-        Sleep::assertSleptTimes(1);
-        (new \ReflectionMethod($middleware, 'releaseSlot'))->invoke($middleware, $counterKey, $claim['token']);
-        $this->assertNull($cache->get($counterKey));
-    }
-
-    public function test_batch_concurrency_claim_stops_waiting_for_a_stuck_lock_without_creating_a_slot(): void
-    {
-        $cache = Cache::store('subtitle_concurrency_test');
-        $counterKey = 'stuck-lock-contention';
-        $otherWorkerLock = $cache->lock($counterKey.':lock', 10);
-        $this->assertTrue($otherWorkerLock->get());
-        Sleep::fake(syncWithCarbon: true);
-        $started = now();
-        $middleware = app(LimitSubtitleBatchConcurrency::class);
-
-        $claim = (new \ReflectionMethod($middleware, 'claimSlot'))->invoke($middleware, $counterKey, 1);
-
-        $this->assertFalse($claim['claimed']);
-        $this->assertSame('lock_busy', $claim['delay_reason']);
-        $this->assertNull($claim['token']);
-        $this->assertNull($cache->get($counterKey));
-        $this->assertGreaterThanOrEqual(900, $started->diffInMilliseconds(now()));
-        $this->assertLessThanOrEqual(1000, $started->diffInMilliseconds(now()));
-        $this->assertTrue($otherWorkerLock->release());
-    }
-
-    public function test_batch_concurrency_middleware_releases_its_slot_when_processing_throws(): void
-    {
-        $job = SubtitleJob::factory()->create(['generation_tier' => 'base']);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        $queuedJob = new class($job->id)
-        {
-            public function __construct(public readonly int $subtitleJobId) {}
-        };
-
-        try {
-            app(LimitSubtitleBatchConcurrency::class)->handle($queuedJob, function (): never {
-                throw new \RuntimeException('Fake provider failure');
-            });
-            $this->fail('Expected the processing failure to propagate.');
-        } catch (\RuntimeException $exception) {
-            $this->assertSame('Fake provider failure', $exception->getMessage());
-        }
-
-        $this->assertNull(Cache::store('subtitle_concurrency_test')->get($counterKey));
-    }
-
-    public function test_batch_concurrency_middleware_claims_and_releases_configured_store_slot(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.batch_concurrency' => 1,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'translating',
-        ]);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        Cache::put($counterKey, 99, now()->addMinute());
-        $queuedJob = new class($job->id)
-        {
-            public bool $released = false;
-
-            public int $releaseDelay = 0;
-
-            public function __construct(public readonly int $subtitleJobId) {}
-
-            public function release(int $delay): void
-            {
-                $this->released = true;
-                $this->releaseDelay = $delay;
-            }
-        };
-        $processed = false;
-
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function () use (&$processed): void {
-                $processed = true;
-            },
-        );
-
-        $this->assertTrue($processed);
-        $this->assertFalse($queuedJob->released);
-        $this->assertSame(99, Cache::get($counterKey));
-        $this->assertNull(Cache::store('subtitle_concurrency_test')->get($counterKey));
-        $this->assertDatabaseMissing('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'event' => 'queue.concurrency_delayed',
-        ]);
-    }
-
-    public function test_batch_concurrency_middleware_evicts_stale_slot_tokens_on_claim(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.batch_concurrency' => 2,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        // One live slot plus one stale slot whose deadline has already passed.
-        // Without eviction the active count would be 2 (at the limit) and the
-        // claim would be rejected; with eviction the stale token is dropped
-        // and the new claim succeeds.
-        Cache::store('subtitle_concurrency_test')->put(
-            $counterKey,
-            json_encode([
-                ['token' => 'live', 'expiresAt' => time() + 60],
-                ['token' => 'stale', 'expiresAt' => time() - 60],
-            ]),
-            now()->addMinute(),
-        );
-        $queuedJob = new class($job->id)
-        {
-            public bool $released = false;
-
-            public function __construct(public readonly int $subtitleJobId) {}
-
-            public function release(int $delay): void
-            {
-                $this->released = true;
-            }
-        };
-        $processed = false;
-
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function () use (&$processed): void {
-                $processed = true;
-            },
-        );
-
-        $this->assertTrue($processed);
-        $this->assertFalse($queuedJob->released);
-        // After the claim/release cycle, the stale token is gone, the live
-        // pre-existing slot remains, and the newly claimed token was released
-        // by the finally block - leaving exactly one slot.
-        $slots = json_decode((string) Cache::store('subtitle_concurrency_test')->get($counterKey), true);
-        $tokens = array_column($slots, 'token');
-        $this->assertNotContains('stale', $tokens);
-        $this->assertContains('live', $tokens);
-        $this->assertCount(1, $slots);
-    }
-
-    public function test_batch_concurrency_middleware_leaked_slot_frees_capacity_when_deadline_passes(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.batch_concurrency' => 1,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        // Simulate a worker that was killed mid-batch: its slot was never
-        // released, but the absolute deadline has now passed. The next claim
-        // must observe the slot as evicted and admit the new job.
-        Cache::store('subtitle_concurrency_test')->put(
-            $counterKey,
-            json_encode([['token' => 'leaked', 'expiresAt' => time() - 1]]),
-            now()->addMinute(),
-        );
-        $queuedJob = new class($job->id)
-        {
-            public bool $released = false;
-
-            public function __construct(public readonly int $subtitleJobId) {}
-
-            public function release(int $delay): void
-            {
-                $this->released = true;
-            }
-        };
-        $processed = false;
-
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function () use (&$processed): void {
-                $processed = true;
-            },
-        );
-
-        $this->assertTrue($processed);
-        $this->assertFalse($queuedJob->released);
-    }
-
-    public function test_batch_concurrency_middleware_releasing_token_frees_capacity_immediately(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.batch_concurrency' => 1,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        $queuedJob = new class($job->id)
-        {
-            public bool $released = false;
-
-            public function __construct(public readonly int $subtitleJobId) {}
-
-            public function release(int $delay): void
-            {
-                $this->released = true;
-            }
-        };
-        $processedCount = 0;
-
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function () use (&$processedCount): void {
-                $processedCount++;
-            },
-        );
-
-        $this->assertSame(1, $processedCount);
-        $this->assertFalse($queuedJob->released);
-
-        // A second immediate claim must succeed because the first slot was
-        // released in the finally block of the first handle() call.
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function () use (&$processedCount): void {
-                $processedCount++;
-            },
-        );
-
-        $this->assertSame(2, $processedCount);
-        $this->assertFalse($queuedJob->released);
-    }
-
-    public function test_batch_concurrency_middleware_releasing_already_evicted_token_is_safe_noop(): void
-    {
-        config([
-            'subtitles.tiers.plans.base.batch_concurrency' => 1,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        // A live slot from an unrelated worker, plus a 'ghost' token that was
-        // already evicted (e.g. its deadline passed and another claim evicted
-        // it). Releasing 'ghost' must not error and must not disturb 'live'.
-        Cache::store('subtitle_concurrency_test')->put(
-            $counterKey,
-            json_encode([['token' => 'live', 'expiresAt' => time() + 60]]),
-            now()->addMinute(),
-        );
-
-        $middleware = app(LimitSubtitleBatchConcurrency::class);
-        $release = new \ReflectionMethod($middleware, 'releaseSlot');
-        $release->invoke($middleware, $counterKey, 'ghost');
-
-        $slots = json_decode((string) Cache::store('subtitle_concurrency_test')->get($counterKey), true);
-        $this->assertCount(1, $slots);
-        $this->assertSame('live', $slots[0]['token']);
-    }
-
-    public function test_batch_concurrency_middleware_bypasses_sync_queue_driver(): void
-    {
-        config([
-            'queue.default' => 'sync',
-            'subtitles.queue.connection' => 'sync',
-            'subtitles.tiers.plans.base.batch_concurrency' => 1,
-        ]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'stage' => 'tokenizing',
-        ]);
-        $counterKey = 'subtitle-concurrency:ai-batch:'.hash('sha256', (string) $job->user_id).':base';
-        Cache::store('subtitle_concurrency_test')->put($counterKey, 1, now()->addMinute());
-        $queuedJob = new class($job->id)
-        {
-            public bool $released = false;
-
-            public function __construct(public readonly int $subtitleJobId) {}
-
-            public function release(int $delay): void
-            {
-                $this->released = true;
-            }
-        };
-        $processed = false;
-
-        app(LimitSubtitleBatchConcurrency::class)->handle(
-            $queuedJob,
-            function () use (&$processed): void {
-                $processed = true;
-            },
-        );
-
-        $this->assertTrue($processed);
-        $this->assertFalse($queuedJob->released);
-    }
-
     public function test_concurrency_limited_jobs_allow_release_retries_but_cap_exceptions(): void
     {
         $runId = (string) Str::uuid();
@@ -694,33 +269,6 @@ class SubtitleRuntimeTracingTest extends TestCase
             $this->assertSame(3, $job->maxExceptions, get_class($job));
             $this->assertSame([15, 60], $job->backoff(), get_class($job));
         }
-    }
-
-    public function test_completed_jobs_record_performance_budget_checks(): void
-    {
-        config(['subtitles.tiers.plans.base.budgets_seconds.short' => 1]);
-        $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'base',
-            'status' => 'completed',
-            'stage' => 'finalizing',
-            'progress_percent' => 100,
-            'created_at' => now()->subSeconds(5),
-            'updated_at' => now()->subSeconds(5),
-            'video_duration_seconds' => 120,
-        ]);
-
-        app(SubtitlePipelineTelemetry::class)->recordJobCompleted($job);
-
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'event' => 'performance.budget_checked',
-            'stage' => 'finalizing',
-        ]);
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'event' => 'performance.budget_exceeded',
-            'stage' => 'finalizing',
-        ]);
     }
 
     public function test_failure_trace_records_public_error_and_exception_context(): void
@@ -782,10 +330,9 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertStringContainsString('"slowType": "stage_duration"', Artisan::output());
     }
 
-    public function test_generation_metrics_command_reports_duration_budget_and_cost_groups(): void
+    public function test_generation_metrics_command_reports_duration_and_cost_groups(): void
     {
         $job = SubtitleJob::factory()->create([
-            'generation_tier' => 'plus',
             'status' => 'completed',
             'stage' => 'finalizing',
             'progress_percent' => 100,
@@ -814,7 +361,6 @@ class SubtitleRuntimeTracingTest extends TestCase
         $metrics = json_decode(Artisan::output(), true);
 
         $this->assertSame(1, $metrics['summary']['completedJobCount']);
-        $this->assertSame('plus', $metrics['groups'][0]['tier']);
         $this->assertSame('medium', $metrics['groups'][0]['durationBucket']);
         $this->assertSame(300000, $metrics['groups'][0]['p95DurationMs']);
         $this->assertSame(1200, $metrics['groups'][0]['p95QueueWaitMs']);
@@ -851,7 +397,6 @@ class SubtitleRuntimeTracingTest extends TestCase
         $metrics = json_decode(Artisan::output(), true);
         $this->assertSame(20000, $metrics['groups'][0]['p95DurationMs']);
         $this->assertSame(1000, $metrics['groups'][0]['p95QueueWaitMs']);
-        $this->assertSame(0, $metrics['groups'][0]['budgetExceededCount']);
         $this->assertSame(100, $metrics['summary']['totalCostMicrousd']);
         $this->assertSame(10000, $metrics['groups'][0]['p50FirstCueMs']);
         $this->assertSame(11000, $metrics['groups'][0]['p95FirstAnnotatedCueMs']);

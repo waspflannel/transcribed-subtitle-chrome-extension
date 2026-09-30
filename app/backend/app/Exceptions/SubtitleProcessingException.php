@@ -42,19 +42,6 @@ class SubtitleProcessingException extends Exception
         return new self('audio_acquisition_failed', $message, 502, $context, $previous);
     }
 
-    public static function videoTooLong(int $durationSeconds, int $maxDurationSeconds): self
-    {
-        return new self(
-            'video_too_long',
-            'Video exceeds the 60 minute limit.',
-            422,
-            [
-                'duration_seconds' => $durationSeconds,
-                'max_duration_seconds' => $maxDurationSeconds,
-            ],
-        );
-    }
-
     /**
      * @param  array<string, mixed>  $context
      */

@@ -10,7 +10,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
-use App\Models\User;
+use App\Services\InstanceSettings;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -48,9 +48,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         config([
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
-            'subtitles.tiers.default' => 'base',
-            'subtitles.tiers.plans.base.generation_concurrency' => 20,
-            'subtitles.tiers.plans.base.batch_concurrency' => 20,
             'subtitles.costs.openai_alignment_microusd_per_call' => 25,
             'subtitles.costs.openai_tokenization_microusd_per_cue' => 10,
             'subtitles.costs.openai_translation_microusd_per_cue' => 5,
@@ -61,7 +58,7 @@ class LyricsCorrectionContinuationTest extends TestCase
 
     #[TestWith(['openai'])]
     #[TestWith(['cerebras'])]
-    public function test_replacement_uses_luna_only_without_changing_generation_selection(string $provider): void
+    public function test_replacement_uses_saved_provider_and_model(string $provider): void
     {
         config([
             'ai.default' => $provider,
@@ -79,26 +76,26 @@ class LyricsCorrectionContinuationTest extends TestCase
         Log::spy();
         $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
         $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
-        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'replacement-luna');
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === $provider && $prompt->model === 'saved-generation-model');
         $this->assertNotEmpty($this->translationAnalysis->selections);
         foreach ($this->translationAnalysis->selections as $selection) {
-            $this->assertSame(['openai', 'replacement-luna'], $selection);
+            $this->assertSame([$provider, 'saved-generation-model'], $selection);
         }
         $this->assertSame($provider, config('ai.default'));
         $job = $queue['job']->fresh();
         $this->assertSame($provider, $job->ai_provider);
         $this->assertSame('saved-generation-model', $job->ai_model);
         $this->assertSame($timings, array_map(fn (array $cue): array => [$cue['startMs'], $cue['endMs']], $job->track->cues));
-        $this->assertSame($initialCost + 55, $job->estimated_provider_cost_microusd);
+        $this->assertSame($initialCost + ($provider === 'openai' ? 55 : 10), $job->estimated_provider_cost_microusd);
         $events = SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->get();
         $this->assertCount(3, $events);
         foreach ($events as $event) {
-            $this->assertSame('openai', $event->context['provider']);
-            $this->assertSame('replacement-luna', $event->context['model']);
+            $this->assertSame($provider, $event->context['provider']);
+            $this->assertSame('saved-generation-model', $event->context['model']);
         }
         foreach (['aligning', 'analyzing'] as $stage) {
             Log::shouldHaveReceived('info')->with('backend.lyrics_correction_unit_finished', \Mockery::on(fn (array $context): bool => $context['stage'] === $stage
-                && $context['provider'] === 'openai' && $context['model'] === 'replacement-luna'));
+                && $context['provider'] === $provider && $context['model'] === 'saved-generation-model'));
         }
     }
 
@@ -124,6 +121,27 @@ class LyricsCorrectionContinuationTest extends TestCase
         }
     }
 
+    public function test_replacement_preserves_original_generation_time_for_future_retention_changes(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
+        $generatedAt = now()->subDays(3);
+        $queue['job']->track->update(['generated_at' => $generatedAt]);
+        $settings = app(InstanceSettings::class);
+        $settings->update(['retentionDays' => 7]);
+        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]])->preventStrayPrompts();
+
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $track = $queue['job']->fresh()->track;
+        $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+        $this->assertTrue($track->generated_at->equalTo($generatedAt));
+        $this->assertTrue($track->expires_at->equalTo($generatedAt->copy()->addDays(7)));
+
+        $settings->update(['retentionDays' => 30]);
+        $this->assertTrue($track->fresh()->expires_at->equalTo($generatedAt->copy()->addDays(30)));
+    }
+
     #[TestWith(['La la la 😀'])]
     #[TestWith(['[Chorus]'])]
     #[TestWith(['This pasted lyric line is deliberately longer than the old eighty four character capacity for a single timing slot.'])]
@@ -142,7 +160,7 @@ class LyricsCorrectionContinuationTest extends TestCase
     {
         $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
         LyricsAlignmentAgent::fake()->preventStrayPrompts();
-        $this->withExtensionAuth($this->installId(), $queue['job']->user)
+        $this->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics', [
                 'expectedTrackId' => $queue['job']->track->public_id, 'lyrics' => $lyrics,
             ])->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed')
@@ -189,29 +207,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->submitLyrics($queue['job'], [str_repeat('𐐀', 25000)])->assertAccepted();
     }
 
-    public function test_replacement_rate_limit_follows_the_account_and_keeps_cancellation_available(): void
-    {
-        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
-        $job = $queue['job'];
-        $url = '/v1/subtitle-jobs/'.$job->public_id.'/lyrics';
-        $payload = ['expectedTrackId' => $job->track->public_id, 'lyrics' => 'Replacement lyrics'];
-        $attemptId = null;
-        for ($i = 0; $i < 5; $i++) {
-            $response = $this->withExtensionAuth('install_'.str_repeat((string) $i, 32), $job->user)
-                ->postJson($url, $payload)->assertStatus($i === 0 ? 202 : 409);
-            $attemptId ??= $response->json('attemptId');
-        }
-        $this->withExtensionAuth('install_'.str_repeat('5', 32), $job->user)
-            ->withServerVariables(['REMOTE_ADDR' => '192.0.2.2'])
-            ->postJson($url, $payload)->assertStatus(429)->assertJsonPath('error.code', 'rate_limited')->assertHeader('Retry-After');
-        $this->getJson($url)->assertOk();
-        $this->deleteJson($url, ['attemptId' => $attemptId])->assertOk();
-        $other = $this->completedTrackWithCues(1, fn (): string => 'Other account lyrics');
-        $this->submitLyrics($other['job'], ['Other replacement'])->assertAccepted();
-        $this->travel(61)->seconds();
-        $this->withExtensionAuth('install_'.str_repeat('5', 32), $job->user)->postJson($url, $payload)->assertAccepted();
-    }
-
     public function test_initial_queue_dispatch_failure_fails_the_fresh_attempt_instead_of_stranding_it(): void
     {
         $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
@@ -230,7 +225,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         DB::commit();
 
         try {
-            $this->withExtensionAuth($this->installId(), $queue['job']->user)
+            $this->withExtensionInstall($this->installId())
                 ->postJson('/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics', ['expectedTrackId' => $queue['job']->track->public_id, 'lyrics' => implode("\n", $queue['texts'])])
                 ->assertStatus(500);
 
@@ -244,7 +239,7 @@ class LyricsCorrectionContinuationTest extends TestCase
 
             Queue::fake();
 
-            $this->withExtensionAuth($this->installId(), $queue['job']->user)
+            $this->withExtensionInstall($this->installId())
                 ->postJson('/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics', ['expectedTrackId' => $queue['job']->track->public_id, 'lyrics' => implode("\n", $queue['texts'])])
                 ->assertAccepted();
         } finally {
@@ -253,9 +248,6 @@ class LyricsCorrectionContinuationTest extends TestCase
                 ->delete();
             DB::table('subtitle_tracks')->where('id', $queue['job']->track->id)->delete();
             DB::table('subtitle_jobs')->where('id', $queue['job']->id)->delete();
-            DB::table('personal_access_tokens')->where('tokenable_id', $queue['job']->user->id)->delete();
-            DB::table('billing_usage_events')->where('user_id', $queue['job']->user->id)->delete();
-            DB::table('users')->where('id', $queue['job']->user->id)->delete();
 
             $testingTransactions = new \Illuminate\Foundation\Testing\DatabaseTransactionsManager($this->connectionsToTransact());
             $database->connection()->setTransactionManager($testingTransactions);
@@ -342,27 +334,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertTrue($restored->failOnTimeout);
         $this->assertSame(4, $restored->expectedRevision);
         $this->assertSame(180, $restored->timeout);
-    }
-
-    public function test_entitlement_loss_between_alignment_retries_prevents_the_second_prompt(): void
-    {
-        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
-        $calls = 0;
-        LyricsAlignmentAgent::fake(function () use (&$calls, $queue): array {
-            $calls++;
-            $queue['job']->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
-
-            return ['cues' => $queue['alignmentCues']];
-        })->preventStrayPrompts();
-        $response = $this->submitLyrics($queue['job'], $queue['texts']);
-
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))->handle(app(LyricsCorrectionService::class));
-
-        $this->assertSame(1, $calls, 'The second alignment prompt must not run without an active plan.');
-        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
-        $this->assertSame('failed', $row->status);
-        $this->assertNull($row->lyrics);
-        $this->assertNull($row->work_state);
     }
 
     public function test_a_completed_track_with_more_than_22_cues_is_accepted_and_completes(): void
@@ -477,7 +448,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $correction = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $trackId = $correction->track->public_id;
 
-        $cancelled = app(LyricsCorrectionService::class)->cancel($queue['job'], $queue['job']->user, $correction->attempt_id);
+        $cancelled = app(LyricsCorrectionService::class)->cancel($queue['job'], $correction->attempt_id);
 
         $this->assertSame('cancelled', $cancelled->status);
         $this->assertSame(1, $cancelled->work_revision);
@@ -487,7 +458,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 0))
             ->handle(app(LyricsCorrectionService::class));
 
-        $again = app(LyricsCorrectionService::class)->cancel($queue['job'], $queue['job']->user, $correction->attempt_id);
+        $again = app(LyricsCorrectionService::class)->cancel($queue['job'], $correction->attempt_id);
         $this->assertSame('cancelled', $again->status);
         $this->assertSame($trackId, $again->track->public_id);
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
@@ -504,7 +475,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->expectException(SubtitleProcessingException::class);
         $this->expectExceptionMessage('A pasted-lyrics correction is already in progress.');
 
-        app(LyricsCorrectionService::class)->cancel($queue['job'], $queue['job']->user, $response->json('attemptId'));
+        app(LyricsCorrectionService::class)->cancel($queue['job'], $response->json('attemptId'));
     }
 
     public function test_cancellation_during_analysis_discards_the_response(): void
@@ -556,7 +527,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         $response = $this->submitLyrics($queue['job'], $queue['texts']);
         $correction = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->translationAnalysis->beforeTokenizationResult = function () use ($queue, $correction): void {
-            app(LyricsCorrectionService::class)->cancel($queue['job'], $queue['job']->user, $correction->attempt_id);
+            app(LyricsCorrectionService::class)->cancel($queue['job'], $correction->attempt_id);
         };
 
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 0))->handle(app(LyricsCorrectionService::class));
@@ -580,7 +551,7 @@ class LyricsCorrectionContinuationTest extends TestCase
             'work_state' => ['stage' => 'analyzing'],
         ]);
 
-        $cancelled = app(LyricsCorrectionService::class)->cancel($queue['job'], $queue['job']->user, $correction->attempt_id);
+        $cancelled = app(LyricsCorrectionService::class)->cancel($queue['job'], $correction->attempt_id);
         (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $correction->attempt_id, 4))
             ->failed(new RuntimeException('late provider failure'));
 
@@ -604,7 +575,7 @@ class LyricsCorrectionContinuationTest extends TestCase
                 'error_message' => $terminalStatus === 'failed' ? 'failed' : null,
             ]);
 
-            $result = app(LyricsCorrectionService::class)->cancel($queue['job'], $queue['job']->user, $correction->attempt_id);
+            $result = app(LyricsCorrectionService::class)->cancel($queue['job'], $correction->attempt_id);
 
             $this->assertSame($terminalStatus, $result->status);
             $this->assertSame($terminalStatus, $correction->fresh()->status);
@@ -737,11 +708,11 @@ class LyricsCorrectionContinuationTest extends TestCase
         $delivery->shouldReceive('release')->once()->with(5);
         $duplicate->setJob($delivery);
         $calls = 0;
-        $first->middleware()[1]->handle($first, function () use ($second, $duplicate, &$calls): void {
-            $second->middleware()[1]->handle($second, function () use (&$calls): void {
+        $first->middleware()[0]->handle($first, function () use ($second, $duplicate, &$calls): void {
+            $second->middleware()[0]->handle($second, function () use (&$calls): void {
                 $calls++;
             });
-            $duplicate->middleware()[1]->handle($duplicate, function (): void {
+            $duplicate->middleware()[0]->handle($duplicate, function (): void {
                 $this->fail('Duplicate lock was acquired.');
             });
         });
@@ -929,28 +900,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(25, $queue['job']->refresh()->estimated_provider_cost_microusd, 'The completed alignment call must record cost even when no cues were returned.');
     }
 
-    public function test_entitlement_loss_between_units_prevents_the_next_provider_call_and_fails_safely(): void
-    {
-        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
-        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]]);
-        $response = $this->submitLyrics($queue['job'], $queue['texts']);
-        $oldTrackId = $queue['job']->track->public_id;
-        $service = app(LyricsCorrectionService::class);
-
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 0))->handle($service);
-
-        $queue['job']->user->forceFill(['billing_subscription_status' => 'past_due'])->save();
-
-        (new LyricsCorrectionJob($queue['job']->track->id, $queue['job']->id, $response->json('attemptId'), 1, 0))->handle($service);
-
-        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls, 'No derived provider call may run after entitlement loss.');
-        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
-        $this->assertSame('failed', $row->status);
-        $this->assertNull($row->lyrics);
-        $this->assertNull($row->work_state);
-        $this->assertSame($oldTrackId, $queue['job']->track->refresh()->public_id);
-    }
-
     public function test_same_language_correction_rebuilds_tokens_only(): void
     {
         $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1), ['include_translation' => false, 'include_romanization' => false]);
@@ -1105,7 +1054,6 @@ class LyricsCorrectionContinuationTest extends TestCase
      */
     private function completedTrackWithCues(int $cueCount, callable $textAt, array $overrides = []): array
     {
-        $user = User::factory()->create();
         $texts = [];
 
         for ($position = 0; $position < $cueCount; $position++) {
@@ -1113,7 +1061,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         }
 
         $job = SubtitleJob::factory()->create([
-            'user_id' => $user->id,
             'status' => 'completed',
             'stage' => 'finalizing',
             'progress_percent' => 100,
@@ -1398,16 +1345,16 @@ class LyricsCorrectionContinuationTest extends TestCase
     {
         $queue = $this->completedTrackWithCues(1, fn (): string => 'Original');
         $url = '/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics';
-        $this->withExtensionAuth($this->installId(), $queue['job']->user);
+        $this->withExtensionInstall($this->installId());
         $this->postJson($url, ['lyrics' => 'New lyrics'])->assertUnprocessable();
         $this->postJson($url, ['expectedTrackId' => (string) Str::uuid(), 'lyrics' => 'New lyrics'])->assertConflict();
         $this->assertDatabaseCount('subtitle_track_lyrics_corrections', 0);
         Queue::assertNotPushed(LyricsCorrectionJob::class);
     }
 
-    public function test_final_publication_rechecks_entitlement_expiry_and_source_identity(): void
+    public function test_final_publication_rechecks_expiry_and_source_identity(): void
     {
-        foreach (['entitlement', 'expiry', 'track', 'run'] as $change) {
+        foreach (['expiry', 'track', 'run'] as $change) {
             $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
             LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]])->preventStrayPrompts();
             $response = $this->submitLyrics($queue['job'], $queue['texts']);
@@ -1417,7 +1364,6 @@ class LyricsCorrectionContinuationTest extends TestCase
             $service->process($track->id, $attempt, 0);
             $this->assertSame('analyzing', $this->correctionRow($queue['job'], $attempt)->work_state['stage']);
             match ($change) {
-                'entitlement' => $queue['job']->user->update(['billing_subscription_status' => 'past_due']),
                 'expiry' => $track->update(['expires_at' => now()->subSecond()]),
                 'track' => $track->update(['public_id' => (string) Str::uuid()]),
                 'run' => $queue['job']->update(['run_id' => (string) Str::uuid()]),
@@ -1499,7 +1445,7 @@ class LyricsCorrectionContinuationTest extends TestCase
     {
         $job->refresh()->load('track');
 
-        return $this->withExtensionAuth($this->installId(), $job->user)
+        return $this->withExtensionInstall($this->installId())
             ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
                 'expectedTrackId' => $job->track->public_id,
                 'lyrics' => implode("\n", $texts),

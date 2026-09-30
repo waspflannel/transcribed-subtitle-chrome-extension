@@ -32,10 +32,6 @@ class SubtitleCueBatchProcessor
         $this->telemetry->recordStageStarted($job, 'tokenizing', $batchIndex);
 
         try {
-            $job = app(JevModelRouter::class)->resolve($job);
-            if ($job === null) {
-                return;
-            }
             $startedAtMs = $this->telemetry->currentTimeMs();
             $includeTranslation = $job->include_translation && $job->source_language !== $job->target_language;
             ['batch' => $batch, 'context' => $context] = $this->artifacts->cueBatchWithContext($job, SubtitleJobArtifactStore::DRAFT_CUES, $batchIndex);

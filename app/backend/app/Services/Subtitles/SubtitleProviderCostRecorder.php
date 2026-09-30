@@ -29,19 +29,6 @@ final class SubtitleProviderCostRecorder
         );
     }
 
-    public function recordModelRouting(SubtitleJob $job, string $model): void
-    {
-        $this->record(
-            job: $job,
-            stage: 'tokenizing',
-            provider: 'typesafe',
-            model: $model,
-            billingUnit: 'routing_call',
-            billedUnits: 1,
-            unitPriceMicrousd: max(0, (int) config('typesafe.routing_microusd_per_call', 0)),
-        );
-    }
-
     /**
      * Record configured feature estimates against the shared analysis model.
      * These rows are estimates, not separate provider requests or actual usage.
@@ -146,7 +133,6 @@ final class SubtitleProviderCostRecorder
                 'billed_units' => $billedUnits,
                 'unit_price_microusd' => $unitPriceMicrousd,
                 'cost_microusd' => $costMicrousd,
-                'generation_tier' => $job->generation_tier,
             ]);
         }, attempts: 5);
     }

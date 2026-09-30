@@ -89,7 +89,7 @@ it('keeps saved lyrics on copy/delete failures and allows retry after load failu
 
 it('opens beside lyric correction only inside the completed transcript toolbar and closes without losing drafts', async () => {
   const view = open(); await flush();
-  expect([...view.root.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(['Watch', 'Study', 'History', 'Account']);
+  expect([...view.root.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(['Watch', 'Study', 'History', 'Settings']);
   const toggle = view.root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!;
   expect(toggle.previousElementSibling?.getAttribute('data-action')).toBe('toggle-lyrics-edit');
   expect(toggle.closest('.ready-toolbar')?.closest('[data-watch-ready]')).not.toBeNull();

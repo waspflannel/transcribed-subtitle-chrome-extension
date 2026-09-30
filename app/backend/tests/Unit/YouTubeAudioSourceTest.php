@@ -235,7 +235,7 @@ class YouTubeAudioSourceTest extends TestCase
         }
     }
 
-    public function test_it_rejects_metadata_over_the_duration_limit(): void
+    public function test_it_accepts_metadata_over_one_hour(): void
     {
         Process::fake([
             '*' => Process::result(json_encode([
@@ -245,11 +245,6 @@ class YouTubeAudioSourceTest extends TestCase
             ])),
         ]);
 
-        try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', null, $this->workDirectory());
-            $this->fail('Expected audio acquisition to reject long video metadata.');
-        } catch (SubtitleProcessingException $exception) {
-            $this->assertSame('video_too_long', $exception->publicCode);
-        }
+        $this->assertSame(3601, (new YouTubeAudioSource)->validatedDuration('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 3601));
     }
 }

@@ -20,7 +20,7 @@ class PrefetchSubtitleAudio implements ShouldBeUnique, ShouldQueue
 
     public readonly int $queuedAt;
 
-    public function __construct(public readonly int $userId, public readonly string $videoId)
+    public function __construct(public readonly string $videoId)
     {
         $this->onConnection(SubtitleQueue::connection());
         $this->onQueue(SubtitleQueue::generationName());
@@ -29,13 +29,13 @@ class PrefetchSubtitleAudio implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return $this->userId.':'.$this->videoId;
+        return $this->videoId;
     }
 
     public function handle(YouTubeAudioSource $audio): void
     {
         if (time() - $this->queuedAt < 15) {
-            $audio->prefetch($this->userId, $this->videoId);
+            $audio->prefetch($this->videoId);
         }
     }
 }

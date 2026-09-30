@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
-use App\Services\Billing\BillingEntitlementService;
 use App\Services\Subtitles\SubtitleBatchDispatcher;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
@@ -69,7 +68,6 @@ class SubtitleContinuationRunTest extends TestCase
         $this->assertSame(123, $job->video_duration_seconds);
         $this->assertNull($job->detected_source_language);
         $this->assertSame(0, $job->estimated_provider_cost_microusd);
-        $this->assertDatabaseCount('billing_usage_events', 0);
     }
 
     public function test_stale_cost_and_duration_sync_do_not_mutate_or_refresh_to_replacement(): void
@@ -80,7 +78,6 @@ class SubtitleContinuationRunTest extends TestCase
         $job->update(['run_id' => (string) Str::uuid()]);
 
         app(SubtitleProviderCostRecorder::class)->recordTranscription($old, 600);
-        app(BillingEntitlementService::class)->syncJobReservationToActualDuration($old);
 
         $this->assertNotSame($job->run_id, $old->run_id);
         $this->assertSame(0, $job->refresh()->estimated_provider_cost_microusd);

@@ -5,7 +5,7 @@ import { groupJobHistoryByMediaKind, jobHistoryMediaKind } from '../../../utils/
 import { languageLabel } from '../../../utils/languages';
 import type { PanelState } from '../../../utils/messages';
 import { formatHistoryTimestamp, generationProgress } from '../../../utils/panel-progress';
-import { formatDurationSeconds, formatJobTiming, publicJobTelemetry } from '../../../utils/account-state';
+import { formatDurationSeconds, formatJobTiming, publicJobTelemetry } from '../../../utils/job-telemetry';
 
 export function renderJobHistory(
   state: PanelState,

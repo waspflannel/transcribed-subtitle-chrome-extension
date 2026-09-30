@@ -7,7 +7,6 @@ use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Subtitles\LyricsCorrectionService;
-use App\Services\Subtitles\SubtitleJobAdmission;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Console\Attributes\Description;
@@ -19,7 +18,7 @@ use Illuminate\Support\Facades\Log;
 #[Description('Fail running subtitle jobs whose stage has exceeded its timeout plus slack.')]
 class FailStalledSubtitleJobs extends Command
 {
-    public function handle(SubtitleJobFailureHandler $failureHandler, SubtitleJobAdmission $admission, LyricsCorrectionService $corrections): int
+    public function handle(SubtitleJobFailureHandler $failureHandler, LyricsCorrectionService $corrections): int
     {
         if (! (bool) config('subtitles.stalled_job.enabled', true)) {
             $this->components->info('Stalled-job watcher is disabled.');
@@ -102,15 +101,6 @@ class FailStalledSubtitleJobs extends Command
         }
 
         $this->components->info("Failed {$failed} stalled subtitle job(s).");
-
-        // Promotion normally rides completion/failure/deletion, but a worker
-        // killed between marking a job terminal and promoting would strand
-        // queued jobs forever; this scheduled sweep heals that window.
-        SubtitleJob::query()
-            ->where('status', 'queued')
-            ->distinct()
-            ->pluck('user_id')
-            ->each(fn (?int $userId) => $admission->promoteQueuedJobs($userId));
 
         return self::SUCCESS;
     }

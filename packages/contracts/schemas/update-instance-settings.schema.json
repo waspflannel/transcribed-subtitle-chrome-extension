@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/update-instance-settings.schema.json",
+  "title": "UpdateInstanceSettings",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apiKey": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4096,
+              "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
+            }
+          }
+        },
+        "cerebras": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apiKey": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4096,
+              "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
+            }
+          }
+        },
+        "elevenlabs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apiKey": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4096,
+              "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
+            }
+          }
+        }
+      },
+      "required": []
+    },
+    "retentionDays": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 36500
+    }
+  },
+  "required": []
+}

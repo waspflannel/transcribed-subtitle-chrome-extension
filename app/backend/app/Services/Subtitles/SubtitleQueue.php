@@ -8,9 +8,9 @@ final class SubtitleQueue
 
     public const FAMILY_BATCH = 'batch';
 
-    public const DEFAULT_GENERATION_NAME = 'subtitle-generation-base';
+    public const DEFAULT_GENERATION_NAME = 'subtitle-generation';
 
-    public const DEFAULT_BATCH_NAME = 'subtitle-batch-base';
+    public const DEFAULT_BATCH_NAME = 'subtitle-batch';
 
     public static function connection(): string
     {
@@ -19,26 +19,22 @@ final class SubtitleQueue
 
     public static function generationName(): string
     {
-        return SubtitleTier::generationQueue(SubtitleTier::default());
+        return (string) config('subtitles.queue.generation_name', self::DEFAULT_GENERATION_NAME);
     }
 
     public static function batchName(): string
     {
-        return SubtitleTier::batchQueue(SubtitleTier::default());
+        return (string) config('subtitles.queue.batch_name', self::DEFAULT_BATCH_NAME);
     }
 
     public static function generationNameForJob(object $job): string
     {
-        $tier = data_get($job, 'generation_tier');
-
-        return SubtitleTier::generationQueue(is_string($tier) ? $tier : SubtitleTier::default());
+        return self::generationName();
     }
 
     public static function batchNameForJob(object $job): string
     {
-        $tier = data_get($job, 'generation_tier');
-
-        return SubtitleTier::batchQueue(is_string($tier) ? $tier : SubtitleTier::default());
+        return self::batchName();
     }
 
     /**
@@ -46,7 +42,7 @@ final class SubtitleQueue
      */
     public static function names(): array
     {
-        return SubtitleTier::allQueuesInPriorityOrder();
+        return [self::generationName(), self::batchName()];
     }
 
     /**
@@ -54,7 +50,7 @@ final class SubtitleQueue
      */
     public static function generationNames(): array
     {
-        return SubtitleTier::generationQueuesInPriorityOrder();
+        return [self::generationName()];
     }
 
     /**
@@ -62,7 +58,7 @@ final class SubtitleQueue
      */
     public static function batchNames(): array
     {
-        return SubtitleTier::batchQueuesInPriorityOrder();
+        return [self::batchName()];
     }
 
     public static function familyForQueue(string $queue): ?string
@@ -88,7 +84,22 @@ final class SubtitleQueue
      */
     public static function workerGroups(): array
     {
-        return SubtitleTier::workerGroups();
+        return array_map(fn (string $family): array => [
+            'name' => $family,
+            'queue_family' => $family,
+            'queues' => [$family === self::FAMILY_GENERATION ? self::generationName() : self::batchName()],
+            'worker_count' => max(1, (int) config('subtitles.queue.'.$family.'_workers', $family === self::FAMILY_GENERATION ? 9 : 22)),
+        ], [self::FAMILY_GENERATION, self::FAMILY_BATCH]);
+    }
+
+    public static function workerCount(): int
+    {
+        return array_sum(array_column(self::workerGroups(), 'worker_count'));
+    }
+
+    public static function concurrencyCacheStore(): string
+    {
+        return (string) config('subtitles.providers.concurrency_cache_store', 'subtitle_concurrency');
     }
 
     /**

@@ -4,7 +4,6 @@ namespace Tests\Feature;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\PrefetchSubtitleAudio;
-use App\Models\User;
 use App\Services\Audio\YouTubeAudioSource;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Process\PendingProcess;
@@ -36,11 +35,11 @@ class AudioAcquisitionExperimentTest extends TestCase
         parent::tearDown();
     }
 
-    private function acquire(int $userId = 1): void
+    private function acquire(): void
     {
         $path = storage_path('framework/testing/acquisition-'.Str::uuid());
         $this->workspaces[] = $path;
-        (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $path, $userId, 'dQw4w9WgXcQ');
+        (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $path, 'dQw4w9WgXcQ');
         $this->assertFileExists($path.'/direct-audio.m4a');
     }
 
@@ -59,28 +58,28 @@ class AudioAcquisitionExperimentTest extends TestCase
         });
     }
 
-    public function test_prefetch_is_encrypted_deduplicated_account_scoped_and_expires(): void
+    public function test_prefetch_is_encrypted_deduplicated_and_expires(): void
     {
         $this->fakeAcquisition();
         $source = new YouTubeAudioSource;
-        $source->prefetch(1, 'dQw4w9WgXcQ');
-        $source->prefetch(1, 'dQw4w9WgXcQ');
-        $this->assertStringNotContainsString('googlevideo', Cache::get('youtube-prefetch:v1:1:dQw4w9WgXcQ'));
+        $source->prefetch('dQw4w9WgXcQ');
+        $source->prefetch('dQw4w9WgXcQ');
+        $this->assertStringNotContainsString('googlevideo', Cache::get('youtube-prefetch:v2:dQw4w9WgXcQ'));
         $this->acquire();
         Process::assertRanTimes(fn ($p) => in_array('--dump-single-json', $p->command, true), 1);
-        $this->acquire(2);
-        Process::assertRanTimes(fn ($p) => in_array('--dump-single-json', $p->command, true), 2);
+        $this->acquire();
+        Process::assertRanTimes(fn ($p) => in_array('--dump-single-json', $p->command, true), 1);
         $this->travel(61)->seconds();
         $this->acquire();
-        Process::assertRanTimes(fn ($p) => in_array('--dump-single-json', $p->command, true), 3);
+        Process::assertRanTimes(fn ($p) => in_array('--dump-single-json', $p->command, true), 2);
     }
 
     public function test_corrupt_or_disabled_prefetch_does_not_block_generation(): void
     {
         $this->fakeAcquisition();
-        Cache::put('youtube-prefetch:v1:1:dQw4w9WgXcQ', 'corrupt', 60);
+        Cache::put('youtube-prefetch:v2:dQw4w9WgXcQ', 'corrupt', 60);
         $this->acquire();
-        (new YouTubeAudioSource)->prefetch(1, 'dQw4w9WgXcQ');
+        (new YouTubeAudioSource)->prefetch('dQw4w9WgXcQ');
         config(['subtitles.youtube.metadata_prefetch' => false]);
         $this->acquire();
         Process::assertRanTimes(fn ($p) => in_array('--dump-single-json', $p->command, true), 3);
@@ -90,8 +89,8 @@ class AudioAcquisitionExperimentTest extends TestCase
     {
         config(['subtitles.youtube.metadata_prefetch' => true]);
         Process::fake(fn () => Process::result(json_encode([...$this->metadata(), 'availability' => 'private'])));
-        (new YouTubeAudioSource)->prefetch(1, 'dQw4w9WgXcQ');
-        $this->assertNull(Cache::get('youtube-prefetch:v1:1:dQw4w9WgXcQ'));
+        (new YouTubeAudioSource)->prefetch('dQw4w9WgXcQ');
+        $this->assertNull(Cache::get('youtube-prefetch:v2:dQw4w9WgXcQ'));
     }
 
     public function test_direct_failure_uses_existing_downloader_and_deletes_partial_file(): void
@@ -129,7 +128,7 @@ class AudioAcquisitionExperimentTest extends TestCase
     public function test_failed_cached_media_resolves_fresh_metadata_once(): void
     {
         $this->fakeAcquisition();
-        (new YouTubeAudioSource)->prefetch(1, 'dQw4w9WgXcQ');
+        (new YouTubeAudioSource)->prefetch('dQw4w9WgXcQ');
         $fresh = false;
         Process::fake(function (PendingProcess $process) use (&$fresh) {
             if (in_array('--dump-single-json', $process->command, true)) {
@@ -146,7 +145,7 @@ class AudioAcquisitionExperimentTest extends TestCase
         });
         $this->acquire();
         $this->assertTrue($fresh);
-        $this->assertNull(Cache::get('youtube-prefetch:v1:1:dQw4w9WgXcQ'));
+        $this->assertNull(Cache::get('youtube-prefetch:v2:dQw4w9WgXcQ'));
     }
 
     public function test_enabled_prefetch_is_queued_without_resolving_metadata_in_http_request(): void
@@ -154,20 +153,18 @@ class AudioAcquisitionExperimentTest extends TestCase
         config(['subtitles.youtube.metadata_prefetch' => true]);
         Queue::fake();
         Process::preventStrayProcesses();
-        $user = User::factory()->create();
-        $this->withExtensionAuth((string) Str::uuid(), $user);
+        $this->withExtensionInstall((string) Str::uuid());
         $this->postJson('/v1/subtitle-audio/prefetch', ['youtubeVideoId' => 'dQw4w9WgXcQ'])->assertExactJson(['ok' => true]);
-        Queue::assertPushed(PrefetchSubtitleAudio::class, fn ($job) => $job->userId === $user->id && $job->videoId === 'dQw4w9WgXcQ');
+        Queue::assertPushed(PrefetchSubtitleAudio::class, fn ($job) => $job->videoId === 'dQw4w9WgXcQ');
         Process::assertNothingRan();
         $this->assertDatabaseCount('subtitle_jobs', 0);
     }
 
-    public function test_prefetch_route_requires_auth_validates_id_and_does_not_create_jobs(): void
+    public function test_prefetch_route_validates_id_and_does_not_create_jobs(): void
     {
         Process::preventStrayProcesses();
         $install = (string) Str::uuid();
-        $this->withHeader('X-Extension-Install-Id', $install)->postJson('/v1/subtitle-audio/prefetch', ['youtubeVideoId' => 'dQw4w9WgXcQ'])->assertUnauthorized();
-        $this->withExtensionAuth($install, User::factory()->create());
+        $this->withExtensionInstall($install);
         $this->postJson('/v1/subtitle-audio/prefetch', ['youtubeVideoId' => 'http://localhost'])->assertUnprocessable();
         $this->postJson('/v1/subtitle-audio/prefetch', ['youtubeVideoId' => 'dQw4w9WgXcQ'])->assertExactJson(['ok' => true]);
         Process::assertNothingRan();
