@@ -6,9 +6,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = Resolve-Path (Join-Path $ScriptDir "..\..")
 
-Write-Host "Running agent scaffold checks in $Root"
-
-& (Join-Path $ScriptDir "lint-docs.ps1")
+Write-Host "Running project checks in $Root"
 
 if (-not $SkipAppChecks) {
     $Contracts = Join-Path $Root "packages\contracts"
@@ -67,4 +65,4 @@ if (-not $SkipAppChecks) {
     & (Join-Path $Root 'scripts/ops/tests/release-checks.ps1')
 }
 
-Write-Host "Agent scaffold checks completed."
+Write-Host "Project checks completed."

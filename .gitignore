@@ -26,3 +26,21 @@ database/*.sqlite
 __pycache__/
 .venv/
 venv/
+
+# Personal planning, review evidence, and agent tooling stay local.
+/docs/*
+!/docs/operations/
+/docs/operations/*
+!/docs/operations/production-hosting-and-ops.md
+AGENTS.md
+/ARCHITECTURE.md
+/handoff.md
+.agents/
+.ai/
+.claude/
+.codex/
+.gemini/
+.mcp.json
+/app/backend/boost.json
+/scripts/agent/*
+!/scripts/agent/check.ps1
