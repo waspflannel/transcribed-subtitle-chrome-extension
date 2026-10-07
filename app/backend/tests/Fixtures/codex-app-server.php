@@ -1,11 +1,11 @@
 <?php
 
 // A local subprocess fixture: never calls a provider or reads real Codex credentials.
+$scenario = $argv[1];
 if (in_array('--version', $argv, true)) {
-    echo "codex-cli 0.123.0\n";
+    echo $scenario === 'old-version' ? "codex-cli 0.160.0\n" : "codex-cli 0.161.0\n";
     exit;
 }
-$scenario = $argv[1];
 $home = getenv('CODEX_HOME');
 $send = function (array $message): void {
     $json = json_encode($message)."\n";
@@ -20,6 +20,12 @@ while (($line = fgets(STDIN)) !== false) {
     $id = $request['id'] ?? null;
     $method = $request['method'] ?? '';
     $params = $request['params'] ?? [];
+    if (in_array($method, ['thread/start', 'turn/start'], true)
+        && (($params['environments'] ?? null) !== [] || isset($params['sandboxPolicy']['access']))) {
+        $send(['id' => $id, 'error' => ['code' => -32600, 'message' => 'Expected disabled environments without legacy readOnly.access.']]);
+
+        continue;
+    }
     $result = (object) [];
     if ($method === 'initialize') {
         if ($scenario === 'stall') {

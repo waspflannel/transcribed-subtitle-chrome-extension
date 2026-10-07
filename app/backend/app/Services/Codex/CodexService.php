@@ -259,6 +259,7 @@ class CodexService
                 'model' => $selection->model,
                 'modelProvider' => 'openai',
                 'ephemeral' => true,
+                'environments' => [],
                 'approvalPolicy' => 'never',
                 'sandbox' => 'read-only',
                 'baseInstructions' => (string) $agent->instructions(),
@@ -274,13 +275,13 @@ class CodexService
             $this->assertActive($attempt);
             $turn = $session->request('turn/start', [
                 'threadId' => $threadId,
+                'environments' => [],
                 'input' => [['type' => 'text', 'text' => json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)]],
                 'outputSchema' => $schema->object($agent->schema($schema))->withoutAdditionalProperties()->toArray(),
                 'serviceTier' => $selection->fastMode ? 'fast' : null,
                 'approvalPolicy' => 'never',
                 'sandboxPolicy' => [
                     'type' => 'readOnly',
-                    'access' => ['type' => 'restricted', 'includePlatformDefaults' => false, 'readableRoots' => []],
                     'networkAccess' => false,
                 ],
             ]);

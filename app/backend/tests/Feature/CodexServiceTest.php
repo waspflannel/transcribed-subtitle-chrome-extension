@@ -83,7 +83,7 @@ class CodexServiceTest extends TestCase
         $codex->validateSelection('gpt-slow', true);
     }
 
-    public function test_structured_prompt_uses_selected_speed_ephemeral_history_and_restricted_access(): void
+    public function test_structured_prompt_uses_selected_speed_ephemeral_history_and_disabled_environments(): void
     {
         $codex = $this->connected();
         $result = $codex->prompt($this->agent(), ['private' => 'prompt-private'], new SubtitleModel('codex', 'gpt-test', true));
@@ -93,13 +93,14 @@ class CodexServiceTest extends TestCase
         $turn = collect($requests)->firstWhere('method', 'turn/start')['params'];
         $this->assertTrue($thread['ephemeral']);
         $this->assertFalse($thread['persistExtendedHistory']);
+        $this->assertSame([], $thread['environments']);
         $this->assertSame('Test subtitle instructions.', $thread['baseInstructions']);
         $this->assertSame('fast', $thread['serviceTier']);
         $this->assertSame('gpt-test', $thread['model']);
         $this->assertFalse($thread['config']['mcp_servers."unsafe".enabled']);
         $this->assertSame('fast', $turn['serviceTier']);
-        $this->assertSame(['type' => 'restricted', 'includePlatformDefaults' => false, 'readableRoots' => []], $turn['sandboxPolicy']['access']);
-        $this->assertFalse($turn['sandboxPolicy']['networkAccess']);
+        $this->assertSame([], $turn['environments']);
+        $this->assertSame(['type' => 'readOnly', 'networkAccess' => false], $turn['sandboxPolicy']);
         $this->assertSame('object', $turn['outputSchema']['type']);
         $this->assertFalse($turn['outputSchema']['additionalProperties']);
     }
@@ -266,6 +267,21 @@ class CodexServiceTest extends TestCase
         $this->assertFalse($summary['available']);
         $this->assertFalse($summary['connected']);
         $this->assertSame([], $summary['models']);
+    }
+
+    public function test_unsupported_cli_version_is_rejected_before_login(): void
+    {
+        $this->scenario('old-version');
+        $codex = app(CodexService::class);
+        $this->assertFalse($codex->summary()['available']);
+        try {
+            $codex->startLogin();
+            $this->fail('Expected an unsupported CLI failure');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_unavailable', $exception->publicCode);
+        }
+        Bus::assertNotDispatched(ConnectCodexAccount::class);
+        $this->assertFileDoesNotExist($this->home.'/requests.jsonl');
     }
 
     public function test_api_key_auth_cannot_be_used_for_a_codex_job(): void

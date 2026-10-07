@@ -65,13 +65,13 @@ class CodexProcess
 
             return $process->isSuccessful()
                 && preg_match('/codex-cli (\d+\.\d+\.\d+)/', $process->getOutput(), $matches) === 1
-                && version_compare($matches[1], '0.123.0', '>=');
+                && version_compare($matches[1], '0.161.0', '>=');
         } catch (Throwable) {
             return false;
         }
     }
 
-    /** CLI configuration names verified against the 0.123.0 schema. */
+    /** CLI configuration names verified against the 0.161.0 schema. */
     private static function configuration(): array
     {
         return [
