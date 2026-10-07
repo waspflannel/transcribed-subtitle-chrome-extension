@@ -1,3 +1,20 @@
+// Source: schemas/codex-account.schema.json
+export interface CodexAccount {
+  available: boolean;
+  connected: boolean;
+  models: {
+    id: string;
+    name: string;
+    supportsFastMode: boolean;
+  }[];
+  login: null | {
+    status: 'pending' | 'awaiting_authorization' | 'failed';
+    verificationUrl?: string;
+    userCode?: string;
+  };
+  error?: string;
+}
+
 // Source: schemas/instance-settings.schema.json
 export interface InstanceSettings {
   providers: {
@@ -34,7 +51,9 @@ export interface UpdateInstanceSettings {
 }
 
 // Source: schemas/create-subtitle-job-request.schema.json
-export interface CreateSubtitleJobRequest {
+export type CreateSubtitleJobRequest = {
+  [k: string]: unknown;
+} & {
   /**
    * Canonical 11-character YouTube video ID.
    */
@@ -257,8 +276,16 @@ export interface CreateSubtitleJobRequest {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider?: 'openai' | 'cerebras';
-}
+  aiProvider?: 'openai' | 'cerebras' | 'codex';
+  /**
+   * Model from the connected Codex account. Required for Codex; omitted for API providers.
+   */
+  aiModel?: string;
+  /**
+   * Use Codex fast service tier. Omitted for API providers.
+   */
+  aiFastMode?: boolean;
+};
 
 // Source: schemas/learning-token-request.schema.json
 export interface LearningTokenRequest {
@@ -679,16 +706,21 @@ export type JobResponse = {
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error'
-    | 'provider_not_configured';
+    | 'provider_not_configured'
+    | 'provider_unavailable';
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'openai' | 'cerebras';
+  aiProvider: 'openai' | 'cerebras' | 'codex';
   /**
    * Exact text model saved on this job.
    */
   aiModel: string;
   partialTrack?: PartialTrackResponse;
+  /**
+   * Pinned Codex fast mode. Absent on older jobs means false.
+   */
+  aiFastMode?: boolean;
 };
 
 // Source: schemas/subtitle-job-history-response.schema.json
@@ -841,7 +873,8 @@ export type SubtitleJobHistoryItem = {
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error'
-    | 'provider_not_configured';
+    | 'provider_not_configured'
+    | 'provider_unavailable';
   targetLanguage:
     | 'bel'
     | 'bos'
@@ -1036,11 +1069,15 @@ export type SubtitleJobHistoryItem = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'openai' | 'cerebras';
+  aiProvider: 'openai' | 'cerebras' | 'codex';
   /**
    * Exact text model saved on this job.
    */
   aiModel: string;
+  /**
+   * Pinned Codex fast mode. Absent on older jobs means false.
+   */
+  aiFastMode?: boolean;
 };
 
 export interface SubtitleJobHistoryResponse {
@@ -1439,7 +1476,8 @@ export interface ErrorObject {
     | 'lyrics_do_not_match'
     | 'lyrics_correction_failed'
     | 'internal_error'
-    | 'provider_not_configured';
+    | 'provider_not_configured'
+    | 'provider_unavailable';
   message: string;
   details?: {
     reason?: 'stale_track';

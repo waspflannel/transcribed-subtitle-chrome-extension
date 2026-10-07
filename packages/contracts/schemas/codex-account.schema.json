@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/codex-account.schema.json",
+  "title": "CodexAccount",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "available",
+    "connected",
+    "models",
+    "login"
+  ],
+  "properties": {
+    "available": {
+      "type": "boolean"
+    },
+    "connected": {
+      "type": "boolean"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "supportsFastMode"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "supportsFastMode": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "login": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "awaiting_authorization",
+                "failed"
+              ]
+            },
+            "verificationUrl": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://auth\\.openai\\.com/"
+            },
+            "userCode": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    }
+  }
+}

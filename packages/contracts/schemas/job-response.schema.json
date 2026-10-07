@@ -394,7 +394,8 @@
       "type": "string",
       "enum": [
         "openai",
-        "cerebras"
+        "cerebras",
+        "codex"
       ],
       "description": "The selected analysis provider stays pinned for this generation."
     },
@@ -407,6 +408,11 @@
     "partialTrack": {
       "$ref": "partial-track-response.schema.json",
       "description": "Available source cues and completed annotations, delivered with running job status."
+    },
+    "aiFastMode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Pinned Codex fast mode. Absent on older jobs means false."
     }
   },
   "allOf": [

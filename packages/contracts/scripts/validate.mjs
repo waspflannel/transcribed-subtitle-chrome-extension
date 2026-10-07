@@ -78,6 +78,16 @@ for (const aiProvider of ['openai', 'cerebras']) {
 for (const aiProvider of ['auto', 'hybrid', 'invalid', null, 1]) {
   if (generationRequest({ ...generationFixture, aiProvider })) throw new Error('Invalid AI provider accepted.');
 }
+if (!generationRequest({ ...generationFixture, aiProvider: 'codex', aiModel: 'test-model', aiFastMode: true })) throw new Error('Valid Codex request rejected.');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'codex' }, 'Codex request without a model');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'openai', aiModel: 'test-model' }, 'API request with a Codex model');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'cerebras', aiFastMode: true }, 'API request with Codex fast mode');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'codex', aiModel: '../config' }, 'unsafe model id');
+const codexAccount = ajv.getSchema('codex-account.schema.json');
+const account = { available: true, connected: false, models: [], login: { status: 'awaiting_authorization', verificationUrl: 'https://auth.openai.com/codex/device', userCode: 'ABCD-EFGH' } };
+if (!codexAccount(account)) throw new Error('Valid Codex account rejected.');
+assertInvalid(codexAccount, { ...account, accessToken: 'secret' }, 'Codex credential leak');
+assertInvalid(codexAccount, { ...account, login: { ...account.login, verificationUrl: 'https://example.com/sign-in' } }, 'untrusted OAuth URL');
 const unavailableTranslation = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-track-response.json'), 'utf8'));
 unavailableTranslation.cues[0].translatedText = '';
 if (!ajv.getSchema('track-response.schema.json')(unavailableTranslation)) throw new Error('Unavailable translation was rejected.');

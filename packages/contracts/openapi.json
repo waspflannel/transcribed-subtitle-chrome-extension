@@ -686,6 +686,91 @@
           }
         ]
       }
+    },
+    "/v1/codex": {
+      "get": {
+        "operationId": "getCodexAccount",
+        "summary": "Read Codex connection, login progress and available models.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public Codex connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/codex-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "disconnectCodexAccount",
+        "summary": "Disconnect Codex from this private instance.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public Codex connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/codex-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/codex/login": {
+      "post": {
+        "operationId": "loginCodexAccount",
+        "summary": "Start Codex device OAuth sign-in on this private instance.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Public Codex connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/codex-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
     }
   },
   "components": {

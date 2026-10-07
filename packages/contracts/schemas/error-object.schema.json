@@ -30,7 +30,8 @@
         "lyrics_do_not_match",
         "lyrics_correction_failed",
         "internal_error",
-        "provider_not_configured"
+        "provider_not_configured",
+        "provider_unavailable"
       ]
     },
     "message": {
