@@ -348,12 +348,15 @@ export function guardCodexAccount(value: unknown): CodexAccount {
   if (account.login !== null) {
     const login = record(account.login, 'Codex login');
     oneOf(login, 'status', ['pending', 'awaiting_authorization', 'failed']);
-    optionalString(login, 'verificationUrl');
-    optionalString(login, 'userCode');
-    if (Object.keys(login).some(key => !['status', 'verificationUrl', 'userCode'].includes(key))) throw invalid('Unexpected Codex login fields');
-    if (typeof login.verificationUrl === 'string') {
-      const url = new URL(login.verificationUrl);
-      if (url.protocol !== 'https:' || url.hostname !== 'auth.openai.com' || url.username || url.password || url.port) throw invalid('Invalid Codex sign-in URL');
+    optionalString(login, 'authUrl');
+    if (Object.keys(login).some(key => !['status', 'authUrl', 'verificationUrl', 'userCode'].includes(key))) throw invalid('Unexpected Codex login fields');
+    // An old worker can finish a device-code attempt during an upgrade. Discard its link and allow a fresh login.
+    if ('verificationUrl' in login || 'userCode' in login) return { ...account, login: { status: 'failed' }, error: 'Restart the backend, then disconnect Codex and sign in again.' } as unknown as CodexAccount;
+    if (typeof login.authUrl === 'string') {
+      if (login.authUrl.length > 4096 || /[\s\u0000-\u001f\u007f\\]/.test(login.authUrl)
+        || !/^https:\/\/(?:auth\.openai\.com|chatgpt\.com)(?:[/?#]|$)/.test(login.authUrl)) throw invalid('Invalid Codex sign-in URL');
+      const url = new URL(login.authUrl);
+      if (url.protocol !== 'https:' || !['auth.openai.com', 'chatgpt.com'].includes(url.hostname) || url.username || url.password || url.port) throw invalid('Invalid Codex sign-in URL');
     }
   }
   return account as unknown as CodexAccount;

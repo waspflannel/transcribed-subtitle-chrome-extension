@@ -20,10 +20,24 @@ class CodexServiceTest extends TestCase
 
     private string $home;
 
+    private int $callbackPort;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->home = sys_get_temp_dir().'/transcribe-codex-test-'.Str::uuid();
+        $listener = stream_socket_server('tcp://127.0.0.1:0');
+        $this->callbackPort = (int) substr(strrchr(stream_socket_get_name($listener, false), ':'), 1);
+        fclose($listener);
+        $this->app->bind(CodexService::class, fn (): CodexService => new class($this->callbackPort) extends CodexService
+        {
+            public function __construct(private readonly int $port) {}
+
+            protected function callbackPort(): int
+            {
+                return $this->port;
+            }
+        });
         config([
             'codex.home' => $this->home,
             'codex.command' => [PHP_BINARY, base_path('tests/Fixtures/codex-app-server.php'), 'success'],
@@ -46,6 +60,13 @@ class CodexServiceTest extends TestCase
         $codex->startLogin();
         Bus::assertDispatchedTimes(ConnectCodexAccount::class, 1);
         $this->completeLogin($codex);
+        $loginRequest = collect($this->requests())->firstWhere('method', 'account/login/start');
+        $this->assertSame(['type' => 'chatgpt'], $loginRequest['params']);
+        $published = json_decode(file_get_contents($this->home.'/published-login.json'), true);
+        $this->assertSame([
+            'status' => 'awaiting_authorization',
+            'authUrl' => 'https://auth.openai.com/oauth/authorize?state=test-state&code_challenge=test-challenge',
+        ], $published['login']);
         $summary = $codex->summary();
         $this->assertTrue($summary['connected']);
         $this->assertNull($summary['login']);
@@ -113,6 +134,119 @@ class CodexServiceTest extends TestCase
         $this->assertStringNotContainsString('secret-provider-error', file_get_contents($this->home.'/connection.json'));
     }
 
+    public function test_browser_authorization_url_is_returned_without_legacy_device_fields(): void
+    {
+        $this->connected();
+        $published = json_decode(file_get_contents($this->home.'/published-login.json'), true);
+        file_put_contents($this->home.'/connection.json', json_encode($published));
+        $this->withExtensionInstall('codex_browser_test')->getJson('/v1/codex')
+            ->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('login.status', 'awaiting_authorization')
+            ->assertJsonPath('login.authUrl', $published['login']['authUrl'])
+            ->assertJsonMissingPath('login.verificationUrl')->assertJsonMissingPath('login.userCode');
+    }
+
+    public function test_browser_login_rejects_unsafe_authorization_urls(): void
+    {
+        $codex = app(CodexService::class);
+        foreach ([
+            'http://auth.openai.com/oauth/authorize',
+            'https://auth.openai.com.attacker.invalid/oauth/authorize',
+            'https://name:password@auth.openai.com/oauth/authorize',
+            'https://auth.openai.com:443/oauth/authorize',
+            'https://chatgpt.com\\@attacker.invalid/oauth/authorize',
+            'https://auth.openai.com/oauth/authorize?state=with space',
+            "https://auth.openai.com/oauth/authorize\n",
+            'javascript:alert(1)',
+            'https://auth.openai.com/'.str_repeat('a', 4096),
+        ] as $url) {
+            $this->scenario('url:'.base64_encode($url));
+            $codex->startLogin();
+            $this->completeLogin($codex);
+            $summary = $codex->summary();
+            $this->assertSame(['status' => 'failed'], $summary['login']);
+            $this->assertFalse($summary['connected']);
+            $this->assertStringNotContainsString($url, file_get_contents($this->home.'/connection.json'));
+        }
+    }
+
+    public function test_browser_login_accepts_the_official_chatgpt_host(): void
+    {
+        $this->scenario('url:'.base64_encode('https://chatgpt.com/oauth/authorize?state=test'));
+        $codex = $this->connected();
+        $this->assertTrue($codex->summary()['connected']);
+    }
+
+    public function test_old_device_login_is_immediately_restartable_and_cannot_complete(): void
+    {
+        $codex = app(CodexService::class);
+        $codex->startLogin();
+        $oldJob = Bus::dispatched(ConnectCodexAccount::class)->last();
+        $state = json_decode(file_get_contents($this->home.'/connection.json'), true);
+        unset($state['flow']);
+        $state['login'] = ['status' => 'awaiting_authorization', 'verificationUrl' => 'https://auth.openai.com/codex/device', 'userCode' => 'OLD-CODE'];
+        file_put_contents($this->home.'/connection.json', json_encode($state));
+        $this->assertSame(['status' => 'failed'], $codex->summary()['login']);
+        $this->assertSame(['status' => 'pending'], $codex->startLogin()['login']);
+        Bus::assertDispatchedTimes(ConnectCodexAccount::class, 2);
+        $oldJob->handle($codex);
+        $this->assertFileDoesNotExist($this->home.'/requests.jsonl');
+        $this->completeLogin($codex);
+        $this->assertTrue($codex->summary()['connected']);
+    }
+
+    public function test_busy_callback_port_never_starts_or_cancels_another_login(): void
+    {
+        $listener = stream_socket_server('tcp://127.0.0.1:'.$this->callbackPort);
+        try {
+            $codex = app(CodexService::class);
+            $codex->startLogin();
+            $this->completeLogin($codex);
+            $this->assertSame(['status' => 'failed'], $codex->summary()['login']);
+            $this->assertFileDoesNotExist($this->home.'/requests.jsonl');
+        } finally {
+            fclose($listener);
+        }
+    }
+
+    public function test_cancelled_browser_listener_is_closed_before_a_retry_owns_the_lock(): void
+    {
+        $this->scenario('cancel-pending');
+        $codex = app(CodexService::class);
+        $codex->startLogin();
+        $started = microtime(true);
+        $this->completeLogin($codex);
+        $this->assertLessThan(4, microtime(true) - $started);
+        $this->assertNull(collect($this->requests())->firstWhere('method', 'account/login/cancel'));
+        $lock = fopen($this->home.'/login.lock', 'c+');
+        $this->assertTrue(flock($lock, LOCK_EX | LOCK_NB));
+        flock($lock, LOCK_UN);
+        fclose($lock);
+        $this->scenario('success');
+        $codex->startLogin();
+        $this->completeLogin($codex);
+        $this->assertTrue($codex->summary()['connected']);
+    }
+
+    public function test_an_existing_login_owner_blocks_new_callback_start_for_a_bounded_time(): void
+    {
+        config(['codex.request_timeout_seconds' => 1]);
+        $codex = app(CodexService::class);
+        $codex->startLogin();
+        $lock = fopen($this->home.'/login.lock', 'c+');
+        flock($lock, LOCK_EX);
+        $started = microtime(true);
+        try {
+            $this->completeLogin($codex);
+            $this->assertLessThan(3, microtime(true) - $started);
+            $this->assertFileDoesNotExist($this->home.'/requests.jsonl');
+            $this->assertSame(['status' => 'failed'], $codex->summary()['login']);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
     public function test_expired_pending_login_is_not_left_spinning(): void
     {
         $codex = app(CodexService::class);
@@ -161,7 +295,7 @@ class CodexServiceTest extends TestCase
         }
     }
 
-    public function test_account_endpoints_are_private_and_do_not_cache_device_codes(): void
+    public function test_account_endpoints_are_private_and_do_not_cache_authorization_urls(): void
     {
         $this->withExtensionInstall('codex_test_install');
         $this->getJson('/v1/codex')->assertOk()->assertJsonPath('available', true)->assertHeader('Cache-Control', 'no-store, private');

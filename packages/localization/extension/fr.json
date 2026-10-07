@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "Le mode rapide utilise plus de crédits Codex lorsque le modèle le permet.",
   "Codex connection": "Connexion Codex",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "Connectez-vous avec ChatGPT pour utiliser Codex pour l’analyse de texte. La transcription audio utilise toujours votre clé API ElevenLabs.",
-  "Open the sign-in page and enter this code:": "Ouvrez la page de connexion et saisissez ce code :",
   "Open ChatGPT sign-in": "Ouvrir la connexion ChatGPT",
   "Sign in with ChatGPT": "Se connecter avec ChatGPT",
   "Disconnect Codex": "Déconnecter Codex",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "La connexion à Codex se gère uniquement depuis le panneau de l’extension.",
   "Check your Codex connection and ElevenLabs API key in Settings.": "Vérifiez votre connexion Codex et votre clé API ElevenLabs dans les paramètres.",
   "Review the Codex model, fast mode, and video settings, then try again.": "Vérifiez le modèle Codex, le mode rapide et les paramètres vidéo, puis réessayez.",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "Le fournisseur d’IA est indisponible. Vérifiez sa connexion dans les paramètres et réessayez."
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "Le fournisseur d’IA est indisponible. Vérifiez sa connexion dans les paramètres et réessayez.",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Terminez la connexion dans l’onglet du navigateur, puis revenez ici. Si aucun onglet ne s’est ouvert, utilisez le lien ci-dessous.",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Impossible d’ouvrir la page de connexion. Utilisez Ouvrir la connexion ChatGPT ci-dessous.",
+  "Restart the backend, then disconnect Codex and sign in again.": "Redémarrez le serveur, puis déconnectez Codex et reconnectez-vous."
 }

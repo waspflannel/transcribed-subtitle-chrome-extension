@@ -1196,7 +1196,6 @@ label.row:has(input:disabled, select:disabled) {
 .ai-source-picker label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .ai-source-picker input { accent-color: var(--accent, #d83b3b); }
 .codex-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.codex-user-code { display: block; margin: 8px 0 12px; font-size: 1.4rem; letter-spacing: 0.12em; }
 [data-codex-status] { overflow-wrap: anywhere; }
 [data-codex-authorization] { margin-bottom: 16px; }
 

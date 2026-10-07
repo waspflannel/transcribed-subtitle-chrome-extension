@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "Mode cepat menggunakan lebih banyak kredit Codex jika didukung oleh model.",
   "Codex connection": "Koneksi Codex",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "Masuk dengan ChatGPT untuk menggunakan Codex dalam analisis teks. Transkripsi audio tetap menggunakan kunci API ElevenLabs Anda.",
-  "Open the sign-in page and enter this code:": "Buka halaman masuk dan masukkan kode ini:",
   "Open ChatGPT sign-in": "Buka halaman masuk ChatGPT",
   "Sign in with ChatGPT": "Masuk dengan ChatGPT",
   "Disconnect Codex": "Putuskan Codex",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "Proses masuk Codex hanya dapat dikelola dari panel ekstensi.",
   "Check your Codex connection and ElevenLabs API key in Settings.": "Periksa koneksi Codex dan kunci API ElevenLabs Anda di Pengaturan.",
   "Review the Codex model, fast mode, and video settings, then try again.": "Periksa model Codex, mode cepat, dan pengaturan video, lalu coba lagi.",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "Penyedia AI tidak tersedia. Periksa koneksinya di Pengaturan dan coba lagi."
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "Penyedia AI tidak tersedia. Periksa koneksinya di Pengaturan dan coba lagi.",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Selesaikan proses masuk di tab browser, lalu kembali ke sini. Jika tab tidak terbuka, gunakan tautan di bawah.",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Tidak dapat membuka halaman masuk. Gunakan Buka halaman masuk ChatGPT di bawah.",
+  "Restart the backend, then disconnect Codex and sign in again.": "Mulai ulang backend, lalu putuskan Codex dan masuk kembali."
 }

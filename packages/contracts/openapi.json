@@ -746,7 +746,7 @@
     "/v1/codex/login": {
       "post": {
         "operationId": "loginCodexAccount",
-        "summary": "Start Codex device OAuth sign-in on this private instance.",
+        "summary": "Start Codex browser OAuth sign-in on this private instance.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"

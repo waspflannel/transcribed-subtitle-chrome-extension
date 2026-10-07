@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "O modo rápido usa mais créditos do Codex quando o modelo oferece suporte.",
   "Codex connection": "Conexão do Codex",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "Entre com o ChatGPT para usar o Codex na análise de texto. A transcrição de áudio continua usando sua chave de API da ElevenLabs.",
-  "Open the sign-in page and enter this code:": "Abra a página de login e insira este código:",
   "Open ChatGPT sign-in": "Abrir login do ChatGPT",
   "Sign in with ChatGPT": "Entrar com o ChatGPT",
   "Disconnect Codex": "Desconectar Codex",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "O login do Codex só pode ser gerenciado pelo painel da extensão.",
   "Check your Codex connection and ElevenLabs API key in Settings.": "Verifique sua conexão do Codex e sua chave de API da ElevenLabs em Configurações.",
   "Review the Codex model, fast mode, and video settings, then try again.": "Revise o modelo do Codex, o modo rápido e as configurações do vídeo e tente novamente.",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "O provedor de IA está indisponível. Verifique a conexão em Configurações e tente novamente."
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "O provedor de IA está indisponível. Verifique a conexão em Configurações e tente novamente.",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Conclua o login na aba do navegador e volte aqui. Se nenhuma aba abrir, use o link abaixo.",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Não foi possível abrir a página de login. Use Abrir login do ChatGPT abaixo.",
+  "Restart the backend, then disconnect Codex and sign in again.": "Reinicie o servidor, desconecte o Codex e entre novamente."
 }

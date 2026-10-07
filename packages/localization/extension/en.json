@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "Fast mode uses more Codex credits when supported by the model.",
   "Codex connection": "Codex connection",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.",
-  "Open the sign-in page and enter this code:": "Open the sign-in page and enter this code:",
   "Open ChatGPT sign-in": "Open ChatGPT sign-in",
   "Sign in with ChatGPT": "Sign in with ChatGPT",
   "Disconnect Codex": "Disconnect Codex",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "Codex sign-in can only be managed from the extension panel.",
   "Check your Codex connection and ElevenLabs API key in Settings.": "Check your Codex connection and ElevenLabs API key in Settings.",
   "Review the Codex model, fast mode, and video settings, then try again.": "Review the Codex model, fast mode, and video settings, then try again.",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "The AI provider is unavailable. Check its connection in Settings and try again."
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "The AI provider is unavailable. Check its connection in Settings and try again.",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Could not open the sign-in page. Use Open ChatGPT sign-in below.",
+  "Restart the backend, then disconnect Codex and sign in again.": "Restart the backend, then disconnect Codex and sign in again."
 }

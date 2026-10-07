@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "Der Schnellmodus verbraucht mehr Codex-Guthaben, wenn das Modell ihn unterstützt.",
   "Codex connection": "Codex-Verbindung",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "Melde dich mit ChatGPT an, um Codex für die Textanalyse zu nutzen. Die Audiotranskription verwendet weiterhin deinen ElevenLabs-API-Schlüssel.",
-  "Open the sign-in page and enter this code:": "Öffne die Anmeldeseite und gib diesen Code ein:",
   "Open ChatGPT sign-in": "ChatGPT-Anmeldung öffnen",
   "Sign in with ChatGPT": "Mit ChatGPT anmelden",
   "Disconnect Codex": "Codex trennen",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "Die Codex-Anmeldung kann nur über das Erweiterungspanel verwaltet werden.",
   "Check your Codex connection and ElevenLabs API key in Settings.": "Prüfe deine Codex-Verbindung und deinen ElevenLabs-API-Schlüssel in den Einstellungen.",
   "Review the Codex model, fast mode, and video settings, then try again.": "Prüfe das Codex-Modell, den Schnellmodus und die Videoeinstellungen und versuche es erneut.",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "Der KI-Anbieter ist nicht verfügbar. Prüfe seine Verbindung in den Einstellungen und versuche es erneut."
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "Der KI-Anbieter ist nicht verfügbar. Prüfe seine Verbindung in den Einstellungen und versuche es erneut.",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Schließe die Anmeldung im Browser-Tab ab und kehre hierher zurück. Falls kein Tab geöffnet wurde, nutze den Link unten.",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Die Anmeldeseite konnte nicht geöffnet werden. Nutze unten ChatGPT-Anmeldung öffnen.",
+  "Restart the backend, then disconnect Codex and sign in again.": "Starte den Server neu, trenne Codex und melde dich erneut an."
 }

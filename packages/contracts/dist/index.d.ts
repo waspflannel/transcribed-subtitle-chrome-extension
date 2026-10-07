@@ -9,8 +9,7 @@ export interface CodexAccount {
   }[];
   login: null | {
     status: 'pending' | 'awaiting_authorization' | 'failed';
-    verificationUrl?: string;
-    userCode?: string;
+    authUrl?: string;
   };
   error?: string;
 }

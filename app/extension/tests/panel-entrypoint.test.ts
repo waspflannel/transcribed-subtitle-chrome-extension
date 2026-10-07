@@ -10,11 +10,12 @@ const mocks = vi.hoisted(() => ({
   messages: vi.fn(),
   activated: vi.fn(),
   updated: vi.fn(),
+  createTab: vi.fn(async (_options: { url: string }) => ({})),
 }));
 vi.mock('wxt/browser', () => ({ browser: {
   runtime: { sendMessage: mocks.sendMessage, connect: mocks.connect, onMessage: { addListener: mocks.messages } },
   windows: { getCurrent: vi.fn(async () => ({ id: 7 })) },
-  tabs: { onActivated: { addListener: mocks.activated }, onUpdated: { addListener: mocks.updated } },
+  tabs: { create: mocks.createTab, onActivated: { addListener: mocks.activated }, onUpdated: { addListener: mocks.updated } },
 } }));
 
 afterEach(() => {
@@ -281,5 +282,36 @@ it('switches API and Codex billing and stores a discovered model with capability
   await vi.advanceTimersByTimeAsync(0);
   expect(state.settings.aiProvider).toBe('openai');
   expect(dom.window.document.querySelector<HTMLElement>('[data-codex-options]')!.hidden).toBe(true);
+  dom.window.close();
+});
+
+it('opens OAuth with the browser API and refreshes connection state when the user returns', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup);
+  stubPanelDom(dom);
+  mocks.createTab.mockClear();
+  const authUrl = 'https://auth.openai.com/oauth/authorize?state=fixture';
+  let state: PanelState = { installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS, backendUrl: 'http://localhost/v1',
+    subtitleState: { type: 'no-track' }, jobHistory: [], codexAccount: { available: true, connected: false, models: [], login: null } };
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string }) => {
+    if (request?.type === 'panel.loginCodex') {
+      state = { ...state, codexAccount: { ...state.codexAccount!, login: { status: 'awaiting_authorization', authUrl } } };
+      return structuredClone(state.codexAccount);
+    }
+    if (request?.type === 'panel.getCodexAccount') return structuredClone(state.codexAccount);
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  dom.window.document.querySelector<HTMLButtonElement>('[data-codex-connect]')!.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.createTab).toHaveBeenCalledExactlyOnceWith({ url: authUrl });
+  state = { ...state, codexAccount: { ...state.codexAccount!, connected: true, login: null } };
+  Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, value: 'visible' });
+  dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(dom.window.document.querySelector('[data-codex-status]')?.textContent).toBe('Codex connected.');
+  expect(mocks.createTab).toHaveBeenCalledTimes(1);
   dom.window.close();
 });

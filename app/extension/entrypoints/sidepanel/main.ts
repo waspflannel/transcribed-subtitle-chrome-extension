@@ -308,7 +308,7 @@ const codexAccount = bindCodexAccount(document, async type => {
   return guardCodexAccount(response);
 }, account => {
   if (latestState) showPanelState({ ...latestState, codexAccount: account, codexAccountError: undefined });
-});
+}, url => browser.tabs.create({ url }));
 let cueSnapshotRequest = 0;
 const transcriptView = bindTranscriptView({
   transcriptSearch,

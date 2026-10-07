@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "在模型支持的情况下，快速模式会消耗更多 Codex 额度。",
   "Codex connection": "Codex 连接",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "使用 ChatGPT 登录，即可通过 Codex 分析文本。音频转录仍使用你的 ElevenLabs API 密钥。",
-  "Open the sign-in page and enter this code:": "打开登录页面并输入此代码：",
   "Open ChatGPT sign-in": "打开 ChatGPT 登录",
   "Sign in with ChatGPT": "使用 ChatGPT 登录",
   "Disconnect Codex": "断开 Codex",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "只能通过扩展程序面板管理 Codex 登录。",
   "Check your Codex connection and ElevenLabs API key in Settings.": "请在设置中检查 Codex 连接和 ElevenLabs API 密钥。",
   "Review the Codex model, fast mode, and video settings, then try again.": "请检查 Codex 模型、快速模式和视频设置，然后重试。",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "AI 提供商不可用。请在设置中检查连接，然后重试。"
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "AI 提供商不可用。请在设置中检查连接，然后重试。",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "请在浏览器标签页中完成登录，然后返回这里。如果没有打开标签页，请使用下方链接。",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "无法打开登录页面。请使用下方的“打开 ChatGPT 登录”。",
+  "Restart the backend, then disconnect Codex and sign in again.": "请重启后端，然后断开 Codex 并重新登录。"
 }

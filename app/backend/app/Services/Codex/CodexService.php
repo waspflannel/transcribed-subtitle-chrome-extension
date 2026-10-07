@@ -77,7 +77,7 @@ class CodexService
             }
             $attempt = (string) Str::uuid();
 
-            return ['attempt' => $attempt, 'expiresAt' => time() + (int) config('codex.login_timeout_seconds'), 'login' => ['status' => 'pending']];
+            return ['attempt' => $attempt, 'flow' => 'browser', 'expiresAt' => time() + (int) config('codex.login_timeout_seconds'), 'login' => ['status' => 'pending']];
         });
         if ($attempt !== null) {
             try {
@@ -99,18 +99,29 @@ class CodexService
             return;
         }
         $session = null;
+        $lock = null;
         try {
+            $lock = $this->loginLock($attempt);
+            $listener = @stream_socket_client('tcp://127.0.0.1:'.$this->callbackPort(), $errorCode, $errorMessage, 0.2);
+            if ($listener !== false) {
+                fclose($listener);
+                throw CodexProcess::failure();
+            }
             $session = new CodexProcess($this->home($attempt), (int) config('codex.login_timeout_seconds'));
-            $login = $session->request('account/login/start', ['type' => 'chatgptDeviceCode']);
+            $login = $session->request('account/login/start', ['type' => 'chatgpt']);
+            $url = is_string($login['authUrl'] ?? null) ? parse_url($login['authUrl']) : false;
             if (! is_string($login['loginId'] ?? null)
-                || ! is_string($login['verificationUrl'] ?? null)
-                || preg_match('~\Ahttps://auth\.openai\.com/codex/device/?\z~', $login['verificationUrl']) !== 1
-                || ! is_string($login['userCode'] ?? null)
-                || preg_match('/\A[A-Za-z0-9-]{4,64}\z/', $login['userCode']) !== 1) {
+                || $login['loginId'] === ''
+                || ! is_array($url)
+                || strlen($login['authUrl']) > 4096
+                || preg_match('/[\x00-\x20\x7f\\\\]/', $login['authUrl']) === 1
+                || ($url['scheme'] ?? null) !== 'https'
+                || ! in_array($url['host'] ?? null, ['auth.openai.com', 'chatgpt.com'], true)
+                || isset($url['user']) || isset($url['pass']) || isset($url['port'])) {
                 throw CodexProcess::failure();
             }
             $this->state(fn (array $current): array => ($current['attempt'] ?? null) === $attempt
-                ? [...$current, 'login' => ['status' => 'awaiting_authorization', 'verificationUrl' => $login['verificationUrl'], 'userCode' => $login['userCode']]]
+                ? [...$current, 'login' => ['status' => 'awaiting_authorization', 'authUrl' => $login['authUrl']]]
                 : $current);
             $completed = $session->until(
                 fn (array $message): bool => ($message['method'] ?? null) === 'account/login/completed' && ($message['params']['loginId'] ?? null) === $login['loginId'],
@@ -132,11 +143,46 @@ class CodexService
         } catch (Throwable) {
             $this->failLogin($attempt);
         } finally {
+            // Closing the owning process bounds cancellation and closes its callback listener.
             $session?->close();
+            if ($lock !== null) {
+                flock($lock, LOCK_UN);
+                fclose($lock);
+            }
             if (($this->state()['active'] ?? null) !== $attempt) {
                 $this->removeHome($attempt);
             }
         }
+    }
+
+    protected function callbackPort(): int
+    {
+        return 1455;
+    }
+
+    /** @return resource */
+    private function loginLock(string $attempt): mixed
+    {
+        $path = rtrim((string) config('codex.home'), '/\\').'/login.lock';
+        $lock = @fopen($path, 'c+');
+        if ($lock === false) {
+            throw CodexProcess::failure();
+        }
+        @chmod($path, 0600);
+        $deadline = microtime(true) + (int) config('codex.request_timeout_seconds');
+        do {
+            $state = $this->state();
+            if (($state['attempt'] ?? null) !== $attempt || ($state['login']['status'] ?? null) !== 'pending') {
+                break;
+            }
+            if (flock($lock, LOCK_EX | LOCK_NB)) {
+                return $lock;
+            }
+            usleep(100000);
+        } while (microtime(true) < $deadline);
+        fclose($lock);
+
+        throw CodexProcess::failure();
     }
 
     public function failLogin(string $attempt): void
@@ -369,7 +415,8 @@ class CodexService
             $path = $root.'/connection.json';
             $original = is_file($path) ? json_decode(file_get_contents($path), true, 32, JSON_THROW_ON_ERROR) : [];
             $state = $original;
-            if (($state['expiresAt'] ?? PHP_INT_MAX) <= time()) {
+            if (($state['expiresAt'] ?? PHP_INT_MAX) <= time()
+                || (isset($state['attempt']) && ($state['flow'] ?? null) !== 'browser')) {
                 $state = ['login' => ['status' => 'failed']];
             }
             $state = $update ? $update($state) : $state;

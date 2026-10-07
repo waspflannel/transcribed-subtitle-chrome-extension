@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "El modo rápido usa más créditos de Codex cuando el modelo lo admite.",
   "Codex connection": "Conexión de Codex",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "Inicia sesión con ChatGPT para usar Codex en el análisis de texto. La transcripción de audio sigue usando tu clave API de ElevenLabs.",
-  "Open the sign-in page and enter this code:": "Abre la página de inicio de sesión e introduce este código:",
   "Open ChatGPT sign-in": "Abrir inicio de sesión de ChatGPT",
   "Sign in with ChatGPT": "Iniciar sesión con ChatGPT",
   "Disconnect Codex": "Desconectar Codex",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "El inicio de sesión de Codex solo se puede gestionar desde el panel de la extensión.",
   "Check your Codex connection and ElevenLabs API key in Settings.": "Comprueba tu conexión de Codex y tu clave API de ElevenLabs en Ajustes.",
   "Review the Codex model, fast mode, and video settings, then try again.": "Revisa el modelo de Codex, el modo rápido y los ajustes del vídeo, y vuelve a intentarlo.",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "El proveedor de IA no está disponible. Comprueba su conexión en Ajustes y vuelve a intentarlo."
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "El proveedor de IA no está disponible. Comprueba su conexión en Ajustes y vuelve a intentarlo.",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Termina de iniciar sesión en la pestaña del navegador y vuelve aquí. Si no se abrió ninguna pestaña, usa el enlace de abajo.",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "No se pudo abrir la página de inicio de sesión. Usa Abrir inicio de sesión de ChatGPT abajo.",
+  "Restart the backend, then disconnect Codex and sign in again.": "Reinicia el servidor, desconecta Codex y vuelve a iniciar sesión."
 }

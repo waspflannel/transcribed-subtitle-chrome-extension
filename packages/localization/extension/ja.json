@@ -452,7 +452,6 @@
   "Fast mode uses more Codex credits when supported by the model.": "対応モデルでは、高速モードでより多くのCodexクレジットを使用します。",
   "Codex connection": "Codex接続",
   "Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.": "ChatGPTでサインインすると、テキスト分析にCodexを使用できます。音声の文字起こしには引き続きElevenLabsのAPIキーを使用します。",
-  "Open the sign-in page and enter this code:": "サインインページを開き、このコードを入力してください：",
   "Open ChatGPT sign-in": "ChatGPTのサインインを開く",
   "Sign in with ChatGPT": "ChatGPTでサインイン",
   "Disconnect Codex": "Codexを切断",
@@ -472,5 +471,8 @@
   "Codex sign-in can only be managed from the extension panel.": "Codexへのサインインは拡張機能のパネルからのみ管理できます。",
   "Check your Codex connection and ElevenLabs API key in Settings.": "設定でCodex接続とElevenLabsのAPIキーを確認してください。",
   "Review the Codex model, fast mode, and video settings, then try again.": "Codexモデル、高速モード、動画の設定を確認して、もう一度お試しください。",
-  "The AI provider is unavailable. Check its connection in Settings and try again.": "AIプロバイダーを利用できません。設定で接続を確認して、もう一度お試しください。"
+  "The AI provider is unavailable. Check its connection in Settings and try again.": "AIプロバイダーを利用できません。設定で接続を確認して、もう一度お試しください。",
+  "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "ブラウザーのタブでサインインを完了し、ここに戻ってください。タブが開かない場合は、下のリンクを使用してください。",
+  "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "サインインページを開けませんでした。下の「ChatGPTのサインインを開く」を使用してください。",
+  "Restart the backend, then disconnect Codex and sign in again.": "バックエンドを再起動し、Codexを切断してからサインインし直してください。"
 }

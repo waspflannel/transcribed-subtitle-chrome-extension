@@ -38,9 +38,23 @@ while (($line = fgets(STDIN)) !== false) {
         ]));
         $result = ['userAgent' => 'fake'];
     } elseif ($method === 'account/login/start') {
-        $send(['id' => $id, 'result' => ['loginId' => 'login-1', 'verificationUrl' => 'https://auth.openai.com/codex/device', 'userCode' => 'ABCD-1234']]);
-        if ($scenario === 'cancel') {
+        $authUrl = str_starts_with($scenario, 'url:') ? base64_decode(substr($scenario, 4)) : 'https://auth.openai.com/oauth/authorize?state=test-state&code_challenge=test-challenge';
+        $send(['id' => $id, 'result' => ['type' => 'chatgpt', 'loginId' => 'login-1', 'authUrl' => $authUrl]]);
+        if (! str_starts_with($scenario, 'url:')) {
+            for ($i = 0; $i < 100; $i++) {
+                $state = json_decode(file_get_contents(dirname($home).'/connection.json'), true);
+                if (isset($state['login']['authUrl'])) {
+                    file_put_contents(dirname($home).'/published-login.json', json_encode($state));
+                    break;
+                }
+                usleep(10000);
+            }
+        }
+        if (in_array($scenario, ['cancel', 'cancel-pending'], true)) {
             file_put_contents(dirname($home).'/connection.json', '{}');
+        }
+        if ($scenario === 'cancel-pending') {
+            continue;
         }
         if ($scenario !== 'login-failure') {
             file_put_contents($home.'/authenticated', 'fixture-account');
@@ -50,6 +64,8 @@ while (($line = fgets(STDIN)) !== false) {
         continue;
     } elseif ($method === 'account/read') {
         $result = ['account' => is_file($home.'/authenticated') ? ['type' => $scenario === 'api-key' ? 'apiKey' : 'chatgpt', 'email' => 'not-returned@example.invalid'] : null];
+    } elseif ($method === 'account/login/cancel' && $scenario === 'cancel-pending') {
+        sleep(10);
     } elseif ($method === 'model/list') {
         $result = ($params['cursor'] ?? null) === null
             ? ['data' => [['id' => 'preset-fast', 'model' => 'gpt-test', 'displayName' => 'Test Model', 'hidden' => false, 'additionalSpeedTiers' => ['fast']]], 'nextCursor' => 'page-2']
