@@ -42,6 +42,16 @@ function stateWithJob(): PanelState {
 }
 
 describe('renderJobHistory links', () => {
+  it('labels saved Codex model and fast mode independently from next-generation API settings', () => {
+    const dom = new JSDOM('<div id="list"></div><p id="err"></p>');
+    const jobsList = dom.window.document.getElementById('list')!;
+    renderJobHistory({ ...stateWithJob(), jobHistory: [makeJob({ aiProvider: 'codex', aiModel: 'saved-model', aiFastMode: true })] }, {
+      jobsList, jobsError: dom.window.document.getElementById('err')!,
+    });
+    expect(jobsList.textContent).toContain('Codex · saved-model · Fast mode');
+    expect(jobsList.textContent).not.toContain('OpenAI');
+    dom.window.close();
+  });
   it.each(['dQw4w9WgXcQ', 'other000001'])('only opens the selected video when the active video is %s', (activeVideoId) => {
     const dom = new JSDOM('<div id="list"></div><p id="err"></p>');
     const jobsList = dom.window.document.getElementById('list')!;

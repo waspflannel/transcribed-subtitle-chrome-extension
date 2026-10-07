@@ -1,5 +1,6 @@
 import { t } from './i18n';
 import type {
+  CodexAccount,
   InstanceSettings,
   UpdateInstanceSettings,
   ApiError,
@@ -16,6 +17,7 @@ import type {
 } from './contracts';
 import { resolveBackendApiBaseUrl } from './api-config';
 import {
+  guardCodexAccount,
   guardInstanceSettings,
   guardJobResponse,
   guardLearningTokenResponse,
@@ -48,6 +50,18 @@ export class SubtitleApiClient {
     private readonly baseUrl = DEFAULT_BACKEND_API_BASE_URL,
     private readonly fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
+
+  public async getCodexAccount(installId: string): Promise<CodexAccount> {
+    return this.request('codex', installId, { method: 'GET', timeoutMs: 30000 }, guardCodexAccount);
+  }
+
+  public async loginCodex(installId: string): Promise<CodexAccount> {
+    return this.request('codex/login', installId, { method: 'POST', timeoutMs: 45000 }, guardCodexAccount);
+  }
+
+  public async disconnectCodex(installId: string): Promise<CodexAccount> {
+    return this.request('codex', installId, { method: 'DELETE', timeoutMs: 30000 }, guardCodexAccount);
+  }
 
 
 
@@ -231,8 +245,10 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
-export function publicSubtitleErrorMessage(error: unknown): string {
+export function publicSubtitleErrorMessage(error: unknown, provider?: JobResponse['aiProvider']): string {
   if (error instanceof SubtitleApiError) {
+    if (provider === 'codex' && error.code === 'provider_not_configured') return t('Check your Codex connection and ElevenLabs API key in Settings.');
+    if (provider === 'codex' && error.code === 'validation_failed') return t('Review the Codex model, fast mode, and video settings, then try again.');
     return messageForApiErrorCode(error.code);
   }
 
@@ -245,6 +261,8 @@ export function publicSubtitleErrorMessage(error: unknown): string {
 
 function messageForApiErrorCode(code: ApiError['error']['code']): string {
   switch (code) {
+    case 'provider_unavailable':
+      return t('The AI provider is unavailable. Check its connection in Settings and try again.');
     case 'provider_not_configured':
       return t("Add the required provider keys in Settings before generating subtitles.");
 

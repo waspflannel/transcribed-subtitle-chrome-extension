@@ -60,7 +60,7 @@ function failedJobPublicErrorMessage(job: SubtitleJobHistoryItem): string | unde
     throw new Error(t("Failed job history item is missing public error fields."));
   }
 
-  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
+  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500), job.aiProvider);
 }
 
 

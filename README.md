@@ -21,7 +21,7 @@ It works with public YouTube videos and Shorts, including videos without existin
 - **Backend:** PHP and Laravel.
 - **Storage and background jobs:** PostgreSQL and Redis.
 - **Speech transcription:** ElevenLabs Scribe.
-- **Translations and language learning features:** OpenAI or Cerebras. ( more coming soon )
+- **Translations and language learning features:** OpenAI/Cerebras API keys or a connected Codex ChatGPT account, with a model picker and optional Fast mode.
 - **Audio processing:** yt-dlp and FFmpeg.
 
 ## More information

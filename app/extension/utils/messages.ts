@@ -1,6 +1,6 @@
 import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
-import type { InstanceSettings, UpdateInstanceSettings, LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
+import type { CodexAccount, InstanceSettings, UpdateInstanceSettings, LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
 export interface PageSnapshot {
   videoDurationSeconds?: number;
@@ -61,6 +61,8 @@ export interface PanelState {
   backendUrl: string;
   instanceSettings?: InstanceSettings;
   instanceSettingsError?: string;
+  codexAccount?: CodexAccount;
+  codexAccountError?: string;
   subtitleState: SubtitleState;
   jobHistory: SubtitleJobHistoryItem[];
   jobHistoryError?: string;
@@ -69,6 +71,7 @@ export interface PanelState {
 }
 
 export type BackgroundRequest =
+  | { type: 'panel.getCodexAccount' | 'panel.loginCodex' | 'panel.disconnectCodex' }
   | { type: 'panel.listGenerations'; youtubeVideoId: string; windowId?: number }
   | { type: 'panel.selectGeneration' | 'panel.deleteGeneration'; jobId: string; currentJobId: string; trackId: string; youtubeVideoId: string; tabId: number; windowId?: number }
   | {
@@ -175,6 +178,10 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
   }
 
   switch (value.type) {
+    case 'panel.getCodexAccount':
+    case 'panel.loginCodex':
+    case 'panel.disconnectCodex':
+      return true;
     case 'panel.getActiveCue':
       return isNonNegativeInteger(value.tabId) && hasString(value, 'youtubeVideoId') && hasString(value, 'trackId')
         && optionalNumber(value, 'windowId');
@@ -274,6 +281,10 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
 export function isBackgroundRequest(message: RuntimeMessage): message is BackgroundRequest {
   switch (message.type) {
+    case 'panel.getCodexAccount':
+    case 'panel.loginCodex':
+    case 'panel.disconnectCodex':
+      return true;
     case 'content.getState':
     case 'content.updateSettings':
     case 'content.enrichLearningToken':

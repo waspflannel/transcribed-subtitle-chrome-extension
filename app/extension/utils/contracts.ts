@@ -1,4 +1,5 @@
 export type {
+  CodexAccount,
   InstanceSettings,
   UpdateInstanceSettings,
   ApiError,

@@ -3,7 +3,7 @@ import { browser, type Browser } from 'wxt/browser';
 import { getInstanceContext, type InstanceContext } from '../utils/instance-context';
 import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError, DEFAULT_BACKEND_API_BASE_URL } from '../utils/api';
 import { clearRememberedTracks, clearTabOperation, clearTabOperationIfMatches, clearTabOperations, forgetRememberedTrack, getRememberedTrack, getTabOperation, rememberActiveTrack, setTabOperation, updateTabOperationIfMatches, type StoredTabOperation } from '../utils/active-tracks';
-import type { InstanceSettings, JobResponse, LearningTokenResponse, LyricsCorrectionStatus, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
+import type { CodexAccount, InstanceSettings, JobResponse, LearningTokenResponse, LyricsCorrectionStatus, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   loadingMessageForStage,
   publicSubtitleJobFailureMessage,
@@ -58,6 +58,9 @@ let localStateResetVersion = 0;
 let instanceMutationVersion = 0;
 let cachedInstanceSettings: InstanceSettings | undefined;
 let instanceSettingsError: string | undefined;
+let cachedCodexAccount: CodexAccount | undefined;
+let codexAccountError: string | undefined;
+let codexAccountVersion = 0;
 let audioPrefetch: { key: string; at: number } | undefined;
 const JOB_POLL_INTERVAL_MS = 5000;
 const ACTIVE_JOB_POLL_INTERVAL_MS = 1000;
@@ -151,6 +154,22 @@ function resetLyricsCorrectionStatesForSession(sessionId?: string): void {
 
 async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.runtime.MessageSender): Promise<unknown> {
   switch (message.type) {
+    case 'panel.getCodexAccount':
+    case 'panel.loginCodex':
+    case 'panel.disconnectCodex': {
+      if (sender.tab) throw new Error('Codex sign-in can only be managed from the extension panel.');
+      const version = ++codexAccountVersion;
+      const installId = await getOrCreateInstallId();
+      const response = message.type === 'panel.loginCodex' ? subtitleApi.loginCodex(installId)
+        : message.type === 'panel.disconnectCodex' ? subtitleApi.disconnectCodex(installId)
+        : subtitleApi.getCodexAccount(installId);
+      const account = await response.catch(error => {
+        throw new Error(error instanceof SubtitleApiError || error instanceof TypeError
+          ? publicSubtitleErrorMessage(error, 'codex') : 'Unable to load Codex. Check the backend and refresh.');
+      });
+      if (version === codexAccountVersion) { cachedCodexAccount = account; codexAccountError = undefined; }
+      return account;
+    }
     case 'content.getState':
       return getContentState(sender, message.revalidateSavedGeneration);
 
@@ -616,8 +635,16 @@ async function generateSubtitlesFromPanel(youtubeVideoId: string, tabId: number,
       }
       const settings = await getExtensionSettings();
       const providers = (await subtitleApi.getInstanceSettings(await getOrCreateInstallId())).providers;
-      const analysisReady = providers[settings.aiProvider].configured;
-      if (!providers.elevenlabs.configured || !analysisReady) {
+      if (!providers.elevenlabs.configured) {
+        throw new SubtitleApiError('provider_not_configured', 'Add the required provider keys in Settings before generating subtitles.', 422);
+      }
+      if (settings.aiProvider === 'codex') {
+        const account = await subtitleApi.getCodexAccount(await getOrCreateInstallId());
+        if (!account.available || !account.connected) throw new Error('Connect Codex in Settings before generating subtitles.');
+        const model = account.models.find(model => model.id === settings.codexModel);
+        if (!model) throw new Error('Select an available Codex model before generating subtitles.');
+        if (settings.codexFastMode && !model.supportsFastMode) throw new Error('Fast mode is unavailable for this Codex model.');
+      } else if (!providers[settings.aiProvider].configured) {
         throw new SubtitleApiError('provider_not_configured', 'Add the required provider keys in Settings before generating subtitles.', 422);
       }
       const pageSnapshot = await getPageSnapshotFromTab(activeTabId);
@@ -696,6 +723,7 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
+      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode } : {}),
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -720,6 +748,7 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
+      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode } : {}),
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -802,7 +831,7 @@ async function generateSubtitlesForTab(
       await publishSubtitleState(tabId, {
         type: 'error',
         youtubeVideoId: pageStatus.videoId,
-        message: publicSubtitleErrorMessage(error),
+        message: publicSubtitleErrorMessage(error, settings.aiProvider),
       }, instanceId, sessionId);
     }
   } finally {
@@ -1674,6 +1703,15 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
       instanceSettingsError = 'Unable to load provider settings. Check that your backend is running.';
     }
   }
+  if (options.syncBackend || !cachedCodexAccount) {
+    const version = codexAccountVersion;
+    try {
+      const account = await subtitleApi.getCodexAccount(installId);
+      if (version === codexAccountVersion) { cachedCodexAccount = account; codexAccountError = undefined; }
+    } catch {
+      if (version === codexAccountVersion) codexAccountError = 'Unable to load Codex. Check the backend and refresh.';
+    }
+  }
   const history = await getPanelJobHistory(installId, effectiveSession, options.syncBackend);
   let backendRecoveryBlocked = await isSubtitleRecoveryBlocked();
 
@@ -2032,6 +2070,8 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
       backendUrl: DEFAULT_BACKEND_API_BASE_URL,
       instanceSettings: cachedInstanceSettings,
       instanceSettingsError,
+      codexAccount: cachedCodexAccount,
+      codexAccountError,
       subtitleState: DEFAULT_SUBTITLE_STATE,
       jobHistory: [],
       lyricsCorrection: null,
@@ -2058,6 +2098,8 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
       backendUrl: DEFAULT_BACKEND_API_BASE_URL,
       instanceSettings: cachedInstanceSettings,
       instanceSettingsError,
+      codexAccount: cachedCodexAccount,
+      codexAccountError,
     subtitleState,
     jobHistory: history.jobs,
     jobHistoryError: history.error,

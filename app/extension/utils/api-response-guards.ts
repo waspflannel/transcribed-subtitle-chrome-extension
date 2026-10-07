@@ -1,4 +1,5 @@
 import type {
+  CodexAccount,
   InstanceSettings,
   JobResponse,
   LearningToken,
@@ -173,8 +174,9 @@ function guardJobCore(value: Record<string, unknown>): void {
   requiredString(value, 'sourceLanguage');
   optionalString(value, 'detectedSourceLanguage');
   requiredString(value, 'targetLanguage');
-  oneOf(value, 'aiProvider', ['openai', 'cerebras']);
+  oneOf(value, 'aiProvider', ['openai', 'cerebras', 'codex']);
   requiredString(value, 'aiModel');
+  if (value.aiFastMode !== undefined) requiredBoolean(value, 'aiFastMode');
   requiredBoolean(value, 'includeRomanization');
   requiredBoolean(value, 'includeTranslation');
   oneOf(value, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
@@ -328,4 +330,31 @@ export function guardInstanceSettings(value: unknown): InstanceSettings {
   }
   if (settings.retentionDays !== null && (!Number.isInteger(settings.retentionDays) || Number(settings.retentionDays) < 1)) throw invalid('Invalid retention');
   return settings as unknown as InstanceSettings;
+}
+
+export function guardCodexAccount(value: unknown): CodexAccount {
+  const account = record(value, 'Codex account');
+  if (Object.keys(account).some(key => !['available', 'connected', 'models', 'login', 'error'].includes(key))) throw invalid('Unexpected Codex account fields');
+  requiredBoolean(account, 'available');
+  requiredBoolean(account, 'connected');
+  optionalString(account, 'error');
+  for (const value of array(account.models, 'Codex models')) {
+    const model = record(value, 'Codex model');
+    requiredString(model, 'id');
+    requiredString(model, 'name');
+    requiredBoolean(model, 'supportsFastMode');
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(String(model.id)) || Object.keys(model).some(key => !['id', 'name', 'supportsFastMode'].includes(key))) throw invalid('Invalid Codex model');
+  }
+  if (account.login !== null) {
+    const login = record(account.login, 'Codex login');
+    oneOf(login, 'status', ['pending', 'awaiting_authorization', 'failed']);
+    optionalString(login, 'verificationUrl');
+    optionalString(login, 'userCode');
+    if (Object.keys(login).some(key => !['status', 'verificationUrl', 'userCode'].includes(key))) throw invalid('Unexpected Codex login fields');
+    if (typeof login.verificationUrl === 'string') {
+      const url = new URL(login.verificationUrl);
+      if (url.protocol !== 'https:' || url.hostname !== 'auth.openai.com' || url.username || url.password || url.port) throw invalid('Invalid Codex sign-in URL');
+    }
+  }
+  return account as unknown as CodexAccount;
 }

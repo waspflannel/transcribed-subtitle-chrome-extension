@@ -9,6 +9,12 @@ import {
 } from '../utils/settings-model';
 
 describe('settings model', () => {
+  it('stores only Codex preferences and validates model ids and fast mode', () => {
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'codex', codexModel: 'test-model', codexFastMode: true }))
+      .toMatchObject({ aiProvider: 'codex', codexModel: 'test-model', codexFastMode: true });
+    expect(createExtensionSettingsFromPartial({ codexModel: '../config', codexFastMode: 'true' as never, accessToken: 'secret' } as never))
+      .toEqual(DEFAULT_EXTENSION_SETTINGS);
+  });
   it('keeps existing installs attached and saves only boolean movement preferences', () => {
     expect(createExtensionSettingsFromPartial(undefined).overlayAttachedToVideo).toBe(true);
     expect(createExtensionSettingsFromPartial({ overlayAttachedToVideo: false }).overlayAttachedToVideo).toBe(false);

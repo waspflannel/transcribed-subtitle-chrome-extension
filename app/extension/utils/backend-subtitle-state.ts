@@ -78,13 +78,13 @@ export async function stateWithBackendProgress(
 }
 
 export function publicSubtitleJobFailureMessage(
-  job: Pick<JobResponse | SubtitleJobHistoryItem, 'errorCode' | 'message'>,
+  job: Pick<JobResponse | SubtitleJobHistoryItem, 'errorCode' | 'message'> & { aiProvider?: JobResponse['aiProvider'] },
 ): string {
   if (!job.errorCode || !job.message) {
     throw new Error('Failed subtitle job is missing error details.');
   }
 
-  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500));
+  return publicSubtitleErrorMessage(new SubtitleApiError(job.errorCode, job.message, 500), job.aiProvider);
 }
 
 export function loadingMessageForStage(stage: SubtitleJobHistoryItem['stage']): string {

@@ -86,6 +86,12 @@
             </div>
 
             <div class="card">
+              <fieldset class="ai-source-picker">
+                <legend class="card-label" data-i18n="AI billing">AI billing</legend>
+                <label><input type="radio" name="aiSource" value="api" checked disabled><span data-i18n="API keys">API keys</span></label>
+                <label><input type="radio" name="aiSource" value="codex" disabled><span data-i18n="Codex credits">Codex credits</span></label>
+              </fieldset>
+              <div data-api-options>
               <label class="row">
                 <span class="row-key" data-i18n="AI model">AI model</span>
                 <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
@@ -95,6 +101,14 @@
               </label>
               <p id="ai-luna-description" class="microcopy"><strong data-i18n="OpenAI:">OpenAI:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
               <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Cerebras:">Cerebras:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
+              </div>
+              <div data-codex-options hidden>
+                <label class="field"><span data-i18n="Codex model">Codex model</span><select name="codexModel" disabled></select></label>
+                <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" name="codexFastMode" aria-describedby="codex-fast-help" disabled></label>
+                <p id="codex-fast-help" class="microcopy" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</p>
+                <p class="microcopy" data-codex-readiness role="status"></p>
+              </div>
+              <p class="microcopy" data-ai-billing></p>
               <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
             </div>
 
@@ -293,6 +307,21 @@
         </section>
 
         <section class="view" data-panel="settings" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" tabindex="0">
+          <div class="card" data-codex-account>
+            <h2 data-i18n="Codex connection">Codex connection</h2>
+            <p class="microcopy" data-i18n="Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.">Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.</p>
+            <p role="status" aria-live="polite" data-codex-status></p>
+            <div data-codex-authorization hidden>
+              <p class="microcopy" data-i18n="Open the sign-in page and enter this code:">Open the sign-in page and enter this code:</p>
+              <code data-codex-code class="codex-user-code"></code>
+              <a class="btn-ghost" data-codex-verification target="_blank" rel="noopener noreferrer" data-i18n="Open ChatGPT sign-in">Open ChatGPT sign-in</a>
+            </div>
+            <div class="codex-actions">
+              <button type="button" class="btn-primary" data-codex-connect disabled data-i18n="Sign in with ChatGPT">Sign in with ChatGPT</button>
+              <button type="button" class="btn-ghost" data-codex-disconnect hidden data-i18n="Disconnect Codex">Disconnect Codex</button>
+              <button type="button" class="btn-ghost" data-codex-refresh data-i18n="Refresh">Refresh</button>
+            </div>
+          </div>
           <form data-instance-settings-form class="instance-settings-form">
             <div class="card">
               <h2 data-i18n="Provider settings">Provider settings</h2>

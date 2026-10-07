@@ -16,7 +16,7 @@ function state(jobId = 'luna'): PanelState {
 }
 function jobs() {
   return ['luna', 'cerebras', 'spanish'].map(jobId => ({ jobId, youtubeVideoId: 'dQw4w9WgXcQ', status: 'completed',
-    sourceLanguage: 'auto', targetLanguage: jobId === 'spanish' ? 'spa' : 'eng', aiProvider: jobId === 'luna' ? 'openai' : 'cerebras' }));
+    sourceLanguage: 'auto', targetLanguage: jobId === 'spanish' ? 'spa' : 'eng', aiProvider: jobId === 'luna' ? 'openai' : 'cerebras', aiModel: jobId === 'luna' ? 'gpt-6-luna' : 'gpt-oss-120b' }));
 }
 function setup(onSelect = vi.fn(async () => true)) {
   const dom = new JSDOM('<select></select><p></p><button></button>');
@@ -51,7 +51,7 @@ it('keeps matching language pairs separate by job and selects the exact generati
   view.render(state());
   await flush();
   expect(Array.from(select.options, option => option.textContent)).toEqual([
-    'Auto → English (OpenAI)', 'Auto → English (Cerebras)', 'Auto → Spanish (Cerebras)',
+    'Auto → English (OpenAI API · gpt-6-luna)', 'Auto → English (Cerebras API · gpt-oss-120b)', 'Auto → Spanish (Cerebras API · gpt-oss-120b)',
     'Delete selected generation…',
   ]);
   expect(select.value).toBe('luna');

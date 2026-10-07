@@ -457,6 +457,12 @@ describe('SubtitleApiClient', () => {
     expect(
       publicSubtitleErrorMessage(new SubtitleApiError('internal_error', 'Stack trace here.', 500)),
     ).toBe('The backend hit an unexpected error. Try again later.');
+    expect(publicSubtitleErrorMessage(new SubtitleApiError('provider_unavailable', 'Private diagnostics', 503)))
+      .toBe('The AI provider is unavailable. Check its connection in Settings and try again.');
+    expect(publicSubtitleErrorMessage(new SubtitleApiError('provider_not_configured', 'Private diagnostics', 422), 'codex'))
+      .toBe('Check your Codex connection and ElevenLabs API key in Settings.');
+    expect(publicSubtitleErrorMessage(new SubtitleApiError('validation_failed', 'Private diagnostics', 422), 'codex'))
+      .toBe('Review the Codex model, fast mode, and video settings, then try again.');
   });
 
 });

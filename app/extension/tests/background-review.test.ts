@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, assert, describe, expect, it, vi } from 'vitest';
-import type { SubtitleCue, TrackResponse } from '../utils/contracts';
+import type { CodexAccount, SubtitleCue, TrackResponse } from '../utils/contracts';
 
 const VIDEO_ONE = 'aBcDeFgHiJk';
 const VIDEO_A = 'dQw4w9WgXcQ';
@@ -91,6 +91,9 @@ const storageMock = vi.hoisted(() => {
 });
 
 const apiMock = vi.hoisted(() => ({
+  getCodexAccount: vi.fn<() => Promise<CodexAccount>>(),
+  loginCodex: vi.fn(),
+  disconnectCodex: vi.fn(),
   prefetchSubtitleAudio: vi.fn(),
   enrichLearningToken: vi.fn(),
   createSubtitleJob: vi.fn(),
@@ -167,6 +170,9 @@ vi.mock('wxt/browser', () => ({
 vi.mock('../utils/api', () => ({
   DEFAULT_BACKEND_API_BASE_URL: 'http://127.0.0.1:8001/v1',
   SubtitleApiClient: class {
+    getCodexAccount() { return apiMock.getCodexAccount(); }
+    loginCodex() { return apiMock.loginCodex(); }
+    disconnectCodex() { return apiMock.disconnectCodex(); }
     prefetchSubtitleAudio(...args: unknown[]) { return apiMock.prefetchSubtitleAudio(...args); }
     enrichLearningToken(...args: unknown[]) { return apiMock.enrichLearningToken(...args); }
     createSubtitleJob(...args: unknown[]) { return apiMock.createSubtitleJob(...args); }
@@ -318,6 +324,9 @@ beforeEach(() => {
   apiMock.cancelSubtitleJob.mockReset();
   apiMock.deleteSavedGeneration.mockReset().mockResolvedValue({ ok: true });
   apiMock.listSubtitleJobs.mockReset().mockResolvedValue({ jobs: [] });
+  apiMock.getCodexAccount.mockReset().mockResolvedValue({ available: true, connected: true, models: [{ id: 'test-model', name: 'Test model', supportsFastMode: true }], login: null });
+  apiMock.loginCodex.mockReset();
+  apiMock.disconnectCodex.mockReset();
 });
 
 afterEach(() => {
@@ -327,6 +336,44 @@ afterEach(() => {
 });
 
 describe('background entrypoint review regressions', () => {
+  it.each(['panel.getCodexAccount', 'panel.loginCodex', 'panel.disconnectCodex'])('rejects %s from content scripts', async type => {
+    seedBaseState();
+    const listener = await loadBackground();
+    expect(await dispatch(listener, { type }, { tab: { id: 1 } })).toMatchObject({ ok: false });
+    expect(apiMock.getCodexAccount).not.toHaveBeenCalled();
+    expect(apiMock.loginCodex).not.toHaveBeenCalled();
+    expect(apiMock.disconnectCodex).not.toHaveBeenCalled();
+  });
+
+  it('pins the selected Codex model and fast mode, without requiring an OpenAI API key', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const providers = await apiMock.getInstanceSettings();
+    providers.providers.openai!.configured = false;
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'panel.updateSettings', patch: { aiProvider: 'codex', codexModel: 'test-model', codexFastMode: true } }, {});
+    apiMock.getInstanceSettings.mockResolvedValueOnce(providers);
+    apiMock.createSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, 'codex-job'), status: 'completed', track: track(VIDEO_A, 'codex-job') });
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
+    expect(apiMock.createSubtitleJob.mock.calls[0]?.[1]).toMatchObject({ aiProvider: 'codex', aiModel: 'test-model', aiFastMode: true });
+  });
+
+  it.each(['disconnected', 'unavailable', 'missing-model', 'unsupported-fast', 'missing-transcription'])('blocks Codex generation when %s', async failure => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'panel.updateSettings', patch: { aiProvider: 'codex', codexModel: 'test-model', codexFastMode: true } }, {});
+    apiMock.getCodexAccount.mockResolvedValue({ available: failure !== 'unavailable', connected: failure !== 'disconnected', login: null,
+      models: failure === 'missing-model' ? [] : [{ id: 'test-model', name: 'Test model', supportsFastMode: failure !== 'unsupported-fast' }] });
+    if (failure === 'missing-transcription') {
+      const providers = await apiMock.getInstanceSettings();
+      providers.providers.elevenlabs!.configured = false;
+      apiMock.getInstanceSettings.mockResolvedValueOnce(providers);
+    }
+    expect(await dispatch(listener, generationRequest(), {})).toMatchObject({ ok: false });
+    expect(apiMock.createSubtitleJob).not.toHaveBeenCalled();
+  });
   it.each(['elevenlabs', 'openai'])('rejects missing %s credentials before creating a job', async (provider) => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });

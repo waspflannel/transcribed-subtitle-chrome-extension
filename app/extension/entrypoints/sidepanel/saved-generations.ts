@@ -37,7 +37,7 @@ export function bindSavedGenerations(
       }
       for (const job of jobs) {
         const source = job.sourceLanguage === 'auto' ? t("Auto") : languageLabel(job.sourceLanguage);
-        const model = aiProviderLabel(job.aiProvider);
+        const model = `${aiProviderLabel(job.aiProvider)}${job.aiProvider === 'codex' ? '' : ' API'} · ${job.aiModel}${job.aiFastMode ? ` · ${t('Fast mode')}` : ''}`;
         select.add(option(`${source} → ${languageLabel(job.targetLanguage)} (${model})`, job.jobId));
       }
       if (track) select.add(option(t("Delete selected generation…"), DELETE_GENERATION));

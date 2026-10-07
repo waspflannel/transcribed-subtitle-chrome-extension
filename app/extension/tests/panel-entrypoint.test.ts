@@ -232,3 +232,54 @@ it('resets video language on panel startup and video changes, but preserves manu
   expect(state.settings.targetLanguage).toBe('fra');
   dom.window.close();
 });
+
+it('switches API and Codex billing and stores a discovered model with capability-aware fast mode', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup);
+  stubPanelDom(dom);
+  let state: PanelState = {
+    installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS, backendUrl: 'http://localhost/v1',
+    subtitleState: { type: 'no-track' }, jobHistory: [],
+    codexAccount: { available: true, connected: true, login: null, models: [
+      { id: 'fast-model', name: 'Fast model', supportsFastMode: true },
+      { id: 'standard-model', name: 'Standard model', supportsFastMode: false },
+    ] },
+  };
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; patch?: Partial<PanelState['settings']> }) => {
+    if (request?.type === 'panel.updateSettings') state = { ...state, settings: { ...state.settings, ...request.patch } };
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  const source = dom.window.document.querySelector<HTMLInputElement>('input[name="aiSource"][value="codex"]')!;
+  source.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings).toMatchObject({ aiProvider: 'codex', codexModel: 'fast-model' });
+  expect(dom.window.document.querySelector<HTMLElement>('[data-api-options]')!.hidden).toBe(true);
+  const model = dom.window.document.querySelector<HTMLSelectElement>('select[name="codexModel"]')!;
+  expect([...model.options].map(option => option.value)).toEqual(['', 'fast-model', 'standard-model']);
+  const fast = dom.window.document.querySelector<HTMLInputElement>('input[name="codexFastMode"]')!;
+  expect(fast.disabled).toBe(false);
+  fast.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.codexFastMode).toBe(true);
+  model.value = 'standard-model';
+  model.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings).toMatchObject({ codexModel: 'standard-model', codexFastMode: false });
+  expect(fast.disabled).toBe(true);
+  state = { ...state, settings: { ...state.settings, codexFastMode: true } };
+  Object.defineProperty(dom.window.document, 'visibilityState', { configurable: true, value: 'visible' });
+  dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fast.disabled).toBe(false); // A saved unsupported preference must still be removable.
+  fast.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.codexFastMode).toBe(false);
+  dom.window.document.querySelector<HTMLInputElement>('input[name="aiSource"][value="api"]')!.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.aiProvider).toBe('openai');
+  expect(dom.window.document.querySelector<HTMLElement>('[data-codex-options]')!.hidden).toBe(true);
+  dom.window.close();
+});
