@@ -69,7 +69,10 @@ while (($line = fgets(STDIN)) !== false) {
     } elseif ($method === 'model/list') {
         $result = ($params['cursor'] ?? null) === null
             ? ['data' => [['id' => 'preset-fast', 'model' => 'gpt-test', 'displayName' => 'Test Model', 'hidden' => false, 'additionalSpeedTiers' => ['fast']]], 'nextCursor' => 'page-2']
-            : ['data' => [['id' => 'preset-slow', 'model' => 'gpt-slow', 'displayName' => 'Slow Model', 'hidden' => false, 'additionalSpeedTiers' => []]], 'nextCursor' => null];
+            : ['data' => [
+                ['id' => 'preset-slow', 'model' => 'gpt-slow', 'displayName' => 'Slow Model', 'hidden' => false, 'additionalSpeedTiers' => []],
+                ['id' => 'preset-current', 'model' => 'gpt-current', 'displayName' => 'Current Model', 'hidden' => false, 'serviceTiers' => [['id' => 'priority', 'name' => 'Fast', 'description' => 'Faster responses.']]],
+            ], 'nextCursor' => null];
     } elseif ($method === 'account/logout') {
         @unlink($home.'/authenticated');
     } elseif ($method === 'thread/start') {

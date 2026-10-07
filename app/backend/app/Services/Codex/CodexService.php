@@ -351,7 +351,8 @@ class CodexService
                 $models[$id] = [
                     'id' => $id,
                     'name' => is_string($model['displayName'] ?? null) ? mb_substr($model['displayName'], 0, 150) : $id,
-                    'supportsFastMode' => in_array('fast', $model['additionalSpeedTiers'] ?? [], true),
+                    'supportsFastMode' => in_array('priority', array_column($model['serviceTiers'] ?? [], 'id'), true)
+                        || in_array('fast', $model['additionalSpeedTiers'] ?? [], true),
                 ];
             }
             $cursor = $page['nextCursor'] ?? null;

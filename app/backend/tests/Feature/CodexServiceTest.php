@@ -73,9 +73,11 @@ class CodexServiceTest extends TestCase
         $this->assertSame([
             ['id' => 'gpt-test', 'name' => 'Test Model', 'supportsFastMode' => true],
             ['id' => 'gpt-slow', 'name' => 'Slow Model', 'supportsFastMode' => false],
+            ['id' => 'gpt-current', 'name' => 'Current Model', 'supportsFastMode' => true],
         ], $summary['models']);
         $this->assertStringNotContainsString('not-returned@example.invalid', json_encode($summary));
         $codex->validateSelection('gpt-test', true);
+        $codex->validateSelection('gpt-current', true);
         $this->expectException(SubtitleProcessingException::class);
         $this->expectExceptionMessage('Choose an available');
         $codex->validateSelection('gpt-slow', true);
