@@ -77,9 +77,10 @@ class SubtitleJobService
         if (! in_array($mode, ['upload', 'youtube_url'], true)) {
             throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
         }
-        $selection = SubtitleModel::configured($payload['aiProvider'] ?? null);
+        $selection = SubtitleModel::configured($payload['aiProvider'] ?? null, $payload['aiModel'] ?? null, $payload['aiFastMode'] ?? false);
         $payload['aiProvider'] = $selection->provider;
         $payload['aiModel'] = $selection->model;
+        $payload['aiFastMode'] = $selection->fastMode;
         $payload['transcriptionIngestionMode'] = $mode;
         $payload['transcriptionOptionsHash'] = SubtitleProcessingVersion::transcriptionOptionsHash($mode);
         $includeRomanization = $payload['includeRomanization'];
@@ -89,6 +90,7 @@ class SubtitleJobService
             $payload['youtubeVideoId'], $payload['sourceLanguage'], $payload['targetLanguage'],
             $processingVersion, $payload['transcriptionOptionsHash'],
             $payload['aiProvider'], $payload['aiModel'],
+            ...($selection->provider === 'codex' ? [$selection->fastMode] : []),
         ], JSON_THROW_ON_ERROR));
         $dispatchState = self::DISPATCH_STATE_REUSED;
 
@@ -281,6 +283,7 @@ class SubtitleJobService
             ->where('transcription_options_hash', $payload['transcriptionOptionsHash'])
             ->where('ai_provider', $payload['aiProvider'])
             ->where('ai_model', $payload['aiModel'])
+            ->where('ai_fast_mode', $payload['aiFastMode'])
             ->where('processing_version', $processingVersion)
             ->orderByRaw('case when reuse_key is null then 1 else 0 end')
             ->orderByDesc('has_reusable_track')
@@ -312,6 +315,7 @@ class SubtitleJobService
             'processing_version' => $processingVersion,
             'ai_provider' => $payload['aiProvider'],
             'ai_model' => $payload['aiModel'],
+            'ai_fast_mode' => $payload['aiFastMode'],
             'transcription_ingestion_mode' => $payload['transcriptionIngestionMode'],
             'transcription_options_hash' => $payload['transcriptionOptionsHash'],
             'include_romanization' => $includeRomanization,
@@ -330,6 +334,9 @@ class SubtitleJobService
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
             'queue' => SubtitleQueue::generationNameForJob($job),
+            'provider' => $job->ai_provider,
+            'model' => $job->ai_model,
+            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
         ]);
 
         return $job;
@@ -360,6 +367,7 @@ class SubtitleJobService
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'ai_provider' => $payload['aiProvider'],
             'ai_model' => $payload['aiModel'],
+            'ai_fast_mode' => $payload['aiFastMode'],
             'detected_source_language' => null,
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
@@ -380,6 +388,9 @@ class SubtitleJobService
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
             'queue' => SubtitleQueue::generationNameForJob($job),
+            'provider' => $job->ai_provider,
+            'model' => $job->ai_model,
+            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
         ]);
     }
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\CodexAccountController;
 use App\Http\Controllers\Api\InstanceSettingsController;
 use App\Http\Controllers\Api\LearningTokenController;
 use App\Http\Controllers\Api\SubtitleJobController;
@@ -13,6 +14,13 @@ Route::prefix('v1')
     ->group(function (): void {
         Route::get('/settings', [InstanceSettingsController::class, 'show']);
         Route::put('/settings', [InstanceSettingsController::class, 'update']);
+
+        Route::get('/codex', [CodexAccountController::class, 'show'])
+            ->middleware('throttle:subtitle-status-api');
+        Route::post('/codex/login', [CodexAccountController::class, 'login'])
+            ->middleware('throttle:codex-login');
+        Route::delete('/codex', [CodexAccountController::class, 'destroy'])
+            ->middleware('throttle:codex-login');
 
         Route::post('/subtitle-audio/prefetch', [SubtitleJobController::class, 'prefetchAudio'])
             ->middleware('throttle:subtitle-prefetch');

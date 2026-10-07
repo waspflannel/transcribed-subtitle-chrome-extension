@@ -9,6 +9,7 @@ use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Codex\CodexService;
 use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -403,6 +404,7 @@ final class LyricsCorrectionService
             'batch_index' => $batchIndex,
             'provider' => $selection?->provider,
             'model' => $selection?->model,
+            ...($selection?->provider === 'codex' ? ['fast_mode' => $selection->fastMode] : []),
             'cue_count' => count($nextState['cues'] ?? []),
             'duration_ms' => (int) round((hrtime(true) - $startedAt) / 1_000_000),
         ]);
@@ -833,6 +835,10 @@ final class LyricsCorrectionService
     private function promptAlignment(array $input, SubtitleModel $selection, ?SubtitleJob $job = null): array
     {
         try {
+            if ($selection->provider === 'codex') {
+                return app(ProviderAdmission::class)->run($selection->provider, $job,
+                    fn (): array => app(CodexService::class)->prompt(LyricsAlignmentAgent::make(), $input, $selection));
+            }
             $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => LyricsAlignmentAgent::make()
                 ->prompt(
                     json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
@@ -844,7 +850,7 @@ final class LyricsCorrectionService
         } catch (Throwable $exception) {
             throw ProviderExceptionPolicy::classify($exception, [
                 'provider' => $selection->provider,
-                'adapter' => 'laravel-ai-sdk',
+                'adapter' => $selection->provider === 'codex' ? 'codex-app-server' : 'laravel-ai-sdk',
                 'agent' => LyricsAlignmentAgent::class,
             ]);
         }

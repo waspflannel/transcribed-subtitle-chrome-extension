@@ -6,6 +6,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\InstanceSetting;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Services\Codex\CodexService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\AiManager;
@@ -86,6 +87,11 @@ class InstanceSettings
 
     public function requireProviderKey(string $provider): void
     {
+        if ($provider === 'codex') {
+            app(CodexService::class)->requireConnected();
+
+            return;
+        }
         $this->apply();
         $provider = $provider === 'eleven' ? 'elevenlabs' : $provider;
         $paths = self::PROVIDERS[$provider] ?? null;

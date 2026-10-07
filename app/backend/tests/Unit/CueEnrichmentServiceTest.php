@@ -5,8 +5,10 @@ namespace Tests\Unit;
 use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\EditedCueAgent;
 use App\Ai\Agents\LearningTokenCardAgent;
+use App\Ai\Agents\SubtitleAgent;
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Codex\CodexService;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -25,6 +27,58 @@ class CueEnrichmentServiceTest extends TestCase
         Event::listen(PromptingAgent::class, function (): void {
             $this->promptCount++;
         });
+    }
+
+    #[TestWith([false])]
+    #[TestWith([true])]
+    public function test_codex_routes_analysis_cards_and_quick_fix_with_the_saved_selection(bool $fastMode): void
+    {
+        $selection = new SubtitleModel('codex', 'saved-model', $fastMode);
+        $cue = [...$this->part(0, 'Hello'), 'translatedText' => 'Hello', 'tokens' => [['index' => 0, 'text' => 'Hello']]];
+        $codex = $this->mock(CodexService::class);
+        $codex->shouldReceive('requireConnected')->times(3);
+        $codex->shouldReceive('prompt')->times(3)->andReturnUsing(function (SubtitleAgent $agent, array $input, SubtitleModel $actual) use ($selection, $cue): array {
+            $this->assertSame($selection, $actual);
+
+            return match ($agent::class) {
+                CueAnalysisAgent::class => ['cues' => [$cue]],
+                LearningTokenCardAgent::class => ['token' => ['index' => 0, 'translation' => 'Hola']],
+                EditedCueAgent::class => ['cues' => [['cueId' => 'cue-0', 'index' => 0, 'tokens' => [['index' => 0, 'translation' => 'Hola']]]]],
+            };
+        });
+        $analysis = app(LaravelAiTranslationAnalysisProvider::class);
+        $this->assertSame('Hello', $analysis->analyzeCueBatch([$cue], [$cue], 'eng', 'spa', false, false, selection: $selection)->cues[0]['sourceText']);
+        $this->assertSame('Hola', $analysis->enrichToken($cue, $cue['tokens'][0], 'eng', 'spa', $selection)['translation']);
+        $this->assertSame('Hola', $analysis->refreshEditedCue($cue, 'eng', 'spa', false, false, $selection)['tokens'][0]['translation']);
+        $this->assertSame(0, $this->promptCount);
+        Http::assertNothingSent();
+    }
+
+    public function test_codex_invalid_generation_output_retains_the_existing_validation(): void
+    {
+        $codex = $this->mock(CodexService::class);
+        $codex->shouldReceive('requireConnected')->once();
+        $codex->shouldReceive('prompt')->once()->andReturn(['cues' => []]);
+        $this->expectException(SubtitleProcessingException::class);
+        $this->expectExceptionMessage('Subtitle enrichment produced invalid output.');
+        $cue = $this->part(0, 'Hello');
+        app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch([$cue], [$cue], 'eng', 'spa', selection: new SubtitleModel('codex', 'saved-model'));
+    }
+
+    public function test_codex_auth_failure_does_not_prompt_any_provider(): void
+    {
+        $codex = $this->mock(CodexService::class);
+        $codex->shouldReceive('requireConnected')->once()->andThrow(new SubtitleProcessingException('provider_not_configured', 'Sign in to Codex.', 422));
+        $codex->shouldNotReceive('prompt');
+        try {
+            $cue = $this->part(0, 'Hello');
+            app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch([$cue], [$cue], 'eng', 'spa', selection: new SubtitleModel('codex', 'saved-model'));
+            $this->fail('Disconnected Codex must fail without falling back.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_not_configured', $exception->publicCode);
+        }
+        $this->assertSame(0, $this->promptCount);
+        Http::assertNothingSent();
     }
 
     #[TestWith(['openai', 'cerebras'])]

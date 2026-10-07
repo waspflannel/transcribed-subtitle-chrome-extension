@@ -22,13 +22,17 @@ class CreateSubtitleJobRequest extends FormRequest
      */
     public function rules(): array
     {
+        $codex = $this->input('aiProvider', config('ai.default')) === 'codex';
+
         return [
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'youtubeUrl' => ['required', 'string', 'url', 'max:2048'],
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
-            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras'])],
+            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex'])],
+            'aiModel' => [Rule::requiredIf($codex), Rule::prohibitedIf(! $codex), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D'],
+            'aiFastMode' => ['sometimes', 'boolean:strict', Rule::prohibitedIf(! $codex && $this->input('aiFastMode') !== false)],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
             'forceRegenerate' => ['sometimes', 'boolean:strict'],
@@ -41,7 +45,7 @@ class CreateSubtitleJobRequest extends FormRequest
     }
 
     /**
-     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, includeRomanization: bool, includeTranslation: bool, forceRegenerate?: bool}
+     * @return array{youtubeVideoId: string, youtubeUrl: string, videoDurationSeconds?: int, sourceLanguage: string, targetLanguage: string, aiProvider?: string, aiModel?: string, aiFastMode?: bool, includeRomanization: bool, includeTranslation: bool, forceRegenerate?: bool}
      */
     public function subtitlePayload(): array
     {
@@ -57,6 +61,12 @@ class CreateSubtitleJobRequest extends FormRequest
 
         if (isset($validated['aiProvider'])) {
             $payload['aiProvider'] = $validated['aiProvider'];
+        }
+        if (isset($validated['aiModel'])) {
+            $payload['aiModel'] = $validated['aiModel'];
+        }
+        if (array_key_exists('aiFastMode', $validated)) {
+            $payload['aiFastMode'] = $validated['aiFastMode'];
         }
 
         if (array_key_exists('forceRegenerate', $validated)) {

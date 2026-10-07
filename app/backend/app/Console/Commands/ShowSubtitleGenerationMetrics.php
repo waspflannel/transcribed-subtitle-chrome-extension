@@ -104,6 +104,7 @@ class ShowSubtitleGenerationMetrics extends Command
             'durationBucket' => $bucket,
             'aiProvider' => $job->ai_provider,
             'aiModel' => $job->ai_model,
+            'aiFastMode' => (bool) $job->ai_fast_mode,
             'processingVersion' => $job->processing_version,
             'transcriptCacheHit' => $events->contains('event', 'transcript.cache_hit'),
             'firstCueMs' => $events->firstWhere('event', 'delivery.first_cue_available')?->duration_ms,

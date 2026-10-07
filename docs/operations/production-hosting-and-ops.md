@@ -14,7 +14,21 @@ Copy `.env.example` for a fresh installation and generate `APP_KEY` once. Back i
 
 Extension Settings has ElevenLabs, OpenAI and Cerebras key fields in one card. Models are fixed to `scribe_v2`, `gpt-6-luna` and `gpt-oss-120b` respectively. The backend encrypts credentials and returns only configured flags and models. Blank fields preserve keys; Remove key clears them. Environment keys work until overridden; model environment variables and old saved model overrides are ignored. HTTP and workers refresh settings, so changing keys does not require restarting workers.
 
-Generation requires ElevenLabs plus the selected analysis provider. Cards, Quick Fix and full lyrics replacement use the saved generation provider/model and recheck its key before actual calls.
+Generation requires ElevenLabs plus the selected analysis provider. Cards, Quick Fix and full lyrics replacement use the saved generation provider/model and recheck its credentials before actual calls.
+
+### Codex with ChatGPT
+
+Codex is an optional text provider alongside the existing API providers. Install the official Codex CLI 0.123.0 or newer on the backend host, available to both PHP HTTP processes and queue workers. Set `CODEX_BINARY` to its executable or absolute path if it is not on their PATH. On Windows, use the native `codex.exe` when PHP cannot resolve the npm launcher. The extension's Settings tab starts device-code sign-in: open the verification link, sign in to ChatGPT and enter the displayed code. Device-code login must be enabled in your ChatGPT security settings or workspace permissions. Keep the generation workers running while signing in; each attempt expires after ten minutes.
+
+In Watch, choose **Codex**, select a model discovered from the connected account, and optionally enable **Fast mode** when the model supports it. Codex requests use that account's applicable Codex usage limits or credits. Fast mode can consume credits faster. ElevenLabs still performs audio transcription using its API key. The API option continues to offer OpenAI and Cerebras with their existing configuration.
+
+Every generation saves its provider, model and Codex Fast preference. History displays those choices. Later word cards, Quick Fix and lyrics replacement keep the saved choice. Disconnecting Codex prevents new Codex calls, including edits to its saved generations; reconnect to continue them. A failed Codex call never falls back to API billing. Provider dollar estimates do not measure Codex credit consumption.
+
+The backend starts Codex app-server over private standard input/output. It uses `app/backend/storage/app/private/codex`, separate from your personal Codex installation, and Codex manages token refresh. HTTP and all queue workers must share this private storage directory; mount it as persistent private storage if running in containers. Do not expose app-server on a public network or copy your personal Codex credentials into this application. Restrict access to its private credential directory like the database and application key. All allowed clients of this personal instance share the connected Codex account. This does not create application user accounts or make the backend suitable for public multi-user hosting.
+
+Text requests use ephemeral threads, existing subtitle instructions and structured output schemas, restricted filesystem access and disabled command/network tools. The application does not persist Codex prompts, transcripts or raw errors. OAuth status responses contain only connection state, model metadata and the temporary device code, never access or refresh tokens.
+
+Apply pending database migrations and rebuild/reload the extension when upgrading. If Codex is not installed, API providers remain available and Codex Settings explains the missing runtime. See the official [app-server integration](https://learn.chatgpt.com/docs/app-server) and [authentication guide](https://learn.chatgpt.com/docs/auth).
 
 ## Private access
 

@@ -179,6 +179,7 @@ class LearningTokenEnrichmentService
             'translation' => $cue['translatedText'] ?? null,
             'provider' => $track->job->ai_provider,
             'model' => $track->job->ai_model,
+            ...($track->job->ai_provider === 'codex' ? ['fastMode' => (bool) $track->job->ai_fast_mode] : []),
             'version' => SubtitleProcessingVersion::LEARNING_TOKEN_CACHE,
         ], JSON_THROW_ON_ERROR));
     }

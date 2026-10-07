@@ -48,6 +48,7 @@ class SubtitleJobHistoryResource extends JsonResource
             'targetLanguage' => $this->target_language,
             'aiProvider' => $this->ai_provider,
             'aiModel' => $this->ai_model,
+            'aiFastMode' => (bool) $this->ai_fast_mode,
             'includeRomanization' => $includeRomanization,
             'includeTranslation' => $includeTranslation,
             'jobId' => $this->public_id,

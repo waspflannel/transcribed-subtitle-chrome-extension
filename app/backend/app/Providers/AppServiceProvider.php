@@ -35,6 +35,11 @@ class AppServiceProvider extends ServiceProvider
         $this->registerSubtitleQueueTracing();
         $this->registerOpenAiResponseTracing();
 
+        RateLimiter::for('codex-login', fn (Request $request): array => [
+            Limit::perMinute(5)->by('codex-login-install:'.$this->validatedInstallId($request, 'codex-login')),
+            Limit::perMinute(15)->by('codex-login-ip:'.$request->ip()),
+        ]);
+
         RateLimiter::for('subtitle-prefetch', fn (Request $request): array => [
             Limit::perMinute(6)->by('prefetch-install:'.$this->validatedInstallId($request, 'subtitle-prefetch')),
             Limit::perMinute(30)->by('prefetch-ip:'.$request->ip()),

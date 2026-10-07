@@ -4,12 +4,15 @@ namespace Tests\Feature;
 
 use App\Ai\Agents\CueAnalysisAgent;
 use App\Ai\Agents\LyricsAlignmentAgent;
+use App\Ai\Agents\SubtitleAgent;
+use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Codex\CodexService;
 use App\Services\InstanceSettings;
 use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
@@ -97,6 +100,29 @@ class LyricsCorrectionContinuationTest extends TestCase
             Log::shouldHaveReceived('info')->with('backend.lyrics_correction_unit_finished', \Mockery::on(fn (array $context): bool => $context['stage'] === $stage
                 && $context['provider'] === $provider && $context['model'] === 'saved-generation-model'));
         }
+    }
+
+    public function test_codex_replacement_uses_saved_model_and_fast_mode_for_alignment_and_analysis(): void
+    {
+        $this->app->forgetInstance(LaravelAiTranslationAnalysisProvider::class);
+        $queue = $this->completedTrackWithCues(2, fn (int $i): string => 'Line '.($i + 1), ['source_language' => 'spa', 'target_language' => 'eng', 'include_translation' => true, 'include_romanization' => false]);
+        $queue['job']->update(['ai_provider' => 'codex', 'ai_model' => 'saved-codex-model', 'ai_fast_mode' => true]);
+        $codex = $this->mock(CodexService::class);
+        $codex->shouldReceive('requireConnected')->twice();
+        $codex->shouldReceive('prompt')->twice()->andReturnUsing(function (SubtitleAgent $agent, array $input, SubtitleModel $selection) use ($queue): array {
+            $this->assertSame(['codex', 'saved-codex-model', true], [$selection->provider, $selection->model, $selection->fastMode]);
+
+            return $agent instanceof LyricsAlignmentAgent ? ['cues' => $queue['alignmentCues']] : ['cues' => array_map(
+                fn (array $cue): array => [...$cue, 'translatedText' => 'Translated '.$cue['sourceText'], 'tokens' => [['index' => 0, 'text' => $cue['sourceText']]]],
+                $input['cues'],
+            )];
+        });
+        $response = $this->submitLyrics($queue['job'], $queue['texts'])->assertAccepted();
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $row->status);
+        $this->assertSame($queue['texts'], array_column($row->track->cues, 'sourceText'));
+        Http::assertNothingSent();
     }
 
     public function test_replacement_publishes_replacement_despite_wrong_analysis_ids_and_token_indices(): void
