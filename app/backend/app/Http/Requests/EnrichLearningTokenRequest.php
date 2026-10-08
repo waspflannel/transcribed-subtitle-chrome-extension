@@ -23,9 +23,4 @@ class EnrichLearningTokenRequest extends FormRequest
             'tokenIndex' => ['required', 'integer', 'min:0'],
         ];
     }
-
-    public function extensionInstallId(): string
-    {
-        return (string) $this->header('X-Extension-Install-Id');
-    }
 }

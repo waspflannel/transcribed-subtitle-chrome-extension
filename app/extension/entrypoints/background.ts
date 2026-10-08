@@ -56,7 +56,6 @@ let cachedPanelJobHistoryError: string | undefined;
 let cachedPanelJobHistoryInstanceId: string | undefined;
 let cachedPanelJobHistorySessionId: string | undefined;
 let localStateResetVersion = 0;
-let instanceMutationVersion = 0;
 let cachedInstanceSettings: InstanceSettings | undefined;
 let instanceSettingsError: string | undefined;
 let cachedCodexAccount: CodexAccount | undefined;
@@ -1060,7 +1059,6 @@ async function submitLyricsCorrectionFromPanel(
         {
           lyrics: message.lyrics,
           expectedTrackId: message.trackId,
-          ...(message.allowPartial ? { allowPartial: true } : {}),
           ...(message.aiProvider ? { aiProvider: message.aiProvider } : {}),
           ...(message.aiModel !== undefined ? { aiModel: message.aiModel } : {}),
           ...(message.aiFastMode !== undefined ? { aiFastMode: message.aiFastMode } : {}),
@@ -1581,6 +1579,8 @@ async function readySubtitleStateForEnrichment(
     return null;
   }
 
+  const operation = tabOperations.get(tabId);
+  const mutation = tabCorrectionMutationInFlight.get(tabId);
   const rememberedTrack = await getRememberedTrack(youtubeVideoId, instanceId);
 
   if (expectedSessionId !== undefined && !await isCurrentSession(expectedSessionId)) return null;
@@ -1588,6 +1588,13 @@ async function readySubtitleStateForEnrichment(
   const currentPage = parseYoutubePage(currentTab?.url ?? '');
   if (!currentPage.supported || currentPage.videoId !== youtubeVideoId) return null;
   if (expectedSessionId !== undefined && !await isCurrentSession(expectedSessionId)) return null;
+  if (tabOperations.get(tabId) !== operation || tabCorrectionMutationInFlight.get(tabId) !== mutation) return null;
+  const latestState = tabSubtitleStates.get(tabId);
+  if (latestState !== currentState) {
+    return latestState?.type === 'ready' && latestState.track.trackId === trackId
+      && latestState.track.youtubeVideoId === youtubeVideoId && tabSubtitleStateOwners.get(tabId) === instanceId
+      && (expectedSessionId === undefined || tabSubtitleStateSessions.get(tabId) === expectedSessionId) ? latestState : null;
+  }
 
   if (rememberedTrack?.trackId === trackId) {
     const restoredState: Extract<SubtitleState, { type: 'ready' }> = { type: 'ready', track: rememberedTrack };
@@ -1603,30 +1610,29 @@ async function readySubtitleStateForEnrichment(
 
 async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> {
   const resetVersion = ++localStateResetVersion;
-  const mutationVersion = ++instanceMutationVersion;
   await setSubtitleRecoveryBlocked(true);
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   await waitForExtensionSettingsWrites();
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   await clearLocalExtensionState();
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   const session = await getInstanceContext();
 
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   await clearRememberedTracks();
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   await clearTabOperations();
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   const resetTabIds = new Set(tabSubtitleStates.keys());
@@ -1640,13 +1646,13 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
   resetLyricsCorrectionStatesForSession();
 
   const activeTab = await getActiveTab(windowId);
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
   const activeTabId = activeTab?.id ?? null;
   if (activeTabId !== null) resetTabIds.add(activeTabId);
   const settings = await getExtensionSettings();
-  if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+  if (resetVersion !== localStateResetVersion) {
     return getPanelState({ syncBackend: false, windowId });
   }
 
@@ -1659,7 +1665,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
       type: 'background.settingsChanged',
       settings,
     });
-    if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+    if (resetVersion !== localStateResetVersion) {
       return getPanelState({ syncBackend: false, windowId });
     }
 
@@ -1667,7 +1673,7 @@ async function clearLocalStateFromPanel(windowId?: number): Promise<PanelState> 
       type: 'background.subtitleStateChanged',
       subtitleState: DEFAULT_SUBTITLE_STATE,
     });
-    if (resetVersion !== localStateResetVersion || mutationVersion !== instanceMutationVersion) {
+    if (resetVersion !== localStateResetVersion) {
       return getPanelState({ syncBackend: false, windowId });
     }
   }
@@ -2157,8 +2163,10 @@ async function syncLyricsCorrection(
       canCommit: () => tabLyricsCorrectionStateSessions.get(tabId) === sessionId,
       onCurrentRequestError: (error) => {
         if (error instanceof SubtitleApiError && error.code === 'not_found') {
+          const failedState = tabLyricsCorrectionStates.get(tabId);
           void isCurrentSession(sessionId).then((current) => {
-            if (current) tombstoneLyricsCorrectionState(tabId);
+            if (current && tabLyricsCorrectionStates.get(tabId) === failedState
+              && tabLyricsCorrectionStateSessions.get(tabId) === sessionId) tombstoneLyricsCorrectionState(tabId);
           });
         }
       },
@@ -2184,8 +2192,11 @@ async function syncLyricsCorrection(
     if (status && !['queued', 'running'].includes(status.status)) {
       const operation = await getTabOperation(tabId);
 
-      if (operation?.kind === 'correction' && operation.instanceId === session.instanceId && operation.jobId === trackedJobId) {
-        if (await isCurrentSession(session.sessionId)) await clearTabOperationIfMatches(tabId, operation);
+      if (await isCurrentSession(session.sessionId) && tabLyricsCorrectionStates.get(tabId) === latestCorrection
+        && latestCorrection?.status === status && operation?.kind === 'correction'
+        && operation.instanceId === session.instanceId && operation.youtubeVideoId === pageStatus.videoId
+        && operation.jobId === trackedJobId && operation.attemptId === status.attemptId) {
+        await clearTabOperationIfMatches(tabId, operation);
       }
     }
 
@@ -2274,6 +2285,9 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
     return DEFAULT_SUBTITLE_STATE;
   }
 
+  const originalState = tabSubtitleStates.get(tabId);
+  const operation = tabOperations.get(tabId);
+  const mutation = tabCorrectionMutationInFlight.get(tabId);
   const rememberedTrack = await getRememberedTrack(pageStatus.videoId, instanceId);
 
   if (!rememberedTrack) {
@@ -2286,6 +2300,14 @@ async function getSubtitleStateForPage(tabId: number, pageStatus: YoutubePageInf
   if (!currentPage.supported || currentPage.videoId !== pageStatus.videoId) return DEFAULT_SUBTITLE_STATE;
 
   if (expectedSessionId !== undefined && !await isCurrentSession(expectedSessionId)) return DEFAULT_SUBTITLE_STATE;
+
+  const latestState = tabSubtitleStates.get(tabId);
+  if (latestState !== originalState || tabOperations.get(tabId) !== operation
+    || tabCorrectionMutationInFlight.get(tabId) !== mutation) {
+    return latestState && tabSubtitleStateOwners.get(tabId) === instanceId
+      && (expectedSessionId === undefined || tabSubtitleStateSessions.get(tabId) === expectedSessionId)
+      && isSubtitleStateForVideo(latestState, pageStatus.videoId) ? latestState : DEFAULT_SUBTITLE_STATE;
+  }
 
   const restoredState: SubtitleState = { type: 'ready', track: rememberedTrack };
   tabSubtitleStates.set(tabId, restoredState);

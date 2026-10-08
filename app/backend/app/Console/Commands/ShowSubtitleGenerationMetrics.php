@@ -32,7 +32,7 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values();
 
         $groups = $rows
-            ->groupBy(fn (array $row): string => json_encode(Arr::only($row, ['durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit'])))
+            ->groupBy(fn (array $row): string => json_encode(Arr::only($row, ['durationBucket', 'aiProvider', 'aiModel', 'aiFastMode', 'processingVersion', 'transcriptCacheHit'])))
             ->map(fn (Collection $group): array => $this->groupMetrics($group))
             ->sortBy('durationBucket')
             ->values();
@@ -60,11 +60,12 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values()
             ->all());
         $this->table(
-            ['bucket', 'model', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms', 'cost_per_min_microusd'],
+            ['bucket', 'model', 'fast', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms', 'cost_per_min_microusd'],
             $groups
                 ->map(fn (array $group): array => [
                     $group['durationBucket'],
                     $group['aiProvider'].'/'.$group['aiModel'],
+                    $group['aiFastMode'] ? 'yes' : 'no',
                     $group['transcriptCacheHit'] ? 'yes' : 'no',
                     $group['completedJobCount'],
                     $group['p50FirstCueMs'] ?? 'n/a',
@@ -125,7 +126,7 @@ class ShowSubtitleGenerationMetrics extends Command
         $first = $group->first();
 
         return [
-            ...Arr::only($first, ['durationBucket', 'aiProvider', 'aiModel', 'processingVersion', 'transcriptCacheHit']),
+            ...Arr::only($first, ['durationBucket', 'aiProvider', 'aiModel', 'aiFastMode', 'processingVersion', 'transcriptCacheHit']),
             'firstCueSampleCount' => $group->whereNotNull('firstCueMs')->count(),
             'firstAnnotatedCueSampleCount' => $group->whereNotNull('firstAnnotatedCueMs')->count(),
             'p50FirstCueMs' => $this->percentile($group->pluck('firstCueMs'), 50),

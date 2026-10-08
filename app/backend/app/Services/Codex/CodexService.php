@@ -61,10 +61,9 @@ class CodexService
         }
         if (isset($this->state()['active'])) {
             $summary = $this->summary();
-            if ($summary['connected']) {
+            if ($summary['connected'] || isset($this->state()['active'])) {
                 return $summary;
             }
-            $this->disconnect();
         }
         $attempt = null;
         $this->state(function (array $state) use (&$attempt): array {

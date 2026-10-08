@@ -29,9 +29,6 @@ describe('runtime message validation', () => {
       type: 'panel.submitLyricsCorrection', jobId: 'job', trackId: 'track', youtubeVideoId: 'video', lyrics: 'lyrics',
     })).toBe(true);
     expect(isRuntimeMessage({
-      type: 'panel.submitLyricsCorrection', jobId: 'job', trackId: 'track', youtubeVideoId: 'video', lyrics: 'lyrics', allowPartial: true,
-    })).toBe(true);
-    expect(isRuntimeMessage({
       type: 'content.enrichLearningToken', youtubeVideoId: 'dQw4w9WgXcQ', trackId: 'track-1', cueId: 'cue-0001', tokenIndex: 0,
     })).toBe(true);
     expect(isRuntimeMessage({
@@ -61,6 +58,11 @@ describe('runtime message validation', () => {
         type: 'loading', youtubeVideoId: 'dQw4w9WgXcQ', message: 'Working', stage: 'old-stage', progressPercent: 10,
       },
     })).toBe(false);
+  });
+
+  it.each([true, false])('rejects the removed allowPartial field (%s)', allowPartial => {
+    expect(isRuntimeMessage({ type: 'panel.submitLyricsCorrection', jobId: 'job', trackId: 'track',
+      youtubeVideoId: 'video', lyrics: 'lyrics', allowPartial })).toBe(false);
   });
 
   it('accepts loading states carrying a partial track and rejects malformed ones', () => {

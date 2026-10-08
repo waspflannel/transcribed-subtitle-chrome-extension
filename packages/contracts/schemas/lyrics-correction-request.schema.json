@@ -20,11 +20,6 @@
       "maxLength": 25000,
       "description": "Pasted plain-text lyrics, at most 25,000 raw Unicode code points. The backend requires a Unicode letter, rejects C0/C1 controls except tab/LF/CR, and rejects HTTP(S)/www link-only input before whitespace normalization."
     },
-    "allowPartial": {
-      "type": "boolean",
-      "default": false,
-      "description": "Legacy compatibility field, accepted but ignored. Replacement uses only the pasted lyrics; partial merging is unavailable."
-    },
     "aiProvider": {
       "type": "string",
       "enum": [

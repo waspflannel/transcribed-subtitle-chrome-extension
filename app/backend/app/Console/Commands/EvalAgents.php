@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Ai\Agents\LyricsAlignmentAgent;
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\InstanceSettings;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\TokenizationBoundaryMetric;
 use Illuminate\Console\Attributes\Description;
@@ -16,11 +17,11 @@ use Laravel\Ai\Events\PromptingAgent;
 use Laravel\Ai\Responses\Data\FinishReason;
 use Throwable;
 
-#[Signature('subtitles:eval-agents {--agent=all : analysis, enrichment, card, edited, lyrics, or all} {--case= : Run one held-out case ID} {--repeat=1 : Repetitions per case} {--model= : Override the globally selected provider model for this run} {--out= : Write the JSON review report to this path}')]
+#[Signature('subtitles:eval-agents {--agent=all : analysis, card, edited, lyrics, or all} {--case= : Run one held-out case ID} {--repeat=1 : Repetitions per case} {--model= : Override the globally selected provider model for this run} {--out= : Write the JSON review report to this path}')]
 #[Description('Evaluate held-out agent cases with first-response evidence, pipeline outcomes, and pending human semantic review. Makes live calls unless agents are faked.')]
 class EvalAgents extends Command
 {
-    private const AGENTS = ['analysis', 'enrichment', 'card', 'edited', 'lyrics'];
+    private const AGENTS = ['analysis', 'card', 'edited', 'lyrics'];
 
     private ?array $activeCase = null;
 
@@ -47,6 +48,7 @@ class EvalAgents extends Command
             return self::FAILURE;
         }
 
+        app(InstanceSettings::class)->apply();
         $this->listen();
         $modelKey = 'ai.providers.'.SubtitleModel::provider().'.models.text.default';
         $originalModel = config($modelKey);
@@ -71,7 +73,7 @@ class EvalAgents extends Command
             }
             $report = [
                 'provider' => SubtitleModel::provider(), 'model' => SubtitleModel::model(), 'createdAt' => now()->toIso8601String(),
-                'scope' => 'Four agents use production provider methods with one response per operation. Lyrics is agent-only; no lyrics pipeline validation is claimed.',
+                'scope' => 'Three agents use production provider methods with one response per operation. Lyrics is agent-only; no lyrics pipeline validation is claimed.',
                 'validityScope' => 'Contract checks cover identity, usable tokens, requested translations/readings, and card meanings. Lyrics has no automated contract checks; its check result is null and output is for human review only. These checks are not a general JSON Schema validator or a language-quality judge.',
                 'usageScope' => 'SDK-reported prompt/completion tokens per captured structured response. A request failing before AgentPrompted has unknown usage and no captured response, even if the remote provider returned malformed data. Faked responses are not performance evidence.',
                 'semanticQuality' => 'Pending bilingual human review; segmentation reference metrics are separate from semantic quality. Keep these held-out cases out of prompts.',
@@ -181,7 +183,6 @@ class EvalAgents extends Command
         try {
             match ($agent) {
                 'analysis' => $provider->validatedAnalysis($output, $this->activeCase['cues'], $input['includeTranslation'], $input['includeRomanization']),
-                'enrichment' => $provider->validatedCards($output, $this->activeCase['cues']),
                 'card' => $provider->validatedCardToken($output['token'] ?? null, $input['requestedToken']),
                 'edited' => $provider->validatedEditedCue($output, $this->activeCase['cues'][0], $input['sourceLanguage'], $input['targetLanguage'], $input['includeTranslation'], $input['includeRomanization']),
             };
@@ -210,11 +211,6 @@ class EvalAgents extends Command
         }
 
         return $scores;
-    }
-
-    private function nonempty(mixed $value): bool
-    {
-        return is_string($value) && trim($value) !== '';
     }
 
     private function latencySummary(array $values): array

@@ -113,7 +113,6 @@ export type BackgroundRequest =
       trackId: string;
       youtubeVideoId: string;
       lyrics: string;
-      allowPartial?: boolean;
       aiProvider?: SubtitleJobHistoryItem['aiProvider'];
       aiModel?: string;
       aiFastMode?: boolean;
@@ -204,7 +203,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         && hasString(value, 'trackId')
         && hasString(value, 'youtubeVideoId')
         && hasString(value, 'lyrics')
-        && optionalBoolean(value, 'allowPartial')
+        && !('allowPartial' in value)
         && isLyricsAiSelection(value)
         && optionalNumber(value, 'windowId');
 

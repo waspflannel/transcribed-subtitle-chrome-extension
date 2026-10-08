@@ -1053,6 +1053,108 @@ describe('background entrypoint review regressions', () => {
     });
   });
 
+  it.each(['page', 'word-card'])('keeps a new generation when a delayed %s cache restore finishes', async (surface) => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const oldTrack = track(VIDEO_A, 'job-old', 'track-old');
+    storageMock.values.set('local:activeTracksByVideoId', {
+      [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: oldTrack },
+    });
+    const listener = await loadBackground();
+    const { browser } = await import('wxt/browser');
+    const tabRead = deferred<any>();
+    const tabReadsBefore = vi.mocked(browser.tabs.get).mock.calls.length;
+    vi.mocked(browser.tabs.get).mockImplementationOnce(() => tabRead.promise);
+    const restoring = dispatch(listener, surface === 'page'
+      ? { type: 'content.getState', revalidateSavedGeneration: false }
+      : { type: 'content.enrichLearningToken', youtubeVideoId: VIDEO_A, trackId: oldTrack.trackId, cueId: 'cue-1', tokenIndex: 0 }, sender(1));
+    await waitFor(() => vi.mocked(browser.tabs.get).mock.calls.length > tabReadsBefore);
+
+    const create = deferred<any>();
+    apiMock.createSubtitleJob.mockReturnValue(create.promise);
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
+    tabRead.resolve(browserMock.tabs.get(1));
+    await restoring;
+    const state = await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
+    expect(state.subtitleState).toMatchObject({ type: 'loading', youtubeVideoId: VIDEO_A });
+    expect(apiMock.enrichLearningToken).not.toHaveBeenCalled();
+
+    create.resolve({ ...job(VIDEO_A, 'job-new'), status: 'completed', track: track(VIDEO_A, 'job-new', 'track-new') });
+    await waitFor(() => (storageMock.values.get('local:activeTracksByVideoId') as any)[VIDEO_A]?.track.trackId === 'track-new');
+  });
+
+  it('does not clear a newer correction attempt while an old terminal poll finishes', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const original = track(VIDEO_A);
+    const instanceId = 'http://127.0.0.1:8001/v1';
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId, track: original } });
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
+    const oldOperation = { kind: 'correction', instanceId, youtubeVideoId: VIDEO_A,
+      jobId: original.jobId, trackId: original.trackId, attemptId: 'attempt-old' };
+    storageMock.values.set('local:tabSubtitleOperations', { '1': oldOperation });
+    const oldStatus = deferred<any>();
+    apiMock.getLyricsCorrectionStatus.mockReturnValueOnce(oldStatus.promise);
+    const oldPoll = dispatch(listener, { type: 'panel.getState', syncBackend: false, syncLyricsCorrection: true, windowId: 1 }, {});
+    await waitFor(() => apiMock.getLyricsCorrectionStatus.mock.calls.length === 1);
+
+    // Resolve both API calls together: the submission persists its attempt
+    // while the old poll is still completing its asynchronous ownership checks.
+    const nextStatus = deferred<any>();
+    apiMock.startLyricsCorrection.mockReturnValueOnce(nextStatus.promise);
+    const submitting = dispatch(listener, { type: 'panel.submitLyricsCorrection', jobId: original.jobId,
+      trackId: original.trackId, youtubeVideoId: VIDEO_A, lyrics: 'replacement words', windowId: 1 }, {});
+    await waitFor(() => apiMock.startLyricsCorrection.mock.calls.length === 1);
+    const queued = { attemptId: 'attempt-new', status: 'queued', stage: 'queued', updatedAt: '2026-10-08T00:01:00Z' };
+    apiMock.getLyricsCorrectionStatus.mockResolvedValue(queued);
+    nextStatus.resolve(queued);
+    oldStatus.resolve({ attemptId: 'attempt-old', status: 'failed', stage: 'failed',
+      errorCode: 'lyrics_correction_failed', message: 'Failed', updatedAt: '2026-10-08T00:00:00Z' });
+    await oldPoll;
+    expect((await submitting).lyricsCorrection).toMatchObject(queued);
+    expect(storageMock.values.get('local:tabSubtitleOperations')).toEqual({ '1': { ...oldOperation, attemptId: 'attempt-new' } });
+  });
+
+  it('keeps a newly submitted correction when an earlier status lookup returns not found', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const original = track(VIDEO_A);
+    storageMock.values.set('local:activeTracksByVideoId', {
+      [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original },
+    });
+    const listener = await loadBackground();
+    const { SubtitleApiError } = await import('../utils/api');
+    await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
+    const oldStatus = deferred<any>();
+    apiMock.getLyricsCorrectionStatus.mockReturnValueOnce(oldStatus.promise);
+    const oldPoll = dispatch(listener, { type: 'panel.getState', syncBackend: false, syncLyricsCorrection: true, windowId: 1 }, {});
+    await waitFor(() => apiMock.getLyricsCorrectionStatus.mock.calls.length === 1);
+    const nextStatus = deferred<any>();
+    apiMock.startLyricsCorrection.mockReturnValueOnce(nextStatus.promise);
+    const submitting = dispatch(listener, { type: 'panel.submitLyricsCorrection', jobId: original.jobId,
+      trackId: original.trackId, youtubeVideoId: VIDEO_A, lyrics: 'replacement words', windowId: 1 }, {});
+    await waitFor(() => apiMock.startLyricsCorrection.mock.calls.length === 1);
+    const queued = { attemptId: 'attempt-new', status: 'queued', stage: 'queued', updatedAt: '2026-10-08T00:01:00Z' };
+    const refresh = deferred<any>();
+    apiMock.getLyricsCorrectionStatus.mockReturnValue(refresh.promise);
+    // Pause the submission's final ownership check, then let the old error's
+    // session check finish after the submission publishes its new attempt.
+    const finalSubmissionSessionRead = storageMock.readCount('local:installId') + 4;
+    storageMock.blockReadAt('local:installId', finalSubmissionSessionRead);
+    nextStatus.resolve(queued);
+    await waitFor(() => storageMock.wasBlockedReadConsumed('local:installId'));
+    oldStatus.reject(new SubtitleApiError('not_found', 'No correction yet', 404));
+    storageMock.resolveReadAt('local:installId', finalSubmissionSessionRead, storageMock.values.get('local:installId'));
+    await oldPoll;
+    await waitFor(() => apiMock.getLyricsCorrectionStatus.mock.calls.length === 2);
+    const result = await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {});
+    expect(result.lyricsCorrection).toMatchObject(queued);
+    refresh.resolve(queued);
+    await submitting;
+  });
+
   it('does not let cancellation cleanup delete a newer same-tab persisted operation', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });

@@ -26,6 +26,7 @@ export function guardJobResponse(value: unknown): JobResponse {
   const response = record(value, 'job response');
 
   guardJobCore(response);
+  requiredString(response, 'jobId');
   requiredString(response, 'createdAt');
   requiredString(response, 'updatedAt');
   if (response.expiresAt !== null) optionalString(response, 'expiresAt');
@@ -39,14 +40,16 @@ export function guardJobResponse(value: unknown): JobResponse {
     }
   }
 
-  if ('track' in response && response.track !== undefined) {
+  if (response.status === 'completed') {
     guardTrackResponse(response.track);
+    if (response.expiresAt !== null) requiredString(response, 'expiresAt');
+  } else {
+    forbidden(response, 'track', String(response.status));
   }
 
-  if (response.status === 'cancelled') {
+  if (response.status === 'failed' || response.status === 'cancelled') {
     requiredString(response, 'errorCode');
     requiredString(response, 'message');
-    forbidden(response, 'track', response.status);
   }
 
   return response as JobResponse;

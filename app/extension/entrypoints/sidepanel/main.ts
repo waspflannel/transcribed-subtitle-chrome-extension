@@ -761,7 +761,7 @@ async function sendPanelRequest(
   try {
     let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
 
-    if (!response && request.type !== 'panel.generateSubtitles') {
+    if (!response && request.type === 'panel.getState') {
       await new Promise((resolve) => setTimeout(resolve, 150));
       response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
     }

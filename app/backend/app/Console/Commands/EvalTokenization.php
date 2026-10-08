@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\InstanceSettings;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use App\Services\TranslationAnalysis\SegmentationEvaluation;
@@ -29,6 +30,7 @@ class EvalTokenization extends Command
      */
     public function handle(): int
     {
+        app(InstanceSettings::class)->apply();
         if (! $this->providerKeyConfigured()) {
             $this->components->error('The selected AI provider key is not configured. The eval harness makes live tokenization calls and cannot run without it.');
 

@@ -77,7 +77,7 @@ class CheckSubtitleRuntime extends Command
         }
 
         $this->table(['setting', 'value'], collect($summary)
-            ->map(fn (mixed $value, string $key): array => [$key, is_bool($value) ? ($value ? 'true' : 'false') : $value])
+            ->map(fn (mixed $value, string $key): array => [$key, is_array($value) || is_bool($value) ? json_encode($value, JSON_THROW_ON_ERROR) : $value])
             ->values()
             ->all());
 

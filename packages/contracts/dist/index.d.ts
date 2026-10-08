@@ -316,10 +316,6 @@ export type LyricsCorrectionRequest = {
    */
   lyrics: string;
   /**
-   * Legacy compatibility field, accepted but ignored. Replacement uses only the pasted lyrics; partial merging is unavailable.
-   */
-  allowPartial?: boolean;
-  /**
    * Optional provider override for this correction only. Omit all AI fields to inherit the generation’s saved provider, model, and fast mode.
    */
   aiProvider?: 'openai' | 'cerebras' | 'codex';

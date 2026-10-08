@@ -6,7 +6,6 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\Validator;
 
 class CorrectSubtitleLyricsRequest extends FormRequest
 {
@@ -39,21 +38,7 @@ class CorrectSubtitleLyricsRequest extends FormRequest
                     }
                 },
             ],
-            'allowPartial' => ['sometimes', 'boolean'],
-        ];
-    }
-
-    /**
-     * @return array<int, callable(Validator): void>
-     */
-    public function after(): array
-    {
-        return [
-            function (Validator $validator): void {
-                if ($this->exists('allowPartial') && ! is_bool($this->input('allowPartial'))) {
-                    $validator->errors()->add('allowPartial', 'The allowPartial field must be a boolean.');
-                }
-            },
+            'allowPartial' => ['missing'],
         ];
     }
 

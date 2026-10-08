@@ -317,7 +317,7 @@
       "post": {
         "operationId": "startLyricsCorrection",
         "summary": "Queue a correction from pasted plain-text lyrics.",
-        "description": "Requires expectedTrackId to match the current track. Rejects stale track identity and lyrics that cannot fit the existing timing slots before queueing. Set allowPartial to true to continue after suspected incomplete lyrics and have the AI merge the supplied lyrics with the generated transcript.",
+        "description": "Requires expectedTrackId to match the current track. Replaces the full track using the pasted lyrics and existing timing slots. Partial merging is unavailable; the removed allowPartial field is rejected.",
         "parameters": [
           {
             "$ref": "#/components/parameters/ExtensionInstallId"

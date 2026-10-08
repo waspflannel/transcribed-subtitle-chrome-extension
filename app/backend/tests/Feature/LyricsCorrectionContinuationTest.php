@@ -528,24 +528,21 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(['First lyric line', 'Second lyric line'], array_column($row->track->cues, 'sourceText'));
     }
 
-    public function test_alignment_uses_one_replacement_mode_even_for_legacy_partial_requests(): void
+    public function test_alignment_uses_full_replacement_mode(): void
     {
-        foreach ([false, true] as $allowPartial) {
-            $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
-            $input = null;
-            LyricsAlignmentAgent::fake(function ($prompt) use (&$input, $queue): array {
-                $input = json_decode($prompt, true, flags: JSON_THROW_ON_ERROR);
+        $queue = $this->completedTrackWithCues(2, fn (int $position): string => 'Lyrics line '.($position + 1));
+        $input = null;
+        LyricsAlignmentAgent::fake(function ($prompt) use (&$input, $queue): array {
+            $input = json_decode($prompt, true, flags: JSON_THROW_ON_ERROR);
 
-                return ['cues' => $queue['alignmentCues']];
-            })->preventStrayPrompts();
-            $response = $this->submitLyrics($queue['job'], $queue['texts'], $allowPartial);
-            $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+            return ['cues' => $queue['alignmentCues']];
+        })->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
 
-            $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
-            $this->assertArrayNotHasKey('allowPartial', $input);
-            $this->assertArrayNotHasKey('existingParts', $input);
-            $this->assertSame($queue['texts'], array_column($input['cues'], 'sourceText'));
-        }
+        $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+        $this->assertArrayNotHasKey('existingParts', $input);
+        $this->assertSame($queue['texts'], array_column($input['cues'], 'sourceText'));
     }
 
     public function test_alignment_allows_sparse_timing_slots(): void
@@ -1455,7 +1452,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         }
         unset($cue);
         LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $alignment]])->preventStrayPrompts();
-        $response = $this->submitLyrics($queue['job'], $queue['texts'], allowPartial: true);
+        $response = $this->submitLyrics($queue['job'], $queue['texts']);
         $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
 
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
@@ -1639,7 +1636,7 @@ class LyricsCorrectionContinuationTest extends TestCase
     /**
      * @param  array<int, string>  $texts
      */
-    private function submitLyrics(SubtitleJob $job, array $texts, bool $allowPartial = false, array $selection = []): TestResponse
+    private function submitLyrics(SubtitleJob $job, array $texts, array $selection = []): TestResponse
     {
         $job->refresh()->load('track');
 
@@ -1647,7 +1644,6 @@ class LyricsCorrectionContinuationTest extends TestCase
             ->postJson('/v1/subtitle-jobs/'.$job->public_id.'/lyrics', [
                 'expectedTrackId' => $job->track->public_id,
                 'lyrics' => implode("\n", $texts),
-                'allowPartial' => $allowPartial,
                 ...$selection,
             ]);
     }

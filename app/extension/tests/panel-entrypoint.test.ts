@@ -3,6 +3,8 @@ import { JSDOM } from 'jsdom';
 import markup from '../entrypoints/sidepanel/index.html?raw';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { PanelState } from '../utils/messages';
+import type { TrackResponse } from '../utils/contracts';
+import trackFixture from '../../../packages/contracts/fixtures/valid-track-response.json';
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(() => new Promise(() => {})),
@@ -313,5 +315,75 @@ it('opens OAuth with the browser API and refreshes connection state when the use
   await vi.advanceTimersByTimeAsync(6000);
   expect(dom.window.document.querySelector('[data-codex-status]')?.textContent).toBe('Codex connected.');
   expect(mocks.createTab).toHaveBeenCalledTimes(1);
+  dom.window.close();
+});
+
+it.each(['read', 'mutation'])('keeps the newer %s rendered when an earlier backend poll returns last', async (kind) => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup);
+  stubPanelDom(dom);
+  mocks.activated.mockClear();
+  const original: PanelState = { installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS,
+    backendUrl: 'http://localhost/v1', subtitleState: { type: 'no-track' }, jobHistory: [] };
+  let state = original;
+  let resolvePoll!: (state: PanelState) => void;
+  const oldPoll = new Promise<PanelState>(resolve => { resolvePoll = resolve; });
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; syncBackend?: boolean; patch?: Partial<PanelState['settings']> }) => {
+    if (request?.type === 'panel.getState' && request.syncBackend) return oldPoll;
+    if (request?.type === 'panel.updateSettings') state = { ...state, settings: { ...state.settings, ...request.patch } };
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  const attach = dom.window.document.querySelector<HTMLInputElement>('input[name="overlayAttachedToVideo"]')!;
+  expect(attach.checked).toBe(true);
+  if (kind === 'mutation') {
+    attach.checked = false;
+    attach.dispatchEvent(new dom.window.Event('change'));
+  } else {
+    state = { ...original, settings: { ...original.settings, overlayAttachedToVideo: false } };
+    const onActivated = mocks.activated.mock.calls[0]?.[0] as (info: { windowId: number }) => void;
+    onActivated({ windowId: 7 });
+  }
+  await vi.advanceTimersByTimeAsync(60);
+  expect(attach.checked).toBe(false);
+  resolvePoll(original);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(attach.checked).toBe(false);
+  dom.window.close();
+});
+
+it('does not repeat a completed deletion whose reply is missing', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup);
+  stubPanelDom(dom);
+  vi.spyOn(dom.window, 'confirm').mockReturnValue(true);
+  const track = { ...trackFixture, expiresAt: null } as TrackResponse;
+  const state: PanelState = { installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS,
+    activeTabId: 1, backendUrl: 'http://localhost/v1', jobHistory: [],
+    pageStatus: { supported: true, videoId: track.youtubeVideoId,
+      url: `https://www.youtube.com/watch?v=${track.youtubeVideoId}`, mediaKind: 'video' },
+    subtitleState: { type: 'ready', track } };
+  let deletes = 0;
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string }) => {
+    if (request?.type === 'panel.listGenerations') return { jobs: [] };
+    if (request?.type === 'panel.getActiveCue') return { ok: false };
+    if (request?.type === 'panel.deleteGeneration') {
+      deletes += 1;
+      return undefined; // The deletion completed, but its acknowledgement did not arrive.
+    }
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  const select = dom.window.document.querySelector<HTMLSelectElement>('[data-generation-select]')!;
+  expect(select.disabled).toBe(false);
+  select.value = 'delete-current-generation';
+  select.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(200);
+  expect(deletes).toBe(1);
+  expect(dom.window.document.querySelector('[data-generation-status]')?.textContent).toContain('background did not respond');
   dom.window.close();
 });

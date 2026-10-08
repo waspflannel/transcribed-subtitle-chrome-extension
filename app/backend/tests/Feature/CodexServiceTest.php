@@ -270,6 +270,25 @@ class CodexServiceTest extends TestCase
         $this->assertSame([], $summary['models']);
     }
 
+    public function test_start_login_preserves_a_connected_account_when_its_status_check_times_out(): void
+    {
+        $codex = $this->connected();
+        $state = json_decode(file_get_contents($this->home.'/connection.json'), true);
+        $state['checkedAt'] = 0;
+        file_put_contents($this->home.'/connection.json', json_encode($state));
+        config(['codex.request_timeout_seconds' => 1]);
+        $this->scenario('stall');
+
+        $summary = $codex->startLogin();
+
+        $this->assertArrayHasKey('error', $summary);
+        $this->assertSame($state['active'], json_decode(file_get_contents($this->home.'/connection.json'), true)['active']);
+        $this->assertDirectoryExists($this->home.'/'.$state['active']);
+        Bus::assertDispatchedTimes(ConnectCodexAccount::class, 1);
+        $this->scenario('success');
+        $this->assertTrue($codex->summary()['connected']);
+    }
+
     public function test_unsupported_cli_version_is_rejected_before_login(): void
     {
         $this->scenario('old-version');

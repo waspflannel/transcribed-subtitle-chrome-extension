@@ -46,7 +46,6 @@ const fixtures = [
   ['learning-token-request.schema.json', 'valid-learning-token-request.json'],
   ['learning-token-response.schema.json', 'valid-learning-token-response.json'],
   ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request.json'],
-  ['lyrics-correction-request.schema.json', 'valid-lyrics-correction-request-partial.json'],
   ['lyrics-correction-status.schema.json', 'valid-lyrics-correction-status.json'],
   ['lyrics-correction-cancel-request.schema.json', 'valid-lyrics-correction-cancel-request.json'],
   ['quick-fix-token-request.schema.json', 'valid-quick-fix-token-request.json'],
@@ -136,11 +135,9 @@ if (!lyricsCorrectionStatus(correctionWithAi)) throw new Error('Rejected correct
 assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiProvider: 'unknown' }, 'unknown correction provider');
 assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiModel: undefined }, 'partial correction AI selection');
 assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiProvider: 'openai' }, 'API correction with fast mode');
-assertInvalid(lyricsCorrectionRequest, {
-  expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041',
-  lyrics: 'First line',
-  allowPartial: 'true',
-}, 'non-boolean allowPartial');
+for (const allowPartial of [true, false, 'true', null]) {
+  assertInvalid(lyricsCorrectionRequest, { ...correctionPayload, allowPartial }, 'removed allowPartial field');
+}
 
 const correctionStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled'];
 const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'finalizing', 'completed', 'failed', 'cancelled'];
