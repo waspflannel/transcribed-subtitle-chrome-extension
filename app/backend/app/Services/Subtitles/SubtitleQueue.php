@@ -40,16 +40,6 @@ final class SubtitleQueue
         return (string) config('subtitles.queue.batch_name', self::DEFAULT_BATCH_NAME);
     }
 
-    public static function generationNameForJob(object $job): string
-    {
-        return self::generationName();
-    }
-
-    public static function batchNameForJob(object $job): string
-    {
-        return self::batchName();
-    }
-
     /**
      * @return array<int, string>
      */

@@ -198,7 +198,7 @@ class SubtitleWorkflowLogger
             'stage' => $stage,
             'queue_connection' => config('subtitles.queue.connection'),
             'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
-            'queue' => $batchIndex === null ? SubtitleQueue::generationNameForJob($job) : SubtitleQueue::batchNameForJob($job),
+            'queue' => $batchIndex === null ? SubtitleQueue::generationName() : SubtitleQueue::batchName(),
             'wait_ms' => $waitMs,
         ], $batchIndex));
     }

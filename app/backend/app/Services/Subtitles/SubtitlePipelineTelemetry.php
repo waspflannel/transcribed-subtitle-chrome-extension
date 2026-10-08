@@ -39,7 +39,7 @@ class SubtitlePipelineTelemetry
             'stage' => $stage,
             'queue_connection' => SubtitleQueue::connection(),
             'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
-            'queue' => $batchIndex === null ? SubtitleQueue::generationNameForJob($job) : SubtitleQueue::batchNameForJob($job),
+            'queue' => $batchIndex === null ? SubtitleQueue::generationName() : SubtitleQueue::batchName(),
             'wait_ms' => $waitMs,
         ], $batchIndex));
         $this->recordSlowQueueWait($job, $stage, $waitMs, $batchIndex);
@@ -52,7 +52,7 @@ class SubtitlePipelineTelemetry
             'status' => $job->status,
             'queue_connection' => SubtitleQueue::connection(),
             'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
-            'queue' => $batchIndex === null ? SubtitleQueue::generationNameForJob($job) : SubtitleQueue::batchNameForJob($job),
+            'queue' => $batchIndex === null ? SubtitleQueue::generationName() : SubtitleQueue::batchName(),
             'worker_pid' => getmypid() ?: null,
         ], $batchIndex));
     }

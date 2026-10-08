@@ -187,7 +187,7 @@ class SubtitleJobService
             try {
                 AcquireSubtitleAudio::dispatch($job->id, $job->run_id)
                     ->onConnection(SubtitleQueue::connection())
-                    ->onQueue(SubtitleQueue::generationNameForJob($job));
+                    ->onQueue(SubtitleQueue::generationName());
             } catch (Throwable $exception) {
                 if (SubtitleQueue::connection() === 'sync') {
                     throw $exception;
@@ -333,7 +333,7 @@ class SubtitleJobService
             'status' => $job->status,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'queue' => SubtitleQueue::generationNameForJob($job),
+            'queue' => SubtitleQueue::generationName(),
             'provider' => $job->ai_provider,
             'model' => $job->ai_model,
             ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
@@ -387,7 +387,7 @@ class SubtitleJobService
             'status' => $job->status,
             'youtube_video_id' => $job->youtube_video_id,
             'processing_version' => $job->processing_version,
-            'queue' => SubtitleQueue::generationNameForJob($job),
+            'queue' => SubtitleQueue::generationName(),
             'provider' => $job->ai_provider,
             'model' => $job->ai_model,
             ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),

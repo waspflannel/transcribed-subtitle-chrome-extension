@@ -46,8 +46,6 @@ class SubtitleGenerationPipeline
      */
     public function acquireAudioAndContinue(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
-        $this->extendProcessingTimeLimit();
-
         $job = $this->claimAcquisition($subtitleJobId, $runId);
 
         if ($job === null) {
@@ -100,7 +98,7 @@ class SubtitleGenerationPipeline
                 $this->markJobRunning($currentJob, 'optimizing-audio', 35);
 
                 OptimizeSubtitleAudio::dispatch($currentJob->id, $runId, $audio)
-                    ->onQueue(SubtitleQueue::generationNameForJob($currentJob))
+                    ->onQueue(SubtitleQueue::generationName())
                     ->afterCommit();
 
                 return true;
@@ -604,7 +602,7 @@ class SubtitleGenerationPipeline
     {
         if ($indexes === []) {
             PrepareSubtitleCuesAfterAnalysisBatches::dispatch($job->id, $job->run_id)
-                ->onQueue(SubtitleQueue::batchNameForJob($job))->afterCommit();
+                ->onQueue(SubtitleQueue::batchName())->afterCommit();
 
             return;
         }
@@ -776,14 +774,5 @@ class SubtitleGenerationPipeline
             'error_code' => null,
             'error_message' => null,
         ]);
-    }
-
-    private function extendProcessingTimeLimit(): void
-    {
-        if (! function_exists('set_time_limit')) {
-            return;
-        }
-
-        set_time_limit((int) config('subtitles.processing_timeout_seconds', 0));
     }
 }

@@ -144,7 +144,7 @@ final class LyricsCorrectionService
 
         try {
             LyricsCorrectionJob::dispatch($correction->subtitle_track_id, $job->getKey(), $attemptId, 0)
-                ->onQueue(SubtitleQueue::batchNameForJob($job));
+                ->onQueue(SubtitleQueue::batchName());
         } catch (Throwable $exception) {
             try {
                 $this->failAttempt(
@@ -809,7 +809,7 @@ final class LyricsCorrectionService
         foreach ($indices as $index) {
             LyricsCorrectionJob::dispatch($correction->subtitle_track_id, $correction->track->job->id,
                 $correction->attempt_id, $correction->work_revision, $index)
-                ->onQueue(SubtitleQueue::batchNameForJob($correction->track->job));
+                ->onQueue(SubtitleQueue::batchName());
         }
     }
 

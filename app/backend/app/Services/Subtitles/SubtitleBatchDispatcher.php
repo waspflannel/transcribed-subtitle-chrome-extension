@@ -25,7 +25,7 @@ class SubtitleBatchDispatcher
             completionJobClass: PrepareSubtitleCuesAfterAnalysisBatches::class,
             completionJobArguments: [$job->id, $job->run_id],
             batchConnection: SubtitleQueue::batchConnection(),
-            batchQueueName: SubtitleQueue::batchNameForJob($job),
+            batchQueueName: SubtitleQueue::batchName(),
         );
     }
 
@@ -44,7 +44,7 @@ class SubtitleBatchDispatcher
             completionJobClass: MergeSubtitleTranscript::class,
             completionJobArguments: [$job->id, $job->run_id, $transcribingStartedAtMs],
             batchConnection: SubtitleQueue::connection(),
-            batchQueueName: SubtitleQueue::generationNameForJob($job),
+            batchQueueName: SubtitleQueue::generationName(),
         );
     }
 
@@ -71,7 +71,7 @@ class SubtitleBatchDispatcher
 
         $subtitleJobId = $job->id;
         $runId = $job->run_id;
-        $completionQueueName = SubtitleQueue::batchNameForJob($job);
+        $completionQueueName = SubtitleQueue::batchName();
 
         Bus::batch($jobs)
             ->name($batchName)
