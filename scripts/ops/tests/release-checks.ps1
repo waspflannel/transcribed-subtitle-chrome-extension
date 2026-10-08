@@ -1,5 +1,12 @@
 $ErrorActionPreference = 'Stop'
 $Root = Resolve-Path (Join-Path $PSScriptRoot '../../..')
+$shell = if ($env:OS -eq 'Windows_NT') { Join-Path $env:ProgramFiles 'Git/bin/bash.exe' } else { 'sh' }
+if (Get-Command $shell -ErrorAction SilentlyContinue) {
+    & $shell (Join-Path $Root 'scripts/desktop/healthcheck.test.sh')
+    if ($LASTEXITCODE -ne 0) { throw 'Desktop healthcheck regression failed.' }
+} else {
+    Write-Host 'Skipped shell healthcheck regression: sh/Git Bash is not installed.'
+}
 $Check = Join-Path $Root 'scripts/ops/check-extension-release.ps1'
 $Deploy = Join-Path $Root 'scripts/ops/deploy-managed-laravel.ps1'
 $package = Get-Content -Raw -LiteralPath (Join-Path $Root 'app/extension/package.json') | ConvertFrom-Json

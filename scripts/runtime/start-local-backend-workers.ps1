@@ -2,8 +2,8 @@
 param(
     [string]$Php,
     [string]$HostName = "127.0.0.1",
-    [int]$Port = 8001,
-    [int]$WorkerTimeoutSeconds = 1200,
+    [ValidateRange(1, 65535)][int]$Port = 8001,
+    [int]$WorkerTimeoutSeconds = 1320,
     [int]$WorkerMaxTimeSeconds = 0,
     [int]$WorkerMemoryMb = 256,
     [int]$WorkerSleepSeconds = 0,
@@ -25,63 +25,7 @@ $WorkerLogDir = Join-Path $Backend "storage\logs\subtitle-workers"
 $PidPath = Join-Path $RuntimeLogDir "local-runtime-pids.json"
 $Timestamp = Get-Date -Format "yyyyMMddHHmmss"
 
-function Add-PhpCandidate {
-    param(
-        [System.Collections.Generic.List[object]]$Candidates,
-        [string]$Binary
-    )
-
-    if (-not $Binary -or -not (Test-Path -LiteralPath $Binary)) {
-        return
-    }
-
-    $resolved = (Resolve-Path -LiteralPath $Binary).Path
-
-    foreach ($candidate in $Candidates) {
-        if ($candidate.Binary -eq $resolved) {
-            return
-        }
-    }
-
-    $Candidates.Add([pscustomobject]@{ Binary = $resolved }) | Out-Null
-}
-
-function Resolve-PhpBinary {
-    $candidates = [System.Collections.Generic.List[object]]::new()
-
-    Add-PhpCandidate -Candidates $candidates -Binary $Php
-
-    $pathPhp = Get-Command php -ErrorAction SilentlyContinue
-    if ($pathPhp) {
-        Add-PhpCandidate -Candidates $candidates -Binary $pathPhp.Source
-    }
-
-    if ($env:LOCALAPPDATA) {
-        $wingetPhp = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages\PHP.PHP.8.4_Microsoft.Winget.Source_8wekyb3d8bbwe\php.exe"
-        Add-PhpCandidate -Candidates $candidates -Binary $wingetPhp
-    }
-
-    foreach ($candidate in $candidates) {
-        & $candidate.Binary -r "exit(extension_loaded('pdo_pgsql') ? 0 : 1);" 2>$null
-
-        if ($LASTEXITCODE -ne 0) {
-            continue
-        }
-
-        Push-Location $Backend
-        try {
-            & $candidate.Binary artisan --version *> $null
-
-            if ($LASTEXITCODE -eq 0) {
-                return $candidate.Binary
-            }
-        } finally {
-            Pop-Location
-        }
-    }
-
-    throw "No PHP binary with pdo_pgsql and artisan support was found. Pass -Php C:\path\to\php.exe."
-}
+. (Join-Path $ScriptDir 'php-runtime.ps1')
 
 function Invoke-ArtisanOutput {
     param([string[]]$ArtisanArgs)
@@ -127,197 +71,60 @@ function Get-WorkerGroupsFromRuntime {
     })
 }
 
-function Test-CommandContainsAny {
-    param(
-        [string]$CommandLine,
-        [string[]]$Needles
-    )
-
-    foreach ($needle in $Needles) {
-        if ($needle -and $CommandLine.Contains($needle)) {
-            return $true
-        }
-    }
-
-    return $false
+function Get-RecordedRuntimeProcesses {
+    if (-not (Test-Path -LiteralPath $PidPath)) { return @() }
+    try { return @(Get-Content -LiteralPath $PidPath -Raw | ConvertFrom-Json) }
+    catch { return @() }
 }
 
-function Get-ProtectedProcessIds {
-    param($ProcessesById)
-
-    $protected = @{}
-    $currentId = [int]$PID
-
-    for ($depth = 0; $depth -lt 8 -and $currentId -gt 0; $depth++) {
-        $protected[$currentId] = $true
-
-        if (-not $ProcessesById.ContainsKey($currentId)) {
-            break
-        }
-
-        $currentId = [int]$ProcessesById[$currentId].ParentProcessId
-    }
-
-    return $protected
-}
-
-function Get-RecordedRuntimeProcessIds {
-    if (-not (Test-Path -LiteralPath $PidPath)) {
-        return @()
-    }
-
+function Test-RecordedProcess {
+    param($Process, $Record)
     try {
-        $recorded = Get-Content -LiteralPath $PidPath -Raw | ConvertFrom-Json
-    } catch {
-        return @()
-    }
-
-    return @(
-        @($recorded) |
-            ForEach-Object { [int]$_.pid } |
-            Where-Object { $_ -gt 0 } |
-            Sort-Object -Unique
-    )
-}
-
-function Test-IsBackendServeCommand {
-    param([string]$CommandLine)
-
-    if (-not $CommandLine) {
-        return $false
-    }
-
-    $normalized = $CommandLine.Replace("\", "/")
-    $backendForward = "$Backend".Replace("\", "/")
-
-    return (
-        ($normalized.Contains($backendForward) -and $normalized.Contains("server.php")) -or
-        (
-            $CommandLine -match "\bartisan\s+serve\b" -and
-            (
-                $CommandLine.Contains("--port=$Port") -or
-                $CommandLine.Contains("--port $Port")
-            )
-        )
-    )
-}
-
-function Test-IsSubtitleWorkerCommand {
-    param(
-        [string]$CommandLine,
-        [string[]]$QueueNames
-    )
-
-    if (-not $CommandLine -or $CommandLine -notmatch "\bqueue:work\b") {
-        return $false
-    }
-
-    return (
-        $CommandLine.Contains("subtitle-auto-worker") -or
-        $CommandLine.Contains("tse-local-") -or
-        $CommandLine -match "subtitle-(generation|batch|ai)" -or
-        (Test-CommandContainsAny -CommandLine $CommandLine -Needles $QueueNames)
-    )
+        return $Process -and $Record.startedAtUtc -and $Process.CreationDate -and
+            $Process.CreationDate.ToUniversalTime() -eq ([datetime]$Record.startedAtUtc).ToUniversalTime() -and
+            $Process.ExecutablePath -eq $Record.executablePath -and $Process.CommandLine -ceq $Record.commandLine
+    } catch { return $false }
 }
 
 function Get-ExistingRuntimeProcesses {
-    param([string[]]$QueueNames)
-
-    $processMatches = [System.Collections.Generic.List[object]]::new()
     $allProcesses = @(Get-CimInstance Win32_Process)
-    $processesById = @{}
-    $childrenByParent = @{}
-    $seedIds = @{}
-    $protectedIds = @{}
-
+    $records = @{}
+    foreach ($record in (Get-RecordedRuntimeProcesses)) { $records[[int]$record.pid] = $record }
+    $pending = [System.Collections.Generic.Queue[object]]::new()
+    $seen = @{}
+    # An absolute Artisan path identifies this checkout. A relative command needs a matching saved birth time.
+    $artisan = [regex]::Escape((Join-Path $Backend 'artisan').Replace('\', '/'))
+    $pattern = '(?:^|\s)"?' + $artisan + '"?\s+(serve|queue:work)(?:\s|$)'
     foreach ($process in $allProcesses) {
-        $processId = [int]$process.ProcessId
-        $parentId = [int]$process.ParentProcessId
-        $processesById[$processId] = $process
-
-        if (-not $childrenByParent.ContainsKey($parentId)) {
-            $childrenByParent[$parentId] = [System.Collections.Generic.List[int]]::new()
+        if ([int]$process.ProcessId -eq $PID) { continue }
+        $kind = $null
+        $record = $records[[int]$process.ProcessId]
+        if ((Test-RecordedProcess $process $record) -and $record.kind -in @('backend', 'worker')) {
+            $kind = $record.kind
+        } elseif ($process.ExecutablePath -eq $script:PhpBinary -and
+            "$($process.CommandLine)".Replace('\', '/') -match $pattern) {
+            $kind = if ($Matches[1] -eq 'serve') { 'backend' } else { 'worker' }
         }
-
-        $childrenByParent[$parentId].Add($processId) | Out-Null
+        if ($kind) { $pending.Enqueue(@{ process = $process; kind = $kind; depth = 0 }) }
     }
-
-    $protectedIds = Get-ProtectedProcessIds -ProcessesById $processesById
-
-    foreach ($recordedId in (Get-RecordedRuntimeProcessIds)) {
-        if ($processesById.ContainsKey($recordedId) -and -not $protectedIds.ContainsKey($recordedId)) {
-            $seedIds[$recordedId] = $true
-        }
-    }
-
-    foreach ($process in $allProcesses) {
-        $processId = [int]$process.ProcessId
-        $command = "$($process.CommandLine)"
-
-        if (-not $command -or $protectedIds.ContainsKey($processId)) {
-            continue
-        }
-
-        if (
-            (Test-IsBackendServeCommand -CommandLine $command) -or
-            (Test-IsSubtitleWorkerCommand -CommandLine $command -QueueNames $QueueNames)
-        ) {
-            $seedIds[$processId] = $true
-        }
-    }
-
-    $targetIds = [System.Collections.Generic.List[int]]::new()
-    $pending = [System.Collections.Generic.Queue[int]]::new()
-
-    foreach ($seedId in $seedIds.Keys) {
-        $pending.Enqueue([int]$seedId)
-    }
-
     while ($pending.Count -gt 0) {
-        $processId = $pending.Dequeue()
-
-        if ($protectedIds.ContainsKey($processId) -or -not $processesById.ContainsKey($processId)) {
-            continue
+        $entry = $pending.Dequeue()
+        $process = $entry.process
+        $processId = [int]$process.ProcessId
+        if ($seen.ContainsKey($processId) -or $processId -eq $PID) { continue }
+        $seen[$processId] = $true
+        [pscustomobject]@{
+            ProcessId = $processId; Name = $process.Name; Kind = $entry.kind; Depth = $entry.depth
+            CommandLine = $process.CommandLine; ExecutablePath = $process.ExecutablePath
+            StartedAtUtc = $process.CreationDate.ToUniversalTime().ToString('o')
         }
-
-        if ($targetIds -contains $processId) {
-            continue
-        }
-
-        $targetIds.Add($processId) | Out-Null
-
-        if ($childrenByParent.ContainsKey($processId)) {
-            foreach ($childId in $childrenByParent[$processId]) {
-                if (-not $protectedIds.ContainsKey($childId)) {
-                    $pending.Enqueue([int]$childId)
-                }
+        foreach ($child in $allProcesses) {
+            # Parent PIDs can be reused too: an older child cannot belong to this parent.
+            if ($child.ParentProcessId -eq $processId -and $child.CreationDate -ge $process.CreationDate) {
+                $pending.Enqueue(@{ process = $child; kind = $entry.kind; depth = $entry.depth + 1 })
             }
         }
     }
-
-    foreach ($processId in ($targetIds | Sort-Object)) {
-        $process = $processesById[$processId]
-        $command = "$($process.CommandLine)"
-        $kind = if (
-            (Test-IsBackendServeCommand -CommandLine $command) -or
-            ($command -and $command.Replace("\", "/").Contains("server.php"))
-        ) {
-            "backend"
-        } elseif (Test-IsSubtitleWorkerCommand -CommandLine $command -QueueNames $QueueNames) {
-            "worker"
-        } else {
-            "runtime-child"
-        }
-
-        $processMatches.Add([pscustomobject]@{
-            ProcessId = $processId
-            Name = "$($process.Name)"
-            Kind = $kind
-            CommandLine = $command
-        }) | Out-Null
-    }
-
-    return @($processMatches)
 }
 
 function Stop-ExistingProcesses {
@@ -334,11 +141,6 @@ function Stop-ExistingProcesses {
     Write-Host "Existing local runtime processes:"
     Write-Host ($Processes | Select-Object ProcessId, Kind, Name, CommandLine | Format-Table -AutoSize | Out-String)
 
-    if ($DryRun) {
-        Write-Host "Dry run: would stop $($Processes.Count) process(es)."
-        return
-    }
-
     if ($RestartQueueWorkersFirst -and ($Processes | Where-Object { $_.Kind -eq "worker" }).Count -gt 0) {
         Write-Host "Signaling queue workers to restart..."
         Invoke-ArtisanOutput -ArtisanArgs @("queue:restart", "--no-ansi") | Out-Null
@@ -349,12 +151,15 @@ function Stop-ExistingProcesses {
     }
 
     # Stop children before parents so the tree tears down cleanly.
-    foreach ($process in ($Processes | Sort-Object ProcessId -Descending)) {
+    foreach ($process in ($Processes | Sort-Object Depth -Descending)) {
         if ([int]$process.ProcessId -eq [int]$PID) {
             continue
         }
 
-        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+        $current = Get-CimInstance Win32_Process -Filter "ProcessId = $($process.ProcessId)" -ErrorAction SilentlyContinue
+        if (Test-RecordedProcess $current $process) {
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+        }
     }
 
     Start-Sleep -Milliseconds 500
@@ -369,12 +174,7 @@ function Start-BackendServer {
 
     $stdout = Join-Path $RuntimeLogDir "backend-serve-$Timestamp.log"
     $stderr = Join-Path $RuntimeLogDir "backend-serve-$Timestamp.err.log"
-    $args = @("artisan", "serve", "--host=$HostName", "--port=$Port")
-
-    if ($DryRun) {
-        Write-Host "Dry run: would start backend: $script:PhpBinary $($args -join ' ')"
-        return $null
-    }
+    $args = @(('"' + (Join-Path $Backend 'artisan') + '"'), "serve", "--host=$HostName", "--port=$Port")
 
     $process = Start-Process `
         -FilePath $script:PhpBinary `
@@ -418,7 +218,7 @@ function Start-WorkerProcesses {
             $stdout = Join-Path $WorkerLogDir "$workerName-$Timestamp.log"
             $stderr = Join-Path $WorkerLogDir "$workerName-$Timestamp.err.log"
             $args = @(
-                "artisan",
+                ('"' + (Join-Path $Backend 'artisan') + '"'),
                 "queue:work",
                 $group.connection,
                 "--name=$workerName",
@@ -429,11 +229,6 @@ function Start-WorkerProcesses {
                 "--memory=$WorkerMemoryMb",
                 "--max-time=$WorkerMaxTimeSeconds"
             )
-
-            if ($DryRun) {
-                Write-Host "Dry run: would start worker: $script:PhpBinary $($args -join ' ')"
-                continue
-            }
 
             $process = Start-Process `
                 -FilePath $script:PhpBinary `
@@ -462,7 +257,7 @@ function Start-WorkerProcesses {
 function Test-StartedProcesses {
     param([object[]]$StartedProcesses)
 
-    if ($DryRun -or $StartedProcesses.Count -eq 0) {
+    if ($StartedProcesses.Count -eq 0) {
         return
     }
 
@@ -480,23 +275,32 @@ function Test-StartedProcesses {
 
             throw "$($process.kind) '$($process.name)' exited immediately. stderr: $stderr"
         }
+        $process | Add-Member -NotePropertyName startedAtUtc -NotePropertyValue $running.CreationDate.ToUniversalTime().ToString('o')
+        $process | Add-Member -NotePropertyName executablePath -NotePropertyValue $running.ExecutablePath
+        $process | Add-Member -NotePropertyName commandLine -NotePropertyValue $running.CommandLine
     }
 }
 
-$profileArgs = @{}
+if ($DryRun) {
+    Write-Host "Dry run: would select the local Postgres/Redis profile with APP_URL=http://${HostName}:$Port."
+    Write-Host "Docker startup: $(!$SkipDocker); migrations: $(!$SkipMigrate); restart backend: $(!$SkipBackend); restart workers: $(!$SkipWorkers)."
+    return
+}
+
+$profileArgs = @{ AppUrl = "http://${HostName}:$Port"; PreserveEnvironment = $SkipBackend }
 if ($Php) {
     $profileArgs.Php = $Php
 }
-if ($SkipDocker -or $DryRun) {
+if ($SkipDocker) {
     $profileArgs.SkipDocker = $true
 }
-if ($SkipMigrate -or $DryRun) {
+if ($SkipMigrate) {
     $profileArgs.SkipMigrate = $true
 }
 
 & (Join-Path $ScriptDir "use-postgres-redis.ps1") @profileArgs
 
-$script:PhpBinary = Resolve-PhpBinary
+$script:PhpBinary = Resolve-PhpBinary -Preferred $Php -BackendPath $Backend
 Write-Host "Using PHP: $script:PhpBinary"
 
 $runtimeOutput = Invoke-ArtisanOutput -ArtisanArgs @("subtitles:runtime-check", "--json", "--strict", "--no-ansi")
@@ -508,14 +312,18 @@ if (-not $runtime.ok) {
 
 $queueConnection = "$($runtime.summary.subtitleQueueConnection)"
 $workerGroups = Get-WorkerGroupsFromRuntime -Runtime $runtime
-$queueNames = @($runtime.summary.subtitleGenerationQueues) + @($runtime.summary.subtitleBatchQueues)
 $plannedWorkerCount = ($workerGroups | Measure-Object -Property worker_count -Sum).Sum
 
 Write-Host "Worker mode: configured groups"
 Write-Host "Queue connection: $queueConnection"
 Write-Host "Planned workers: $plannedWorkerCount"
 
-$existing = Get-ExistingRuntimeProcesses -QueueNames $queueNames
+$existing = @(Get-ExistingRuntimeProcesses | Where-Object {
+    ($_.Kind -eq 'backend' -and -not $SkipBackend) -or ($_.Kind -eq 'worker' -and -not $SkipWorkers)
+})
+$preservedRecords = @(Get-RecordedRuntimeProcesses | Where-Object {
+    ($_.kind -eq 'backend' -and $SkipBackend) -or ($_.kind -eq 'worker' -and $SkipWorkers)
+})
 Stop-ExistingProcesses -Processes $existing -RestartQueueWorkersFirst:(!$SkipWorkers)
 
 $startedProcesses = [System.Collections.Generic.List[object]]::new()
@@ -530,11 +338,9 @@ foreach ($workerProcess in (Start-WorkerProcesses -WorkerGroups $workerGroups)) 
 
 Test-StartedProcesses -StartedProcesses @($startedProcesses)
 
-if (-not $DryRun) {
-    New-Item -ItemType Directory -Force -Path $RuntimeLogDir | Out-Null
-    @($startedProcesses) | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $PidPath
-    Write-Host "Wrote PID summary: $PidPath"
-}
+New-Item -ItemType Directory -Force -Path $RuntimeLogDir | Out-Null
+@($preservedRecords + @($startedProcesses)) | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $PidPath
+Write-Host "Wrote PID summary: $PidPath"
 
 Write-Host "Local backend URL: http://${HostName}:$Port"
 Write-Host "Started processes: $($startedProcesses.Count)"

@@ -3,8 +3,8 @@ param(
     [string]$ApplicationPath = "/var/www/transcribed-subtitle-extension/app/backend/current",
     [string]$PhpPath = "php",
     [string]$WorkerUser = "forge",
-    [int]$WorkerTimeoutSeconds = 1200,
-    [int]$StopWaitSeconds = 1260,
+    [int]$WorkerTimeoutSeconds = 1320,
+    [int]$StopWaitSeconds = 1380,
     [int]$SleepSeconds = 0,
     [int]$Tries = 0,
     [int]$MemoryMb = 256,
@@ -50,7 +50,7 @@ foreach ($group in $groups) {
     $lines.Add("numprocs=$($group.worker_count)")
     $lines.Add("redirect_stderr=true")
     $lines.Add("stdout_logfile=$LogDirectory/$program.log")
-    $lines.Add("stopwaitsecs=$StopWaitSeconds")
+    $lines.Add("stopwaitsecs=$([Math]::Max($StopWaitSeconds, $timeout + 60))")
     $lines.Add("")
 }
 

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Php,
-    [int]$Port = 8001,
+    [ValidateRange(1, 65535)][int]$Port = 8001,
     [switch]$SkipDocker,
     [switch]$SkipMigrate,
     [switch]$SkipExtension
@@ -49,6 +49,8 @@ if ($SkipExtension) {
 }
 
 Write-Host "Starting the extension dev server. Press Ctrl+C to stop it."
+$previousApiUrl = $env:WXT_BACKEND_API_BASE_URL
+$env:WXT_BACKEND_API_BASE_URL = "http://127.0.0.1:$Port/v1"
 Push-Location $Extension
 try {
     & $npmPath run dev
@@ -58,4 +60,5 @@ try {
     }
 } finally {
     Pop-Location
+    $env:WXT_BACKEND_API_BASE_URL = $previousApiUrl
 }

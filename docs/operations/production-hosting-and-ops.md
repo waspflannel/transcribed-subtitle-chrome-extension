@@ -28,9 +28,11 @@ Run `scripts/desktop/tests.ps1` for setup/config/compiler checks. Add `-Smoke -P
 
 Use PHP 8.4, Composer, Postgres, Redis, FFmpeg and yt-dlp. Compose supplies Postgres and Redis with loopback-bound ports. The Windows launcher `scripts/runtime/start-local-backend-workers.ps1` sets the local runtime profile, migrates, and launches Laravel and workers. `start-local-dev.ps1` also starts WXT development.
 
+Local `-Port` updates the backend URL and the WXT API base URL. `-DryRun` leaves configuration and processes untouched. `-SkipBackend` and `-SkipWorkers` preserve the skipped processes and their saved identities. Worker-only startup refuses profile/URL changes; restart both services to apply them. Unchanged environment values are not rewritten, avoiding Laravel's automatic HTTP reload. Restart cleanup requires an absolute Artisan path for this checkout or matching saved process creation time, executable and command line. Relative-command processes from older PID files without identity metadata must be stopped manually once.
+
 On a private Linux server, install the same prerequisites, run Composer and migrations in `app/backend`, and supervise HTTP, workers and scheduler. Existing Ubuntu/managed deployment scripts remain available. Upload the repository root: contracts/localization in `packages/` are runtime dependencies.
 
-Copy `.env.example` for a fresh installation and generate `APP_KEY` once. Back it up with the database: encrypted credentials and correction state require it.
+Copy `.env.example` for a fresh installation, then run `php artisan config:clear` and `php artisan instance:ensure-key --no-interaction`. Composer setup and Ubuntu deployment use the same command: an existing key is preserved, and only an absent key is generated. Back it up with the database: encrypted credentials and correction state require it.
 
 ## Provider configuration
 
@@ -80,7 +82,7 @@ The extension address is selected at build time; permissions cover only YouTube 
 | `SUBTITLE_CODEX_CONCURRENCY` | 3 Codex sessions (they share one login) |
 | `SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE` | 300 attempts per provider |
 | `SUBTITLE_BATCH_QUEUE_CONNECTION` | `redis-batch` |
-| `REDIS_QUEUE_RETRY_AFTER` / `SUBTITLE_WORKER_TIMEOUT_SECONDS` | 1260 / 1200 seconds (generation) |
+| `REDIS_QUEUE_RETRY_AFTER` / `SUBTITLE_WORKER_TIMEOUT_SECONDS` | 1380 / 1320 seconds (generation) |
 | `REDIS_BATCH_QUEUE_RETRY_AFTER` / `SUBTITLE_BATCH_WORKER_TIMEOUT_SECONDS` | 360 / 330 seconds (batch) |
 
 Tune processes to memory, CPU and provider quotas. HTTP and workers share Redis permits. Generation work (download, audio preparation, transcription chunks) runs on the `redis` connection. Batch work (analysis, transcript merge, track publication, lyrics correction) runs on `redis-batch` with a short retry window, so a killed worker's job returns before the stalled-job check fails the run. On each connection, retry-after must exceed its workers' timeout; `ops:production-check` verifies both. Eight-chunk transcription bounds, retries, overlap/run locks and stalled-worker detection remain technical safeguards.

@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$Php,
+    [string]$AppUrl = "http://127.0.0.1:8001",
+    [switch]$PreserveEnvironment,
     [switch]$SkipDocker,
     [switch]$SkipMigrate
 )
@@ -12,110 +14,12 @@ $Backend = Join-Path $Root "app\backend"
 $EnvPath = Join-Path $Backend ".env"
 $ExampleEnvPath = Join-Path $Backend ".env.example"
 
-function Invoke-CandidatePhp {
-    param(
-        [string]$Candidate,
-        [string[]]$PhpArgs,
-        [string[]]$CommandArgs
-    )
-
-    $previousErrorActionPreference = $global:ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-
-    try {
-        & $Candidate @PhpArgs @CommandArgs 2>$null
-    } finally {
-        $global:ErrorActionPreference = $previousErrorActionPreference
-    }
-}
-
-function Test-PhpInvocationHasPdoPgsql {
-    param(
-        [string]$Candidate,
-        [string[]]$PhpArgs
-    )
-
-    if (-not $Candidate -or -not (Test-Path $Candidate)) {
-        return $false
-    }
-
-    Invoke-CandidatePhp -Candidate $Candidate -PhpArgs $PhpArgs -CommandArgs @("-r", "exit(extension_loaded('pdo_pgsql') ? 0 : 1);") | Out-Null
-    return $LASTEXITCODE -eq 0
-}
-
-function Test-PhpInvocationCanRunArtisan {
-    param(
-        [string]$Candidate,
-        [string[]]$PhpArgs
-    )
-
-    Push-Location $Backend
-    try {
-        Invoke-CandidatePhp -Candidate $Candidate -PhpArgs $PhpArgs -CommandArgs @("artisan", "--version") | Out-Null
-        return $LASTEXITCODE -eq 0
-    } finally {
-        Pop-Location
-    }
-}
-
-function New-PhpRuntime {
-    param(
-        [string]$Binary,
-        [string[]]$RuntimeArgs
-    )
-
-    return [pscustomobject]@{
-        Binary = (Resolve-Path $Binary).Path
-        RuntimeArgs = $RuntimeArgs
-    }
-}
-
-function Resolve-PhpBinary {
-    $candidates = @()
-
-    if ($Php) {
-        $candidates += (New-PhpRuntime -Binary $Php -RuntimeArgs @())
-    }
-
-    $pathPhp = Get-Command php -ErrorAction SilentlyContinue
-    if ($pathPhp) {
-        $candidates += (New-PhpRuntime -Binary $pathPhp.Source -RuntimeArgs @())
-    }
-
-    $wingetPhp = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages\PHP.PHP.8.4_Microsoft.Winget.Source_8wekyb3d8bbwe\php.exe"
-    if (Test-Path $wingetPhp) {
-        $candidates += (New-PhpRuntime -Binary $wingetPhp -RuntimeArgs @())
-    }
-
-    foreach ($candidate in $candidates) {
-        Write-Verbose "Checking PHP candidate: $($candidate.Binary) $($candidate.RuntimeArgs -join ' ')"
-        $hasPdoPgsql = Test-PhpInvocationHasPdoPgsql -Candidate $candidate.Binary -PhpArgs $candidate.RuntimeArgs
-        $canRunArtisan = $false
-
-        if ($hasPdoPgsql) {
-            $canRunArtisan = Test-PhpInvocationCanRunArtisan -Candidate $candidate.Binary -PhpArgs $candidate.RuntimeArgs
-        }
-
-        Write-Verbose "Candidate result: pdo_pgsql=$hasPdoPgsql artisan=$canRunArtisan"
-
-        if (
-            $hasPdoPgsql -and
-            $canRunArtisan
-        ) {
-            return $candidate
-        }
-    }
-
-    throw "No PHP binary with pdo_pgsql was found. Install PHP 8.4 (`winget install --id PHP.PHP.8.4`) and enable pdo_pgsql in php.ini, or pass -Php C:\path\to\php.exe."
-}
+. (Join-Path $ScriptDir 'php-runtime.ps1')
 
 function Invoke-RuntimePhp {
     param([string[]]$CommandArgs)
-
-    & $phpRuntime.Binary @($phpRuntime.RuntimeArgs) @CommandArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "PHP command failed: $($CommandArgs -join ' ')"
-    }
+    & $phpBinary @CommandArgs
+    if ($LASTEXITCODE -ne 0) { throw "PHP command failed: $($CommandArgs -join ' ')" }
 }
 
 function Set-EnvValue {
@@ -128,15 +32,19 @@ function Set-EnvValue {
     $line = "$Key=$Value"
     $content = if (Test-Path $Path) { Get-Content -LiteralPath $Path } else { @() }
     $pattern = "^$([regex]::Escape($Key))="
+    if ($content -contains $line) { return }
+    if ($PreserveEnvironment) {
+        throw "The local profile needs to change $Key. Restart both backend and workers without -SkipBackend to apply it."
+    }
     $updated = $false
-    $next = foreach ($existing in $content) {
+    $next = @(foreach ($existing in $content) {
         if ($existing -match $pattern) {
             $updated = $true
             $line
         } else {
             $existing
         }
-    }
+    })
 
     if (-not $updated) {
         $next += $line
@@ -145,16 +53,16 @@ function Set-EnvValue {
     Set-Content -LiteralPath $Path -Value $next
 }
 
-$phpRuntime = Resolve-PhpBinary
-$phpPrefix = @($phpRuntime.Binary) + @($phpRuntime.RuntimeArgs)
-Write-Host "Using PHP: $($phpPrefix -join ' ')"
+$phpBinary = Resolve-PhpBinary -Preferred $Php -BackendPath $Backend
+Write-Host "Using PHP: $phpBinary"
 
 if (-not (Test-Path $EnvPath)) {
+    if ($PreserveEnvironment) { throw 'The local profile is missing. Start without -SkipBackend to create it.' }
     Copy-Item -LiteralPath $ExampleEnvPath -Destination $EnvPath
 }
 
 $runtimeEnv = @{
-    APP_URL = "http://127.0.0.1:8001"
+    APP_URL = $AppUrl
     DB_CONNECTION = "pgsql"
     DB_HOST = "127.0.0.1"
     DB_PORT = "55432"

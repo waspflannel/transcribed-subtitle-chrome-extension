@@ -350,7 +350,7 @@ foreach ($groups as $group) {
     $lines[] = "numprocs={$count}";
     $lines[] = "redirect_stderr=true";
     $lines[] = "stdout_logfile={$logDir}/tse-{$name}.log";
-    $lines[] = "stopwaitsecs=1260";
+    $lines[] = "stopwaitsecs=".($timeout + 60);
     $lines[] = "";
 }
 file_put_contents($output, implode("\n", $lines));
@@ -428,10 +428,8 @@ deploy() {
     (
         cd "$BACKEND"
         composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
-        if ! grep -Eq '^APP_KEY=base64:' .env; then
-            "$php" artisan key:generate --force --no-ansi
-        fi
         "$php" artisan config:clear --no-ansi
+        "$php" artisan instance:ensure-key --no-interaction --no-ansi
         if [[ "$SKIP_MIGRATE" -eq 0 ]]; then
             "$php" artisan migrate --force --no-ansi
         fi
