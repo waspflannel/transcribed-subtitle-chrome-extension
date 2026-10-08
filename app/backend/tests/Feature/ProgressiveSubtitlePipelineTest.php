@@ -520,15 +520,17 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertDatabaseCount('subtitle_job_artifacts', 0);
     }
 
-    #[TestWith([false])]
-    #[TestWith([true])]
-    public function test_untimed_chunk_tail_waits_until_its_cue_is_stable(bool $silentTail): void
+    #[TestWith([false, false])]
+    #[TestWith([true, false])]
+    #[TestWith([false, true])]
+    #[TestWith([true, true])]
+    public function test_untimed_chunk_tail_waits_until_its_cue_is_stable(bool $silentTail, bool $anchored): void
     {
         $job = $this->job();
         $this->transcribe($job, 0, ['language_code' => 'eng', 'words' => [
             ['text' => 'Earlier.', 'start' => 0.5, 'end' => 1, 'type' => 'word'],
             ['text' => 'Hello.', 'start' => 2, 'end' => 3, 'type' => 'word'],
-            ['text' => 'Again.', 'start' => 3, 'end' => 3, 'type' => 'word'],
+            ['text' => 'Again.', 'type' => 'word', ...($anchored ? ['start' => 3, 'end' => 3] : [])],
         ]]);
         $opening = $this->preview($job);
         $this->assertSame(['Earlier.'], array_column($opening['cues'], 'sourceText'));
@@ -548,7 +550,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
-        $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ['Earlier.', 'Hello.', 'Again. There.'],
+        $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ($anchored ? ['Earlier.', 'Hello. Again.', 'There.'] : ['Earlier.', 'Hello.', 'Again. There.']),
             array_column($job->fresh()->track->cues, 'sourceText'));
     }
 

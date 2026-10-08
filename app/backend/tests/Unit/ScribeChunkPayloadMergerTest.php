@@ -4,10 +4,66 @@ namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\Transcription\ScribeChunkPayloadMerger;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ScribeChunkPayloadMergerTest extends TestCase
 {
+    #[DataProvider('positionalZeroDurationWords')]
+    public function test_zero_duration_words_keep_their_position_across_chunks(array $left, array $right, array $expected): void
+    {
+        $merged = $this->merger()->merge([
+            $this->chunk(array_map(fn (array $word): array => $this->word(...$word), $left), 0.0, 0.0, 100.0),
+            $this->chunk(array_map(fn (array $word): array => $this->word(...$word), $right), 98.0, 100.0, null),
+        ]);
+
+        $this->assertSame($expected, array_map(
+            fn (array $word): array => [$word['text'], $word['start'], $word['end']],
+            $merged['words'],
+        ));
+    }
+
+    public static function positionalZeroDurationWords(): array
+    {
+        return [
+            'point offset and midpoint ownership' => [
+                [],
+                [['outside', 1.5, 1.5], ['す', 2.0, 2.0], ['next', 3.0, 4.0]],
+                [['す', 100.0, 100.0], ['next', 101.0, 102.0]],
+            ],
+            'asymmetric suffix timing preserves the base once' => [
+                [['base', 99.5, 99.9], ['suffix', 99.9, 100.1], ['next', 100.5, 101.0]],
+                [['base', 1.6, 2.4], ['suffix', 2.4, 2.4], ['next', 2.5, 3.0]],
+                [['base', 99.5, 99.9], ['suffix', 100.4, 100.4], ['next', 100.5, 101.0]],
+            ],
+            'interior point keeps the matching right duration' => [
+                [['word', 99.9, 99.9]],
+                [['word', 1.8, 2.4]],
+                [['word', 99.8, 100.4]],
+            ],
+            'interior point keeps the matching left duration' => [
+                [['word', 99.6, 100.2]],
+                [['word', 2.1, 2.1]],
+                [['word', 99.6, 100.2]],
+            ],
+            'touching repeated lyrics stay separate' => [
+                [['la', 99.0, 100.0]],
+                [['la', 2.0, 2.0]],
+                [['la', 99.0, 100.0], ['la', 100.0, 100.0]],
+            ],
+            'inherited boundary suffix matches a timed copy starting there' => [
+                [['base', 99.0, 100.0], ['suffix', 100.0, 100.0], ['next', 101.0, 102.0]],
+                [['base', 1.0, 2.0], ['suffix', 2.0, 2.2], ['next', 3.0, 4.0]],
+                [['base', 99.0, 100.0], ['suffix', 100.0, 100.2], ['next', 101.0, 102.0]],
+            ],
+            'equal points belong to exactly one chunk' => [
+                [['word', 100.0, 100.0]],
+                [['word', 2.0, 2.0]],
+                [['word', 100.0, 100.0]],
+            ],
+        ];
+    }
+
     public function test_offsets_word_timestamps_by_chunk_audio_start(): void
     {
         $merged = $this->merger()->merge([

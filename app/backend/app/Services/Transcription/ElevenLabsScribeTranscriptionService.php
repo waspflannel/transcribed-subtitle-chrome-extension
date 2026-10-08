@@ -167,7 +167,7 @@ class ElevenLabsScribeTranscriptionService
         // chunk supplies a following word. That final cue is not stable yet.
         $untimedTail = false;
         foreach (array_reverse($payload['words']) as $word) {
-            if (! is_numeric($word['start'] ?? null) || ! is_numeric($word['end'] ?? null)) {
+            if (! is_numeric($word['start'] ?? null) || ! is_numeric($word['end'] ?? null) || $word['end'] <= $word['start']) {
                 $untimedTail = true;
 
                 continue;
@@ -177,7 +177,7 @@ class ElevenLabsScribeTranscriptionService
             }
             break;
         }
-        if ($safeEnd <= 0 || ! array_filter($payload['words'], fn (array $word): bool => is_numeric($word['start'] ?? null) && is_numeric($word['end'] ?? null)) || ($sourceLanguage === 'auto'
+        if ($safeEnd <= 0 || ! array_filter($payload['words'], fn (array $word): bool => is_numeric($word['start'] ?? null) && is_numeric($word['end'] ?? null) && $word['end'] > $word['start']) || ($sourceLanguage === 'auto'
             && LanguageCatalog::normalizeCode($payload['language_code'] ?? null) === null)) {
             return null;
         }
@@ -284,10 +284,8 @@ class ElevenLabsScribeTranscriptionService
                     $this->failInvalidProviderPayload($provider, $model, 'invalid_word_timing', $context, $index);
                 }
 
-                if ($end > $start) {
-                    $normalized['start'] = $start;
-                    $normalized['end'] = $end;
-                }
+                $normalized['start'] = $start;
+                $normalized['end'] = $end;
             }
 
             $normalizedWords[] = $normalized;

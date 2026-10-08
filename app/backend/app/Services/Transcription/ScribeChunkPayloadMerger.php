@@ -8,9 +8,9 @@ use App\Services\Languages\LanguageCatalog;
 /**
  * Merges per-chunk Scribe payloads into one payload the normalizer can
  * consume. Word timestamps are offset by each chunk's audio start. Timed
- * words keep the existing nominal-midpoint ownership unless matching text
- * and strictly overlapping timing positively identify the same word in
- * adjacent overlap.
+ * words keep nominal-midpoint ownership; anchored point timestamps also
+ * travel with an owned preceding word. Matching text and overlapping timing
+ * identify duplicate words in adjacent chunks.
  *
  * Untimed word tokens carry no position of their own; they travel with the
  * next timed word in their chunk (matching how the normalizer glues them),
@@ -150,6 +150,11 @@ class ScribeChunkPayloadMerger
             $midpoint = ($start + $end) / 2;
             $owned = $midpoint >= $chunk['nominalStartSeconds']
                 && ($chunk['nominalEndSeconds'] === null || $midpoint < $chunk['nominalEndSeconds']);
+            $previous = $parsed[array_key_last($parsed)] ?? null;
+            if ($start === $end && $previous !== null && $previous['owned']
+                && $start >= $previous['start'] && $end <= $previous['end']) {
+                $owned = true;
+            }
 
             $parsed[] = [
                 'id' => $nextWordId++,
@@ -431,6 +436,15 @@ class ScribeChunkPayloadMerger
      */
     private function boundaryTimingAgrees(array $leftWord, array $rightWord): bool
     {
+        if ($leftWord['start'] === $leftWord['end']) {
+            return $rightWord['start'] === $rightWord['end']
+                ? $leftWord['start'] === $rightWord['start']
+                : $rightWord['start'] <= $leftWord['start'] && $leftWord['start'] < $rightWord['end'];
+        }
+        if ($rightWord['start'] === $rightWord['end']) {
+            return $leftWord['start'] <= $rightWord['start'] && $rightWord['start'] < $leftWord['end'];
+        }
+
         return max($leftWord['start'], $rightWord['start'])
             < min($leftWord['end'], $rightWord['end']);
     }
@@ -442,6 +456,10 @@ class ScribeChunkPayloadMerger
      */
     private function boundaryWinner(array $keep, array $leftWord, array $rightWord): int
     {
+        if (($leftWord['start'] === $leftWord['end']) !== ($rightWord['start'] === $rightWord['end'])) {
+            return $leftWord['end'] > $leftWord['start'] ? $leftWord['id'] : $rightWord['id'];
+        }
+
         $leftKept = $keep[$leftWord['id']] ?? false;
         $rightKept = $keep[$rightWord['id']] ?? false;
 
@@ -461,7 +479,7 @@ class ScribeChunkPayloadMerger
             return false;
         }
 
-        return (float) $token['start'] >= 0 && (float) $token['end'] > (float) $token['start'];
+        return (float) $token['start'] >= 0 && (float) $token['end'] >= (float) $token['start'];
     }
 
     private function failInvalidChunk(string $reason, ?int $chunkIndex): never

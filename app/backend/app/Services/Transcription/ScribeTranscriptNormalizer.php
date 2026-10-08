@@ -121,6 +121,16 @@ class ScribeTranscriptNormalizer
             $start = (float) $token['start'];
             $end = (float) $token['end'];
 
+            // A point timestamp inside the preceding word anchors its suffix,
+            // even though it cannot supply a standalone cue duration.
+            $lastWordIndex = array_key_last($words);
+            if ($start === $end && $lastWordIndex !== null && $pendingUntimedText === []
+                && $start >= $words[$lastWordIndex]['start'] && $end <= $words[$lastWordIndex]['end']) {
+                $words[$lastWordIndex]['text'] .= ' '.$text;
+
+                continue;
+            }
+
             if ($start < 0 || $end <= $start) {
                 $pendingUntimedText[] = $text;
                 $untimedWordCount++;

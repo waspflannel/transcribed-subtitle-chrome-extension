@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
 class ElevenLabsScribeTranscriptionServiceTest extends TestCase
@@ -253,7 +254,7 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         }
     }
 
-    public function test_it_normalizes_zero_duration_tokens_as_untimed(): void
+    public function test_it_preserves_zero_duration_positions_for_chunk_merging(): void
     {
         Http::fake([
             'api.elevenlabs.test/v1/speech-to-text' => Http::response([
@@ -268,8 +269,8 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
 
         $payload = $this->service()->transcribeChunk($this->audio, 'por');
 
-        $this->assertSame(['text' => 'Ei', 'type' => 'word'], $payload['words'][0]);
-        $this->assertSame(['text' => ' ', 'type' => 'spacing'], $payload['words'][1]);
+        $this->assertSame(['text' => 'Ei', 'type' => 'word', 'start' => 0.5, 'end' => 0.5], $payload['words'][0]);
+        $this->assertSame(['text' => ' ', 'type' => 'spacing', 'start' => 0.5, 'end' => 0.5], $payload['words'][1]);
         $this->assertSame(
             ['text' => 'mundo', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
             $payload['words'][2],
@@ -288,6 +289,85 @@ class ElevenLabsScribeTranscriptionServiceTest extends TestCase
         $payload = $this->service()->transcribeChunk($this->audio, 'spa');
 
         $this->assertSame(['text' => 'Hola', 'type' => 'word'], $payload['words'][0]);
+    }
+
+    #[TestWith(['jpn', 'そうで', 'す', 'そうです。'])]
+    #[TestWith(['cmn', '你', '好', '你好。'])]
+    #[TestWith(['eng', 'Hello', 'there', 'Hello there 。'])]
+    public function test_zero_duration_suffixes_stay_before_the_pause(string $language, string $word, string $suffix, string $expected): void
+    {
+        Http::fake(['*' => Http::response(['words' => [
+            ['text' => $word, 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+            ['text' => ' ', 'type' => 'spacing', 'start' => 1.0, 'end' => 1.0],
+            ['text' => $suffix, 'type' => 'word', 'start' => 1.0, 'end' => 1.0],
+            ['text' => '。', 'type' => 'word', 'start' => 1.0, 'end' => 1.0],
+            ['text' => 'Next.', 'type' => 'word', 'start' => 3.0, 'end' => 4.0],
+        ]])]);
+
+        $service = $this->service();
+        $payload = $service->transcribeChunk($this->audio, $language);
+        $chunks = [[
+            'payload' => $payload,
+            'audioStartSeconds' => 0.0,
+            'nominalStartSeconds' => 0.0,
+            'nominalEndSeconds' => null,
+            'nextAudioStartSeconds' => 2.0,
+        ]];
+        $complete = $service->transcriptFromChunkPayloads($chunks, $language, 12);
+        $prefix = $service->stableTranscriptPrefix($chunks, $language, 12);
+
+        $this->assertSame([$expected, 'Next.'], array_column($complete->segments, 'text'));
+        $this->assertSame(0.5, $complete->segments[0]->startSeconds);
+        $this->assertSame(1.0, $complete->segments[0]->endSeconds);
+        $this->assertEquals([$complete->segments[0]], $prefix->segments);
+    }
+
+    #[TestWith([2.0, false])]
+    #[TestWith([1.0, true])]
+    public function test_zero_duration_suffix_keeps_its_anchor_chunk_ownership(float $boundary, bool $silentTail): void
+    {
+        Http::fake(['*' => Http::response(['words' => [
+            ['text' => 'そうで', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+            ['text' => 'す。', 'type' => 'word', 'start' => 1.0, 'end' => 1.0],
+            ['text' => 'Next.', 'type' => 'word', 'start' => 3.0, 'end' => 4.0],
+        ]])]);
+        $service = $this->service();
+        $payload = $service->transcribeYouTube('dQw4w9WgXcQ', 'jpn');
+        $chunks = array_map(fn (array $bounds): array => [
+            'payload' => $silentTail && $bounds[0] === $boundary ? ['words' => []] : $payload,
+            'audioStartSeconds' => 0.0,
+            'nominalStartSeconds' => $bounds[0],
+            'nominalEndSeconds' => $bounds[1],
+        ], [[0.0, $boundary], [$boundary, null]]);
+
+        $transcript = $service->transcriptFromChunkPayloads($chunks, 'jpn', 12);
+
+        $this->assertSame($silentTail ? ['そうです。'] : ['そうです。', 'Next.'], array_column($transcript->segments, 'text'));
+    }
+
+    public function test_unanchored_zero_duration_and_untimed_words_still_follow_the_next_word(): void
+    {
+        Http::fake(['*' => Http::response(['words' => [
+            ['text' => 'Earlier.', 'type' => 'word', 'start' => 0.5, 'end' => 1.0],
+            ['text' => 'A', 'type' => 'word', 'start' => 3.0, 'end' => 3.0],
+            ['text' => 'new', 'type' => 'word'],
+            ['text' => 'line.', 'type' => 'word', 'start' => 3.0, 'end' => 4.0],
+        ]])]);
+
+        $transcript = $this->transcribeWholeAudio($this->audio, 'eng');
+
+        $this->assertSame(['Earlier.', 'A new line.'], array_column($transcript->segments, 'text'));
+    }
+
+    public function test_streaming_waits_when_a_chunk_only_contains_point_timestamps(): void
+    {
+        $this->assertNull($this->service()->stableTranscriptPrefix([[
+            'payload' => ['words' => [['text' => 'す。', 'type' => 'word', 'start' => 1.0, 'end' => 1.0]]],
+            'audioStartSeconds' => 0.0,
+            'nominalStartSeconds' => 0.0,
+            'nominalEndSeconds' => 5.0,
+            'nextAudioStartSeconds' => 3.0,
+        ]], 'jpn', 12));
     }
 
     public function test_it_merges_chunk_payloads_dropping_overlap_duplicates(): void
