@@ -69,9 +69,15 @@ while (($line = fgets(STDIN)) !== false) {
 
         continue;
     } elseif ($method === 'account/read') {
-        $result = ['account' => is_file($home.'/authenticated') ? ['type' => $scenario === 'api-key' ? 'apiKey' : 'chatgpt', 'email' => 'not-returned@example.invalid'] : null];
+        $revoked = $scenario === 'revoked' && ($params['refreshToken'] ?? false);
+        $result = ['account' => is_file($home.'/authenticated') && ! $revoked ? ['type' => $scenario === 'api-key' ? 'apiKey' : 'chatgpt', 'email' => 'not-returned@example.invalid'] : null];
     } elseif ($method === 'account/login/cancel' && $scenario === 'cancel-pending') {
         sleep(10);
+    } elseif ($method === 'test/notify') {
+        for ($i = 0; $i < 1000; $i++) {
+            $send(['method' => 'item/agentMessage/delta', 'params' => ['delta' => 'x']]);
+        }
+        $send(['method' => 'item/completed', 'params' => ['item' => ['type' => 'agentMessage']]]);
     } elseif ($method === 'model/list') {
         $result = ($params['cursor'] ?? null) === null
             ? ['data' => [['id' => 'preset-fast', 'model' => 'gpt-test', 'displayName' => 'Test Model', 'hidden' => false, 'additionalSpeedTiers' => ['fast']]], 'nextCursor' => 'page-2']
@@ -106,7 +112,7 @@ while (($line = fgets(STDIN)) !== false) {
         ]]]);
         $info = match ($scenario) {
             'quota' => 'usageLimitExceeded',
-            'unauthorized' => 'unauthorized',
+            'unauthorized', 'revoked' => 'unauthorized',
             'rate-limit' => ['httpConnectionFailed' => ['httpStatusCode' => 429]],
             default => null,
         };

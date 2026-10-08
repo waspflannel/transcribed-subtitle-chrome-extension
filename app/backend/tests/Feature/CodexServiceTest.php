@@ -6,6 +6,7 @@ use App\Ai\Agents\SubtitleAgent;
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\ConnectCodexAccount;
+use App\Services\Codex\CodexProcess;
 use App\Services\Codex\CodexService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -349,7 +350,7 @@ class CodexServiceTest extends TestCase
 
     public function test_quota_auth_and_rate_limits_keep_distinct_safe_failures(): void
     {
-        foreach (['quota' => 'enrichment_failed', 'rate-limit' => 'rate_limited', 'unauthorized' => 'provider_not_configured'] as $scenario => $code) {
+        foreach (['quota' => 'enrichment_failed', 'rate-limit' => 'rate_limited', 'unauthorized' => 'provider_unavailable', 'revoked' => 'provider_not_configured'] as $scenario => $code) {
             $this->scenario('success');
             $codex = $this->connected();
             $this->scenario($scenario);
@@ -363,6 +364,52 @@ class CodexServiceTest extends TestCase
                 $codex->disconnect();
             }
         }
+    }
+
+    public function test_one_unauthorized_turn_keeps_the_shared_login_until_a_fresh_check_rejects_it(): void
+    {
+        $codex = $this->connected();
+        $home = $this->home.'/'.json_decode(file_get_contents($this->home.'/connection.json'), true)['active'];
+        $this->scenario('unauthorized');
+        try {
+            $codex->prompt($this->agent(), [], new SubtitleModel('codex', 'gpt-test'));
+            $this->fail('Expected a retryable failure.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertTrue($exception->isTransient());
+        }
+        $this->assertDirectoryExists($home);
+        $this->assertTrue($codex->summary()['connected']);
+        $this->assertSame(['refreshToken' => true], collect($this->requests())->where('method', 'account/read')->last()['params']);
+
+        $this->scenario('revoked');
+        try {
+            $codex->prompt($this->agent(), [], new SubtitleModel('codex', 'gpt-test'));
+            $this->fail('Expected a reconnect failure.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('provider_not_configured', $exception->publicCode);
+        }
+        $this->assertDirectoryDoesNotExist($home);
+        $this->assertFalse($codex->summary()['connected']);
+    }
+
+    public function test_sessions_keep_needed_notifications_and_drop_streaming_deltas(): void
+    {
+        File::ensureDirectoryExists($this->home.'/session');
+        $process = new CodexProcess($this->home.'/session', 3);
+        try {
+            $process->request('test/notify');
+            $retained = (fn (): array => $this->messages)->call($process);
+            $this->assertSame(['item/completed'], array_column($retained, 'method'));
+            $this->assertSame('agentMessage', $process->until(fn (array $message): bool => ($message['method'] ?? null) === 'item/completed')['params']['item']['type']);
+        } finally {
+            $process->close();
+        }
+    }
+
+    public function test_unsupported_cli_message_names_the_enforced_minimum_version(): void
+    {
+        $this->scenario('old-version');
+        $this->assertSame('Install Codex CLI 0.161.0 or newer on the backend and set CODEX_BINARY.', app(CodexService::class)->summary()['error']);
     }
 
     public function test_inherited_service_environment_is_removed(): void

@@ -21,9 +21,14 @@ final class ProviderAdmission
         $lease = max((int) config('subtitles.providers.lease_seconds', 660),
             (int) config('subtitles.enrichment.timeout_seconds', 120) + 60,
             (int) config('subtitles.transcription.timeout_seconds', 600) + 60);
+        $limit = max(1, (int) config('subtitles.providers.global_concurrency', 30));
+        if ($provider === 'codex') {
+            // Every Codex process shares one login file, so keep parallel sessions few.
+            $limit = min($limit, max(1, (int) config('subtitles.providers.codex_concurrency', 3)));
+        }
         try {
             return $cache->funnel('subtitle-provider:concurrency:'.$provider.':')
-                ->limit(max(1, (int) config('subtitles.providers.global_concurrency', 30)))
+                ->limit($limit)
                 ->releaseAfter($lease)->block(0)->then(function () use ($cache, $provider, $job, $request): mixed {
                     $cache->lock('subtitle-provider:rate-lock', 10)->block(1, function () use ($cache, $provider): void {
                         $limiter = new RateLimiter($cache);

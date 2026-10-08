@@ -6,6 +6,7 @@ use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Models\SubtitleJob;
+use App\Services\Codex\CodexService;
 use App\Services\InstanceSettings;
 use App\Services\Subtitles\ProviderAdmission;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
@@ -156,6 +157,23 @@ class ProviderControlsTest extends TestCase
         $queued->setJob($queueJob);
         $queued->handle($processor);
         $this->assertTrue(true);
+    }
+
+    public function test_codex_capacity_is_capped_below_the_global_limit(): void
+    {
+        config(['subtitles.providers.global_concurrency' => 30, 'subtitles.providers.codex_concurrency' => 1]);
+        $this->mock(CodexService::class)->shouldReceive('requireConnected');
+        $job = SubtitleJob::factory()->create(['status' => 'completed']);
+        $gate = app(ProviderAdmission::class);
+        $gate->run('codex', $job, function () use ($gate, $job): void {
+            try {
+                $gate->run('codex', $job, fn () => $this->fail('A second Codex session was admitted.'));
+                $this->fail('Expected capacity rejection.');
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertSame('provider_admission', $exception->context['reason']);
+            }
+            $this->assertSame('admitted', $gate->run('openai', $job, fn () => 'admitted'));
+        });
     }
 
     public function test_different_providers_have_independent_capacity_without_an_account(): void

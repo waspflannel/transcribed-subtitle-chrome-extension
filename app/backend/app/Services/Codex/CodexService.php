@@ -26,7 +26,7 @@ class CodexService
             'login' => $state['login'] ?? null,
         ];
         if (! $summary['available']) {
-            return [...$summary, 'error' => 'Install Codex CLI 0.123.0 or newer on the backend and set CODEX_BINARY.'];
+            return [...$summary, 'error' => 'Install Codex CLI '.CodexProcess::MINIMUM_VERSION.' or newer on the backend and set CODEX_BINARY.'];
         }
         if (! isset($state['active'])) {
             return $summary;
@@ -47,11 +47,7 @@ class CodexService
 
             return [...$summary, 'connected' => isset($state['active']), 'models' => $state['models'] ?? [], 'login' => $state['login'] ?? null];
         } catch (SubtitleProcessingException $exception) {
-            if ($exception->publicCode === 'provider_not_configured') {
-                $this->state(fn (array $current): array => ($current['active'] ?? null) === $state['active'] ? [] : $current);
-                $this->removeHome($state['active']);
-            }
-
+            // withSession clears the login only after a fresh session confirms it is gone.
             return [...$summary, 'error' => $exception->getMessage()];
         } catch (Throwable) {
             return [...$summary, 'error' => 'Codex connection could not be checked. Reconnect or try again.'];
@@ -386,7 +382,13 @@ class CodexService
 
             return $callback($session);
         } catch (SubtitleProcessingException $exception) {
-            if ($requireActive && $exception->publicCode === 'provider_not_configured') {
+            if ($requireActive && $exception->publicCode === 'provider_not_configured' && ($this->state()['active'] ?? null) === $attempt) {
+                // Every session shares one login, so one turn's 401 may be a refresh race, not a logout.
+                $session?->close();
+                $session = null;
+                if (! $this->accountRevoked($attempt)) {
+                    throw CodexProcess::failure();
+                }
                 $this->state(fn (array $state): array => ($state['active'] ?? null) === $attempt ? [] : $state);
             }
             throw $exception;
@@ -397,6 +399,21 @@ class CodexService
             if ($requireActive && ($this->state()['active'] ?? null) !== $attempt) {
                 $this->removeHome($attempt);
             }
+        }
+    }
+
+    /** A fresh session refreshes the shared login; only a definite rejection means it is gone. */
+    private function accountRevoked(string $attempt): bool
+    {
+        $session = null;
+        try {
+            $session = new CodexProcess($this->home($attempt), (int) config('codex.request_timeout_seconds'));
+
+            return ($session->request('account/read', ['refreshToken' => true])['account']['type'] ?? null) !== 'chatgpt';
+        } catch (SubtitleProcessingException $exception) {
+            return $exception->publicCode === 'provider_not_configured';
+        } finally {
+            $session?->close();
         }
     }
 

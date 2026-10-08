@@ -4,6 +4,7 @@ namespace App\Services\Codex;
 
 use App\Exceptions\SubtitleProcessingException;
 use Closure;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\Process\InputStream;
 use Symfony\Component\Process\Process;
 use Throwable;
@@ -11,6 +12,11 @@ use Throwable;
 /** One bounded stdio session. Raw process failures never escape. */
 class CodexProcess
 {
+    public const MINIMUM_VERSION = '0.161.0';
+
+    /** Notifications a later matcher may still need; others (deltas, usage, status) are dropped. */
+    private const RETAINED_NOTIFICATIONS = ['item/started', 'item/completed', 'turn/completed', 'account/login/completed'];
+
     private Process $process;
 
     private InputStream $input;
@@ -57,21 +63,26 @@ class CodexProcess
         }
     }
 
+    /** Cached briefly so settings reads do not start a CLI process each time. */
     public static function available(): bool
     {
-        try {
-            $process = new Process([...(array) config('codex.command'), '--version'], timeout: 5);
-            $process->run();
+        $command = (array) config('codex.command');
 
-            return $process->isSuccessful()
-                && preg_match('/codex-cli (\d+\.\d+\.\d+)/', $process->getOutput(), $matches) === 1
-                && version_compare($matches[1], '0.161.0', '>=');
-        } catch (Throwable) {
-            return false;
-        }
+        return Cache::remember('codex:available:'.md5(json_encode($command)), 60, function () use ($command): bool {
+            try {
+                $process = new Process([...$command, '--version'], timeout: 5);
+                $process->run();
+
+                return $process->isSuccessful()
+                    && preg_match('/codex-cli (\d+\.\d+\.\d+)/', $process->getOutput(), $matches) === 1
+                    && version_compare($matches[1], self::MINIMUM_VERSION, '>=');
+            } catch (Throwable) {
+                return false;
+            }
+        });
     }
 
-    /** CLI configuration names verified against the 0.161.0 schema. */
+    /** CLI configuration names verified against the MINIMUM_VERSION schema. */
     private static function configuration(): array
     {
         return [
@@ -130,22 +141,18 @@ class CodexProcess
     {
         $nextTick = 0;
         try {
+            // Messages kept by earlier calls are scanned once; new ones are matched as they arrive.
+            foreach ($this->messages as $key => $message) {
+                if ($matches($message)) {
+                    unset($this->messages[$key]);
+
+                    return $message;
+                }
+            }
             while (microtime(true) < $this->deadline) {
                 if (microtime(true) >= $nextTick) {
                     $tick?->__invoke();
                     $nextTick = microtime(true) + 0.25;
-                }
-                foreach ($this->messages as $key => $message) {
-                    if (array_key_exists('id', $message) && isset($message['method'])) {
-                        // Never approve execution, credential refresh, or interactive requests.
-                        $this->send(['id' => $message['id'], 'error' => ['code' => -32601, 'message' => 'Unsupported request.']]);
-                        throw self::failure();
-                    }
-                    if ($matches($message)) {
-                        unset($this->messages[$key]);
-
-                        return $message;
-                    }
                 }
                 $running = $this->process->isRunning();
                 $chunk = $this->process->getOutput();
@@ -163,7 +170,17 @@ class CodexProcess
                     if (! is_array($message)) {
                         throw self::failure();
                     }
-                    $this->messages[] = $message;
+                    if (array_key_exists('id', $message) && isset($message['method'])) {
+                        // Never approve execution, credential refresh, or interactive requests.
+                        $this->send(['id' => $message['id'], 'error' => ['code' => -32601, 'message' => 'Unsupported request.']]);
+                        throw self::failure();
+                    }
+                    if ($matches($message)) {
+                        return $message;
+                    }
+                    if (! isset($message['method']) || in_array($message['method'], self::RETAINED_NOTIFICATIONS, true)) {
+                        $this->messages[] = $message;
+                    }
                 }
                 if (! $running && $chunk === '') {
                     throw self::failure();

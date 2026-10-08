@@ -104,6 +104,7 @@ return [
 
     'providers' => [
         'global_concurrency' => (int) env('SUBTITLE_PROVIDER_GLOBAL_CONCURRENCY', 30),
+        'codex_concurrency' => (int) env('SUBTITLE_CODEX_CONCURRENCY', 3),
         'concurrency_cache_store' => env('SUBTITLE_CONCURRENCY_CACHE_STORE', 'subtitle_concurrency'),
         'release_delay_seconds' => (int) env('SUBTITLE_CONCURRENCY_RELEASE_DELAY_SECONDS', 2),
         'lease_seconds' => (int) env('SUBTITLE_CONCURRENCY_LEASE_SECONDS', 660),
