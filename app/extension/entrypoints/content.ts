@@ -28,6 +28,7 @@ const YOUTUBE_ROUTE_EVENTS = ['yt-navigate-finish', 'yt-page-data-updated', 'pop
 const ROUTE_REHYDRATE_DELAY_MS = 150;
 const VIDEO_BIND_RETRY_LIMIT = 10;
 const VIDEO_BIND_RETRY_DELAY_MS = 300;
+const STUDY_HOVER_RELEASE_DELAY_MS = 150;
 
 export default defineContentScript({
   matches: ['*://*.youtube.com/*'],
@@ -52,6 +53,7 @@ export default defineContentScript({
     let studyPauseOwned = false;
     let studyPauseRequestVideo: HTMLVideoElement | null = null;
     let studyPauseCycle = 0;
+    let studyHoverReleaseTimer: number | undefined;
     const pendingTokenKeys = new Set<string>();
     const failedTokenKeys = new Set<string>();
     let disposed = false;
@@ -425,6 +427,7 @@ export default defineContentScript({
         videoBindRetryTimer = undefined;
       }
       releaseStudyPause();
+      clearStudyHoverRelease();
       studyHoverActive = false;
       studyFocusActive = false;
       studyPauseRequestVideo = null;
@@ -742,14 +745,27 @@ export default defineContentScript({
     }
 
     function beginStudyHover(): void {
+      clearStudyHoverRelease();
       studyPauseCycle += 1;
       studyHoverActive = true;
       pauseVideoForStudy();
     }
 
+    // Moving between adjacent words fires leave then enter. Wait briefly so
+    // playback does not resume and pause again between them.
     function endStudyHover(): void {
       studyHoverActive = false;
-      releaseStudyPauseWhenIdle();
+      clearStudyHoverRelease();
+      studyHoverReleaseTimer = window.setTimeout(() => {
+        studyHoverReleaseTimer = undefined;
+        if (!disposed) releaseStudyPauseWhenIdle();
+      }, STUDY_HOVER_RELEASE_DELAY_MS);
+    }
+
+    function clearStudyHoverRelease(): void {
+      if (studyHoverReleaseTimer === undefined) return;
+      window.clearTimeout(studyHoverReleaseTimer);
+      studyHoverReleaseTimer = undefined;
     }
 
     function beginStudyFocus(): void {

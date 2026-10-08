@@ -13,7 +13,8 @@ export interface KeyboardShortcutDefinition {
   label: string;
   description: string;
   display: string;
-  key: string;
+  /** Physical key (KeyboardEvent.code). Option+Shift on macOS and non-US layouts change `key`, not `code`. */
+  code: string;
   altKey: boolean;
   shiftKey: boolean;
   ctrlKey: boolean;
@@ -26,7 +27,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Replay cue',
     description: 'Replay the active subtitle cue from its start.',
     display: 'Alt+Shift+R',
-    key: 'r',
+    code: 'KeyR',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -37,7 +38,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Previous cue',
     description: 'Jump to the previous generated subtitle cue.',
     display: 'Alt+Shift+Left',
-    key: 'arrowleft',
+    code: 'ArrowLeft',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -48,7 +49,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Next cue',
     description: 'Jump to the next generated subtitle cue.',
     display: 'Alt+Shift+Right',
-    key: 'arrowright',
+    code: 'ArrowRight',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -59,7 +60,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Translation',
     description: 'Show or hide cue translations.',
     display: 'Alt+Shift+T',
-    key: 't',
+    code: 'KeyT',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -70,7 +71,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Source blur',
     description: 'Blur or reveal source words.',
     display: 'Alt+Shift+B',
-    key: 'b',
+    code: 'KeyB',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -81,7 +82,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Hover pause',
     description: 'Turn word-hover video pause on or off.',
     display: 'Alt+Shift+A',
-    key: 'a',
+    code: 'KeyA',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -92,7 +93,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Transcript',
     description: 'Focus the side-panel Transcript view.',
     display: 'Alt+Shift+X',
-    key: 'x',
+    code: 'KeyX',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -103,7 +104,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
     label: 'Copy cue',
     description: 'Copy the active cue text.',
     display: 'Alt+Shift+C',
-    key: 'c',
+    code: 'KeyC',
     altKey: true,
     shiftKey: true,
     ctrlKey: false,
@@ -112,17 +113,16 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcutDefinition[] =
 ];
 
 export function shortcutActionFromKeyboardEvent(
-  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey' | 'target' | 'composedPath'>,
+  event: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'code' | 'metaKey' | 'shiftKey' | 'target' | 'composedPath'>,
   options: { enabled: boolean },
 ): KeyboardShortcutAction | null {
   if (!options.enabled || isEditableShortcutTarget(event)) {
     return null;
   }
 
-  const key = event.key.toLowerCase();
   const shortcut = DEFAULT_KEYBOARD_SHORTCUTS.find(
     (candidate) =>
-      candidate.key === key &&
+      candidate.code === event.code &&
       candidate.altKey === event.altKey &&
       candidate.shiftKey === event.shiftKey &&
       candidate.ctrlKey === event.ctrlKey &&

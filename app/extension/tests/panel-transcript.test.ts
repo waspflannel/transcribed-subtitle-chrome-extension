@@ -16,6 +16,15 @@ describe('filterTranscriptCues', () => {
     expect(filterTranscriptCues(cues, 'goodbye').map((c) => c.cueId)).toEqual(['c2']);
     expect(filterTranscriptCues(cues, 'o-la').map((c) => c.cueId)).toEqual(['c1']);
   });
+  it('matches full-width and half-width forms both ways', () => {
+    const japanese: SubtitleCue[] = [
+      { ...cues[0], cueId: 'k', sourceText: 'ｶﾗｵｹ ＡＢＣ', tokens: [{ index: 0, text: 'ｶﾗｵｹ', normalizedText: 'ｶﾗｵｹ' }] },
+      { ...cues[1], cueId: 'w', sourceText: 'カラオケ abc', tokens: [{ index: 0, text: 'カラオケ', normalizedText: 'カラオケ' }] },
+    ];
+    expect(filterTranscriptCues(japanese, 'カラオケ').map((c) => c.cueId)).toEqual(['k', 'w']);
+    expect(filterTranscriptCues(japanese, 'ａｂｃ').map((c) => c.cueId)).toEqual(['k', 'w']);
+    expect(panelPartialTranscriptListHtml({ cues: japanese, activeCueId: null, query: 'ｶﾗｵｹ' })).toContain('data-cue-id="w"');
+  });
 });
 
 describe('panelTranscriptListHtml', () => {

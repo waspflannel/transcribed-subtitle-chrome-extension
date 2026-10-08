@@ -302,6 +302,40 @@ describe('content study pause ownership', () => {
     video.remove();
   });
 
+  it('stays paused while the pointer moves between adjacent words', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    const video = document.createElement('video');
+    setVideoRect(video);
+    document.body.append(video);
+    setVideoPaused(video, false);
+    Object.defineProperty(video, 'ended', { configurable: true, value: false });
+    const pause = vi.fn(() => setVideoPaused(video, true));
+    const play = vi.fn(() => { setVideoPaused(video, false); return Promise.resolve(); });
+    video.pause = pause;
+    video.play = play;
+    let invalidate!: () => void;
+    (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
+    await Promise.resolve();
+    await Promise.resolve();
+    messageListener()({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState() }, {}, () => {});
+    const token = document.querySelector('#tse-overlay-host')!.shadowRoot!.querySelector<HTMLButtonElement>('[data-token-index]')!;
+
+    token.dispatchEvent(new Event('pointerenter'));
+    token.dispatchEvent(new Event('pointerleave'));
+    vi.advanceTimersByTime(100);
+    token.dispatchEvent(new Event('pointerenter'));
+    vi.advanceTimersByTime(500);
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(play).not.toHaveBeenCalled();
+
+    token.dispatchEvent(new Event('pointerleave'));
+    vi.advanceTimersByTime(149);
+    expect(play).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(play).toHaveBeenCalledTimes(1);
+    invalidate();
+  });
+
   it('binds a player that mounts after the track before handling a transcript jump', async () => {
     const { default: contentScript } = await import('../entrypoints/content');
     let invalidate: (() => void) | null = null;

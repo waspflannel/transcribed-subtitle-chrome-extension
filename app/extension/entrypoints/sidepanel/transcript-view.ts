@@ -2,7 +2,7 @@ import { escapeHtml } from '../../utils/html';
 import { t } from '../../utils/i18n';
 import type { PartialSubtitleCue, SubtitleCue } from '../../utils/contracts';
 import type { ExtensionSettings } from '../../utils/settings-model';
-import { panelPartialTranscriptListHtml, panelTranscriptListHtml, transcriptSearchText, type TranscriptLanguages } from '../../utils/panel/transcript';
+import { panelPartialTranscriptListHtml, panelTranscriptListHtml, searchFold, transcriptSearchText, type TranscriptLanguages } from '../../utils/panel/transcript';
 import { lyricsCharacterCount, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
 
 export interface QuickFixSelection {
@@ -272,7 +272,7 @@ export function bindTranscriptView(dom: {
     },
     setPartialData(nextYoutubeVideoId: string, nextCues: readonly PartialSubtitleCue[], nextSettings: ExtensionSettings, nextLanguages?: TranscriptLanguages) {
       const signature = JSON.stringify(nextCues);
-      if (!partial || signature !== cueContentSignature) searchableText = nextCues.map((cue) => cue.sourceText.toLowerCase());
+      if (!partial || signature !== cueContentSignature) searchableText = nextCues.map((cue) => searchFold(cue.sourceText));
       if (signature !== cueContentSignature) cueRevision += 1;
       cueContentSignature = signature;
       youtubeVideoId = nextYoutubeVideoId; cues = []; partialCues = nextCues; partial = true; settings = nextSettings; languages = nextLanguages; render();

@@ -21,19 +21,24 @@ export interface QuickFixEditing {
   value: string;
 }
 
+/** NFKC makes full-width and half-width forms (ＡＢＣ/ABC, ｶﾀｶﾅ/カタカナ) match; then case-fold. */
+export function searchFold(text: string): string {
+  return text.normalize('NFKC').toLowerCase();
+}
+
 export function filterTranscriptCues(cues: readonly SubtitleCue[], query: string, searchableText?: readonly string[]): SubtitleCue[] {
-  const q = query.trim().toLowerCase();
+  const q = searchFold(query.trim());
   if (q === '') return [...cues];
   return cues.filter((cue, index) => (searchableText?.[index] ?? transcriptSearchText(cue)).includes(q));
 }
 
 export function transcriptSearchText(cue: SubtitleCue): string {
-  return [
+  return searchFold([
     cue.sourceText,
     cue.romanization ?? '',
     cue.translatedText,
     ...cue.tokens.flatMap((t) => [t.text, t.normalizedText, t.romanization ?? '', t.gloss ?? '', t.translation ?? '']),
-  ].join(' ').toLowerCase();
+  ].join(' '));
 }
 
 function timecode(ms: number): string {
@@ -66,10 +71,10 @@ export function panelPartialTranscriptListHtml(input: {
   searchableText?: readonly string[];
   languages?: TranscriptLanguages;
 }): string {
-  const query = input.query.trim().toLowerCase();
+  const query = searchFold(input.query.trim());
   const cues = query === ''
     ? input.cues
-    : input.cues.filter((cue, index) => (input.searchableText?.[index] ?? cue.sourceText.toLowerCase()).includes(query));
+    : input.cues.filter((cue, index) => (input.searchableText?.[index] ?? searchFold(cue.sourceText)).includes(query));
 
   if (cues.length === 0) return `<p class="transcript-empty muted">${escapeHtml(t("No cues match that search."))}</p>`;
 
