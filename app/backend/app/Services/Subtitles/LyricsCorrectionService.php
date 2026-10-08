@@ -1077,6 +1077,10 @@ final class LyricsCorrectionService
      */
     private function findComparableSpan(string $sourceText, string $tokenText, int $cursor): ?array
     {
+        // Fold typographic quotes only for comparison; offsets still refer to the original text.
+        $quotes = ['‘' => "'", '’' => "'", '“' => '"', '”' => '"'];
+        $tokenText = strtr($tokenText, $quotes);
+
         if ($tokenText === '') {
             return null;
         }
@@ -1089,7 +1093,7 @@ final class LyricsCorrectionService
             }
 
             for ($end = $start + 1; $end <= $sourceLength; $end++) {
-                $candidate = $this->tokenValidator->normalizeTokenText(mb_substr($sourceText, $start, $end - $start, 'UTF-8'));
+                $candidate = strtr($this->tokenValidator->normalizeTokenText(mb_substr($sourceText, $start, $end - $start, 'UTF-8')), $quotes);
 
                 if ($candidate === $tokenText) {
                     return [$start, $end];
