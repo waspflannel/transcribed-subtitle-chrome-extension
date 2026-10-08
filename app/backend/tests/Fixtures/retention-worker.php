@@ -49,7 +49,7 @@ if ($action === 'settings-hold') {
 }
 if (str_starts_with($action, 'publish')) {
     $job = SubtitleJob::findOrFail($jobId);
-    app(SubtitleGenerationPipeline::class)->persistGeneratedSubtitleTrack($job->id, $job->run_id);
+    app(SubtitleGenerationPipeline::class)->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
 } else {
     app(InstanceSettings::class)->update(['retentionDays' => $retentionDays]);
 }

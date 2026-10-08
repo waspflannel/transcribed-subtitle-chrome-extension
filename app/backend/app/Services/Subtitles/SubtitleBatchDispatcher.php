@@ -2,7 +2,6 @@
 
 namespace App\Services\Subtitles;
 
-use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Models\SubtitleJob;
@@ -47,13 +46,6 @@ class SubtitleBatchDispatcher
             batchConnection: SubtitleQueue::connection(),
             batchQueueName: SubtitleQueue::generationNameForJob($job),
         );
-    }
-
-    public function dispatchMergedCueTrackFinalization(SubtitleJob $job): void
-    {
-        // Assembly already has a worker. Publish its local result immediately
-        // after commit instead of waiting behind more audio/provider work.
-        FinalizeSubtitleJob::dispatchSync($job->id, $job->run_id);
     }
 
     /**

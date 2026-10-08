@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Ai\Agents\CueAnalysisAgent;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
@@ -59,7 +58,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             'subtitles.enrichment.balanced_batches' => true,
             'subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000,
         ]);
-        Bus::fake()->except(FinalizeSubtitleJob::class);
+        Bus::fake();
         Http::preventStrayRequests();
         Http::fake(['api.elevenlabs.test/*' => fn () => Http::response($this->transcriptionPayload)]);
         CueAnalysisAgent::fake(function (string $prompt): array {
@@ -350,7 +349,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertSame('Meaning 0', $opening['cues'][0]['translatedText']);
         $this->assertSame('spa', $job->fresh()->detected_source_language);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        Bus::assertNotDispatched(FinalizeSubtitleJob::class);
         $this->assertDatabaseCount('subtitle_tracks', 0);
 
         $this->transcribe($job, 1);
@@ -362,7 +360,7 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertSame('tokenizing', $job->fresh()->stage);
         $this->assertSame('eng', $job->fresh()->detected_source_language);
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        Bus::assertNotDispatched(FinalizeSubtitleJob::class);
+        $this->assertDatabaseCount('subtitle_tracks', 0);
 
         // Finish later batches first. Coverage must stop at the first gap.
         $batchCount = $store->batchCount($job, SubtitleJobArtifactStore::DRAFT_CUES);
@@ -383,8 +381,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
         $this->assertDatabaseCount('jobs', 0);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $job->refresh()->load('track');
         $this->assertSame('completed', $job->status);
         $this->assertSame(0, SubtitleJobArtifact::where('subtitle_job_id', $job->id)->count());
@@ -475,30 +471,51 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->assertSame('completed', $job->fresh()->status);
     }
 
-    public function test_hour_long_analysis_finalizes_after_commit_without_another_queue_delivery(): void
+    public function test_hour_long_analysis_survives_a_crash_during_finalization(): void
     {
         $job = $this->completedAnalysisJob(1200);
         $pipeline = app(SubtitleGenerationPipeline::class);
 
+        // A worker killed mid-publication never commits a half-finished run.
         DB::beginTransaction();
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        $this->assertSame('finalizing', $job->fresh()->stage);
+        $this->assertSame('completed', $job->fresh()->status);
+        DB::rollBack();
+        $this->assertSame('tokenizing', $job->fresh()->stage);
         $this->assertSame('running', $job->fresh()->status);
         $this->assertDatabaseCount('subtitle_tracks', 0);
-        DB::commit();
 
+        // The redelivered continuation publishes from the kept analysis.
+        $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
         $this->assertCount(1200, $job->fresh()->track->cues);
         $this->assertDatabaseCount('jobs', 0);
+        $this->assertDatabaseCount('subtitle_job_artifacts', 0);
 
-        $this->assertDatabaseCount('subtitle_tracks', 1);
-
-        // Old serialized finalizers and duplicate continuations remain harmless.
-        (new FinalizeSubtitleJob($job->id, $job->run_id))->handle($pipeline);
+        // Duplicate continuations remain harmless.
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $this->travel(8)->minutes();
         $this->artisan('subtitles:fail-stalled-jobs')->assertExitCode(0);
         $this->assertSame('completed', $job->fresh()->status);
+        $this->assertDatabaseCount('subtitle_tracks', 1);
+    }
+
+    public function test_redelivered_merge_after_its_commit_requeues_pending_analysis(): void
+    {
+        $job = $this->job();
+        foreach ([0, 1, 2] as $index) {
+            $this->transcribe($job, $index);
+        }
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+        $this->assertSame('tokenizing', $job->fresh()->stage);
+
+        Bus::fake(); // The first delivery died before publishing its analysis batch.
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+
+        $pending = app(SubtitleJobArtifactStore::class)->pendingAnalysisIndexes($job);
+        $this->assertNotSame([], $pending);
+        Bus::assertBatched(fn ($batch): bool => $batch->jobs->pluck('batchIndex')->all() === $pending);
     }
 
     public function test_synchronous_finalizer_failure_cleans_artifacts(): void
@@ -548,7 +565,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, $index, $job->run_id);
         }
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
-        $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
         // A point word after a full stop starts the next sentence, anchored or not.
         $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ['Earlier.', 'Hello.', 'Again. There.'],

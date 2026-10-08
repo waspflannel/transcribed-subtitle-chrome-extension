@@ -6,7 +6,6 @@ use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
@@ -250,7 +249,6 @@ class SubtitleRuntimeTracingTest extends TestCase
             new OptimizeSubtitleAudio(1, $runId, $stageAudio),
             new MergeSubtitleTranscript(1, $runId, 0),
             new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId),
-            new FinalizeSubtitleJob(1, $runId),
         ];
         $providerJobs = [
             new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $stageAudio, 0.0, 0.0, null),

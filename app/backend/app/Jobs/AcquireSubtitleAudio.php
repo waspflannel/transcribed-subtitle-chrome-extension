@@ -9,6 +9,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use RuntimeException;
 use Throwable;
@@ -48,6 +49,16 @@ class AcquireSubtitleAudio implements ShouldQueue
     public function handle(SubtitleGenerationPipeline $pipeline): void
     {
         $pipeline->acquireAudioAndContinue($this->subtitleJobId, $this->runId, $this->queuedAtMs);
+    }
+
+    /**
+     * A redelivered acquisition may re-claim its run, so deliveries of one run
+     * never overlap. The lock expires before Redis redelivers a killed worker's job.
+     */
+    public function middleware(): array
+    {
+        return [(new WithoutOverlapping('subtitle-acquisition:'.$this->runId))
+            ->releaseAfter(2)->expireAfter(960)];
     }
 
     public function failed(?Throwable $exception): void

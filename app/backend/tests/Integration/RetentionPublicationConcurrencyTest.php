@@ -7,6 +7,7 @@ use App\Models\SubtitleTrack;
 use App\Services\InstanceSettings;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Transcription\TimestampedTranscript;
+use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -62,14 +63,16 @@ class RetentionPublicationConcurrencyTest extends TestCase
         $settings = app(InstanceSettings::class);
         $settings->update(['retentionDays' => $publicationFirst ? 7 : null]);
         $nextRetention = $publicationFirst ? null : 7;
-        $job = SubtitleJob::factory()->create(['stage' => 'finalizing']);
+        $job = SubtitleJob::factory()->create(['stage' => 'tokenizing']);
         $artifacts = app(SubtitleJobArtifactStore::class);
         $artifacts->putTranscript($job, new TimestampedTranscript('eng', 2, [], "WEBVTT\n\n"));
-        $artifacts->putCueCollection($job, SubtitleJobArtifactStore::MERGED_CUES, [[
+        $cues = [[
             'cueId' => 'cue-0001', 'index' => 0, 'startMs' => 0, 'endMs' => 2000,
             'sourceText' => 'Hello', 'translatedText' => '',
             'tokens' => [['index' => 0, 'text' => 'Hello', 'normalizedText' => 'hello']],
-        ]]);
+        ]];
+        $artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
+        $artifacts->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 0, new CueEnrichmentResult($cues));
         $releasePath = storage_path('retention-release');
         $first = $this->worker($publicationFirst ? 'publish-hold' : 'settings-hold', $job, $releasePath, $nextRetention);
         $secondAction = $publicationFirst ? 'settings' : 'publish';

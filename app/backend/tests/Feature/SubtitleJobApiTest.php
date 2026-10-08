@@ -689,16 +689,42 @@ class SubtitleJobApiTest extends TestCase
         ];
     }
 
-    public function test_transcription_processor_ignores_jobs_already_claimed_by_another_worker(): void
+    public function test_redelivered_acquisition_reclaims_its_run_after_a_worker_crash(): void
     {
+        Queue::fake();
         $job = SubtitleJob::factory()->create([
             'stage' => 'acquiring-audio',
             'progress_percent' => 20,
+            'updated_at' => now()->subMinutes(10),
         ]);
+        $this->audioSource->beforeAcquireResult = function () use ($job): void {
+            // The claim restarts the watchdog clock for the retried download.
+            $this->assertTrue($job->fresh()->updated_at->greaterThan(now()->subMinute()));
+        };
+
+        app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
+
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertSame('optimizing-audio', $job->fresh()->stage);
+        Queue::assertPushed(OptimizeSubtitleAudio::class, 1);
+
+        // Deliveries of one run still never overlap, and a killed worker's
+        // lock expires before Redis redelivers its job.
+        $delivery = new AcquireSubtitleAudio($job->id, $job->run_id);
+        $overlap = $delivery->middleware()[0];
+        $this->assertStringContainsString($job->run_id, $overlap->key);
+        $this->assertGreaterThan($delivery->timeout, $overlap->expiresAfter);
+        $this->assertLessThan(config('queue.connections.redis.retry_after'), $overlap->expiresAfter);
+    }
+
+    public function test_acquisition_skips_runs_that_already_moved_past_audio(): void
+    {
+        $job = SubtitleJob::factory()->create(['stage' => 'optimizing-audio', 'progress_percent' => 35]);
 
         app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
 
         $this->assertSame(0, $this->audioSource->calls);
+        $this->assertSame('optimizing-audio', $job->fresh()->stage);
     }
 
     public function test_generation_runs_audio_optimization_before_scribe_transcription(): void

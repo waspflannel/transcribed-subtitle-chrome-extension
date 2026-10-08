@@ -5,7 +5,6 @@ namespace App\Services\Subtitles;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\FinalizeSubtitleJob;
 use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
@@ -93,7 +92,6 @@ class SubtitleRuntimeTracer
         OptimizeSubtitleAudio::class,
         TranscribeSubtitleAudioChunk::class,
         MergeSubtitleTranscript::class,
-        FinalizeSubtitleJob::class,
         PrepareSubtitleCuesAfterAnalysisBatches::class,
         AnalyzeSubtitleCueBatch::class,
     ];

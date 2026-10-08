@@ -33,8 +33,6 @@ class SubtitleJobArtifactStore
 
     public const ANALYZED_CUES = 'analyzed_cues';
 
-    public const MERGED_CUES = 'merged_cues';
-
     public const PARTIAL_TRACK = 'partial_track';
 
     public function __construct(
@@ -359,8 +357,7 @@ class SubtitleJobArtifactStore
             ->orderBy('batch_index')
             ->get();
 
-        $sourceType = $artifactType === self::ANALYZED_CUES ? self::DRAFT_CUES : self::MERGED_CUES;
-        $expectedCount = $this->batchCount($job, $sourceType);
+        $expectedCount = $this->batchCount($job, self::DRAFT_CUES);
         if ($artifacts->pluck('batch_index')->all() !== range(0, $expectedCount - 1)) {
             $this->failMissingArtifact($artifactType);
         }

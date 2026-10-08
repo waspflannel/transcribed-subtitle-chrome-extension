@@ -18,7 +18,6 @@ use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\VideoTranscriptCache;
-use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -48,7 +47,7 @@ class SubtitleGenerationPipeline
     {
         $this->extendProcessingTimeLimit();
 
-        $job = $this->claimPreparingJob($subtitleJobId, $runId);
+        $job = $this->claimAcquisition($subtitleJobId, $runId);
 
         if ($job === null) {
             return;
@@ -431,6 +430,15 @@ class SubtitleGenerationPipeline
         $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
 
         try {
+            if ($job->stage === 'tokenizing') {
+                // A crash right after the merge commit can lose its analysis
+                // dispatch. Replaying pending batches is safe: analysis locks
+                // and stored results drop duplicates.
+                $this->dispatchAnalysisIndexes($job, $this->artifacts->pendingAnalysisIndexes($job));
+
+                return;
+            }
+
             $durationSeconds = (int) $job->video_duration_seconds;
             $transcript = $this->transcriptionService->transcriptFromChunkPayloads(
                 chunks: $this->artifacts->transcriptChunks($job),
@@ -500,79 +508,67 @@ class SubtitleGenerationPipeline
         }, attempts: 5);
     }
 
+    /**
+     * Analysis batch completion: once every batch has landed, assemble the
+     * analyzed cues and publish the track in one locked transaction. A crash
+     * before commit leaves the run in `tokenizing` with its artifacts, so the
+     * redelivered continuation publishes it again.
+     */
     public function prepareCuesAfterCompletedAnalysisBatches(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
-        DB::transaction(function () use ($subtitleJobId, $runId, $queuedAtMs): void {
-            $job = $this->lockRunningJob($subtitleJobId, $runId);
-            if ($job === null || $job->stage !== 'tokenizing' || ! $this->artifacts->analysisIsComplete($job)) {
-                return;
-            }
-            $stage = 'assembling-analysis-results';
-            $this->telemetry->recordQueueWait($job, $stage, null, $queuedAtMs);
-            $this->telemetry->recordStageStarted($job, $stage);
-            $startedAtMs = $this->telemetry->currentTimeMs();
-            $analyzed = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
-            $this->logger->tokenizationCompleted($job, $analyzed);
-            $this->storeMergedCuesAndContinue($job, $analyzed);
-            $this->telemetry->recordStageCompleted($job, $stage, $startedAtMs);
-        }, attempts: 5);
-    }
-
-    public function persistGeneratedSubtitleTrack(
-        int $subtitleJobId,
-        string $runId,
-        ?int $queuedAtMs = null,
-    ): void {
-        $job = $this->loadRunningJob($subtitleJobId, $runId);
-
-        if ($job === null) {
+        if ($this->loadRunningJob($subtitleJobId, $runId)?->stage !== 'tokenizing') {
             return;
         }
 
-        $this->telemetry->recordQueueWait($job, 'finalizing', null, $queuedAtMs);
-        $this->telemetry->recordStageStarted($job, 'finalizing');
-        $startedAtMs = $this->telemetry->currentTimeMs();
+        $stage = 'tokenizing';
 
-        $transcript = $this->artifacts->transcript($job);
-        $enrichment = $this->artifacts->cueCollection($job, SubtitleJobArtifactStore::MERGED_CUES);
+        try {
+            $published = DB::transaction(function () use ($subtitleJobId, $runId, $queuedAtMs, &$stage): ?array {
+                // Retention changes and publication share settings -> job -> track order.
+                app(InstanceSettings::class)->lockForUpdate();
+                $job = $this->lockRunningJob($subtitleJobId, $runId);
+                if ($job === null || $job->stage !== 'tokenizing' || ! $this->artifacts->analysisIsComplete($job)) {
+                    return null;
+                }
+                $this->telemetry->recordQueueWait($job, 'assembling-analysis-results', null, $queuedAtMs);
+                $this->telemetry->recordStageStarted($job, 'assembling-analysis-results');
+                $startedAtMs = $this->telemetry->currentTimeMs();
+                $analyzed = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
+                $this->logger->tokenizationCompleted($job, $analyzed);
+                $this->telemetry->recordStageCompleted($job, 'assembling-analysis-results', $startedAtMs);
 
-        $track = DB::transaction(function () use ($subtitleJobId, $runId, $enrichment) {
-            // Retention changes and publication share settings -> job -> track order.
-            app(InstanceSettings::class)->lockForUpdate();
-            $currentJob = $this->lockRunningJob($subtitleJobId, $runId);
+                $stage = 'finalizing';
+                $this->telemetry->recordStageStarted($job, $stage);
+                $startedAtMs = $this->telemetry->currentTimeMs();
+                $audioDurationSeconds = (int) ($job->video_duration_seconds
+                    ?? $this->artifacts->transcript($job)->durationSeconds ?? 0);
+                $job->track()->delete();
+                $track = $this->tracks->generate($job, $analyzed);
+                $job->update([
+                    'status' => 'completed',
+                    'stage' => 'finalizing',
+                    'progress_percent' => 100,
+                    'error_code' => null,
+                    'error_message' => null,
+                    'expires_at' => $track->expires_at,
+                ]);
+                $this->artifacts->deleteForJob($job);
 
-            if (! $currentJob instanceof SubtitleJob) {
-                return null;
-            }
+                return [$job, $track, $startedAtMs, $audioDurationSeconds];
+            }, attempts: 5);
+        } catch (Throwable $exception) {
+            $this->failureHandler->failJob($subtitleJobId, $stage, $exception, $runId);
 
-            $this->markJobRunning($currentJob, 'finalizing', 95);
-            $currentJob->track()->delete();
-            $track = $this->tracks->generate($currentJob, $enrichment);
-            $currentJob->update([
-                'status' => 'completed',
-                'stage' => 'finalizing',
-                'progress_percent' => 100,
-                'error_code' => null,
-                'error_message' => null,
-                'expires_at' => $track->expires_at,
-            ]);
-            $completedJob = $currentJob->refresh();
-            $this->artifacts->deleteForJob($completedJob);
+            throw $exception;
+        }
 
-            return $track;
-        }, attempts: 5);
-
-        if ($track === null) {
+        if ($published === null) {
             return;
         }
 
+        [$job, $track, $startedAtMs, $audioDurationSeconds] = $published;
         $job->setRelation('track', $track);
-        $job->status = 'completed';
-        $this->logger->trackGenerated(
-            job: $job,
-            track: $track,
-            audioDurationSeconds: (int) ($job->video_duration_seconds ?? $transcript->durationSeconds ?? 0),
-        );
+        $this->logger->trackGenerated(job: $job, track: $track, audioDurationSeconds: $audioDurationSeconds);
         $this->telemetry->recordStageCompleted($job, 'finalizing', $startedAtMs);
         $this->logger->completedTrackTiming($job, (int) abs(now()->diffInMilliseconds($job->created_at)));
         $this->telemetry->recordJobCompleted($job);
@@ -614,28 +610,6 @@ class SubtitleGenerationPipeline
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
     }
 
-    private function storeMergedCuesAndContinue(
-        SubtitleJob $job,
-        CueEnrichmentResult $merged,
-    ): void {
-        DB::transaction(function () use ($job, $merged): void {
-            $job = $this->lockRunningJob($job->id, $job->run_id);
-
-            if ($job === null || $job->stage !== 'tokenizing') {
-                return;
-            }
-
-            $this->artifacts->putCueCollection(
-                job: $job,
-                artifactType: SubtitleJobArtifactStore::MERGED_CUES,
-                cues: $merged->cues,
-            );
-
-            $this->markJobRunning($job, 'finalizing', 95);
-            DB::afterCommit(fn () => $this->batchDispatcher->dispatchMergedCueTrackFinalization($job));
-        }, attempts: 5);
-    }
-
     private function loadRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob
     {
         $job = SubtitleJob::query()
@@ -675,12 +649,18 @@ class SubtitleGenerationPipeline
         return $job;
     }
 
-    private function claimPreparingJob(int $subtitleJobId, string $runId): ?SubtitleJob
+    /**
+     * Claims the run for audio acquisition and refreshes its watchdog clock.
+     * A redelivery after a worker crash re-claims `acquiring-audio` for the
+     * same run: the per-run workspace makes downloading again safe, and the
+     * job's run lock keeps two deliveries from overlapping.
+     */
+    private function claimAcquisition(int $subtitleJobId, string $runId): ?SubtitleJob
     {
         $updated = SubtitleJob::query()
             ->whereKey($subtitleJobId)
             ->where('status', 'running')
-            ->where('stage', 'preparing')
+            ->whereIn('stage', ['preparing', 'acquiring-audio'])
             ->where('run_id', $runId)
             ->update([
                 'stage' => 'acquiring-audio',
