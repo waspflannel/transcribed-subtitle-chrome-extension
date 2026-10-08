@@ -93,7 +93,7 @@ final class SubtitleQueue
     }
 
     /**
-     * @return array<int, array{name: string, queue_family: string, connection: string, queues: array<int, string>, worker_count: int}>
+     * @return array<int, array{name: string, queue_family: string, connection: string, queues: array<int, string>, worker_count: int, timeout_seconds: int}>
      */
     public static function workerGroups(): array
     {
@@ -103,7 +103,19 @@ final class SubtitleQueue
             'connection' => $family === self::FAMILY_GENERATION ? self::connection() : self::batchConnection(),
             'queues' => [$family === self::FAMILY_GENERATION ? self::generationName() : self::batchName()],
             'worker_count' => max(1, (int) config('subtitles.queue.'.$family.'_workers', $family === self::FAMILY_GENERATION ? 9 : 22)),
+            'timeout_seconds' => self::workerTimeoutSeconds($family),
         ], [self::FAMILY_GENERATION, self::FAMILY_BATCH]);
+    }
+
+    /**
+     * Worker --timeout must stay below its connection's retry_after, or a job
+     * without its own timeout is redelivered while it still runs.
+     */
+    public static function workerTimeoutSeconds(string $family): int
+    {
+        return $family === self::FAMILY_BATCH && self::batchConnection() !== self::connection()
+            ? (int) config('subtitles.queue.batch_worker_timeout_seconds', 330)
+            : (int) config('subtitles.queue.worker_timeout_seconds', 1200);
     }
 
     public static function workerCount(): int

@@ -122,6 +122,7 @@ function Get-WorkerGroupsFromRuntime {
             connection = "$($_.connection)"
             queues = @($_.queues)
             worker_count = [int]$_.worker_count
+            timeout_seconds = if ($_.timeout_seconds) { [int]$_.timeout_seconds } else { $WorkerTimeoutSeconds }
         }
     })
 }
@@ -423,7 +424,7 @@ function Start-WorkerProcesses {
                 "--name=$workerName",
                 "--queue=$queues",
                 "--tries=$WorkerTries",
-                "--timeout=$WorkerTimeoutSeconds",
+                "--timeout=$($group.timeout_seconds)",
                 "--sleep=$WorkerSleepSeconds",
                 "--memory=$WorkerMemoryMb",
                 "--max-time=$WorkerMaxTimeSeconds"

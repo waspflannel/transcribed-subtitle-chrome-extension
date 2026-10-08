@@ -337,10 +337,11 @@ foreach ($groups as $group) {
     $total += $count;
     $queues = implode(",", $group["queues"]);
     $connection = $group["connection"];
+    $timeout = (int) $group["timeout_seconds"];
     $lines[] = "[program:tse-{$name}]";
     $lines[] = "process_name=%(program_name)s_%(process_num)02d";
     $lines[] = "directory={$root}";
-    $lines[] = "command={$php} artisan queue:work {$connection} --queue={$queues} --sleep=0 --tries=0 --timeout=1200 --memory=256 --max-time=3600";
+    $lines[] = "command={$php} artisan queue:work {$connection} --queue={$queues} --sleep=0 --tries=0 --timeout={$timeout} --memory=256 --max-time=3600";
     $lines[] = "autostart=true";
     $lines[] = "autorestart=true";
     $lines[] = "stopasgroup=true";

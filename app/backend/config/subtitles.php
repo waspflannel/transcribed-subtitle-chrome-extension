@@ -16,6 +16,8 @@ return [
         'batch_connection' => env('SUBTITLE_BATCH_QUEUE_CONNECTION', 'redis-batch'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
+        // Batch jobs time out within 300s; stay below the batch connection's retry_after (360s).
+        'batch_worker_timeout_seconds' => (int) env('SUBTITLE_BATCH_WORKER_TIMEOUT_SECONDS', 330),
         'generation_name' => env('SUBTITLE_GENERATION_QUEUE', 'subtitle-generation'),
         'batch_name' => env('SUBTITLE_BATCH_QUEUE', 'subtitle-batch'),
         'generation_workers' => (int) env('SUBTITLE_GENERATION_WORKERS', 9),

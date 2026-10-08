@@ -35,11 +35,13 @@ $lines.Add("")
 foreach ($group in $groups) {
     $program = "tse-$($group.name)"
     $queues = ($group.queues -join ",")
+    # Each group stays below its own connection's retry_after; older runtime output has no timeout.
+    $timeout = if ($group.timeout_seconds) { [int]$group.timeout_seconds } else { $WorkerTimeoutSeconds }
 
     $lines.Add("[program:$program]")
     $lines.Add("process_name=%(program_name)s_%(process_num)02d")
     $lines.Add("directory=$ApplicationPath")
-    $lines.Add("command=$PhpPath artisan queue:work $($group.connection) --queue=$queues --sleep=$SleepSeconds --tries=$Tries --timeout=$WorkerTimeoutSeconds --memory=$MemoryMb --max-time=$MaxTimeSeconds")
+    $lines.Add("command=$PhpPath artisan queue:work $($group.connection) --queue=$queues --sleep=$SleepSeconds --tries=$Tries --timeout=$timeout --memory=$MemoryMb --max-time=$MaxTimeSeconds")
     $lines.Add("autostart=true")
     $lines.Add("autorestart=true")
     $lines.Add("stopasgroup=true")

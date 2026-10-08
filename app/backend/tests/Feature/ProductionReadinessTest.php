@@ -61,9 +61,21 @@ class ProductionReadinessTest extends TestCase
         $this->assertFalse($payload['ok']);
         $this->assertContains('APP_DEBUG must be false.', $payload['problems']);
         $this->assertContains('Remote APP_URL must use HTTPS; local loopback can use HTTP.', $payload['problems']);
-        $this->assertContains('Queue retry_after must be greater than the subtitle worker timeout.', $payload['problems']);
+        $this->assertContains('Each queue connection retry_after must be greater than its subtitle worker timeout.', $payload['problems']);
         $this->assertContains('FFMPEG_BINARY must be configured.', $payload['problems']);
         $this->assertStringNotContainsString('sk-test-stripe', $output);
+    }
+
+    public function test_batch_worker_timeout_must_stay_below_the_batch_retry_window(): void
+    {
+        $this->configureSafeProductionRuntime();
+        $this->fakeHealthyConnectivity();
+        $this->assertSame(0, Artisan::call('ops:production-check', ['--json' => true]));
+
+        config(['subtitles.queue.batch_worker_timeout_seconds' => 400]);
+        $this->fakeHealthyConnectivity();
+        $this->assertSame(1, Artisan::call('ops:production-check', ['--json' => true]));
+        $this->assertContains('Each queue connection retry_after must be greater than its subtitle worker timeout.', json_decode(Artisan::output(), true)['problems']);
     }
 
     public function test_production_readiness_check_flags_unreachable_postgres_and_each_redis_role(): void

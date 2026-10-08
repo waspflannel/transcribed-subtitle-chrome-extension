@@ -105,7 +105,7 @@ class LyricsCorrectionJob implements ShouldQueue
     {
         $providerTimeout = max(1, (int) config('subtitles.enrichment.timeout_seconds', 120));
         $timeout = $providerTimeout + 60;
-        $workerTimeout = max(1, (int) config('subtitles.queue.worker_timeout_seconds', 1200));
+        $workerTimeout = max(1, SubtitleQueue::workerTimeoutSeconds(SubtitleQueue::FAMILY_BATCH));
         $retryAfter = (int) config('queue.connections.'.SubtitleQueue::batchConnection().'.retry_after', 0);
         $driver = (string) config('queue.connections.'.SubtitleQueue::batchConnection().'.driver');
 
