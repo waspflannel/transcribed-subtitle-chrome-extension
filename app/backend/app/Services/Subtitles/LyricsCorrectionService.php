@@ -11,6 +11,7 @@ use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Codex\CodexService;
 use App\Services\InstanceSettings;
+use App\Services\Text\NoSpaceArtifactBoundary;
 use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -21,6 +22,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use IntlBreakIterator;
+use Laravel\Ai\Responses\Data\FinishReason;
+use Normalizer;
 use Throwable;
 
 final class LyricsCorrectionService
@@ -36,7 +40,8 @@ final class LyricsCorrectionService
 
     public function normalizeLyrics(string $lyrics): string
     {
-        $lines = preg_split('/\R/u', $lyrics) ?: [];
+        // Composed form keeps pasted text comparable with transcripts (か plus a combining voicing mark becomes が).
+        $lines = preg_split('/\R/u', Normalizer::normalize($lyrics, Normalizer::FORM_C) ?: $lyrics) ?: [];
         $normalized = [];
 
         foreach ($lines as $line) {
@@ -634,7 +639,7 @@ final class LyricsCorrectionService
         $result = $this->translationAnalysis->analyzeCueBatch(
             $batch, $cues, $job->source_language, $job->target_language,
             includeTranslation: $this->translationRequested($job),
-            includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
+            includeRomanization: $this->romanizationRequested($job, $batch),
             selection: SubtitleModel::forCorrection($correction),
             validateOutput: false,
             job: $job,
@@ -714,7 +719,7 @@ final class LyricsCorrectionService
                 if (in_array($batchIndex, $state['completedBatches'], true)) {
                     return null;
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::forCorrection($locked));
+                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $this->romanizationRequested($job, $nextState['cues']), requiredStatus: 'completed', selection: SubtitleModel::forCorrection($locked));
                 // Merge only this result into current state, preserving other workers' results.
                 $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
                 $state['completedBatches'][] = $batchIndex;
@@ -846,16 +851,19 @@ final class LyricsCorrectionService
     private function promptAlignment(array $input, SubtitleModel $selection, ?SubtitleJob $job = null): array
     {
         try {
+            $agent = LyricsAlignmentAgent::make(cueCount: count($input['cues']));
             if ($selection->provider === 'codex') {
                 return app(ProviderAdmission::class)->run($selection->provider, $job,
-                    fn (): array => app(CodexService::class)->prompt(LyricsAlignmentAgent::make(), $input, $selection));
+                    fn (): array => app(CodexService::class)->prompt($agent, $input, $selection));
             }
-            $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => LyricsAlignmentAgent::make()
-                ->prompt(
-                    json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-                    provider: $selection->provider,
-                    model: $selection->model,
-                ));
+            $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => $agent->prompt(
+                json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+                provider: $selection->provider,
+                model: $selection->model,
+            ));
+            if ($response->steps->last()?->finishReason === FinishReason::Length) {
+                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'alignment_output_truncated']);
+            }
 
             return $response->toArray();
         } catch (Throwable $exception) {
@@ -897,16 +905,51 @@ final class LyricsCorrectionService
         preg_match_all('/\S+\s*/u', $lyrics, $matches);
         $parts = [];
         foreach ($matches[0] as $word) {
-            if (mb_strlen(rtrim($word), 'UTF-8') <= 84) {
-                $parts[] = $word;
-            } else {
-                // Allow boundaries in unspaced scripts without separating combining marks.
-                preg_match_all('/\X/u', $word, $graphemes);
-                array_push($parts, ...$graphemes[0]);
+            $pieces = preg_match('/['.NoSpaceArtifactBoundary::SCRIPT_CLASS.']/u', $word) === 1 ? $this->wordPieces($word) : [$word];
+            foreach ($pieces as $piece) {
+                if (mb_strlen(rtrim($piece), 'UTF-8') <= 84) {
+                    $parts[] = $piece;
+                } else {
+                    // Allow boundaries in overlong unspaced text without separating combining marks.
+                    preg_match_all('/\X/u', $piece, $graphemes);
+                    array_push($parts, ...$graphemes[0]);
+                }
             }
         }
 
         return $parts;
+    }
+
+    /**
+     * Split unspaced scripts (Japanese, Chinese, Thai) at dictionary word boundaries.
+     * Punctuation and trailing whitespace stay attached to a neighboring word.
+     *
+     * @return list<string>
+     */
+    private function wordPieces(string $word): array
+    {
+        $breaks = IntlBreakIterator::createWordInstance();
+        $breaks->setText($word);
+        $pieces = [];
+        $pending = '';
+        $start = 0;
+        foreach ($breaks as $end) {
+            if ($end === 0) {
+                continue;
+            }
+            $piece = substr($word, $start, $end - $start);
+            $start = $end;
+            if (preg_match('/[\p{L}\p{N}]/u', $piece) === 1) {
+                $pieces[] = $pending.$piece;
+                $pending = '';
+            } elseif ($pieces === []) {
+                $pending .= $piece;
+            } else {
+                $pieces[array_key_last($pieces)] .= $piece;
+            }
+        }
+
+        return $pending === '' ? $pieces : [...$pieces, $pending];
     }
 
     private function cuesFromAlignment(array $sourceCues, array $parts, array $output, string $attemptId): array
@@ -922,20 +965,14 @@ final class LyricsCorrectionService
         }
         foreach ($allocations as $cue) {
             $id = is_array($cue) ? ($cue['cueId'] ?? null) : null;
+            $end = is_array($cue) ? ($cue['endPartIndex'] ?? null) : null;
             if (! is_string($id) || ! isset($knownIds[$id]) || $knownIds[$id] <= $previousSlot
-                || ! is_array($cue['segments'] ?? null) || $cue['segments'] === [] || count($cue['segments']) > $partCount) {
+                || ! is_int($end) || $end < $cursor || $end >= $partCount) {
                 throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
             }
             $previousSlot = $knownIds[$id];
-            foreach ($cue['segments'] as $segment) {
-                if (! is_array($segment) || ($segment['source'] ?? null) !== 'pasted' || ! is_int($segment['endPartIndex'] ?? null)
-                    || $segment['endPartIndex'] < $cursor || $segment['endPartIndex'] >= $partCount) {
-                    throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
-                }
-                $end = $segment['endPartIndex'];
-                $texts[$id][] = implode('', array_slice($parts, $cursor, $end - $cursor + 1));
-                $cursor = $end + 1;
-            }
+            $texts[$id] = implode('', array_slice($parts, $cursor, $end - $cursor + 1));
+            $cursor = $end + 1;
         }
         if ($cursor !== $partCount) {
             throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_alignment']);
@@ -943,7 +980,7 @@ final class LyricsCorrectionService
 
         $draft = [];
         foreach ($sourceCues as $sourceCue) {
-            $text = SubtitleText::collapseWhitespace(implode('', $texts[$sourceCue['cueId']] ?? []));
+            $text = SubtitleText::collapseWhitespace($texts[$sourceCue['cueId']] ?? '');
             $start = (int) $sourceCue['startMs'];
             $duration = (int) $sourceCue['endMs'] - $start;
             if ($text === '' || $start < 0 || $duration <= 0) {
@@ -961,12 +998,15 @@ final class LyricsCorrectionService
             foreach ($chunks as $chunkIndex => $chunk) {
                 $consumedLength += $lengths[$chunkIndex];
                 $end = (int) $sourceCue['startMs'] + intdiv($duration * $consumedLength, $totalLength);
-                $index = count($draft);
-                $draft[] = [
-                    'cueId' => sprintf('lyrics-%s-%04d', substr(str_replace('-', '', $attemptId), 0, 8), $index + 1),
-                    'index' => $index, 'startMs' => $start, 'endMs' => $end,
-                    'sourceText' => $chunk, 'translatedText' => $chunk, 'tokens' => [],
-                ];
+                // Like draft generation, symbol-only lines such as ♪ have no learner words to analyze.
+                if (preg_match('/[\p{L}\p{N}]/u', $chunk) === 1) {
+                    $index = count($draft);
+                    $draft[] = [
+                        'cueId' => sprintf('lyrics-%s-%04d', substr(str_replace('-', '', $attemptId), 0, 8), $index + 1),
+                        'index' => $index, 'startMs' => $start, 'endMs' => $end,
+                        'sourceText' => $chunk, 'translatedText' => $chunk, 'tokens' => [],
+                    ];
+                }
                 $start = $end;
             }
         }
@@ -979,15 +1019,10 @@ final class LyricsCorrectionService
         return $job->include_translation && $job->source_language !== $job->target_language;
     }
 
-    private function containsNonLatin(array $cues): bool
+    /** Romanization is only requested, and costed, for batches containing non-Latin letters. */
+    private function romanizationRequested(SubtitleJob $job, array $cues): bool
     {
-        foreach ($cues as $cue) {
-            if (preg_match('/(?!\p{Latin})\p{L}/u', (string) $cue['sourceText']) === 1) {
-                return true;
-            }
-        }
-
-        return false;
+        return $job->include_romanization && SubtitleText::hasNonLatinCues($cues);
     }
 
     /**

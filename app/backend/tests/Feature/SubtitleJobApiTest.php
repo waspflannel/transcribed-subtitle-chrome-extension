@@ -901,8 +901,8 @@ class SubtitleJobApiTest extends TestCase
         config(['ai.default' => 'cerebras', 'ai.providers.cerebras.models.text.default' => 'saved-cerebras']);
         LyricsAlignmentAgent::fake([
             ['isMatch' => true, 'isComplete' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
-                ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
+                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
+                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
             ]],
         ]);
         $jobResponse = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
@@ -1299,8 +1299,8 @@ class SubtitleJobApiTest extends TestCase
             }
 
             return ['isMatch' => true, 'isComplete' => true, 'cues' => [
-                ['cueId' => 'cue-0001', 'index' => 0, 'segments' => [['source' => 'pasted', 'startPartIndex' => 0, 'endPartIndex' => 2, 'separator' => '']]],
-                ['cueId' => 'cue-0002', 'index' => 1, 'segments' => [['source' => 'pasted', 'startPartIndex' => 3, 'endPartIndex' => 5, 'separator' => '']]],
+                ['cueId' => 'cue-0001', 'index' => 0, 'endPartIndex' => 2],
+                ['cueId' => 'cue-0002', 'index' => 1, 'endPartIndex' => 5],
             ]];
         })->preventStrayPrompts();
 

@@ -66,13 +66,18 @@ class LaravelAiTranslationAnalysisProvider
     private function uncheckedAnalysis(array $output, array $sourceCues, bool $includeTranslation, bool $includeRomanization): CueEnrichmentResult
     {
         $knownIds = array_flip(array_column($sourceCues, 'cueId'));
+        $knownIndexes = array_flip(array_column($sourceCues, 'index'));
         $byId = [];
+        $byIndex = [];
         $remaining = [];
         foreach (is_array($output['cues'] ?? null) ? $output['cues'] : [] as $cue) {
             $cue = is_array($cue) ? $cue : [];
             $id = $cue['cueId'] ?? null;
+            $index = $cue['index'] ?? null;
             if (is_string($id) && isset($knownIds[$id]) && ! isset($byId[$id])) {
                 $byId[$id] = $cue;
+            } elseif (is_int($index) && isset($knownIndexes[$index]) && ! isset($byIndex[$index])) {
+                $byIndex[$index] = $cue;
             } else {
                 $remaining[] = $cue;
             }
@@ -80,8 +85,8 @@ class LaravelAiTranslationAnalysisProvider
 
         $cues = [];
         foreach ($sourceCues as $source) {
-            // Keep matching IDs when available; otherwise trust the model's response order.
-            $cue = $byId[$source['cueId']] ?? array_shift($remaining) ?? [];
+            // Match by ID, then index; trust response order only for unidentifiable cues.
+            $cue = $byId[$source['cueId']] ?? $byIndex[$source['index']] ?? array_shift($remaining) ?? [];
             $source['translatedText'] = $includeTranslation
                 ? ($this->cleanString($cue['translatedText'] ?? null) ?? $source['sourceText']) : $source['sourceText'];
             unset($source['romanization']);
@@ -99,6 +104,15 @@ class LaravelAiTranslationAnalysisProvider
                     $parsed['romanization'] = $reading;
                 }
                 $source['tokens'][] = $parsed;
+            }
+            if ($source['tokens'] === []) {
+                // Published cues need at least one token; the whole line stays clickable.
+                $source['tokens'][] = [
+                    'index' => 0,
+                    'text' => $source['sourceText'],
+                    'normalizedText' => $this->tokenValidator->normalizeTokenText($source['sourceText']),
+                    ...(isset($source['romanization']) ? ['romanization' => $source['romanization']] : []),
+                ];
             }
             $cues[] = $source;
         }

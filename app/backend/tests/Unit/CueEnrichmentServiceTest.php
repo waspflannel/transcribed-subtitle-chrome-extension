@@ -118,11 +118,12 @@ class CueEnrichmentServiceTest extends TestCase
         }
         $this->assertSame([['index' => 0, 'text' => 'First', 'normalizedText' => 'first']], $result->cues[0]['tokens']);
         $this->assertSame([['index' => 0, 'text' => 'Second', 'normalizedText' => 'second']], $result->cues[1]['tokens']);
-        $this->assertSame([], $result->cues[2]['tokens']);
+        $this->assertSame([['index' => 0, 'text' => 'Third', 'normalizedText' => 'third']], $result->cues[2]['tokens']);
     }
 
     #[TestWith([[]])]
     #[TestWith([['cues' => [null, ['cueId' => 'extra', 'tokens' => 'malformed']]]])]
+    #[TestWith([['cues' => [['cueId' => 'cue-0', 'index' => 0, 'tokens' => [['index' => 0, 'text' => '…'], ['index' => 1, 'text' => '♪']]]]]])]
     public function test_unchecked_analysis_keeps_aligned_text_when_details_are_missing(array $output): void
     {
         $parts = [$this->part(0, 'Keep these lyrics')];
@@ -130,7 +131,19 @@ class CueEnrichmentServiceTest extends TestCase
         $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch($parts, $parts, 'eng', 'spa', includeRomanization: true, validateOutput: false);
         $this->assertCount(1, $result->cues);
         $this->assertSame('Keep these lyrics', $result->cues[0]['translatedText']);
-        $this->assertSame([], $result->cues[0]['tokens']);
+        $this->assertSame([['index' => 0, 'text' => 'Keep these lyrics', 'normalizedText' => 'keep these lyrics']], $result->cues[0]['tokens']);
+    }
+
+    public function test_unchecked_analysis_matches_cues_by_index_before_response_order(): void
+    {
+        $parts = [$this->part(0, 'Alpha', 0, 100), $this->part(1, 'Beta', 100, 200), $this->part(2, 'Gamma', 200, 300)];
+        CueAnalysisAgent::fake([['cues' => [
+            ['cueId' => 'renamed-a', 'index' => 0, 'translatedText' => 'A', 'tokens' => [['index' => 0, 'text' => 'Alpha']]],
+            ['cueId' => 'renamed-c', 'index' => 2, 'translatedText' => 'C', 'tokens' => [['index' => 0, 'text' => 'Gamma']]],
+        ]]])->preventStrayPrompts();
+        $result = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch($parts, $parts, 'eng', 'spa', validateOutput: false);
+        $this->assertSame(['A', 'Beta', 'C'], array_column($result->cues, 'translatedText'));
+        $this->assertSame([['Alpha'], ['Beta'], ['Gamma']], array_map(fn (array $cue): array => array_column($cue['tokens'], 'text'), $result->cues));
     }
 
     public function test_luna_annotates_fixed_cues_and_returns_all_requested_language_work_once(): void

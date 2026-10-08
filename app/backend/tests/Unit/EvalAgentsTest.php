@@ -25,9 +25,7 @@ class EvalAgentsTest extends TestCase
         LyricsAlignmentAgent::fake(function (string $prompt): array {
             $input = json_decode($prompt, true);
 
-            return ['cues' => [['cueId' => $input['cues'][0]['cueId'], 'segments' => [
-                ['source' => 'pasted', 'endPartIndex' => count($input['lyricsParts']) - 1],
-            ]]]];
+            return ['cues' => [['cueId' => $input['cues'][0]['cueId'], 'endPartIndex' => count($input['lyricsParts']) - 1]]];
         })->preventStrayPrompts();
 
         $report = $this->runReport(['--repeat' => '2']);
