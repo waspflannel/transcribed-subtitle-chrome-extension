@@ -266,12 +266,14 @@ final class LyricsCorrectionService
                 ];
             }
 
-            // Corrected model tokens may no longer align with the transcript.
-            $updatedSourceText = $span === null
-                ? SubtitleText::canonicalComparable(implode(' ', array_column($updatedTokens, 'text')))
-                : mb_substr($sourceText, 0, $span[0], 'UTF-8')
-                    .$replacement
-                    .mb_substr($sourceText, $span[1], null, 'UTF-8');
+            if ($span === null) {
+                // Without an exact span, an edit would drop punctuation or words the tokens do not cover.
+                throw new SubtitleProcessingException('lyrics_correction_failed', 'This word cannot be edited because the line text does not match its words. Your subtitles are unchanged.', 422, ['reason' => 'token_span_not_found']);
+            }
+
+            $updatedSourceText = mb_substr($sourceText, 0, $span[0], 'UTF-8')
+                .$replacement
+                .mb_substr($sourceText, $span[1], null, 'UTF-8');
 
             if (SubtitleText::collapseWhitespace($updatedSourceText) === '') {
                 throw new SubtitleProcessingException('validation_failed', 'Replacement text must leave a non-empty subtitle line.', 422);
@@ -283,14 +285,19 @@ final class LyricsCorrectionService
                 ]);
             }
 
+            // Only this cue changes, so only its own timing needs checking before the paid call.
+            if ((int) $cue['startMs'] < 0 || (int) $cue['endMs'] <= (int) $cue['startMs']) {
+                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_timing_or_text']);
+            }
+
             $updatedCue = [
                 ...$cue,
                 'cueId' => 'quick-fix-'.str_replace('-', '', (string) Str::uuid()),
                 'sourceText' => $updatedSourceText,
-                'translatedText' => $updatedSourceText,
                 'tokens' => $updatedTokens,
             ];
-            unset($updatedCue['romanization']);
+            // The old translation and readings describe the replaced word; the refresh rebuilds them.
+            unset($updatedCue['romanization'], $updatedCue['translatedText']);
 
             return [$cuePosition, $updatedCue];
         }, attempts: 5);
@@ -314,9 +321,16 @@ final class LyricsCorrectionService
             $track->update([
                 'public_id' => (string) Str::uuid(),
                 'cues' => $cues,
-                'web_vtt' => $this->webVtt($cues),
+                'web_vtt' => SubtitleWebVttFormatter::fromCues($cues),
             ]);
-            $this->costs->recordCueBatch($job, 'enriching', 1, requiredStatus: 'completed');
+            // One call rebuilt word cards plus the enabled translation and readings.
+            foreach (array_keys(array_filter([
+                'enriching' => true,
+                'translating' => $this->translationRequested($job),
+                'romanizing' => $this->romanizationRequested($job, [$updatedCue]),
+            ])) as $stage) {
+                $this->costs->recordCueBatch($job, $stage, 1, requiredStatus: 'completed');
+            }
 
             return $track->fresh(['job']);
         }, attempts: 5);
@@ -1084,23 +1098,5 @@ final class LyricsCorrectionService
         }
 
         return null;
-    }
-
-    private function webVtt(array $cues): string
-    {
-        $previousEnd = null;
-
-        foreach ($cues as $cue) {
-            $start = (int) $cue['startMs'];
-            $end = (int) $cue['endMs'];
-
-            if ($start < 0 || $end <= $start || ($previousEnd !== null && $start < $previousEnd) || (string) $cue['sourceText'] === '' || mb_strlen((string) $cue['sourceText'], 'UTF-8') > 84) {
-                throw SubtitleProcessingException::lyricsCorrectionFailed(['reason' => 'invalid_timing_or_text']);
-            }
-
-            $previousEnd = $end;
-        }
-
-        return SubtitleWebVttFormatter::fromCues($cues);
     }
 }

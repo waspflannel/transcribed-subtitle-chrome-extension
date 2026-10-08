@@ -81,6 +81,8 @@ final class SubtitleProviderCostRecorder
     {
         $purpose = match ($stage) {
             'enriching' => 'enrichment',
+            'translating' => 'translation',
+            'romanizing' => 'romanization',
             default => null,
         };
 

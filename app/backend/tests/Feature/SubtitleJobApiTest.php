@@ -3126,8 +3126,8 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
     }
 
     #[DataProvider('correctedTokenEdits')]
-    public function test_quick_fix_handles_model_tokens_that_differ_from_the_transcript(
-        string $sourceText, array $tokenTexts, int $tokenIndex, string $replacement, string $expectedText,
+    public function test_quick_fix_rejects_model_tokens_that_differ_from_the_transcript(
+        string $sourceText, array $tokenTexts, int $tokenIndex, string $replacement, ?string $expectedText,
     ): void {
         $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
@@ -3137,10 +3137,21 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
             'index' => $index, 'text' => $text, 'normalizedText' => mb_strtolower($text),
         ], $tokenTexts, array_keys($tokenTexts));
         $job->track->update(['cues' => [$cue]]);
+        $original = $job->track->fresh()->getAttributes();
 
-        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/'.$tokenIndex, [
+        $response = $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cue['cueId'].'/tokens/'.$tokenIndex, [
             'expectedTrackId' => $job->track->public_id, 'text' => $replacement,
-        ])->assertOk()
+        ]);
+
+        if ($expectedText === null) {
+            $response->assertUnprocessable()->assertJsonPath('error.code', 'lyrics_correction_failed')
+                ->assertJsonPath('error.message', 'This word cannot be edited because the line text does not match its words. Your subtitles are unchanged.');
+            $this->assertSame($original, $job->track->fresh()->getAttributes());
+            EditedCueAgent::assertNeverPrompted();
+
+            return;
+        }
+        $response->assertOk()
             ->assertJsonPath('cues.0.sourceText', $expectedText)
             ->assertJsonPath('cues.0.tokens.'.$tokenIndex.'.text', $replacement);
         $this->assertStringContainsString($expectedText, $job->track->fresh()->web_vtt);
@@ -3149,12 +3160,75 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
     public static function correctedTokenEdits(): array
     {
         return [
-            'mixed script correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 1, 'يديه', 'غصن يديه النجسة'],
-            'token after correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 2, 'الجديدة', 'غصن يدينو الجديدة'],
-            'misleading repetition' => ['their there', ['there', 'there'], 0, 'here', 'here there'],
+            'mixed script correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 1, 'يديه', null],
+            'token after correction' => ['غصن يديנו النجسة.', ['غصن', 'يدينو', 'النجسة'], 2, 'الجديدة', null],
+            'misleading repetition' => ['their there', ['there', 'there'], 0, 'here', null],
             'exact punctuation' => ['hello, world!', ['hello', 'world'], 1, 'everyone', 'hello, everyone!'],
-            'attached punctuation' => ['helo world!', ['hello', 'world!'], 0, 'hi', 'hi world!'],
-            'no-space script' => ['日夲語勉強', ['日本語', '勉強'], 1, '学習', '日本語学習'],
+            'attached punctuation' => ['helo world!', ['hello', 'world!'], 0, 'hi', null],
+            'no-space script' => ['日夲語勉強', ['日本語', '勉強'], 1, '学習', null],
         ];
+    }
+
+    public function test_quick_fix_ignores_invalid_timing_in_other_cues_and_keeps_the_previous_translation_out_of_the_prompt(): void
+    {
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $cues = $job->track->cues;
+        $cues[0]['translatedText'] = 'Old translation of the old word';
+        // A neighbor that is too long and overlaps must not block an edit to another cue.
+        $cues[1]['sourceText'] = str_repeat('long ', 20);
+        $cues[1]['startMs'] = $cues[0]['startMs'];
+        $job->track->update(['cues' => $cues]);
+        $prompted = null;
+        EditedCueAgent::fake(function (string $prompt) use (&$prompted): array {
+            $prompted = json_decode($prompt, true)['cues'][0];
+
+            return ['translatedText' => 'Refreshed', 'cues' => [[...$prompted, 'romanization' => null, 'tokens' => array_map(
+                fn (array $token): array => [...$token, 'translation' => 'new', 'gloss' => null, 'romanization' => null], $prompted['tokens'],
+            )]]];
+        })->preventStrayPrompts();
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $job->track->public_id, 'text' => 'updated',
+        ])->assertOk()->assertJsonPath('cues.0.sourceText', 'updated transcript segment');
+        $this->assertArrayNotHasKey('translatedText', $prompted);
+    }
+
+    public function test_quick_fix_rejects_invalid_edited_cue_timing_before_the_provider_call(): void
+    {
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $cues = $job->track->cues;
+        $cues[0]['endMs'] = $cues[0]['startMs'];
+        $job->track->update(['cues' => $cues]);
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $job->track->public_id, 'text' => 'updated',
+        ])->assertUnprocessable()->assertJsonPath('error.code', 'lyrics_correction_failed');
+        EditedCueAgent::assertNeverPrompted();
+    }
+
+    public function test_quick_fix_records_cost_for_each_refreshed_layer(): void
+    {
+        config([
+            'subtitles.costs.openai_enrichment_microusd_per_cue' => 7,
+            'subtitles.costs.openai_translation_microusd_per_cue' => 5,
+            'subtitles.costs.openai_romanization_microusd_per_cue' => 3,
+        ]);
+        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload(['includeTranslation' => true]))->assertOk();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $job->update(['ai_provider' => 'openai', 'source_language' => 'jpn', 'target_language' => 'eng', 'include_romanization' => true]);
+        $cues = $job->track->cues;
+        $cues[0] = [...$cues[0], 'sourceText' => '猫です', 'tokens' => [
+            ['index' => 0, 'text' => '猫', 'normalizedText' => '猫'], ['index' => 1, 'text' => 'です', 'normalizedText' => 'です'],
+        ]];
+        $job->track->update(['cues' => $cues]);
+        $before = $job->fresh()->estimated_provider_cost_microusd;
+
+        $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cues[0]['cueId'].'/tokens/0', [
+            'expectedTrackId' => $job->track->public_id, 'text' => '犬',
+        ])->assertOk();
+
+        $this->assertSame($before + 15, $job->fresh()->estimated_provider_cost_microusd);
     }
 }
