@@ -225,7 +225,12 @@ class ContractResponseValidationTest extends TestCase
             ->assertOk();
         $this->assertResponseMatchesSchema($cancelled, 'lyrics-correction-status.schema.json');
 
-        $cue = $track->fresh()->cues[0];
+        $cues = $track->fresh()->cues;
+        // Quick Fix needs tokens that cover the whole line.
+        $cues[0]['tokens'][] = ['index' => 1, 'text' => 'source', 'normalizedText' => 'source'];
+        $cues[0]['tokens'][] = ['index' => 2, 'text' => 'text', 'normalizedText' => 'text'];
+        $track->update(['cues' => $cues]);
+        $cue = $cues[0];
         $quickFix = $this
             ->withExtensionInstall($installId)
             ->patchJson('/v1/subtitle-jobs/'.$track->job->public_id.'/cues/'.$cue['cueId'].'/tokens/0', [
