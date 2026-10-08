@@ -164,6 +164,37 @@ class ScribeAudioChunkerTest extends TestCase
         }
     }
 
+    public function test_chunk_timeout_scales_with_length_and_secrets_stay_out_of_ffmpeg(): void
+    {
+        $directory = storage_path('framework/testing/scribe-audio-chunker/'.(string) Str::uuid());
+        File::ensureDirectoryExists($directory);
+        $path = $directory.DIRECTORY_SEPARATOR.'scribe-ready.flac';
+        File::put($path, 'prepared-flac');
+        $audio = new TemporaryAudioFile($path, $directory, 36000, File::size($path), 'audio/flac');
+        $timeouts = [];
+        Process::preventStrayProcesses();
+        Process::fake(function (PendingProcess $process) use (&$timeouts, $directory) {
+            $timeouts[] = $process->timeout;
+            $this->assertFalse($process->environment['APP_KEY'] ?? false);
+            $this->assertFalse($process->environment['OPENAI_API_KEY']);
+            $this->assertSame($directory.DIRECTORY_SEPARATOR.'process-temp', $process->environment['TMPDIR']);
+            File::put($process->command[array_key_last($process->command)], 'chunk-flac');
+
+            return Process::result();
+        });
+
+        try {
+            $this->chunker()->extractChunk($audio, 0, 0.0, 30.0);
+            $this->chunker()->extractChunk($audio, 1, 30.0, 4530.0);
+            config(['subtitles.audio_preparation.ffmpeg_timeout_seconds' => 300]);
+            $this->chunker()->extractChunk($audio, 2, 4530.0, 10530.0);
+
+            $this->assertSame([60, 450, 300], $timeouts);
+        } finally {
+            File::deleteDirectory($directory);
+        }
+    }
+
     private function chunker(): ScribeAudioChunker
     {
         return new ScribeAudioChunker;

@@ -3,6 +3,7 @@
 namespace App\Services\Audio;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Support\ChildProcessEnvironment;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
@@ -14,6 +15,9 @@ use Throwable;
 
 class YouTubeAudioSource
 {
+    /** Window + metadata (60s) + direct (60s) + download (600s) stays inside AcquireSubtitleAudio's 900s. */
+    private const CACHED_MEDIA_RETRY_WINDOW_SECONDS = 60;
+
     public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
     {
         File::ensureDirectoryExists($workDirectory, 0700);
@@ -27,10 +31,13 @@ class YouTubeAudioSource
                 [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
             }
             Log::info('backend.youtube_metadata_reused', ['hit' => $cached !== null]);
+            $startedAt = now();
             try {
                 $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
             } catch (SubtitleProcessingException $exception) {
-                if ($cached === null) {
+                // Retry only fast failures (stale cached media): a full second attempt
+                // after a slow one would outlive the acquisition job and skip cleanup.
+                if ($cached === null || $startedAt->diffInSeconds(now()) > self::CACHED_MEDIA_RETRY_WINDOW_SECONDS) {
                     throw $exception;
                 }
                 Cache::forget($this->prefetchKey($videoId));
@@ -329,31 +336,12 @@ class YouTubeAudioSource
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|false>
      */
     private function processEnvironment(): array
     {
-        $tempDirectory = rtrim((string) config('subtitles.youtube.temp_directory'), DIRECTORY_SEPARATOR)
-            .DIRECTORY_SEPARATOR.'process-temp';
-
-        File::ensureDirectoryExists($tempDirectory, 0700);
-
-        $environment = [];
-
-        foreach (['SystemRoot', 'WINDIR', 'COMSPEC', 'Path', 'PATH', 'PATHEXT', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'PROGRAMDATA'] as $name) {
-            $value = getenv($name);
-
-            if (is_string($value) && $value !== '') {
-                $environment[$name] = $value;
-            }
-        }
-
-        return [
-            ...$environment,
-            'TEMP' => $tempDirectory,
-            'TMP' => $tempDirectory,
-            'TMPDIR' => $tempDirectory,
-        ];
+        return ChildProcessEnvironment::isolated(rtrim((string) config('subtitles.youtube.temp_directory'), DIRECTORY_SEPARATOR)
+            .DIRECTORY_SEPARATOR.'process-temp');
     }
 
     private function throwProcessFailure(ProcessResult $result, string $stage): never

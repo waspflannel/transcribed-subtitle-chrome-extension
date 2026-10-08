@@ -3,6 +3,7 @@
 namespace App\Services\Audio;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Support\ChildProcessEnvironment;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -98,7 +99,7 @@ class ScribeAudioChunker
             '-c:a',
             'flac',
             $chunkPath,
-        ], $index);
+        ], $index, $endSeconds - $startSeconds, $audio->directory);
 
         if (! File::isFile($chunkPath) || File::size($chunkPath) < 1) {
             throw $this->failure('Transcription audio chunk is empty.', [
@@ -119,11 +120,15 @@ class ScribeAudioChunker
     /**
      * @param  array<int, string>  $command
      */
-    private function runFfmpeg(array $command, int $chunkIndex): void
+    private function runFfmpeg(array $command, int $chunkIndex, float $chunkSeconds, string $workDirectory): void
     {
+        // ffmpeg runs far faster than 10x real time; scale so long chunks are not cut off.
+        $timeoutSeconds = min($this->ffmpegTimeoutSeconds(), max(60, (int) ceil($chunkSeconds / 10)));
+
         try {
-            // Leave the rest of the 720s job budget for Scribe and upload slack.
-            $result = Process::timeout(min(60, $this->ffmpegTimeoutSeconds()))->run($command);
+            $result = Process::timeout($timeoutSeconds)
+                ->env(ChildProcessEnvironment::isolated($workDirectory.DIRECTORY_SEPARATOR.'process-temp'))
+                ->run($command);
         } catch (Throwable $exception) {
             throw $this->failure('Transcription audio chunking could not run.', [
                 'reason' => 'process_exception',

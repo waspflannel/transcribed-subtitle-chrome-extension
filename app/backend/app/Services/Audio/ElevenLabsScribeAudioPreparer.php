@@ -3,6 +3,7 @@
 namespace App\Services\Audio;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Support\ChildProcessEnvironment;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -73,7 +74,7 @@ class ElevenLabsScribeAudioPreparer
 
         try {
             $result = Process::timeout($this->ffmpegTimeoutSeconds())
-                ->env($this->processEnvironment($workDirectory))
+                ->env(ChildProcessEnvironment::isolated($workDirectory.DIRECTORY_SEPARATOR.'process-temp'))
                 ->run($command);
         } catch (Throwable $exception) {
             throw $this->failure('Audio preparation command could not run.', [
@@ -133,33 +134,6 @@ class ElevenLabsScribeAudioPreparer
     private function ffmpegTimeoutSeconds(): int
     {
         return max(1, (int) config('subtitles.audio_preparation.ffmpeg_timeout_seconds', 600));
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function processEnvironment(string $workDirectory): array
-    {
-        $tempDirectory = $workDirectory.DIRECTORY_SEPARATOR.'process-temp';
-
-        File::ensureDirectoryExists($tempDirectory, 0700);
-
-        $environment = [];
-
-        foreach (['SystemRoot', 'WINDIR', 'COMSPEC', 'Path', 'PATH', 'PATHEXT', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA', 'PROGRAMDATA'] as $name) {
-            $value = getenv($name);
-
-            if (is_string($value) && $value !== '') {
-                $environment[$name] = $value;
-            }
-        }
-
-        return [
-            ...$environment,
-            'TEMP' => $tempDirectory,
-            'TMP' => $tempDirectory,
-            'TMPDIR' => $tempDirectory,
-        ];
     }
 
     private function isMissingFfmpegFailure(ProcessResult $result): bool

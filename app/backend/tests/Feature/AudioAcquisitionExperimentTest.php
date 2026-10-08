@@ -148,6 +148,22 @@ class AudioAcquisitionExperimentTest extends TestCase
         $this->assertNull(Cache::get('youtube-prefetch:v2:dQw4w9WgXcQ'));
     }
 
+    public function test_slow_cached_media_failure_is_not_retried_past_the_job_budget(): void
+    {
+        $this->fakeAcquisition();
+        (new YouTubeAudioSource)->prefetch('dQw4w9WgXcQ');
+        $fresh = false;
+        Process::fake(function (PendingProcess $process) use (&$fresh) {
+            $fresh = $fresh || in_array('--dump-single-json', $process->command, true);
+            $this->travel(61)->seconds();
+
+            return Process::result(errorOutput: 'slow failure', exitCode: 1);
+        });
+
+        $this->assertThrows(fn () => $this->acquire(), SubtitleProcessingException::class);
+        $this->assertFalse($fresh);
+    }
+
     public function test_enabled_prefetch_is_queued_without_resolving_metadata_in_http_request(): void
     {
         config(['subtitles.youtube.metadata_prefetch' => true]);
