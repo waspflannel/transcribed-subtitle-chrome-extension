@@ -3,7 +3,6 @@ param(
     [string]$ApplicationPath = "/var/www/transcribed-subtitle-extension/app/backend/current",
     [string]$PhpPath = "php",
     [string]$WorkerUser = "forge",
-    [string]$QueueConnection = "redis",
     [int]$WorkerTimeoutSeconds = 1200,
     [int]$StopWaitSeconds = 1260,
     [int]$SleepSeconds = 0,
@@ -40,7 +39,7 @@ foreach ($group in $groups) {
     $lines.Add("[program:$program]")
     $lines.Add("process_name=%(program_name)s_%(process_num)02d")
     $lines.Add("directory=$ApplicationPath")
-    $lines.Add("command=$PhpPath artisan queue:work $QueueConnection --queue=$queues --sleep=$SleepSeconds --tries=$Tries --timeout=$WorkerTimeoutSeconds --memory=$MemoryMb --max-time=$MaxTimeSeconds")
+    $lines.Add("command=$PhpPath artisan queue:work $($group.connection) --queue=$queues --sleep=$SleepSeconds --tries=$Tries --timeout=$WorkerTimeoutSeconds --memory=$MemoryMb --max-time=$MaxTimeSeconds")
     $lines.Add("autostart=true")
     $lines.Add("autorestart=true")
     $lines.Add("stopasgroup=true")

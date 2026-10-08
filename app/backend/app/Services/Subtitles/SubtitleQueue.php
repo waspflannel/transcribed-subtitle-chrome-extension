@@ -17,6 +17,19 @@ final class SubtitleQueue
         return (string) config('subtitles.queue.connection', 'redis');
     }
 
+    /**
+     * Batch work gets its own Redis connection with a short retry_after, so a
+     * killed worker's job comes back before the stalled-job watchdog fires.
+     */
+    public static function batchConnection(): string
+    {
+        $connection = self::connection();
+
+        return config('queue.connections.'.$connection.'.driver') === 'redis'
+            ? (string) config('subtitles.queue.batch_connection', 'redis-batch')
+            : $connection;
+    }
+
     public static function generationName(): string
     {
         return (string) config('subtitles.queue.generation_name', self::DEFAULT_GENERATION_NAME);
@@ -80,13 +93,14 @@ final class SubtitleQueue
     }
 
     /**
-     * @return array<int, array{name: string, queue_family: string, queues: array<int, string>, worker_count: int}>
+     * @return array<int, array{name: string, queue_family: string, connection: string, queues: array<int, string>, worker_count: int}>
      */
     public static function workerGroups(): array
     {
         return array_map(fn (string $family): array => [
             'name' => $family,
             'queue_family' => $family,
+            'connection' => $family === self::FAMILY_GENERATION ? self::connection() : self::batchConnection(),
             'queues' => [$family === self::FAMILY_GENERATION ? self::generationName() : self::batchName()],
             'worker_count' => max(1, (int) config('subtitles.queue.'.$family.'_workers', $family === self::FAMILY_GENERATION ? 9 : 22)),
         ], [self::FAMILY_GENERATION, self::FAMILY_BATCH]);

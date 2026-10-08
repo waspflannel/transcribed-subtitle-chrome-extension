@@ -119,6 +119,7 @@ function Get-WorkerGroupsFromRuntime {
         [pscustomobject]@{
             name = "$($_.name)"
             queue_family = "$($_.queue_family)"
+            connection = "$($_.connection)"
             queues = @($_.queues)
             worker_count = [int]$_.worker_count
         }
@@ -393,10 +394,7 @@ function Start-BackendServer {
 }
 
 function Start-WorkerProcesses {
-    param(
-        [object[]]$WorkerGroups,
-        [string]$QueueConnection
-    )
+    param([object[]]$WorkerGroups)
 
     if ($SkipWorkers) {
         return @()
@@ -421,7 +419,7 @@ function Start-WorkerProcesses {
             $args = @(
                 "artisan",
                 "queue:work",
-                $QueueConnection,
+                $group.connection,
                 "--name=$workerName",
                 "--queue=$queues",
                 "--tries=$WorkerTries",
@@ -525,7 +523,7 @@ if ($backendProcess -ne $null) {
     $startedProcesses.Add($backendProcess) | Out-Null
 }
 
-foreach ($workerProcess in (Start-WorkerProcesses -WorkerGroups $workerGroups -QueueConnection $queueConnection)) {
+foreach ($workerProcess in (Start-WorkerProcesses -WorkerGroups $workerGroups)) {
     $startedProcesses.Add($workerProcess) | Out-Null
 }
 

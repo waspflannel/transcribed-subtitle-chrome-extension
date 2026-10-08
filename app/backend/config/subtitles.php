@@ -12,6 +12,8 @@ return [
 
     'queue' => [
         'connection' => env('SUBTITLE_QUEUE_CONNECTION', 'redis'),
+        // Used only when the main connection is Redis; other drivers share one connection.
+        'batch_connection' => env('SUBTITLE_BATCH_QUEUE_CONNECTION', 'redis-batch'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
         'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
         'generation_name' => env('SUBTITLE_GENERATION_QUEUE', 'subtitle-generation'),
@@ -126,6 +128,10 @@ return [
         //     ceiling spans one stage's queue wait plus its work.
         //   - batch stages heartbeat updated_at on
         //     every progress step, so the ceiling only spans one stalled step.
+        // Each ceiling plus slack must exceed retry_after of the connection
+        // running that stage (redis 1260s for audio stages, redis-batch 360s
+        // for analysis and finalization), so Redis redelivers a killed
+        // worker's job before this watcher fails the run.
         'stage_timeout_seconds' => [
             'preparing' => (int) env('SUBTITLE_STALLED_PREPARING_TIMEOUT_SECONDS', 900),
             'acquiring-audio' => (int) env('SUBTITLE_STALLED_ACQUIRING_AUDIO_TIMEOUT_SECONDS', 1200),

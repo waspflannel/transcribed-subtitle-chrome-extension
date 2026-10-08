@@ -31,6 +31,18 @@ return [
             'after_commit' => false,
         ],
 
+        // Subtitle batch work (analysis, merge, finalization) times out within
+        // 300s. A short reservation lets Redis redeliver a killed worker's job
+        // before the stalled-job watchdog fails the run.
+        'redis-batch' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'queue'),
+            'queue' => env('SUBTITLE_BATCH_QUEUE', 'subtitle-batch'),
+            'retry_after' => (int) env('REDIS_BATCH_QUEUE_RETRY_AFTER', 360),
+            'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 1),
+            'after_commit' => false,
+        ],
+
         'deferred' => [
             'driver' => 'deferred',
         ],

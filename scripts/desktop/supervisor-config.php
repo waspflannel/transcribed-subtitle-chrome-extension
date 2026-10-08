@@ -28,11 +28,13 @@ $programs = [
 ];
 foreach ($runtime['summary']['subtitleWorkerGroups'] as $group) {
     $queue = implode(',', $group['queues']);
-    if (! preg_match('/\A[a-z0-9_,-]+\z/D', $queue) || ! preg_match('/\A[a-z0-9_-]+\z/D', $group['name'])) {
+    $connection = $group['connection'];
+    if (! preg_match('/\A[a-z0-9_,-]+\z/D', $queue) || ! preg_match('/\A[a-z0-9_-]+\z/D', $group['name'])
+        || ! preg_match('/\A[a-z0-9_-]+\z/D', $connection)) {
         throw new RuntimeException('Invalid worker configuration.');
     }
     $programs[$group['name']] = [
-        "php artisan queue:work redis --queue={$queue} --tries=0 --timeout=1200 --sleep=1 --memory=256 --no-ansi",
+        "php artisan queue:work {$connection} --queue={$queue} --tries=0 --timeout=1200 --sleep=1 --memory=256 --no-ansi",
         max(1, (int) $group['worker_count']),
     ];
 }

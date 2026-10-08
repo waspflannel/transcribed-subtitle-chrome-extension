@@ -33,7 +33,7 @@ abstract class SubtitleBatchContinuationJob implements ShouldQueue
         public readonly string $runId,
         ?int $queuedAtMs = null,
     ) {
-        $this->onConnection(SubtitleQueue::connection());
+        $this->onConnection(SubtitleQueue::batchConnection());
         $this->queuedAtMs = $queuedAtMs ?? $this->currentTimeMs();
     }
 

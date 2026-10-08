@@ -7,11 +7,17 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 class AnalyzeSubtitleCueBatch extends SubtitleCueBatchJob
 {
+    /**
+     * A held lock means a twin delivery is analyzing this batch, so the
+     * duplicate is dropped instead of polling. The lock outlives the 300s
+     * timeout but expires before the batch connection's 360s retry_after,
+     * so a killed worker's own redelivery can still take it.
+     */
     public function middleware(): array
     {
         return [
             (new WithoutOverlapping('subtitle-analysis:'.$this->runId.':'.$this->batchIndex))
-                ->releaseAfter(1)->expireAfter(660),
+                ->dontRelease()->expireAfter(330),
             ...parent::middleware(),
         ];
     }

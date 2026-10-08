@@ -45,7 +45,7 @@ class LyricsCorrectionJob implements ShouldQueue
     ) {
         $this->batchIndex = $batchIndex;
         $this->queuedAtMs = (int) round(microtime(true) * 1000);
-        $this->onConnection(SubtitleQueue::connection());
+        $this->onConnection(SubtitleQueue::batchConnection());
         $this->timeout = self::timeoutSeconds();
     }
 
@@ -106,8 +106,8 @@ class LyricsCorrectionJob implements ShouldQueue
         $providerTimeout = max(1, (int) config('subtitles.enrichment.timeout_seconds', 120));
         $timeout = $providerTimeout + 60;
         $workerTimeout = max(1, (int) config('subtitles.queue.worker_timeout_seconds', 1200));
-        $retryAfter = (int) config('queue.connections.'.SubtitleQueue::connection().'.retry_after', 0);
-        $driver = (string) config('queue.connections.'.SubtitleQueue::connection().'.driver');
+        $retryAfter = (int) config('queue.connections.'.SubtitleQueue::batchConnection().'.retry_after', 0);
+        $driver = (string) config('queue.connections.'.SubtitleQueue::batchConnection().'.driver');
 
         if ($timeout >= $workerTimeout || ($driver !== 'sync' && $retryAfter <= $timeout)) {
             throw new LogicException('Lyrics correction timeout must cover its single provider request and stay below the worker timeout and queue retry_after.');

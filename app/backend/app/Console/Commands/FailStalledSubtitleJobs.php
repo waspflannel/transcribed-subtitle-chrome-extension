@@ -83,7 +83,7 @@ class FailStalledSubtitleJobs extends Command
         // and its queue retry have had time to finish. Duplicate deliveries are
         // serialized by the attempt lock and rejected by the revision check.
         $correctionCutoff = $now->copy()->subSeconds(
-            (int) config('queue.connections.'.SubtitleQueue::connection().'.retry_after', 0)
+            (int) config('queue.connections.'.SubtitleQueue::batchConnection().'.retry_after', 0)
                 + LyricsCorrectionJob::MAX_BACKOFF_SECONDS
                 + $slackSeconds,
         );

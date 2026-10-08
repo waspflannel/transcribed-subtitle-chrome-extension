@@ -2,14 +2,23 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\AcquireSubtitleAudio;
+use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\LyricsCorrectionJob;
+use App\Jobs\MergeSubtitleTranscript;
+use App\Jobs\OptimizeSubtitleAudio;
+use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
+use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
 
@@ -62,6 +71,32 @@ class FailStalledSubtitleJobsTest extends TestCase
             'subtitle_job_id' => $stalled->id,
             'event' => 'job.failed',
         ]);
+    }
+
+    public function test_stage_ceilings_outlast_the_retry_window_of_the_connection_running_the_stage(): void
+    {
+        config(['subtitles.queue.connection' => 'redis']);
+        $runId = (string) Str::uuid();
+        $audio = new TemporaryAudioFile('unused', 'unused', 1, 1, 'audio/flac');
+        $stageJobs = [
+            'acquiring-audio' => [new AcquireSubtitleAudio(1, $runId)],
+            'optimizing-audio' => [new OptimizeSubtitleAudio(1, $runId, $audio)],
+            'transcribing' => [new TranscribeSubtitleAudioChunk(1, 0, 1, $runId, $audio, 0.0, 0.0, null), new MergeSubtitleTranscript(1, $runId, 0)],
+            'tokenizing' => [new AnalyzeSubtitleCueBatch(1, 0, $runId), new PrepareSubtitleCuesAfterAnalysisBatches(1, $runId)],
+        ];
+        $slack = (int) config('subtitles.stalled_job.slack_seconds');
+
+        foreach ($stageJobs as $stage => $jobs) {
+            $ceiling = (int) config('subtitles.stalled_job.stage_timeout_seconds.'.$stage) + $slack;
+            foreach ($jobs as $job) {
+                $retryAfter = (int) config('queue.connections.'.$job->connection.'.retry_after');
+                $this->assertGreaterThan($job->timeout, $retryAfter, $job::class.' must finish inside its reservation.');
+                $this->assertGreaterThan($retryAfter, $ceiling, $job::class.' must be redelivered before the watcher fails '.$stage.'.');
+            }
+        }
+        $this->assertSame('redis-batch', $stageJobs['tokenizing'][0]->connection);
+        // Worker launchers read each group's connection from the runtime check.
+        $this->assertSame(['redis', 'redis-batch'], array_column(SubtitleQueue::workerGroups(), 'connection'));
     }
 
     public function test_it_no_ops_when_disabled(): void

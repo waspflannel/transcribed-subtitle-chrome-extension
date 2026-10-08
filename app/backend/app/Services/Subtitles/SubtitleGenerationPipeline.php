@@ -606,7 +606,7 @@ class SubtitleGenerationPipeline
     {
         if ($indexes === []) {
             PrepareSubtitleCuesAfterAnalysisBatches::dispatch($job->id, $job->run_id)
-                ->onQueue(SubtitleQueue::generationNameForJob($job))->afterCommit();
+                ->onQueue(SubtitleQueue::batchNameForJob($job))->afterCommit();
 
             return;
         }

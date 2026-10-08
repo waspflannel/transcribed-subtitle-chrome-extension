@@ -25,6 +25,8 @@ class SubtitleBatchDispatcher
             stage: 'analysis',
             completionJobClass: PrepareSubtitleCuesAfterAnalysisBatches::class,
             completionJobArguments: [$job->id, $job->run_id],
+            batchConnection: SubtitleQueue::batchConnection(),
+            batchQueueName: SubtitleQueue::batchNameForJob($job),
         );
     }
 
@@ -42,6 +44,7 @@ class SubtitleBatchDispatcher
             stage: 'transcribing',
             completionJobClass: MergeSubtitleTranscript::class,
             completionJobArguments: [$job->id, $job->run_id, $transcribingStartedAtMs],
+            batchConnection: SubtitleQueue::connection(),
             batchQueueName: SubtitleQueue::generationNameForJob($job),
         );
     }
@@ -54,6 +57,8 @@ class SubtitleBatchDispatcher
     }
 
     /**
+     * Completion jobs are short continuations, so they run as batch work.
+     *
      * @param  array<int, object|array<int, object>>  $jobs
      * @param  class-string  $completionJobClass
      * @param  array<int, mixed>  $completionJobArguments
@@ -65,7 +70,8 @@ class SubtitleBatchDispatcher
         string $stage,
         string $completionJobClass,
         array $completionJobArguments,
-        ?string $batchQueueName = null,
+        string $batchConnection,
+        string $batchQueueName,
     ): void {
         if ($jobs === []) {
             throw new LogicException('Cannot dispatch an empty subtitle batch.');
@@ -73,12 +79,11 @@ class SubtitleBatchDispatcher
 
         $subtitleJobId = $job->id;
         $runId = $job->run_id;
-        $batchQueueName ??= SubtitleQueue::batchNameForJob($job);
-        $completionQueueName = SubtitleQueue::generationNameForJob($job);
+        $completionQueueName = SubtitleQueue::batchNameForJob($job);
 
         Bus::batch($jobs)
             ->name($batchName)
-            ->onConnection(SubtitleQueue::connection())
+            ->onConnection($batchConnection)
             ->onQueue($batchQueueName)
             ->before(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName, $batchQueueName): void {
                 app(SubtitlePipelineTelemetry::class)->recordBatchDispatched(
@@ -102,7 +107,7 @@ class SubtitleBatchDispatcher
             ): void {
                 app(SubtitlePipelineTelemetry::class)->recordBatchCompleted($subtitleJobId, $runId, $batchName, $batch);
                 $completionJobClass::dispatch(...$completionJobArguments)
-                    ->onConnection(SubtitleQueue::connection())
+                    ->onConnection(SubtitleQueue::batchConnection())
                     ->onQueue($completionQueueName);
             })
             ->catch(static function (Batch $batch, Throwable $exception) use ($subtitleJobId, $stage, $runId, $batchName): void {

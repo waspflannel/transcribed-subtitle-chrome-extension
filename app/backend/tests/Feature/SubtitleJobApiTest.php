@@ -43,6 +43,7 @@ use Illuminate\Queue\Connectors\ConnectorInterface;
 use Illuminate\Queue\NullQueue;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -534,6 +535,24 @@ class SubtitleJobApiTest extends TestCase
         $this->dispatchCancelledBatch(new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id));
 
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_duplicate_analysis_delivery_is_dropped_while_its_twin_holds_the_lock(): void
+    {
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+        $duplicate = new AnalyzeSubtitleCueBatch($job->id, 0, $job->run_id);
+        $overlap = $duplicate->middleware()[0];
+        $this->assertTrue(Cache::lock($overlap->getLockKey($duplicate), 60)->get());
+
+        AnalyzeSubtitleCueBatch::dispatch($job->id, 0, $job->run_id)->onQueue(SubtitleQueue::batchName());
+        $this->runQueuedSubtitleJobs();
+
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+        // A killed worker's own redelivery must find the lock already expired.
+        $this->assertGreaterThan($duplicate->timeout, $overlap->expiresAfter);
+        $this->assertLessThan(config('queue.connections.redis-batch.retry_after'), $overlap->expiresAfter);
     }
 
     public function test_luna_annotations_preserve_source_cues_in_the_final_track_and_webvtt(): void
