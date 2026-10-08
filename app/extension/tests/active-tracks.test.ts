@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-const storageState = vi.hoisted(() => ({ values: new Map<string, unknown>() }));
+const storageState = vi.hoisted(() => ({ values: new Map<string, unknown>(), failWrites: false }));
 
 vi.mock('wxt/utils/storage', () => ({
   storage: {
@@ -10,6 +10,7 @@ vi.mock('wxt/utils/storage', () => ({
           return storageState.values.has(key) ? storageState.values.get(key) as T : options.fallback;
         },
         async setValue(value: T): Promise<void> {
+          if (storageState.failWrites) throw new Error('QUOTA_BYTES quota exceeded');
           storageState.values.set(key, value);
         },
         async removeValue(): Promise<void> {
@@ -25,7 +26,41 @@ import type { TrackResponse } from '../utils/contracts';
 describe('instance-scoped remembered tracks', () => {
   beforeEach(() => {
     storageState.values.clear();
+    storageState.failWrites = false;
     vi.useFakeTimers({ now: new Date('2026-05-30T00:00:00Z') });
+  });
+
+  it('evicts the least recently remembered track, not the oldest generated one', async () => {
+    const { getRememberedTrack, rememberActiveTrack } = await import('../utils/active-tracks');
+    // Entries written before rememberedAt existed fall back to their generation time.
+    storageState.values.set('local:activeTracksByVideoId', Object.fromEntries(['a', 'b', 'c', 'd', 'e'].map((videoId, index) => [
+      videoId,
+      { instanceId: 'instance-a', track: { ...trackResponse(), youtubeVideoId: videoId, generatedAt: `2026-05-2${index}T00:00:00Z` } },
+    ])));
+    const older = { ...trackResponse(), youtubeVideoId: 'older', generatedAt: '2026-01-01T00:00:00Z' };
+
+    await rememberActiveTrack(older, 'instance-a');
+    await expect(getRememberedTrack('older', 'instance-a')).resolves.toEqual(older);
+    await expect(getRememberedTrack('a', 'instance-a')).resolves.toBeNull();
+
+    vi.advanceTimersByTime(1000);
+    await rememberActiveTrack({ ...trackResponse(), youtubeVideoId: 'newest', generatedAt: '2026-01-02T00:00:00Z' }, 'instance-a');
+    await expect(getRememberedTrack('older', 'instance-a')).resolves.toEqual(older);
+    await expect(getRememberedTrack('b', 'instance-a')).resolves.toBeNull();
+  });
+
+  it('logs a failed cache write instead of failing the caller', async () => {
+    const { getRememberedTrack, rememberActiveTrack } = await import('../utils/active-tracks');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    storageState.failWrites = true;
+
+    await expect(rememberActiveTrack(trackResponse(), 'instance-a')).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith('extension.remembered_track_write_failed', expect.objectContaining({ trackId: 'track-1' }));
+
+    storageState.failWrites = false;
+    await rememberActiveTrack(trackResponse(), 'instance-a');
+    await expect(getRememberedTrack('video-1', 'instance-a')).resolves.toEqual(trackResponse());
+    warn.mockRestore();
   });
 
   afterEach(() => vi.useRealTimers());

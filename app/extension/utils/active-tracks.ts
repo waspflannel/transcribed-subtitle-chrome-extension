@@ -8,6 +8,8 @@ const MAX_STORED_TRACKS = 5;
 interface RememberedTrack {
   instanceId: string;
   track: TrackResponse;
+  /** Epoch ms of the last remember. Entries saved before this field fall back to generatedAt. */
+  rememberedAt?: number;
 }
 
 const activeTracksStorage = storage.defineItem<Record<string, RememberedTrack>>('local:activeTracksByVideoId', {
@@ -40,13 +42,23 @@ export async function rememberActiveTrack(track: TrackResponse, instanceId: stri
     const storedTracks = pruneExpiredTracks(await activeTracksStorage.getValue());
     const nextTracks = {
       ...storedTracks,
-      [track.youtubeVideoId]: { instanceId, track },
+      [track.youtubeVideoId]: { instanceId, track, rememberedAt: Date.now() },
     };
 
     await activeTracksStorage.setValue(limitStoredTracks(nextTracks));
   });
   rememberedTracksQueue = write.then(() => undefined, () => undefined);
-  await write;
+  try {
+    await write;
+  } catch (error) {
+    // The cache only speeds up page entry. A failed write must not stop the
+    // caller from showing the track it already has.
+    console.warn('extension.remembered_track_write_failed', {
+      youtubeVideoId: track.youtubeVideoId,
+      trackId: track.trackId,
+      error: error instanceof Error ? error.message : 'Unknown storage error',
+    });
+  }
 }
 
 export async function getRememberedTrack(youtubeVideoId: string, instanceId: string): Promise<TrackResponse | null> {
@@ -172,10 +184,14 @@ export async function clearTabOperations(): Promise<void> {
   await clear;
 }
 
+/** Keeps the most recently remembered tracks, not the most recently generated ones. */
 function limitStoredTracks(tracks: Record<string, RememberedTrack>): Record<string, RememberedTrack> {
+  const lastUsed = (remembered: RememberedTrack): number =>
+    remembered.rememberedAt ?? (Date.parse(remembered.track.generatedAt) || 0);
+
   return Object.fromEntries(
     Object.entries(tracks)
-      .sort(([, first], [, second]) => Date.parse(second.track.generatedAt) - Date.parse(first.track.generatedAt))
+      .sort(([, first], [, second]) => lastUsed(second) - lastUsed(first))
       .slice(0, MAX_STORED_TRACKS),
   );
 }

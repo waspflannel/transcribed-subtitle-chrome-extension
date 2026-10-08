@@ -11,7 +11,8 @@ export default defineConfig({
       default_locale: 'en',
       action: {},
       // `sidePanel` is Chromium-only; Firefox uses sidebar_action and warns on unknown permissions.
-      permissions: ['activeTab', 'storage', ...(browser === 'firefox' ? [] : ['sidePanel'])],
+      // `unlimitedStorage` lifts the 10 MB storage.local quota that full remembered tracks can reach.
+      permissions: ['activeTab', 'storage', 'unlimitedStorage', ...(browser === 'firefox' ? [] : ['sidePanel'])],
       host_permissions: ['*://*.youtube.com/*', backendApiHostPermission(backendApiBaseUrl)],
       web_accessible_resources: [
         { resources: ['fonts/*'], matches: ['*://*.youtube.com/*'] },
