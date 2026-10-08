@@ -6,6 +6,7 @@ import {
   createExtensionSettingsFromPartial,
   type ExtensionSettings,
 } from '../utils/settings-model';
+import { watchExtensionSettings } from '../utils/settings';
 import {
   DEFAULT_SUBTITLE_STATE,
   isRuntimeMessage,
@@ -33,6 +34,7 @@ export default defineContentScript({
   runAt: 'document_idle',
   main(ctx) {
     let settings = DEFAULT_EXTENSION_SETTINGS;
+    let settingsRevision = 0;
     let subtitleState: SubtitleState = DEFAULT_SUBTITLE_STATE;
     let activeCue: SubtitleCue | null = null;
     let activePartialCue: PartialSubtitleCue | null = null;
@@ -114,6 +116,8 @@ export default defineContentScript({
     window.addEventListener('scroll', schedulePlayerRecovery, true);
     const playerRecoveryTimer = window.setInterval(recoverPlayerBinding, 1000);
     browser.runtime.onMessage.addListener(handleRuntimeMessage);
+    // Settings changed in the panel or another tab reach every YouTube tab.
+    const stopSettingsWatch = watchExtensionSettings(applySettings);
     void hydrateContentState();
 
     updateOverlay();
@@ -130,6 +134,7 @@ export default defineContentScript({
       }
       window.removeEventListener('keydown', handleKeyboardShortcut, true);
       browser.runtime.onMessage.removeListener(handleRuntimeMessage);
+      stopSettingsWatch();
       window.clearInterval(playerRecoveryTimer);
       if (playerPositionFrame !== undefined) window.cancelAnimationFrame(playerPositionFrame);
       window.removeEventListener('fullscreenchange', schedulePlayerRecovery);
@@ -149,29 +154,7 @@ export default defineContentScript({
       }
 
       if (message.type === 'background.settingsChanged') {
-        const nextSettings = createExtensionSettingsFromPartial(message.settings);
-        const timingOffsetChanged =
-          nextSettings.subtitleTimingOffsetSeconds !== settings.subtitleTimingOffsetSeconds;
-
-        settings = nextSettings;
-
-        if (!settings.overlayVisible || !settings.pauseOnWordHover) {
-          releaseStudyPause();
-        }
-
-        if (timingOffsetChanged && subtitleState.type === 'ready') {
-          clearBoundWebVttTrack();
-          videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
-          bindGeneratedSubtitles(subtitleState.track);
-        } else if (timingOffsetChanged && subtitleState.type === 'loading' && subtitleState.partialTrack) {
-          const partialKey = partialTrackKey(subtitleState);
-          clearBoundWebVttTrack();
-          videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
-          bindPartialSubtitles(subtitleState.partialTrack, partialKey);
-        } else {
-          updateOverlay();
-        }
-
+        applySettings(createExtensionSettingsFromPartial(message.settings));
         sendResponse({ ok: true });
 
         return false;
@@ -227,6 +210,31 @@ export default defineContentScript({
       }
 
       return false;
+    }
+
+    function applySettings(nextSettings: ExtensionSettings): void {
+      settingsRevision += 1;
+      const timingOffsetChanged =
+        nextSettings.subtitleTimingOffsetSeconds !== settings.subtitleTimingOffsetSeconds;
+
+      settings = nextSettings;
+
+      if (!settings.overlayVisible || !settings.pauseOnWordHover) {
+        releaseStudyPause();
+      }
+
+      if (timingOffsetChanged && subtitleState.type === 'ready') {
+        clearBoundWebVttTrack();
+        videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
+        bindGeneratedSubtitles(subtitleState.track);
+      } else if (timingOffsetChanged && subtitleState.type === 'loading' && subtitleState.partialTrack) {
+        const partialKey = partialTrackKey(subtitleState);
+        clearBoundWebVttTrack();
+        videoBindRetriesLeft = VIDEO_BIND_RETRY_LIMIT;
+        bindPartialSubtitles(subtitleState.partialTrack, partialKey);
+      } else {
+        updateOverlay();
+      }
     }
 
     function handleKeyboardShortcut(event: KeyboardEvent): void {
@@ -296,12 +304,21 @@ export default defineContentScript({
       const request = ++hydrationRequest;
       const epoch = stateEpoch;
       const url = window.location.href;
+      const requestSettingsRevision = settingsRevision;
       try {
         const state = await browser.runtime.sendMessage({ type: 'content.getState', revalidateSavedGeneration: true });
-        if (disposed || request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) return;
+        if (disposed) return;
+        // Settings are not page state. A subtitle push that superseded this
+        // reply must not also drop the saved settings it carries.
+        const replySettings = state?.settings && requestSettingsRevision === settingsRevision
+          ? createExtensionSettingsFromPartial(state.settings) : null;
+        if (request !== hydrationRequest || epoch !== stateEpoch || url !== window.location.href) {
+          if (replySettings) applySettings(replySettings);
+          return;
+        }
 
-        if (state?.settings) {
-          settings = createExtensionSettingsFromPartial(state.settings);
+        if (replySettings) {
+          settings = replySettings;
         }
 
         if (state?.subtitleState) {
@@ -947,8 +964,7 @@ export default defineContentScript({
         })) as { ok?: boolean; settings?: ExtensionSettings; error?: string };
 
         if (response?.settings) {
-          settings = createExtensionSettingsFromPartial(response.settings);
-          updateOverlay();
+          applySettings(createExtensionSettingsFromPartial(response.settings));
 
           return true;
         }

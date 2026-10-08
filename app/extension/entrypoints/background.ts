@@ -174,7 +174,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       return getContentState(sender, message.revalidateSavedGeneration);
 
     case 'content.updateSettings':
-      return updateSettingsFromContent(message.patch, sender);
+      return updateSettingsFromContent(message.patch);
 
     case 'content.enrichLearningToken':
       return enrichLearningTokenFromContent(message, sender);
@@ -508,36 +508,17 @@ async function recoverSubtitleStateFromBackend(
   return localState;
 }
 
+// Content scripts watch the settings storage, so every YouTube tab follows a save.
 async function updateSettingsFromPanel(patch: Partial<ExtensionSettings>, windowId?: number): Promise<PanelState> {
-  const settings = await updateExtensionSettings(patch);
-  const activeTab = await getActiveTab(windowId);
-  const activeTabId = activeTab?.id ?? null;
-
-  if (activeTabId !== null) {
-    await sendTabMessage(activeTabId, {
-      type: 'background.settingsChanged',
-      settings,
-    });
-  }
+  await updateExtensionSettings(patch);
 
   return getPanelState({ syncBackend: false, windowId });
 }
 
 async function updateSettingsFromContent(
   patch: Partial<ExtensionSettings>,
-  sender: Browser.runtime.MessageSender,
 ): Promise<{ ok: true; settings: ExtensionSettings }> {
-  const settings = await updateExtensionSettings(patch);
-  const senderTabId = typeof sender.tab?.id === 'number' ? sender.tab.id : null;
-
-  if (senderTabId !== null) {
-    await sendTabMessage(senderTabId, {
-      type: 'background.settingsChanged',
-      settings,
-    });
-  }
-
-  return { ok: true, settings };
+  return { ok: true, settings: await updateExtensionSettings(patch) };
 }
 
 async function generateSubtitlesFromPanel(youtubeVideoId: string, tabId: number, windowId?: number): Promise<PanelState> {

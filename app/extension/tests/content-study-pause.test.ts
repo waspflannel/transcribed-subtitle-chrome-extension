@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     listeners,
+    settingsWatch: null as ((settings: typeof DEFAULT_EXTENSION_SETTINGS) => void) | null,
     cueChange: null as ((change: { activeCue: SubtitleCue | null }) => void) | null,
     sendMessage: vi.fn(async (message: { type?: string }) => {
       if (message.type === 'content.getState') {
@@ -41,6 +42,13 @@ vi.mock('wxt/browser', () => ({
         },
       },
     },
+  },
+}));
+
+vi.mock('../utils/settings', () => ({
+  watchExtensionSettings(callback: (settings: typeof DEFAULT_EXTENSION_SETTINGS) => void) {
+    mocks.settingsWatch = callback;
+    return () => { mocks.settingsWatch = null; };
   },
 }));
 
@@ -132,6 +140,41 @@ describe('content study pause ownership', () => {
     update.mockRestore();
     position.mockRestore();
     invalidate();
+  });
+
+  it('applies saved settings from page entry even when a subtitle push arrives first', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    const video = document.createElement('video');
+    setVideoRect(video);
+    document.body.append(video);
+    let resolveState!: (state: any) => void;
+    mocks.sendMessage.mockImplementationOnce(() => new Promise((resolve) => { resolveState = resolve; }));
+    let invalidate!: () => void;
+    (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
+    const state = readySubtitleState();
+    messageListener()({ type: 'background.subtitleStateChanged', subtitleState: state }, {}, () => {});
+    resolveState({ settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true }, subtitleState: state });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.getElementById('tse-overlay-host')?.shadowRoot?.textContent).toContain('Bonjour');
+    invalidate();
+  });
+
+  it('follows settings saved from another tab or the panel', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    const video = document.createElement('video');
+    setVideoRect(video);
+    document.body.append(video);
+    let invalidate!: () => void;
+    (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
+    await Promise.resolve();
+    await Promise.resolve();
+    messageListener()({ type: 'background.subtitleStateChanged', subtitleState: readySubtitleState() }, {}, () => {});
+    expect(document.getElementById('tse-overlay-host')?.shadowRoot?.textContent).not.toContain('Bonjour');
+    mocks.settingsWatch!({ ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true });
+    expect(document.getElementById('tse-overlay-host')?.shadowRoot?.textContent).toContain('Bonjour');
+    invalidate();
+    expect(mocks.settingsWatch).toBeNull();
   });
 
   beforeEach(() => {

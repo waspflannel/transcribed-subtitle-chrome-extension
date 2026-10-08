@@ -45,6 +45,11 @@ export async function updateExtensionSettings(patch: Partial<ExtensionSettings>)
   return write;
 }
 
+/** Calls back with normalized settings whenever any extension context saves them. */
+export function watchExtensionSettings(callback: (settings: ExtensionSettings) => void): () => void {
+  return settingsStorage.watch((value) => callback(createExtensionSettingsFromPartial(value)));
+}
+
 export function waitForExtensionSettingsWrites(): Promise<void> {
   return settingsWriteQueue;
 }
