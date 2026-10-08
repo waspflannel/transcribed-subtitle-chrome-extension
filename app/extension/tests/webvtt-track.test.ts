@@ -83,6 +83,22 @@ describe('bindWebVttTrackToVideo', () => {
     cleanup();
   });
 
+  it('binds locally built WebVTT whose cue text cannot break parsing', async () => {
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const video = new FakeVideoElement();
+    const track = trackResponse();
+    track.cues[0].sourceText = 'a --> b <i>c</i> & d\n\nnext';
+    track.webVtt = 'WEBVTT\n\nbroken backend text';
+
+    const cleanup = bindWebVttTrackToVideo({ video: video as unknown as HTMLVideoElement, track, onCueChange: () => undefined });
+    const vtt = await (createObjectURL.mock.calls[0]![0] as Blob).text();
+
+    expect(vtt).toBe('WEBVTT\n\ncue-0001\n00:00:00.500 --> 00:00:02.100\na --&gt; b &lt;i&gt;c&lt;/i&gt; &amp; d next\n');
+    expect(buildWebVttFromCues([{ ...track.cues[0], sourceText: ' ' }])).toContain('00:00:02.100\n...\n');
+    cleanup();
+  });
+
   it('offsets WebVTT and cue timings for manual sync adjustment', () => {
     const shifted = offsetTrackTiming(trackResponse(), 4.5);
 
@@ -178,7 +194,6 @@ describe('bindWebVttTrackToVideo', () => {
       track: {
         youtubeVideoId: 'dQw4w9WgXcQ',
         sourceLanguage: 'spa',
-        webVtt,
         cues: partialCues,
       },
       onCueChange: (change) => changes.push({ translatedText: change.activeCue?.translatedText }),

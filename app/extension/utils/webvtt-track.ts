@@ -21,7 +21,6 @@ export interface WebVttBindableTrack<TCue extends WebVttBindableCue = SubtitleCu
   youtubeVideoId: string;
   sourceLanguage: string;
   detectedSourceLanguage?: string;
-  webVtt: string;
   cues: readonly TCue[];
 }
 
@@ -45,7 +44,8 @@ export function bindWebVttTrackToVideo<TCue extends WebVttBindableCue>(
   const { video, onCueChange, logger } = options;
   const track = offsetTrackTiming(options.track, options.timingOffsetSeconds ?? 0);
   const trackElement = video.ownerDocument.createElement('track');
-  const objectUrl = URL.createObjectURL(new Blob([track.webVtt], { type: 'text/vtt' }));
+  // Always build from cues: backend WebVTT carries raw lyric text that can break parsing.
+  const objectUrl = URL.createObjectURL(new Blob([buildWebVttFromCues(track.cues)], { type: 'text/vtt' }));
   let disposed = false;
 
   trackElement.kind = 'subtitles';
@@ -142,10 +142,22 @@ export function buildWebVttFromCues(cues: readonly WebVttBindableCue[]): string 
   const blocks = ['WEBVTT'];
 
   for (const cue of cues) {
-    blocks.push(`${cue.cueId}\n${formatTimestamp(cue.startMs)} --> ${formatTimestamp(cue.endMs)}\n${cue.sourceText}`);
+    blocks.push(`${cue.cueId}\n${formatTimestamp(cue.startMs)} --> ${formatTimestamp(cue.endMs)}\n${webVttCueText(cue.sourceText)}`);
   }
 
   return `${blocks.join('\n\n')}\n`;
+}
+
+/**
+ * One-line cue payload that cannot end the cue or change parsing: a lyric
+ * with "-->", "<" or "&" would otherwise drop or empty the cue. Cues are
+ * matched by id, so the text only has to stay non-empty.
+ */
+function webVttCueText(text: string): string {
+  const safe = text.replace(/\s+/g, ' ').trim()
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+  return safe === '' ? '...' : safe;
 }
 
 function formatTimestamp(milliseconds: number): string {

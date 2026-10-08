@@ -108,6 +108,36 @@ describe('content study pause ownership', () => {
     invalidate();
   });
 
+  it('keeps the shown preview cue while appended cues rebuild the timing track', async () => {
+    const { default: contentScript } = await import('../entrypoints/content');
+    const { bindWebVttTrackToVideo } = await import('../utils/webvtt-track');
+    const video = document.createElement('video');
+    setVideoRect(video);
+    document.body.append(video);
+    let invalidate!: () => void;
+    (contentScript as any).main({ onInvalidated: (callback: () => void) => { invalidate = callback; } });
+    await Promise.resolve();
+    await Promise.resolve();
+    const cue = { cueId: 'cue-1', index: 0, startMs: 0, endMs: 2000, sourceText: 'hola' };
+    const state = (cues: typeof cue[], revision: number) => ({ type: 'loading', status: 'running', youtubeVideoId: 'video-1', jobId: 'job-1',
+      message: 'Generating', stage: 'transcribing', progressPercent: 40,
+      partialTrack: { jobId: 'job-1', youtubeVideoId: 'video-1', sourceLanguage: 'spa', revision, cues } });
+    const publish = (value: unknown) => messageListener()({ type: 'background.subtitleStateChanged', subtitleState: value }, {}, () => {});
+    const shadow = () => document.getElementById('tse-overlay-host')!.shadowRoot!;
+    publish(state([cue], 1));
+    expect(shadow().textContent).toContain('hola');
+
+    // A real rebuilt track reports no active cue until its cues load.
+    vi.mocked(bindWebVttTrackToVideo).mockImplementationOnce((options: any) => {
+      options.onCueChange({ activeCue: null });
+      return vi.fn();
+    });
+    publish(state([cue, { ...cue, cueId: 'cue-2', index: 1, startMs: 2000, endMs: 3000, sourceText: 'adios' }], 2));
+    expect(shadow().querySelector('.rail--generating')).toBeNull();
+    expect(shadow().textContent).toContain('hola');
+    invalidate();
+  });
+
   it('coalesces scroll bursts without rebuilding content and skips hidden overlay positioning', async () => {
     const { default: contentScript } = await import('../entrypoints/content');
     const { OverlayShell } = await import('../utils/overlay');
