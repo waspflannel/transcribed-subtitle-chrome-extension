@@ -28,8 +28,8 @@ class SubtitleCueBatchProcessor
             return;
         }
 
-        $this->telemetry->recordQueueWait($job, 'tokenizing', $batchIndex, $queuedAtMs);
-        $this->telemetry->recordStageStarted($job, 'tokenizing', $batchIndex);
+        $this->telemetry->recordQueueWait($job, 'tokenizing', $batchIndex, $queuedAtMs, SubtitleQueue::FAMILY_BATCH);
+        $this->telemetry->recordStageStarted($job, 'tokenizing', $batchIndex, SubtitleQueue::FAMILY_BATCH);
 
         try {
             $startedAtMs = $this->telemetry->currentTimeMs();

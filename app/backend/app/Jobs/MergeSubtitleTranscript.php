@@ -7,7 +7,7 @@ use App\Services\Subtitles\SubtitleGenerationPipeline;
 /**
  * Final generation stage: assembles the per-chunk Scribe payloads into one
  * normalized transcript, stores the draft cues, and dispatches the analysis
- * batches. Runs as the transcription batch's completion job.
+ * batches. Runs after a transcription batch or a persisted transcript cache hit.
  */
 class MergeSubtitleTranscript extends SubtitleBatchContinuationJob
 {

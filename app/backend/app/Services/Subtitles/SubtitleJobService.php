@@ -77,6 +77,7 @@ class SubtitleJobService
         if (! in_array($mode, ['upload', 'youtube_url'], true)) {
             throw new InvalidArgumentException('Unsupported transcription ingestion mode.');
         }
+        $payload['youtubeUrl'] = 'https://www.youtube.com/watch?v='.$payload['youtubeVideoId'];
         $selection = SubtitleModel::configured($payload['aiProvider'] ?? null, $payload['aiModel'] ?? null, $payload['aiFastMode'] ?? false);
         $payload['aiProvider'] = $selection->provider;
         $payload['aiModel'] = $selection->model;

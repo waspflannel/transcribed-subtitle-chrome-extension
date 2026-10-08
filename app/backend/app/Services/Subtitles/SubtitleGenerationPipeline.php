@@ -4,6 +4,7 @@ namespace App\Services\Subtitles;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AnalyzeSubtitleCueBatch;
+use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\TranscribeSubtitleAudioChunk;
@@ -42,10 +43,46 @@ class SubtitleGenerationPipeline
     /**
      * Generation stage 1: claim the preparing job and download the source
      * audio, then hand off to OptimizeSubtitleAudio. A cached transcript
-     * skips the audio stages entirely and dispatches analysis directly.
+     * skips the audio stages and queues its persisted transcript continuation.
      */
     public function acquireAudioAndContinue(int $subtitleJobId, string $runId, ?int $queuedAtMs = null): void
     {
+        // A delivery can die after committing its handoff but before publishing it.
+        // Replay the durable continuation; downstream run locks/results drop duplicates.
+        $current = $this->loadRunningJob($subtitleJobId, $runId);
+        if ($current === null) {
+            return;
+        }
+        if ($current->stage === 'acquiring-audio' && $this->artifacts->hasArtifact($current, SubtitleJobArtifactStore::TRANSCRIPT)) {
+            $job = $this->claimAcquisition($subtitleJobId, $runId);
+            if ($job !== null) {
+                MergeSubtitleTranscript::dispatch($job->id, $job->run_id, $this->telemetry->currentTimeMs())
+                    ->onQueue(SubtitleQueue::batchName());
+            }
+
+            return;
+        }
+        if ($current->stage === 'optimizing-audio') {
+            $this->dispatchAcquiredAudio($current);
+
+            return;
+        }
+        if ($current->stage === 'transcribing') {
+            $this->dispatchPlannedTranscription($current);
+
+            return;
+        }
+        if ($current->stage === 'tokenizing') {
+            DB::transaction(function () use ($subtitleJobId, $runId): void {
+                $job = $this->lockRunningJob($subtitleJobId, $runId);
+                if ($job?->stage === 'tokenizing') {
+                    $this->dispatchAnalysisIndexes($job, $this->artifacts->pendingAnalysisIndexes($job));
+                }
+            }, attempts: 5);
+
+            return;
+        }
+
         $job = $this->claimAcquisition($subtitleJobId, $runId);
 
         if ($job === null) {
@@ -80,7 +117,6 @@ class SubtitleGenerationPipeline
             }
             $audio = $this->audioSource->acquire(
                 youtubeUrl: $job->youtube_url,
-                requestDurationSeconds: $job->video_duration_seconds,
                 workDirectory: SubtitleAudioWorkspace::directory($runId),
                 videoId: $job->youtube_video_id,
             );
@@ -96,10 +132,8 @@ class SubtitleGenerationPipeline
                 $this->logger->audioAcquisitionCompleted($currentJob, $audio);
                 $this->telemetry->recordStageCompleted($currentJob, 'acquiring-audio', $audioStartedAtMs);
                 $this->markJobRunning($currentJob, 'optimizing-audio', 35);
-
-                OptimizeSubtitleAudio::dispatch($currentJob->id, $runId, $audio)
-                    ->onQueue(SubtitleQueue::generationName())
-                    ->afterCommit();
+                $this->artifacts->putAcquiredAudio($currentJob, $audio);
+                DB::afterCommit(fn () => $this->dispatchAcquiredAudio($currentJob));
 
                 return true;
             }, attempts: 5);
@@ -118,7 +152,7 @@ class SubtitleGenerationPipeline
     private function dispatchUrlTranscription(SubtitleJob $job, int $startedAtMs): void
     {
         $duration = $this->audioSource->validatedDuration(
-            'https://www.youtube.com/watch?v='.$job->youtube_video_id, $job->video_duration_seconds);
+            'https://www.youtube.com/watch?v='.$job->youtube_video_id);
 
         DB::transaction(function () use ($job, $duration, $startedAtMs): void {
             $currentJob = $this->lockRunningJob($job->id, $job->run_id);
@@ -131,8 +165,29 @@ class SubtitleGenerationPipeline
             $this->logger->transcriptionStarted($currentJob);
             $this->telemetry->recordStageStarted($currentJob, 'transcribing');
             $transcribingStartedAtMs = $this->telemetry->currentTimeMs();
-            $chunks = [new TranscribeSubtitleAudioChunk($currentJob->id, 0, 1, $currentJob->run_id, null, 0.0, 0.0, null)];
-            DB::afterCommit(fn () => $this->batchDispatcher->dispatchTranscription($currentJob, $chunks, $transcribingStartedAtMs));
+            $this->artifacts->putTranscriptionPlan($currentJob, [
+                'audio' => null,
+                'chunks' => [['audioStartSeconds' => 0.0, 'nominalStartSeconds' => 0.0, 'nominalEndSeconds' => null]],
+                'startedAtMs' => $transcribingStartedAtMs,
+                'dispatched' => false,
+            ]);
+            DB::afterCommit(fn () => $this->dispatchPlannedTranscription($currentJob));
+        }, attempts: 5);
+    }
+
+    private function dispatchAcquiredAudio(SubtitleJob $job): void
+    {
+        DB::transaction(function () use ($job): void {
+            $job = $this->lockRunningJob($job->id, $job->run_id);
+            if ($job?->stage !== 'optimizing-audio') {
+                return;
+            }
+            $audio = $this->artifacts->acquiredAudio($job);
+            if ($audio !== null) {
+                $job->touch();
+                OptimizeSubtitleAudio::dispatch($job->id, $job->run_id, $audio)
+                    ->onQueue(SubtitleQueue::generationName())->afterCommit();
+            }
         }, attempts: 5);
     }
 
@@ -273,7 +328,7 @@ class SubtitleGenerationPipeline
         if ($plan === null || $plan['dispatched']) {
             return;
         }
-        $audio = new TemporaryAudioFile(...$plan['audio']);
+        $audio = $plan['audio'] === null ? null : new TemporaryAudioFile(...$plan['audio']);
         $chunks = [];
         foreach ($plan['chunks'] as $index => $bounds) {
             $chunks[] = new TranscribeSubtitleAudioChunk(
@@ -426,7 +481,7 @@ class SubtitleGenerationPipeline
             return;
         }
 
-        $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs);
+        $this->telemetry->recordQueueWait($job, 'transcribing', null, $queuedAtMs, SubtitleQueue::FAMILY_BATCH);
 
         try {
             if ($job->stage === 'tokenizing') {
@@ -434,6 +489,17 @@ class SubtitleGenerationPipeline
                 // dispatch. Replaying pending batches is safe: analysis locks
                 // and stored results drop duplicates.
                 $this->dispatchAnalysisIndexes($job, $this->artifacts->pendingAnalysisIndexes($job));
+
+                return;
+            }
+
+            if ($job->stage === 'acquiring-audio' && $this->artifacts->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT)) {
+                DB::transaction(function () use ($subtitleJobId, $runId): void {
+                    $current = $this->lockRunningJob($subtitleJobId, $runId);
+                    if ($current?->stage === 'acquiring-audio') {
+                        $this->dispatchAnalysisBatches($current);
+                    }
+                }, attempts: 5);
 
                 return;
             }
@@ -481,8 +547,8 @@ class SubtitleGenerationPipeline
     }
 
     /**
-     * Cache-hit continuation: the transcript already exists for this video,
-     * so the job goes straight from claiming to analysis dispatch.
+     * Cache-hit continuation: keep acquisition recoverable until its short
+     * batch-queue continuation takes ownership of analysis dispatch.
      * No transcription cost is recorded because no provider call happened.
      */
     private function continueWithCachedTranscript(SubtitleJob $job, CachedVideoTranscript $cached): void
@@ -504,7 +570,8 @@ class SubtitleGenerationPipeline
             $this->artifacts->putTranscript($job, $transcript);
             $this->artifacts->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $draftCues);
             $this->telemetry->recordFirstCueAvailable($job);
-            $this->dispatchAnalysisBatches($job);
+            MergeSubtitleTranscript::dispatch($job->id, $job->run_id, $this->telemetry->currentTimeMs())
+                ->onQueue(SubtitleQueue::batchName())->afterCommit();
         }, attempts: 5);
     }
 
@@ -530,15 +597,15 @@ class SubtitleGenerationPipeline
                 if ($job === null || $job->stage !== 'tokenizing' || ! $this->artifacts->analysisIsComplete($job)) {
                     return null;
                 }
-                $this->telemetry->recordQueueWait($job, 'assembling-analysis-results', null, $queuedAtMs);
-                $this->telemetry->recordStageStarted($job, 'assembling-analysis-results');
+                $this->telemetry->recordQueueWait($job, 'assembling-analysis-results', null, $queuedAtMs, SubtitleQueue::FAMILY_BATCH);
+                $this->telemetry->recordStageStarted($job, 'assembling-analysis-results', queueFamily: SubtitleQueue::FAMILY_BATCH);
                 $startedAtMs = $this->telemetry->currentTimeMs();
                 $analyzed = $this->artifacts->cueResultFromBatchArtifacts($job, SubtitleJobArtifactStore::ANALYZED_CUES);
                 $this->logger->tokenizationCompleted($job, $analyzed);
                 $this->telemetry->recordStageCompleted($job, 'assembling-analysis-results', $startedAtMs);
 
                 $stage = 'finalizing';
-                $this->telemetry->recordStageStarted($job, $stage);
+                $this->telemetry->recordStageStarted($job, $stage, queueFamily: SubtitleQueue::FAMILY_BATCH);
                 $startedAtMs = $this->telemetry->currentTimeMs();
                 $audioDurationSeconds = (int) ($job->video_duration_seconds
                     ?? $this->artifacts->transcript($job)->durationSeconds ?? 0);

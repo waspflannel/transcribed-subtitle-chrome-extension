@@ -29,9 +29,4 @@ class CachedVideoTranscript extends Model
             'expires_at' => 'immutable_datetime',
         ];
     }
-
-    public function isExpired(): bool
-    {
-        return $this->expires_at->isPast();
-    }
 }

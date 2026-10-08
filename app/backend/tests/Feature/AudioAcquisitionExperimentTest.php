@@ -39,7 +39,7 @@ class AudioAcquisitionExperimentTest extends TestCase
     {
         $path = storage_path('framework/testing/acquisition-'.Str::uuid());
         $this->workspaces[] = $path;
-        (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $path, 'dQw4w9WgXcQ');
+        (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $path, 'dQw4w9WgXcQ');
         $this->assertFileExists($path.'/direct-audio.m4a');
     }
 
@@ -113,7 +113,7 @@ class AudioAcquisitionExperimentTest extends TestCase
         });
         $path = storage_path('framework/testing/acquisition-'.Str::uuid());
         $this->workspaces[] = $path;
-        $result = (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $path);
+        $result = (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $path);
         $this->assertSame(realpath($path.'/fallback.m4a'), $result->path);
     }
 

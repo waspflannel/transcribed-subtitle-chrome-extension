@@ -105,7 +105,7 @@ final class SubtitleQueue
     {
         return $family === self::FAMILY_BATCH && self::batchConnection() !== self::connection()
             ? (int) config('subtitles.queue.batch_worker_timeout_seconds', 330)
-            : (int) config('subtitles.queue.worker_timeout_seconds', 1200);
+            : (int) config('subtitles.queue.worker_timeout_seconds', 1320);
     }
 
     public static function workerCount(): int

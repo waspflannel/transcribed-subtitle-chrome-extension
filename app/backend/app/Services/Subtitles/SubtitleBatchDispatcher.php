@@ -77,12 +77,13 @@ class SubtitleBatchDispatcher
             ->name($batchName)
             ->onConnection($batchConnection)
             ->onQueue($batchQueueName)
-            ->before(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName, $batchQueueName): void {
+            ->before(static function (Batch $batch) use ($subtitleJobId, $runId, $batchName, $batchQueueName, $batchConnection): void {
                 app(SubtitlePipelineTelemetry::class)->recordBatchDispatched(
                     $subtitleJobId,
                     $runId,
                     $batchName,
                     $batchQueueName,
+                    $batchConnection,
                     $batch,
                 );
             })

@@ -9,6 +9,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\AcquireSubtitleAudio;
 use App\Jobs\AnalyzeSubtitleCueBatch;
 use App\Jobs\LyricsCorrectionJob;
+use App\Jobs\MergeSubtitleTranscript;
 use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
@@ -738,6 +739,88 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(0, $this->audioSource->calls);
         $this->assertSame('optimizing-audio', $job->fresh()->stage);
+    }
+
+    public function test_acquisition_replays_its_saved_audio_handoff_without_downloading_again(): void
+    {
+        Queue::fake();
+        $job = SubtitleJob::factory()->create(['stage' => 'preparing']);
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->acquireAudioAndContinue($job->id, $job->run_id);
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertNotNull($this->artifacts()->acquiredAudio($job));
+        Queue::fake(); // The worker died after the durable handoff, before queue publication.
+        $pipeline->acquireAudioAndContinue($job->id, $job->run_id);
+        Queue::assertPushed(OptimizeSubtitleAudio::class, fn ($queued): bool => $queued->audio->path === $this->audioSource->lastAudioPath);
+        $this->assertSame(1, $this->audioSource->calls);
+    }
+
+    public function test_acquisition_replays_a_saved_url_handoff_without_metadata_work(): void
+    {
+        Bus::fake();
+        $job = $this->runningSubtitleJob('transcribing');
+        $job->update(['transcription_ingestion_mode' => 'youtube_url']);
+        $this->artifacts()->putTranscriptionPlan($job, [
+            'audio' => null,
+            'chunks' => [['audioStartSeconds' => 0.0, 'nominalStartSeconds' => 0.0, 'nominalEndSeconds' => null]],
+            'startedAtMs' => 123,
+            'dispatched' => false,
+        ]);
+        app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
+        Bus::assertBatched(fn ($batch): bool => $batch->jobs->count() === 1
+            && $batch->jobs[0] instanceof TranscribeSubtitleAudioChunk && $batch->jobs[0]->chunkAudio === null);
+        $this->assertTrue($this->artifacts()->transcriptionPlan($job)['dispatched']);
+        $this->assertSame(0, $this->audioSource->metadataCalls);
+    }
+
+    public function test_acquisition_replays_cached_transcript_analysis_after_lost_publication(): void
+    {
+        Bus::fake();
+        $job = $this->runningSubtitleJob('tokenizing');
+        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, [$this->sampleCue()]);
+        app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
+        Bus::assertBatched(fn ($batch): bool => $batch->jobs->count() === 1
+            && $batch->jobs[0] instanceof AnalyzeSubtitleCueBatch && $batch->jobs[0]->batchIndex === 0);
+        $this->assertSame(0, $this->audioSource->calls);
+        $this->assertSame(0, $this->transcriptionService->chunkCalls);
+    }
+
+    public function test_cached_acquisition_survives_lost_continuation_publication_until_redelivery(): void
+    {
+        $this->withExtensionInstall($this->installId())
+            ->postJson('/v1/subtitle-jobs', $this->validPayload())->assertOk();
+        Queue::fake();
+        $response = $this->postJson('/v1/subtitle-jobs', $this->validPayload(['targetLanguage' => 'fra']))->assertAccepted();
+        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $pipeline->acquireAudioAndContinue($job->id, $job->run_id);
+        Queue::assertPushed(MergeSubtitleTranscript::class, 1);
+        $this->assertSame('acquiring-audio', $job->fresh()->stage);
+        $this->assertTrue($this->artifacts()->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT));
+
+        // The worker dies after commit, then the reusable cache expires.
+        // This run must recover from its own transcript after Redis redelivers it.
+        Queue::fake();
+        CachedVideoTranscript::query()->delete();
+        $this->travel((int) config('queue.connections.redis.retry_after'))->seconds();
+        $this->artisan('subtitles:fail-stalled-jobs')->assertSuccessful();
+        $this->assertSame('running', $job->fresh()->status);
+        $pipeline->acquireAudioAndContinue($job->id, $job->run_id);
+        Queue::assertPushed(MergeSubtitleTranscript::class, 1);
+        $this->assertTrue($job->fresh()->updated_at->greaterThan(now()->subMinute()));
+        Bus::fake();
+        Queue::pushed(MergeSubtitleTranscript::class)->first()->handle($pipeline);
+        $this->assertSame('tokenizing', $job->fresh()->stage);
+
+        // A second crash after the merge commits can replay its analysis handoff.
+        Bus::fake();
+        $this->travel((int) config('queue.connections.redis-batch.retry_after'))->seconds();
+        $this->artisan('subtitles:fail-stalled-jobs')->assertSuccessful();
+        (new MergeSubtitleTranscript($job->id, $job->run_id, 0))->handle($pipeline);
+        Bus::assertBatched(fn ($batch): bool => $batch->jobs[0] instanceof AnalyzeSubtitleCueBatch);
+        $this->assertSame('running', $job->fresh()->status);
+        $this->assertSame(1, $this->audioSource->calls);
+        $this->assertSame(1, $this->transcriptionService->chunkCalls);
     }
 
     public function test_generation_runs_audio_optimization_before_scribe_transcription(): void
@@ -2776,7 +2859,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('subtitle_jobs', [
             'public_id' => $shortsResponse->json('jobId'),
             'youtube_video_id' => 'shorts00001',
-            'youtube_url' => 'https://www.youtube.com/shorts/shorts00001?feature=share',
+            'youtube_url' => 'https://www.youtube.com/watch?v=shorts00001',
         ]);
 
         $shortUrlPayload = $this->validPayload([
@@ -2791,7 +2874,7 @@ class SubtitleJobApiTest extends TestCase
         $this->assertDatabaseHas('subtitle_jobs', [
             'public_id' => $shortUrlResponse->json('jobId'),
             'youtube_video_id' => 'youtu000001',
-            'youtube_url' => 'https://youtu.be/youtu000001',
+            'youtube_url' => 'https://www.youtube.com/watch?v=youtu000001',
         ]);
     }
 
@@ -3064,7 +3147,7 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
     public bool $rejectMetadata = false;
 
-    public function validatedDuration(string $youtubeUrl, ?int $requestDurationSeconds): int
+    public function validatedDuration(string $youtubeUrl): int
     {
         $this->metadataCalls++;
         if ($this->rejectMetadata) {
@@ -3080,7 +3163,7 @@ class RecordingYouTubeAudioSource extends YouTubeAudioSource
 
     public ?\Closure $beforeAcquireResult = null;
 
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
     {
         $this->calls++;
         parse_str((string) parse_url($youtubeUrl, PHP_URL_QUERY), $query);

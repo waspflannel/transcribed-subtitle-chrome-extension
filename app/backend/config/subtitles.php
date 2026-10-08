@@ -13,7 +13,7 @@ return [
         // Used only when the main connection is Redis; other drivers share one connection.
         'batch_connection' => env('SUBTITLE_BATCH_QUEUE_CONNECTION', 'redis-batch'),
         'stale_preparing_seconds' => (int) env('SUBTITLE_STALE_PREPARING_SECONDS', 60),
-        'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1200),
+        'worker_timeout_seconds' => (int) env('SUBTITLE_WORKER_TIMEOUT_SECONDS', 1320),
         // Batch jobs time out within 300s; stay below the batch connection's retry_after (360s).
         'batch_worker_timeout_seconds' => (int) env('SUBTITLE_BATCH_WORKER_TIMEOUT_SECONDS', 330),
         'generation_name' => env('SUBTITLE_GENERATION_QUEUE', 'subtitle-generation'),
@@ -126,20 +126,20 @@ return [
         //   - `preparing` is pre-pickup queue wait; keep it generous so a brief
         //     worker backlog does not fail a job that is merely waiting.
         //   - `acquiring-audio`/`optimizing-audio`/`transcribing` each run as
-        //     their own stage job with its own timeout (900/1200/720s), and the
+        //     their own stage job with its own timeout (900/1200/up to 1260s), and the
         //     job stage is stamped when the next stage is dispatched, so each
         //     ceiling spans one stage's queue wait plus its work.
         //   - batch stages heartbeat updated_at on
         //     every progress step, so the ceiling only spans one stalled step.
         // Each ceiling plus slack must exceed retry_after of the connection
-        // running that stage (redis 1260s for audio stages, redis-batch 360s
+        // running that stage (redis 1380s for audio stages, redis-batch 360s
         // for analysis and finalization), so Redis redelivers a killed
         // worker's job before this watcher fails the run.
         'stage_timeout_seconds' => [
             'preparing' => (int) env('SUBTITLE_STALLED_PREPARING_TIMEOUT_SECONDS', 900),
-            'acquiring-audio' => (int) env('SUBTITLE_STALLED_ACQUIRING_AUDIO_TIMEOUT_SECONDS', 1200),
-            'optimizing-audio' => (int) env('SUBTITLE_STALLED_OPTIMIZING_AUDIO_TIMEOUT_SECONDS', 1200),
-            'transcribing' => (int) env('SUBTITLE_STALLED_TRANSCRIBING_TIMEOUT_SECONDS', 1200),
+            'acquiring-audio' => (int) env('SUBTITLE_STALLED_ACQUIRING_AUDIO_TIMEOUT_SECONDS', 1380),
+            'optimizing-audio' => (int) env('SUBTITLE_STALLED_OPTIMIZING_AUDIO_TIMEOUT_SECONDS', 1380),
+            'transcribing' => (int) env('SUBTITLE_STALLED_TRANSCRIBING_TIMEOUT_SECONDS', 1380),
             'tokenizing' => (int) env('SUBTITLE_STALLED_TOKENIZING_TIMEOUT_SECONDS', 600),
             'romanizing' => (int) env('SUBTITLE_STALLED_ROMANIZING_TIMEOUT_SECONDS', 600),
             'translating' => (int) env('SUBTITLE_STALLED_TRANSLATING_TIMEOUT_SECONDS', 600),

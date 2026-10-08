@@ -18,7 +18,7 @@ class YouTubeAudioSource
     /** Window + metadata (60s) + direct (60s) + download (600s) stays inside AcquireSubtitleAudio's 900s. */
     private const CACHED_MEDIA_RETRY_WINDOW_SECONDS = 60;
 
-    public function acquire(string $youtubeUrl, ?int $requestDurationSeconds, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
+    public function acquire(string $youtubeUrl, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
     {
         File::ensureDirectoryExists($workDirectory, 0700);
 
@@ -28,7 +28,7 @@ class YouTubeAudioSource
                 $durationSeconds = $this->durationSeconds($cached);
                 $metadata = $cached;
             } else {
-                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
+                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl);
             }
             Log::info('backend.youtube_metadata_reused', ['hit' => $cached !== null]);
             $startedAt = now();
@@ -41,7 +41,7 @@ class YouTubeAudioSource
                     throw $exception;
                 }
                 Cache::forget($this->prefetchKey($videoId));
-                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl, $requestDurationSeconds);
+                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl);
                 $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
             }
             $sizeBytes = File::size($realPath);
@@ -166,13 +166,13 @@ class YouTubeAudioSource
         return null;
     }
 
-    public function validatedDuration(string $youtubeUrl, ?int $requestDurationSeconds): int
+    public function validatedDuration(string $youtubeUrl): int
     {
-        return $this->validatedMetadata($youtubeUrl, $requestDurationSeconds)[1];
+        return $this->validatedMetadata($youtubeUrl)[1];
     }
 
     /** @return array{array<string, mixed>, int} */
-    private function validatedMetadata(string $youtubeUrl, ?int $requestDurationSeconds): array
+    private function validatedMetadata(string $youtubeUrl): array
     {
         $metadata = $this->metadata($youtubeUrl);
         $duration = $this->durationSeconds($metadata);

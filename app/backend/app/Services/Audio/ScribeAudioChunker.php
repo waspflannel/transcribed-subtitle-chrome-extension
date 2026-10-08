@@ -123,7 +123,7 @@ class ScribeAudioChunker
     private function runFfmpeg(array $command, int $chunkIndex, float $chunkSeconds, string $workDirectory): void
     {
         // ffmpeg runs far faster than 10x real time; scale so long chunks are not cut off.
-        $timeoutSeconds = min($this->ffmpegTimeoutSeconds(), max(60, (int) ceil($chunkSeconds / 10)));
+        $timeoutSeconds = self::extractionTimeoutSeconds($chunkSeconds);
 
         try {
             $result = Process::timeout($timeoutSeconds)
@@ -167,9 +167,10 @@ class ScribeAudioChunker
         return trim($binary);
     }
 
-    private function ffmpegTimeoutSeconds(): int
+    public static function extractionTimeoutSeconds(float $chunkSeconds): int
     {
-        return max(1, (int) config('subtitles.audio_preparation.ffmpeg_timeout_seconds', 600));
+        return min(max(1, (int) config('subtitles.audio_preparation.ffmpeg_timeout_seconds', 600)),
+            max(60, (int) ceil($chunkSeconds / 10)));
     }
 
     /**

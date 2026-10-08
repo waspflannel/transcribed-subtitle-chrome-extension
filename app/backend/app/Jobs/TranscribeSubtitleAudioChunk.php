@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
@@ -15,6 +16,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
+use LogicException;
 use RuntimeException;
 use Throwable;
 
@@ -37,7 +39,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
 
     public int $maxExceptions = 3;
 
-    /** Covers extraction (60s), Scribe (600s), and upload/persistence slack. */
+    /** Recomputed for each new payload from its serial extraction and request budgets. */
     public int $timeout = 720;
 
     public readonly int $queuedAtMs;
@@ -56,6 +58,15 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
         public readonly ?float $audioEndSeconds = null,
     ) {
         $this->onConnection(SubtitleQueue::connection());
+        $extractionSeconds = $audioEndSeconds === null ? 0
+            : ScribeAudioChunker::extractionTimeoutSeconds($audioEndSeconds - $audioStartSeconds);
+        $this->timeout = max(720, $extractionSeconds + max(1, (int) config('subtitles.transcription.timeout_seconds', 600)) + 60);
+        $retryAfter = (int) config('queue.connections.'.$this->connection.'.retry_after', 0);
+        if (config('queue.connections.'.$this->connection.'.driver') !== 'sync'
+            && ($this->timeout >= SubtitleQueue::workerTimeoutSeconds(SubtitleQueue::FAMILY_GENERATION)
+                || $this->timeout + 30 >= $retryAfter)) {
+            throw new LogicException('Transcription timeout must cover extraction and Scribe, stay below the generation worker timeout, and leave 30 seconds before queue retry_after for its overlap lock.');
+        }
         $this->queuedAtMs = $queuedAtMs ?? (int) floor(microtime(true) * 1000);
     }
 
@@ -66,7 +77,7 @@ class TranscribeSubtitleAudioChunk implements ShouldQueue
     {
         return [
             (new WithoutOverlapping('subtitle-transcription:'.$this->runId.':'.$this->chunkIndex))
-                ->releaseAfter(1)->expireAfter(780),
+                ->releaseAfter(1)->expireAfter($this->timeout + 30),
             new SkipIfBatchCancelled,
         ];
     }

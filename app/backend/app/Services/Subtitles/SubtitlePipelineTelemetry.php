@@ -21,7 +21,7 @@ class SubtitlePipelineTelemetry
         return (int) floor(microtime(true) * 1000);
     }
 
-    public function recordQueueWait(SubtitleJob $job, string $stage, ?int $batchIndex, ?int $queuedAtMs): void
+    public function recordQueueWait(SubtitleJob $job, string $stage, ?int $batchIndex, ?int $queuedAtMs, string $queueFamily = SubtitleQueue::FAMILY_GENERATION): void
     {
         if ($queuedAtMs === null) {
             return;
@@ -34,25 +34,26 @@ class SubtitlePipelineTelemetry
             stage: $stage,
             waitMs: $waitMs,
             batchIndex: $batchIndex,
+            queueFamily: $queueFamily,
         );
         $this->tracer->jobEvent($job, 'queue.wait_observed', $this->withBatchIndex([
             'stage' => $stage,
-            'queue_connection' => SubtitleQueue::connection(),
-            'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
-            'queue' => $batchIndex === null ? SubtitleQueue::generationName() : SubtitleQueue::batchName(),
+            'queue_connection' => $queueFamily === SubtitleQueue::FAMILY_BATCH ? SubtitleQueue::batchConnection() : SubtitleQueue::connection(),
+            'queue_family' => $queueFamily,
+            'queue' => $queueFamily === SubtitleQueue::FAMILY_BATCH ? SubtitleQueue::batchName() : SubtitleQueue::generationName(),
             'wait_ms' => $waitMs,
         ], $batchIndex));
         $this->recordSlowQueueWait($job, $stage, $waitMs, $batchIndex);
     }
 
-    public function recordStageStarted(SubtitleJob $job, string $stage, ?int $batchIndex = null): void
+    public function recordStageStarted(SubtitleJob $job, string $stage, ?int $batchIndex = null, string $queueFamily = SubtitleQueue::FAMILY_GENERATION): void
     {
         $this->tracer->jobEvent($job, 'stage.started', $this->withBatchIndex([
             'stage' => $stage,
             'status' => $job->status,
-            'queue_connection' => SubtitleQueue::connection(),
-            'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
-            'queue' => $batchIndex === null ? SubtitleQueue::generationName() : SubtitleQueue::batchName(),
+            'queue_connection' => $queueFamily === SubtitleQueue::FAMILY_BATCH ? SubtitleQueue::batchConnection() : SubtitleQueue::connection(),
+            'queue_family' => $queueFamily,
+            'queue' => $queueFamily === SubtitleQueue::FAMILY_BATCH ? SubtitleQueue::batchName() : SubtitleQueue::generationName(),
             'worker_pid' => getmypid() ?: null,
         ], $batchIndex));
     }
@@ -169,13 +170,14 @@ class SubtitlePipelineTelemetry
         string $runId,
         string $batchName,
         string $queueName,
+        string $connection,
         Batch $batch,
     ): void {
         $this->tracer->jobEventById($subtitleJobId, 'batch.dispatched', [
             'run_id' => $runId,
             'laravel_batch_id' => $batch->id,
-            'queue_connection' => SubtitleQueue::connection(),
-            'queue_family' => SubtitleQueue::FAMILY_BATCH,
+            'queue_connection' => $connection,
+            'queue_family' => SubtitleQueue::familyForQueue($queueName),
             'queue' => $queueName,
             ...$this->batchContext($batchName, $batch),
         ]);

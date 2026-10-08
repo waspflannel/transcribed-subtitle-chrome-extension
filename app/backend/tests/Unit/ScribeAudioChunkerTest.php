@@ -2,16 +2,35 @@
 
 namespace Tests\Unit;
 
+use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
+use LogicException;
 use Tests\TestCase;
 
 class ScribeAudioChunkerTest extends TestCase
 {
+    public function test_transcription_reservation_covers_serial_extraction_and_provider_work(): void
+    {
+        config(['subtitles.queue.connection' => 'redis']);
+        $audio = new TemporaryAudioFile('unused', 'unused', 36000, 1, 'audio/flac');
+        foreach ([[null, 720], [4500, 1110], [6000, 1260]] as [$end, $expected]) {
+            $job = new TranscribeSubtitleAudioChunk(1, 0, 1, 'run', $audio, 0, 0, null, audioEndSeconds: $end);
+            $this->assertSame($expected, $job->timeout);
+            $this->assertGreaterThan($job->timeout, SubtitleQueue::workerTimeoutSeconds(SubtitleQueue::FAMILY_GENERATION));
+            $this->assertGreaterThan($job->timeout, $job->middleware()[0]->expiresAfter);
+            $this->assertLessThan(config('queue.connections.redis.retry_after'), $job->middleware()[0]->expiresAfter);
+        }
+        config(['queue.connections.redis.retry_after' => 1260]);
+        $this->expectException(LogicException::class);
+        new TranscribeSubtitleAudioChunk(1, 0, 1, 'run', $audio, 0, 0, null, audioEndSeconds: 6000);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

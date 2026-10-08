@@ -42,11 +42,6 @@ class SubtitleTrack extends Model
         return $this->expires_at?->isPast() ?? false;
     }
 
-    public function effectiveSourceLanguage(): string
-    {
-        return $this->detected_source_language ?: $this->source_language;
-    }
-
     protected function casts(): array
     {
         return [

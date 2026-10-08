@@ -255,7 +255,7 @@ class ScribeTranscriptNormalizer
                 }
             }
 
-            if ($currentWords !== [] && $this->exceedsHardLimit($currentWords, $word)) {
+            while ($currentWords !== [] && $this->exceedsHardLimit($currentWords, $word)) {
                 $best = $this->bestCandidate($candidates);
                 $flush($best !== null ? $best['index'] : (count($currentWords) - 1));
             }

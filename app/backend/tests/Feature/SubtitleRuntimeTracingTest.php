@@ -16,6 +16,7 @@ use App\Models\SubtitleTrack;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Subtitles\SubtitleBatchDispatcher;
 use App\Services\Subtitles\SubtitleCueBatchProcessor;
+use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
 use App\Services\Subtitles\SubtitleProviderCostRecorder;
@@ -26,12 +27,45 @@ use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class SubtitleRuntimeTracingTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_pipeline_telemetry_uses_actual_generation_and_batch_queues(): void
+    {
+        config(['subtitles.queue.connection' => 'redis']);
+        Queue::fake();
+        $job = SubtitleJob::factory()->create([
+            'stage' => 'transcribing', 'source_language' => 'eng', 'target_language' => 'eng',
+            'include_translation' => false, 'include_romanization' => false, 'video_duration_seconds' => 2,
+        ]);
+        $store = app(SubtitleJobArtifactStore::class);
+        $store->putTranscriptChunk($job, 0, 1, ['language_code' => 'eng', 'words' => [
+            ['text' => 'Hello.', 'type' => 'word', 'start' => 0.0, 'end' => 1.0],
+        ]], 0, 0, null);
+        app(SubtitleBatchDispatcher::class)->dispatchTranscription($job, [
+            new TranscribeSubtitleAudioChunk($job->id, 0, 1, $job->run_id, null, 0, 0, null),
+        ], 0);
+        $pipeline = app(SubtitleGenerationPipeline::class);
+        $queuedAt = (int) (microtime(true) * 1000);
+        $pipeline->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, $queuedAt, $queuedAt);
+        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $job->run_id, $queuedAt);
+        $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id, $queuedAt);
+
+        foreach ($job->events()->whereIn('event', ['queue.wait_observed', 'stage.started'])->get() as $event) {
+            $this->assertSame('redis-batch', $event->queue_connection, $event->stage);
+            $this->assertSame(SubtitleQueue::batchName(), $event->queue);
+            $this->assertSame('batch', $event->context['queue_family']);
+        }
+        $batches = $job->events()->where('event', 'batch.dispatched')->orderBy('id')->get();
+        $this->assertSame(['redis', 'redis-batch'], $batches->pluck('queue_connection')->all());
+        $this->assertSame(['generation', 'batch'], $batches->map(fn ($event) => $event->context['queue_family'])->all());
+        $this->assertSame('completed', $job->fresh()->status);
+    }
 
     private TraceRecordingTranslationAnalysisProvider $translationAnalysis;
 

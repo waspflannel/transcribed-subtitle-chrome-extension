@@ -5,6 +5,7 @@ namespace App\Services\Subtitles;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobArtifact;
+use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\TimestampedTranscriptSegment;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
@@ -17,6 +18,19 @@ class SubtitleJobArtifactStore
     public const TRANSCRIPT_CHUNK = 'transcript_chunk';
 
     public const TRANSCRIPTION_PLAN = 'transcription_plan';
+
+    public const ACQUIRED_AUDIO = 'acquired_audio';
+
+    public function putAcquiredAudio(SubtitleJob $job, TemporaryAudioFile $audio): void
+    {
+        $this->put($job, self::ACQUIRED_AUDIO, get_object_vars($audio));
+    }
+
+    public function acquiredAudio(SubtitleJob $job): ?TemporaryAudioFile
+    {
+        return $this->hasArtifact($job, self::ACQUIRED_AUDIO)
+            ? new TemporaryAudioFile(...$this->payload($job, self::ACQUIRED_AUDIO)) : null;
+    }
 
     public function putTranscriptionPlan(SubtitleJob $job, array $plan): void
     {

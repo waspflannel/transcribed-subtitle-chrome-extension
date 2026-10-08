@@ -10,6 +10,24 @@ use Tests\TestCase;
 
 class ScribeTranscriptNormalizerTest extends TestCase
 {
+    public function test_soft_break_rechecks_the_remaining_words_against_hard_limits(): void
+    {
+        foreach ([
+            [['Hi,', 0, 1], [str_repeat('a', 35), 1, 2], [str_repeat('b', 35), 2, 3], [str_repeat('c', 20).'.', 3, 4]],
+            [['Hi,', 0, 0.1], ['long', 0.1, 5.9], ['phrase.', 5.9, 6.2]],
+        ] as $input) {
+            $words = array_map(fn (array $word): array => [
+                'text' => $word[0], 'start' => $word[1], 'end' => $word[2], 'type' => 'word',
+            ], $input);
+            $transcript = $this->normalizer()->normalize(['words' => $words], 'eng', 10);
+            $this->assertSame(implode(' ', array_column($input, 0)), implode(' ', array_column($transcript->segments, 'text')));
+            foreach ($transcript->segments as $segment) {
+                $this->assertLessThanOrEqual(84, mb_strlen($segment->text));
+                $this->assertLessThanOrEqual(6, $segment->endSeconds - $segment->startSeconds);
+            }
+        }
+    }
+
     public function test_preserves_korean_word_boundaries_and_mixed_text(): void
     {
         foreach (['나는 학교에 갑니다.', '나는 Laravel 학교에 갑니다.', '나는 학교에 갑니다.'] as $text) {

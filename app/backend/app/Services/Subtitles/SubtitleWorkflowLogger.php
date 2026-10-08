@@ -190,15 +190,15 @@ class SubtitleWorkflowLogger
         }
     }
 
-    public function queueWaitObserved(SubtitleJob $job, string $stage, int $waitMs, ?int $batchIndex = null): void
+    public function queueWaitObserved(SubtitleJob $job, string $stage, int $waitMs, ?int $batchIndex = null, string $queueFamily = SubtitleQueue::FAMILY_GENERATION): void
     {
         Log::info('backend.subtitle_queue_wait_observed', $this->withOptionalBatchIndex([
             'job_id' => $job->public_id,
             'youtube_video_id' => $job->youtube_video_id,
             'stage' => $stage,
-            'queue_connection' => config('subtitles.queue.connection'),
-            'queue_family' => $batchIndex === null ? SubtitleQueue::FAMILY_GENERATION : SubtitleQueue::FAMILY_BATCH,
-            'queue' => $batchIndex === null ? SubtitleQueue::generationName() : SubtitleQueue::batchName(),
+            'queue_connection' => $queueFamily === SubtitleQueue::FAMILY_BATCH ? SubtitleQueue::batchConnection() : SubtitleQueue::connection(),
+            'queue_family' => $queueFamily,
+            'queue' => $queueFamily === SubtitleQueue::FAMILY_BATCH ? SubtitleQueue::batchName() : SubtitleQueue::generationName(),
             'wait_ms' => $waitMs,
         ], $batchIndex));
     }

@@ -47,7 +47,7 @@ class YouTubeAudioSourceTest extends TestCase
         });
 
         $this->expectException(SubtitleProcessingException::class);
-        (new YouTubeAudioSource)->validatedDuration('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42);
+        (new YouTubeAudioSource)->validatedDuration('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     }
 
     public function test_it_acquires_audio_from_public_video_metadata(): void
@@ -75,7 +75,6 @@ class YouTubeAudioSourceTest extends TestCase
 
         $audio = (new YouTubeAudioSource)->acquire(
             youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-            requestDurationSeconds: 42,
             workDirectory: $this->workDirectory(),
         );
 
@@ -105,7 +104,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $this->workDirectory());
             $this->fail('Expected audio acquisition to reject private video metadata.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_unavailable', $exception->publicCode);
@@ -141,7 +140,7 @@ class YouTubeAudioSourceTest extends TestCase
             return Process::result($path);
         });
 
-        $audio = (new YouTubeAudioSource)->acquire($url, 42, $directory);
+        $audio = (new YouTubeAudioSource)->acquire($url, $directory);
 
         $this->assertSame(43, $audio->durationSeconds);
         $this->assertFileDoesNotExist($directory.DIRECTORY_SEPARATOR.'youtube-info.json');
@@ -161,7 +160,7 @@ class YouTubeAudioSourceTest extends TestCase
         });
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $directory);
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $directory);
             $this->fail('Expected the expired media URL to fail without retrying.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('download', $exception->context['stage']);
@@ -176,7 +175,7 @@ class YouTubeAudioSourceTest extends TestCase
         Process::fake(['*' => Process::result(json_encode(['duration' => 42, 'availability' => 'public', 'is_live' => true]))]);
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $this->workDirectory());
             $this->fail('Expected live video to be rejected before downloading.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_unavailable', $exception->publicCode);
@@ -195,7 +194,7 @@ class YouTubeAudioSourceTest extends TestCase
         ]);
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $this->workDirectory());
             $this->fail('Expected audio acquisition to report missing downloader configuration.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_acquisition_failed', $exception->publicCode);
@@ -226,7 +225,7 @@ class YouTubeAudioSourceTest extends TestCase
         });
 
         try {
-            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 42, $this->workDirectory());
+            (new YouTubeAudioSource)->acquire('https://www.youtube.com/watch?v=dQw4w9WgXcQ', $this->workDirectory());
             $this->fail('Expected non-audio download output to fail.');
         } catch (SubtitleProcessingException $exception) {
             $this->assertSame('audio_acquisition_failed', $exception->publicCode);
@@ -245,6 +244,6 @@ class YouTubeAudioSourceTest extends TestCase
             ])),
         ]);
 
-        $this->assertSame(3601, (new YouTubeAudioSource)->validatedDuration('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 3601));
+        $this->assertSame(3601, (new YouTubeAudioSource)->validatedDuration('https://www.youtube.com/watch?v=dQw4w9WgXcQ'));
     }
 }

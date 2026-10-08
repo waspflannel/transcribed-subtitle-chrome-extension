@@ -17,7 +17,7 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1260),
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1380),
             'after_commit' => false,
         ],
 
@@ -25,7 +25,7 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'queue'),
             'queue' => env('REDIS_QUEUE', 'subtitle-generation'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1260),
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 1380),
             // Revisit delayed jobs promptly without busy-polling an idle queue.
             'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 1),
             'after_commit' => false,
