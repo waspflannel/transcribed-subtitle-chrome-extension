@@ -125,7 +125,8 @@ internal sealed class ControlPanel : Form
         return button;
     }
 
-    private static string Quote(string value) { return "\"" + value + "\""; }
+    // Double trailing backslashes so "D:\Data\" or "C:\" cannot escape the closing quote.
+    private static string Quote(string value) { return "\"" + value + new string('\\', value.Length - value.TrimEnd('\\').Length) + "\""; }
 
     private void UpdateButtons()
     {
@@ -157,7 +158,7 @@ internal sealed class ControlPanel : Form
             var info = new ProcessStartInfo {
                 FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
                 Arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(Path.Combine(packageDirectory, "runtime.ps1"))
-                    + " -Action " + action + " -PackageDirectory " + Quote(packageDirectory.TrimEnd('\\')) + " -DataDirectory " + Quote(dataDirectory),
+                    + " -Action " + action + " -PackageDirectory " + Quote(packageDirectory) + " -DataDirectory " + Quote(dataDirectory),
                 UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true
             };
             operation = new Process { StartInfo = info };
@@ -224,6 +225,12 @@ internal sealed class ControlPanel : Form
             }
         } else {
             File.AppendAllText(Path.Combine(dataDirectory, "setup.log"), DateTime.Now.ToString("s") + " / " + action + Environment.NewLine + text + errorText);
+            if (exitCode == 0 && action == "Stop" && text.Contains("TRANSCRIBE-ACTIVE: ")
+                && MessageBox.Show(this, "Subtitles are still being generated. Stopping now interrupts them, and they may need to be retried. Stop anyway?",
+                    "Transcribe", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) {
+                StartOperation("Stop -Force");
+                return;
+            }
             if (exitCode != 0) {
                 needsAttention = true;
                 status.Text = "Needs attention";

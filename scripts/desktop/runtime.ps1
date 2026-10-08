@@ -3,7 +3,9 @@ param(
     [ValidateSet('Setup', 'Start', 'Stop', 'Status')][string]$Action = 'Status',
     [string]$PackageDirectory = $PSScriptRoot,
     [string]$DataDirectory = (Join-Path $env:LOCALAPPDATA 'Transcribe'),
-    [ValidatePattern('^[a-z0-9][a-z0-9_-]+$')][string]$ProjectName = 'transcribe-desktop'
+    [ValidatePattern('^[a-z0-9][a-z0-9_-]+$')][string]$ProjectName = 'transcribe-desktop',
+    # Stop even when subtitle generations are running.
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,13 +51,23 @@ function Invoke-Compose {
     Invoke-Docker -Arguments (@('compose') + $script:ComposeArguments + $Arguments) -Capture:$Capture
 }
 
+# Desktop-sized worker counts; server defaults (9 + 22 workers) are too heavy for one computer.
+$script:DesktopDefaults = @('SUBTITLE_GENERATION_WORKERS=3', 'SUBTITLE_BATCH_WORKERS=6')
+
 function New-RuntimeEnvironment([string]$Path) {
-    if (Test-Path -LiteralPath $Path) { return }
+    if (Test-Path -LiteralPath $Path) {
+        # Add defaults introduced after this file was created. Never change existing values.
+        $existing = @(Get-Content -LiteralPath $Path)
+        $missing = @($script:DesktopDefaults | Where-Object { -not ($existing -match ('^' + $_.Split('=')[0] + '=')) })
+        if ($missing.Count -gt 0) { [IO.File]::AppendAllText($Path, "`n" + ($missing -join "`n") + "`n") }
+        return
+    }
     $key = New-Object byte[] 32
     $password = New-Object byte[] 32
     $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
     try { $rng.GetBytes($key); $rng.GetBytes($password) } finally { $rng.Dispose() }
-    $content = @(
+    $content = (@(
+        '# APP_KEY encrypts your saved keys and data. Keep a copy of this file outside %LOCALAPPDATA%\Transcribe.',
         'APP_NAME=Transcribe', 'APP_ENV=production', 'APP_DEBUG=false',
         ('APP_KEY=base64:' + [Convert]::ToBase64String($key)),
         'DB_CONNECTION=pgsql', 'DB_USERNAME=subtitle',
@@ -67,7 +79,7 @@ function New-RuntimeEnvironment([string]$Path) {
         'REDIS_QUEUE_CONNECTION=queue', 'REDIS_QUEUE_DB=2',
         'LOG_CHANNEL=stderr', 'LOG_LEVEL=info', 'MAIL_MAILER=log',
         'YOUTUBE_AUDIO_BINARY=yt-dlp', 'FFMPEG_BINARY=ffmpeg'
-    ) -join "`n"
+    ) + $script:DesktopDefaults) -join "`n"
     # CreateNew prevents a repeated setup from replacing an existing encryption key.
     $file = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
     try {
@@ -152,7 +164,7 @@ if ($manifest.image -notmatch '^transcribe-desktop:[a-zA-Z0-9_.-]+$') { throw 'I
 $script:PackageImage = $manifest.image
 $script:EnvironmentPath = Join-Path $DataDirectory 'runtime.env'
 $env:TRANSCRIBE_IMAGE = $manifest.image
-$env:TRANSCRIBE_DATA_DIR = [IO.Path]::GetFullPath($DataDirectory).Replace('\', '/')
+$env:TRANSCRIBE_DATA_DIR = [IO.Path]::GetFullPath($DataDirectory).Replace('\', '/').TrimEnd('/')
 $script:ComposeArguments = @('--project-name', $ProjectName, '--file', (Join-Path $PackageDirectory 'compose.yaml'), '--env-file', $script:EnvironmentPath)
 $script:DockerPath = Find-Docker
 
@@ -196,27 +208,46 @@ try {
         $status = Get-RuntimeStatus
         if ($status.healthy) { Write-Stage 'Ready. The backend is already running.'; return }
         if (-not $status.backendRunning) {
-            $port = if ($env:TRANSCRIBE_PORT) { [int]$env:TRANSCRIBE_PORT } else { 8001 }
-            $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, $port)
-            try { $listener.Start() } catch { throw "Port $port is already in use. Stop the other backend, then select Start backend again." } finally { $listener.Stop() }
+            # Fixed port: the packaged extension and guide are built for 127.0.0.1:8001.
+            $listener = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 8001)
+            try { $listener.Start() } catch { throw 'Port 8001 is already in use. Stop the other backend, then select Start backend again.' } finally { $listener.Stop() }
         }
         Write-Stage 'Starting database and queue...'
         Invoke-Compose -Arguments @('up', '--wait', '--wait-timeout', '120', 'postgres', 'redis')
         Invoke-Compose -Arguments @('stop', 'backend')
         $backupDirectory = Join-Path $DataDirectory 'backups'
         New-Item -ItemType Directory -Force -Path $backupDirectory | Out-Null
-        Write-Stage 'Backing up saved data before checking migrations...'
-        # ponytail: one refreshed startup snapshot; versioned backups when automatic updates are added.
-        Invoke-Compose -Arguments @('exec', '-T', 'postgres', 'pg_dump', '-U', 'subtitle', '-d', 'transcribe', '-Fc', '-f', '/tmp/before-start.dump')
-        Invoke-Compose -Arguments @('cp', 'postgres:/tmp/before-start.dump', (Join-Path $backupDirectory 'before-start.dump'))
         Copy-Item -LiteralPath $script:EnvironmentPath -Destination (Join-Path $backupDirectory 'runtime.env')
+        # One snapshot per image version, refreshed on each start. A failed migration leaves the
+        # marker behind, so a retry keeps the snapshot taken before it instead of dumping half-migrated data.
+        $migrationMarker = Join-Path $backupDirectory 'migration-pending.txt'
+        if (Test-Path -LiteralPath $migrationMarker) {
+            Write-Stage 'Keeping the backup made before the last unfinished start...'
+        } else {
+            Write-Stage 'Backing up saved data before checking migrations...'
+            $backup = Join-Path $backupDirectory ('before-start-' + $manifest.image.Split(':')[1] + '.dump')
+            Invoke-Compose -Arguments @('exec', '-T', 'postgres', 'pg_dump', '-U', 'subtitle', '-d', 'transcribe', '-Fc', '-f', '/tmp/before-start.dump')
+            Invoke-Compose -Arguments @('cp', 'postgres:/tmp/before-start.dump', "$backup.partial")
+            Move-Item -LiteralPath "$backup.partial" -Destination $backup -Force
+            $manifest.image | Set-Content -LiteralPath $migrationMarker
+        }
         Write-Stage 'Applying migrations...'
         Invoke-Compose -Arguments @('run', '--rm', '--no-deps', 'backend', 'migrate')
+        Remove-Item -LiteralPath $migrationMarker
         Write-Stage 'Starting backend, workers and scheduler...'
         Invoke-Compose -Arguments @('up', '--wait', '--wait-timeout', '240')
         if (-not (Get-RuntimeStatus).healthy) { throw 'The backend did not become healthy. Open the setup log for details.' }
         Write-Stage 'Ready. Open the extension guide to finish setup.'
     } else {
+        if (-not $Force) {
+            # Stopping interrupts running generations; the panel asks before rerunning with -Force.
+            $active = ''
+            try {
+                $active = (Invoke-Compose -Arguments @('exec', '-T', 'postgres', 'psql', '-U', 'subtitle', '-d', 'transcribe', '-tAc',
+                    "select count(*) from subtitle_jobs where status = 'running'") -Capture) -join ''
+            } catch { }
+            if ($active.Trim() -match '^[1-9][0-9]*$') { Write-Output "TRANSCRIBE-ACTIVE: $($active.Trim())"; return }
+        }
         Write-Stage 'Stopping Transcribe. Saved subtitles and keys will be kept.'
         Invoke-Compose -Arguments @('stop', '--timeout', '30')
         Write-Stage 'Backend stopped.'
