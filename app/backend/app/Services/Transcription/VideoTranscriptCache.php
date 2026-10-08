@@ -44,15 +44,15 @@ class VideoTranscriptCache
             return;
         }
 
-        CachedVideoTranscript::query()->updateOrCreate(
+        // One INSERT ... ON CONFLICT statement: two jobs caching the same video
+        // at once cannot hit the unique key. Upsert skips model casts.
+        CachedVideoTranscript::query()->upsert(
             [
                 'youtube_video_id' => $youtubeVideoId,
                 'requested_source_language' => $requestedSourceLanguage,
                 'transcription_model' => $this->transcriptionModel($ingestionMode),
-            ],
-            [
                 'audio_duration_seconds' => $audioDurationSeconds,
-                'payload' => [
+                'payload' => json_encode([
                     'language' => $transcript->language,
                     'durationSeconds' => $transcript->durationSeconds,
                     'webVtt' => $transcript->webVtt,
@@ -64,9 +64,11 @@ class VideoTranscriptCache
                         ],
                         $transcript->segments,
                     ),
-                ],
+                ], JSON_THROW_ON_ERROR),
                 'expires_at' => now()->addDays($this->ttlDays()),
             ],
+            ['youtube_video_id', 'requested_source_language', 'transcription_model'],
+            ['audio_duration_seconds', 'payload', 'expires_at'],
         );
     }
 

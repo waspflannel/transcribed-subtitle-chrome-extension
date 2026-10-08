@@ -20,6 +20,8 @@ use App\Services\Subtitles\SubtitlePartialTrackAssembler;
 use App\Services\Subtitles\TimestampedSubtitleTrackGenerator;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\TimestampedTranscript;
+use App\Services\Transcription\TimestampedTranscriptSegment;
+use App\Services\Transcription\VideoTranscriptCache;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Factory;
@@ -29,6 +31,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
@@ -453,6 +456,65 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $this->transcribe($job, 1);
         $this->assertNotNull($this->preview($job));
         $this->assertSame('running', $job->fresh()->status);
+    }
+
+    public function test_symbol_only_transcript_fails_as_no_speech(): void
+    {
+        $job = $this->job();
+        foreach ([0, 1, 2] as $index) {
+            $this->transcribe($job, $index, ['language_code' => 'eng', 'words' => [
+                ['text' => '♪', 'start' => 0.5, 'end' => 4, 'type' => 'word'],
+            ]]);
+        }
+
+        try {
+            app(SubtitleGenerationPipeline::class)->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+            $this->fail('Expected a no-speech failure.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('no_speech', $exception->context['reason']);
+        }
+
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertSame('transcription_failed', $job->fresh()->error_code);
+        $this->assertSame('No speech was found in this video.', $job->fresh()->error_message);
+        $this->assertDatabaseCount('cached_video_transcripts', 0);
+    }
+
+    public function test_cached_symbol_only_transcript_fails_as_no_speech(): void
+    {
+        $job = $this->job();
+        $job->update(['stage' => 'preparing', 'source_language' => 'eng']);
+        app(VideoTranscriptCache::class)->store($job->youtube_video_id, 'eng',
+            new TimestampedTranscript('eng', 60, [new TimestampedTranscriptSegment(1, 4, '♪')], "WEBVTT\n\n"), 60);
+
+        try {
+            app(SubtitleGenerationPipeline::class)->acquireAudioAndContinue($job->id, $job->run_id);
+            $this->fail('Expected a no-speech failure.');
+        } catch (SubtitleProcessingException $exception) {
+            $this->assertSame('no_speech', $exception->context['reason']);
+        }
+
+        $this->assertSame('failed', $job->fresh()->status);
+        $this->assertSame('transcription_failed', $job->fresh()->error_code);
+    }
+
+    public function test_transcript_cache_write_failure_does_not_fail_a_paid_merge(): void
+    {
+        $job = $this->job();
+        foreach ([0, 1, 2] as $index) {
+            $this->transcribe($job, $index);
+        }
+        $this->mock(VideoTranscriptCache::class)->shouldReceive('store')->once()
+            ->andThrow(new RuntimeException('Synthetic cache failure.'));
+        Log::spy();
+
+        app(SubtitleGenerationPipeline::class)->mergeTranscriptAndDispatchAnalysis($job->id, $job->run_id, (int) (microtime(true) * 1000));
+
+        $this->assertSame('running', $job->fresh()->status);
+        $this->assertSame('tokenizing', $job->fresh()->stage);
+        Log::shouldHaveReceived('warning')->with('backend.transcript_cache_write_failed', \Mockery::on(
+            fn (array $context): bool => $context['run_id'] === $job->run_id && $context['exception'] === RuntimeException::class,
+        ));
     }
 
     public function test_silent_tail_finalizes_without_an_empty_analysis_batch(): void

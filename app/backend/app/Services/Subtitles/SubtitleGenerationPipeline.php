@@ -17,6 +17,7 @@ use App\Services\InstanceSettings;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
+use App\Services\Transcription\TimestampedTranscript;
 use App\Services\Transcription\VideoTranscriptCache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -449,29 +450,29 @@ class SubtitleGenerationPipeline
             );
             $draftCues = $this->tracks->draftCues($transcript);
 
-            DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $draftCues, $durationSeconds, $transcribingStartedAtMs): void {
+            $merged = DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $draftCues, $durationSeconds, $transcribingStartedAtMs): bool {
                 $job = $this->lockRunningJob($subtitleJobId, $runId);
                 if ($job === null || $job->stage !== 'transcribing') {
-                    return;
+                    return false;
                 }
+                $this->failWithoutSpeech($draftCues);
                 $this->telemetry->recordStageCompleted($job, 'transcribing', $transcribingStartedAtMs);
                 $this->costs->recordTranscription($job, $durationSeconds);
                 $this->logger->transcriptionCompleted($job, $transcript, $durationSeconds);
                 $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
-                $this->transcriptCache->store(
-                    youtubeVideoId: $job->youtube_video_id,
-                    requestedSourceLanguage: $job->source_language,
-                    transcript: $transcript,
-                    audioDurationSeconds: $durationSeconds,
-                    ingestionMode: $job->transcription_ingestion_mode,
-                );
                 $this->artifacts->putTranscript($job, $transcript);
                 $indexes = $this->artifacts->appendDraftCues($job, $draftCues);
                 if (in_array(0, $indexes, true)) {
                     $this->telemetry->recordFirstCueAvailable($job);
                 }
                 $this->dispatchAnalysisBatches($job);
+
+                return true;
             }, attempts: 5);
+
+            if ($merged) {
+                $this->cacheTranscript($job, $transcript, $durationSeconds);
+            }
         } catch (Throwable $exception) {
             $this->failureHandler->failJob($subtitleJobId, 'transcribing', $exception, $runId);
 
@@ -497,6 +498,7 @@ class SubtitleGenerationPipeline
             if ($job === null || $job->stage !== 'acquiring-audio') {
                 return;
             }
+            $this->failWithoutSpeech($draftCues);
 
             $this->telemetry->recordTranscriptCacheHit($job);
             $job->update(['video_duration_seconds' => $cached->audio_duration_seconds]);
@@ -608,6 +610,44 @@ class SubtitleGenerationPipeline
         }
         $jobs = array_map(fn (int $index): AnalyzeSubtitleCueBatch => new AnalyzeSubtitleCueBatch($job->id, $index, $job->run_id), $indexes);
         DB::afterCommit(fn () => $this->batchDispatcher->dispatchAnalysis($job, $jobs));
+    }
+
+    /**
+     * Sound symbols such as "♪" produce no draft cues, so a whole transcript
+     * without cues has no speech to subtitle.
+     *
+     * @param  array<int, array<string, mixed>>  $draftCues
+     */
+    private function failWithoutSpeech(array $draftCues): void
+    {
+        if ($draftCues === []) {
+            throw SubtitleProcessingException::transcriptionFailed('No speech was found in this video.', [
+                'reason' => 'no_speech',
+            ]);
+        }
+    }
+
+    /**
+     * Runs after the merge commit. The cache only saves a future transcription,
+     * so a failed write must not fail a run that already paid for Scribe.
+     */
+    private function cacheTranscript(SubtitleJob $job, TimestampedTranscript $transcript, int $durationSeconds): void
+    {
+        try {
+            $this->transcriptCache->store(
+                youtubeVideoId: $job->youtube_video_id,
+                requestedSourceLanguage: $job->source_language,
+                transcript: $transcript,
+                audioDurationSeconds: $durationSeconds,
+                ingestionMode: $job->transcription_ingestion_mode,
+            );
+        } catch (Throwable $exception) {
+            Log::warning('backend.transcript_cache_write_failed', [
+                'job_id' => $job->public_id,
+                'run_id' => $job->run_id,
+                'exception' => $exception::class,
+            ]);
+        }
     }
 
     private function loadRunningJob(int $subtitleJobId, string $runId): ?SubtitleJob

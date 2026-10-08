@@ -197,6 +197,19 @@ class SubtitleJobApiTest extends TestCase
         }
     }
 
+    public function test_repeated_transcript_cache_writes_upsert_one_row(): void
+    {
+        $cache = app(VideoTranscriptCache::class);
+        $transcript = $this->transcriptionService->transcriptFromChunkPayloads([], 'spa', 42);
+
+        $cache->store('dQw4w9WgXcQ', 'spa', $transcript, 42);
+        $cache->store('dQw4w9WgXcQ', 'spa', $transcript, 43);
+
+        $entry = CachedVideoTranscript::query()->sole();
+        $this->assertSame(43, $entry->audio_duration_seconds);
+        $this->assertSame($transcript->webVtt, $cache->transcript($entry)->webVtt);
+    }
+
     public function test_generation_accepts_long_videos_without_paid_tiers_or_a_subscription(): void
     {
         Queue::fake();
