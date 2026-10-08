@@ -10,6 +10,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Codex\CodexService;
+use App\Services\InstanceSettings;
 use App\Services\Text\SubtitleText;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
 use App\Services\TranslationAnalysis\LearningTokenOutputValidator;
@@ -55,25 +56,29 @@ final class LyricsCorrectionService
         return $normalizedLyrics;
     }
 
-    public function submit(SubtitleJob $job, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
+    public function submit(SubtitleJob $job, string $lyrics, string $expectedTrackId, ?SubtitleModel $selection = null): SubtitleTrackLyricsCorrection
     {
+        if ($selection !== null) {
+            app(InstanceSettings::class)->requireProviderKey($selection->provider);
+        }
+        $selection ??= SubtitleModel::forJob($job);
         $lock = Cache::store(SubtitleQueue::concurrencyCacheStore())->lock('subtitle-track-edit:'.$job->id, 30);
         if (! $lock->get()) {
             throw SubtitleProcessingException::lyricsCorrectionInProgress(['reason' => 'track_edit_in_progress']);
         }
         try {
-            return $this->submitLocked($job, $lyrics, $expectedTrackId);
+            return $this->submitLocked($job, $lyrics, $expectedTrackId, $selection);
         } finally {
             $lock->release();
         }
     }
 
-    private function submitLocked(SubtitleJob $job, string $lyrics, string $expectedTrackId): SubtitleTrackLyricsCorrection
+    private function submitLocked(SubtitleJob $job, string $lyrics, string $expectedTrackId, SubtitleModel $selection): SubtitleTrackLyricsCorrection
     {
         $trackId = $job->track?->getKey();
         $attemptId = (string) Str::uuid();
 
-        $correction = DB::transaction(function () use ($job, $lyrics, $trackId, $attemptId, $expectedTrackId): SubtitleTrackLyricsCorrection {
+        $correction = DB::transaction(function () use ($job, $lyrics, $trackId, $attemptId, $expectedTrackId, $selection): SubtitleTrackLyricsCorrection {
             $job = SubtitleJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
 
             $track = SubtitleTrack::query()
@@ -106,6 +111,9 @@ final class LyricsCorrectionService
             if ($correction instanceof SubtitleTrackLyricsCorrection) {
                 $correction->update([
                     'attempt_id' => $attemptId,
+                    'ai_provider' => $selection->provider,
+                    'ai_model' => $selection->model,
+                    'ai_fast_mode' => $selection->fastMode,
                     'status' => 'queued',
                     'work_revision' => 0,
                     'work_state' => $initialState,
@@ -116,6 +124,9 @@ final class LyricsCorrectionService
             } else {
                 $correction = $track->lyricsCorrection()->create([
                     'attempt_id' => $attemptId,
+                    'ai_provider' => $selection->provider,
+                    'ai_model' => $selection->model,
+                    'ai_fast_mode' => $selection->fastMode,
                     'status' => 'queued',
                     'work_revision' => 0,
                     'work_state' => $initialState,
@@ -393,7 +404,7 @@ final class LyricsCorrectionService
 
         $this->commitProgress($trackId, $attemptId, $expectedRevision, $job, $processedStage, $nextState);
         $selection = match ($processedStage) {
-            'aligning', 'analyzing' => SubtitleModel::forJob($job),
+            'aligning', 'analyzing' => SubtitleModel::forCorrection($correction),
             default => null,
         };
         Log::info('backend.lyrics_correction_unit_finished', [
@@ -624,7 +635,7 @@ final class LyricsCorrectionService
             $batch, $cues, $job->source_language, $job->target_language,
             includeTranslation: $this->translationRequested($job),
             includeRomanization: $job->include_romanization && $this->containsNonLatin($batch),
-            selection: SubtitleModel::forJob($job),
+            selection: SubtitleModel::forCorrection($correction),
             validateOutput: false,
             job: $job,
         );
@@ -703,7 +714,7 @@ final class LyricsCorrectionService
                 if (in_array($batchIndex, $state['completedBatches'], true)) {
                     return null;
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::forJob($job));
+                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $job->include_romanization, requiredStatus: 'completed', selection: SubtitleModel::forCorrection($locked));
                 // Merge only this result into current state, preserving other workers' results.
                 $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
                 $state['completedBatches'][] = $batchIndex;
@@ -802,7 +813,7 @@ final class LyricsCorrectionService
         ];
 
         $this->ensureCorrectionCurrent($correction);
-        $selection = SubtitleModel::forJob($job);
+        $selection = SubtitleModel::forCorrection($correction);
         $output = $this->promptAlignment($input, $selection, $job);
         $this->costs->recordCorrectionAlignment($job, $selection);
         $this->ensureCorrectionCurrent($correction);

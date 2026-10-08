@@ -124,6 +124,18 @@ assertInvalid(
 );
 
 const lyricsCorrectionRequest = ajv.getSchema('lyrics-correction-request.schema.json');
+const correctionPayload = { expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041', lyrics: 'First line' };
+for (const selection of [{}, { aiProvider: 'openai' }, { aiProvider: 'cerebras' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }]) {
+  if (!lyricsCorrectionRequest({ ...correctionPayload, ...selection })) throw new Error(`Rejected valid correction selection: ${JSON.stringify(selection)}`);
+}
+for (const selection of [{ aiProvider: 'codex' }, { aiProvider: 'codex', aiModel: '../model' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: 'true' }, { aiProvider: 'openai', aiModel: 'gpt-codex' }, { aiProvider: 'cerebras', aiFastMode: true }, { aiModel: 'gpt-codex' }]) {
+  assertInvalid(lyricsCorrectionRequest, { ...correctionPayload, ...selection }, `invalid correction selection ${JSON.stringify(selection)}`);
+}
+const correctionWithAi = { attemptId: correctionPayload.expectedTrackId, status: 'queued', stage: 'queued', updatedAt: '2026-10-07T12:00:00Z', aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true };
+if (!lyricsCorrectionStatus(correctionWithAi)) throw new Error('Rejected correction status with pinned AI selection');
+assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiProvider: 'unknown' }, 'unknown correction provider');
+assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiModel: undefined }, 'partial correction AI selection');
+assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiProvider: 'openai' }, 'API correction with fast mode');
 assertInvalid(lyricsCorrectionRequest, {
   expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041',
   lyrics: 'First line',

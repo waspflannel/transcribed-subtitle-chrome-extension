@@ -304,7 +304,9 @@ export interface LearningTokenResponse {
 }
 
 // Source: schemas/lyrics-correction-request.schema.json
-export interface LyricsCorrectionRequest {
+export type LyricsCorrectionRequest = {
+  [k: string]: unknown;
+} & {
   /**
    * Identity of the track the learner intends to replace.
    */
@@ -317,23 +319,47 @@ export interface LyricsCorrectionRequest {
    * Legacy compatibility field, accepted but ignored. Replacement uses only the pasted lyrics; partial merging is unavailable.
    */
   allowPartial?: boolean;
-}
+  /**
+   * Optional provider override for this correction only. Omit all AI fields to inherit the generation’s saved provider, model, and fast mode.
+   */
+  aiProvider?: 'openai' | 'cerebras' | 'codex';
+  /**
+   * Model from the connected Codex account. Required for Codex; omitted for API providers.
+   */
+  aiModel?: string;
+  /**
+   * Use Codex fast service tier. Omitted for API providers.
+   */
+  aiFastMode?: boolean;
+};
 
 // Source: schemas/lyrics-correction-status.schema.json
+/**
+ * AI selection is pinned per correction. Older backend responses can omit all three AI fields.
+ */
 export type LyricsCorrectionStatus =
   | {
+      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiModel?: string;
+      aiFastMode?: boolean;
       attemptId: string;
       status: 'queued';
       stage: 'queued';
       updatedAt: string;
     }
   | {
+      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiModel?: string;
+      aiFastMode?: boolean;
       attemptId: string;
       status: 'running';
       stage: 'aligning' | 'rebuilding' | 'romanizing' | 'finalizing';
       updatedAt: string;
     }
   | {
+      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiModel?: string;
+      aiFastMode?: boolean;
       attemptId: string;
       status: 'completed';
       stage: 'completed';
@@ -341,6 +367,9 @@ export type LyricsCorrectionStatus =
       track: TrackResponse;
     }
   | {
+      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiModel?: string;
+      aiFastMode?: boolean;
       attemptId: string;
       status: 'failed';
       stage: 'failed';
@@ -349,6 +378,9 @@ export type LyricsCorrectionStatus =
       message: string;
     }
   | {
+      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiModel?: string;
+      aiFastMode?: boolean;
       attemptId: string;
       status: 'cancelled';
       stage: 'cancelled';

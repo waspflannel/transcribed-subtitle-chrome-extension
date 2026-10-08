@@ -108,7 +108,7 @@ export function guardLearningTokenResponse(value: unknown): LearningTokenRespons
 
 export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionStatus {
   const response = record(value, 'lyrics correction status');
-  const allowedKeys = ['attemptId', 'status', 'stage', 'updatedAt', 'track', 'errorCode', 'message'];
+  const allowedKeys = ['attemptId', 'status', 'stage', 'updatedAt', 'track', 'errorCode', 'message', 'aiProvider', 'aiModel', 'aiFastMode'];
 
   if (Object.keys(response).some((key) => !allowedKeys.includes(key))) {
     throw invalid('Backend returned unknown lyrics correction status fields.');
@@ -117,6 +117,12 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   requiredString(response, 'attemptId');
   oneOf(response, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
   requiredString(response, 'updatedAt');
+  if (response.aiProvider !== undefined || response.aiModel !== undefined || response.aiFastMode !== undefined) {
+    oneOf(response, 'aiProvider', ['openai', 'cerebras', 'codex']);
+    requiredString(response, 'aiModel');
+    requiredBoolean(response, 'aiFastMode');
+    if (response.aiProvider !== 'codex' && response.aiFastMode) throw invalid('Fast mode requires Codex.');
+  }
 
   if (response.status === 'queued') oneOf(response, 'stage', ['queued']);
   if (response.status === 'running') oneOf(response, 'stage', ['aligning', 'rebuilding', 'romanizing', 'finalizing']);

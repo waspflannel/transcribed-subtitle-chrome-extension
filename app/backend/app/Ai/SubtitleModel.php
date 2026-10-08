@@ -4,6 +4,7 @@ namespace App\Ai;
 
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Codex\CodexService;
 
 final class SubtitleModel
@@ -32,6 +33,15 @@ final class SubtitleModel
     public static function forJob(SubtitleJob $job): self
     {
         return new self($job->ai_provider, $job->ai_model, (bool) $job->ai_fast_mode);
+    }
+
+    public static function forCorrection(SubtitleTrackLyricsCorrection $correction): self
+    {
+        if ($correction->ai_provider === null) {
+            return self::forJob($correction->track->job);
+        }
+
+        return new self($correction->ai_provider, $correction->ai_model, (bool) $correction->ai_fast_mode);
     }
 
     public static function provider(?string $provider = null): string

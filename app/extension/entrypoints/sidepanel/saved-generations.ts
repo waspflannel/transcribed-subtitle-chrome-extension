@@ -14,6 +14,7 @@ export function bindSavedGenerations(
   selectGeneration: (request: PanelRequest) => Promise<boolean>,
   windowId: () => number | undefined,
   applyPanelState: (state: PanelState) => void,
+  onJobsLoaded: (jobs: SubtitleJobHistoryItem[]) => void = () => {},
 ): { render: (state: PanelState) => void; showError: (message: string) => void } {
   let latest: PanelState;
   let context = '';
@@ -59,6 +60,7 @@ export function bindSavedGenerations(
       if (requestRevision !== revision) return;
       if (!response || !Array.isArray(response.jobs)) throw new Error(response?.error ?? t("Unable to load saved generations. Try refreshing."));
       jobs = response.jobs.filter((job: SubtitleJobHistoryItem) => job.youtubeVideoId === page.videoId && job.status === 'completed');
+      onJobsLoaded(jobs);
       status.textContent = '';
       if (response.panelState) applyPanelState(response.panelState);
     } catch (error) {
@@ -97,6 +99,7 @@ export function bindSavedGenerations(
         context = nextContext;
         revision += 1;
         jobs = [];
+        onJobsLoaded(jobs);
         loading = false;
         status.textContent = '';
         if (context) void load();

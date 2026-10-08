@@ -4,7 +4,10 @@
   "title": "LyricsCorrectionRequest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["expectedTrackId", "lyrics"],
+  "required": [
+    "expectedTrackId",
+    "lyrics"
+  ],
   "properties": {
     "expectedTrackId": {
       "type": "string",
@@ -21,6 +24,58 @@
       "type": "boolean",
       "default": false,
       "description": "Legacy compatibility field, accepted but ignored. Replacement uses only the pasted lyrics; partial merging is unavailable."
+    },
+    "aiProvider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "cerebras",
+        "codex"
+      ],
+      "description": "Optional provider override for this correction only. Omit all AI fields to inherit the generation’s saved provider, model, and fast mode."
+    },
+    "aiModel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "Model from the connected Codex account. Required for Codex; omitted for API providers."
+    },
+    "aiFastMode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use Codex fast service tier. Omitted for API providers."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "aiProvider"
+        ],
+        "properties": {
+          "aiProvider": {
+            "const": "codex"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "aiModel"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "aiModel"
+          ]
+        },
+        "properties": {
+          "aiFastMode": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
 }

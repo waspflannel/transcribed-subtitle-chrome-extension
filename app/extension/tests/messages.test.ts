@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { isBackgroundRequest, isRuntimeMessage } from '../utils/messages';
 
 describe('runtime message validation', () => {
+  it.each([
+    [{ aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }, true],
+    [{ aiProvider: 'cerebras' }, true],
+    [{ aiProvider: 'codex' }, false],
+    [{ aiProvider: 'codex', aiModel: '' }, false],
+    [{ aiProvider: 'codex', aiModel: '../model' }, false],
+    [{ aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: 'true' }, false],
+    [{ aiProvider: 'openai', aiModel: 'gpt-codex' }, false],
+    [{ aiProvider: 'openai', aiFastMode: true }, false],
+    [{ aiProvider: 'unknown' }, false],
+    [{ aiModel: 'gpt-codex' }, false],
+  ])('validates correction AI selection %j', (selection, valid) => {
+    expect(isRuntimeMessage({ type: 'panel.submitLyricsCorrection', jobId: 'job', trackId: 'track', youtubeVideoId: 'video', lyrics: 'lyrics', ...selection })).toBe(valid);
+  });
   it('accepts concrete extension messages with required payload fields', () => {
     expect(isRuntimeMessage({ type: 'content.getState' })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false })).toBe(true);

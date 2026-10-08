@@ -1072,6 +1072,9 @@ async function submitLyricsCorrectionFromPanel(
           lyrics: message.lyrics,
           expectedTrackId: message.trackId,
           ...(message.allowPartial ? { allowPartial: true } : {}),
+          ...(message.aiProvider ? { aiProvider: message.aiProvider } : {}),
+          ...(message.aiModel !== undefined ? { aiModel: message.aiModel } : {}),
+          ...(message.aiFastMode !== undefined ? { aiFastMode: message.aiFastMode } : {}),
         },
       );
     } catch (error) {

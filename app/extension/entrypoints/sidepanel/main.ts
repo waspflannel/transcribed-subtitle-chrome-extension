@@ -4,6 +4,7 @@ import { bindSavedGenerations } from './saved-generations';
 import { bindKnownLyrics } from './known-lyrics';
 import { bindInstanceSettings } from './instance-settings';
 import { bindCodexAccount } from './codex-account';
+import { bindLyricsAiOptions, correctionAiLabel } from './lyrics-ai-options';
 import { guardCodexAccount } from '../../utils/api-response-guards';
 
 import { browser } from 'wxt/browser';
@@ -234,6 +235,10 @@ overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
 captionFontSizeSelect.addEventListener('change', handleCaptionFontSizeChange);
 captionDensitySelect.addEventListener('change', handleCaptionDensityChange);
 captionContrastThemeSelect.addEventListener('change', handleCaptionContrastThemeChange);
+const lyricsAiOptions = bindLyricsAiOptions(document.querySelector<HTMLElement>('[data-lyrics-ai-options]')!, () => {
+  lyricsReplaceConfirm = false;
+  renderLyricsEditState();
+});
 const savedGenerations = bindSavedGenerations(
   document.querySelector<HTMLSelectElement>('[data-generation-select]')!,
   document.querySelector<HTMLElement>('[data-generation-status]')!,
@@ -241,6 +246,7 @@ const savedGenerations = bindSavedGenerations(
   request => sendPanelRequest(request, 'generation-selection', 'mutation'),
   () => panelWindowId,
   showPanelState,
+  jobs => lyricsAiOptions.setSavedJobs(jobs),
 );
 
 aiProviderSelect.addEventListener('change', () => {
@@ -527,7 +533,7 @@ async function cancelGeneration(button: HTMLButtonElement): Promise<void> {
 
 async function submitLyricsCorrection(event: SubmitEvent): Promise<void> {
   event.preventDefault();
-  if (!canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection)) return;
+  if (!lyricsAiOptions.ready() || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection)) return;
   lyricsReplaceConfirm = true;
   renderLyricsEditState();
   confirmLyricsCorrectionButton.focus();
@@ -538,7 +544,7 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
   const subtitleState = state?.subtitleState;
   const page = state?.pageStatus;
 
-  if (lyricsCorrectionRequestBusy || !state || subtitleState?.type !== 'ready' || !page?.supported || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, state.lyricsCorrection)) return;
+  if (lyricsCorrectionRequestBusy || !state || subtitleState?.type !== 'ready' || !page?.supported || !lyricsAiOptions.ready() || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, state.lyricsCorrection)) return;
 
   lyricsCorrectionRequestBusy = true;
   renderLyricsEditState();
@@ -549,6 +555,7 @@ async function applyConfirmedLyricsCorrection(): Promise<void> {
       trackId: subtitleState.track.trackId,
       youtubeVideoId: page.videoId,
       lyrics: lyricsCorrectionTextarea.value,
+      ...lyricsAiOptions.payload(),
     }, 'correction', 'mutation');
     lyricsReplaceConfirm = false;
     if (applied) {
@@ -568,7 +575,7 @@ function renderLyricsCorrectionInput(): void {
   lyricsCorrectionError.textContent = error ?? '';
   lyricsCorrectionError.hidden = error === null;
   lyricsCorrectionTextarea.setAttribute('aria-invalid', String(error !== null));
-  lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
+  lyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !lyricsAiOptions.ready() || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 }
 
 async function cancelLyricsCorrection(): Promise<void> {
@@ -682,6 +689,7 @@ function renderLyricsEditState(): void {
   const activeCorrection = isActiveLyricsCorrection(latestState?.lyricsCorrection);
   const editOpen = watchScreen === 'replace' && ready;
   const quickActive = ready && !activeCorrection;
+  if (latestState) lyricsAiOptions.render(latestState, lyricsCorrectionRequestBusy || activeCorrection);
 
   /* Drop a selection whose cue no longer exists (e.g. the track rotated). */
   if (quickFixSelection) {
@@ -706,7 +714,7 @@ function renderLyricsEditState(): void {
   confirmLyricsCorrectionButton.textContent = t("Replace entire track");
   cancelLyricsConfirmationButton.textContent = t("Cancel");
   lyricsCorrectionTextarea.disabled = lyricsCorrectionRequestBusy;
-  confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
+  confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !lyricsAiOptions.ready() || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 
   quickFixStatus.textContent = quickFixNotice ?? '';
   transcriptView.setQuickFixMode(quickActive);
@@ -1151,7 +1159,7 @@ function showWatchState(state: PanelState, supported: boolean): void {
     announceProgress(t("Replacing lyrics"), progress.label);
     progressBar.style.width = `${progress.percent}%`;
     progressStages.innerHTML = lyricsCorrectionStageChecklistHtml(state.lyricsCorrection.stage);
-    progressCopy.textContent = t("Your current subtitles stay active while the replacement runs.");
+    progressCopy.textContent = [correctionAiLabel(state.lyricsCorrection), t("Your current subtitles stay active while the replacement runs.")].filter(Boolean).join(' · ');
   }
 }
 

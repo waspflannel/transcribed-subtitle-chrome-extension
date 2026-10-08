@@ -474,5 +474,9 @@
   "The AI provider is unavailable. Check its connection in Settings and try again.": "AIプロバイダーを利用できません。設定で接続を確認して、もう一度お試しください。",
   "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "ブラウザーのタブでサインインを完了し、ここに戻ってください。タブが開かない場合は、下のリンクを使用してください。",
   "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "サインインページを開けませんでした。下の「ChatGPTのサインインを開く」を使用してください。",
-  "Restart the backend, then disconnect Codex and sign in again.": "バックエンドを再起動し、Codexを切断してからサインインし直してください。"
+  "Restart the backend, then disconnect Codex and sign in again.": "バックエンドを再起動し、Codexを切断してからサインインし直してください。",
+  "Connect Codex in Settings before replacing lyrics.": "歌詞を置き換える前に、設定でCodexを接続してください。",
+  "Select an available Codex model before replacing lyrics.": "歌詞を置き換える前に、利用可能なCodexモデルを選択してください。",
+  "Uses this generation’s saved AI settings.": "この生成時に保存されたAI設定を使用します。",
+  "This choice applies only to this lyrics correction.": "この選択は今回の歌詞修正にのみ適用されます。"
 }

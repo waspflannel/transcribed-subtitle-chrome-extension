@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class CorrectSubtitleLyricsRequest extends FormRequest
@@ -19,8 +20,13 @@ class CorrectSubtitleLyricsRequest extends FormRequest
      */
     public function rules(): array
     {
+        $codex = $this->input('aiProvider') === 'codex';
+
         return [
             'expectedTrackId' => ['required', 'uuid'],
+            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex'])],
+            'aiModel' => [Rule::requiredIf($codex), Rule::prohibitedIf(! $codex), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D'],
+            'aiFastMode' => ['sometimes', 'boolean:strict', Rule::prohibitedIf(! $codex && $this->input('aiFastMode') !== false)],
             'lyrics' => [
                 'bail', 'required', 'string', 'max:25000',
                 function (string $attribute, mixed $value, Closure $fail): void {

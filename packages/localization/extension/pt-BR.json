@@ -474,5 +474,9 @@
   "The AI provider is unavailable. Check its connection in Settings and try again.": "O provedor de IA está indisponível. Verifique a conexão em Configurações e tente novamente.",
   "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Conclua o login na aba do navegador e volte aqui. Se nenhuma aba abrir, use o link abaixo.",
   "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Não foi possível abrir a página de login. Use Abrir login do ChatGPT abaixo.",
-  "Restart the backend, then disconnect Codex and sign in again.": "Reinicie o servidor, desconecte o Codex e entre novamente."
+  "Restart the backend, then disconnect Codex and sign in again.": "Reinicie o servidor, desconecte o Codex e entre novamente.",
+  "Connect Codex in Settings before replacing lyrics.": "Conecte o Codex nas Configurações antes de substituir a letra.",
+  "Select an available Codex model before replacing lyrics.": "Selecione um modelo do Codex disponível antes de substituir a letra.",
+  "Uses this generation’s saved AI settings.": "Usa as configurações de IA salvas para esta geração.",
+  "This choice applies only to this lyrics correction.": "Esta escolha se aplica apenas a esta correção de letra."
 }

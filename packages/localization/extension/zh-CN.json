@@ -474,5 +474,9 @@
   "The AI provider is unavailable. Check its connection in Settings and try again.": "AI 提供商不可用。请在设置中检查连接，然后重试。",
   "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "请在浏览器标签页中完成登录，然后返回这里。如果没有打开标签页，请使用下方链接。",
   "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "无法打开登录页面。请使用下方的“打开 ChatGPT 登录”。",
-  "Restart the backend, then disconnect Codex and sign in again.": "请重启后端，然后断开 Codex 并重新登录。"
+  "Restart the backend, then disconnect Codex and sign in again.": "请重启后端，然后断开 Codex 并重新登录。",
+  "Connect Codex in Settings before replacing lyrics.": "替换歌词前，请在设置中连接 Codex。",
+  "Select an available Codex model before replacing lyrics.": "替换歌词前，请选择可用的 Codex 模型。",
+  "Uses this generation’s saved AI settings.": "使用本次生成时保存的 AI 设置。",
+  "This choice applies only to this lyrics correction.": "此选择仅适用于本次歌词修正。"
 }

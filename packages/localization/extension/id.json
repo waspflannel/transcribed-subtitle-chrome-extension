@@ -474,5 +474,9 @@
   "The AI provider is unavailable. Check its connection in Settings and try again.": "Penyedia AI tidak tersedia. Periksa koneksinya di Pengaturan dan coba lagi.",
   "Finish signing in in the browser tab, then return here. If no tab opened, use the link below.": "Selesaikan proses masuk di tab browser, lalu kembali ke sini. Jika tab tidak terbuka, gunakan tautan di bawah.",
   "Could not open the sign-in page. Use Open ChatGPT sign-in below.": "Tidak dapat membuka halaman masuk. Gunakan Buka halaman masuk ChatGPT di bawah.",
-  "Restart the backend, then disconnect Codex and sign in again.": "Mulai ulang backend, lalu putuskan Codex dan masuk kembali."
+  "Restart the backend, then disconnect Codex and sign in again.": "Mulai ulang backend, lalu putuskan Codex dan masuk kembali.",
+  "Connect Codex in Settings before replacing lyrics.": "Hubungkan Codex di Pengaturan sebelum mengganti lirik.",
+  "Select an available Codex model before replacing lyrics.": "Pilih model Codex yang tersedia sebelum mengganti lirik.",
+  "Uses this generation’s saved AI settings.": "Menggunakan pengaturan AI yang tersimpan untuk hasil ini.",
+  "This choice applies only to this lyrics correction.": "Pilihan ini hanya berlaku untuk koreksi lirik ini."
 }

@@ -344,7 +344,7 @@
         },
         "responses": {
           "202": {
-            "description": "Lyrics correction accepted for asynchronous processing.",
+              "description": "Lyrics correction accepted for asynchronous processing. Optional AI selection overrides apply only to this correction; the response reports its pinned provider, model, and fast mode.",
             "content": {
               "application/json": {
                 "schema": {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Ai\SubtitleModel;
 use App\Models\SubtitleTrackLyricsCorrection;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -14,8 +15,12 @@ class SubtitleTrackLyricsCorrectionResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $selection = SubtitleModel::forCorrection($this->resource);
         $resource = [
             'attemptId' => $this->attempt_id,
+            'aiProvider' => $selection->provider,
+            'aiModel' => $selection->model,
+            'aiFastMode' => $selection->fastMode,
             'status' => $this->status,
             'stage' => $this->publicStage(),
             'updatedAt' => $this->updated_at->toJSON(),

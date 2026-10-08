@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Ai\SubtitleModel;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CancelSubtitleLyricsRequest;
 use App\Http\Requests\CorrectSubtitleLyricsRequest;
@@ -146,6 +147,9 @@ class SubtitleJobController extends Controller
             job: $job,
             lyrics: $request->lyrics(),
             expectedTrackId: (string) $request->validated('expectedTrackId'),
+            selection: $request->validated('aiProvider') !== null
+                ? SubtitleModel::configured($request->validated('aiProvider'), $request->validated('aiModel'), $request->boolean('aiFastMode'))
+                : null,
         );
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve(), 202);
@@ -154,13 +158,10 @@ class SubtitleJobController extends Controller
     public function lyricsCorrectionStatus(Request $request, string $jobId): JsonResponse
     {
         $correction = SubtitleTrackLyricsCorrection::query()
+            ->with('track.job')
             ->whereHas('track', fn ($query) => $query->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now())))
             ->whereHas('track.job', fn ($query) => $query->where('public_id', $jobId))
             ->firstOrFail();
-
-        if ($correction->status === 'completed') {
-            $correction->load('track.job');
-        }
 
         return response()->json(SubtitleTrackLyricsCorrectionResource::make($correction)->resolve());
     }

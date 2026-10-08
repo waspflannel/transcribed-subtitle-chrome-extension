@@ -3,11 +3,18 @@
   "$id": "https://transcribed-subtitle-extension.local/schemas/lyrics-correction-status.schema.json",
   "title": "LyricsCorrectionStatus",
   "type": "object",
+  "description": "AI selection is pinned per correction. Older backend responses can omit all three AI fields.",
+  "dependentRequired": {"aiProvider": ["aiModel", "aiFastMode"], "aiModel": ["aiProvider", "aiFastMode"], "aiFastMode": ["aiProvider", "aiModel"]},
+  "if": {"required": ["aiProvider"], "properties": {"aiProvider": {"enum": ["openai", "cerebras"]}}},
+  "then": {"properties": {"aiFastMode": {"const": false}}},
   "oneOf": [
     {
       "additionalProperties": false,
       "required": ["attemptId", "status", "stage", "updatedAt"],
       "properties": {
+        "aiProvider": {"enum": ["openai", "cerebras", "codex"]},
+        "aiModel": {"type": "string", "minLength": 1},
+        "aiFastMode": {"type": "boolean"},
         "attemptId": {"type": "string", "format": "uuid"},
         "status": {"const": "queued"},
         "stage": {"const": "queued"},
@@ -18,6 +25,9 @@
       "additionalProperties": false,
       "required": ["attemptId", "status", "stage", "updatedAt"],
       "properties": {
+        "aiProvider": {"enum": ["openai", "cerebras", "codex"]},
+        "aiModel": {"type": "string", "minLength": 1},
+        "aiFastMode": {"type": "boolean"},
         "attemptId": {"type": "string", "format": "uuid"},
         "status": {"const": "running"},
         "stage": {"enum": ["aligning", "rebuilding", "romanizing", "finalizing"]},
@@ -28,6 +38,9 @@
       "additionalProperties": false,
       "required": ["attemptId", "status", "stage", "updatedAt", "track"],
       "properties": {
+        "aiProvider": {"enum": ["openai", "cerebras", "codex"]},
+        "aiModel": {"type": "string", "minLength": 1},
+        "aiFastMode": {"type": "boolean"},
         "attemptId": {"type": "string", "format": "uuid"},
         "status": {"const": "completed"},
         "stage": {"const": "completed"},
@@ -39,6 +52,9 @@
       "additionalProperties": false,
       "required": ["attemptId", "status", "stage", "updatedAt", "errorCode", "message"],
       "properties": {
+        "aiProvider": {"enum": ["openai", "cerebras", "codex"]},
+        "aiModel": {"type": "string", "minLength": 1},
+        "aiFastMode": {"type": "boolean"},
         "attemptId": {"type": "string", "format": "uuid"},
         "status": {"const": "failed"},
         "stage": {"const": "failed"},
@@ -51,6 +67,9 @@
       "additionalProperties": false,
       "required": ["attemptId", "status", "stage", "updatedAt"],
       "properties": {
+        "aiProvider": {"enum": ["openai", "cerebras", "codex"]},
+        "aiModel": {"type": "string", "minLength": 1},
+        "aiFastMode": {"type": "boolean"},
         "attemptId": {"type": "string", "format": "uuid"},
         "status": {"const": "cancelled"},
         "stage": {"const": "cancelled"},

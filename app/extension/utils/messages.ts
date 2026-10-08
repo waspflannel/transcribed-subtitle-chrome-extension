@@ -113,6 +113,9 @@ export type BackgroundRequest =
       youtubeVideoId: string;
       lyrics: string;
       allowPartial?: boolean;
+      aiProvider?: SubtitleJobHistoryItem['aiProvider'];
+      aiModel?: string;
+      aiFastMode?: boolean;
       windowId?: number;
     }
   | {
@@ -201,6 +204,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
         && hasString(value, 'youtubeVideoId')
         && hasString(value, 'lyrics')
         && optionalBoolean(value, 'allowPartial')
+        && isLyricsAiSelection(value)
         && optionalNumber(value, 'windowId');
 
     case 'panel.cancelSubtitleJob':
@@ -386,6 +390,15 @@ function optionalString(value: Record<string, unknown>, key: string): boolean {
 
 function optionalBoolean(value: Record<string, unknown>, key: string): boolean {
   return !(key in value) || typeof value[key] === 'boolean';
+}
+
+function isLyricsAiSelection(value: Record<string, unknown>): boolean {
+  if (!optionalBoolean(value, 'aiFastMode')) return false;
+  if (value.aiProvider === 'codex') {
+    return typeof value.aiModel === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.aiModel);
+  }
+  return (!('aiProvider' in value) || value.aiProvider === 'openai' || value.aiProvider === 'cerebras')
+    && !('aiModel' in value) && value.aiFastMode !== true;
 }
 
 function optionalNumber(value: Record<string, unknown>, key: string): boolean {

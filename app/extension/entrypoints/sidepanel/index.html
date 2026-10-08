@@ -173,6 +173,24 @@
                 <form class="lyrics-correction-form" data-lyrics-correction-form="">
                   <p id="lyrics-paste-instructions" class="card-copy" data-i18n="For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.">For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.</p>
                   <p id="lyrics-paste-warning" class="microcopy" data-i18n="This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.</p>
+                  <div data-lyrics-ai-options>
+                    <fieldset class="ai-source-picker">
+                      <legend class="card-label" data-i18n="AI billing">AI billing</legend>
+                      <label><input type="radio" name="lyricsAiSource" value="api"><span data-i18n="API keys">API keys</span></label>
+                      <label><input type="radio" name="lyricsAiSource" value="codex"><span data-i18n="Codex credits">Codex credits</span></label>
+                    </fieldset>
+                    <div data-lyrics-api-options hidden>
+                      <label class="row"><span class="row-key" data-i18n="AI model">AI model</span><select data-lyrics-ai-provider><option value="openai">OpenAI</option><option value="cerebras">Cerebras</option></select></label>
+                    </div>
+                    <div data-lyrics-codex-options hidden>
+                      <label class="field"><span data-i18n="Codex model">Codex model</span><select data-lyrics-ai-model aria-describedby="lyrics-ai-readiness"></select></label>
+                      <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" data-lyrics-ai-fast aria-describedby="lyrics-ai-fast-help"></label>
+                      <p class="microcopy" id="lyrics-ai-fast-help" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</p>
+                    </div>
+                    <p class="microcopy" data-lyrics-ai-summary></p>
+                    <p class="microcopy" data-i18n="This choice applies only to this lyrics correction.">This choice applies only to this lyrics correction.</p>
+                    <p class="microcopy" id="lyrics-ai-readiness" data-lyrics-ai-readiness role="status" hidden></p>
+                  </div>
                   <label class="field">
                     <span data-i18n="Lyrics">Lyrics</span>
                     <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea="" rows="6" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error" data-i18n-placeholder="Paste the full lyrics without section tags"></textarea>

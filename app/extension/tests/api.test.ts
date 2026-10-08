@@ -311,21 +311,23 @@ describe('SubtitleApiClient', () => {
     );
   });
 
-  it('starts and polls pasted lyrics correction status', async () => {
+  it('starts and polls pasted lyrics correction with its pinned AI selection', async () => {
     const status: LyricsCorrectionStatus = {
       attemptId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3010',
       status: 'queued',
       stage: 'queued',
       updatedAt: '2026-08-13T00:00:00Z',
+      aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true,
     };
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(status, 202))
       .mockResolvedValueOnce(jsonResponse(status, 200));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
 
-    await expect(client.startLyricsCorrection(installId, 'job-1', { lyrics: 'hello', expectedTrackId: 'track-1' })).resolves.toEqual(status);
+    const payload = { lyrics: 'hello', expectedTrackId: 'track-1', aiProvider: 'codex' as const, aiModel: 'gpt-codex', aiFastMode: true };
+    await expect(client.startLyricsCorrection(installId, 'job-1', payload)).resolves.toEqual(status);
     await expect(client.getLyricsCorrectionStatus(installId, 'job-1')).resolves.toEqual(status);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'POST', body: JSON.stringify({ lyrics: 'hello', expectedTrackId: 'track-1' }) }));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, 'http://localhost:8000/v1/subtitle-jobs/job-1/lyrics', expect.objectContaining({ method: 'GET' }));
   });
 

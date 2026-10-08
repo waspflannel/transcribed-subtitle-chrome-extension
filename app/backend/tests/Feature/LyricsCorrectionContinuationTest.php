@@ -102,13 +102,24 @@ class LyricsCorrectionContinuationTest extends TestCase
         }
     }
 
-    public function test_codex_replacement_uses_saved_model_and_fast_mode_for_alignment_and_analysis(): void
+    #[TestWith([false])]
+    #[TestWith([true])]
+    public function test_codex_replacement_uses_saved_model_and_fast_mode_for_alignment_and_analysis(bool $override): void
     {
         $this->app->forgetInstance(LaravelAiTranslationAnalysisProvider::class);
         $queue = $this->completedTrackWithCues(2, fn (int $i): string => 'Line '.($i + 1), ['source_language' => 'spa', 'target_language' => 'eng', 'include_translation' => true, 'include_romanization' => false]);
-        $queue['job']->update(['ai_provider' => 'codex', 'ai_model' => 'saved-codex-model', 'ai_fast_mode' => true]);
+        if (! $override) {
+            $queue['job']->update(['ai_provider' => 'codex', 'ai_model' => 'saved-codex-model', 'ai_fast_mode' => true]);
+        }
+        $identity = $queue['job']->only(['ai_provider', 'ai_model', 'ai_fast_mode', 'reuse_key', 'run_id']);
         $codex = $this->mock(CodexService::class);
-        $codex->shouldReceive('requireConnected')->twice();
+        if ($override) {
+            $transactionLevel = DB::transactionLevel();
+            $codex->shouldReceive('validateSelection')->once()->with('saved-codex-model', true)->andReturnUsing(function () use ($transactionLevel): void {
+                $this->assertSame($transactionLevel, DB::transactionLevel());
+            });
+        }
+        $codex->shouldReceive('requireConnected')->times($override ? 3 : 2);
         $codex->shouldReceive('prompt')->twice()->andReturnUsing(function (SubtitleAgent $agent, array $input, SubtitleModel $selection) use ($queue): array {
             $this->assertSame(['codex', 'saved-codex-model', true], [$selection->provider, $selection->model, $selection->fastMode]);
 
@@ -117,12 +128,131 @@ class LyricsCorrectionContinuationTest extends TestCase
                 $input['cues'],
             )];
         });
-        $response = $this->submitLyrics($queue['job'], $queue['texts'])->assertAccepted();
+        $response = $this->submitLyrics($queue['job'], $queue['texts'], selection: $override
+            ? ['aiProvider' => 'codex', 'aiModel' => 'saved-codex-model', 'aiFastMode' => true] : [])
+            ->assertAccepted()->assertJsonPath('aiProvider', 'codex')->assertJsonPath('aiModel', 'saved-codex-model')->assertJsonPath('aiFastMode', true);
         $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
         $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
         $this->assertSame('completed', $row->status);
         $this->assertSame($queue['texts'], array_column($row->track->cues, 'sourceText'));
+        $this->assertSame($identity, $queue['job']->fresh()->only(array_keys($identity)));
+        $this->assertSame(['codex', 'saved-codex-model', true], [$row->ai_provider, $row->ai_model, $row->ai_fast_mode]);
         Http::assertNothingSent();
+    }
+
+    public function test_api_override_is_pinned_for_all_correction_stages_without_changing_codex_generation(): void
+    {
+        $queue = $this->completedTrackWithCues(2, fn (int $i): string => 'Line '.($i + 1), ['source_language' => 'spa', 'target_language' => 'eng', 'include_translation' => true, 'include_romanization' => false]);
+        $queue['job']->update(['ai_provider' => 'codex', 'ai_model' => 'generation-codex', 'ai_fast_mode' => true]);
+        $identity = $queue['job']->only(['ai_provider', 'ai_model', 'ai_fast_mode', 'reuse_key', 'run_id']);
+        $initialCost = $queue['job']->estimated_provider_cost_microusd;
+        config(['ai.providers.openai.models.text.default' => 'correction-api-model']);
+        $this->mock(CodexService::class)->shouldNotReceive('requireConnected', 'validateSelection', 'prompt');
+        LyricsAlignmentAgent::fake([['cues' => $queue['alignmentCues']]])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts'], selection: ['aiProvider' => 'openai', 'aiFastMode' => false])
+            ->assertAccepted()->assertJsonPath('aiProvider', 'openai')->assertJsonPath('aiModel', 'correction-api-model')->assertJsonPath('aiFastMode', false);
+        config(['ai.providers.openai.models.text.default' => 'changed-after-submission']);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'correction-api-model');
+        $this->assertSame([['openai', 'correction-api-model']], $this->translationAnalysis->selections);
+        $job = $queue['job']->fresh();
+        $this->assertSame($identity, $job->only(array_keys($identity)));
+        $this->assertSame($initialCost + 55, $job->estimated_provider_cost_microusd);
+        foreach (SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->get() as $event) {
+            $this->assertSame('openai', $event->context['provider']);
+            $this->assertSame('correction-api-model', $event->context['model']);
+        }
+    }
+
+    #[TestWith([['aiProvider' => 'unknown']])]
+    #[TestWith([['aiProvider' => 'codex']])]
+    #[TestWith([['aiProvider' => 'codex', 'aiModel' => '../model']])]
+    #[TestWith([['aiProvider' => 'codex', 'aiModel' => 'valid', 'aiFastMode' => 'true']])]
+    #[TestWith([['aiProvider' => 'openai', 'aiModel' => 'override']])]
+    #[TestWith([['aiProvider' => 'cerebras', 'aiFastMode' => true]])]
+    #[TestWith([['aiModel' => 'orphan-model']])]
+    #[TestWith([['aiFastMode' => true]])]
+    public function test_invalid_correction_selection_never_queues(array $selection): void
+    {
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
+        $this->mock(CodexService::class)->shouldNotReceive('validateSelection', 'prompt');
+        $this->submitLyrics($queue['job'], $queue['texts'], selection: $selection)
+            ->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed');
+        Queue::assertNotPushed(LyricsCorrectionJob::class);
+        $this->assertDatabaseCount('subtitle_track_lyrics_corrections', 0);
+    }
+
+    #[TestWith(['codex'])]
+    #[TestWith(['openai'])]
+    public function test_unavailable_correction_override_preserves_track_and_does_not_queue(string $provider): void
+    {
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
+        $trackId = $queue['job']->track->public_id;
+        $selection = ['aiProvider' => $provider];
+        if ($provider === 'codex') {
+            $selection['aiModel'] = 'codex-model';
+            $this->mock(CodexService::class)->shouldReceive('validateSelection')->once()->andThrow(new SubtitleProcessingException('provider_not_configured', 'Reconnect Codex.', 422));
+        } else {
+            config(['ai.providers.openai.key' => null]);
+        }
+        $this->submitLyrics($queue['job'], $queue['texts'], selection: $selection)
+            ->assertUnprocessable()->assertJsonPath('error.code', 'provider_not_configured');
+        Queue::assertNotPushed(LyricsCorrectionJob::class);
+        $this->assertDatabaseCount('subtitle_track_lyrics_corrections', 0);
+        $this->assertSame($trackId, $queue['job']->track->fresh()->public_id);
+    }
+
+    public function test_disconnected_correction_provider_fails_without_falling_back_to_generation_api(): void
+    {
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
+        $trackId = $queue['job']->track->public_id;
+        $codex = $this->mock(CodexService::class);
+        $codex->shouldReceive('validateSelection')->once()->with('correction-codex', false);
+        $codex->shouldReceive('requireConnected')->once()->ordered();
+        $codex->shouldReceive('requireConnected')->once()->ordered()->andThrow(new SubtitleProcessingException('provider_not_configured', 'Reconnect Codex.', 422));
+        $codex->shouldNotReceive('prompt');
+        LyricsAlignmentAgent::fake()->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts'], selection: ['aiProvider' => 'codex', 'aiModel' => 'correction-codex'])->assertAccepted();
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $this->assertSame('failed', $row->status);
+        $this->assertSame('codex', $row->ai_provider);
+        $this->assertNull($row->lyrics);
+        $this->assertSame($trackId, $row->track->public_id);
+        LyricsAlignmentAgent::assertNeverPrompted();
+        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
+    }
+
+    public function test_resubmission_replaces_the_previous_correction_selection_and_omission_inherits_generation(): void
+    {
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
+        $queue['job']->update(['ai_provider' => 'cerebras', 'ai_model' => 'saved-generation-model']);
+        config(['ai.providers.openai.models.text.default' => 'correction-api']);
+        $first = $this->submitLyrics($queue['job'], $queue['texts'], selection: ['aiProvider' => 'openai'])->assertAccepted();
+        app(LyricsCorrectionService::class)->cancel($queue['job'], $first->json('attemptId'));
+        $next = $this->submitLyrics($queue['job'], $queue['texts'])->assertAccepted()
+            ->assertJsonPath('aiProvider', 'cerebras')->assertJsonPath('aiModel', 'saved-generation-model')->assertJsonPath('aiFastMode', false);
+        $this->assertNotSame($first->json('attemptId'), $next->json('attemptId'));
+        $this->assertDatabaseCount('subtitle_track_lyrics_corrections', 1);
+        $row = $this->correctionRow($queue['job'], $next->json('attemptId'));
+        $this->assertSame('cerebras', $row->ai_provider);
+    }
+
+    public function test_legacy_correction_without_saved_selection_inherits_the_generation_model(): void
+    {
+        $queue = $this->completedTrackWithCues(1, fn (): string => 'Original lyrics');
+        $queue['job']->update(['ai_provider' => 'cerebras', 'ai_model' => 'legacy-generation-model']);
+        LyricsAlignmentAgent::fake([['cues' => $queue['alignmentCues']]])->preventStrayPrompts();
+        $response = $this->submitLyrics($queue['job'], $queue['texts'])->assertAccepted();
+        $row = $this->correctionRow($queue['job'], $response->json('attemptId'));
+        $row->update(['ai_provider' => null, 'ai_model' => null, 'ai_fast_mode' => null]);
+        $this->getJson('/v1/subtitle-jobs/'.$queue['job']->public_id.'/lyrics')->assertOk()
+            ->assertJsonPath('aiProvider', 'cerebras')->assertJsonPath('aiModel', 'legacy-generation-model')->assertJsonPath('aiFastMode', false);
+        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
+        $this->assertSame('completed', $row->fresh()->status);
+        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'cerebras' && $prompt->model === 'legacy-generation-model');
+        $this->assertSame([['cerebras', 'legacy-generation-model']], $this->translationAnalysis->selections);
     }
 
     public function test_replacement_publishes_replacement_despite_wrong_analysis_ids_and_token_indices(): void
@@ -1467,7 +1597,7 @@ class LyricsCorrectionContinuationTest extends TestCase
     /**
      * @param  array<int, string>  $texts
      */
-    private function submitLyrics(SubtitleJob $job, array $texts, bool $allowPartial = false): TestResponse
+    private function submitLyrics(SubtitleJob $job, array $texts, bool $allowPartial = false, array $selection = []): TestResponse
     {
         $job->refresh()->load('track');
 
@@ -1476,6 +1606,7 @@ class LyricsCorrectionContinuationTest extends TestCase
                 'expectedTrackId' => $job->track->public_id,
                 'lyrics' => implode("\n", $texts),
                 'allowPartial' => $allowPartial,
+                ...$selection,
             ]);
     }
 

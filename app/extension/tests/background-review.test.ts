@@ -99,6 +99,7 @@ const apiMock = vi.hoisted(() => ({
   createSubtitleJob: vi.fn(),
   getSubtitleJob: vi.fn(),
   getLyricsCorrectionStatus: vi.fn(),
+  startLyricsCorrection: vi.fn(),
   cancelSubtitleJob: vi.fn(),
   deleteSavedGeneration: vi.fn(),
   listSubtitleJobs: vi.fn(async () => ({ jobs: [] })),
@@ -177,6 +178,7 @@ vi.mock('../utils/api', () => ({
     enrichLearningToken(...args: unknown[]) { return apiMock.enrichLearningToken(...args); }
     createSubtitleJob(...args: unknown[]) { return apiMock.createSubtitleJob(...args); }
     getLyricsCorrectionStatus(...args: unknown[]) { return apiMock.getLyricsCorrectionStatus(...args); }
+    startLyricsCorrection(...args: unknown[]) { return apiMock.startLyricsCorrection(...args); }
     getSubtitleJob(...args: unknown[]) { return apiMock.getSubtitleJob(...args); }
     cancelSubtitleJob(...args: unknown[]) { return apiMock.cancelSubtitleJob(...args); }
     deleteSavedGeneration(...args: unknown[]) { return apiMock.deleteSavedGeneration(...args); }
@@ -321,6 +323,7 @@ beforeEach(() => {
   apiMock.createSubtitleJob.mockReset();
   apiMock.getSubtitleJob.mockReset();
   apiMock.getLyricsCorrectionStatus.mockReset().mockResolvedValue({ status: 'completed' });
+  apiMock.startLyricsCorrection.mockReset();
   apiMock.cancelSubtitleJob.mockReset();
   apiMock.deleteSavedGeneration.mockReset().mockResolvedValue({ ok: true });
   apiMock.listSubtitleJobs.mockReset().mockResolvedValue({ jobs: [] });
@@ -336,6 +339,23 @@ afterEach(() => {
 });
 
 describe('background entrypoint review regressions', () => {
+  it.each([{}, { aiProvider: 'cerebras' }, { aiProvider: 'codex', aiModel: 'test-model', aiFastMode: true }])('forwards correction selection %j without updating generation settings', async selection => {
+    seedBaseState();
+    const settingsBefore = structuredClone(storageMock.values.get('local:extensionSettings'));
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const original = track(VIDEO_A);
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    const correction = { attemptId: 'attempt-selection', status: 'queued', stage: 'queued', updatedAt: '2026-10-07T12:00:00Z', aiProvider: 'codex', aiModel: 'test-model', aiFastMode: true };
+    apiMock.startLyricsCorrection.mockResolvedValue(correction);
+    apiMock.getLyricsCorrectionStatus.mockResolvedValue(correction);
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
+    const result = await dispatch(listener, { type: 'panel.submitLyricsCorrection', jobId: original.jobId, trackId: original.trackId, youtubeVideoId: VIDEO_A, lyrics: 'hello world', ...selection, windowId: 1 }, {});
+    expect(apiMock.startLyricsCorrection).toHaveBeenCalledWith(expect.any(String), original.jobId, { lyrics: 'hello world', expectedTrackId: original.trackId, ...selection });
+    expect(result.lyricsCorrection).toMatchObject(correction);
+    expect(storageMock.values.get('local:extensionSettings')).toEqual(settingsBefore);
+    expect(apiMock.createSubtitleJob).not.toHaveBeenCalled();
+  });
   it.each(['panel.getCodexAccount', 'panel.loginCodex', 'panel.disconnectCodex'])('rejects %s from content scripts', async type => {
     seedBaseState();
     const listener = await loadBackground();
