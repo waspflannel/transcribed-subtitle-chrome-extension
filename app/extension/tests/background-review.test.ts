@@ -1450,3 +1450,48 @@ describe('saved generation deletion and page reload', () => {
     expect((storageMock.values.get('local:activeTracksByVideoId') as any)[VIDEO_A].track).toEqual(selected);
   });
 });
+
+describe('per-video generation ownership', () => {
+  it('lets a tab generate for a new video while the previous video still generates', async () => {
+    vi.useFakeTimers();
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const jobs = [job(VIDEO_A, 'job-a'), job(VIDEO_B, 'job-b')];
+    apiMock.createSubtitleJob.mockResolvedValueOnce(jobs[0]).mockResolvedValueOnce(jobs[1]);
+    apiMock.getSubtitleJob.mockImplementation(async (_installId, jobId) => jobs.find((item) => item.jobId === jobId));
+    const listener = await loadBackground();
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => vi.getTimerCount() === 1);
+
+    browserMock.tabs.get(1)!.url = `https://www.youtube.com/watch?v=${VIDEO_B}`;
+    expect(await dispatch(listener, generationRequest(), {})).not.toMatchObject({ ok: false });
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 2);
+    expect(apiMock.createSubtitleJob.mock.calls[1]?.[1]).toMatchObject({ youtubeVideoId: VIDEO_B });
+
+    // The same video stays locked while its own generation runs.
+    expect(await dispatch(listener, generationRequest(), {})).toMatchObject({ ok: false, errorCode: 'lyrics_correction_in_progress' });
+  });
+
+  it('releases a panel recovery claim that no monitor took over', async () => {
+    vi.useFakeTimers();
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    browserMock.tabs.set(2, { id: 2, windowId: 1, active: false, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
+    storageMock.values.set('local:tabSubtitleOperations', { '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'done-job' } });
+    const done = { ...job(VIDEO_A, 'done-job'), status: 'completed', track: track(VIDEO_A, 'done-job') };
+    const running = job(VIDEO_B, 'job-b');
+    apiMock.getSubtitleJob.mockImplementation(async (_installId, jobId) => (jobId === 'done-job' ? done : running));
+    apiMock.createSubtitleJob.mockResolvedValue(running);
+    const listener = await loadBackground();
+    expect((await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {})).subtitleState)
+      .toMatchObject({ type: 'ready', track: { jobId: 'done-job' } });
+
+    browserMock.setActiveTab(2);
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => vi.getTimerCount() === 1);
+    apiMock.getSubtitleJob.mockClear();
+    await vi.advanceTimersByTimeAsync(10000);
+    // One active tab polls once per second; a leaked claim halves that rate.
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(10);
+  });
+});

@@ -47,7 +47,8 @@ const tabOperations = new Map<number, symbol>();
 const tabGenerationCancellationInFlight = new Map<number, { jobId: string; operation: symbol }>();
 const tabLyricsCorrectionStates = new Map<number, LyricsCorrectionTabState>();
 const tabLyricsCorrectionStateSessions = new Map<number, string>();
-const tabGenerationInFlight = new Set<number>();
+/** Tab ID -> video whose generation this worker runs or monitors in that tab. */
+const tabGenerationInFlight = new Map<number, string>();
 const tabCorrectionMutationInFlight = new Map<number, symbol>();
 const panelPorts = new Set<Browser.runtime.Port>();
 let cachedPanelJobHistory: SubtitleJobHistoryItem[] = [];
@@ -66,6 +67,12 @@ const JOB_POLL_INTERVAL_MS = 5000;
 const ACTIVE_JOB_POLL_INTERVAL_MS = 1000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
+
+// A tab can move to another video while an earlier generation still polls;
+// that generation must not block edits or generation for the new video.
+function isGenerationInFlight(tabId: number, youtubeVideoId: string): boolean {
+  return tabGenerationInFlight.get(tabId) === youtubeVideoId;
+}
 
 function isGenerationCancellationClaim(tabId: number, jobId: string, operation: symbol): boolean {
   const claim = tabGenerationCancellationInFlight.get(tabId);
@@ -207,7 +214,7 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
       if (!await isCurrentSession(session.sessionId)) throw new Error('Your backend changed. Refresh the panel.');
       if (tab?.id !== undefined && page.supported && state?.type === 'ready'
         && tabSubtitleStates.get(tab.id) === state
-        && !tabGenerationInFlight.has(tab.id) && !tabCorrectionMutationInFlight.has(tab.id)) {
+        && !isGenerationInFlight(tab.id, page.videoId) && !tabCorrectionMutationInFlight.has(tab.id)) {
         const checked = await revalidateSavedTrack(tab.id, page, state, installId, session, response.jobs);
         if (checked !== state && tabSubtitleStates.get(tab.id) === checked) {
           const recovered = checked.type === 'no-track'
@@ -475,7 +482,7 @@ async function recoverSubtitleStateFromBackend(
 
   if (resolved.type === 'loading') {
     let monitorRecoveredJob = false;
-    if (resolved.jobId && !tabGenerationInFlight.has(tabId)) {
+    if (resolved.jobId && !isGenerationInFlight(tabId, pageStatus.videoId)) {
       const persistedOperation = await getTabOperation(tabId);
       if (!await isCurrentRecoveryOwner()) return localState;
       if (persistedOperation?.kind === 'generation' && persistedOperation.instanceId === session.instanceId
@@ -543,7 +550,7 @@ async function generateSubtitlesFromPanel(youtubeVideoId: string, tabId: number,
     return getPanelState({ syncBackend: true, windowId });
   }
 
-  if (tabGenerationInFlight.has(activeTabId) || tabCorrectionMutationInFlight.has(activeTabId)) {
+  if (isGenerationInFlight(activeTabId, pageStatus.videoId) || tabCorrectionMutationInFlight.has(activeTabId)) {
     throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle edit is already in progress.', 409);
   }
 
@@ -552,7 +559,7 @@ async function generateSubtitlesFromPanel(youtubeVideoId: string, tabId: number,
   const operation = Symbol('generation');
   tabOperations.set(activeTabId, operation);
   tabGenerationCancellationInFlight.delete(activeTabId);
-  tabGenerationInFlight.add(activeTabId);
+  tabGenerationInFlight.set(activeTabId, pageStatus.videoId);
   let generationStarted = false;
 
   try {
@@ -1024,7 +1031,7 @@ async function submitLyricsCorrectionFromPanel(
     throw new SubtitleApiError('not_found', 'The active subtitle track has changed. Refresh the panel and try again.', 404);
   }
 
-  if (tabGenerationInFlight.has(tabId) || tabCorrectionMutationInFlight.has(tabId)) {
+  if (isGenerationInFlight(tabId, message.youtubeVideoId) || tabCorrectionMutationInFlight.has(tabId)) {
     throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle generation is already in progress.', 409);
   }
 
@@ -1296,7 +1303,7 @@ async function cancelLyricsCorrectionFromPanel(
     throw new SubtitleApiError('not_found', 'The active subtitle track has changed. Refresh the panel and try again.', 404);
   }
 
-  if (tabGenerationInFlight.has(tabId) || tabCorrectionMutationInFlight.has(tabId)) {
+  if (isGenerationInFlight(tabId, message.youtubeVideoId) || tabCorrectionMutationInFlight.has(tabId)) {
     throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle generation is already in progress.', 409);
   }
 
@@ -1364,7 +1371,7 @@ async function quickFixTokenFromPanel(
     throw new SubtitleApiError('not_found', 'The active subtitle track has changed. Refresh the panel and try again.', 404);
   }
 
-  if (tabGenerationInFlight.has(tabId) || tabCorrectionMutationInFlight.has(tabId)) {
+  if (isGenerationInFlight(tabId, message.youtubeVideoId) || tabCorrectionMutationInFlight.has(tabId)) {
     throw new SubtitleApiError('lyrics_correction_in_progress', 'A subtitle generation is already in progress.', 409);
   }
 
@@ -1449,7 +1456,7 @@ async function changeSavedGenerationFromPanel(
   const session = await getInstanceContext();
   if (!session || tab?.id !== message.tabId) throw new Error('The active tab or backend changed. Refresh the panel.');
   const tabId = message.tabId;
-  if (tabGenerationInFlight.has(tabId) || tabCorrectionMutationInFlight.has(tabId)) {
+  if (isGenerationInFlight(tabId, message.youtubeVideoId) || tabCorrectionMutationInFlight.has(tabId)) {
     throw new Error('Wait for the current subtitle operation to finish.');
   }
   const claim = Symbol('change-saved-generation');
@@ -1705,6 +1712,7 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
        : await getSubtitleStateForPage(activeTabId, pageStatus, effectiveSession?.instanceId, effectiveSession?.sessionId);
 
   let stateForRecovery = localState;
+  let createdRecoveryClaim: symbol | undefined;
   if (activeTabId !== null && pageStatus?.supported && effectiveSession) {
     let operation = await getTabOperation(activeTabId);
     if (!await isCurrentSession(effectiveSession.sessionId)) {
@@ -1720,9 +1728,9 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
         tabSubtitleStateSessions.delete(activeTabId);
       }
     } else if (operation?.kind === 'generation' && operation.youtubeVideoId === pageStatus.videoId
-      && !tabGenerationInFlight.has(activeTabId)) {
+      && !isGenerationInFlight(activeTabId, pageStatus.videoId)) {
       const recoveryOperation = operation;
-      const recoveryClaim = tabOperations.get(activeTabId) ?? Symbol('panel-recovery');
+      const recoveryClaim = tabOperations.get(activeTabId) ?? (createdRecoveryClaim = Symbol('panel-recovery'));
       tabOperations.set(activeTabId, recoveryClaim);
       let recoveryJob: JobResponse | undefined;
       let terminalStatusMissing = false;
@@ -1788,7 +1796,7 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
           recoveryClaimValid = await updateTabOperationIfMatches(activeTabId, operation, nextOperation);
           if (recoveryClaimValid) operation = nextOperation;
         } else if (!recoveryJob && !history.error && localState.type !== 'ready'
-          && !tabGenerationInFlight.has(activeTabId)) {
+          && !isGenerationInFlight(activeTabId, pageStatus.videoId)) {
           unknownSubmission = true;
           recoveryClaimValid = await isCurrentGenerationRecovery(
             activeTabId,
@@ -1968,7 +1976,7 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
           youtubeVideoId: pageStatus.videoId,
           jobId: historyJob.jobId,
         };
-        const recoveredClaim = tabOperations.get(activeTabId) ?? Symbol('panel-history-recovery');
+        const recoveredClaim = tabOperations.get(activeTabId) ?? (createdRecoveryClaim = Symbol('panel-history-recovery'));
         tabOperations.set(activeTabId, recoveredClaim);
         await setTabOperation(activeTabId, recoveredOperation);
         if (await isCurrentGenerationRecovery(
@@ -1977,7 +1985,7 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
           effectiveSession.sessionId,
           recoveredClaim,
           recoveredOperation,
-        ) && !tabGenerationInFlight.has(activeTabId)) {
+        ) && !isGenerationInFlight(activeTabId, pageStatus.videoId)) {
           tabSubtitleStates.set(activeTabId, {
             type: 'loading',
             status: historyJob.status === 'queued' ? 'queued' : 'running',
@@ -2001,12 +2009,18 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
       }
     }
   }
+  // A recovery claim that no monitor took over would stay until the tab
+  // closes and slow every status poll loop through minimumActivePollInterval.
+  if (activeTabId !== null && createdRecoveryClaim && tabOperations.get(activeTabId) === createdRecoveryClaim) {
+    tabOperations.delete(activeTabId);
+  }
 
   backendRecoveryBlocked = await isSubtitleRecoveryBlocked();
   const recoveryJobs = !backendRecoveryBlocked && options.syncBackend && effectiveSession && pageStatus?.supported
     ? await savedTrackRecoveryJobs(stateForRecovery, pageStatus, history.jobs, installId, effectiveSession)
     : history.jobs;
-  let subtitleState = backendRecoveryBlocked || !options.syncBackend || (activeTabId !== null && tabGenerationInFlight.has(activeTabId))
+  let subtitleState = backendRecoveryBlocked || !options.syncBackend
+    || (activeTabId !== null && pageStatus?.supported === true && isGenerationInFlight(activeTabId, pageStatus.videoId))
     ? stateForRecovery : await stateWithBackendProgress(stateForRecovery, pageStatus, recoveryJobs, (job) =>
     effectiveSession ? resolveCompletedSubtitleJob(installId, job, effectiveSession.sessionId) : Promise.resolve(null),
   );
@@ -2356,11 +2370,11 @@ function ensureRecoveredGenerationMonitor(
   session: InstanceContext,
   initialJob?: JobResponse,
 ): void {
-  if (tabGenerationInFlight.has(tabId)) return;
+  if (isGenerationInFlight(tabId, pageStatus.videoId)) return;
 
   const operation = Symbol('recovered-generation');
   tabOperations.set(tabId, operation);
-  tabGenerationInFlight.add(tabId);
+  tabGenerationInFlight.set(tabId, pageStatus.videoId);
   let terminal = false;
 
   void (async () => {
