@@ -16,6 +16,18 @@ class PrivateInstanceAccessTest extends TestCase
             ->getJson('/v1/settings')->assertOk()->assertJsonStructure(['providers', 'retentionDays']);
     }
 
+    public function test_configured_extension_ids_admit_only_those_extensions(): void
+    {
+        config(['instance.allowed_extension_ids' => [str_repeat('b', 32)]]);
+        $this->withExtensionInstall('install_'.str_repeat('a', 32))
+            ->withHeader('Origin', 'chrome-extension://'.str_repeat('b', 32))
+            ->getJson('/v1/settings')->assertOk();
+        $this->withHeader('Origin', 'chrome-extension://'.str_repeat('a', 32))
+            ->putJson('/v1/settings', ['retentionDays' => 1])
+            ->assertForbidden()->assertJsonPath('error.code', 'instance_access_denied');
+        $this->assertDatabaseCount('instance_settings', 0);
+    }
+
     public function test_public_clients_cannot_read_or_replace_instance_settings(): void
     {
         $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.8'])

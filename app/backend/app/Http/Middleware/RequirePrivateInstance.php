@@ -14,9 +14,11 @@ class RequirePrivateInstance
     {
         $hosts = ['localhost', '127.0.0.1', '[::1]', parse_url((string) config('app.url'), PHP_URL_HOST)];
         $origin = $request->header('Origin');
+        $extensionIds = config('instance.allowed_extension_ids', []);
         $originAllowed = $origin === null
             || $origin === $request->getSchemeAndHttpHost()
-            || preg_match('/\Achrome-extension:\/\/[a-p]{32}\z/D', $origin) === 1;
+            || (preg_match('/\Achrome-extension:\/\/([a-p]{32})\z/D', $origin, $extension) === 1
+                && ($extensionIds === [] || in_array($extension[1], $extensionIds, true)));
 
         if (! IpUtils::checkIp($request->ip() ?? '', config('instance.allowed_networks', []))
             || ! in_array($request->getHost(), $hosts, true)
