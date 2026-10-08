@@ -730,7 +730,7 @@ async function generateSubtitlesForTab(
       ...(forceRegenerate ? { forceRegenerate: true } : {}),
       youtubeVideoId: pageStatus.videoId,
       youtubeUrl: pageStatus.url,
-      ...(isCreatePayloadVideoDurationSeconds(pageSnapshot.videoDurationSeconds)
+      ...(isPositiveVideoDurationSeconds(pageSnapshot.videoDurationSeconds)
         ? { videoDurationSeconds: pageSnapshot.videoDurationSeconds }
         : {}),
       sourceLanguage: settings.sourceLanguage,
@@ -2360,9 +2360,6 @@ function isPositiveVideoDurationSeconds(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
-function isCreatePayloadVideoDurationSeconds(value: unknown): value is number {
-  return isPositiveVideoDurationSeconds(value);
-}
 
 function ensureRecoveredGenerationMonitor(
   tabId: number,

@@ -4,16 +4,17 @@ import markup from '../entrypoints/sidepanel/index.html?raw';
 import { bindKnownLyrics } from '../entrypoints/sidepanel/known-lyrics';
 import { setupTabs } from '../entrypoints/sidepanel/tabs';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn(), remove: vi.fn(), copy: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), getKeys: vi.fn(), set: vi.fn(), remove: vi.fn(), copy: vi.fn() }));
 vi.mock('wxt/browser', () => ({ browser: { storage: { local: {
-  get: mocks.get, set: mocks.set, remove: mocks.remove,
+  get: mocks.get, getKeys: mocks.getKeys, set: mocks.set, remove: mocks.remove,
 } } } }));
 let stored: Record<string, unknown>;
 const windows: JSDOM[] = [];
 beforeEach(() => {
   stored = {};
   vi.resetAllMocks();
-  mocks.get.mockImplementation(async () => ({ ...stored }));
+  mocks.getKeys.mockImplementation(async () => Object.keys(stored));
+  mocks.get.mockImplementation(async (keys: string[]) => Object.fromEntries(Object.entries(stored).filter(([key]) => keys.includes(key))));
   mocks.set.mockImplementation(async (value) => { Object.assign(stored, value); });
   mocks.remove.mockImplementation(async (key) => { delete stored[key]; });
   mocks.copy.mockResolvedValue(undefined);

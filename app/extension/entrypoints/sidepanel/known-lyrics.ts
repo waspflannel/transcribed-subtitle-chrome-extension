@@ -33,7 +33,9 @@ export function bindKnownLyrics(root: Document): void {
   async function refresh(): Promise<void> {
     const request = ++revision;
     try {
-      const stored = await browser.storage.local.get(null);
+      // Read only Known Lyrics keys; remembered tracks can hold megabytes.
+      const keys = (await browser.storage.local.getKeys()).filter(key => key.startsWith(prefix));
+      const stored = keys.length > 0 ? await browser.storage.local.get(keys) : {};
       if (request !== revision) return;
       if (status.dataset.i18n === 'Could not load lyrics. Reopen Known Lyrics to retry.') announce('');
       const expanded = new Set([...list.querySelectorAll<HTMLDetailsElement>('details[open]')].map(details => details.dataset.key));

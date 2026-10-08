@@ -46,16 +46,6 @@ export function renderOverlayContent(
         : renderFrame('');
     }
 
-    const cueRomanization =
-      state.settings.showRomanization && cue.romanization
-        ? `<div class="cue-romanization study-cue-romanization${studyBlurClass(
-            state.settings.blurRomanization,
-            'romanization',
-          )}"${state.settings.blurRomanization
-              ? ` tabindex="0" aria-label="${escapeHtml(t('Cue romanization, focus to reveal blurred text'))}"`
-              : ''}>${escapeHtml(cue.romanization)}</div>`
-        : '';
-
     return renderFrame(`
       <section class="rail" role="status" data-study-rail>
         <div class="rail-meta">
@@ -64,7 +54,7 @@ export function renderOverlayContent(
         </div>
         <div class="rail-main">
           <div class="token-area" dir="auto" lang="${escapeHtml(languageTag(track.detectedSourceLanguage ?? track.sourceLanguage))}">${renderSourceLine(cue, state.settings, interaction)}</div>
-          ${cueRomanization}
+          ${renderCueRomanization(cue.romanization, state.settings)}
           ${renderTranslation(cue.sourceText, cue.translatedText, track.targetLanguage, state.settings)}
         </div>
         ${renderStudyControls(interaction.copyStatus, interaction.actionStatus)}
@@ -113,15 +103,6 @@ function renderPartialRail(
   partialTrack: PartialSubtitleTrack,
   settings: ExtensionSettings,
 ): string {
-  const cueRomanization =
-    settings.showRomanization && cue.romanization
-      ? `<div class="cue-romanization study-cue-romanization${studyBlurClass(
-          settings.blurRomanization,
-          'romanization',
-        )}"${settings.blurRomanization
-            ? ` tabindex="0" aria-label="${escapeHtml(t('Cue romanization, focus to reveal blurred text'))}"`
-            : ''}>${escapeHtml(cue.romanization)}</div>`
-      : '';
   const translation = renderTranslation(cue.sourceText, cue.translatedText ?? '', partialTrack.targetLanguage, settings);
 
   return `
@@ -134,11 +115,20 @@ function renderPartialRail(
         <div class="token-area" dir="auto" lang="${escapeHtml(languageTag(partialTrack.sourceLanguage))}"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${settings.blurSourceWords
             ? ` tabindex="0" aria-label="${escapeHtml(t('Partial source text, focus to reveal blurred text'))}"`
             : ''}>${escapeHtml(cue.sourceText)}</span></div>
-        ${cueRomanization}
+        ${renderCueRomanization(cue.romanization, settings)}
         ${translation}
       </div>
     </section>
   `;
+}
+
+function renderCueRomanization(romanization: string | null | undefined, settings: ExtensionSettings): string {
+  if (!settings.showRomanization || !romanization) return '';
+
+  return `<div class="cue-romanization study-cue-romanization${studyBlurClass(settings.blurRomanization, 'romanization')}"${
+    settings.blurRomanization
+      ? ` tabindex="0" aria-label="${escapeHtml(t('Cue romanization, focus to reveal blurred text'))}"`
+      : ''}>${escapeHtml(romanization)}</div>`;
 }
 
 function renderSourceLine(
