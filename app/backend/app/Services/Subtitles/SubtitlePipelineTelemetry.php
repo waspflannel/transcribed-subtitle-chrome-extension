@@ -345,7 +345,6 @@ class SubtitlePipelineTelemetry
     {
         return $job->events()
             ->whereNotIn('event', [
-                'artifact.deleted',
                 'batch.failed',
                 'job.failed',
                 'job.stale_run_skipped',
