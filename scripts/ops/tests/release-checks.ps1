@@ -7,7 +7,7 @@ $ApiUrl = 'https://release-check.example.com/v1'
 $outputDirectory = Join-Path $Root 'app/extension/.output'
 New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 $fixturePath = Join-Path $outputDirectory ('release-check-'+[guid]::NewGuid().ToString('N')+'.zip')
-Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 
 function Assert-Rejected([scriptblock]$Action, [string]$Message) {
     $rejected = $false
