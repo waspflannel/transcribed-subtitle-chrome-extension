@@ -240,11 +240,11 @@ try {
         Write-Stage 'Ready. Open the extension guide to finish setup.'
     } else {
         if (-not $Force) {
-            # Stopping interrupts running generations; the panel asks before rerunning with -Force.
+            # Stopping interrupts generation and correction work; the panel asks before rerunning with -Force.
             $active = ''
             try {
                 $active = (Invoke-Compose -Arguments @('exec', '-T', 'postgres', 'psql', '-U', 'subtitle', '-d', 'transcribe', '-tAc',
-                    "select count(*) from subtitle_jobs where status = 'running'") -Capture) -join ''
+                    "select (select count(*) from subtitle_jobs where status = 'running') + (select count(*) from subtitle_track_lyrics_corrections where status in ('queued', 'running'))") -Capture) -join ''
             } catch { }
             if ($active.Trim() -match '^[1-9][0-9]*$') { Write-Output "TRANSCRIBE-ACTIVE: $($active.Trim())"; return }
         }

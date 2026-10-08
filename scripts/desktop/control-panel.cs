@@ -226,7 +226,7 @@ internal sealed class ControlPanel : Form
         } else {
             File.AppendAllText(Path.Combine(dataDirectory, "setup.log"), DateTime.Now.ToString("s") + " / " + action + Environment.NewLine + text + errorText);
             if (exitCode == 0 && action == "Stop" && text.Contains("TRANSCRIBE-ACTIVE: ")
-                && MessageBox.Show(this, "Subtitles are still being generated. Stopping now interrupts them, and they may need to be retried. Stop anyway?",
+                && MessageBox.Show(this, "Subtitle work is still queued or running. Stopping now interrupts it, and it may need to be retried. Stop anyway?",
                     "Transcribe", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes) {
                 StartOperation("Stop -Force");
                 return;
