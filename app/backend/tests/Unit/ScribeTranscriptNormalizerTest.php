@@ -261,6 +261,78 @@ class ScribeTranscriptNormalizerTest extends TestCase
         $this->assertSame([implode(' ', array_fill(0, 14, 'word')), 'word'], array_column($transcript->segments, 'text'));
     }
 
+    public function test_sung_pauses_inside_japanese_words_do_not_split_cues(): void
+    {
+        // Real Scribe shape: tiny per-character timings with held notes between them.
+        $transcript = $this->normalizer()->normalize(['words' => $this->characters([
+            ['思', 46.48], ['い', 48.98], ['よ', 48.99], ['一', 49.0], ['つ', 50.06], ['に', 50.08],
+            ['な', 51.7], ['れ。', 51.85],
+            ['何', 60.0], ['か', 60.1], ['を', 61.2], ['つ', 61.3], ['か', 61.4], ['む', 61.5], ['こ', 61.6], ['と', 61.7], ['。', 61.8],
+        ])], 'jpn', 70);
+
+        $this->assertSame(['思いよ一つになれ。', '何かをつかむこと。'], array_column($transcript->segments, 'text'));
+    }
+
+    public function test_a_pause_before_a_kanji_word_still_breaks_japanese_lines(): void
+    {
+        $transcript = $this->normalizer()->normalize(['words' => $this->characters([
+            ['走', 0.66], ['り', 0.9], ['な', 1.2], ['が', 1.5], ['ら', 1.9],
+            ['凍', 3.74], ['え', 3.9], ['た', 4.1], ['っ', 4.2], ['て', 4.4],
+        ])], 'jpn', 10);
+
+        $this->assertSame(['走りながら', '凍えたって'], array_column($transcript->segments, 'text'));
+    }
+
+    public function test_timing_jitter_does_not_glue_the_next_sentence_to_a_full_stop(): void
+    {
+        $transcript = $this->normalizer()->normalize(['words' => [
+            ['text' => 'な', 'start' => 1.0, 'end' => 1.2, 'type' => 'word'],
+            ['text' => 'れ。', 'start' => 1.2, 'end' => 1.4, 'type' => 'word'],
+            ['text' => 'ど', 'start' => 1.39, 'end' => 1.5, 'type' => 'word'],
+            ['text' => 'こ。', 'start' => 1.5, 'end' => 1.7, 'type' => 'word'],
+        ]], 'jpn', 3);
+
+        $this->assertSame(['なれ。', 'どこ。'], array_column($transcript->segments, 'text'));
+        $this->assertSame(1.4, $transcript->segments[1]->startSeconds);
+    }
+
+    public function test_a_point_timestamp_after_a_full_stop_starts_the_next_sentence(): void
+    {
+        $transcript = $this->normalizer()->normalize(['words' => [
+            ['text' => 'いよ。', 'start' => 1.0, 'end' => 1.4, 'type' => 'word'],
+            ['text' => 'だ', 'start' => 1.4, 'end' => 1.4, 'type' => 'word'],
+            ['text' => 'から。', 'start' => 3.0, 'end' => 3.5, 'type' => 'word'],
+        ]], 'jpn', 5);
+
+        $this->assertSame(['いよ。', 'だから。'], array_column($transcript->segments, 'text'));
+    }
+
+    public function test_streaming_prefix_matches_the_complete_japanese_transcript(): void
+    {
+        $payload = ['words' => $this->characters([
+            ['思', 0.5], ['い', 3.0], ['よ', 3.1], ['一', 3.2], ['つ', 4.3], ['に', 4.4], ['な', 5.9], ['れ', 6.0],
+            ['明', 7.5], ['日', 7.7], ['を', 9.0], ['信', 9.2], ['じ', 9.4], ['て', 9.6], ['る', 9.8],
+        ])];
+        $complete = $this->normalizer()->normalize($payload, 'jpn', 12);
+
+        foreach ([3.05, 6.5, 8.0, 9.5] as $stableBefore) {
+            $prefix = $this->normalizer()->normalize($payload, 'jpn', 12, stableBeforeSeconds: $stableBefore);
+            $this->assertEquals($prefix->segments, array_slice($complete->segments, 0, count($prefix->segments)));
+        }
+        $this->assertSame(['思いよ一つになれ', '明日を信じてる'], array_column($complete->segments, 'text'));
+    }
+
+    /**
+     * @param  list<array{0: string, 1: float}>  $characters
+     * @return list<array{text: string, start: float, end: float, type: string}>
+     */
+    private function characters(array $characters): array
+    {
+        return array_map(fn (array $character): array => [
+            'text' => $character[0], 'start' => $character[1], 'end' => $character[1] + 0.02, 'type' => 'word',
+        ], $characters);
+    }
+
     private function normalizer(): ScribeTranscriptNormalizer
     {
         return new ScribeTranscriptNormalizer;

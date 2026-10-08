@@ -8,9 +8,9 @@ namespace App\Support;
  */
 final class SubtitleProcessingVersion
 {
-    public const JOB = 'scribe-v2-analysis-v18-';
+    public const JOB = 'scribe-v2-analysis-v19-';
 
-    public const TRANSCRIPT_CACHE = 'transcript-chunks-v8';
+    public const TRANSCRIPT_CACHE = 'transcript-chunks-v9';
 
     public const LEARNING_TOKEN_CACHE = 'learning-token-v11';
 

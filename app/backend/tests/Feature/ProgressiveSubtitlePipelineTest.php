@@ -550,7 +550,8 @@ class ProgressiveSubtitlePipelineTest extends TestCase
         $pipeline->prepareCuesAfterCompletedAnalysisBatches($job->id, $job->run_id);
         $pipeline->persistGeneratedSubtitleTrack($job->id, $job->run_id);
         $this->assertSame('completed', $job->fresh()->status);
-        $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ($anchored ? ['Earlier.', 'Hello. Again.', 'There.'] : ['Earlier.', 'Hello.', 'Again. There.']),
+        // A point word after a full stop starts the next sentence, anchored or not.
+        $this->assertSame($silentTail ? ['Earlier.', 'Hello. Again.'] : ['Earlier.', 'Hello.', 'Again. There.'],
             array_column($job->fresh()->track->cues, 'sourceText'));
     }
 

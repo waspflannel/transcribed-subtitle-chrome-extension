@@ -7,6 +7,7 @@ use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\SubtitleWebVttFormatter;
 use App\Services\Text\NoSpaceArtifactBoundary;
 use App\Services\Text\SubtitleText;
+use IntlBreakIterator;
 
 class ScribeTranscriptNormalizer
 {
@@ -34,6 +35,8 @@ class ScribeTranscriptNormalizer
      * comma, semicolon, colon, and CJK equivalents.
      */
     private const CLAUSE_PUNCTUATION = '/[,;:、，；：]$/u';
+
+    private ?IntlBreakIterator $wordBreaks = null;
 
     /**
      * @param  array<string, mixed>  $payload
@@ -122,10 +125,12 @@ class ScribeTranscriptNormalizer
             $end = (float) $token['end'];
 
             // A point timestamp inside the preceding word anchors its suffix,
-            // even though it cannot supply a standalone cue duration.
+            // even though it cannot supply a standalone cue duration. A word
+            // after a sentence end starts the next sentence instead.
             $lastWordIndex = array_key_last($words);
             if ($start === $end && $lastWordIndex !== null && $pendingUntimedText === []
-                && $start >= $words[$lastWordIndex]['start'] && $end <= $words[$lastWordIndex]['end']) {
+                && $start >= $words[$lastWordIndex]['start'] && $end <= $words[$lastWordIndex]['end']
+                && ! $this->endsSentence($words[$lastWordIndex]['text'])) {
                 $words[$lastWordIndex]['text'] .= ' '.$text;
 
                 continue;
@@ -165,9 +170,16 @@ class ScribeTranscriptNormalizer
 
         // Overlapping words cannot be split into separate non-overlapping cues.
         // Group before the streaming cutoff so connected words stay unpublished together.
+        // Timing jitter at the end of a finished sentence moves the next word
+        // after it, so the sentence-final punctuation still closes its cue.
         $groups = [];
         foreach ($words as $word) {
             $last = array_key_last($groups);
+            if ($last !== null && $word['start'] < $groups[$last]['end']
+                && $groups[$last]['end'] - $word['start'] <= self::SOFT_GAP_BREAK_SECONDS
+                && $word['end'] > $groups[$last]['end'] && $this->endsSentence($groups[$last]['text'])) {
+                $word['start'] = $groups[$last]['end'];
+            }
             if ($last !== null && $word['start'] < $groups[$last]['end']) {
                 $groups[$last]['text'] .= ' '.$word['text'];
                 $groups[$last]['end'] = max($groups[$last]['end'], $word['end']);
@@ -221,7 +233,20 @@ class ScribeTranscriptNormalizer
         foreach ($words as $word) {
             if ($currentWords !== [] && $previousWord !== null) {
                 $gap = $word['start'] - $previousWord['end'];
-                if ($gap >= self::PAUSE_BREAK_SECONDS) {
+                if ($this->joinsNoSpaceText($previousWord, $word) && $gap < self::MAX_CUE_DURATION_SECONDS) {
+                    // Scribe times unspaced scripts per character, and a sung
+                    // note held inside a word leaves a long gap. Only a pause
+                    // where a word ends can break the cue. It forces a break
+                    // before a kanji or katakana word, not before kana that
+                    // continue a phrase (okurigana, particles, endings).
+                    if ($gap >= self::SOFT_GAP_BREAK_SECONDS && $this->isWordBoundary($currentWords, $word)) {
+                        if ($gap >= self::PAUSE_BREAK_SECONDS && preg_match('/^[\p{Han}\p{Katakana}]/u', $word['text']) === 1) {
+                            $flush(count($currentWords) - 1);
+                        } else {
+                            $this->recordCandidate($candidates, count($currentWords) - 1, min($gap, self::MAX_GAP_SCORE));
+                        }
+                    }
+                } elseif ($gap >= self::PAUSE_BREAK_SECONDS) {
                     // A real pause is always the strongest boundary. Close now
                     // rather than waiting for a hard limit to fire somewhere else.
                     $flush(count($currentWords) - 1);
@@ -347,9 +372,38 @@ class ScribeTranscriptNormalizer
      */
     private function shouldCloseCue(array $words): bool
     {
-        $lastWord = $words[array_key_last($words)];
+        return $this->endsSentence($words[array_key_last($words)]['text']);
+    }
 
-        return preg_match('/[.!?\x{061F}\x{3002}\x{FF01}\x{FF1F}]$/u', $lastWord['text']) === 1;
+    private function endsSentence(string $text): bool
+    {
+        return preg_match('/[.!?\x{061F}\x{3002}\x{FF01}\x{FF1F}]$/u', $text) === 1;
+    }
+
+    /**
+     * @param  array{text: string, start: float, end: float}  $previous
+     * @param  array{text: string, start: float, end: float}  $next
+     */
+    private function joinsNoSpaceText(array $previous, array $next): bool
+    {
+        return NoSpaceArtifactBoundary::isNoSpaceScriptChar(mb_substr($previous['text'], -1, 1, 'UTF-8'))
+            && NoSpaceArtifactBoundary::isNoSpaceScriptChar(mb_substr($next['text'], 0, 1, 'UTF-8'));
+    }
+
+    /**
+     * Uses ICU dictionary word breaks. Only the current cue and the incoming
+     * word are read, so a published streaming prefix never changes later.
+     *
+     * @param  array<int, array{text: string, start: float, end: float}>  $currentWords
+     * @param  array{text: string, start: float, end: float}  $next
+     */
+    private function isWordBoundary(array $currentWords, array $next): bool
+    {
+        $left = SubtitleText::canonicalComparable(implode(' ', array_column($currentWords, 'text')));
+        $this->wordBreaks ??= IntlBreakIterator::createWordInstance();
+        $this->wordBreaks->setText($left.SubtitleText::canonicalComparable($next['text']));
+
+        return $this->wordBreaks->isBoundary(strlen($left));
     }
 
     /**

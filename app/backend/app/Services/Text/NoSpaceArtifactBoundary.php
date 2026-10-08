@@ -15,11 +15,12 @@ final class NoSpaceArtifactBoundary
 {
     /**
      * Unicode ranges for scripts written without inter-word spaces
-     * (CJK, kana, halfwidth kana, Thai, Lao, Khmer, Burmese).
+     * (CJK including 々〆〇 and supplementary ideographs, kana, halfwidth
+     * kana and sound marks, Thai, Lao, Khmer, Burmese).
      * Consumed by segmentation, artifact stripping, and validation so they
      * share one definition of "no-space script".
      */
-    public const SCRIPT_CLASS = '\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF66}-\x{FF9D}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}';
+    public const SCRIPT_CLASS = '\x{3005}-\x{3007}\x{303B}\x{303C}\x{3040}-\x{30FF}\x{3400}-\x{9FFF}\x{F900}-\x{FAFF}\x{FF66}-\x{FF9F}\x{20000}-\x{2FA1F}\x{0E00}-\x{0E7F}\x{0E80}-\x{0EFF}\x{1780}-\x{17FF}\x{1000}-\x{109F}';
 
     /**
      * Matches one or more whitespace characters framed by no-space-script
