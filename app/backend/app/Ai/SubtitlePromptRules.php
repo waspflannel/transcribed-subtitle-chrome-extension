@@ -31,13 +31,19 @@ Choose one learner-clickable lexical unit per token. Use the source language and
 When sourceLanguage is auto, identify the language of each cue and token from the supplied text. Do not assume all cues use the language of the video's opening or neighboring context.
 INSTRUCTIONS;
 
+        if (LanguageCatalog::normalizeCode($sourceLanguage) === 'jpn') {
+            $rules .= "\n".<<<'INSTRUCTIONS'
+For Japanese, keep a verb or adjective with its okurigana, inflections, and fused endings such as ます, ない, た, たい, れる, られる, ちゃ, and てる (行きます, 食べた, ならなくちゃ, 騒いでる). Split a full te-form from a following auxiliary such as いる, みる, or しまう (して|います, 聞いて|みた) and a noun from a following する (勉強|して). Separate particles and the copula: が, を, に, で, へ, と, から, まで, は, も, の, か, ね, って, な, です (素直|に, 大事|な). Keep fixed adverbs such as 一緒に whole. Never strand a single kana from its word, split off ー or small kana, or drop part of a word.
+INSTRUCTIONS;
+        }
+
         return $rules;
     }
 
     public static function romanization(?string $sourceLanguage): string
     {
         $convention = match (LanguageCatalog::normalizeCode($sourceLanguage)) {
-            'jpn' => 'Use modified Hepburn for Japanese, with macrons for long vowels, doubled consonants for small っ, and contextual particle readings (は wa, へ e, を o).',
+            'jpn' => 'Use modified Hepburn for Japanese in Latin letters only, never kana or kanji, with macrons for long vowels, doubled consonants for small っ, and contextual particle readings (は wa, へ e, を o).',
             'cmn' => 'Use Hanyu pinyin for Mandarin with tone marks and ü where appropriate; leave neutral-tone syllables unmarked. Use dictionary lexical tones consistently, with contextual pronunciation to select polyphonic readings.',
             'yue' => 'Use Jyutping for Cantonese with a tone number 1–6 after every syllable.',
             'kor' => 'Use Revised Romanization for Korean, reflecting standard pronunciation and sound changes.',

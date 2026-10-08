@@ -66,11 +66,19 @@ class LearningTokenOutputValidator
 
     public function normalizeTokenText(string $text): string
     {
-        $normalized = SubtitleText::canonicalComparable($text);
+        return mb_strtolower(SubtitleText::canonicalComparable($text), 'UTF-8');
+    }
 
-        return function_exists('mb_strtolower')
-            ? mb_strtolower($normalized, 'UTF-8')
-            : strtolower($normalized);
+    /**
+     * True when the tokens spell the cue's words in order, ignoring case, spacing and punctuation.
+     *
+     * @param  array<int, array{text: string}>  $tokens
+     */
+    public function tokensMatchSourceText(array $tokens, string $sourceText): bool
+    {
+        $words = fn (string $text): string => (string) preg_replace('/[^\p{L}\p{N}\p{M}]+/u', '', $this->normalizeTokenText($text));
+
+        return $words(implode(' ', array_column($tokens, 'text'))) === $words($sourceText);
     }
 
     private function isLexicalTokenText(string $text): bool

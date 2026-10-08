@@ -134,6 +134,26 @@ class LearningTokenOutputValidatorTest extends TestCase
         ];
     }
 
+    #[DataProvider('sourceMatches')]
+    public function test_tokens_must_spell_the_source_words_in_order(string $sourceText, array $tokenTexts, bool $matches): void
+    {
+        $tokens = array_map(fn (string $text): array => ['text' => $text], $tokenTexts);
+        $this->assertSame($matches, $this->validator()->tokensMatchSourceText($tokens, $sourceText));
+    }
+
+    public static function sourceMatches(): array
+    {
+        return [
+            'punctuation and case' => ['Hello, World!', ['hello', 'world'], true],
+            'curly apostrophe' => ['Don’t stop', ["Don't", 'stop'], true],
+            'scribe spacing in japanese' => ['日本 語を 勉強', ['日本語', 'を', '勉強'], true],
+            'rewritten word' => ['their there', ['there', 'there'], false],
+            'missing word' => ['one two three', ['one', 'three'], false],
+            'reordered words' => ['one two', ['two', 'one'], false],
+            'corrected script' => ['يديנו', ['يدينو'], false],
+        ];
+    }
+
     private function assertRejectedTokenizationReason(mixed $tokens, string $reason): void
     {
         try {

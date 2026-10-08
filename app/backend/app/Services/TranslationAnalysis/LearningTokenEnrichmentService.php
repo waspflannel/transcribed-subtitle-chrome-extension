@@ -5,6 +5,7 @@ namespace App\Services\TranslationAnalysis;
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleTrack;
+use App\Services\Subtitles\SubtitleProviderCostRecorder;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Support\SubtitleProcessingVersion;
 use Illuminate\Support\Facades\Cache;
@@ -16,6 +17,7 @@ class LearningTokenEnrichmentService
 {
     public function __construct(
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
+        private readonly SubtitleProviderCostRecorder $costs,
     ) {}
 
     /**
@@ -48,21 +50,29 @@ class LearningTokenEnrichmentService
         if (! $lock->get()) {
             throw SubtitleProcessingException::rateLimited(context: ['reason' => 'learning_token_in_progress']);
         }
+        $prompted = false;
         try {
             $enrichedToken = Cache::remember(
                 $cacheKey,
                 now()->addDays(30),
-                fn (): array => $this->translationAnalysis->enrichToken(
-                    cue: $cue,
-                    token: $token,
-                    sourceLanguage: $track->source_language,
-                    targetLanguage: $track->target_language,
-                    selection: SubtitleModel::forJob($track->job),
-                    job: $track->job,
-                ),
+                function () use ($cue, $token, $track, &$prompted): array {
+                    $prompted = true;
+
+                    return $this->translationAnalysis->enrichToken(
+                        cue: $cue,
+                        token: $token,
+                        sourceLanguage: $track->source_language,
+                        targetLanguage: $track->target_language,
+                        selection: SubtitleModel::forJob($track->job),
+                        job: $track->job,
+                    );
+                },
             );
         } finally {
             $lock->release();
+        }
+        if ($prompted) {
+            $this->costs->recordCueBatch($track->job, 'enriching', 1, requiredStatus: 'completed');
         }
 
         $response = DB::transaction(function () use ($track, $payload, $enrichedToken): array {

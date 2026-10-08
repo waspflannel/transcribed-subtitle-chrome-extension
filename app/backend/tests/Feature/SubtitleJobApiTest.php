@@ -2516,6 +2516,8 @@ class SubtitleJobApiTest extends TestCase
         $cues[0]['tokens'][0]['lemma'] = 'first';
         $cues[0]['tokens'][0]['partOfSpeech'] = 'adjective';
         $track->update(['cues' => $cues]);
+        config(['subtitles.costs.openai_enrichment_microusd_per_cue' => 4]);
+        $costBefore = $track->job->estimated_provider_cost_microusd;
 
         $this
             ->withExtensionInstall($this->installId())
@@ -2538,6 +2540,7 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame('first gloss', $track->cues[0]['tokens'][0]['gloss']);
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
+        $this->assertSame($costBefore + 4, $track->job->fresh()->estimated_provider_cost_microusd, 'Only the provider call is costed.');
     }
 
     public function test_learning_token_enrichment_preserves_concurrent_token_updates(): void

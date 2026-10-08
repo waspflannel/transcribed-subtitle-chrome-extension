@@ -46,7 +46,8 @@ class LaravelAiTranslationAnalysisProvider
             return $this->uncheckedAnalysis($output, $batch, $includeTranslation, $includeRomanization);
         }
         try {
-            return $this->validatedAnalysis($output, $batch, $includeTranslation, $includeRomanization);
+            // Tokens that rewrite the transcript get the one retry; the retry's wording is then accepted.
+            return $this->validatedAnalysis($output, $batch, $includeTranslation, $includeRomanization, requireSourceTokens: $beforeRetry !== null);
         } catch (SubtitleProcessingException $exception) {
             // One repeat for malformed output, only while the caller's run is active.
             if ($beforeRetry === null || ! $beforeRetry($exception)) {
@@ -120,7 +121,7 @@ class LaravelAiTranslationAnalysisProvider
         return new CueEnrichmentResult($cues);
     }
 
-    public function validatedAnalysis(array $output, array $sourceCues, bool $includeTranslation, bool $includeRomanization): CueEnrichmentResult
+    public function validatedAnalysis(array $output, array $sourceCues, bool $includeTranslation, bool $includeRomanization, bool $requireSourceTokens = false): CueEnrichmentResult
     {
         $generated = $output['cues'] ?? null;
         if (! is_array($generated) || ! array_is_list($generated) || count($generated) !== count($sourceCues)) {
@@ -133,6 +134,9 @@ class LaravelAiTranslationAnalysisProvider
                 $this->failInvalidOutput('cue_identity_mismatch', ['cue_index' => $source['index']]);
             }
             $tokens = $this->tokenValidator->validatedGeneratedTokens($cue['tokens'] ?? null, $source['index']);
+            if ($requireSourceTokens && ! $this->tokenValidator->tokensMatchSourceText($tokens, $source['sourceText'])) {
+                $this->failInvalidOutput('token_source_mismatch', ['cue_index' => $source['index']]);
+            }
             $source['translatedText'] = $includeTranslation
                 ? $this->requiredString($cue['translatedText'] ?? null, 'missing_translation') : $source['sourceText'];
             if ($includeRomanization) {

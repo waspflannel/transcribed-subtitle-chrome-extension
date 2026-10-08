@@ -206,6 +206,16 @@ class AiAgentInstructionTest extends TestCase
         $this->assertStringNotContainsString('modified Hepburn', (new CueAnalysisAgent('jpn'))->instructions());
     }
 
+    public function test_japanese_segmentation_keeps_inflections_and_separates_particles(): void
+    {
+        $japanese = (string) (new CueAnalysisAgent('jpn'))->instructions();
+        $this->assertStringContainsString('For Japanese, keep a verb or adjective with its okurigana', $japanese);
+        $this->assertStringContainsString('して|います', $japanese);
+        $this->assertStringContainsString('split off ー or small kana', $japanese);
+        $this->assertStringContainsString('Latin letters only', (string) (new CueAnalysisAgent('jpn', includeRomanization: true))->instructions());
+        $this->assertStringNotContainsString('For Japanese', (string) (new CueAnalysisAgent('kor'))->instructions());
+    }
+
     public function test_cards_request_only_annotations_and_preserve_identity(): void
     {
         $instructions = (new LearningTokenCardAgent)->instructions();

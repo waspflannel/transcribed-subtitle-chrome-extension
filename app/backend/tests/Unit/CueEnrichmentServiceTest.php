@@ -267,15 +267,34 @@ class CueEnrichmentServiceTest extends TestCase
         app(LaravelAiTranslationAnalysisProvider::class)->validatedAnalysis($this->analysisOutput(0, 'Hello'), $parts, true, false);
     }
 
-    public function test_mixed_script_transcription_corrections_are_trusted(): void
+    public function test_tokens_that_rewrite_the_transcript_retry_once_then_accept_the_model_wording(): void
     {
-        $part = $this->part(11, 'حلفوا غصن يديנו النجسة.');
-        $output = $this->analysisOutput(11, 'يدينو');
-        CueAnalysisAgent::fake([$output])->preventStrayPrompts();
-        $cue = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch([$part], [$part], 'ara', 'eng', beforeRetry: fn () => $this->fail('Valid corrections need no retry.'))->cues[0];
+        $part = $this->part(11, 'غصن يديנו النجسة.');
+        $output = $this->analysisOutput(11, 'غصن');
+        $output['cues'][0]['tokens'] = [['index' => 0, 'text' => 'غصن'], ['index' => 1, 'text' => 'يدينو'], ['index' => 2, 'text' => 'النجسة']];
+        CueAnalysisAgent::fake([$output, $output])->preventStrayPrompts();
+        $retries = 0;
+        $cue = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch([$part], [$part], 'ara', 'eng', beforeRetry: function (SubtitleProcessingException $exception) use (&$retries): bool {
+            $this->assertSame('token_source_mismatch', $exception->context['reason']);
+
+            return ++$retries === 1;
+        })->cues[0];
         $this->assertSame($part['sourceText'], $cue['sourceText']);
-        $this->assertSame('يدينو', $cue['tokens'][0]['text']);
-        $this->assertSame(1, $this->promptCount);
+        $this->assertSame(['غصن', 'يدينو', 'النجسة'], array_column($cue['tokens'], 'text'));
+        $this->assertSame([1, 2], [$retries, $this->promptCount]);
+    }
+
+    public function test_a_retry_that_matches_the_transcript_replaces_rewritten_tokens(): void
+    {
+        $part = $this->part(0, "Don’t stop, believin'!");
+        $rewritten = $this->analysisOutput(0, 'Do');
+        $rewritten['cues'][0]['tokens'] = [['index' => 0, 'text' => 'Do'], ['index' => 1, 'text' => 'not'], ['index' => 2, 'text' => 'stop'], ['index' => 3, 'text' => 'believing']];
+        $faithful = $this->analysisOutput(0, "Don't");
+        $faithful['cues'][0]['tokens'] = [['index' => 0, 'text' => "Don't"], ['index' => 1, 'text' => 'stop'], ['index' => 2, 'text' => "believin'"]];
+        CueAnalysisAgent::fake([$rewritten, $faithful])->preventStrayPrompts();
+        $cue = app(LaravelAiTranslationAnalysisProvider::class)->analyzeCueBatch([$part], [$part], 'eng', 'spa', false, false, beforeRetry: fn (): bool => true)->cues[0];
+        $this->assertSame(["Don't", 'stop', "believin'"], array_column($cue['tokens'], 'text'));
+        $this->assertSame(2, $this->promptCount);
     }
 
     public function test_word_card_accepts_an_honest_gloss_without_inventing_a_translation(): void
