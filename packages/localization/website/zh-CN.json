@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "所有能够访问你的实例的人都会共用其中的服务提供商密钥和已保存的生成结果。请仅在自己的电脑或可信的私有网络中运行实例。",
   "Explore word cards": "探索单词卡片",
   "Extension instructions": "扩展程序说明",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "解压 Transcribe 下载文件并打开 Transcribe.exe。选择 Install all requirements，然后选择 Start backend。完成 Docker Desktop 的提示步骤，等待面板显示 Ready。",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": "在 :slot1:观看:slot2: 中找到该行；如有需要，可以使用转录搜索。",
   "Fix a single word": "修正单个单词",
   "Focus the side-panel transcript": "聚焦侧边栏转录文本",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": ":slot1:历史记录:slot2: 标签页会列出你最近的 25 个任务，并分为视频和 Shorts。使用 :slot3:打开视频:slot4: 返回 YouTube。该视频可用的已完成生成内容会被恢复。",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "Chrome 网上应用店链接目前尚不可用。如果你获得了扩展 ZIP 文件，请使用下面的手动步骤。",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "修正会保留该行的时间信息，并更新翻译、已启用的发音读法和单词卡。请等待生成或歌词替换完成后，再进行其他修正。",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "桌面版下载包含 extension 文件夹。在下面的手动安装步骤中，请选择已解压的 Transcribe 下载目录中的这个文件夹。",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "下面的扩展程序截图使用了示例歌曲和示例歌词。选择图片即可查看完整尺寸。",
   "The panel says “No video here”": "面板显示“此处没有视频”",
   "The user guide": "用户指南",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "当你拥有歌曲的完整歌词，并希望替换生成的转录文本时，请使用此功能。请从已完成的生成结果开始。",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "等待更新完成，然后检查该行。选择 :slot1:完成:slot2: 退出单词选择。",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "替换完成后，播放几行内容，检查歌词措辞和时间。翻译、已启用的发音读法和词汇数据都会根据校正后的文本重新生成。",
+  "Windows desktop download": "Windows 桌面版下载",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "可以。在转写文本的一行中选择“编辑”，选中单词并输入修正内容。应用会保留该行的时间信息，同时更新其学习数据。请求会由你配置的服务提供商处理。",
   "Your computer or server": "您的电脑或服务器"
 }

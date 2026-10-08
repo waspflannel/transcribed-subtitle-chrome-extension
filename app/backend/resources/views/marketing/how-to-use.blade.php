@@ -41,6 +41,10 @@
                 <h2 id="install-title">{{ __('How to install') }}</h2>
                 <p>{{ __('Use desktop Chrome. The extension works with public YouTube videos and Shorts; existing captions are not required.') }}</p>
 
+                <h3>{{ __('Windows desktop download') }}</h3>
+                <p>{{ __('Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.') }}</p>
+                <p>{{ __('The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.') }}</p>
+
                 <h3 id="chrome-web-store">{{ __('From the Chrome Web Store') }}</h3>
                 @if (config('marketing.chrome_extension_url'))
                     <p>{!! strtr(e(__(':slot1:Open Chrome Web Store :slot2:↗:slot3::slot4:')), [':slot1:' => '<a class="button button-accent" href="'.e(config('marketing.chrome_extension_url')).'">', ':slot2:' => '<span aria-hidden="true">', ':slot3:' => '</span>', ':slot4:' => '</a>']) !!}</p>

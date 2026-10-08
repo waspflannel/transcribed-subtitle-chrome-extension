@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.",
   "Explore word cards": "Explore word cards",
   "Extension instructions": "Extension instructions",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": "Find the line in :slot1:Watch:slot2:, using transcript search if needed.",
   "Fix a single word": "Fix a single word",
   "Focus the side-panel transcript": "Focus the side-panel transcript",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.",
   "The panel says “No video here”": "The panel says “No video here”",
   "The user guide": "The user guide",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.",
+  "Windows desktop download": "Windows desktop download",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.",
   "Your computer or server": "Your computer or server"
 }

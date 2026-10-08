@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    pull_policy: never
+    environment:
+      POSTGRES_DB: transcribe
+      POSTGRES_USER: subtitle
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run setup first}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U subtitle -d transcribe"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+  redis:
+    image: redis:7-alpine
+    pull_policy: never
+    command: [redis-server, --appendonly, "yes"]
+    volumes:
+      - queue:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+  backend:
+    image: ${TRANSCRIBE_IMAGE:?Missing package image}
+    pull_policy: never
+    env_file: ${TRANSCRIBE_DATA_DIR:?Missing data directory}/runtime.env
+    environment:
+      APP_URL: http://127.0.0.1:${TRANSCRIBE_PORT:-8001}
+      # Only the bridge gateway forwards host traffic; Host/Origin checks remain enforced.
+      INSTANCE_ALLOWED_NETWORKS: 127.0.0.1/32,::1/128,172.31.251.1/32
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: transcribe
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_QUEUE_HOST: redis
+      REDIS_QUEUE_PORT: 6379
+    ports:
+      - "127.0.0.1:${TRANSCRIBE_PORT:-8001}:8001"
+    volumes:
+      - storage:/opt/transcribe/app/backend/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /opt/transcribe/healthcheck.sh]
+      interval: 15s
+      timeout: 15s
+      start_period: 30s
+      retries: 10
+    stop_grace_period: 30s
+    restart: "no"
+networks:
+  default:
+    # ponytail: fixed private bridge; make subnet configurable if VPN overlap is reported.
+    ipam:
+      config:
+        - subnet: 172.31.251.0/24
+          gateway: 172.31.251.1
+volumes:
+  database:
+  queue:
+  storage:

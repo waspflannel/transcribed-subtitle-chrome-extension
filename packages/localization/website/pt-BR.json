@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "Quem consegue acessar sua instância compartilha suas chaves e gerações salvas. Mantenha-a no seu computador ou em uma rede privada confiável.",
   "Explore word cards": "Explore os cartões de palavras",
   "Extension instructions": "Instruções da extensão",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "Extraia o download do Transcribe e abra Transcribe.exe. Selecione Install all requirements e depois Start backend. Conclua as etapas solicitadas pelo Docker Desktop e aguarde até que o painel mostre Ready.",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": "Encontre a linha em :slot1:Assistir:slot2:, usando a busca na transcrição, se necessário.",
   "Fix a single word": "Corrigir uma única palavra",
   "Focus the side-panel transcript": "Focar a transcrição do painel lateral",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": "A aba :slot1:Histórico:slot2: lista suas 25 tarefas mais recentes, agrupadas em Vídeos e Shorts. Use :slot3:Abrir vídeo:slot4: para voltar ao YouTube. As gerações concluídas disponíveis são recuperadas para esse vídeo.",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "O link da Chrome Web Store ainda não está disponível aqui. Se você recebeu um ZIP da extensão, use as etapas manuais abaixo.",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "A correção preserva os tempos da linha e atualiza a tradução, as leituras de pronúncia ativadas e os cartões de palavras. Espere a geração ou a substituição da letra terminar antes de fazer outra correção.",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "O download para desktop inclui uma pasta extension. Nas etapas manuais abaixo, escolha essa pasta dentro do download extraído do Transcribe.",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "As capturas de tela da extensão abaixo usam uma música de exemplo e uma letra de amostra. Selecione uma imagem para vê-la em tamanho completo.",
   "The panel says “No video here”": "O painel exibe “Nenhum vídeo aqui”",
   "The user guide": "O guia do usuário",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "Use isto quando você tiver a letra completa de uma música e quiser substituir a transcrição gerada. Comece com uma geração concluída.",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "Aguarde a atualização e verifique a linha. Selecione :slot1:Concluído:slot2: para sair da seleção de palavras.",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "Quando a substituição terminar, reproduza várias linhas para verificar as palavras e a sincronização. As traduções, as leituras de pronúncia ativadas e os dados das palavras são recriados com o texto corrigido.",
+  "Windows desktop download": "Download para Windows",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "Sim. Escolha Editar em uma linha da transcrição, selecione uma palavra e digite a correção. O aplicativo atualiza os dados de estudo da linha sem mudar seus tempos. Seu provedor configurado processa a solicitação.",
   "Your computer or server": "Seu computador ou servidor"
 }

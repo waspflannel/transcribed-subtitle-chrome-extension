@@ -4,6 +4,20 @@ Each backend is one personal workspace on a local computer or private server. Al
 
 ## Runtime and setup
 
+### Windows desktop download
+
+Extract the complete desktop ZIP and open `Transcribe.exe`. The panel has three actions: **Install all requirements**, **Start backend** (changes to **Stop backend**), and **Install browser extension**. Setup downloads and verifies Docker Desktop when absent, then loads the bundled Linux images. Docker's first-time prompts, Windows features and a requested reboot must be completed before startup can succeed. Windows x64 is the supported desktop target.
+
+The package includes the backend, PHP, media tools and their runtime dependencies, PostgreSQL, Redis and the built `extension/` folder. No Composer/npm build is needed on the user's computer. The extension button opens the how-to-use guide; Chrome's manual installation uses the included `extension/` folder. Set provider keys in the extension Settings tab.
+
+Desktop state lives in `%LOCALAPPDATA%\Transcribe`; `runtime.env` contains the generated encryption key and random database password and must be backed up with the database. Repeated setup preserves that file. The `transcribe-desktop` Compose project keeps database, queue and backend storage in named volumes outside the download. Start makes one refreshed database/key backup in `backups/`, applies migrations, and starts the backend, canonical worker groups and scheduler. Readiness includes Supervisor processes, HTTP and database/Redis connectivity. Stop keeps volumes and Docker Desktop running; it allows 30 seconds for shutdown before terminating remaining work, which may be retried after restart. Closing the panel leaves the backend running.
+
+Only backend port `127.0.0.1:8001` is published. Database/Redis stay on the private bridge. Its gateway is the only non-loopback address added to the instance allowlist; Host and Origin checks remain enabled. The fixed `172.31.251.0/24` bridge can conflict with another Docker/VPN subnet; startup reports the Docker error instead of changing unrelated networks. A backend already using port 8001 must be stopped first.
+
+Build on Windows with `scripts/ops/build-desktop-release.ps1`. Each default build uses a distinct image tag and output directory in ignored `dist/desktop/`. `-GuideUrl` may point to the public HTTPS guide; the default opens the packaged backend's local guide. The ZIP includes images for offline runtime loading, while installing Docker Desktop and using providers still need network access. It excludes internal docs, agent tooling, source tests and local credentials. Publishing, installer/code signing and clean Windows VM acceptance are separate release steps.
+
+Run `scripts/desktop/tests.ps1` for setup/config/compiler checks. Add `-Smoke -PackageDirectory <extracted-package>` to use a disposable Compose project on port 18001 and verify migrations, health, encrypted settings, repeated setup and restart. It removes only its own disposable volumes. The root harness includes basic desktop checks on Windows.
+
 Use PHP 8.4, Composer, Postgres, Redis, FFmpeg and yt-dlp. Compose supplies Postgres and Redis with loopback-bound ports. The Windows launcher `scripts/runtime/start-local-backend-workers.ps1` sets the local runtime profile, migrates, and launches Laravel and workers. `start-local-dev.ps1` also starts WXT development.
 
 On a private Linux server, install the same prerequisites, run Composer and migrations in `app/backend`, and supervise HTTP, workers and scheduler. Existing Ubuntu/managed deployment scripts remain available. Upload the repository root: contracts/localization in `packages/` are runtime dependencies.

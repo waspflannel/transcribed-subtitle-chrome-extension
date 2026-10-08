@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "インスタンスにアクセスできる人は全員、そのプロバイダーのキーと保存された生成結果を共有します。自分のコンピューターまたは信頼できる非公開ネットワーク内で運用してください。",
   "Explore word cards": "単語カードを見る",
   "Extension instructions": "拡張機能の使い方",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "Transcribe のダウンロードを展開し、Transcribe.exe を開きます。Install all requirements を選択し、次に Start backend を選択します。Docker Desktop の案内に従い、パネルに Ready と表示されるまで待ちます。",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": " :slot1:視聴:slot2:で該当する行を探します。必要に応じて文字起こし検索を使用してください。",
   "Fix a single word": "1語だけ修正する",
   "Focus the side-panel transcript": "サイドパネルの書き起こしにフォーカス",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": " :slot1:履歴:slot2:タブには、最新25件のジョブが「動画」と「ショート」に分けて表示されます。:slot3:動画を開く:slot4:を使用するとYouTubeに戻れます。利用可能な完了済みの生成結果は、その動画用に復元されます。",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "Chrome ウェブストアのリンクはまだここでは利用できません。拡張機能のZIPファイルを受け取っている場合は、以下の手動手順を使用してください。",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "修正では、その行のタイミングを維持したまま、翻訳、有効になっている発音表記、単語カードを更新します。別の修正を行う前に、生成または歌詞の置き換えが終わるまでお待ちください。",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "デスクトップ版には extension フォルダーが含まれています。以下の手動インストール手順では、展開した Transcribe の中にあるこのフォルダーを選択してください。",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "以下の拡張機能のスクリーンショットでは、サンプルの曲と歌詞を使用しています。画像を選択すると、元のサイズで表示できます。",
   "The panel says “No video here”": "パネルに「ここに動画はありません」と表示される",
   "The user guide": "ユーザーガイド",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "曲の完全な歌詞があり、生成された文字起こしを置き換えたい場合に使用します。まず、完了した生成を用意してください。",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "更新が完了するまで待ってから、行を確認します。単語の選択を終了するには:slot1:完了:slot2:を選択します。",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "置換が完了したら、数行を再生して語句とタイミングを確認します。修正されたテキストに基づいて、翻訳、有効な発音表記、単語データが再構築されます。",
+  "Windows desktop download": "Windows デスクトップ版のダウンロード",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "はい。文字起こしの行で「編集」を選び、単語を選択して修正内容を入力してください。アプリはタイミングを維持したまま、その行の学習データを更新します。リクエストは、設定したプロバイダーが処理します。",
   "Your computer or server": "自分のコンピューターまたはサーバー"
 }

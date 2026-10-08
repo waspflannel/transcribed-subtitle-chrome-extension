@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "인스턴스에 접근할 수 있는 모든 사람은 제공업체 키와 저장된 생성 결과를 공유합니다. 자신의 컴퓨터나 신뢰할 수 있는 비공개 네트워크에서 운영하세요.",
   "Explore word cards": "단어 카드 살펴보기",
   "Extension instructions": "확장 프로그램 안내",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "Transcribe 다운로드 파일을 압축 해제하고 Transcribe.exe를 엽니다. Install all requirements를 선택한 다음 Start backend를 선택합니다. Docker Desktop의 안내를 완료하고 패널에 Ready가 표시될 때까지 기다립니다.",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": ":slot1:보기:slot2:에서 해당 줄을 찾으세요. 필요한 경우 자막 검색을 사용하세요.",
   "Fix a single word": "단어 하나 수정",
   "Focus the side-panel transcript": "사이드 패널 대본에 포커스",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": ":slot1:기록:slot2: 탭에는 최근 작업 25개가 동영상과 Shorts로 분류되어 표시됩니다. :slot3:동영상 열기:slot4:를 사용하여 YouTube로 돌아가세요. 완료된 생성 항목을 이용할 수 있으면 해당 동영상에 대해 복구됩니다.",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "Chrome 웹 스토어 링크는 아직 여기에서 사용할 수 없습니다. 확장 프로그램 ZIP 파일을 받았다면 아래의 수동 설치 단계를 사용하세요.",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "수정 시 해당 줄의 타이밍을 유지하면서 번역, 활성화된 발음 표기, 단어 카드를 갱신합니다. 다른 수정을 하기 전에 생성이나 가사 교체가 끝날 때까지 기다리세요.",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "데스크톱 다운로드에는 extension 폴더가 포함되어 있습니다. 아래 수동 설치 단계에서 압축 해제한 Transcribe 다운로드 안의 이 폴더를 선택하세요.",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "아래 확장 프로그램 스크린샷에는 예시 곡과 샘플 가사가 사용되었습니다. 이미지를 선택하면 전체 크기로 볼 수 있습니다.",
   "The panel says “No video here”": "패널에 “여기에 동영상이 없습니다”라고 표시됩니다",
   "The user guide": "사용자 가이드",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "노래의 전체 가사를 가지고 있으며 생성된 자막을 교체하려는 경우 사용하세요. 먼저 생성이 완료된 상태여야 합니다.",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "업데이트가 완료될 때까지 기다린 다음 해당 줄을 확인하세요. 단어 선택을 종료하려면 :slot1:완료:slot2:를 선택하세요.",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "교체가 완료되면 여러 줄을 재생하여 가사와 타이밍을 확인하세요. 번역, 활성화된 발음 표기 및 단어 데이터가 수정된 텍스트를 기준으로 다시 생성됩니다.",
+  "Windows desktop download": "Windows 데스크톱 다운로드",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "네. 전사 내용의 줄에서 편집을 선택하고 단어를 고른 뒤 수정 내용을 입력하세요. 앱은 타이밍을 유지하면서 해당 줄의 학습 데이터를 갱신합니다. 설정된 제공업체가 요청을 처리합니다.",
   "Your computer or server": "내 컴퓨터 또는 서버"
 }

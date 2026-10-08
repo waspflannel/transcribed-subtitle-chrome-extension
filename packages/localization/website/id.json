@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "Semua orang yang dapat mengakses instans Anda berbagi kunci penyedia dan hasil pembuatan yang tersimpan di dalamnya. Jalankan instans hanya di komputer Anda atau jaringan pribadi yang tepercaya.",
   "Explore word cards": "Menjelajahi kartu kata",
   "Extension instructions": "Petunjuk ekstensi",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "Ekstrak unduhan Transcribe dan buka Transcribe.exe. Pilih Install all requirements, lalu Start backend. Selesaikan petunjuk Docker Desktop dan tunggu sampai panel menampilkan Ready.",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": "Temukan baris tersebut di :slot1:Tonton:slot2:, gunakan pencarian transkrip jika diperlukan.",
   "Fix a single word": "Memperbaiki satu kata",
   "Focus the side-panel transcript": "Fokuskan transkrip panel samping",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": "Tab :slot1:Riwayat:slot2: mencantumkan 25 tugas terbaru Anda, yang dikelompokkan menjadi Video dan Shorts. Gunakan :slot3:Buka video:slot4: untuk kembali ke YouTube. Hasil yang telah selesai dan tersedia akan dipulihkan untuk video tersebut.",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "Tautan Chrome Web Store belum tersedia di sini. Jika Anda telah menerima ZIP ekstensi, gunakan langkah manual di bawah ini.",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "Koreksi mempertahankan waktu baris tersebut dan memperbarui terjemahan, pelafalan yang diaktifkan, serta kartu kata. Tunggu hingga pembuatan atau penggantian lirik selesai sebelum melakukan koreksi lain.",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "Unduhan desktop menyertakan folder extension. Pada langkah manual di bawah, pilih folder tersebut di dalam unduhan Transcribe yang telah diekstrak.",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "Tangkapan layar ekstensi di bawah ini menggunakan contoh lagu dan lirik sampel. Pilih gambar untuk melihatnya dalam ukuran penuh.",
   "The panel says “No video here”": "Panel menampilkan “Tidak ada video di sini”",
   "The user guide": "Panduan pengguna",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "Gunakan ini jika Anda memiliki lirik lengkap sebuah lagu dan ingin mengganti transkrip yang dibuat secara otomatis. Mulai dengan hasil pembuatan yang sudah selesai.",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "Tunggu pembaruan selesai, lalu periksa baris tersebut. Pilih :slot1:Selesai:slot2: untuk keluar dari pemilihan kata.",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "Setelah penggantian selesai, putar beberapa baris untuk memeriksa kata-kata dan waktunya. Terjemahan, pelafalan yang diaktifkan, dan data kata akan dibuat ulang dengan teks yang telah dikoreksi.",
+  "Windows desktop download": "Unduhan desktop Windows",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "Ya. Pilih Edit pada baris transkrip, pilih kata, lalu masukkan koreksinya. Aplikasi memperbarui data pembelajaran baris tersebut sambil mempertahankan waktunya. Penyedia yang Anda konfigurasi menangani permintaan ini.",
   "Your computer or server": "Komputer atau server Anda"
 }

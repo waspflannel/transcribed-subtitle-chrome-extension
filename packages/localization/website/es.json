@@ -54,6 +54,7 @@
   "Everyone who can reach your instance shares its provider keys and saved generations. Keep it on your computer or a trusted private network.": "Quienes puedan acceder a tu instancia comparten sus claves y generaciones guardadas. Mantenla en tu ordenador o en una red privada de confianza.",
   "Explore word cards": "Explorar tarjetas de palabras",
   "Extension instructions": "Instrucciones de la extensión",
+  "Extract the Transcribe download and open Transcribe.exe. Select Install all requirements, then Start backend. Complete any Docker Desktop prompts and wait until the panel says Ready.": "Extrae la descarga de Transcribe y abre Transcribe.exe. Selecciona Install all requirements y luego Start backend. Completa los pasos que solicite Docker Desktop y espera hasta que el panel indique Ready.",
   "Find the line in :slot1:Watch:slot2:, using transcript search if needed.": "Busca la línea en :slot1:Ver:slot2:, usando la búsqueda de la transcripción si es necesario.",
   "Fix a single word": "Corregir una sola palabra",
   "Focus the side-panel transcript": "Enfocar la transcripción del panel lateral",
@@ -144,6 +145,7 @@
   "The :slot1:History:slot2: tab lists your latest 25 jobs, grouped into Videos and Shorts. Use :slot3:Open video:slot4: to return to YouTube. Available completed generations are recovered for that video.": "La pestaña :slot1:Historial:slot2: muestra tus 25 tareas más recientes, agrupadas en Videos y Shorts. Usa :slot3:Abrir video:slot4: para volver a YouTube. Las generaciones completadas disponibles se recuperan para ese video.",
   "The Chrome Web Store link is not available here yet. If you have been given an extension ZIP, use the manual steps below.": "El enlace de Chrome Web Store aún no está disponible aquí. Si te han proporcionado un ZIP de la extensión, sigue los pasos manuales que aparecen a continuación.",
   "The correction keeps the line’s timing and refreshes its translation, enabled pronunciation readings, and word cards. Wait for generation or a lyrics replacement to finish before making another correction.": "La corrección conserva los tiempos de la línea y actualiza su traducción, las lecturas de pronunciación activadas y las fichas de palabras. Espera a que termine la generación o la sustitución de letras antes de hacer otra corrección.",
+  "The desktop download includes an extension folder. In the manual steps below, choose that folder inside your extracted Transcribe download.": "La descarga de escritorio incluye una carpeta extension. En los pasos manuales de abajo, selecciona esa carpeta dentro de la descarga de Transcribe que has extraído.",
   "The extension screenshots below use an example song and sample lyrics. Select an image to view it at full size.": "Las capturas de pantalla de la extensión que aparecen abajo usan una canción de ejemplo y una letra de muestra. Selecciona una imagen para verla en tamaño completo.",
   "The panel says “No video here”": "El panel muestra «No hay ningún vídeo aquí»",
   "The user guide": "La guía del usuario",
@@ -164,6 +166,7 @@
   "Use this when you have the complete lyrics for a song and want to replace its generated transcript. Start with a completed generation.": "Usa esto cuando tengas la letra completa de una canción y quieras reemplazar su transcripción generada. Empieza con una generación completada.",
   "Wait for the update, then check the line. Select :slot1:Done:slot2: to leave word selection.": "Espera a que se actualice y comprueba la línea. Selecciona :slot1:Listo:slot2: para salir de la selección de palabras.",
   "When replacement finishes, play several lines to check the wording and timing. Translations, enabled pronunciation readings, and word data are rebuilt with the corrected text.": "Cuando termine el reemplazo, reproduce varias líneas para comprobar la redacción y la sincronización. Las traducciones, las lecturas de pronunciación activadas y los datos de las palabras se vuelven a generar con el texto corregido.",
+  "Windows desktop download": "Descarga de escritorio para Windows",
   "Yes. Choose Edit on a transcript line, select a word, and enter the correction. The app refreshes that line’s learning data while keeping its timing. Your configured provider handles the request.": "Sí. Elige Editar en una línea de la transcripción, selecciona una palabra e introduce la corrección. La aplicación actualiza los datos de estudio de esa línea sin cambiar sus tiempos. Tu proveedor configurado procesa la solicitud.",
   "Your computer or server": "Tu ordenador o servidor"
 }

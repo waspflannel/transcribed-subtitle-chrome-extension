@@ -63,6 +63,9 @@ if (-not $SkipAppChecks) {
     }
 
     & (Join-Path $Root 'scripts/ops/tests/release-checks.ps1')
+    if ($env:OS -eq 'Windows_NT') {
+        & (Join-Path $Root 'scripts/desktop/tests.ps1')
+    }
 }
 
 Write-Host "Project checks completed."
