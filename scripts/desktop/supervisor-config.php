@@ -21,7 +21,9 @@ serverurl=unix:///tmp/supervisor.sock
 CONFIG;
 
 $programs = [
-    'backend' => ['php artisan serve --host=0.0.0.0 --port=8001', 1],
+    // Several PHP server workers so a slow AI request cannot block polling or the healthcheck.
+    // Laravel ignores PHP_CLI_SERVER_WORKERS without --no-reload.
+    'backend' => ['env PHP_CLI_SERVER_WORKERS=6 php artisan serve --host=0.0.0.0 --port=8001 --no-reload', 1],
     'scheduler' => ['php artisan schedule:work --no-ansi', 1],
 ];
 foreach ($runtime['summary']['subtitleWorkerGroups'] as $group) {
