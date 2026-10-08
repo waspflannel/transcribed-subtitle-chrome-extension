@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Exceptions\SubtitleProcessingException;
+use App\Services\Subtitles\SubtitleWebVttFormatter;
 use App\Services\Transcription\ScribeTranscriptNormalizer;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
@@ -52,6 +53,14 @@ class ScribeTranscriptNormalizerTest extends TestCase
         $this->assertSame(3.0, $transcript->durationSeconds);
         $this->assertSame("WEBVTT\n\ncue-0001\n00:00:00.100 --> 00:00:00.900\nHello world.\n\ncue-0002\n00:00:02.000 --> 00:00:02.900\nAfter pause.\n", $transcript->webVtt);
         $this->assertCount(2, $transcript->segments);
+    }
+
+    public function test_webvtt_escapes_cue_text_markup(): void
+    {
+        $this->assertSame(
+            "WEBVTT\n\nc1\n00:00:00.000 --> 00:00:01.000\nI &lt;3 you --&gt; &amp; me\n",
+            SubtitleWebVttFormatter::fromCues([['cueId' => 'c1', 'startMs' => 0, 'endMs' => 1000, 'sourceText' => "I <3 you\n--> & me"]]),
+        );
     }
 
     public function test_it_breaks_on_non_latin_sentence_punctuation(): void

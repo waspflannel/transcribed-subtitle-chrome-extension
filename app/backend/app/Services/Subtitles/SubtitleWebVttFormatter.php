@@ -17,7 +17,7 @@ final class SubtitleWebVttFormatter
             $blocks[] = implode("\n", [
                 (string) $cue['cueId'],
                 self::timestampFromMilliseconds((int) $cue['startMs']).' --> '.self::timestampFromMilliseconds((int) $cue['endMs']),
-                (string) $cue['sourceText'],
+                self::cueText((string) $cue['sourceText']),
             ]);
         }
 
@@ -35,7 +35,7 @@ final class SubtitleWebVttFormatter
             $blocks[] = implode("\n", [
                 sprintf('cue-%04d', $index + 1),
                 self::timestampFromSeconds($segment->startSeconds).' --> '.self::timestampFromSeconds($segment->endSeconds),
-                $segment->text,
+                self::cueText($segment->text),
             ]);
         }
 
@@ -52,6 +52,15 @@ final class SubtitleWebVttFormatter
         $milliseconds %= 1000;
 
         return sprintf('%02d:%02d:%02d.%03d', $hours, $minutes, $seconds, $milliseconds);
+    }
+
+    /**
+     * WebVTT reads `&`, `<` and `-->` in cue text as markup, and a blank line
+     * ends the cue, so lyrics such as "<3" or "-->" are escaped.
+     */
+    private static function cueText(string $text): string
+    {
+        return str_replace(['&', '<', '>', "\r", "\n"], ['&amp;', '&lt;', '&gt;', ' ', ' '], $text);
     }
 
     private static function timestampFromSeconds(float $seconds): string
