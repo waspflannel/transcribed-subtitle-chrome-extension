@@ -26,7 +26,7 @@ describe('bindWebVttTrackToVideo', () => {
     const trackElement = video.appendedTrack!;
     expect(trackElement.kind).toBe('subtitles');
     expect(trackElement.label).toBe('AI subtitles');
-    expect(trackElement.srclang).toBe('spa');
+    expect(trackElement.srclang).toBe('es');
     expect(trackElement.src).toBe('blob:test-track');
     expect(trackElement.track.mode).toBe('hidden');
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));

@@ -15,6 +15,7 @@ import {
   isSourceLanguage,
   isTargetLanguage,
   languageLabel,
+  languageTag,
 } from '../../utils/languages';
 import { isRuntimeMessage } from '../../utils/messages';
 import type { PanelRequest, PanelState } from '../../utils/messages';
@@ -956,10 +957,18 @@ function showPanelState(state: PanelState): void {
   showStatusBanner(state);
   showWatchState(state, supported);
   if (subtitleState.type === 'ready') {
-    transcriptView.setData(subtitleState.track.youtubeVideoId, subtitleState.track.cues, settings);
+    const { track } = subtitleState;
+    transcriptView.setData(track.youtubeVideoId, track.cues, settings, {
+      source: languageTag(track.detectedSourceLanguage ?? track.sourceLanguage),
+      target: languageTag(track.targetLanguage),
+    });
     void pullActiveCue(state);
   } else if (subtitleState.type === 'loading' && subtitleState.partialTrack?.cues.length) {
-    transcriptView.setPartialData(subtitleState.partialTrack.youtubeVideoId, subtitleState.partialTrack.cues, settings);
+    const { partialTrack } = subtitleState;
+    transcriptView.setPartialData(partialTrack.youtubeVideoId, partialTrack.cues, settings, {
+      source: languageTag(partialTrack.sourceLanguage),
+      target: languageTag(partialTrack.targetLanguage),
+    });
   } else {
     cueSnapshotRequest += 1;
     transcriptView.setData(null, [], settings);

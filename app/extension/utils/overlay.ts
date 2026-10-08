@@ -8,12 +8,18 @@ import type { OverlayRenderState, OverlayStatus } from './overlay/types';
 import { hasLearningMetadata, tokenKey } from './track-tokens';
 import { findActiveYoutubeVideo } from './youtube-video';
 
-const OVERLAY_FONTS: ReadonlyArray<readonly [string, number, string]> = [
+// Fontsource subset ranges. Latin-ext covers romaji macrons (ō, ū) and pinyin tone marks (ǎ).
+const LATIN_RANGE = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
+const LATIN_EXT_RANGE = 'U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF';
+
+const OVERLAY_FONTS: ReadonlyArray<readonly [string, number, string, string?]> = [
   ['Geist Sans', 400, 'geist-sans-latin-400-normal.woff2'],
   ['Geist Sans', 600, 'geist-sans-latin-600-normal.woff2'],
   ['Geist Sans', 700, 'geist-sans-latin-700-normal.woff2'],
-  ['IBM Plex Mono', 400, 'ibm-plex-mono-latin-400-normal.woff2'],
-  ['IBM Plex Mono', 500, 'ibm-plex-mono-latin-500-normal.woff2'],
+  ['IBM Plex Mono', 400, 'ibm-plex-mono-latin-400-normal.woff2', LATIN_RANGE],
+  ['IBM Plex Mono', 400, 'ibm-plex-mono-latin-ext-400-normal.woff2', LATIN_EXT_RANGE],
+  ['IBM Plex Mono', 500, 'ibm-plex-mono-latin-500-normal.woff2', LATIN_RANGE],
+  ['IBM Plex Mono', 500, 'ibm-plex-mono-latin-ext-500-normal.woff2', LATIN_EXT_RANGE],
 ];
 
 function buildOverlayFontFaces(): string {
@@ -24,10 +30,10 @@ function buildOverlayFontFaces(): string {
   }
 
   return OVERLAY_FONTS.map(
-    ([family, weight, file]) =>
+    ([family, weight, file, unicodeRange]) =>
       `@font-face{font-family:'${family}';font-style:normal;font-weight:${weight};font-display:swap;src:url('${runtime.getURL(
         ('fonts/' + file) as never,
-      )}') format('woff2');}`,
+      )}') format('woff2');${unicodeRange ? `unicode-range:${unicodeRange};` : ''}}`,
   ).join('');
 }
 

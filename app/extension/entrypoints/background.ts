@@ -866,6 +866,7 @@ async function waitForCompletedSubtitleJob(
       const refreshedTrack: PartialSubtitleTrack = {
         ...job.partialTrack,
         sourceLanguage: job.detectedSourceLanguage ?? job.sourceLanguage,
+        targetLanguage: job.targetLanguage,
       };
       const revisionChanged = refreshedTrack.revision !== partialTrack?.revision;
       if (revisionChanged && tabOperations.get(tabId) === operation) {

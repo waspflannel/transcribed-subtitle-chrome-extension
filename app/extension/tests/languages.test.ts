@@ -9,6 +9,7 @@ import {
   isTargetLanguage,
   languageLabel,
   languageSearchText,
+  languageTag,
 } from '../utils/languages';
 
 describe('language catalog', () => {
@@ -35,6 +36,17 @@ describe('language catalog', () => {
     expect(languageLabel('cmn')).toBe('Mandarin');
     expect(languageSearchText(japanese!)).toContain('ja');
     expect(languageSearchText(japanese!)).not.toContain('excellent');
+  });
+
+  it('maps catalog codes to BCP-47 tags for the lang attribute', () => {
+    expect(languageTag('jpn')).toBe('ja');
+    expect(languageTag('cmn')).toBe('zh');
+    expect(languageTag('kor')).toBe('ko');
+    expect(languageTag('eng')).toBe('en');
+    expect(languageTag('yue')).toBe('yue');
+    expect(languageTag('auto')).toBe('und');
+    expect(languageTag(undefined)).toBe('und');
+    expect(languageTag('"><img>')).toBe('und');
   });
 
   it('rejects unknown display language codes instead of inventing labels', () => {

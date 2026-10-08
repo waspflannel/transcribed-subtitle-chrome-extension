@@ -334,6 +334,15 @@
           word-break: keep-all;
         }
 
+        /* The still-generating preview holds the whole cue in one span, so
+           long unspaced (CJK) lines must wrap instead of overflowing the rail. */
+        .partial-source-layer {
+          line-height: 1.3;
+          min-width: 0;
+          overflow-wrap: anywhere;
+          word-break: normal;
+        }
+
         .token-extra {
           color: var(--accent-soft);
           font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;

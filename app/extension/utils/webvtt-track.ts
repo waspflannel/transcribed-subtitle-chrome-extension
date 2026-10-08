@@ -1,4 +1,5 @@
 import type { SubtitleCue } from './contracts';
+import { languageTag } from './languages';
 import type { WebVttTrackLogger } from './webvtt-track-logger';
 
 /**
@@ -19,6 +20,7 @@ export interface WebVttBindableCue {
 export interface WebVttBindableTrack<TCue extends WebVttBindableCue = SubtitleCue> {
   youtubeVideoId: string;
   sourceLanguage: string;
+  detectedSourceLanguage?: string;
   webVtt: string;
   cues: readonly TCue[];
 }
@@ -48,7 +50,7 @@ export function bindWebVttTrackToVideo<TCue extends WebVttBindableCue>(
 
   trackElement.kind = 'subtitles';
   trackElement.label = 'AI subtitles';
-  trackElement.srclang = track.sourceLanguage === 'auto' ? 'und' : track.sourceLanguage;
+  trackElement.srclang = languageTag(track.detectedSourceLanguage ?? track.sourceLanguage);
   trackElement.src = objectUrl;
 
   const textTrack = trackElement.track;

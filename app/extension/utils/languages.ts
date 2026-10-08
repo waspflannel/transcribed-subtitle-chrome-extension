@@ -61,6 +61,17 @@ export function languageLabel(code: string): string {
   return t(language.label);
 }
 
+/**
+ * BCP-47 tag for a catalog language code (`jpn` -> `ja`, `cmn` -> `zh`).
+ * Browsers choose CJK glyphs from `lang`, so Japanese kanji need `ja`.
+ * `auto` and unknown codes return `und`.
+ */
+export function languageTag(code: string | null | undefined): string {
+  const language = code === 'auto' ? undefined : LANGUAGE_OPTIONS.find((candidate) => candidate.code === code);
+
+  return language?.aliases?.find((alias) => /^[a-z]{2}$/.test(alias)) ?? language?.code ?? 'und';
+}
+
 export function languageSearchText(language: LanguageOption): string {
   return [
     language.label,

@@ -1,7 +1,9 @@
 import { t } from '../i18n';
 import type { ExtensionSettings } from '../settings-model';
 import { escapeHtml } from '../html';
+import { languageTag } from '../languages';
 import type { LearningToken, PartialSubtitleCue, SubtitleCue } from '../contracts';
+import type { PartialSubtitleTrack } from '../messages';
 import { hasLearningMetadata, tokenKey } from '../track-tokens';
 import { EMPTY_INTERACTION, type OverlayInteractionState, type OverlayRenderState } from './types';
 
@@ -31,6 +33,7 @@ export function renderOverlayContent(
 
   if (state.subtitleState.type === 'ready') {
     const cue = state.activeCue;
+    const track = state.subtitleState.track;
 
     if (!cue) {
       return interaction.actionStatus
@@ -60,9 +63,9 @@ export function renderOverlayContent(
           <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
         </div>
         <div class="rail-main">
-          <div class="token-area" dir="auto" lang="${state.subtitleState.track.sourceLanguage === 'auto' ? 'und' : state.subtitleState.track.sourceLanguage}">${renderSourceLine(cue, state.settings, interaction)}</div>
+          <div class="token-area" dir="auto" lang="${escapeHtml(languageTag(track.detectedSourceLanguage ?? track.sourceLanguage))}">${renderSourceLine(cue, state.settings, interaction)}</div>
           ${cueRomanization}
-          ${renderTranslation(cue, state.settings)}
+          ${renderTranslation(cue.sourceText, cue.translatedText, track.targetLanguage, state.settings)}
         </div>
         ${renderStudyControls(interaction.copyStatus, interaction.actionStatus)}
       </section>
@@ -82,7 +85,7 @@ export function renderOverlayContent(
     const partialCue = state.activePartialCue;
 
     if (partialCue && state.subtitleState.partialTrack) {
-      return renderFrame(renderPartialRail(partialCue, state.subtitleState.partialTrack.sourceLanguage, state.settings));
+      return renderFrame(renderPartialRail(partialCue, state.subtitleState.partialTrack, state.settings));
     }
 
     return renderFrame(`
@@ -107,7 +110,7 @@ export function renderOverlayContent(
  */
 function renderPartialRail(
   cue: PartialSubtitleCue,
-  sourceLanguage: string,
+  partialTrack: PartialSubtitleTrack,
   settings: ExtensionSettings,
 ): string {
   const cueRomanization =
@@ -119,11 +122,7 @@ function renderPartialRail(
             ? ` tabindex="0" aria-label="${escapeHtml(t('Cue romanization, focus to reveal blurred text'))}"`
             : ''}>${escapeHtml(cue.romanization)}</div>`
       : '';
-  const translatedText = cue.translatedText?.trim() ?? '';
-  const translation =
-    settings.showTranslation && translatedText !== '' && translatedText !== cue.sourceText.trim()
-      ? `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${settings.blurTranslation ? ` tabindex="0" aria-label="${escapeHtml(t('Cue translation, focus to reveal blurred text'))}"` : ''} dir="auto">${escapeHtml(translatedText)}</div>`
-      : '';
+  const translation = renderTranslation(cue.sourceText, cue.translatedText ?? '', partialTrack.targetLanguage, settings);
 
   return `
     <section class="rail" role="status">
@@ -132,7 +131,7 @@ function renderPartialRail(
         <span class="cue-time">${escapeHtml(formatCueTimeRange(cue))}</span>
       </div>
       <div class="rail-main">
-        <div class="token-area" dir="auto" lang="${sourceLanguage === 'auto' ? 'und' : escapeHtml(sourceLanguage)}"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${settings.blurSourceWords
+        <div class="token-area" dir="auto" lang="${escapeHtml(languageTag(partialTrack.sourceLanguage))}"><span class="partial-source-layer token-text${studyBlurClass(settings.blurSourceWords, 'token')}"${settings.blurSourceWords
             ? ` tabindex="0" aria-label="${escapeHtml(t('Partial source text, focus to reveal blurred text'))}"`
             : ''}>${escapeHtml(cue.sourceText)}</span></div>
         ${cueRomanization}
@@ -239,12 +238,19 @@ function renderTokenInteraction(
   `;
 }
 
-function renderTranslation(cue: SubtitleCue, settings: ExtensionSettings): string {
-  if (!settings.showTranslation || cue.translatedText.trim() === '' || cue.translatedText.trim() === cue.sourceText.trim()) {
+function renderTranslation(
+  sourceText: string,
+  translatedText: string,
+  targetLanguage: string | undefined,
+  settings: ExtensionSettings,
+): string {
+  const text = translatedText.trim();
+
+  if (!settings.showTranslation || text === '' || text === sourceText.trim()) {
     return '';
   }
 
-  return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${settings.blurTranslation ? ` tabindex="0" aria-label="${escapeHtml(t('Cue translation, focus to reveal blurred text'))}"` : ''} dir="auto">${escapeHtml(cue.translatedText)}</div>`;
+  return `<div class="translation study-translation${studyBlurClass(settings.blurTranslation, 'translation')}"${settings.blurTranslation ? ` tabindex="0" aria-label="${escapeHtml(t('Cue translation, focus to reveal blurred text'))}"` : ''} dir="auto" lang="${escapeHtml(languageTag(targetLanguage))}">${escapeHtml(text)}</div>`;
 }
 
 function studyBlurClass(enabled: boolean, layer: 'token' | 'romanization' | 'translation'): string {

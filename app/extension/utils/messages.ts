@@ -17,6 +17,7 @@ export interface PartialSubtitleTrack {
   jobId: string;
   youtubeVideoId: string;
   sourceLanguage: string;
+  targetLanguage?: string;
   revision: number;
   cues: PartialSubtitleCue[];
 }
@@ -360,6 +361,7 @@ function isPartialSubtitleTrack(value: unknown): value is PartialSubtitleTrack {
     && hasString(value, 'jobId')
     && hasString(value, 'youtubeVideoId')
     && hasString(value, 'sourceLanguage')
+    && optionalString(value, 'targetLanguage')
     && isNonNegativeInteger(value.revision)
     && (value.readyThroughMs === undefined || isNonNegativeInteger(value.readyThroughMs))
     && Array.isArray(value.cues);

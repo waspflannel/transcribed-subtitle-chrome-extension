@@ -36,6 +36,26 @@ describe('panelTranscriptListHtml', () => {
     expect(html).toContain('data-transcript-action="copy"');
     expect(html).not.toContain('data-transcript-action="replay"');
   });
+  it('tags source and translation lines with their languages', () => {
+    const languages = { source: 'ja', target: 'en' };
+    const settings = { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true, showRomanization: true };
+    const plain = panelTranscriptListHtml({ cues, activeCueId: null, query: '', settings, languages });
+    expect(plain).toContain('<div class="ct" dir="auto" lang="ja">hola</div>');
+    expect(plain).toContain('<div class="cg" dir="auto" lang="en">hello</div>');
+    const missing = panelTranscriptListHtml({ cues: [{ ...cues[0], translatedText: '' }], activeCueId: null, query: '', settings, languages });
+    expect(missing).toContain('<div class="cg" dir="auto">Translation unavailable</div>');
+
+    const tokens: SubtitleCue = { ...cues[0], sourceText: '今日、', tokens: [
+      { index: 0, text: '今日', normalizedText: '今日', romanization: 'kyō' },
+      { index: 1, text: '、', normalizedText: '、' },
+    ] };
+    const tokenHtml = panelTranscriptListHtml({ cues: [tokens], activeCueId: null, query: '', settings, languages });
+    expect(tokenHtml).toContain('<div class="toks" dir="auto" lang="ja">');
+    expect(tokenHtml).toContain('<span class="tok tok--punct"><span class="tok-text">、</span>');
+    expect(tokenHtml).toContain('<span class="tok"><span class="tok-text">今日</span>');
+    expect(panelPartialTranscriptListHtml({ cues: [tokens], activeCueId: null, query: '', languages }))
+      .toContain('<div class="ct" dir="auto" lang="ja">今日、</div>');
+  });
   it('shows an empty-state when the query matches nothing', () => {
     expect(panelTranscriptListHtml({ cues, activeCueId: null, query: 'zzz', settings: DEFAULT_EXTENSION_SETTINGS })).toContain('No cues match');
   });

@@ -2,7 +2,7 @@ import { escapeHtml } from '../../utils/html';
 import { t } from '../../utils/i18n';
 import type { PartialSubtitleCue, SubtitleCue } from '../../utils/contracts';
 import type { ExtensionSettings } from '../../utils/settings-model';
-import { panelPartialTranscriptListHtml, panelTranscriptListHtml, transcriptSearchText } from '../../utils/panel/transcript';
+import { panelPartialTranscriptListHtml, panelTranscriptListHtml, transcriptSearchText, type TranscriptLanguages } from '../../utils/panel/transcript';
 import { lyricsCharacterCount, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
 
 export interface QuickFixSelection {
@@ -28,6 +28,7 @@ export function bindTranscriptView(dom: {
   let partialCues: readonly PartialSubtitleCue[] = [];
   let partial = false;
   let settings: ExtensionSettings | null = null;
+  let languages: TranscriptLanguages | undefined;
   let youtubeVideoId: string | null = null;
   let activeCueId: string | null = null;
   let renderedSignature: string | null = null;
@@ -51,6 +52,7 @@ export function bindTranscriptView(dom: {
       settings?.showRomanization ?? false,
       settings?.showTranslation ?? false,
       settings?.interfaceLocale,
+      languages,
       partial,
       quickFixMode,
       editingCueId,
@@ -81,11 +83,13 @@ export function bindTranscriptView(dom: {
         activeCueId,
         query: dom.transcriptSearch.value,
         searchableText,
+        languages,
       }) : panelTranscriptListHtml({
         cues,
         activeCueId,
         query: dom.transcriptSearch.value,
         searchableText,
+        languages,
         settings,
         quickFixMode,
         editingCueId,
@@ -258,20 +262,20 @@ export function bindTranscriptView(dom: {
   });
 
   return {
-    setData(nextYoutubeVideoId: string | null, nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings) {
+    setData(nextYoutubeVideoId: string | null, nextCues: readonly SubtitleCue[], nextSettings: ExtensionSettings, nextLanguages?: TranscriptLanguages) {
       if (youtubeVideoId !== nextYoutubeVideoId || !nextCues.some((cue) => cue.cueId === editingCueId)) editingCueId = null;
       const signature = JSON.stringify(nextCues);
       if (partial || signature !== cueContentSignature) searchableText = nextCues.map(transcriptSearchText);
       if (signature !== cueContentSignature) cueRevision += 1;
       cueContentSignature = signature;
-      youtubeVideoId = nextYoutubeVideoId; cues = nextCues; partialCues = []; partial = false; settings = nextSettings; render();
+      youtubeVideoId = nextYoutubeVideoId; cues = nextCues; partialCues = []; partial = false; settings = nextSettings; languages = nextLanguages; render();
     },
-    setPartialData(nextYoutubeVideoId: string, nextCues: readonly PartialSubtitleCue[], nextSettings: ExtensionSettings) {
+    setPartialData(nextYoutubeVideoId: string, nextCues: readonly PartialSubtitleCue[], nextSettings: ExtensionSettings, nextLanguages?: TranscriptLanguages) {
       const signature = JSON.stringify(nextCues);
       if (!partial || signature !== cueContentSignature) searchableText = nextCues.map((cue) => cue.sourceText.toLowerCase());
       if (signature !== cueContentSignature) cueRevision += 1;
       cueContentSignature = signature;
-      youtubeVideoId = nextYoutubeVideoId; cues = []; partialCues = nextCues; partial = true; settings = nextSettings; render();
+      youtubeVideoId = nextYoutubeVideoId; cues = []; partialCues = nextCues; partial = true; settings = nextSettings; languages = nextLanguages; render();
     },
     setActiveCue(cueId: string | null) {
       if (cueId === activeCueId) return;

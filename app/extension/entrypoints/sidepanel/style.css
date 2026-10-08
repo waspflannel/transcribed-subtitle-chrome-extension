@@ -993,6 +993,11 @@ select option {
   unicode-bidi: isolate;
 }
 
+/* ponytail: cancels the word gap before 、。 tokens; one that wraps to a line start sits 10px into the margin. */
+.tok--punct {
+  margin-inline-start: -10px;
+}
+
 .tok-edit {
   background: transparent;
   border: 0;

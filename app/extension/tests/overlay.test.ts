@@ -33,7 +33,7 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('AI subtitles');
     expect(html).toContain('class="rail"');
     expect(html).toContain('class="token-card"');
-    expect(html).toContain('lang="spa"');
+    expect(html).toContain('lang="es"');
     expect(html).toContain('00:00 - 00:02');
     expect(html).toContain('hola');
     expect(html).toContain('Bonjour');
@@ -178,11 +178,42 @@ describe('renderOverlayContent', () => {
     expect(html).toContain('hola a todos');
     expect(html).toContain('Bonjour a tous');
     expect(html).toContain('o-la a to-dos');
-    expect(html).toContain('lang="spa"');
+    expect(html).toContain('lang="es"');
     expect(html).toContain('00:00 - 00:02');
     // No interactivity until the finalized track lands.
     expect(html).not.toContain('class="token-card"');
     expect(html).not.toContain('data-study-control');
+  });
+
+  it('tags detected Japanese source text and the translation with BCP-47 languages', () => {
+    const track = { ...trackResponse({ sourceLanguage: 'auto', targetLanguage: 'eng', sourceText: '今日', translatedText: 'Today' }), detectedSourceLanguage: 'jpn' as const };
+    const html = renderOverlayContent({ ...readyState(track), settings: { ...DEFAULT_EXTENSION_SETTINGS, showTranslation: true } });
+
+    expect(html).toContain('class="token-area" dir="auto" lang="ja"');
+    expect(html).toMatch(/class="translation[^"]*" dir="auto" lang="en">Today</);
+    expect(html).not.toContain('lang="und"');
+
+    const partial = partialLoadingState({ translatedText: 'Today' });
+    if (partial.subtitleState.type !== 'loading') throw new Error('Expected a loading state');
+    const partialHtml = renderOverlayContent({ ...partial, subtitleState: { ...partial.subtitleState,
+      partialTrack: { ...partial.subtitleState.partialTrack!, sourceLanguage: 'jpn', targetLanguage: 'eng' } } });
+    expect(partialHtml).toContain('lang="ja"');
+    expect(partialHtml).toContain('lang="en"');
+  });
+
+  it('lets the one-span preview wrap long unspaced lines without changing token cards', () => {
+    expect(overlayStyles).toMatch(/\.partial-source-layer \{[^}]*overflow-wrap: anywhere;[^}]*word-break: normal;/);
+    expect(overlayStyles).toMatch(/\.token-text \{[^}]*word-break: keep-all;/);
+  });
+
+  it('bundles the latin-ext IBM Plex Mono subset for romaji and pinyin marks', () => {
+    const shell = new OverlayShell(document);
+    shell.update(readyState(), document.createElement('video'));
+    const css = document.getElementById('tse-overlay-host')?.shadowRoot?.querySelector('style')?.textContent ?? '';
+    shell.unmount();
+
+    expect(css).toMatch(/font-weight:400;[^}]*unicode-range:U\+0100-02BA/);
+    expect(css).toMatch(/font-weight:500;[^}]*unicode-range:U\+0100-02BA/);
   });
 
   it('renders partial cues with source text only before enrichment batches land', () => {
@@ -386,7 +417,7 @@ describe('renderOverlayContent', () => {
     });
     const html = renderOverlayContent(readyState(track));
 
-    expect(html).toContain('lang="eng"');
+    expect(html).toContain('lang="en"');
     expect(html).toContain('Hello');
     expect(html).toContain('everyone');
     expect(html).not.toContain('class="translation"');
