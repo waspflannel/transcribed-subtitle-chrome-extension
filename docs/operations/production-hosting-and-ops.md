@@ -60,6 +60,10 @@ Apply pending database migrations and rebuild/reload the extension when upgradin
 
 There is no user login. `INSTANCE_ALLOWED_NETWORKS` defaults to `127.0.0.1/32,::1/128`. For LAN/VPN access, set `APP_URL` to the exact backend origin and allow only trusted client CIDRs. Host and Origin checks reject unexpected browser origins and DNS-rebinding hosts. Keep firewall rules consistent.
 
+By default any Chrome extension origin passes the Origin check, so another installed extension with access to the backend address can call the API. Set `INSTANCE_ALLOWED_EXTENSION_IDS` to a comma-separated list of extension IDs to admit only those. An unpacked extension's ID depends on its folder unless its manifest has a fixed `key`.
+
+yt-dlp, its JavaScript runtime and ffmpeg run with an allowlisted environment (system paths and a private temp folder). `APP_KEY`, database passwords and provider keys are never passed to them.
+
 Do not expose an unauthenticated public backend. A reverse proxy must enforce private client access itself; it must not present public traffic as trusted loopback clients. Use TLS remotely and HTTP only on loopback.
 
 The extension address is selected at build time; permissions cover only YouTube and that origin. Set `WXT_BACKEND_API_BASE_URL=https://subtitles.internal/v1` before building for a server. Rebuild/reload when changing backend. Settings displays the address. Local default: `http://127.0.0.1:8001/v1`.
@@ -73,17 +77,21 @@ The extension address is selected at build time; permissions cover only YouTube 
 | `SUBTITLE_GENERATION_WORKERS` | 9 |
 | `SUBTITLE_BATCH_WORKERS` | 22 |
 | `SUBTITLE_PROVIDER_GLOBAL_CONCURRENCY` | 30 calls per provider |
+| `SUBTITLE_CODEX_CONCURRENCY` | 3 Codex sessions (they share one login) |
 | `SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE` | 300 attempts per provider |
+| `SUBTITLE_BATCH_QUEUE_CONNECTION` | `redis-batch` |
+| `REDIS_QUEUE_RETRY_AFTER` / `SUBTITLE_WORKER_TIMEOUT_SECONDS` | 1260 / 1200 seconds (generation) |
+| `REDIS_BATCH_QUEUE_RETRY_AFTER` / `SUBTITLE_BATCH_WORKER_TIMEOUT_SECONDS` | 360 / 330 seconds (batch) |
 
-Tune processes to memory, CPU and provider quotas. HTTP and workers share Redis permits. Queue retry-after must exceed worker timeout (defaults 1260 and 1200 seconds). Eight-chunk transcription bounds, retries, overlap/run locks and stalled-worker detection remain technical safeguards.
+Tune processes to memory, CPU and provider quotas. HTTP and workers share Redis permits. Generation work (download, audio preparation, transcription chunks) runs on the `redis` connection. Batch work (analysis, transcript merge, track publication, lyrics correction) runs on `redis-batch` with a short retry window, so a killed worker's job returns before the stalled-job check fails the run. On each connection, retry-after must exceed its workers' timeout; `ops:production-check` verifies both. Eight-chunk transcription bounds, retries, overlap/run locks and stalled-worker detection remain technical safeguards.
 
-`subtitles:runtime-check --json` supplies worker configuration to `scripts/ops/render-supervisor-config.ps1`. Restart workers for code/config changes; provider settings refresh automatically.
+`subtitles:runtime-check --json` supplies each worker group's connection, queues, count and timeout to `scripts/ops/render-supervisor-config.ps1` and the other launchers. Restart workers for code/config changes; provider settings refresh automatically.
 
 ## Storage and scheduler
 
 Tracks stay saved until deletion by default. Retention days recompute existing track/completed-job deadlines from generation time. Enabling retention can make older tracks eligible for the next prune; disabling it clears deadlines. Temporary audio and correction state are always cleaned up.
 
-Run `php artisan schedule:work` locally or a minute scheduler on the server. It prunes expired records and old queue diagnostics and checks stalled jobs. Transcript-cache expiry is separate (`SUBTITLE_TRANSCRIPT_CACHE_TTL_DAYS`, default 30 days) and does not delete saved tracks.
+Run `php artisan schedule:work` locally or a minute scheduler on the server. It prunes expired records and old queue diagnostics and checks stalled jobs. Trace events older than `SUBTITLE_TRACE_EVENT_RETENTION_DAYS` (default 30; 0 keeps them) are pruned daily, even for tracks that are kept. Transcript-cache expiry is separate (`SUBTITLE_TRANSCRIPT_CACHE_TTL_DAYS`, default 30 days) and does not delete saved tracks.
 
 ## Upgrade from the account-based version
 
