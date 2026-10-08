@@ -25,6 +25,9 @@ return [
     'tracing' => [
         'slow_queue_wait_ms' => (int) env('SUBTITLE_TRACE_SLOW_QUEUE_WAIT_MS', 30000),
         'slow_stage_ms' => (int) env('SUBTITLE_TRACE_SLOW_STAGE_MS', 120000),
+        // subtitles:prune-expired deletes older trace events daily. <= 0 keeps
+        // them until their job is deleted.
+        'event_retention_days' => (int) env('SUBTITLE_TRACE_EVENT_RETENTION_DAYS', 30),
     ],
 
     'costs' => [

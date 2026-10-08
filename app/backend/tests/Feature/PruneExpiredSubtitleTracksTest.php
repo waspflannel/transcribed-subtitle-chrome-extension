@@ -156,6 +156,28 @@ class PruneExpiredSubtitleTracksTest extends TestCase
                 'expired_track_count' => 1,
                 'expired_job_count' => 1,
                 'expired_cached_transcript_count' => 1,
+                'old_trace_event_count' => 0,
             ]);
+    }
+
+    #[TestWith([30, false])]
+    #[TestWith([0, true])]
+    public function test_it_prunes_trace_events_past_retention_even_for_kept_tracks(int $retentionDays, bool $oldEventKept): void
+    {
+        config(['subtitles.tracing.event_retention_days' => $retentionDays]);
+        $job = SubtitleJob::factory()->create(['status' => 'completed', 'expires_at' => null]);
+        SubtitleTrack::factory()->for($job, 'job')->create(['expires_at' => null]);
+        $event = fn (string $name): SubtitleJobEvent => SubtitleJobEvent::create([
+            'subtitle_job_id' => $job->id, 'public_job_id' => $job->public_id, 'run_id' => $job->run_id, 'event' => $name,
+        ]);
+        $old = $event('stage.completed');
+        $old->forceFill(['created_at' => now()->subDays(31)])->save();
+        $recent = $event('job.completed');
+
+        $this->artisan('subtitles:prune-expired')->assertSuccessful();
+
+        $this->assertSame($oldEventKept, SubtitleJobEvent::whereKey($old->id)->exists());
+        $this->assertModelExists($recent);
+        $this->assertModelExists($job);
     }
 }

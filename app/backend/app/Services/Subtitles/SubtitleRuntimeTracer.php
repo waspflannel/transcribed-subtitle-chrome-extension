@@ -11,6 +11,7 @@ use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
+use App\Services\Audio\TemporaryAudioFile;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -315,7 +316,8 @@ class SubtitleRuntimeTracer
         }
 
         try {
-            return unserialize($serialized, ['allowed_classes' => self::QUEUED_SUBTITLE_JOB_CLASSES]);
+            // Audio stage jobs carry their source file as a typed property.
+            return unserialize($serialized, ['allowed_classes' => [...self::QUEUED_SUBTITLE_JOB_CLASSES, TemporaryAudioFile::class]]);
         } catch (Throwable) {
             return null;
         }

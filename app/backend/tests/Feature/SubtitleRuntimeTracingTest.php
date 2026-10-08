@@ -111,6 +111,30 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
     }
 
+    public function test_queue_hooks_trace_audio_jobs_that_carry_an_audio_file(): void
+    {
+        $job = SubtitleJob::factory()->create(['stage' => 'optimizing-audio']);
+        $staleRunId = (string) Str::uuid();
+        $audio = new TemporaryAudioFile('unused-path', 'unused-directory', 1, 1, 'audio/flac');
+        OptimizeSubtitleAudio::dispatch($job->id, $staleRunId, $audio)->onQueue(SubtitleQueue::generationName());
+        TranscribeSubtitleAudioChunk::dispatch($job->id, 0, 1, $staleRunId, $audio, 0.0, 0.0, null)
+            ->onQueue(SubtitleQueue::generationName());
+
+        foreach ([1, 2] as $delivery) {
+            Artisan::call('queue:work', [
+                '--queue' => SubtitleQueue::workerQueueList(),
+                '--once' => true,
+                '--tries' => 1,
+                '--sleep' => 0,
+            ]);
+        }
+
+        foreach ([OptimizeSubtitleAudio::class, TranscribeSubtitleAudioChunk::class] as $jobClass) {
+            $this->assertSame(1, SubtitleJobEvent::query()->where('subtitle_job_id', $job->id)
+                ->where('event', 'queue.processing')->where('context->job_class', $jobClass)->count(), $jobClass);
+        }
+    }
+
     public function test_batch_progress_callbacks_write_real_progress_into_the_job_row(): void
     {
         $job = SubtitleJob::factory()->create([
