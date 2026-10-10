@@ -20,6 +20,8 @@ Stop keeps volumes and Docker Desktop running. When subtitles are being generate
 
 Codex is not available in the desktop package. The image does not include the Codex CLI, and its sign-in callback (port 1455) is not published. Use the OpenAI or Cerebras API providers.
 
+Claude Code is not available in the desktop package either; the image does not include the Claude CLI.
+
 Only backend port `127.0.0.1:8001` is published. Database/Redis stay on the private bridge. Its gateway is the only non-loopback address added to the instance allowlist; Host and Origin checks remain enabled. The fixed `172.31.251.0/24` bridge can conflict with another Docker/VPN subnet; startup reports the Docker error instead of changing unrelated networks. The port is fixed because the packaged extension and guide are built for `http://127.0.0.1:8001`. A backend already using port 8001 must be stopped first.
 
 Build on Windows with `scripts/ops/build-desktop-release.ps1`. Each default build uses a distinct image tag and output directory in ignored `dist/desktop/`. `-GuideUrl` may point to the public HTTPS guide; the default opens the packaged backend's local guide. The ZIP includes images for offline runtime loading, while installing Docker Desktop and using providers still need network access. It excludes internal docs, agent tooling, source tests and local credentials. Publishing, installer/code signing and clean Windows VM acceptance are separate release steps.
@@ -58,6 +60,24 @@ Text requests use ephemeral threads, existing subtitle instructions and structur
 
 Apply pending database migrations and rebuild/reload the extension when upgrading. If Codex is not installed, API providers remain available and Codex Settings explains the missing runtime. See the official [app-server integration](https://learn.chatgpt.com/docs/app-server) and [authentication guide](https://learn.chatgpt.com/docs/auth).
 
+### Claude Code subscription
+
+Install Claude Code CLI 2.1.273 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
+
+`CLAUDE_MODEL` selects the model (default `sonnet`; aliases such as `haiku` and `opus` track the latest models). Restart the backend and workers after changing it.
+
+Each AI request starts one `claude -p` process with:
+
+- tools, MCP servers, settings files, skills and session saving turned off
+- working directory and `CLAUDE_CONFIG_DIR` set to `app/backend/storage/app/private/claude-code`
+- no inherited environment variables except platform basics
+
+No `ANTHROPIC_API_KEY` reaches the CLI, so requests never bill an API account. ElevenLabs still transcribes audio.
+
+A rejected token shows as "provider not configured". Rate limits come from your Claude subscription. Each call adds a few seconds of CLI startup, so large jobs are slower than API providers.
+
+This is for your own self-hosted instance with your own subscription. Do not offer it to other people as a way to use their Claude subscription.
+
 ## Private access
 
 There is no user login. `INSTANCE_ALLOWED_NETWORKS` defaults to `127.0.0.1/32,::1/128`. For LAN/VPN access, set `APP_URL` to the exact backend origin and allow only trusted client CIDRs. Host and Origin checks reject unexpected browser origins and DNS-rebinding hosts. Keep firewall rules consistent.
@@ -80,6 +100,7 @@ The extension address is selected at build time; permissions cover only YouTube 
 | `SUBTITLE_BATCH_WORKERS` | 22 |
 | `SUBTITLE_PROVIDER_GLOBAL_CONCURRENCY` | 30 calls per provider |
 | `SUBTITLE_CODEX_CONCURRENCY` | 3 Codex sessions (they share one login) |
+| `SUBTITLE_CLAUDE_CONCURRENCY` | 3 Claude Code processes |
 | `SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE` | 300 attempts per provider |
 | `SUBTITLE_BATCH_QUEUE_CONNECTION` | `redis-batch` |
 | `REDIS_QUEUE_RETRY_AFTER` / `SUBTITLE_WORKER_TIMEOUT_SECONDS` | 1380 / 1320 seconds (generation) |
