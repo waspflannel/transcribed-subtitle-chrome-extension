@@ -256,7 +256,7 @@ aiProviderSelect.addEventListener('change', () => {
 });
 for (const input of aiSourceInputs) input.addEventListener('change', () => {
   if (!input.checked) return;
-  const aiProvider = input.value === 'codex' ? 'codex' : aiProviderSelect.value === 'cerebras' ? 'cerebras' : 'openai';
+  const aiProvider = input.value === 'codex' ? 'codex' : input.value === 'claude' ? 'claude' : aiProviderSelect.value === 'cerebras' ? 'cerebras' : 'openai';
   const codexModel = currentSettings?.codexModel || latestState?.codexAccount?.models[0]?.id || '';
   void updateSettings({ aiProvider, ...(aiProvider === 'codex' ? { codexModel } : {}) });
 });
@@ -987,7 +987,7 @@ function showPanelState(state: PanelState): void {
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayAttachedToVideoInput.checked = settings.overlayAttachedToVideo;
-  if (settings.aiProvider !== 'codex') aiProviderSelect.value = settings.aiProvider;
+  if (settings.aiProvider === 'openai' || settings.aiProvider === 'cerebras') aiProviderSelect.value = settings.aiProvider;
   renderAiOptions(state);
   overlayPositionSelect.value = settings.overlayPosition;
   captionFontSizeSelect.value = settings.captionFontSize;
@@ -1200,8 +1200,9 @@ function renderGenerateNote(state: PanelState, supported: boolean): void {
 
 function renderAiOptions(state: PanelState): void {
   const codex = state.settings.aiProvider === 'codex';
-  for (const input of aiSourceInputs) input.checked = input.value === (codex ? 'codex' : 'api');
-  apiOptions.hidden = codex;
+  const source = codex ? 'codex' : state.settings.aiProvider === 'claude' ? 'claude' : 'api';
+  for (const input of aiSourceInputs) input.checked = input.value === source;
+  apiOptions.hidden = source !== 'api';
   codexOptions.hidden = !codex;
   const models = state.codexAccount?.models ?? [];
   const optionsKey = JSON.stringify([interfaceLocale(), models]);
@@ -1225,6 +1226,7 @@ function renderAiOptions(state: PanelState): void {
     : !models.some(model => model.id === state.settings.codexModel) ? t('Select an available Codex model before generating subtitles.') : '';
   aiBilling.textContent = codex
     ? t('Text analysis uses Codex credits. Audio transcription uses your ElevenLabs API key.')
+    : source === 'claude' ? t('Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.')
     : t('Text analysis and audio transcription use your API keys.');
 }
 

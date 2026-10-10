@@ -65,6 +65,23 @@ it('defaults to the saved Codex model and fast mode, then sends only API provide
   expect(controls.payload()).toEqual({ aiProvider: 'cerebras' });
 });
 
+it('selects Claude without a model, and blocks it until a token is configured', () => {
+  state.instanceSettings = { providers: {
+    openai: { configured: true, model: 'gpt-6-luna' }, cerebras: { configured: true, model: 'gpt-oss-120b' },
+    elevenlabs: { configured: true, model: 'scribe_v2' }, claude: { configured: false, model: 'sonnet', available: true },
+  }, retentionDays: null };
+  const controls = bindLyricsAiOptions(field('[data-lyrics-ai-options]'), vi.fn());
+  controls.render(state, false);
+  field<HTMLInputElement>('input[name="lyricsAiSource"][value="claude"]').click();
+  expect(controls.payload()).toEqual({ aiProvider: 'claude' });
+  expect(controls.ready()).toBe(false);
+  expect(field('[data-lyrics-ai-readiness]').textContent).toContain('Add a Claude Code token');
+  expect(field('[data-lyrics-api-options]').hidden).toBe(true);
+  controls.render({ ...state, instanceSettings: { ...state.instanceSettings!, providers: { ...state.instanceSettings!.providers, claude: { configured: true, model: 'sonnet', available: true } } } }, false);
+  expect(controls.ready()).toBe(true);
+  expect(correctionAiLabel({ aiProvider: 'claude', aiModel: 'sonnet', aiFastMode: false })).toBe('Claude · sonnet');
+});
+
 it('blocks disconnected, missing-model and unsupported-fast selections without silently choosing another provider', () => {
   state.jobHistory = [{ ...originalJob, jobId: track.jobId, aiProvider: 'codex', aiModel: 'standard-model', aiFastMode: true }];
   const controls = bindLyricsAiOptions(field('[data-lyrics-ai-options]'), vi.fn());

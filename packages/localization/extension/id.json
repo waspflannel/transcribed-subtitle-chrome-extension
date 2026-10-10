@@ -478,5 +478,10 @@
   "Connect Codex in Settings before replacing lyrics.": "Hubungkan Codex di Pengaturan sebelum mengganti lirik.",
   "Select an available Codex model before replacing lyrics.": "Pilih model Codex yang tersedia sebelum mengganti lirik.",
   "Uses this generation’s saved AI settings.": "Menggunakan pengaturan AI yang tersimpan untuk hasil ini.",
-  "This choice applies only to this lyrics correction.": "Pilihan ini hanya berlaku untuk koreksi lirik ini."
+  "This choice applies only to this lyrics correction.": "Pilihan ini hanya berlaku untuk koreksi lirik ini.",
+  "Claude subscription": "Langganan Claude",
+  "Claude Code": "Claude Code",
+  "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "Analisis teks menggunakan langganan Claude Anda. Transkripsi audio menggunakan kunci API ElevenLabs Anda.",
+  "Add a Claude Code token in Settings before replacing lyrics.": "Tambahkan token Claude Code di Pengaturan sebelum mengganti lirik.",
+  "Install Claude Code CLI 2.1.273 or newer on the backend.": "Instal Claude Code CLI 2.1.273 atau yang lebih baru di backend."
 }

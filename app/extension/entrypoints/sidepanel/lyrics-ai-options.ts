@@ -7,7 +7,7 @@ type Selection = Pick<SubtitleJobHistoryItem, 'aiProvider' | 'aiModel' | 'aiFast
 
 export function correctionAiLabel(selection: Partial<Selection>): string {
   if (!selection.aiProvider || !selection.aiModel) return '';
-  return `${aiProviderLabel(selection.aiProvider)}${selection.aiProvider === 'codex' ? '' : ' API'} · ${selection.aiModel}${selection.aiFastMode ? ` · ${t('Fast mode')}` : ''}`;
+  return `${aiProviderLabel(selection.aiProvider)}${selection.aiProvider === 'codex' || selection.aiProvider === 'claude' ? '' : ' API'} · ${selection.aiModel}${selection.aiFastMode ? ` · ${t('Fast mode')}` : ''}`;
 }
 
 export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
@@ -29,6 +29,10 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
 
   const error = (): string => {
     const selected = selection;
+    if (selected?.aiProvider === 'claude') {
+      if (latest?.instanceSettings?.providers.claude.available === false) return t('Install Claude Code CLI 2.1.273 or newer on the backend.');
+      return latest?.instanceSettings?.providers.claude.configured ? '' : t('Add a Claude Code token in Settings before replacing lyrics.');
+    }
     if (selected?.aiProvider !== 'codex') return '';
     if (!latest?.codexAccount?.available || !latest.codexAccount.connected) return t('Connect Codex in Settings before replacing lyrics.');
     const selectedModel = latest.codexAccount.models.find(candidate => candidate.id === selected.aiModel);
@@ -38,13 +42,14 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
   const draw = (): void => {
     const codex = selection?.aiProvider === 'codex';
     const models = latest?.codexAccount?.models ?? [];
+    const source = codex ? 'codex' : selection?.aiProvider === 'claude' ? 'claude' : 'api';
     for (const input of sources) {
-      input.checked = selection !== null && input.value === (codex ? 'codex' : 'api');
+      input.checked = selection !== null && input.value === source;
       input.disabled = busy;
     }
-    apiOptions.hidden = !selection || codex;
+    apiOptions.hidden = !selection || source !== 'api';
     codexOptions.hidden = !codex;
-    if (selection && !codex) provider.value = selection.aiProvider;
+    if (selection && source === 'api') provider.value = selection.aiProvider;
     provider.disabled = busy;
     const optionsKey = JSON.stringify([interfaceLocale(), models]);
     if (optionsKey !== modelOptionsKey) {
@@ -73,6 +78,7 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
   for (const source of sources) source.addEventListener('change', () => {
     if (!source.checked || busy) return;
     if (source.value === 'api') selectApi();
+    else if (source.value === 'claude') update({ aiProvider: 'claude', aiModel: latest?.instanceSettings?.providers.claude.model ?? '', aiFastMode: false });
     else update({ aiProvider: 'codex', aiModel: latest?.codexAccount?.models[0]?.id ?? '', aiFastMode: false });
   });
   provider.addEventListener('change', selectApi);

@@ -631,6 +631,8 @@ async function generateSubtitlesFromPanel(youtubeVideoId: string, tabId: number,
         const model = account.models.find(model => model.id === settings.codexModel);
         if (!model) throw new Error('Select an available Codex model before generating subtitles.');
         if (settings.codexFastMode && !model.supportsFastMode) throw new Error('Fast mode is unavailable for this Codex model.');
+      } else if (settings.aiProvider === 'claude' && !providers.claude.available) {
+        throw new Error('Install Claude Code CLI 2.1.273 or newer on the backend.');
       } else if (!providers[settings.aiProvider].configured) {
         throw new SubtitleApiError('provider_not_configured', 'Add the required provider keys in Settings before generating subtitles.', 422);
       }

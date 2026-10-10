@@ -478,5 +478,10 @@
   "Connect Codex in Settings before replacing lyrics.": "Verbinde Codex in den Einstellungen, bevor du den Liedtext ersetzt.",
   "Select an available Codex model before replacing lyrics.": "Wähle ein verfügbares Codex-Modell, bevor du den Liedtext ersetzt.",
   "Uses this generation’s saved AI settings.": "Verwendet die für diese Generierung gespeicherten KI-Einstellungen.",
-  "This choice applies only to this lyrics correction.": "Diese Auswahl gilt nur für diese Liedtextkorrektur."
+  "This choice applies only to this lyrics correction.": "Diese Auswahl gilt nur für diese Liedtextkorrektur.",
+  "Claude subscription": "Claude-Abonnement",
+  "Claude Code": "Claude Code",
+  "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "Die Textanalyse nutzt dein Claude-Abonnement. Die Audiotranskription verwendet deinen ElevenLabs-API-Schlüssel.",
+  "Add a Claude Code token in Settings before replacing lyrics.": "Füge in den Einstellungen ein Claude-Code-Token hinzu, bevor du den Liedtext ersetzt.",
+  "Install Claude Code CLI 2.1.273 or newer on the backend.": "Installiere auf dem Backend die Claude Code CLI 2.1.273 oder neuer."
 }

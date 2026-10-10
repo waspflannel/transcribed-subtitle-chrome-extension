@@ -398,7 +398,7 @@ function isLyricsAiSelection(value: Record<string, unknown>): boolean {
   if (value.aiProvider === 'codex') {
     return typeof value.aiModel === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.aiModel);
   }
-  return (!('aiProvider' in value) || value.aiProvider === 'openai' || value.aiProvider === 'cerebras')
+  return (!('aiProvider' in value) || value.aiProvider === 'openai' || value.aiProvider === 'cerebras' || value.aiProvider === 'claude')
     && !('aiModel' in value) && value.aiFastMode !== true;
 }
 

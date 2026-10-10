@@ -72,7 +72,7 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
   const sourceLanguage = normalizeSourceLanguage(value?.sourceLanguage);
   const targetLanguage = normalizeTargetLanguage(value?.targetLanguage);
 
-  if (value?.aiProvider === 'openai' || value?.aiProvider === 'cerebras' || value?.aiProvider === 'codex') {
+  if (value?.aiProvider === 'openai' || value?.aiProvider === 'cerebras' || value?.aiProvider === 'codex' || value?.aiProvider === 'claude') {
     settings.aiProvider = value.aiProvider;
   }
   if (typeof value?.codexModel === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.codexModel)) settings.codexModel = value.codexModel;
@@ -165,7 +165,7 @@ export function normalizeSubtitleTimingOffsetSeconds(value: unknown): number {
 }
 
 export function aiProviderLabel(provider: ExtensionSettings['aiProvider']): string {
-  return provider === 'codex' ? 'Codex' : provider === 'cerebras' ? 'Cerebras' : 'OpenAI';
+  return provider === 'codex' ? 'Codex' : provider === 'claude' ? 'Claude' : provider === 'cerebras' ? 'Cerebras' : 'OpenAI';
 }
 
 export function createAnonymousInstallId(): string {
