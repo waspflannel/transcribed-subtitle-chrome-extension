@@ -66,7 +66,7 @@ it('submits the Claude Code token and shows the missing CLI notice only when una
   key.dispatchEvent(new Event('input', { bubbles: true }));
   form.dispatchEvent(new Event('submit', { cancelable: true }));
   await vi.waitFor(() => expect(submissions).toHaveLength(1));
-  expect(submissions[0]?.providers?.claude).toEqual({ apiKey: 'claude-token', model: 'sonnet', thinking: 'medium' });
+  expect(submissions[0]?.providers?.claude).toEqual({ apiKey: 'claude-token' });
   expect(key.value).toBe('');
 });
 

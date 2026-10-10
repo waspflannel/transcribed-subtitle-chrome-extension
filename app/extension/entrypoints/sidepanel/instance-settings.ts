@@ -69,7 +69,9 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       patch.providers![name] = removed.has(name) ? { apiKey: null } : key.value.trim() ? { apiKey: key.value.trim() } : {};
       key.value = '';
     }
-    patch.providers!.claude = { ...patch.providers!.claude, model: modelSelect.value as ClaudeModel, thinking: thinkingSelect.value as ClaudeThinking };
+    // Untouched selects may not reflect the backend (settings not loaded, or a CLAUDE_MODEL outside the list), so only send changes.
+    if (dirty.has('claudeModel')) patch.providers!.claude!.model = modelSelect.value as ClaudeModel;
+    if (dirty.has('claudeThinking')) patch.providers!.claude!.thinking = thinkingSelect.value as ClaudeThinking;
     const buttons = form.querySelectorAll<HTMLButtonElement>('button');
     for (const button of buttons) button.disabled = true;
     try {
@@ -102,7 +104,7 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       indicator.setAttribute('aria-label', configured ? t('Configured') : t('Not configured'));
       indicator.title = configured ? t('Configured') : t('Not configured');
     }
-    // A CLAUDE_MODEL default outside the dropdown leaves the select unchanged; saving then stores the shown model.
+    // A CLAUDE_MODEL default outside the dropdown leaves the select unchanged.
     if (!dirty.has('claudeModel') && settings.providers.claude.model in claudeModelLabels) modelSelect.value = settings.providers.claude.model;
     if (!dirty.has('claudeThinking')) thinkingSelect.value = settings.providers.claude.thinking;
     cliMissing.hidden = settings.providers.claude.available;
