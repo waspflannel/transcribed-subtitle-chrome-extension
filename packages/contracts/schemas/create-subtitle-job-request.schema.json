@@ -245,7 +245,8 @@
       "enum": [
         "openai",
         "cerebras",
-        "codex"
+        "codex",
+        "claude"
       ],
       "description": "The selected analysis provider stays pinned for this generation."
     },
@@ -254,7 +255,7 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-      "description": "Model from the connected Codex account. Required for Codex; omitted for API providers."
+      "description": "Model from the connected Codex account. Required for Codex; omitted for other providers."
     },
     "aiFastMode": {
       "type": "boolean",

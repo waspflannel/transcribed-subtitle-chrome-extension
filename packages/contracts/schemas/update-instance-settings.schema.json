@@ -50,6 +50,20 @@
               "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
             }
           }
+        },
+        "claude": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "apiKey": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 4096,
+              "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
+            }
+          }
         }
       },
       "required": []

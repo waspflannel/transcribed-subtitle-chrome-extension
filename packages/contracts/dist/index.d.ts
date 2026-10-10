@@ -29,6 +29,11 @@ export interface InstanceSettings {
       configured: boolean;
       model: string;
     };
+    claude: {
+      configured: boolean;
+      model: string;
+      available: boolean;
+    };
   };
   retentionDays: number | null;
 }
@@ -43,6 +48,9 @@ export interface UpdateInstanceSettings {
       apiKey?: string | null;
     };
     elevenlabs?: {
+      apiKey?: string | null;
+    };
+    claude?: {
       apiKey?: string | null;
     };
   };
@@ -275,9 +283,9 @@ export type CreateSubtitleJobRequest = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider?: 'openai' | 'cerebras' | 'codex';
+  aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
   /**
-   * Model from the connected Codex account. Required for Codex; omitted for API providers.
+   * Model from the connected Codex account. Required for Codex; omitted for other providers.
    */
   aiModel?: string;
   /**
@@ -318,9 +326,9 @@ export type LyricsCorrectionRequest = {
   /**
    * Optional provider override for this correction only. Omit all AI fields to inherit the generation’s saved provider, model, and fast mode.
    */
-  aiProvider?: 'openai' | 'cerebras' | 'codex';
+  aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
   /**
-   * Model from the connected Codex account. Required for Codex; omitted for API providers.
+   * Model from the connected Codex account. Required for Codex; omitted for other providers.
    */
   aiModel?: string;
   /**
@@ -335,7 +343,7 @@ export type LyricsCorrectionRequest = {
  */
 export type LyricsCorrectionStatus =
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -344,7 +352,7 @@ export type LyricsCorrectionStatus =
       updatedAt: string;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -353,7 +361,7 @@ export type LyricsCorrectionStatus =
       updatedAt: string;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -363,7 +371,7 @@ export type LyricsCorrectionStatus =
       track: TrackResponse;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -374,7 +382,7 @@ export type LyricsCorrectionStatus =
       message: string;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -738,7 +746,7 @@ export type JobResponse = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'openai' | 'cerebras' | 'codex';
+  aiProvider: 'openai' | 'cerebras' | 'codex' | 'claude';
   /**
    * Exact text model saved on this job.
    */
@@ -1096,7 +1104,7 @@ export type SubtitleJobHistoryItem = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'openai' | 'cerebras' | 'codex';
+  aiProvider: 'openai' | 'cerebras' | 'codex' | 'claude';
   /**
    * Exact text model saved on this job.
    */

@@ -59,12 +59,34 @@
               "minLength": 1
             }
           }
+        },
+        "claude": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "configured",
+            "model",
+            "available"
+          ],
+          "properties": {
+            "configured": {
+              "type": "boolean"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "available": {
+              "type": "boolean"
+            }
+          }
         }
       },
       "required": [
         "openai",
         "cerebras",
-        "elevenlabs"
+        "elevenlabs",
+        "claude"
       ]
     },
     "retentionDays": {

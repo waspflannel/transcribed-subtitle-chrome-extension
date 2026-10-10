@@ -71,9 +71,11 @@ const lyricsCorrectionStatus = ajv.getSchema('lyrics-correction-status.schema.js
 
 const generationRequest = ajv.getSchema('create-subtitle-job-request.schema.json');
 const generationFixture = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-create-subtitle-job-request.json'), 'utf8'));
-for (const aiProvider of ['openai', 'cerebras']) {
+for (const aiProvider of ['openai', 'cerebras', 'claude']) {
   if (!generationRequest({ ...generationFixture, aiProvider })) throw new Error('Valid AI provider rejected.');
 }
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'claude', aiModel: 'sonnet' }, 'Claude request with a model');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'claude', aiFastMode: true }, 'Claude request with fast mode');
 for (const aiProvider of ['auto', 'hybrid', 'invalid', null, 1]) {
   if (generationRequest({ ...generationFixture, aiProvider })) throw new Error('Invalid AI provider accepted.');
 }
@@ -124,20 +126,29 @@ assertInvalid(
 
 const lyricsCorrectionRequest = ajv.getSchema('lyrics-correction-request.schema.json');
 const correctionPayload = { expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041', lyrics: 'First line' };
-for (const selection of [{}, { aiProvider: 'openai' }, { aiProvider: 'cerebras' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }]) {
+for (const selection of [{}, { aiProvider: 'openai' }, { aiProvider: 'cerebras' }, { aiProvider: 'claude' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }]) {
   if (!lyricsCorrectionRequest({ ...correctionPayload, ...selection })) throw new Error(`Rejected valid correction selection: ${JSON.stringify(selection)}`);
 }
-for (const selection of [{ aiProvider: 'codex' }, { aiProvider: 'codex', aiModel: '../model' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: 'true' }, { aiProvider: 'openai', aiModel: 'gpt-codex' }, { aiProvider: 'cerebras', aiFastMode: true }, { aiModel: 'gpt-codex' }]) {
+for (const selection of [{ aiProvider: 'codex' }, { aiProvider: 'codex', aiModel: '../model' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: 'true' }, { aiProvider: 'openai', aiModel: 'gpt-codex' }, { aiProvider: 'cerebras', aiFastMode: true }, { aiProvider: 'claude', aiModel: 'sonnet' }, { aiModel: 'gpt-codex' }]) {
   assertInvalid(lyricsCorrectionRequest, { ...correctionPayload, ...selection }, `invalid correction selection ${JSON.stringify(selection)}`);
 }
 const correctionWithAi = { attemptId: correctionPayload.expectedTrackId, status: 'queued', stage: 'queued', updatedAt: '2026-10-07T12:00:00Z', aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true };
 if (!lyricsCorrectionStatus(correctionWithAi)) throw new Error('Rejected correction status with pinned AI selection');
+if (!lyricsCorrectionStatus({ ...correctionWithAi, aiProvider: 'claude', aiModel: 'sonnet', aiFastMode: false })) throw new Error('Rejected Claude correction status');
 assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiProvider: 'unknown' }, 'unknown correction provider');
 assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiModel: undefined }, 'partial correction AI selection');
 assertInvalid(lyricsCorrectionStatus, { ...correctionWithAi, aiProvider: 'openai' }, 'API correction with fast mode');
 for (const allowPartial of [true, false, 'true', null]) {
   assertInvalid(lyricsCorrectionRequest, { ...correctionPayload, allowPartial }, 'removed allowPartial field');
 }
+
+const instanceSettings = ajv.getSchema('instance-settings.schema.json');
+const updateSettings = ajv.getSchema('update-instance-settings.schema.json');
+const settings = { providers: { openai: { configured: true, model: 'm' }, cerebras: { configured: false, model: 'm' }, elevenlabs: { configured: true, model: 'm' }, claude: { configured: true, model: 'sonnet', available: true } }, retentionDays: null };
+if (!instanceSettings(settings)) throw new Error('Rejected valid instance settings');
+assertInvalid(instanceSettings, { ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, apiKey: 'secret' } } }, 'Claude token leak');
+if (!updateSettings({ providers: { claude: { apiKey: 'tok' } } })) throw new Error('Rejected Claude token update');
+assertInvalid(updateSettings, { providers: { claude: { model: 'opus' } } }, 'Claude model override');
 
 const correctionStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled'];
 const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'finalizing', 'completed', 'failed', 'cancelled'];
