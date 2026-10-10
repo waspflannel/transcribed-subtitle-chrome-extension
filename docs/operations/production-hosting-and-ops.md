@@ -64,13 +64,14 @@ Apply pending database migrations and rebuild/reload the extension when upgradin
 
 Install Claude Code CLI 2.1.273 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
 
-`CLAUDE_MODEL` selects the model (default `sonnet`; aliases such as `haiku` and `opus` track the latest models). Restart the backend and workers after changing it.
+The model (`opus`, `sonnet`, `haiku`; default `sonnet`) and Thinking level (`low`, `medium`, `high`, `xhigh`, `max`, passed as `--effort`; default `medium`) are chosen in **Settings → Claude Code**; `CLAUDE_MODEL` only sets the default model before one is saved. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
 
 Each AI request starts one `claude -p` process with:
 
 - tools, MCP servers, settings files, skills and session saving turned off
 - working directory and `CLAUDE_CONFIG_DIR` set to `app/backend/storage/app/private/claude-code`
 - no inherited environment variables except platform basics
+- `--effort` set to the saved Thinking level, and `CLAUDE_CODE_DISABLE_FAST_MODE=1` in the environment
 
 No `ANTHROPIC_API_KEY` reaches the CLI, so requests never bill an API account. ElevenLabs still transcribes audio.
 
