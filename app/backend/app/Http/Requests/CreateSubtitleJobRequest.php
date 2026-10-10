@@ -30,7 +30,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
-            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex'])],
+            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex', 'claude'])],
             'aiModel' => [Rule::requiredIf($codex), Rule::prohibitedIf(! $codex), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D'],
             'aiFastMode' => ['sometimes', 'boolean:strict', Rule::prohibitedIf(! $codex && $this->input('aiFastMode') !== false)],
             'includeRomanization' => ['required', 'boolean'],

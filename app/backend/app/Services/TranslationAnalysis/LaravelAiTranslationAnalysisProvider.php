@@ -8,6 +8,7 @@ use App\Ai\Agents\LearningTokenCardAgent;
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
+use App\Services\ClaudeCode\ClaudeCodeService;
 use App\Services\Codex\CodexService;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\ProviderAdmission;
@@ -346,6 +347,10 @@ class LaravelAiTranslationAnalysisProvider
                 return app(ProviderAdmission::class)->run($selection->provider, $job,
                     fn (): array => app(CodexService::class)->prompt($agent, $input, $selection));
             }
+            if ($selection->provider === 'claude') {
+                return app(ProviderAdmission::class)->run($selection->provider, $job,
+                    fn (): array => app(ClaudeCodeService::class)->prompt($agent, $input, $selection));
+            }
             $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => $agent->prompt(
                 json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 provider: $selection->provider,
@@ -364,7 +369,7 @@ class LaravelAiTranslationAnalysisProvider
         } catch (Throwable $exception) {
             throw ProviderExceptionPolicy::classify($exception, [
                 'provider' => $selection->provider,
-                'adapter' => $selection->provider === 'codex' ? 'codex-app-server' : 'laravel-ai-sdk',
+                'adapter' => SubtitleModel::adapter($selection->provider),
                 'agent' => $agentClass,
             ]);
         }

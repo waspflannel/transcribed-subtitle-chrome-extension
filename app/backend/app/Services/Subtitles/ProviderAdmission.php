@@ -26,6 +26,10 @@ final class ProviderAdmission
             // Every Codex process shares one login file, so keep parallel sessions few.
             $limit = min($limit, max(1, (int) config('subtitles.providers.codex_concurrency', 3)));
         }
+        if ($provider === 'claude') {
+            // Each Claude call is a separate local CLI process sharing one config directory.
+            $limit = min($limit, max(1, (int) config('subtitles.providers.claude_concurrency', 3)));
+        }
         try {
             return $cache->funnel('subtitle-provider:concurrency:'.$provider.':')
                 ->limit($limit)

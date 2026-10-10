@@ -9,7 +9,9 @@ use App\Services\ClaudeCode\ClaudeCodeService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\TestWith;
 use Tests\TestCase;
@@ -155,6 +157,59 @@ class ClaudeCodeServiceTest extends TestCase
         config(['claude-code.command' => ['/nonexistent/claude']]);
         Cache::flush();
         $this->assertFalse(ClaudeCodeService::available());
+    }
+
+    public function test_settings_store_the_claude_token_encrypted_and_never_return_it(): void
+    {
+        config(['claude-code.token' => null]);
+        $this->withExtensionInstall('install_claude_test')
+            ->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-secret-token']]])
+            ->assertOk()->assertDontSee('claude-secret-token');
+        $this->getJson('/v1/settings')->assertOk()->assertDontSee('claude-secret-token')
+            ->assertJsonPath('providers.claude', ['configured' => true, 'model' => 'sonnet', 'available' => true]);
+
+        $this->assertStringNotContainsString('claude-secret-token', DB::table('instance_settings')->value('values'));
+    }
+
+    public function test_claude_jobs_pin_the_configured_model_and_reject_model_overrides(): void
+    {
+        Queue::fake();
+        config(['ai.providers.eleven.key' => 'eleven-key']);
+        $this->withExtensionInstall('install_claude_test');
+
+        $this->postJson('/v1/subtitle-jobs', $this->payload())->assertAccepted()
+            ->assertJsonPath('aiProvider', 'claude')->assertJsonPath('aiModel', 'sonnet');
+        $this->postJson('/v1/subtitle-jobs', [...$this->payload(), 'aiModel' => 'opus'])->assertUnprocessable();
+        $this->postJson('/v1/subtitle-jobs', [...$this->payload(), 'aiFastMode' => true])->assertUnprocessable();
+    }
+
+    public function test_claude_generation_requires_a_token_and_a_supported_cli(): void
+    {
+        Queue::fake();
+        config(['ai.providers.eleven.key' => 'eleven-key', 'claude-code.token' => null]);
+        $this->withExtensionInstall('install_claude_test');
+
+        $this->postJson('/v1/subtitle-jobs', $this->payload())->assertUnprocessable()
+            ->assertJsonPath('error.code', 'provider_not_configured');
+
+        config(['claude-code.token' => 'test-token']);
+        $this->scenario('old-version');
+        Cache::flush();
+        $this->postJson('/v1/subtitle-jobs', $this->payload())->assertUnprocessable()
+            ->assertJsonPath('error.code', 'provider_not_configured');
+    }
+
+    private function payload(): array
+    {
+        return [
+            'youtubeVideoId' => 'dQw4w9WgXcQ',
+            'youtubeUrl' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            'sourceLanguage' => 'auto',
+            'targetLanguage' => 'eng',
+            'includeRomanization' => false,
+            'includeTranslation' => false,
+            'aiProvider' => 'claude',
+        ];
     }
 
     private function scenario(string $name): void
