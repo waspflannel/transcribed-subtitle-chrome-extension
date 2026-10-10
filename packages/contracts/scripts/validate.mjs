@@ -144,11 +144,22 @@ for (const allowPartial of [true, false, 'true', null]) {
 
 const instanceSettings = ajv.getSchema('instance-settings.schema.json');
 const updateSettings = ajv.getSchema('update-instance-settings.schema.json');
-const settings = { providers: { openai: { configured: true, model: 'm' }, cerebras: { configured: false, model: 'm' }, elevenlabs: { configured: true, model: 'm' }, claude: { configured: true, model: 'sonnet', available: true } }, retentionDays: null };
+const settings = { providers: { openai: { configured: true, model: 'm' }, cerebras: { configured: false, model: 'm' }, elevenlabs: { configured: true, model: 'm' }, claude: { configured: true, model: 'sonnet', thinking: 'medium', available: true } }, retentionDays: null };
 if (!instanceSettings(settings)) throw new Error('Rejected valid instance settings');
 assertInvalid(instanceSettings, { ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, apiKey: 'secret' } } }, 'Claude token leak');
 if (!updateSettings({ providers: { claude: { apiKey: 'tok' } } })) throw new Error('Rejected Claude token update');
-assertInvalid(updateSettings, { providers: { claude: { model: 'opus' } } }, 'Claude model override');
+const { thinking: _thinking, ...claudeWithoutThinking } = settings.providers.claude;
+assertInvalid(instanceSettings, { ...settings, providers: { ...settings.providers, claude: claudeWithoutThinking } }, 'Claude settings without thinking');
+assertInvalid(instanceSettings, { ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, thinking: 'turbo' } } }, 'Claude settings with unknown thinking');
+for (const model of ['opus', 'sonnet', 'haiku']) {
+  if (!updateSettings({ providers: { claude: { model } } })) throw new Error(`Rejected Claude model update ${model}`);
+}
+for (const thinking of ['low', 'medium', 'high', 'xhigh', 'max']) {
+  if (!updateSettings({ providers: { claude: { thinking } } })) throw new Error(`Rejected Claude thinking update ${thinking}`);
+}
+for (const claude of [{ model: 'gpt-5' }, { model: 'claude-opus-4' }, { thinking: 'turbo' }, { fastMode: true }]) {
+  assertInvalid(updateSettings, { providers: { claude } }, `Claude update ${JSON.stringify(claude)}`);
+}
 
 const correctionStatuses = ['queued', 'running', 'completed', 'failed', 'cancelled'];
 const correctionStages = ['queued', 'aligning', 'rebuilding', 'romanizing', 'finalizing', 'completed', 'failed', 'cancelled'];
