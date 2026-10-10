@@ -43,7 +43,7 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
   cliMissing.className = 'microcopy';
   cliMissing.dataset.claudeCliMissing = '';
   cliMissing.hidden = true;
-  cliMissing.textContent = t('Install Claude Code CLI 2.1.273 or newer on the backend.');
+  cliMissing.textContent = t('Install Claude Code CLI 2.1.280 or newer on the backend.');
   const claudeRow = fields.querySelector('#claudeKey')!.parentElement!;
   claudeRow.append(selectField(root, 'claudeModel', 'Model', claudeModelLabels), cliMissing);
   const modelSelect = form.elements.namedItem('claudeModel') as HTMLSelectElement;

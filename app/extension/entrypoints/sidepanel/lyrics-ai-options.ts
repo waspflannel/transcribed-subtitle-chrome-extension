@@ -30,7 +30,7 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
   const error = (): string => {
     const selected = selection;
     if (selected?.aiProvider === 'claude') {
-      if (latest?.instanceSettings?.providers.claude.available === false) return t('Install Claude Code CLI 2.1.273 or newer on the backend.');
+      if (latest?.instanceSettings?.providers.claude.available === false) return t('Install Claude Code CLI 2.1.280 or newer on the backend.');
       return latest?.instanceSettings?.providers.claude.configured ? '' : t('Add a Claude Code token in Settings before replacing lyrics.');
     }
     if (selected?.aiProvider !== 'codex') return '';

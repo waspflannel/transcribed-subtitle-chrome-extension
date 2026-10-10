@@ -3,12 +3,12 @@
 // A local subprocess fixture: never calls a provider or reads real Claude credentials.
 $scenario = $argv[1];
 if (in_array('--version', $argv, true)) {
-    echo $scenario === 'old-version' ? "2.1.200 (Claude Code)\n" : "2.1.273 (Claude Code)\n";
+    echo $scenario === 'old-version' ? "2.1.200 (Claude Code)\n" : "2.1.280 (Claude Code)\n";
     exit;
 }
 $stdin = stream_get_contents(STDIN);
 $env = [];
-foreach (['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_DISABLE_FAST_MODE', 'MAX_THINKING_TOKENS', 'ANTHROPIC_API_KEY', 'APP_KEY', 'DB_PASSWORD', 'OPENAI_API_KEY', 'TRANSCRIBE_TEST_SECRET'] as $name) {
+foreach (['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_DISABLE_FAST_MODE', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'ANTHROPIC_API_KEY', 'APP_KEY', 'DB_PASSWORD', 'OPENAI_API_KEY', 'TRANSCRIBE_TEST_SECRET'] as $name) {
     $env[$name] = getenv($name);
 }
 file_put_contents(getenv('CLAUDE_CONFIG_DIR').'/invocation.json', json_encode([

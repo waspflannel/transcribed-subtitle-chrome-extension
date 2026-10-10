@@ -62,16 +62,16 @@ Apply pending database migrations and rebuild/reload the extension when upgradin
 
 ### Claude Code subscription
 
-Install Claude Code CLI 2.1.273 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
+Install Claude Code CLI 2.1.280 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
 
-The model (`opus`, `sonnet`, `haiku`; default `sonnet`) is chosen in **Settings → Claude Code**; `CLAUDE_MODEL` only sets the default model before one is saved. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
+The model (`opus`, `sonnet`, `haiku`; default `sonnet`) is chosen in **Settings → Claude Code**. The backend pins these aliases to `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5` with `ANTHROPIC_DEFAULT_*_MODEL`, which also covers the CLI's own background Haiku calls; `CLAUDE_MODEL` only sets the default model before one is saved. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
 
 Each AI request starts one `claude -p` process with:
 
 - tools, MCP servers, settings files, skills and session saving turned off
 - working directory and `CLAUDE_CONFIG_DIR` set to `app/backend/storage/app/private/claude-code`
 - no inherited environment variables except platform basics
-- thinking off (`MAX_THINKING_TOKENS=0`) and `CLAUDE_CODE_DISABLE_FAST_MODE=1` in the environment. It is a plain prompt-to-JSON call, like Codex. With thinking on, Haiku spent about 3x the answer's tokens thinking, and batches went past the 120s timeout.
+- `--effort low` (fixed, not a setting), and `CLAUDE_CODE_DISABLE_FAST_MODE=1` in the environment. It is a plain prompt-to-JSON call, like Codex. On Haiku 5.5 an 8-cue batch takes about 10s at `low`; `max` took about 70s and risks the 120s timeout.
 
 No `ANTHROPIC_API_KEY` reaches the CLI, so requests never bill an API account. ElevenLabs still transcribes audio.
 

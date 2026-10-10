@@ -483,7 +483,7 @@
   "Claude Code": "Claude Code",
   "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "テキスト分析にはClaudeのサブスクリプションを、音声の文字起こしにはElevenLabsのAPIキーを使用します。",
   "Add a Claude Code token in Settings before replacing lyrics.": "歌詞を置き換える前に、設定でClaude Codeのトークンを追加してください。",
-  "Install Claude Code CLI 2.1.273 or newer on the backend.": "バックエンドにClaude Code CLI 2.1.273以降をインストールしてください。",
+  "Install Claude Code CLI 2.1.280 or newer on the backend.": "バックエンドにClaude Code CLI 2.1.280以降をインストールしてください。",
   "Opus": "Opus",
   "Sonnet": "Sonnet",
   "Haiku": "Haiku"

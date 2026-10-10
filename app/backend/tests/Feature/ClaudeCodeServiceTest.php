@@ -84,15 +84,17 @@ class ClaudeCodeServiceTest extends TestCase
         }
     }
 
-    public function test_thinking_and_fast_mode_are_disabled(): void
+    public function test_aliases_use_the_5_5_models_at_low_effort_with_fast_mode_disabled(): void
     {
         app(ClaudeCodeService::class)->prompt($this->agent(), [], new SubtitleModel('claude', 'opus'));
 
         $invocation = $this->invocation();
         $argv = $invocation['argv'];
-        $this->assertNotContains('--effort', $argv);
+        $this->assertSame('low', $argv[array_search('--effort', $argv, true) + 1]);
         $this->assertSame('opus', $argv[array_search('--model', $argv, true) + 1]);
-        $this->assertSame('0', $invocation['env']['MAX_THINKING_TOKENS']);
+        $this->assertSame('claude-opus-5-5', $invocation['env']['ANTHROPIC_DEFAULT_OPUS_MODEL']);
+        $this->assertSame('claude-sonnet-5-5', $invocation['env']['ANTHROPIC_DEFAULT_SONNET_MODEL']);
+        $this->assertSame('claude-haiku-5-5', $invocation['env']['ANTHROPIC_DEFAULT_HAIKU_MODEL']);
         $this->assertSame('1', $invocation['env']['CLAUDE_CODE_DISABLE_FAST_MODE']);
         foreach (['--fast', '--fast-mode', '--enable-fast-mode'] as $flag) {
             $this->assertNotContains($flag, $argv);
