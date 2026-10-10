@@ -84,11 +84,11 @@ class ClaudeCodeServiceTest extends TestCase
     }
 
     #[TestWith(['unauthorized', 'provider_not_configured'])]
-    #[TestWith(['rate-limited', null])]
+    #[TestWith(['rate-limited', 'rate_limited'])]
     #[TestWith(['server-error', 'provider_unavailable'])]
     #[TestWith(['crash', 'provider_unavailable'])]
     #[TestWith(['oversized', 'provider_unavailable'])]
-    public function test_cli_failures_map_to_safe_provider_errors(string $scenario, ?string $code): void
+    public function test_cli_failures_map_to_safe_provider_errors(string $scenario, string $code): void
     {
         $this->scenario($scenario);
 
@@ -96,7 +96,7 @@ class ClaudeCodeServiceTest extends TestCase
             app(ClaudeCodeService::class)->prompt($this->agent(), [], new SubtitleModel('claude', 'sonnet'));
             $this->fail('Expected a provider failure.');
         } catch (SubtitleProcessingException $exception) {
-            $this->assertSame($code ?? SubtitleProcessingException::rateLimited()->publicCode, $exception->publicCode);
+            $this->assertSame($code, $exception->publicCode);
             $this->assertStringNotContainsString('raw-provider-secret', $exception->getMessage());
             $this->assertStringNotContainsString('raw-provider-secret', json_encode($exception->context));
         }

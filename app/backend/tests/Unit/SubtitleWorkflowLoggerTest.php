@@ -246,7 +246,7 @@ class SubtitleWorkflowLoggerTest extends TestCase
         $this->logger()->translationStarted($job, 3);
     }
 
-    private function logger():SubtitleWorkflowLogger
+    private function logger(): SubtitleWorkflowLogger
     {
         return new SubtitleWorkflowLogger;
     }

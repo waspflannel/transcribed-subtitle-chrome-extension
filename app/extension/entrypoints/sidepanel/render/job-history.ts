@@ -54,7 +54,7 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelS
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
   const meta = [
-    `${aiProviderLabel(job.aiProvider)}${job.aiProvider === 'codex' || job.aiProvider === 'claude' ?'' : ' API'} · ${job.aiModel}`,
+    `${aiProviderLabel(job.aiProvider)}${job.aiProvider === 'codex' || job.aiProvider === 'claude' ? '' : ' API'} · ${job.aiModel}`,
     job.aiFastMode ? t('Fast mode') : null,
     `${languageLabel(job.sourceLanguage)} → ${languageLabel(job.targetLanguage)}`,
     job.detectedSourceLanguage ? t('detected {language}', { language: languageLabel(job.detectedSourceLanguage) }) : null,
