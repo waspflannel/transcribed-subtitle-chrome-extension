@@ -21,7 +21,7 @@ import { isRuntimeMessage } from '../../utils/messages';
 import type { PanelRequest, PanelState } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
 import { escapeHtml } from '../../utils/html';
-import { aiProviderLabel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
+import { aiProviderLabel, CLAUDE_MODELS, type ClaudeModel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
@@ -143,6 +143,8 @@ const codexOptions = document.querySelector<HTMLElement>('[data-codex-options]')
 const codexModelSelect = document.querySelector<HTMLSelectElement>('select[name="codexModel"]')!;
 const codexFastModeInput = document.querySelector<HTMLInputElement>('input[name="codexFastMode"]')!;
 const codexReadiness = document.querySelector<HTMLElement>('[data-codex-readiness]')!;
+const claudeOptions = document.querySelector<HTMLElement>('[data-claude-options]')!;
+const claudeModelSelect = document.querySelector<HTMLSelectElement>('select[name="claudeModel"]')!;
 const aiBilling = document.querySelector<HTMLElement>('[data-ai-billing]')!;
 interfaceLanguageSelect.innerHTML = '<option value="auto" data-i18n="Browser language">Browser language</option>'
   + Object.entries(INTERFACE_LOCALES).map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
@@ -256,7 +258,7 @@ aiProviderSelect.addEventListener('change', () => {
 });
 for (const input of aiSourceInputs) input.addEventListener('change', () => {
   if (!input.checked) return;
-  const aiProvider = input.value === 'codex' ? 'codex' : aiProviderSelect.value === 'cerebras' ? 'cerebras' : 'openai';
+  const aiProvider = input.value === 'codex' ? 'codex' : input.value === 'claude' ? 'claude' : aiProviderSelect.value === 'cerebras' ? 'cerebras' : 'openai';
   const codexModel = currentSettings?.codexModel || latestState?.codexAccount?.models[0]?.id || '';
   void updateSettings({ aiProvider, ...(aiProvider === 'codex' ? { codexModel } : {}) });
 });
@@ -265,6 +267,10 @@ codexModelSelect.addEventListener('change', () => {
   if (model) void updateSettings({ codexModel: model.id, ...(!model.supportsFastMode ? { codexFastMode: false } : {}) });
 });
 codexFastModeInput.addEventListener('change', () => void updateSettings({ codexFastMode: codexFastModeInput.checked }));
+claudeModelSelect.addEventListener('change', () => {
+  const claudeModel = claudeModelSelect.value;
+  if (claudeModel in CLAUDE_MODELS) void updateSettings({ claudeModel: claudeModel as ClaudeModel });
+});
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 overlayAttachedToVideoInput.addEventListener('change', () =>
   void updateSettings({ overlayAttachedToVideo: overlayAttachedToVideoInput.checked }),
@@ -987,7 +993,7 @@ function showPanelState(state: PanelState): void {
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayAttachedToVideoInput.checked = settings.overlayAttachedToVideo;
-  if (settings.aiProvider !== 'codex') aiProviderSelect.value = settings.aiProvider;
+  if (settings.aiProvider === 'openai' || settings.aiProvider === 'cerebras') aiProviderSelect.value = settings.aiProvider;
   renderAiOptions(state);
   overlayPositionSelect.value = settings.overlayPosition;
   captionFontSizeSelect.value = settings.captionFontSize;
@@ -1200,9 +1206,12 @@ function renderGenerateNote(state: PanelState, supported: boolean): void {
 
 function renderAiOptions(state: PanelState): void {
   const codex = state.settings.aiProvider === 'codex';
-  for (const input of aiSourceInputs) input.checked = input.value === (codex ? 'codex' : 'api');
-  apiOptions.hidden = codex;
+  const source = codex ? 'codex' : state.settings.aiProvider === 'claude' ? 'claude' : 'api';
+  for (const input of aiSourceInputs) input.checked = input.value === source;
+  apiOptions.hidden = source !== 'api';
   codexOptions.hidden = !codex;
+  claudeOptions.hidden = source !== 'claude';
+  claudeModelSelect.value = state.settings.claudeModel;
   const models = state.codexAccount?.models ?? [];
   const optionsKey = JSON.stringify([interfaceLocale(), models]);
   if (optionsKey !== codexModelOptionsKey) {
@@ -1225,6 +1234,7 @@ function renderAiOptions(state: PanelState): void {
     : !models.some(model => model.id === state.settings.codexModel) ? t('Select an available Codex model before generating subtitles.') : '';
   aiBilling.textContent = codex
     ? t('Text analysis uses Codex credits. Audio transcription uses your ElevenLabs API key.')
+    : source === 'claude' ? t('Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.')
     : t('Text analysis and audio transcription use your API keys.');
 }
 
@@ -1368,6 +1378,7 @@ function setSettingsDisabled(disabled: boolean): void {
   aiProviderSelect.disabled = disabled;
   for (const input of aiSourceInputs) input.disabled = disabled;
   codexModelSelect.disabled = disabled || !latestState?.codexAccount?.connected;
+  claudeModelSelect.disabled = disabled;
   codexFastModeInput.disabled = disabled || !latestState?.codexAccount?.connected
     || (!latestState.settings.codexFastMode && !latestState.codexAccount.models.find(model => model.id === latestState?.settings.codexModel)?.supportsFastMode);
   overlayPositionSelect.disabled = disabled;

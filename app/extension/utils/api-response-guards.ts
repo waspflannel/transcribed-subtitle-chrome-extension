@@ -121,7 +121,7 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   oneOf(response, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
   requiredString(response, 'updatedAt');
   if (response.aiProvider !== undefined || response.aiModel !== undefined || response.aiFastMode !== undefined) {
-    oneOf(response, 'aiProvider', ['openai', 'cerebras', 'codex']);
+    oneOf(response, 'aiProvider', ['openai', 'cerebras', 'codex', 'claude']);
     requiredString(response, 'aiModel');
     requiredBoolean(response, 'aiFastMode');
     if (response.aiProvider !== 'codex' && response.aiFastMode) throw invalid('Fast mode requires Codex.');
@@ -183,7 +183,7 @@ function guardJobCore(value: Record<string, unknown>): void {
   requiredString(value, 'sourceLanguage');
   optionalString(value, 'detectedSourceLanguage');
   requiredString(value, 'targetLanguage');
-  oneOf(value, 'aiProvider', ['openai', 'cerebras', 'codex']);
+  oneOf(value, 'aiProvider', ['openai', 'cerebras', 'codex', 'claude']);
   requiredString(value, 'aiModel');
   if (value.aiFastMode !== undefined) requiredBoolean(value, 'aiFastMode');
   requiredBoolean(value, 'includeRomanization');
@@ -330,12 +330,14 @@ export function guardInstanceSettings(value: unknown): InstanceSettings {
   const settings = record(value, 'instance settings');
   const providers = record(settings.providers, 'providers');
   if (Object.keys(settings).some(key => key !== 'providers' && key !== 'retentionDays')) throw invalid('Unexpected settings fields');
-  if (Object.keys(providers).some(key => !['openai', 'cerebras', 'elevenlabs'].includes(key))) throw invalid('Unexpected provider');
-  for (const name of ['openai', 'cerebras', 'elevenlabs']) {
+  if (Object.keys(providers).some(key => !['openai', 'cerebras', 'elevenlabs', 'claude'].includes(key))) throw invalid('Unexpected provider');
+  for (const name of ['openai', 'cerebras', 'elevenlabs', 'claude']) {
     const provider = record(providers[name], name);
     requiredBoolean(provider, 'configured');
-    requiredString(provider, 'model');
-    if (Object.keys(provider).some(key => key !== 'configured' && key !== 'model')) throw invalid('Provider response contains unexpected fields');
+    if (name === 'claude') requiredBoolean(provider, 'available');
+    else requiredString(provider, 'model');
+    const allowed = name === 'claude' ? ['configured', 'available'] : ['configured', 'model'];
+    if (Object.keys(provider).some(key => !allowed.includes(key))) throw invalid('Provider response contains unexpected fields');
   }
   if (settings.retentionDays !== null && (!Number.isInteger(settings.retentionDays) || Number(settings.retentionDays) < 1)) throw invalid('Invalid retention');
   return settings as unknown as InstanceSettings;

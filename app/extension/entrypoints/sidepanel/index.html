@@ -90,6 +90,7 @@
                 <legend class="card-label" data-i18n="AI billing">AI billing</legend>
                 <label><input type="radio" name="aiSource" value="api" checked disabled><span data-i18n="API keys">API keys</span></label>
                 <label><input type="radio" name="aiSource" value="codex" disabled><span data-i18n="Codex credits">Codex credits</span></label>
+                <label><input type="radio" name="aiSource" value="claude" disabled><span data-i18n="Claude subscription">Claude subscription</span></label>
               </fieldset>
               <div data-api-options>
               <label class="row">
@@ -107,6 +108,13 @@
                 <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" name="codexFastMode" aria-describedby="codex-fast-help" disabled></label>
                 <p id="codex-fast-help" class="microcopy" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</p>
                 <p class="microcopy" data-codex-readiness role="status"></p>
+              </div>
+              <div data-claude-options hidden>
+                <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeModel" disabled>
+                  <option value="opus" data-i18n="Opus">Opus</option>
+                  <option value="sonnet" data-i18n="Sonnet">Sonnet</option>
+                  <option value="haiku" data-i18n="Haiku">Haiku</option>
+                </select></label>
               </div>
               <p class="microcopy" data-ai-billing></p>
               <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
@@ -178,6 +186,7 @@
                       <legend class="card-label" data-i18n="AI billing">AI billing</legend>
                       <label><input type="radio" name="lyricsAiSource" value="api"><span data-i18n="API keys">API keys</span></label>
                       <label><input type="radio" name="lyricsAiSource" value="codex"><span data-i18n="Codex credits">Codex credits</span></label>
+                      <label><input type="radio" name="lyricsAiSource" value="claude"><span data-i18n="Claude subscription">Claude subscription</span></label>
                     </fieldset>
                     <div data-lyrics-api-options hidden>
                       <label class="row"><span class="row-key" data-i18n="AI model">AI model</span><select data-lyrics-ai-provider><option value="openai">OpenAI</option><option value="cerebras">Cerebras</option></select></label>

@@ -230,6 +230,22 @@ class SubtitleWorkflowLoggerTest extends TestCase
         $this->logger()->completedTrackTiming($job, 500);
     }
 
+    public function test_enrichment_logs_name_the_claude_cli_adapter(): void
+    {
+        $job = SubtitleJob::factory()->create(['ai_provider' => 'claude', 'ai_model' => 'sonnet']);
+
+        Log::shouldReceive('info')
+            ->once()
+            ->with('backend.translation_started', Mockery::on(
+                fn (array $context): bool => $context['provider'] === 'claude'
+                    && $context['adapter'] === 'claude-code-cli'
+                    && $context['model'] === 'sonnet'
+                    && ! array_key_exists('fast_mode', $context),
+            ));
+
+        $this->logger()->translationStarted($job, 3);
+    }
+
     private function logger(): SubtitleWorkflowLogger
     {
         return new SubtitleWorkflowLogger;

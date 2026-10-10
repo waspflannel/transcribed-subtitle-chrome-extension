@@ -5,6 +5,7 @@ namespace App\Ai;
 use App\Exceptions\SubtitleProcessingException;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrackLyricsCorrection;
+use App\Services\ClaudeCode\ClaudeCodeService;
 use App\Services\Codex\CodexService;
 
 final class SubtitleModel
@@ -23,8 +24,15 @@ final class SubtitleModel
 
             return new self($provider, $model, $fastMode);
         }
+        if ($provider === 'claude') {
+            if (! in_array($model, ClaudeCodeService::MODELS, true) || $fastMode) {
+                throw new SubtitleProcessingException('validation_failed', 'Choose a Claude model: opus, sonnet or haiku.', 422);
+            }
+
+            return new self($provider, $model);
+        }
         if ($model !== null || $fastMode) {
-            throw new SubtitleProcessingException('validation_failed', 'Choose Codex to select a model or fast mode.', 422);
+            throw new SubtitleProcessingException('validation_failed', 'Choose Codex or Claude to select a model, and Codex for fast mode.', 422);
         }
 
         return new self($provider, self::model($provider));
@@ -47,16 +55,26 @@ final class SubtitleModel
     public static function provider(?string $provider = null): string
     {
         $provider ??= config('ai.default');
-        if (! in_array($provider, ['openai', 'cerebras', 'codex'], true)) {
+        if (! in_array($provider, ['openai', 'cerebras', 'codex', 'claude'], true)) {
             throw SubtitleProcessingException::enrichmentFailed('Subtitle AI provider is not configured.');
         }
 
         return $provider;
     }
 
+    public static function adapter(string $provider): string
+    {
+        return match ($provider) {
+            'codex' => 'codex-app-server',
+            'claude' => 'claude-code-cli',
+            default => 'laravel-ai-sdk',
+        };
+    }
+
     public static function model(?string $provider = null): string
     {
-        $model = config('ai.providers.'.self::provider($provider).'.models.text.default');
+        $provider = self::provider($provider);
+        $model = config('ai.providers.'.$provider.'.models.text.default');
         if (! is_string($model) || trim($model) === '') {
             throw SubtitleProcessingException::enrichmentFailed('Subtitle AI model is not configured.');
         }

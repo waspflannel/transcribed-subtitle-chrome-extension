@@ -52,6 +52,16 @@ describe('renderJobHistory links', () => {
     expect(jobsList.textContent).not.toContain('OpenAI');
     dom.window.close();
   });
+  it('labels Claude jobs without an API suffix', () => {
+    const dom = new JSDOM('<div id="list"></div><p id="err"></p>');
+    const jobsList = dom.window.document.getElementById('list')!;
+    renderJobHistory({ ...stateWithJob(), jobHistory: [makeJob({ aiProvider: 'claude', aiModel: 'sonnet' })] }, {
+      jobsList, jobsError: dom.window.document.getElementById('err')!,
+    });
+    expect(jobsList.textContent).toContain('Claude · sonnet');
+    expect(jobsList.textContent).not.toContain('Claude API');
+    dom.window.close();
+  });
   it.each(['dQw4w9WgXcQ', 'other000001'])('only opens the selected video when the active video is %s', (activeVideoId) => {
     const dom = new JSDOM('<div id="list"></div><p id="err"></p>');
     const jobsList = dom.window.document.getElementById('list')!;

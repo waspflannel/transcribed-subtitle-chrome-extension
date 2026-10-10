@@ -23,10 +23,10 @@ class UpdateInstanceSettingsRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'providers' => ['sometimes', 'array:openai,cerebras,elevenlabs'],
+            'providers' => ['sometimes', 'array:openai,cerebras,elevenlabs,claude'],
             'retentionDays' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:36500'],
         ];
-        foreach (['openai', 'cerebras', 'elevenlabs'] as $provider) {
+        foreach (['openai', 'cerebras', 'elevenlabs', 'claude'] as $provider) {
             $rules['providers.'.$provider] = ['sometimes', 'array:apiKey'];
             $rules['providers.'.$provider.'.apiKey'] = ['sometimes', 'nullable', 'string', 'max:4096', 'regex:/^[^\x00-\x1F\x7F]*$/'];
         }
@@ -44,8 +44,15 @@ class UpdateInstanceSettingsRequest extends FormRequest
         }
         foreach ($providers as $provider => &$fields) {
             $key = $original['providers'][$provider]['apiKey'] ?? null;
-            if (is_array($fields) && is_string($key) && trim($key) === '') {
+            if (! is_array($fields) || ! is_string($key)) {
+                continue;
+            }
+            // Keys never contain whitespace; terminal line wraps add it when long tokens are copied.
+            $key = preg_replace('/\s+/u', '', $key);
+            if ($key === '') {
                 unset($fields['apiKey']);
+            } else {
+                $fields['apiKey'] = $key;
             }
         }
         $this->merge(['providers' => $providers]);

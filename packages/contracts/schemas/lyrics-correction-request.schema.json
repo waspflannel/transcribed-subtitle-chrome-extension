@@ -25,7 +25,8 @@
       "enum": [
         "openai",
         "cerebras",
-        "codex"
+        "codex",
+        "claude"
       ],
       "description": "Optional provider override for this correction only. Omit all AI fields to inherit the generation’s saved provider, model, and fast mode."
     },
@@ -34,7 +35,7 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-      "description": "Model from the connected Codex account. Required for Codex; omitted for API providers."
+      "description": "Required for Codex (a model from the connected account) and Claude (opus, sonnet or haiku); omitted for other providers."
     },
     "aiFastMode": {
       "type": "boolean",
@@ -50,7 +51,10 @@
         ],
         "properties": {
           "aiProvider": {
-            "const": "codex"
+            "enum": [
+              "codex",
+              "claude"
+            ]
           }
         }
       },
@@ -64,10 +68,47 @@
           "required": [
             "aiModel"
           ]
-        },
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "aiProvider"
+        ],
+        "properties": {
+          "aiProvider": {
+            "const": "codex"
+          }
+        }
+      },
+      "else": {
         "properties": {
           "aiFastMode": {
             "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "aiProvider"
+        ],
+        "properties": {
+          "aiProvider": {
+            "const": "claude"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "aiModel": {
+            "enum": [
+              "opus",
+              "sonnet",
+              "haiku"
+            ]
           }
         }
       }

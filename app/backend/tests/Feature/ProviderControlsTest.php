@@ -16,6 +16,7 @@ use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Queue\Failed\DatabaseUuidFailedJobProvider;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -168,6 +169,28 @@ class ProviderControlsTest extends TestCase
         $gate->run('codex', $job, function () use ($gate, $job): void {
             try {
                 $gate->run('codex', $job, fn () => $this->fail('A second Codex session was admitted.'));
+                $this->fail('Expected capacity rejection.');
+            } catch (SubtitleProcessingException $exception) {
+                $this->assertSame('provider_admission', $exception->context['reason']);
+            }
+            $this->assertSame('admitted', $gate->run('openai', $job, fn () => 'admitted'));
+        });
+    }
+
+    public function test_claude_capacity_is_capped_below_the_global_limit(): void
+    {
+        config([
+            'subtitles.providers.global_concurrency' => 30,
+            'subtitles.providers.claude_concurrency' => 1,
+            'claude-code.token' => 'test-token',
+            'claude-code.command' => [PHP_BINARY, base_path('tests/Fixtures/claude-code-cli.php'), 'success'],
+        ]);
+        Cache::flush();
+        $job = SubtitleJob::factory()->create(['status' => 'completed']);
+        $gate = app(ProviderAdmission::class);
+        $gate->run('claude', $job, function () use ($gate, $job): void {
+            try {
+                $gate->run('claude', $job, fn () => $this->fail('A second Claude process was admitted.'));
                 $this->fail('Expected capacity rejection.');
             } catch (SubtitleProcessingException $exception) {
                 $this->assertSame('provider_admission', $exception->context['reason']);

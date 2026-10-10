@@ -448,6 +448,7 @@
   "API keys": "API 密钥",
   "Codex credits": "Codex 额度",
   "Codex model": "Codex 模型",
+  "Claude model": "Claude 模型",
   "Fast mode": "快速模式",
   "Fast mode uses more Codex credits when supported by the model.": "在模型支持的情况下，快速模式会消耗更多 Codex 额度。",
   "Codex connection": "Codex 连接",
@@ -478,5 +479,13 @@
   "Connect Codex in Settings before replacing lyrics.": "替换歌词前，请在设置中连接 Codex。",
   "Select an available Codex model before replacing lyrics.": "替换歌词前，请选择可用的 Codex 模型。",
   "Uses this generation’s saved AI settings.": "使用本次生成时保存的 AI 设置。",
-  "This choice applies only to this lyrics correction.": "此选择仅适用于本次歌词修正。"
+  "This choice applies only to this lyrics correction.": "此选择仅适用于本次歌词修正。",
+  "Claude subscription": "Claude 订阅",
+  "Claude Code": "Claude Code",
+  "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "文本分析使用你的 Claude 订阅。音频转录使用你的 ElevenLabs API 密钥。",
+  "Add a Claude Code token in Settings before replacing lyrics.": "替换歌词之前，请先在设置中添加 Claude Code 令牌。",
+  "Install Claude Code CLI 2.1.280 or newer on the backend.": "请在后端安装 Claude Code CLI 2.1.280 或更高版本。",
+  "Opus": "Opus",
+  "Sonnet": "Sonnet",
+  "Haiku": "Haiku"
 }

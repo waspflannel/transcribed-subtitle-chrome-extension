@@ -395,7 +395,8 @@
       "enum": [
         "openai",
         "cerebras",
-        "codex"
+        "codex",
+        "claude"
       ],
       "description": "The selected analysis provider stays pinned for this generation."
     },

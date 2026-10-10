@@ -6,6 +6,9 @@ describe('runtime message validation', () => {
   it.each([
     [{ aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }, true],
     [{ aiProvider: 'cerebras' }, true],
+    [{ aiProvider: 'claude' }, true],
+    [{ aiProvider: 'claude', aiModel: 'sonnet' }, false],
+    [{ aiProvider: 'claude', aiFastMode: true }, false],
     [{ aiProvider: 'codex' }, false],
     [{ aiProvider: 'codex', aiModel: '' }, false],
     [{ aiProvider: 'codex', aiModel: '../model' }, false],

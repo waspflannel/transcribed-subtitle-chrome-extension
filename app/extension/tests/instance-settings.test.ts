@@ -12,6 +12,7 @@ const settings: InstanceSettings = {
     openai: { configured: true, model: 'gpt-6-luna' },
     cerebras: { configured: false, model: 'gpt-oss-120b' },
     elevenlabs: { configured: true, model: 'scribe_v2' },
+    claude: { configured: false, available: false },
   },
   retentionDays: null,
 };
@@ -24,8 +25,8 @@ it('submits keys only to the backend, clears inputs, preserves drafts on refresh
   const state = { installId: 'install_test', backendUrl: 'http://127.0.0.1:8001/v1', settings: DEFAULT_EXTENSION_SETTINGS, instanceSettings: settings, subtitleState: { type: 'no-track' as const }, jobHistory: [] };
   view.render(state);
   const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
-  expect(form.querySelectorAll('[data-provider-fields] input')).toHaveLength(3);
-  expect(form.querySelector('[data-provider-fields]')?.closest('.card')?.querySelectorAll('input')).toHaveLength(3);
+  expect(form.querySelectorAll('[data-provider-fields] input')).toHaveLength(4);
+  expect(form.querySelector('[data-provider-fields]')?.closest('.card')?.querySelectorAll('input')).toHaveLength(4);
   expect(form.querySelectorAll('[data-provider-fields] fieldset')).toHaveLength(0);
   expect(form.querySelector('[name="openaiModel"]')).toBeNull();
   expect(form.querySelector('[data-provider-status="openai"]')?.textContent).toBe('✓');
@@ -49,6 +50,35 @@ it('submits keys only to the backend, clears inputs, preserves drafts on refresh
   expect(document.body.textContent).not.toContain('test-secret-key');
 });
 
+it('submits the Claude Code token and shows the missing CLI notice only when unavailable', async () => {
+  document.documentElement.innerHTML = markup;
+  const submissions: UpdateInstanceSettings[] = [];
+  const view = bindInstanceSettings(document, async patch => { submissions.push(structuredClone(patch)); return true; });
+  const state = { installId: 'install_test', backendUrl: 'http://127.0.0.1:8001/v1', settings: DEFAULT_EXTENSION_SETTINGS, instanceSettings: settings, subtitleState: { type: 'no-track' as const }, jobHistory: [] };
+  view.render(state);
+  const notice = document.querySelector<HTMLElement>('[data-claude-cli-missing]')!;
+  expect(notice.hidden).toBe(false);
+  view.render({ ...state, instanceSettings: { ...settings, providers: { ...settings.providers, claude: { configured: true, available: true } } } });
+  expect(notice.hidden).toBe(true);
+  const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
+  const key = form.elements.namedItem('claudeKey') as HTMLInputElement;
+  key.value = 'claude-token';
+  key.dispatchEvent(new Event('input', { bubbles: true }));
+  form.dispatchEvent(new Event('submit', { cancelable: true }));
+  await vi.waitFor(() => expect(submissions).toHaveLength(1));
+  expect(submissions[0]?.providers?.claude).toEqual({ apiKey: 'claude-token' });
+  expect(key.value).toBe('');
+});
+
+it('has no Claude model or thinking dropdowns; the model is picked on the generation page', () => {
+  document.documentElement.innerHTML = markup;
+  bindInstanceSettings(document, async () => true);
+  const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
+  expect(form.elements.namedItem('claudeModel')).toBeNull();
+  expect(form.elements.namedItem('claudeThinking')).toBeNull();
+  expect(form.querySelectorAll('select')).toHaveLength(0);
+});
+
 it('uses anonymous settings endpoints and rejects any returned credential fields', async () => {
   const fetcher = vi.fn(async () => new Response(JSON.stringify(settings)));
   const api = new SubtitleApiClient('http://localhost:8001/v1', fetcher as typeof fetch);
@@ -56,5 +86,10 @@ it('uses anonymous settings endpoints and rejects any returned credential fields
   expect(fetcher).toHaveBeenCalledWith('http://localhost:8001/v1/settings', expect.objectContaining({ method: 'PUT', headers: expect.not.objectContaining({ Authorization: expect.anything() }) }));
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, openai: { ...settings.providers.openai, apiKey: 'must-not-return' } } })).toThrow();
   expect(() => guardInstanceSettings({ ...settings, retentionDays: 0 })).toThrow();
+  expect(guardInstanceSettings({ ...settings, providers: { ...settings.providers, claude: { configured: true, available: true } } }).providers.claude.available).toBe(true);
+  const { claude: _claude, ...withoutClaude } = settings.providers;
+  expect(() => guardInstanceSettings({ ...settings, providers: withoutClaude })).toThrow();
+  expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, apiKey: 'must-not-return' } } })).toThrow();
+  expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, openai: { ...settings.providers.openai, available: true } } })).toThrow();
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, typesafe: { configured: false, model: 'retired' } } })).toThrow();
 });

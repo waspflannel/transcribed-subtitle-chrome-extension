@@ -2,7 +2,7 @@ import { t } from '../../utils/i18n';
 import type { PanelState } from '../../utils/messages';
 import type { UpdateInstanceSettings } from '../../utils/contracts';
 
-const providers = { openai: 'OpenAI', cerebras: 'Cerebras', elevenlabs: 'ElevenLabs' } as const;
+const providers = { openai: 'OpenAI', cerebras: 'Cerebras', elevenlabs: 'ElevenLabs', claude: 'Claude Code' } as const;
 
 export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanceSettings) => Promise<boolean>): { render(state: PanelState): void } {
   const form = root.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
@@ -30,6 +30,13 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
     });
     fields.append(row);
   }
+  const cliMissing = root.createElement('p');
+  cliMissing.className = 'microcopy';
+  cliMissing.dataset.claudeCliMissing = '';
+  cliMissing.hidden = true;
+  cliMissing.textContent = t('Install Claude Code CLI 2.1.280 or newer on the backend.');
+  const claudeRow = fields.querySelector('#claudeKey')!.parentElement!;
+  claudeRow.append(cliMissing);
   form.addEventListener('input', event => {
     if (event.target instanceof HTMLInputElement) {
       dirty.add(event.target.name);
@@ -80,5 +87,6 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       indicator.setAttribute('aria-label', configured ? t('Configured') : t('Not configured'));
       indicator.title = configured ? t('Configured') : t('Not configured');
     }
+    cliMissing.hidden = settings.providers.claude.available;
   } };
 }

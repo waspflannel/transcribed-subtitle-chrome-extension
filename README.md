@@ -21,7 +21,7 @@ It works with public YouTube videos and Shorts, including videos without existin
 - **Backend:** PHP and Laravel.
 - **Storage and background jobs:** PostgreSQL and Redis.
 - **Speech transcription:** ElevenLabs Scribe.
-- **Translations and language learning features:** OpenAI/Cerebras API keys or a connected Codex ChatGPT account, with a model picker and optional Fast mode.
+- **Translations and language learning features:** OpenAI/Cerebras API keys, a connected Codex ChatGPT account (model picker and optional Fast mode), or a local Claude Code CLI using your Claude subscription token, with the model (Opus/Sonnet/Haiku) picked on the generation page like Codex (Fast mode is intentionally unsupported because it bills usage credits).
 - **Audio processing:** yt-dlp and FFmpeg.
 
 ## More information

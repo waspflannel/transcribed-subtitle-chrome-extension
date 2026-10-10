@@ -103,7 +103,7 @@ const apiMock = vi.hoisted(() => ({
   cancelSubtitleJob: vi.fn(),
   deleteSavedGeneration: vi.fn(),
   listSubtitleJobs: vi.fn(async () => ({ jobs: [] })),
-  getInstanceSettings: vi.fn(async () => ({ providers: Object.fromEntries(['openai','cerebras','elevenlabs'].map(name => [name, { configured: true, model: 'test-model' }])), retentionDays: null })),
+  getInstanceSettings: vi.fn(async () => ({ providers: { ...Object.fromEntries(['openai','cerebras','elevenlabs'].map(name => [name, { configured: true, model: 'test-model' }])), claude: { configured: true, available: true } } as Record<string, { configured: boolean; model?: string; available?: boolean }>, retentionDays: null })),
 }));
 
 const browserMock = vi.hoisted(() => {
@@ -377,6 +377,18 @@ describe('background entrypoint review regressions', () => {
     await dispatch(listener, generationRequest(), {});
     await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
     expect(apiMock.createSubtitleJob.mock.calls[0]?.[1]).toMatchObject({ aiProvider: 'codex', aiModel: 'test-model', aiFastMode: true });
+  });
+
+  it('sends the selected Claude model with the job, like Codex', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const listener = await loadBackground();
+    await dispatch(listener, { type: 'panel.updateSettings', patch: { aiProvider: 'claude', claudeModel: 'haiku' } }, {});
+    apiMock.createSubtitleJob.mockResolvedValue({ ...job(VIDEO_A, 'claude-job'), status: 'completed', track: track(VIDEO_A, 'claude-job') });
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => apiMock.createSubtitleJob.mock.calls.length === 1);
+    expect(apiMock.createSubtitleJob.mock.calls[0]?.[1]).toMatchObject({ aiProvider: 'claude', aiModel: 'haiku' });
+    expect(apiMock.createSubtitleJob.mock.calls[0]?.[1]).not.toHaveProperty('aiFastMode');
   });
 
   it.each(['disconnected', 'unavailable', 'missing-model', 'unsupported-fast', 'missing-transcription'])('blocks Codex generation when %s', async failure => {

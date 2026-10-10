@@ -448,6 +448,7 @@
   "API keys": "Chaves de API",
   "Codex credits": "Créditos do Codex",
   "Codex model": "Modelo do Codex",
+  "Claude model": "Modelo do Claude",
   "Fast mode": "Modo rápido",
   "Fast mode uses more Codex credits when supported by the model.": "O modo rápido usa mais créditos do Codex quando o modelo oferece suporte.",
   "Codex connection": "Conexão do Codex",
@@ -478,5 +479,13 @@
   "Connect Codex in Settings before replacing lyrics.": "Conecte o Codex nas Configurações antes de substituir a letra.",
   "Select an available Codex model before replacing lyrics.": "Selecione um modelo do Codex disponível antes de substituir a letra.",
   "Uses this generation’s saved AI settings.": "Usa as configurações de IA salvas para esta geração.",
-  "This choice applies only to this lyrics correction.": "Esta escolha se aplica apenas a esta correção de letra."
+  "This choice applies only to this lyrics correction.": "Esta escolha se aplica apenas a esta correção de letra.",
+  "Claude subscription": "Assinatura do Claude",
+  "Claude Code": "Claude Code",
+  "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "A análise de texto usa sua assinatura do Claude. A transcrição de áudio usa sua chave de API da ElevenLabs.",
+  "Add a Claude Code token in Settings before replacing lyrics.": "Adicione um token do Claude Code em Configurações antes de substituir a letra.",
+  "Install Claude Code CLI 2.1.280 or newer on the backend.": "Instale o Claude Code CLI 2.1.280 ou mais recente no backend.",
+  "Opus": "Opus",
+  "Sonnet": "Sonnet",
+  "Haiku": "Haiku"
 }

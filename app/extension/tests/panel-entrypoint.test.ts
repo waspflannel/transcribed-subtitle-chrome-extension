@@ -287,6 +287,40 @@ it('switches API and Codex billing and stores a discovered model with capability
   dom.window.close();
 });
 
+it('shows the Claude model picker for Claude billing and stores the chosen model', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup);
+  stubPanelDom(dom);
+  let state: PanelState = {
+    installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS, backendUrl: 'http://localhost/v1',
+    subtitleState: { type: 'no-track' }, jobHistory: [],
+  };
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; patch?: Partial<PanelState['settings']> }) => {
+    if (request?.type === 'panel.updateSettings') state = { ...state, settings: { ...state.settings, ...request.patch } };
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  const claudeOptions = dom.window.document.querySelector<HTMLElement>('[data-claude-options]')!;
+  expect(claudeOptions.hidden).toBe(true);
+  dom.window.document.querySelector<HTMLInputElement>('input[name="aiSource"][value="claude"]')!.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.aiProvider).toBe('claude');
+  expect(claudeOptions.hidden).toBe(false);
+  const model = dom.window.document.querySelector<HTMLSelectElement>('select[name="claudeModel"]')!;
+  expect([...model.options].map(option => option.value)).toEqual(['opus', 'sonnet', 'haiku']);
+  expect(model.value).toBe('sonnet');
+  model.value = 'haiku';
+  model.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.claudeModel).toBe('haiku');
+  dom.window.document.querySelector<HTMLInputElement>('input[name="aiSource"][value="codex"]')!.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(claudeOptions.hidden).toBe(true);
+  dom.window.close();
+});
+
 it('opens OAuth with the browser API and refreshes connection state when the user returns', async () => {
   vi.resetModules();
   vi.useFakeTimers();

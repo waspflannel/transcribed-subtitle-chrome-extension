@@ -101,8 +101,32 @@ class InstanceSettingsTest extends TestCase
             ->putJson('/v1/settings', ['providers' => ['typesafe' => ['apiKey' => 'never-save-this-key']]])
             ->assertUnprocessable()->assertDontSee('never-save-this-key');
         $this->assertDatabaseCount('instance_settings', 0);
-        $this->getJson('/v1/settings')->assertOk()->assertJsonCount(3, 'providers')
+        $this->getJson('/v1/settings')->assertOk()->assertJsonCount(4, 'providers')->assertJsonMissingPath('providers.claude.model')
             ->assertJsonMissingPath('providers.typesafe');
+    }
+
+    public function test_claude_settings_save_only_the_token_and_never_return_it(): void
+    {
+        $this->withExtensionInstall('install_settings_test')->getJson('/v1/settings')->assertOk()
+            ->assertJsonMissingPath('providers.claude.model')->assertJsonMissingPath('providers.claude.thinking');
+
+        $this->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-private-token']]])
+            ->assertOk()->assertJsonPath('providers.claude.configured', true)
+            ->assertDontSee('claude-private-token');
+        $this->assertStringNotContainsString('claude-private-token', DB::table('instance_settings')->value('values'));
+
+        config(['claude-code.token' => null]);
+        app(InstanceSettings::class)->apply();
+        $this->assertSame('claude-private-token', config('claude-code.token'));
+    }
+
+    public function test_claude_settings_reject_the_removed_model_and_thinking_fields(): void
+    {
+        $this->withExtensionInstall('install_settings_test');
+        foreach ([['model' => 'sonnet'], ['thinking' => 'medium']] as $fields) {
+            $this->putJson('/v1/settings', ['providers' => ['claude' => $fields]])->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('instance_settings', 0);
     }
 
     public function test_retention_changes_update_existing_tracks_and_completed_jobs_from_generation_time(): void
