@@ -483,5 +483,13 @@
   "Claude Code": "Claude Code",
   "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "Die Textanalyse nutzt dein Claude-Abonnement. Die Audiotranskription verwendet deinen ElevenLabs-API-Schlüssel.",
   "Add a Claude Code token in Settings before replacing lyrics.": "Füge in den Einstellungen ein Claude-Code-Token hinzu, bevor du den Liedtext ersetzt.",
-  "Install Claude Code CLI 2.1.273 or newer on the backend.": "Installiere auf dem Backend die Claude Code CLI 2.1.273 oder neuer."
+  "Install Claude Code CLI 2.1.273 or newer on the backend.": "Installiere auf dem Backend die Claude Code CLI 2.1.273 oder neuer.",
+  "Thinking": "Denken",
+  "Opus": "Opus",
+  "Sonnet": "Sonnet",
+  "Haiku": "Haiku",
+  "Low": "Niedrig",
+  "High": "Hoch",
+  "Extra high": "Sehr hoch",
+  "Max": "Maximal"
 }

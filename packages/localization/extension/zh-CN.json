@@ -483,5 +483,13 @@
   "Claude Code": "Claude Code",
   "Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.": "文本分析使用你的 Claude 订阅。音频转录使用你的 ElevenLabs API 密钥。",
   "Add a Claude Code token in Settings before replacing lyrics.": "替换歌词之前，请先在设置中添加 Claude Code 令牌。",
-  "Install Claude Code CLI 2.1.273 or newer on the backend.": "请在后端安装 Claude Code CLI 2.1.273 或更高版本。"
+  "Install Claude Code CLI 2.1.273 or newer on the backend.": "请在后端安装 Claude Code CLI 2.1.273 或更高版本。",
+  "Thinking": "思考",
+  "Opus": "Opus",
+  "Sonnet": "Sonnet",
+  "Haiku": "Haiku",
+  "Low": "低",
+  "High": "高",
+  "Extra high": "超高",
+  "Max": "最高"
 }
