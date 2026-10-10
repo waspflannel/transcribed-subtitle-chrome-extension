@@ -448,6 +448,7 @@
   "API keys": "API 密钥",
   "Codex credits": "Codex 额度",
   "Codex model": "Codex 模型",
+  "Claude model": "Claude 模型",
   "Fast mode": "快速模式",
   "Fast mode uses more Codex credits when supported by the model.": "在模型支持的情况下，快速模式会消耗更多 Codex 额度。",
   "Codex connection": "Codex 连接",

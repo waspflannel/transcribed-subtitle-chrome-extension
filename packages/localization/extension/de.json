@@ -448,6 +448,7 @@
   "API keys": "API-Schlüssel",
   "Codex credits": "Codex-Guthaben",
   "Codex model": "Codex-Modell",
+  "Claude model": "Claude-Modell",
   "Fast mode": "Schnellmodus",
   "Fast mode uses more Codex credits when supported by the model.": "Der Schnellmodus verbraucht mehr Codex-Guthaben, wenn das Modell ihn unterstützt.",
   "Codex connection": "Codex-Verbindung",

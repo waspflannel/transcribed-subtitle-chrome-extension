@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\ClaudeCode\ClaudeCodeService;
 use App\Services\Languages\LanguageCatalog;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -22,7 +23,9 @@ class CreateSubtitleJobRequest extends FormRequest
      */
     public function rules(): array
     {
-        $codex = $this->input('aiProvider', config('ai.default')) === 'codex';
+        $provider = $this->input('aiProvider', config('ai.default'));
+        $codex = $provider === 'codex';
+        $claude = $provider === 'claude';
 
         return [
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
@@ -31,7 +34,7 @@ class CreateSubtitleJobRequest extends FormRequest
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
             'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex', 'claude'])],
-            'aiModel' => [Rule::requiredIf($codex), Rule::prohibitedIf(! $codex), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D'],
+            'aiModel' => [Rule::requiredIf($codex || $claude), Rule::prohibitedIf(! $codex && ! $claude), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D', ...($claude ? [Rule::in(ClaudeCodeService::MODELS)] : [])],
             'aiFastMode' => ['sometimes', 'boolean:strict', Rule::prohibitedIf(! $codex && $this->input('aiFastMode') !== false)],
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],

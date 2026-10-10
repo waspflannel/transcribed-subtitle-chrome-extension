@@ -448,6 +448,7 @@
   "API keys": "API keys",
   "Codex credits": "Codex credits",
   "Codex model": "Codex model",
+  "Claude model": "Claude model",
   "Fast mode": "Fast mode",
   "Fast mode uses more Codex credits when supported by the model.": "Fast mode uses more Codex credits when supported by the model.",
   "Codex connection": "Codex connection",

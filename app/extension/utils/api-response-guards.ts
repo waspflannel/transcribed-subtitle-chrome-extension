@@ -334,9 +334,9 @@ export function guardInstanceSettings(value: unknown): InstanceSettings {
   for (const name of ['openai', 'cerebras', 'elevenlabs', 'claude']) {
     const provider = record(providers[name], name);
     requiredBoolean(provider, 'configured');
-    requiredString(provider, 'model');
     if (name === 'claude') requiredBoolean(provider, 'available');
-    const allowed = name === 'claude' ? ['configured', 'model', 'available'] : ['configured', 'model'];
+    else requiredString(provider, 'model');
+    const allowed = name === 'claude' ? ['configured', 'available'] : ['configured', 'model'];
     if (Object.keys(provider).some(key => !allowed.includes(key))) throw invalid('Provider response contains unexpected fields');
   }
   if (settings.retentionDays !== null && (!Number.isInteger(settings.retentionDays) || Number(settings.retentionDays) < 1)) throw invalid('Invalid retention');

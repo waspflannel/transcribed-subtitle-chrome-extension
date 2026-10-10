@@ -712,7 +712,8 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
-      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode } : {}),
+      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode }
+        : settings.aiProvider === 'claude' ? { aiModel: settings.claudeModel } : {}),
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -737,7 +738,8 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
-      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode } : {}),
+      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode }
+        : settings.aiProvider === 'claude' ? { aiModel: settings.claudeModel } : {}),
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });

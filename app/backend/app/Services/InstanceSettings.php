@@ -18,7 +18,8 @@ class InstanceSettings
         'openai' => ['key' => 'ai.providers.openai.key', 'model' => 'ai.providers.openai.models.text.default'],
         'cerebras' => ['key' => 'ai.providers.cerebras.key', 'model' => 'ai.providers.cerebras.models.text.default'],
         'elevenlabs' => ['key' => 'ai.providers.eleven.key', 'model' => 'ai.providers.eleven.models.transcription.default'],
-        'claude' => ['key' => 'claude-code.token', 'model' => 'claude-code.model'],
+        // Each Claude job carries its own model, like Codex.
+        'claude' => ['key' => 'claude-code.token'],
     ];
 
     public function apply(): void
@@ -36,9 +37,6 @@ class InstanceSettings
                 app(AiManager::class)->forgetInstance($provider === 'elevenlabs' ? 'eleven' : $provider);
             }
         }
-        if (array_key_exists('model', $values['providers']['claude'] ?? [])) {
-            config(['claude-code.model' => $values['providers']['claude']['model']]);
-        }
     }
 
     public function summary(): array
@@ -46,10 +44,10 @@ class InstanceSettings
         $this->apply();
         $providers = [];
         foreach (self::PROVIDERS as $provider => $paths) {
-            $providers[$provider] = [
-                'configured' => filled(config($paths['key'])),
-                'model' => (string) config($paths['model']),
-            ];
+            $providers[$provider] = ['configured' => filled(config($paths['key']))];
+            if (isset($paths['model'])) {
+                $providers[$provider]['model'] = (string) config($paths['model']);
+            }
         }
         $providers['claude']['available'] = ClaudeCodeService::available();
 
@@ -102,7 +100,7 @@ class InstanceSettings
         $this->apply();
         $provider = $provider === 'eleven' ? 'elevenlabs' : $provider;
         $paths = self::PROVIDERS[$provider] ?? null;
-        if ($paths === null || blank(config($paths['key'])) || blank(config($paths['model']))) {
+        if ($paths === null || blank(config($paths['key'])) || (isset($paths['model']) && blank(config($paths['model'])))) {
             throw new SubtitleProcessingException('provider_not_configured', 'Configure the '.$provider.' API key in Settings before generating.', 422);
         }
         if ($provider === 'claude' && ! ClaudeCodeService::available()) {

@@ -21,7 +21,7 @@ import { isRuntimeMessage } from '../../utils/messages';
 import type { PanelRequest, PanelState } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
 import { escapeHtml } from '../../utils/html';
-import { aiProviderLabel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
+import { aiProviderLabel, CLAUDE_MODELS, type ClaudeModel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
@@ -143,6 +143,8 @@ const codexOptions = document.querySelector<HTMLElement>('[data-codex-options]')
 const codexModelSelect = document.querySelector<HTMLSelectElement>('select[name="codexModel"]')!;
 const codexFastModeInput = document.querySelector<HTMLInputElement>('input[name="codexFastMode"]')!;
 const codexReadiness = document.querySelector<HTMLElement>('[data-codex-readiness]')!;
+const claudeOptions = document.querySelector<HTMLElement>('[data-claude-options]')!;
+const claudeModelSelect = document.querySelector<HTMLSelectElement>('select[name="claudeModel"]')!;
 const aiBilling = document.querySelector<HTMLElement>('[data-ai-billing]')!;
 interfaceLanguageSelect.innerHTML = '<option value="auto" data-i18n="Browser language">Browser language</option>'
   + Object.entries(INTERFACE_LOCALES).map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
@@ -265,6 +267,10 @@ codexModelSelect.addEventListener('change', () => {
   if (model) void updateSettings({ codexModel: model.id, ...(!model.supportsFastMode ? { codexFastMode: false } : {}) });
 });
 codexFastModeInput.addEventListener('change', () => void updateSettings({ codexFastMode: codexFastModeInput.checked }));
+claudeModelSelect.addEventListener('change', () => {
+  const claudeModel = claudeModelSelect.value;
+  if (claudeModel in CLAUDE_MODELS) void updateSettings({ claudeModel: claudeModel as ClaudeModel });
+});
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 overlayAttachedToVideoInput.addEventListener('change', () =>
   void updateSettings({ overlayAttachedToVideo: overlayAttachedToVideoInput.checked }),
@@ -1204,6 +1210,8 @@ function renderAiOptions(state: PanelState): void {
   for (const input of aiSourceInputs) input.checked = input.value === source;
   apiOptions.hidden = source !== 'api';
   codexOptions.hidden = !codex;
+  claudeOptions.hidden = source !== 'claude';
+  claudeModelSelect.value = state.settings.claudeModel;
   const models = state.codexAccount?.models ?? [];
   const optionsKey = JSON.stringify([interfaceLocale(), models]);
   if (optionsKey !== codexModelOptionsKey) {
@@ -1370,6 +1378,7 @@ function setSettingsDisabled(disabled: boolean): void {
   aiProviderSelect.disabled = disabled;
   for (const input of aiSourceInputs) input.disabled = disabled;
   codexModelSelect.disabled = disabled || !latestState?.codexAccount?.connected;
+  claudeModelSelect.disabled = disabled;
   codexFastModeInput.disabled = disabled || !latestState?.codexAccount?.connected
     || (!latestState.settings.codexFastMode && !latestState.codexAccount.models.find(model => model.id === latestState?.settings.codexModel)?.supportsFastMode);
   overlayPositionSelect.disabled = disabled;

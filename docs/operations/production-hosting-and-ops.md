@@ -64,7 +64,7 @@ Apply pending database migrations and rebuild/reload the extension when upgradin
 
 Install Claude Code CLI 2.1.280 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
 
-The model (`opus`, `sonnet`, `haiku`; default `sonnet`) is chosen in **Settings → Claude Code**. The backend pins these aliases to `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5` with `ANTHROPIC_DEFAULT_*_MODEL`, which also covers the CLI's own background Haiku calls; `CLAUDE_MODEL` only sets the default model before one is saved. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
+The model (`opus`, `sonnet`, `haiku`; default `sonnet`) is picked on the generation page, like the Codex model. The extension saves it and sends it with each job as `aiModel`, so every job keeps its own model. The backend pins these aliases to `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5` with `ANTHROPIC_DEFAULT_*_MODEL`, which also covers the CLI's own background Haiku calls. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
 
 Each AI request starts one `claude -p` process with:
 

@@ -78,7 +78,7 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
   for (const source of sources) source.addEventListener('change', () => {
     if (!source.checked || busy) return;
     if (source.value === 'api') selectApi();
-    else if (source.value === 'claude') update({ aiProvider: 'claude', aiModel: latest?.instanceSettings?.providers.claude.model ?? '', aiFastMode: false });
+    else if (source.value === 'claude') update({ aiProvider: 'claude', aiModel: latest?.settings.claudeModel ?? 'sonnet', aiFastMode: false });
     else update({ aiProvider: 'codex', aiModel: latest?.codexAccount?.models[0]?.id ?? '', aiFastMode: false });
   });
   provider.addEventListener('change', selectApi);
@@ -114,7 +114,8 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
     },
     payload(): Pick<LyricsCorrectionRequest, 'aiProvider' | 'aiModel' | 'aiFastMode'> {
       if (!changed || !selection) return {};
-      return { aiProvider: selection.aiProvider, ...(selection.aiProvider === 'codex' ? { aiModel: selection.aiModel, aiFastMode: selection.aiFastMode ?? false } : {}) };
+      return { aiProvider: selection.aiProvider, ...(selection.aiProvider === 'codex' ? { aiModel: selection.aiModel, aiFastMode: selection.aiFastMode ?? false }
+        : selection.aiProvider === 'claude' ? { aiModel: selection.aiModel } : {}) };
     },
   };
 }

@@ -2,10 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Services\ClaudeCode\ClaudeCodeService;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class UpdateInstanceSettingsRequest extends FormRequest
 {
@@ -29,10 +27,9 @@ class UpdateInstanceSettingsRequest extends FormRequest
             'retentionDays' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:36500'],
         ];
         foreach (['openai', 'cerebras', 'elevenlabs', 'claude'] as $provider) {
-            $rules['providers.'.$provider] = ['sometimes', $provider === 'claude' ? 'array:apiKey,model' : 'array:apiKey'];
+            $rules['providers.'.$provider] = ['sometimes', 'array:apiKey'];
             $rules['providers.'.$provider.'.apiKey'] = ['sometimes', 'nullable', 'string', 'max:4096', 'regex:/^[^\x00-\x1F\x7F]*$/'];
         }
-        $rules['providers.claude.model'] = ['sometimes', 'string', Rule::in(ClaudeCodeService::MODELS)];
 
         return $rules;
     }

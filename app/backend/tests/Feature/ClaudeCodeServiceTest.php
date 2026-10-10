@@ -184,7 +184,7 @@ class ClaudeCodeServiceTest extends TestCase
             ->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-secret-token']]])
             ->assertOk()->assertDontSee('claude-secret-token');
         $this->getJson('/v1/settings')->assertOk()->assertDontSee('claude-secret-token')
-            ->assertJsonPath('providers.claude', ['configured' => true, 'model' => 'sonnet', 'available' => true]);
+            ->assertJsonPath('providers.claude', ['configured' => true, 'available' => true]);
 
         $this->assertStringNotContainsString('claude-secret-token', DB::table('instance_settings')->value('values'));
     }
@@ -199,15 +199,18 @@ class ClaudeCodeServiceTest extends TestCase
         $this->assertSame('sk-ant-oat01-abcdef', config('claude-code.token'));
     }
 
-    public function test_claude_jobs_pin_the_configured_model_and_reject_model_overrides(): void
+    public function test_claude_jobs_carry_the_selected_model_like_codex(): void
     {
         Queue::fake();
         config(['ai.providers.eleven.key' => 'eleven-key']);
         $this->withExtensionInstall('install_claude_test');
 
-        $this->postJson('/v1/subtitle-jobs', $this->payload())->assertAccepted()
-            ->assertJsonPath('aiProvider', 'claude')->assertJsonPath('aiModel', 'sonnet');
-        $this->postJson('/v1/subtitle-jobs', [...$this->payload(), 'aiModel' => 'opus'])->assertUnprocessable();
+        $this->postJson('/v1/subtitle-jobs', [...$this->payload(), 'aiModel' => 'haiku'])->assertAccepted()
+            ->assertJsonPath('aiProvider', 'claude')->assertJsonPath('aiModel', 'haiku');
+        $payload = $this->payload();
+        unset($payload['aiModel']);
+        $this->postJson('/v1/subtitle-jobs', $payload)->assertUnprocessable();
+        $this->postJson('/v1/subtitle-jobs', [...$this->payload(), 'aiModel' => 'claude-opus-4'])->assertUnprocessable();
         $this->postJson('/v1/subtitle-jobs', [...$this->payload(), 'aiFastMode' => true])->assertUnprocessable();
     }
 
@@ -237,6 +240,7 @@ class ClaudeCodeServiceTest extends TestCase
             'includeRomanization' => false,
             'includeTranslation' => false,
             'aiProvider' => 'claude',
+            'aiModel' => 'sonnet',
         ];
     }
 

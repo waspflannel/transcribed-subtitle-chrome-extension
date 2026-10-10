@@ -62,13 +62,6 @@
               ],
               "maxLength": 4096,
               "pattern": "^[^\\u0000-\\u001F\\u007F]*$"
-            },
-            "model": {
-              "enum": [
-                "opus",
-                "sonnet",
-                "haiku"
-              ]
             }
           }
         }

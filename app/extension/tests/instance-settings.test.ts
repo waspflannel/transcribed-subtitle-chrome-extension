@@ -12,7 +12,7 @@ const settings: InstanceSettings = {
     openai: { configured: true, model: 'gpt-6-luna' },
     cerebras: { configured: false, model: 'gpt-oss-120b' },
     elevenlabs: { configured: true, model: 'scribe_v2' },
-    claude: { configured: false, model: 'sonnet', available: false },
+    claude: { configured: false, available: false },
   },
   retentionDays: null,
 };
@@ -58,7 +58,7 @@ it('submits the Claude Code token and shows the missing CLI notice only when una
   view.render(state);
   const notice = document.querySelector<HTMLElement>('[data-claude-cli-missing]')!;
   expect(notice.hidden).toBe(false);
-  view.render({ ...state, instanceSettings: { ...settings, providers: { ...settings.providers, claude: { configured: true, model: 'sonnet', available: true } } } });
+  view.render({ ...state, instanceSettings: { ...settings, providers: { ...settings.providers, claude: { configured: true, available: true } } } });
   expect(notice.hidden).toBe(true);
   const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
   const key = form.elements.namedItem('claudeKey') as HTMLInputElement;
@@ -70,33 +70,13 @@ it('submits the Claude Code token and shows the missing CLI notice only when una
   expect(key.value).toBe('');
 });
 
-it('renders the Claude model dropdown, reflects the backend and keeps unsaved choices', async () => {
+it('has no Claude model or thinking dropdowns; the model is picked on the generation page', () => {
   document.documentElement.innerHTML = markup;
-  const submissions: UpdateInstanceSettings[] = [];
-  const view = bindInstanceSettings(document, async patch => { submissions.push(structuredClone(patch)); return true; });
-  const withClaude = (model: string) => ({
-    installId: 'install_test', backendUrl: 'http://127.0.0.1:8001/v1', settings: DEFAULT_EXTENSION_SETTINGS, subtitleState: { type: 'no-track' as const }, jobHistory: [],
-    instanceSettings: { ...settings, providers: { ...settings.providers, claude: { configured: true, model, available: true } } },
-  });
-  view.render(withClaude('opus'));
+  bindInstanceSettings(document, async () => true);
   const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
-  const model = form.elements.namedItem('claudeModel') as HTMLSelectElement;
-  expect(model.closest('.provider-field')?.querySelector('#claudeKey')).not.toBeNull();
-  expect([...model.options].map(option => option.value)).toEqual(['opus', 'sonnet', 'haiku']);
+  expect(form.elements.namedItem('claudeModel')).toBeNull();
   expect(form.elements.namedItem('claudeThinking')).toBeNull();
-  expect(model.value).toBe('opus');
-  expect(form.querySelectorAll('[data-provider-fields] input')).toHaveLength(4);
-  model.value = 'haiku';
-  model.dispatchEvent(new Event('input', { bubbles: true }));
-  view.render(withClaude('opus'));
-  expect(model.value).toBe('haiku');
-  form.dispatchEvent(new Event('submit', { cancelable: true }));
-  await vi.waitFor(() => expect(submissions).toHaveLength(1));
-  expect(submissions[0]?.providers?.claude).toEqual({ model: 'haiku' });
-  expect(submissions[0]?.providers?.openai).not.toHaveProperty('model');
-  await vi.waitFor(() => expect(document.querySelector('[data-instance-settings-status]')?.textContent).toBe('Settings saved.'));
-  view.render(withClaude('sonnet'));
-  expect(model.value).toBe('sonnet');
+  expect(form.querySelectorAll('select')).toHaveLength(0);
 });
 
 it('uses anonymous settings endpoints and rejects any returned credential fields', async () => {
@@ -106,7 +86,7 @@ it('uses anonymous settings endpoints and rejects any returned credential fields
   expect(fetcher).toHaveBeenCalledWith('http://localhost:8001/v1/settings', expect.objectContaining({ method: 'PUT', headers: expect.not.objectContaining({ Authorization: expect.anything() }) }));
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, openai: { ...settings.providers.openai, apiKey: 'must-not-return' } } })).toThrow();
   expect(() => guardInstanceSettings({ ...settings, retentionDays: 0 })).toThrow();
-  expect(guardInstanceSettings({ ...settings, providers: { ...settings.providers, claude: { configured: true, model: 'sonnet', available: true } } }).providers.claude.available).toBe(true);
+  expect(guardInstanceSettings({ ...settings, providers: { ...settings.providers, claude: { configured: true, available: true } } }).providers.claude.available).toBe(true);
   const { claude: _claude, ...withoutClaude } = settings.providers;
   expect(() => guardInstanceSettings({ ...settings, providers: withoutClaude })).toThrow();
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, apiKey: 'must-not-return' } } })).toThrow();

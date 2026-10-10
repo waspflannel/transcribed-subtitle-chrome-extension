@@ -14,12 +14,15 @@ export type OverlayPosition = 'bottom' | 'top' | 'compact';
 export type CaptionFontSize = 'small' | 'medium' | 'large';
 export type CaptionDensity = 'compact' | 'comfortable';
 export type CaptionContrastTheme = 'default' | 'high';
+export const CLAUDE_MODELS = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' } as const;
+export type ClaudeModel = keyof typeof CLAUDE_MODELS;
 
 export interface ExtensionSettings {
   interfaceLocale: InterfaceLocale | 'auto';
   aiProvider: NonNullable<CreateSubtitleJobRequest['aiProvider']>;
   codexModel: string;
   codexFastMode: boolean;
+  claudeModel: ClaudeModel;
   sourceLanguage: SourceLanguage;
   targetLanguage: TargetLanguage;
   overlayVisible: boolean;
@@ -47,6 +50,7 @@ export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   aiProvider: 'openai',
   codexModel: '',
   codexFastMode: false,
+  claudeModel: 'sonnet',
   sourceLanguage: DEFAULT_SOURCE_LANGUAGE,
   targetLanguage: DEFAULT_TARGET_LANGUAGE,
   overlayVisible: true,
@@ -77,6 +81,7 @@ export function createExtensionSettingsFromPartial(value: Partial<ExtensionSetti
   }
   if (typeof value?.codexModel === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.codexModel)) settings.codexModel = value.codexModel;
   if (typeof value?.codexFastMode === 'boolean') settings.codexFastMode = value.codexFastMode;
+  if (typeof value?.claudeModel === 'string' && value.claudeModel in CLAUDE_MODELS) settings.claudeModel = value.claudeModel;
 
   if (sourceLanguage) {
     settings.sourceLanguage = sourceLanguage;

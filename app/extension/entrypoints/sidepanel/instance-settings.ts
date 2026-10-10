@@ -3,15 +3,6 @@ import type { PanelState } from '../../utils/messages';
 import type { UpdateInstanceSettings } from '../../utils/contracts';
 
 const providers = { openai: 'OpenAI', cerebras: 'Cerebras', elevenlabs: 'ElevenLabs', claude: 'Claude Code' } as const;
-const claudeModelLabels = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' } as const;
-type ClaudeModel = keyof typeof claudeModelLabels;
-
-function selectField(root: Document, name: string, label: string, options: Record<string, string>): HTMLElement {
-  const field = root.createElement('div');
-  field.innerHTML = `<label class="field" for="${name}"><span data-i18n="${label}">${t(label)}</span></label>
-    <select id="${name}" name="${name}">${Object.entries(options).map(([value, text]) => `<option value="${value}" data-i18n="${text}">${t(text)}</option>`).join('')}</select>`;
-  return field;
-}
 
 export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanceSettings) => Promise<boolean>): { render(state: PanelState): void } {
   const form = root.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
@@ -45,11 +36,9 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
   cliMissing.hidden = true;
   cliMissing.textContent = t('Install Claude Code CLI 2.1.280 or newer on the backend.');
   const claudeRow = fields.querySelector('#claudeKey')!.parentElement!;
-  claudeRow.append(selectField(root, 'claudeModel', 'Model', claudeModelLabels), cliMissing);
-  const modelSelect = form.elements.namedItem('claudeModel') as HTMLSelectElement;
+  claudeRow.append(cliMissing);
   form.addEventListener('input', event => {
-    if (event.target instanceof HTMLSelectElement) dirty.add(event.target.name);
-    else if (event.target instanceof HTMLInputElement) {
+    if (event.target instanceof HTMLInputElement) {
       dirty.add(event.target.name);
       const name = event.target.name.replace(/Key$/, '');
       removed.delete(name);
@@ -66,8 +55,6 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       patch.providers![name] = removed.has(name) ? { apiKey: null } : key.value.trim() ? { apiKey: key.value.trim() } : {};
       key.value = '';
     }
-    // An untouched select may not reflect the backend (settings not loaded, or a CLAUDE_MODEL outside the list), so only send changes.
-    if (dirty.has('claudeModel')) patch.providers!.claude!.model = modelSelect.value as ClaudeModel;
     const buttons = form.querySelectorAll<HTMLButtonElement>('button');
     for (const button of buttons) button.disabled = true;
     try {
@@ -100,8 +87,6 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       indicator.setAttribute('aria-label', configured ? t('Configured') : t('Not configured'));
       indicator.title = configured ? t('Configured') : t('Not configured');
     }
-    // A CLAUDE_MODEL default outside the dropdown leaves the select unchanged.
-    if (!dirty.has('claudeModel') && settings.providers.claude.model in claudeModelLabels) modelSelect.value = settings.providers.claude.model;
     cliMissing.hidden = settings.providers.claude.available;
   } };
 }

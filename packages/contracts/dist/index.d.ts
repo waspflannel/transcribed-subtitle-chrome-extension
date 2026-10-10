@@ -31,7 +31,6 @@ export interface InstanceSettings {
     };
     claude: {
       configured: boolean;
-      model: string;
       available: boolean;
     };
   };
@@ -52,7 +51,6 @@ export interface UpdateInstanceSettings {
     };
     claude?: {
       apiKey?: string | null;
-      model?: 'opus' | 'sonnet' | 'haiku';
     };
   };
   retentionDays?: number | null;
@@ -286,7 +284,7 @@ export type CreateSubtitleJobRequest = {
    */
   aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
   /**
-   * Model from the connected Codex account. Required for Codex; omitted for other providers.
+   * Required for Codex (a model from the connected account) and Claude (opus, sonnet or haiku); omitted for other providers.
    */
   aiModel?: string;
   /**
@@ -329,7 +327,7 @@ export type LyricsCorrectionRequest = {
    */
   aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
   /**
-   * Model from the connected Codex account. Required for Codex; omitted for other providers.
+   * Required for Codex (a model from the connected account) and Claude (opus, sonnet or haiku); omitted for other providers.
    */
   aiModel?: string;
   /**

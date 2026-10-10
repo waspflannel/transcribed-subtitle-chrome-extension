@@ -448,6 +448,7 @@
   "API keys": "API 키",
   "Codex credits": "Codex 크레딧",
   "Codex model": "Codex 모델",
+  "Claude model": "Claude 모델",
   "Fast mode": "빠른 모드",
   "Fast mode uses more Codex credits when supported by the model.": "모델이 지원하는 경우 빠른 모드는 Codex 크레딧을 더 많이 사용합니다.",
   "Codex connection": "Codex 연결",

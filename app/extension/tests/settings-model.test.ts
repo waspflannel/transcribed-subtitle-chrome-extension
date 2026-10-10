@@ -16,8 +16,10 @@ describe('settings model', () => {
     expect(createExtensionSettingsFromPartial({ codexModel: '../config', codexFastMode: 'true' as never, accessToken: 'secret' } as never))
       .toEqual(DEFAULT_EXTENSION_SETTINGS);
   });
-  it('keeps the Claude provider and labels it', () => {
-    expect(createExtensionSettingsFromPartial({ aiProvider: 'claude' }).aiProvider).toBe('claude');
+  it('keeps the Claude provider and model, and labels it', () => {
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'claude' })).toMatchObject({ aiProvider: 'claude', claudeModel: 'sonnet' });
+    expect(createExtensionSettingsFromPartial({ claudeModel: 'haiku' }).claudeModel).toBe('haiku');
+    expect(createExtensionSettingsFromPartial({ claudeModel: 'claude-opus-4' as never }).claudeModel).toBe('sonnet');
     expect(aiProviderLabel('claude')).toBe('Claude');
   });
   it('keeps existing installs attached and saves only boolean movement preferences', () => {
