@@ -83,6 +83,26 @@ class ClaudeCodeServiceTest extends TestCase
         }
     }
 
+    #[TestWith(['low'])]
+    #[TestWith(['medium'])]
+    #[TestWith(['high'])]
+    #[TestWith(['xhigh'])]
+    #[TestWith(['max'])]
+    public function test_configured_thinking_level_is_passed_as_effort_and_fast_mode_is_disabled(string $level): void
+    {
+        config(['claude-code.thinking' => $level]);
+        app(ClaudeCodeService::class)->prompt($this->agent(), [], new SubtitleModel('claude', 'opus'));
+
+        $invocation = $this->invocation();
+        $argv = $invocation['argv'];
+        $this->assertSame($level, $argv[array_search('--effort', $argv, true) + 1]);
+        $this->assertSame('opus', $argv[array_search('--model', $argv, true) + 1]);
+        $this->assertSame('1', $invocation['env']['CLAUDE_CODE_DISABLE_FAST_MODE']);
+        foreach (['--fast', '--fast-mode', '--enable-fast-mode'] as $flag) {
+            $this->assertNotContains($flag, $argv);
+        }
+    }
+
     #[TestWith(['unauthorized', 'provider_not_configured'])]
     #[TestWith(['rate-limited', 'rate_limited'])]
     #[TestWith(['server-error', 'provider_unavailable'])]
@@ -166,7 +186,7 @@ class ClaudeCodeServiceTest extends TestCase
             ->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-secret-token']]])
             ->assertOk()->assertDontSee('claude-secret-token');
         $this->getJson('/v1/settings')->assertOk()->assertDontSee('claude-secret-token')
-            ->assertJsonPath('providers.claude', ['configured' => true, 'model' => 'sonnet', 'available' => true]);
+            ->assertJsonPath('providers.claude', ['configured' => true, 'model' => 'sonnet', 'thinking' => 'medium', 'available' => true]);
 
         $this->assertStringNotContainsString('claude-secret-token', DB::table('instance_settings')->value('values'));
     }

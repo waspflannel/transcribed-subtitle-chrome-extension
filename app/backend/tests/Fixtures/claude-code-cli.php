@@ -8,7 +8,7 @@ if (in_array('--version', $argv, true)) {
 }
 $stdin = stream_get_contents(STDIN);
 $env = [];
-foreach (['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_API_KEY', 'APP_KEY', 'DB_PASSWORD', 'OPENAI_API_KEY', 'TRANSCRIBE_TEST_SECRET'] as $name) {
+foreach (['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_DISABLE_FAST_MODE', 'ANTHROPIC_API_KEY', 'APP_KEY', 'DB_PASSWORD', 'OPENAI_API_KEY', 'TRANSCRIBE_TEST_SECRET'] as $name) {
     $env[$name] = getenv($name);
 }
 file_put_contents(getenv('CLAUDE_CONFIG_DIR').'/invocation.json', json_encode([

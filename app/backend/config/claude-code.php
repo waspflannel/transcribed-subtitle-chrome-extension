@@ -7,4 +7,6 @@ return [
     'model' => env('CLAUDE_MODEL', 'sonnet'),
     // Set only from Settings (InstanceSettings::apply); never read from the environment.
     'token' => null,
+    // Set from Settings (like token); the default applies until one is saved.
+    'thinking' => 'medium',
 ];
