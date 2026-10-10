@@ -38,7 +38,8 @@ switch ($scenario) {
         echo $success([]);
         break;
     case 'oversized':
-        echo str_repeat('x', 9 * 1024 * 1024);
+        // Valid success JSON, so only the output byte cap can reject it.
+        echo $success(['structured_output' => ['answer' => str_repeat('x', 9 * 1024 * 1024)]]);
         break;
     case 'hang':
         sleep(10);
