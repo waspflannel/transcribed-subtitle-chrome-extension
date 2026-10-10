@@ -36,10 +36,8 @@ class InstanceSettings
                 app(AiManager::class)->forgetInstance($provider === 'elevenlabs' ? 'eleven' : $provider);
             }
         }
-        foreach (['model', 'thinking'] as $field) {
-            if (array_key_exists($field, $values['providers']['claude'] ?? [])) {
-                config(['claude-code.'.$field => $values['providers']['claude'][$field]]);
-            }
+        if (array_key_exists('model', $values['providers']['claude'] ?? [])) {
+            config(['claude-code.model' => $values['providers']['claude']['model']]);
         }
     }
 
@@ -53,7 +51,6 @@ class InstanceSettings
                 'model' => (string) config($paths['model']),
             ];
         }
-        $providers['claude']['thinking'] = (string) config('claude-code.thinking');
         $providers['claude']['available'] = ClaudeCodeService::available();
 
         return ['providers' => $providers, 'retentionDays' => $this->retentionDays()];

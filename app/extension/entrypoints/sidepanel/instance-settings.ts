@@ -4,9 +4,7 @@ import type { UpdateInstanceSettings } from '../../utils/contracts';
 
 const providers = { openai: 'OpenAI', cerebras: 'Cerebras', elevenlabs: 'ElevenLabs', claude: 'Claude Code' } as const;
 const claudeModelLabels = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' } as const;
-const claudeThinkingLabels = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' } as const;
 type ClaudeModel = keyof typeof claudeModelLabels;
-type ClaudeThinking = keyof typeof claudeThinkingLabels;
 
 function selectField(root: Document, name: string, label: string, options: Record<string, string>): HTMLElement {
   const field = root.createElement('div');
@@ -47,9 +45,8 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
   cliMissing.hidden = true;
   cliMissing.textContent = t('Install Claude Code CLI 2.1.273 or newer on the backend.');
   const claudeRow = fields.querySelector('#claudeKey')!.parentElement!;
-  claudeRow.append(selectField(root, 'claudeModel', 'Model', claudeModelLabels), selectField(root, 'claudeThinking', 'Thinking', claudeThinkingLabels), cliMissing);
+  claudeRow.append(selectField(root, 'claudeModel', 'Model', claudeModelLabels), cliMissing);
   const modelSelect = form.elements.namedItem('claudeModel') as HTMLSelectElement;
-  const thinkingSelect = form.elements.namedItem('claudeThinking') as HTMLSelectElement;
   form.addEventListener('input', event => {
     if (event.target instanceof HTMLSelectElement) dirty.add(event.target.name);
     else if (event.target instanceof HTMLInputElement) {
@@ -69,9 +66,8 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       patch.providers![name] = removed.has(name) ? { apiKey: null } : key.value.trim() ? { apiKey: key.value.trim() } : {};
       key.value = '';
     }
-    // Untouched selects may not reflect the backend (settings not loaded, or a CLAUDE_MODEL outside the list), so only send changes.
+    // An untouched select may not reflect the backend (settings not loaded, or a CLAUDE_MODEL outside the list), so only send changes.
     if (dirty.has('claudeModel')) patch.providers!.claude!.model = modelSelect.value as ClaudeModel;
-    if (dirty.has('claudeThinking')) patch.providers!.claude!.thinking = thinkingSelect.value as ClaudeThinking;
     const buttons = form.querySelectorAll<HTMLButtonElement>('button');
     for (const button of buttons) button.disabled = true;
     try {
@@ -106,7 +102,6 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
     }
     // A CLAUDE_MODEL default outside the dropdown leaves the select unchanged.
     if (!dirty.has('claudeModel') && settings.providers.claude.model in claudeModelLabels) modelSelect.value = settings.providers.claude.model;
-    if (!dirty.has('claudeThinking')) thinkingSelect.value = settings.providers.claude.thinking;
     cliMissing.hidden = settings.providers.claude.available;
   } };
 }

@@ -32,7 +32,6 @@ export interface InstanceSettings {
     claude: {
       configured: boolean;
       model: string;
-      thinking: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
       available: boolean;
     };
   };
@@ -54,7 +53,6 @@ export interface UpdateInstanceSettings {
     claude?: {
       apiKey?: string | null;
       model?: 'opus' | 'sonnet' | 'haiku';
-      thinking?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
     };
   };
   retentionDays?: number | null;

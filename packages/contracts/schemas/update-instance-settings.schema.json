@@ -69,15 +69,6 @@
                 "sonnet",
                 "haiku"
               ]
-            },
-            "thinking": {
-              "enum": [
-                "low",
-                "medium",
-                "high",
-                "xhigh",
-                "max"
-              ]
             }
           }
         }

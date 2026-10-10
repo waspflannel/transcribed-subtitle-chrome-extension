@@ -105,26 +105,25 @@ class InstanceSettingsTest extends TestCase
             ->assertJsonMissingPath('providers.typesafe');
     }
 
-    public function test_claude_model_and_thinking_default_save_and_apply_without_returning_the_token(): void
+    public function test_claude_model_defaults_saves_and_applies_without_returning_the_token(): void
     {
         $this->withExtensionInstall('install_settings_test')->getJson('/v1/settings')->assertOk()
-            ->assertJsonPath('providers.claude.model', 'sonnet')->assertJsonPath('providers.claude.thinking', 'medium');
+            ->assertJsonPath('providers.claude.model', 'sonnet')->assertJsonMissingPath('providers.claude.thinking');
 
-        $this->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-private-token', 'model' => 'opus', 'thinking' => 'high']]])
-            ->assertOk()->assertJsonPath('providers.claude.model', 'opus')->assertJsonPath('providers.claude.thinking', 'high')
+        $this->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-private-token', 'model' => 'opus']]])
+            ->assertOk()->assertJsonPath('providers.claude.model', 'opus')
             ->assertDontSee('claude-private-token');
         $this->assertStringNotContainsString('claude-private-token', DB::table('instance_settings')->value('values'));
 
-        config(['claude-code.model' => 'sonnet', 'claude-code.thinking' => 'medium']);
+        config(['claude-code.model' => 'sonnet']);
         app(InstanceSettings::class)->apply();
         $this->assertSame('opus', config('claude-code.model'));
-        $this->assertSame('high', config('claude-code.thinking'));
     }
 
-    public function test_claude_rejects_unknown_model_and_thinking_values(): void
+    public function test_claude_rejects_unknown_models_and_the_removed_thinking_field(): void
     {
         $this->withExtensionInstall('install_settings_test');
-        foreach ([['model' => 'gpt-5'], ['model' => 'claude-opus-4'], ['thinking' => 'turbo']] as $fields) {
+        foreach ([['model' => 'gpt-5'], ['model' => 'claude-opus-4'], ['thinking' => 'medium']] as $fields) {
             $this->putJson('/v1/settings', ['providers' => ['claude' => $fields]])->assertUnprocessable();
         }
         $this->assertDatabaseCount('instance_settings', 0);

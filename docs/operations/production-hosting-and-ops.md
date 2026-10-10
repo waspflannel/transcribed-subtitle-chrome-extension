@@ -64,18 +64,18 @@ Apply pending database migrations and rebuild/reload the extension when upgradin
 
 Install Claude Code CLI 2.1.273 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
 
-The model (`opus`, `sonnet`, `haiku`; default `sonnet`) and Thinking level (`low`, `medium`, `high`, `xhigh`, `max`, passed as `--effort`; default `medium`) are chosen in **Settings → Claude Code**; `CLAUDE_MODEL` only sets the default model before one is saved. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
+The model (`opus`, `sonnet`, `haiku`; default `sonnet`) is chosen in **Settings → Claude Code**; `CLAUDE_MODEL` only sets the default model before one is saved. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
 
 Each AI request starts one `claude -p` process with:
 
 - tools, MCP servers, settings files, skills and session saving turned off
 - working directory and `CLAUDE_CONFIG_DIR` set to `app/backend/storage/app/private/claude-code`
 - no inherited environment variables except platform basics
-- `--effort` set to the saved Thinking level, and `CLAUDE_CODE_DISABLE_FAST_MODE=1` in the environment
+- thinking off (`MAX_THINKING_TOKENS=0`) and `CLAUDE_CODE_DISABLE_FAST_MODE=1` in the environment. It is a plain prompt-to-JSON call, like Codex. With thinking on, Haiku spent about 3x the answer's tokens thinking, and batches went past the 120s timeout.
 
 No `ANTHROPIC_API_KEY` reaches the CLI, so requests never bill an API account. ElevenLabs still transcribes audio.
 
-A rejected token shows as "provider not configured". Rate limits come from your Claude subscription. Each call adds a few seconds of CLI startup, so large jobs are slower than API providers.
+A rejected token shows as "provider not configured". Spaces in a pasted token (from terminal line wraps) are removed on save. Rate limits come from your Claude subscription. Each call adds a few seconds of CLI startup, so large jobs are slower than API providers.
 
 This is for your own self-hosted instance with your own subscription. Do not offer it to other people as a way to use their Claude subscription.
 

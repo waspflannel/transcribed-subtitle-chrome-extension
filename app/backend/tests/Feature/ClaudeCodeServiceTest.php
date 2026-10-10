@@ -6,6 +6,7 @@ use App\Ai\Agents\SubtitleAgent;
 use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Services\ClaudeCode\ClaudeCodeService;
+use App\Services\InstanceSettings;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -83,20 +84,15 @@ class ClaudeCodeServiceTest extends TestCase
         }
     }
 
-    #[TestWith(['low'])]
-    #[TestWith(['medium'])]
-    #[TestWith(['high'])]
-    #[TestWith(['xhigh'])]
-    #[TestWith(['max'])]
-    public function test_configured_thinking_level_is_passed_as_effort_and_fast_mode_is_disabled(string $level): void
+    public function test_thinking_and_fast_mode_are_disabled(): void
     {
-        config(['claude-code.thinking' => $level]);
         app(ClaudeCodeService::class)->prompt($this->agent(), [], new SubtitleModel('claude', 'opus'));
 
         $invocation = $this->invocation();
         $argv = $invocation['argv'];
-        $this->assertSame($level, $argv[array_search('--effort', $argv, true) + 1]);
+        $this->assertNotContains('--effort', $argv);
         $this->assertSame('opus', $argv[array_search('--model', $argv, true) + 1]);
+        $this->assertSame('0', $invocation['env']['MAX_THINKING_TOKENS']);
         $this->assertSame('1', $invocation['env']['CLAUDE_CODE_DISABLE_FAST_MODE']);
         foreach (['--fast', '--fast-mode', '--enable-fast-mode'] as $flag) {
             $this->assertNotContains($flag, $argv);
@@ -186,9 +182,19 @@ class ClaudeCodeServiceTest extends TestCase
             ->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => 'claude-secret-token']]])
             ->assertOk()->assertDontSee('claude-secret-token');
         $this->getJson('/v1/settings')->assertOk()->assertDontSee('claude-secret-token')
-            ->assertJsonPath('providers.claude', ['configured' => true, 'model' => 'sonnet', 'thinking' => 'medium', 'available' => true]);
+            ->assertJsonPath('providers.claude', ['configured' => true, 'model' => 'sonnet', 'available' => true]);
 
         $this->assertStringNotContainsString('claude-secret-token', DB::table('instance_settings')->value('values'));
+    }
+
+    public function test_settings_strip_whitespace_from_a_pasted_token(): void
+    {
+        $this->withExtensionInstall('install_claude_test')
+            ->putJson('/v1/settings', ['providers' => ['claude' => ['apiKey' => " sk-ant-oat01-abc def\n"]]])
+            ->assertOk();
+
+        app(InstanceSettings::class)->apply();
+        $this->assertSame('sk-ant-oat01-abcdef', config('claude-code.token'));
     }
 
     public function test_claude_jobs_pin_the_configured_model_and_reject_model_overrides(): void
