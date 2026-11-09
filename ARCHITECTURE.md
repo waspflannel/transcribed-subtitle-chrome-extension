@@ -149,3 +149,11 @@ Progressive upload runs report a provisional language for the available speech p
 Job polling uses a one-second interval with cross-tab pacing and a 30-second timeout. Contract errors stop immediately; transient failures retry at five seconds, at most six consecutive times. sinceRevision omits unchanged partial tracks. The background pushes state through panel ports, with a 30-second fallback poll. Rendering preserves the saved source language. Overlapping cues select the latest start. Ads hide the overlay until playback resumes.
 
 Reasoning defaults to low. Codex and Claude concurrency defaults to 3. Direct full download defaults on. Existing environment overrides remain effective. Stage starts refresh the active run heartbeat even without progress changes. Claude prompts hold shared runtime locks; disconnect and account replacement require exclusive ownership.
+
+## Status streams and generated validation
+
+GET `/v1/subtitle-jobs/{jobId}/events` accepts the same installation header as polling. Each `update` SSE event contains the existing JobResponse JSON. Streams last at most 20 seconds and close on terminal status. Disable proxy buffering. The extension reconnects and falls back to polling on transport failure. Contract errors remain terminal. Persisted operations recover after worker suspension; streams are never the durable job owner.
+
+Partial tracks are assembled from draft and analysis artifacts on read. Reads do not lock the job or store a preview. Revision, contiguous readyThroughMs and sinceRevision behavior stay the same.
+
+Contracts build generates standalone validators beside the types. The extension runs these without eval or runtime Ajv imports. Schema changes must rebuild both artifacts. No new environment settings are required.

@@ -38,6 +38,9 @@ Route::prefix('v1')
             ->name('subtitle-jobs.index')
             ->middleware('throttle:subtitle-status-api');
 
+        Route::get('/subtitle-jobs/{jobId}/events', [SubtitleJobController::class, 'events'])
+            ->middleware('throttle:subtitle-status-api');
+
         Route::get('/subtitle-jobs/{jobId}', [SubtitleJobController::class, 'show'])
             ->name('subtitle-jobs.show')
             ->middleware('throttle:subtitle-status-api');

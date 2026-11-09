@@ -21,6 +21,7 @@ use App\Services\Subtitles\LyricsCorrectionService;
 use App\Services\Subtitles\SubtitleJobService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SubtitleJobController extends Controller
 {
@@ -108,6 +109,28 @@ class SubtitleJobController extends Controller
         }
 
         return response()->json(SubtitleJobResource::make($job)->resolve());
+    }
+
+    public function events(Request $request, string $jobId): StreamedResponse
+    {
+        // Validate before sending headers so missing jobs retain their normal HTTP error.
+        $this->show($request, $jobId);
+
+        return response()->eventStream(function () use ($request, $jobId): \Generator {
+            $previous = null;
+            for ($tick = 0; $tick < 20 && ! connection_aborted(); $tick++) {
+                $payload = $this->show($request, $jobId)->getData(true);
+                $encoded = json_encode($payload, JSON_THROW_ON_ERROR);
+                if ($encoded !== $previous) {
+                    yield $encoded;
+                    $previous = $encoded;
+                }
+                if (! in_array($payload['status'], ['queued', 'running'], true)) {
+                    break;
+                }
+                sleep(1);
+            }
+        });
     }
 
     public function destroyGeneration(Request $request, string $jobId, SubtitleJobService $subtitleJobs): JsonResponse

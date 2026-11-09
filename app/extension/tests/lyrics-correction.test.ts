@@ -222,7 +222,7 @@ describe('lyrics correction per-tab synchronization state', () => {
       type: 'response',
       jobId: 'job-1',
       requestId: 1,
-      status: status('attempt-1', 'completed'),
+      status: status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'completed'),
     });
 
     expect(cleared.jobId).toBeNull();
@@ -238,7 +238,7 @@ describe('lyrics correction per-tab synchronization state', () => {
       type: 'response',
       jobId: 'job-other',
       requestId: 1,
-      status: status('attempt-1', 'queued'),
+      status: status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'queued'),
     });
 
     expect(next.status).toBeNull();
@@ -247,18 +247,18 @@ describe('lyrics correction per-tab synchronization state', () => {
 
 describe('syncLyricsCorrectionStatus', () => {
   it('keeps cached progress with a refresh error, then clears the error on recovery', async () => {
-    const cached = status('attempt-1', 'running');
+    const cached = status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'running');
     const states = new Map([[1, nextLyricsCorrectionSync(lyricsCorrectionTabState(), { type: 'submit', jobId: 'job-1', status: cached })]]);
     const options = { tabId: 1, jobId: 'job-1', syncBackend: true, states };
     await expect(syncLyricsCorrectionStatus({ ...options, fetchStatus: async () => { throw new Error('offline'); } })).rejects.toThrow('offline');
     expect(states.get(1)?.status).toEqual(cached);
     expect(states.get(1)?.syncError).toContain('retrying automatically');
-    await syncLyricsCorrectionStatus({ ...options, fetchStatus: async () => status('attempt-1', 'completed') });
+    await syncLyricsCorrectionStatus({ ...options, fetchStatus: async () => status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'completed') });
     expect(states.get(1)?.syncError).toBeUndefined();
   });
 
   it('makes zero status API calls and mutates no state when backend sync is disabled', async () => {
-    const fetchStatus = vi.fn(async () => status('attempt-1', 'running'));
+    const fetchStatus = vi.fn(async () => status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'running'));
     const states = new Map();
 
     const result = await syncLyricsCorrectionStatus({
@@ -276,7 +276,7 @@ describe('syncLyricsCorrectionStatus', () => {
 
   it('returns the job-scoped cached value for a non-sync call without touching the revision', async () => {
     const states = new Map();
-    const cached = status('attempt-1', 'running');
+    const cached = status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'running');
     states.set(1, nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
       type: 'submit',
       jobId: 'job-1',
@@ -292,7 +292,7 @@ describe('syncLyricsCorrectionStatus', () => {
       fetchStatus,
     });
 
-    expect(result?.attemptId).toBe('attempt-1');
+    expect(result?.attemptId).toBe('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003');
     expect(fetchStatus).not.toHaveBeenCalled();
     expect(states.get(1)?.latestRequestId).toBe(1);
   });
@@ -302,7 +302,7 @@ describe('syncLyricsCorrectionStatus', () => {
     states.set(1, nextLyricsCorrectionSync(lyricsCorrectionTabState(), {
       type: 'submit',
       jobId: 'job-1',
-      status: status('attempt-1', 'running'),
+      status: status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'running'),
     }));
     const fetchStatus = vi.fn(async () => status('attempt-2', 'queued'));
 
@@ -502,23 +502,23 @@ describe('syncLyricsCorrectionStatus', () => {
 
 describe('guardLyricsCorrectionStatus state exclusivity', () => {
   it('rejects a queued or running response that carries a track', () => {
-    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'queued', { track: trackResponse() }))).toThrow(TypeError);
-    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'running', { track: trackResponse() }))).toThrow(TypeError);
+    expect(() => guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'queued', { track: trackResponse() }))).toThrow(TypeError);
+    expect(() => guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'running', { track: trackResponse() }))).toThrow(TypeError);
   });
 
   it('rejects a completed response that carries error fields', () => {
-    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'completed', {
+    expect(() => guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'completed', {
       track: trackResponse(),
       errorCode: 'lyrics_correction_failed',
     }))).toThrow(TypeError);
-    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'completed', {
+    expect(() => guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'completed', {
       track: trackResponse(),
       message: 'failed',
     }))).toThrow(TypeError);
   });
 
   it('rejects a failed response that carries a track', () => {
-    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'failed', {
+    expect(() => guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'failed', {
       errorCode: 'lyrics_do_not_match',
       message: 'no match',
       track: trackResponse(),
@@ -526,26 +526,26 @@ describe('guardLyricsCorrectionStatus state exclusivity', () => {
   });
 
   it('rejects a cancelled response that carries an error field', () => {
-    expect(() => guardLyricsCorrectionStatus(status('attempt-1', 'cancelled', {
+    expect(() => guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'cancelled', {
       stage: 'cancelled',
       message: 'cancelled',
     }))).toThrow(TypeError);
   });
 
   it('rejects private or unknown fields on correction status responses', () => {
-    expect(() => guardLyricsCorrectionStatus({ ...status('attempt-1', 'queued'), lyrics: 'private' } as never)).toThrow(TypeError);
-    expect(() => guardLyricsCorrectionStatus({ ...status('attempt-1', 'cancelled'), workState: {} } as never)).toThrow(TypeError);
+    expect(() => guardLyricsCorrectionStatus({ ...status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'queued'), lyrics: 'private' } as never)).toThrow(TypeError);
+    expect(() => guardLyricsCorrectionStatus({ ...status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'cancelled'), workState: {} } as never)).toThrow(TypeError);
   });
 
   it('accepts the canonical queued, running, completed, failed, and cancelled shapes', () => {
-    expect(guardLyricsCorrectionStatus(status('attempt-1', 'queued')).status).toBe('queued');
-    expect(guardLyricsCorrectionStatus(status('attempt-1', 'running')).status).toBe('running');
-    expect(guardLyricsCorrectionStatus(status('attempt-1', 'completed', { track: trackResponse() })).status).toBe('completed');
-    expect(guardLyricsCorrectionStatus(status('attempt-1', 'failed', {
+    expect(guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'queued')).status).toBe('queued');
+    expect(guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'running')).status).toBe('running');
+    expect(guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'completed', { track: trackResponse() })).status).toBe('completed');
+    expect(guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'failed', {
       errorCode: 'lyrics_correction_failed',
       message: 'failed',
     })).status).toBe('failed');
-    expect(guardLyricsCorrectionStatus(status('attempt-1', 'cancelled', { stage: 'cancelled' })).status).toBe('cancelled');
+    expect(guardLyricsCorrectionStatus(status('018f9e2f-0d8c-7500-8f38-9f4c5d1b3003', 'cancelled', { stage: 'cancelled' })).status).toBe('cancelled');
   });
 });
 

@@ -866,12 +866,15 @@ async function waitForCompletedSubtitleJob(
   operation: symbol,
 ): Promise<JobResponse | null> {
   let job = initialJob;
+  let stream = subtitleApi.streamSubtitleJob(installId, job.jobId);
+  let streaming = true;
   let failures = 0;
   let publishedVersion: string | undefined;
   let partialTrack = (await getTabOperation(tabId))?.partialTrack;
   let jobPollInterval = job.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
 
-  while (tabOperations.get(tabId) === operation) {
+  try {
+    while (tabOperations.get(tabId) === operation) {
     if (isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
 
     if (job.status === 'completed' || job.status === 'failed') {
@@ -943,7 +946,18 @@ async function waitForCompletedSubtitleJob(
     if (!refreshedSession || refreshedSession.instanceId !== session.instanceId || refreshedSession.sessionId !== session.sessionId) return null;
 
     try {
-      const refreshedJob = await subtitleApi.getSubtitleJob(installId, job.jobId, partialTrack?.revision);
+      let pushed: JobResponse | undefined;
+      if (streaming) {
+        try {
+          const next = await stream.next();
+          if (next.done) stream = subtitleApi.streamSubtitleJob(installId, job.jobId);
+          else pushed = next.value;
+        } catch (error) {
+          if (error instanceof SubtitleContractError) throw error;
+          streaming = false;
+        }
+      }
+      const refreshedJob = pushed ?? await subtitleApi.getSubtitleJob(installId, job.jobId, partialTrack?.revision);
       failures = 0;
       jobPollInterval = refreshedJob.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
       job = refreshedJob;
@@ -980,6 +994,7 @@ async function waitForCompletedSubtitleJob(
   }
 
   return null;
+  } finally { await stream.return(undefined); }
 }
 
 function minimumActivePollInterval(): number {

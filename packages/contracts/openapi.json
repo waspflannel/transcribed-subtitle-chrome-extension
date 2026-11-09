@@ -920,6 +920,34 @@
           }
         }
       }
+    },
+    "/v1/subtitle-jobs/{jobId}/events": {
+      "get": {
+        "summary": "Stream subtitle status for up to 20 seconds",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE update events contain JobResponse JSON; clients reconnect or poll",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

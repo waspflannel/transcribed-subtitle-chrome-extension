@@ -24,6 +24,16 @@ describe('SubtitleApiClient', () => {
     expect(publicSubtitleErrorMessage(new SubtitleContractError('Update the backend.'))).toBe('Update the backend.');
   });
 
+  it('reads split SSE frames and treats malformed events as terminal contract errors', async () => {
+    const job = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../../../packages/contracts/fixtures/valid-job-response.json', import.meta.url), 'utf8'));
+    const client = new SubtitleApiClient('http://localhost/v1', async () => new Response(`event: update\ndata: ${JSON.stringify(job)}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } }));
+    const stream = client.streamSubtitleJob(installId, job.jobId);
+    expect((await stream.next()).value).toEqual(job);
+    await stream.return(undefined);
+    const invalid = new SubtitleApiClient('http://localhost/v1', async () => new Response('data: {}\n\n', { headers: { 'Content-Type': 'text/event-stream' } }));
+    await expect(invalid.streamSubtitleJob(installId, 'job').next()).rejects.toBeInstanceOf(SubtitleContractError);
+  });
+
   it('deletes a saved generation through the generation resource', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
@@ -34,12 +44,12 @@ describe('SubtitleApiClient', () => {
 
   it('rejects malformed previews and previews belonging to another job or video', () => {
     const job = {
-      jobId: 'job-1', youtubeVideoId: 'dQw4w9WgXcQ', status: 'running', stage: 'transcribing',
+      jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001', youtubeVideoId: 'dQw4w9WgXcQ', status: 'running', stage: 'transcribing',
       sourceLanguage: 'eng', targetLanguage: 'fra', aiProvider: 'openai', aiModel: 'gpt-6-luna',
       includeRomanization: false, includeTranslation: true,
       progressPercent: 50, createdAt: '2026-09-11T00:00:00Z', updatedAt: '2026-09-11T00:00:00Z',
     };
-    const partialTrack = { jobId: job.jobId, youtubeVideoId: job.youtubeVideoId, revision: 1, cues: trackResponse().cues };
+    const partialTrack = { jobId: job.jobId, youtubeVideoId: job.youtubeVideoId, revision: 1, cues: trackResponse().cues.map(({ tokens, ...cue }) => cue) };
     expect(() => guardJobResponse({ ...job, aiProvider: 'auto', aiModel: 'pending' })).toThrow();
     expect(guardJobResponse({ ...job, partialTrack }).partialTrack).toEqual(partialTrack);
     for (const patch of [{ jobId: 'another-job' }, { youtubeVideoId: 'another-id1' }, { cues: [] }, { revision: 0 }, { revision: 1.5 }, { readyThroughMs: -1 }, { readyThroughMs: NaN }]) {
@@ -50,7 +60,7 @@ describe('SubtitleApiClient', () => {
 
   it('rejects missing job identity and invalid terminal payloads at the API boundary', async () => {
     const valid = {
-      jobId: 'job-1', youtubeVideoId: 'dQw4w9WgXcQ', status: 'completed', stage: 'finalizing',
+      jobId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001', youtubeVideoId: 'dQw4w9WgXcQ', status: 'completed', stage: 'finalizing',
       sourceLanguage: 'eng', targetLanguage: 'fra', aiProvider: 'openai', aiModel: 'test-model',
       includeRomanization: false, includeTranslation: true, progressPercent: 100,
       createdAt: '2026-10-08T00:00:00Z', updatedAt: '2026-10-08T00:00:00Z', track: trackResponse(), expiresAt: null,
