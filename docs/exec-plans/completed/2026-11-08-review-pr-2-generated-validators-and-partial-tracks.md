@@ -8,3 +8,5 @@ Read main checkout guidance because ignored harness files are absent in worktree
 - Validate with the full harness and fake providers only. No paid calls.
 
 Decision: retain polling fallback because MV3 can suspend a stream. SSE is an optimization, not durable ownership. No config added.
+
+Complete. Full local harness passed. No paid provider calls or real generations.

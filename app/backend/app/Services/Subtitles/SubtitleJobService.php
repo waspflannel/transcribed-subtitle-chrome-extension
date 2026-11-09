@@ -324,7 +324,6 @@ class SubtitleJobService
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
-            'estimated_provider_cost_microusd' => 0,
             'install_id' => $installId,
         ]);
         $job->forceFill(['created_at' => $createdAt])->saveQuietly();
@@ -375,7 +374,6 @@ class SubtitleJobService
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
-            'estimated_provider_cost_microusd' => 0,
             'error_code' => null,
             'error_message' => null,
             'install_id' => $installId,

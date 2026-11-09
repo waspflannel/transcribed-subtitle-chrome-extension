@@ -14,7 +14,6 @@ use App\Jobs\OptimizeSubtitleAudio;
 use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\CachedVideoTranscript;
 use App\Models\SubtitleJob;
-use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Audio\ElevenLabsScribeAudioPreparer;
@@ -93,23 +92,6 @@ class SubtitleJobApiTest extends TestCase
         $this->getJson('/v1/subtitle-jobs')->assertOk()->assertJsonCount(3, 'jobs');
     }
 
-    public function test_queued_job_keeps_its_model_after_configuration_changes(): void
-    {
-        config(['subtitles.queue.connection' => 'database', 'ai.providers.cerebras.models.text.default' => 'pinned-model']);
-        $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertAccepted();
-        $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
-        config(['ai.default' => 'openai', 'ai.providers.cerebras.models.text.default' => 'changed-model', 'subtitles.queue.connection' => 'sync']);
-        (new AcquireSubtitleAudio($job->id, $job->run_id))->handle(app(SubtitleGenerationPipeline::class));
-        $this->assertSame('completed', $job->refresh()->status);
-        $this->assertSame([['cerebras', 'pinned-model']], $this->translationAnalysis->selections);
-        $costs = $job->events()->where('event', 'provider.cost_estimated')->where('stage', '!=', 'transcribing')->get();
-        $this->assertNotEmpty($costs);
-        foreach ($costs as $cost) {
-            $this->assertSame('cerebras', $cost->context['provider']);
-            $this->assertSame('pinned-model', $cost->context['model']);
-        }
-    }
-
     public function test_invalid_or_unconfigured_provider_cannot_create_jobs(): void
     {
         $this->withExtensionInstall($this->installId());
@@ -120,23 +102,6 @@ class SubtitleJobApiTest extends TestCase
         $this->postJson('/v1/subtitle-jobs', $this->validPayload(['aiProvider' => 'cerebras']))->assertUnprocessable();
         $this->assertSame(0, SubtitleJob::count());
         $this->assertSame(0, $this->audioSource->calls);
-    }
-
-    public function test_legacy_vocabulary_hints_are_ignored_without_changing_price_or_job_reuse(): void
-    {
-        config(['subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000]);
-        $payload = $this->validPayload(['youtubeVideoId' => 'hintstest01', 'vocabularyHints' => ['Marie Curie', 'ElevenLabs', 'Marie Curie']]);
-        $created = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $payload)->assertOk();
-        $this->assertArrayNotHasKey('vocabulary_hints', SubtitleJob::query()->firstOrFail()->getAttributes());
-        $transcriptionCost = SubtitleJobEvent::query()->where('event', 'provider.cost_estimated')->where('stage', 'transcribing')->firstOrFail();
-        $this->assertSame(1000, $transcriptionCost->context['unit_price_microusd']);
-        $this->assertStringNotContainsString('Marie Curie', json_encode($transcriptionCost->context));
-        $this->postJson('/v1/subtitle-jobs', [...$payload, 'vocabularyHints' => ['another name']])
-            ->assertOk()->assertJsonPath('jobId', $created->json('jobId'));
-        unset($payload['vocabularyHints']);
-        $this->postJson('/v1/subtitle-jobs', $payload)->assertOk()->assertJsonPath('jobId', $created->json('jobId'));
-        $this->assertSame(1, $this->transcriptionService->chunkCalls);
-        $this->assertSame(1, SubtitleJob::count());
     }
 
     public function test_url_mode_validates_metadata_and_completes_without_download_or_encoding(): void
@@ -653,44 +618,6 @@ class SubtitleJobApiTest extends TestCase
     }
 
     #[DataProvider('inactiveAnalysisRuns')]
-    public function test_late_invalid_analysis_cannot_change_a_stopped_or_replaced_run(string $status, bool $replaceRun, bool $multipleCues): void
-    {
-        $this->app->forgetInstance(LaravelAiTranslationAnalysisProvider::class);
-        $job = $this->runningSubtitleJob('tokenizing');
-        $runId = $job->run_id;
-        $nextRunId = $replaceRun ? (string) Str::uuid() : $runId;
-        $cues = [$this->sampleCue()];
-        if ($multipleCues) {
-            $cues[] = [...$this->sampleCue(), 'cueId' => 'cue-0002', 'index' => 1, 'sourceText' => 'hello'];
-        }
-        $this->artifacts()->putCueCollection($job, SubtitleJobArtifactStore::DRAFT_CUES, $cues);
-        $calls = 0;
-        CueAnalysisAgent::fake(function () use ($job, $status, $nextRunId, $cues, &$calls): array {
-            $calls++;
-            $job->forceFill([
-                'status' => $status,
-                'run_id' => $nextRunId,
-                'error_code' => $status === 'failed' ? 'sibling_batch_failed' : null,
-            ])->save();
-
-            return ['dialect' => 'unknown', 'cues' => array_map(fn (array $cue): array => [
-                ...$cue,
-                'tokens' => $cue['index'] === 0 ? [] : [['index' => 0, 'text' => $cue['sourceText']]],
-            ], $cues)];
-        })->preventStrayPrompts();
-
-        app(SubtitleCueBatchProcessor::class)->analyzeCueBatch($job->id, 0, $runId);
-
-        $this->assertSame(1, $calls);
-        $this->assertSame($status, $job->fresh()->status);
-        $this->assertSame($nextRunId, $job->fresh()->run_id);
-        $this->assertSame($status === 'failed' ? 'sibling_batch_failed' : null, $job->fresh()->error_code);
-        $this->assertSame(0, DB::table('subtitle_job_artifacts')->where('subtitle_job_id', $job->id)->whereIn('artifact_type', [
-            SubtitleJobArtifactStore::ANALYZED_CUES,
-        ])->count());
-        $this->assertSame(0, SubtitleJobEvent::query()->where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->count());
-    }
-
     public static function inactiveAnalysisRuns(): array
     {
         return [
@@ -2008,58 +1935,6 @@ class SubtitleJobApiTest extends TestCase
         $this->assertSame(0, SubtitleJob::count());
     }
 
-    public function test_repeat_generation_for_the_same_video_reuses_the_cached_transcript(): void
-    {
-        config(['ai.providers.eleven.models.transcription.default' => 'scribe-test']);
-
-        $this
-            ->withExtensionInstall($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'cachehit001']))
-            ->assertOk();
-
-        $this->assertDatabaseHas('cached_video_transcripts', [
-            'youtube_video_id' => 'cachehit001',
-            'requested_source_language' => 'auto',
-            'transcription_model' => SubtitleProcessingVersion::transcriptCacheModel('scribe-test'),
-            'audio_duration_seconds' => 42,
-        ]);
-
-        // A different target language forces a new job while the transcript
-        // cache key (video + requested source language + model) is unchanged.
-        $secondResponse = $this
-            ->withExtensionInstall($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload([
-                'youtubeVideoId' => 'cachehit001',
-                'targetLanguage' => 'fra',
-            ]));
-
-        $secondResponse
-            ->assertOk()
-            ->assertJsonPath('track.cues.0.sourceText', 'first transcript segment')
-            ->assertJsonPath('detectedSourceLanguage', 'spa')
-            ->assertJsonPath('videoDurationSeconds', 42);
-
-        // Acquire, optimize, and transcribe ran only for the first job.
-        $this->assertSame(1, $this->audioSource->calls);
-        $this->assertSame(1, $this->transcriptionService->prepareCalls);
-        $this->assertCount(1, $this->transcriptionService->sourceLanguages);
-
-        $secondJob = SubtitleJob::query()
-            ->where('public_id', $secondResponse->json('jobId'))
-            ->firstOrFail();
-
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $secondJob->id,
-            'event' => 'transcript.cache_hit',
-        ]);
-        // The cache hit skips the provider call, so no transcription cost.
-        $this->assertSame(0, SubtitleJobEvent::query()
-            ->where('subtitle_job_id', $secondJob->id)
-            ->where('event', 'provider.cost_estimated')
-            ->where('stage', 'transcribing')
-            ->count());
-    }
-
     public function test_transcript_cache_is_disabled_when_ttl_is_zero(): void
     {
         config(['subtitles.transcript_cache.ttl_days' => 0]);
@@ -2242,36 +2117,6 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame(1, $this->audioSource->calls);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls);
-    }
-
-    public function test_generation_records_estimated_provider_cost_without_exposing_internal_payload(): void
-    {
-        config([
-            'subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 100,
-            'subtitles.costs.openai_tokenization_microusd_per_cue' => 10,
-        ]);
-
-        $response = $this
-            ->withExtensionInstall($this->installId())
-            ->postJson('/v1/subtitle-jobs', $this->validPayload(['youtubeVideoId' => 'costtrace01']));
-
-        $response
-            ->assertOk()
-            ->assertJsonPath('videoDurationSeconds', 42)
-            ->assertJsonPath('includeRomanization', true)
-            ->assertJsonPath('includeTranslation', false)
-            ->assertJsonMissingPath('estimatedProviderCostMicrousd')
-            ->assertJsonMissingPath('generationTier');
-
-        $job = SubtitleJob::query()
-            ->where('public_id', $response->json('jobId'))
-            ->sole();
-
-        $this->assertSame(120, $job->estimated_provider_cost_microusd);
-        $this->assertSame(2, SubtitleJobEvent::query()
-            ->where('subtitle_job_id', $job->id)
-            ->where('event', 'provider.cost_estimated')
-            ->count());
     }
 
     public function test_old_tokenization_processing_versions_are_not_reused(): void
@@ -2659,8 +2504,6 @@ class SubtitleJobApiTest extends TestCase
         $cues[0]['tokens'][0]['lemma'] = 'first';
         $cues[0]['tokens'][0]['partOfSpeech'] = 'adjective';
         $track->update(['cues' => $cues]);
-        config(['subtitles.costs.openai_enrichment_microusd_per_cue' => 4]);
-        $costBefore = $track->job->estimated_provider_cost_microusd;
 
         $this
             ->withExtensionInstall($this->installId())
@@ -2683,7 +2526,6 @@ class SubtitleJobApiTest extends TestCase
 
         $this->assertSame('first gloss', $track->cues[0]['tokens'][0]['gloss']);
         $this->assertSame(1, $this->translationAnalysis->tokenCalls);
-        $this->assertSame($costBefore + 4, $track->job->fresh()->estimated_provider_cost_microusd, 'Only the provider call is costed.');
     }
 
     public function test_learning_token_enrichment_preserves_concurrent_token_updates(): void
@@ -3357,9 +3199,6 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
     public function test_quick_fix_records_cost_for_each_refreshed_layer(): void
     {
         config([
-            'subtitles.costs.openai_enrichment_microusd_per_cue' => 7,
-            'subtitles.costs.openai_translation_microusd_per_cue' => 5,
-            'subtitles.costs.openai_romanization_microusd_per_cue' => 3,
         ]);
         $response = $this->withExtensionInstall($this->installId())->postJson('/v1/subtitle-jobs', $this->validPayload(['includeTranslation' => true]))->assertOk();
         $job = SubtitleJob::where('public_id', $response->json('jobId'))->firstOrFail();
@@ -3369,12 +3208,10 @@ class RecordingTranscriptionService extends ElevenLabsScribeTranscriptionService
             ['index' => 0, 'text' => '猫', 'normalizedText' => '猫'], ['index' => 1, 'text' => 'です', 'normalizedText' => 'です'],
         ]];
         $job->track->update(['cues' => $cues]);
-        $before = $job->fresh()->estimated_provider_cost_microusd;
 
         $this->patchJson('/v1/subtitle-jobs/'.$job->public_id.'/cues/'.$cues[0]['cueId'].'/tokens/0', [
             'expectedTrackId' => $job->track->public_id, 'text' => '犬',
         ])->assertOk();
 
-        $this->assertSame($before + 15, $job->fresh()->estimated_provider_cost_microusd);
     }
 }

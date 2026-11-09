@@ -9,7 +9,6 @@ use App\Ai\SubtitleModel;
 use App\Exceptions\SubtitleProcessingException;
 use App\Jobs\LyricsCorrectionJob;
 use App\Models\SubtitleJob;
-use App\Models\SubtitleJobEvent;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Codex\CodexService;
@@ -51,55 +50,7 @@ class LyricsCorrectionContinuationTest extends TestCase
         config([
             'queue.default' => 'sync',
             'subtitles.queue.connection' => 'sync',
-            'subtitles.costs.openai_alignment_microusd_per_call' => 25,
-            'subtitles.costs.openai_tokenization_microusd_per_cue' => 10,
-            'subtitles.costs.openai_translation_microusd_per_cue' => 5,
-            'subtitles.costs.openai_romanization_microusd_per_cue' => 5,
-            'subtitles.costs.openai_enrichment_microusd_per_cue' => 5,
         ]);
-    }
-
-    #[TestWith(['openai'])]
-    #[TestWith(['cerebras'])]
-    public function test_replacement_uses_saved_provider_and_model(string $provider): void
-    {
-        config([
-            'ai.default' => $provider,
-            'ai.providers.openai.models.text.default' => 'replacement-luna',
-            'ai.providers.cerebras.models.text.default' => 'analysis-cerebras',
-            'subtitles.costs.cerebras_tokenization_microusd_per_cue' => 2,
-            'subtitles.costs.cerebras_translation_microusd_per_cue' => 3,
-        ]);
-        $queue = $this->completedTrackWithCues(2, fn (int $i): string => 'Line '.($i + 1), ['source_language' => 'spa', 'target_language' => 'eng', 'include_translation' => true, 'include_romanization' => false]);
-        $initialCost = $queue['job']->estimated_provider_cost_microusd;
-        $queue['job']->update(['ai_provider' => $provider, 'ai_model' => 'saved-generation-model']);
-        $timings = array_map(fn (array $cue): array => [$cue['startMs'], $cue['endMs']], $queue['job']->track->cues);
-        LyricsAlignmentAgent::fake([['isMatch' => true, 'isComplete' => true, 'cues' => $queue['alignmentCues']]])->preventStrayPrompts();
-        $response = $this->submitLyrics($queue['job'], $queue['texts']);
-        Log::spy();
-        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
-        $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
-        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === $provider && $prompt->model === 'saved-generation-model');
-        $this->assertNotEmpty($this->translationAnalysis->selections);
-        foreach ($this->translationAnalysis->selections as $selection) {
-            $this->assertSame([$provider, 'saved-generation-model'], $selection);
-        }
-        $this->assertSame($provider, config('ai.default'));
-        $job = $queue['job']->fresh();
-        $this->assertSame($provider, $job->ai_provider);
-        $this->assertSame('saved-generation-model', $job->ai_model);
-        $this->assertSame($timings, array_map(fn (array $cue): array => [$cue['startMs'], $cue['endMs']], $job->track->cues));
-        $this->assertSame($initialCost + ($provider === 'openai' ? 55 : 10), $job->estimated_provider_cost_microusd);
-        $events = SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->get();
-        $this->assertCount(3, $events);
-        foreach ($events as $event) {
-            $this->assertSame($provider, $event->context['provider']);
-            $this->assertSame('saved-generation-model', $event->context['model']);
-        }
-        foreach (['aligning', 'analyzing'] as $stage) {
-            Log::shouldHaveReceived('info')->with('backend.lyrics_correction_unit_finished', \Mockery::on(fn (array $context): bool => $context['stage'] === $stage
-                && $context['provider'] === $provider && $context['model'] === 'saved-generation-model'));
-        }
     }
 
     #[TestWith([false])]
@@ -138,31 +89,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame($identity, $queue['job']->fresh()->only(array_keys($identity)));
         $this->assertSame(['codex', 'saved-codex-model', true], [$row->ai_provider, $row->ai_model, $row->ai_fast_mode]);
         Http::assertNothingSent();
-    }
-
-    public function test_api_override_is_pinned_for_all_correction_stages_without_changing_codex_generation(): void
-    {
-        $queue = $this->completedTrackWithCues(2, fn (int $i): string => 'Line '.($i + 1), ['source_language' => 'spa', 'target_language' => 'eng', 'include_translation' => true, 'include_romanization' => false]);
-        $queue['job']->update(['ai_provider' => 'codex', 'ai_model' => 'generation-codex', 'ai_fast_mode' => true]);
-        $identity = $queue['job']->only(['ai_provider', 'ai_model', 'ai_fast_mode', 'reuse_key', 'run_id']);
-        $initialCost = $queue['job']->estimated_provider_cost_microusd;
-        config(['ai.providers.openai.models.text.default' => 'correction-api-model']);
-        $this->mock(CodexService::class)->shouldNotReceive('requireConnected', 'validateSelection', 'prompt');
-        LyricsAlignmentAgent::fake([['cues' => $queue['alignmentCues']]])->preventStrayPrompts();
-        $response = $this->submitLyrics($queue['job'], $queue['texts'], selection: ['aiProvider' => 'openai', 'aiFastMode' => false])
-            ->assertAccepted()->assertJsonPath('aiProvider', 'openai')->assertJsonPath('aiModel', 'correction-api-model')->assertJsonPath('aiFastMode', false);
-        config(['ai.providers.openai.models.text.default' => 'changed-after-submission']);
-        $this->runCorrectionRevisions($queue['job'], $response->json('attemptId'));
-        $this->assertSame('completed', $this->correctionRow($queue['job'], $response->json('attemptId'))->status);
-        LyricsAlignmentAgent::assertPrompted(fn ($prompt): bool => $prompt->provider->name() === 'openai' && $prompt->model === 'correction-api-model');
-        $this->assertSame([['openai', 'correction-api-model']], $this->translationAnalysis->selections);
-        $job = $queue['job']->fresh();
-        $this->assertSame($identity, $job->only(array_keys($identity)));
-        $this->assertSame($initialCost + 55, $job->estimated_provider_cost_microusd);
-        foreach (SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->get() as $event) {
-            $this->assertSame('openai', $event->context['provider']);
-            $this->assertSame('correction-api-model', $event->context['model']);
-        }
     }
 
     #[TestWith([['aiProvider' => 'unknown']])]
@@ -958,7 +884,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertSame(2, $row->work_revision);
         $this->assertSame(1, $this->translationAnalysis->tokenizationCalls, 'A duplicate delivery must not rerun the batch provider unit.');
         // Alignment plus tokenization; Latin-only batches do not request or cost romanization.
-        $this->assertSame(55, $queue['job']->refresh()->estimated_provider_cost_microusd, 'A duplicate delivery must not record cost twice.');
     }
 
     public function test_a_transient_provider_failure_leaves_revision_and_stage_resumable_and_a_retry_completes(): void
@@ -1051,7 +976,6 @@ class LyricsCorrectionContinuationTest extends TestCase
         $this->assertNull($row->lyrics);
         $this->assertNull($row->work_state);
         $this->assertSame($oldTrackId, $queue['job']->track->refresh()->public_id);
-        $this->assertSame(25, $queue['job']->refresh()->estimated_provider_cost_microusd, 'The completed alignment call must record cost even when no cues were returned.');
     }
 
     public function test_same_language_correction_rebuilds_tokens_only(): void

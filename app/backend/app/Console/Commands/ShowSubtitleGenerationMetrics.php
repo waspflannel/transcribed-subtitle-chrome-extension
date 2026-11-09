@@ -11,7 +11,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
 #[Signature('subtitles:metrics {--days=7 : Completed jobs to include by created-at window} {--json : Output machine-readable JSON}')]
-#[Description('Show subtitle generation timing, queue wait, and provider-cost metrics.')]
+#[Description('Show subtitle generation timing and queue wait metrics.')]
 class ShowSubtitleGenerationMetrics extends Command
 {
     /**
@@ -40,9 +40,7 @@ class ShowSubtitleGenerationMetrics extends Command
         $summary = [
             'days' => $days,
             'completedJobCount' => $rows->count(),
-            'totalCostMicrousd' => $rows->sum('costMicrousd'),
             'totalGeneratedMinutes' => round($rows->sum('generatedMinutes'), 2),
-            'costPerGeneratedMinuteMicrousd' => $this->costPerGeneratedMinute($rows),
         ];
 
         if ($this->option('json')) {
@@ -60,7 +58,7 @@ class ShowSubtitleGenerationMetrics extends Command
             ->values()
             ->all());
         $this->table(
-            ['bucket', 'model', 'fast', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms', 'cost_per_min_microusd'],
+            ['bucket', 'model', 'fast', 'cached', 'jobs', 'source_p50_ms', 'ready_p50_ms', 'total_p50_ms', 'total_p95_ms', 'p95_wait_ms'],
             $groups
                 ->map(fn (array $group): array => [
                     $group['durationBucket'],
@@ -73,7 +71,6 @@ class ShowSubtitleGenerationMetrics extends Command
                     $group['p50DurationMs'],
                     $group['p95DurationMs'],
                     $group['p95QueueWaitMs'],
-                    $group['costPerGeneratedMinuteMicrousd'],
                 ])
                 ->all(),
         );
@@ -112,7 +109,6 @@ class ShowSubtitleGenerationMetrics extends Command
             'firstAnnotatedCueMs' => $events->firstWhere('event', 'delivery.first_annotated_cue_available')?->duration_ms,
             'durationMs' => $completed->duration_ms,
             'queueWaitMs' => $queueWaits->max() ?? 0,
-            'costMicrousd' => (int) $job->estimated_provider_cost_microusd,
             'generatedMinutes' => $videoDurationSeconds / 60,
         ];
     }
@@ -137,7 +133,6 @@ class ShowSubtitleGenerationMetrics extends Command
             'p50DurationMs' => $this->percentile($group->pluck('durationMs'), 50),
             'p95DurationMs' => $this->percentile($group->pluck('durationMs'), 95),
             'p95QueueWaitMs' => $this->percentile($group->pluck('queueWaitMs'), 95),
-            'costPerGeneratedMinuteMicrousd' => $this->costPerGeneratedMinute($group),
         ];
     }
 
@@ -163,14 +158,4 @@ class ShowSubtitleGenerationMetrics extends Command
     /**
      * @param  Collection<int, array<string, mixed>>  $rows
      */
-    private function costPerGeneratedMinute(Collection $rows): int
-    {
-        $minutes = (float) $rows->sum('generatedMinutes');
-
-        if ($minutes <= 0.0) {
-            return 0;
-        }
-
-        return (int) round((int) $rows->sum('costMicrousd') / $minutes);
-    }
 }

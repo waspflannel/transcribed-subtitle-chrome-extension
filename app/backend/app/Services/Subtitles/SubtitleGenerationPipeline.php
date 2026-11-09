@@ -35,7 +35,6 @@ class SubtitleGenerationPipeline
         private readonly SubtitleWorkflowLogger $logger,
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly SubtitlePipelineTelemetry $telemetry,
-        private readonly SubtitleProviderCostRecorder $costs,
         private readonly SubtitleBatchDispatcher $batchDispatcher,
         private readonly SubtitleJobFailureHandler $failureHandler,
     ) {}
@@ -521,7 +520,6 @@ class SubtitleGenerationPipeline
                 }
                 $this->failWithoutSpeech($draftCues);
                 $this->telemetry->recordStageCompleted($job, 'transcribing', $transcribingStartedAtMs);
-                $this->costs->recordTranscription($job, $durationSeconds);
                 $this->logger->transcriptionCompleted($job, $transcript, $durationSeconds);
                 $this->recordDetectedSourceLanguage($job, $job->source_language, $transcript->language);
                 $this->artifacts->putTranscript($job, $transcript);

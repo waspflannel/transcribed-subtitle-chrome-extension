@@ -7,7 +7,6 @@ use App\Models\SubtitleJob;
 use App\Services\Subtitles\SubtitleBatchDispatcher;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
-use App\Services\Subtitles\SubtitleProviderCostRecorder;
 use App\Services\Subtitles\TimestampedSubtitleTrackGenerator;
 use App\Services\Transcription\ElevenLabsScribeTranscriptionService;
 use App\Services\Transcription\TimestampedTranscript;
@@ -67,20 +66,5 @@ class SubtitleContinuationRunTest extends TestCase
         $this->assertSame('preparing', $job->stage);
         $this->assertSame(123, $job->video_duration_seconds);
         $this->assertNull($job->detected_source_language);
-        $this->assertSame(0, $job->estimated_provider_cost_microusd);
-    }
-
-    public function test_stale_cost_and_duration_sync_do_not_mutate_or_refresh_to_replacement(): void
-    {
-        config(['subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 100]);
-        $job = SubtitleJob::factory()->create(['status' => 'running']);
-        $old = clone $job;
-        $job->update(['run_id' => (string) Str::uuid()]);
-
-        app(SubtitleProviderCostRecorder::class)->recordTranscription($old, 600);
-
-        $this->assertNotSame($job->run_id, $old->run_id);
-        $this->assertSame(0, $job->refresh()->estimated_provider_cost_microusd);
-        $this->assertDatabaseMissing('subtitle_job_events', ['event' => 'provider.cost_estimated']);
     }
 }

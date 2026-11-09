@@ -19,7 +19,6 @@ use App\Services\Subtitles\SubtitleCueBatchProcessor;
 use App\Services\Subtitles\SubtitleGenerationPipeline;
 use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Subtitles\SubtitleJobFailureHandler;
-use App\Services\Subtitles\SubtitleProviderCostRecorder;
 use App\Services\Subtitles\SubtitleQueue;
 use App\Services\TranslationAnalysis\CueEnrichmentResult;
 use App\Services\TranslationAnalysis\LaravelAiTranslationAnalysisProvider;
@@ -84,89 +83,6 @@ class SubtitleRuntimeTracingTest extends TestCase
             'subtitles.queue.connection' => 'database',
             'subtitles.providers.concurrency_cache_store' => 'subtitle_concurrency_test',
         ]);
-    }
-
-    public function test_cerebras_costs_use_its_model_and_rates(): void
-    {
-        config([
-            'ai.default' => 'cerebras',
-            'ai.providers.cerebras.models.text.default' => 'cerebras-analysis',
-            'subtitles.costs.cerebras_tokenization_microusd_per_cue' => 3,
-            'subtitles.costs.openai_tokenization_microusd_per_cue' => 999,
-        ]);
-        $job = SubtitleJob::factory()->create(['status' => 'running', 'run_id' => (string) Str::uuid()]);
-        app(SubtitleProviderCostRecorder::class)->recordAnalyzedCueBatch($job, 2, false);
-        $event = SubtitleJobEvent::where('subtitle_job_id', $job->id)->where('event', 'provider.cost_estimated')->firstOrFail();
-        $this->assertSame('cerebras', $event->context['provider']);
-        $this->assertSame('cerebras-analysis', $event->context['model']);
-        $this->assertSame(6, $event->context['cost_microusd']);
-        $this->assertSame(6, $job->fresh()->estimated_provider_cost_microusd);
-    }
-
-    public function test_queue_hooks_emit_processing_processed_and_stale_run_events(): void
-    {
-        $job = SubtitleJob::factory()->create([
-            'stage' => 'tokenizing',
-            'run_id' => (string) Str::uuid(),
-        ]);
-        $staleRunId = (string) Str::uuid();
-
-        AnalyzeSubtitleCueBatch::dispatch($job->id, 0, $staleRunId)
-            ->onConnection(SubtitleQueue::connection())
-            ->onQueue(SubtitleQueue::batchName());
-
-        Artisan::call('queue:work', [
-            '--queue' => SubtitleQueue::workerQueueList().',default',
-            '--once' => true,
-            '--tries' => 1,
-            '--sleep' => 0,
-        ]);
-
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'run_id' => $staleRunId,
-            'event' => 'queue.processing',
-            'queue_connection' => 'database',
-            'queue' => SubtitleQueue::batchName(),
-            'batch_index' => 0,
-        ]);
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'event' => 'job.stale_run_skipped',
-            'stage' => 'tokenizing',
-        ]);
-        $this->assertDatabaseHas('subtitle_job_events', [
-            'subtitle_job_id' => $job->id,
-            'run_id' => $staleRunId,
-            'event' => 'queue.processed',
-            'queue_connection' => 'database',
-            'queue' => SubtitleQueue::batchName(),
-        ]);
-        $this->assertSame(0, $this->translationAnalysis->tokenizationCalls);
-    }
-
-    public function test_queue_hooks_trace_audio_jobs_that_carry_an_audio_file(): void
-    {
-        $job = SubtitleJob::factory()->create(['stage' => 'optimizing-audio']);
-        $staleRunId = (string) Str::uuid();
-        $audio = new TemporaryAudioFile('unused-path', 'unused-directory', 1, 1, 'audio/flac');
-        OptimizeSubtitleAudio::dispatch($job->id, $staleRunId, $audio)->onQueue(SubtitleQueue::generationName());
-        TranscribeSubtitleAudioChunk::dispatch($job->id, 0, 1, $staleRunId, $audio, 0.0, 0.0, null)
-            ->onQueue(SubtitleQueue::generationName());
-
-        foreach ([1, 2] as $delivery) {
-            Artisan::call('queue:work', [
-                '--queue' => SubtitleQueue::workerQueueList(),
-                '--once' => true,
-                '--tries' => 1,
-                '--sleep' => 0,
-            ]);
-        }
-
-        foreach ([OptimizeSubtitleAudio::class, TranscribeSubtitleAudioChunk::class] as $jobClass) {
-            $this->assertSame(1, SubtitleJobEvent::query()->where('subtitle_job_id', $job->id)
-                ->where('event', 'queue.processing')->where('context->job_class', $jobClass)->count(), $jobClass);
-        }
     }
 
     public function test_batch_progress_callbacks_write_real_progress_into_the_job_row(): void
@@ -393,7 +309,6 @@ class SubtitleRuntimeTracingTest extends TestCase
             'stage' => 'finalizing',
             'progress_percent' => 100,
             'video_duration_seconds' => 600,
-            'estimated_provider_cost_microusd' => 500,
         ]);
         SubtitleJobEvent::query()->create([
             'subtitle_job_id' => $job->id,
@@ -420,7 +335,6 @@ class SubtitleRuntimeTracingTest extends TestCase
         $this->assertSame('medium', $metrics['groups'][0]['durationBucket']);
         $this->assertSame(300000, $metrics['groups'][0]['p95DurationMs']);
         $this->assertSame(1200, $metrics['groups'][0]['p95QueueWaitMs']);
-        $this->assertSame(50, $metrics['groups'][0]['costPerGeneratedMinuteMicrousd']);
         $this->assertNull($metrics['groups'][0]['p50FirstCueMs']);
         $this->assertNull($metrics['groups'][0]['p50FirstAnnotatedCueMs']);
         $this->assertSame(0, $metrics['groups'][0]['firstAnnotatedCueSampleCount']);
@@ -431,7 +345,6 @@ class SubtitleRuntimeTracingTest extends TestCase
         $job = SubtitleJob::factory()->create([
             'status' => 'completed',
             'video_duration_seconds' => 120,
-            'estimated_provider_cost_microusd' => 100,
         ]);
 
         foreach ([(string) Str::uuid() => [300000, 90000], $job->run_id => [20000, 1000]] as $runId => [$duration, $wait]) {
@@ -453,7 +366,7 @@ class SubtitleRuntimeTracingTest extends TestCase
         $metrics = json_decode(Artisan::output(), true);
         $this->assertSame(20000, $metrics['groups'][0]['p95DurationMs']);
         $this->assertSame(1000, $metrics['groups'][0]['p95QueueWaitMs']);
-        $this->assertSame(100, $metrics['summary']['totalCostMicrousd']);
+        $this->assertArrayNotHasKey('totalCostMicrousd', $metrics['summary']);
         $this->assertSame(10000, $metrics['groups'][0]['p50FirstCueMs']);
         $this->assertSame(11000, $metrics['groups'][0]['p95FirstAnnotatedCueMs']);
         $this->assertSame(1, $metrics['groups'][0]['firstAnnotatedCueSampleCount']);

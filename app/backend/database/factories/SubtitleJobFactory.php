@@ -37,7 +37,6 @@ class SubtitleJobFactory extends Factory
             'status' => 'running',
             'stage' => 'preparing',
             'progress_percent' => 5,
-            'estimated_provider_cost_microusd' => 0,
             'install_id' => 'install_'.str_repeat('a', 32),
         ];
     }

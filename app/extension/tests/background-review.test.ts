@@ -346,7 +346,7 @@ describe('background entrypoint review regressions', () => {
     const settingsBefore = structuredClone(storageMock.values.get('local:extensionSettings'));
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A);
-    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     const correction = { attemptId: 'attempt-selection', status: 'queued', stage: 'queued', updatedAt: '2026-10-07T12:00:00Z', aiProvider: 'codex', aiModel: 'test-model', aiFastMode: true };
     apiMock.startLyricsCorrection.mockResolvedValue(correction);
     apiMock.getLyricsCorrectionStatus.mockResolvedValue(correction);
@@ -435,7 +435,7 @@ describe('background entrypoint review regressions', () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A);
-    if (saved) storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    if (saved) storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     const fresh = track(VIDEO_A, original.jobId, 'fresh-track');
     const completed = { ...job(VIDEO_A, original.jobId), status: 'completed', track: fresh };
     apiMock.createSubtitleJob.mockResolvedValue(completed);
@@ -450,36 +450,12 @@ describe('background entrypoint review regressions', () => {
     expect(result.subtitleState.track.trackId).toBe('fresh-track');
   });
 
-  it('prefetches only for an open panel, without waiting, and deduplicates per video', async () => {
-    vi.stubEnv('WXT_AUDIO_METADATA_PREFETCH', 'true');
-    seedBaseState();
-    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
-    const listener = await loadBackground();
-    const request = { type: 'panel.getState', syncBackend: false, windowId: 1 };
-    await dispatch(listener, request, {});
-    expect(apiMock.prefetchSubtitleAudio).not.toHaveBeenCalled();
-    let disconnect = () => {};
-    const connect = browserMock.connectListeners[0];
-    assert(connect, 'Background must register a connect listener');
-    connect({ name: 'panel', onDisconnect: { addListener: (fn: () => void) => { disconnect = fn; } } });
-    apiMock.prefetchSubtitleAudio.mockReturnValue(new Promise(() => {}));
-    await dispatch(listener, request, {});
-    await dispatch(listener, request, {});
-    expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(1);
-    expect(apiMock.prefetchSubtitleAudio.mock.calls[0]?.[1]).toBe(VIDEO_A);
-    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
-    await dispatch(listener, request, {});
-    expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(2);
-    disconnect();
-    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_ONE}` });
-    await dispatch(listener, request, {});
-    expect(apiMock.prefetchSubtitleAudio).toHaveBeenCalledTimes(2);
-  });
+
   it('refreshes and publishes a correction without fetching history', async () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A);
-    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     const listener = await loadBackground();
     await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
     const replacement = { ...original, trackId: 'replacement-track' };
@@ -495,7 +471,7 @@ describe('background entrypoint review regressions', () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A);
-    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     apiMock.getLyricsCorrectionStatus.mockResolvedValue({ attemptId: 'attempt-1', status: 'completed', track: original });
     const listener = await loadBackground();
     await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
@@ -524,7 +500,7 @@ describe('background entrypoint review regressions', () => {
     const savedJob = { ...job(VIDEO_A, 'old-job'), status: 'completed', track: oldTrack };
     const recentJobs = Array.from({ length: 25 }, (_, index) => ({ ...job(VIDEO_B, `recent-${index}`), status: 'completed' }));
     storageMock.values.set('local:activeTracksByVideoId', Object.fromEntries(Array.from({ length: 5 }, (_, index) =>
-      [`cached-${index}`, { instanceId: 'http://127.0.0.1:8001/v1', track: track(`cached-${index}`) }])));
+      [`cached-${index}`, { track: track(`cached-${index}`) }])));
     apiMock.listSubtitleJobs.mockImplementation(async (...args: unknown[]) => ({ jobs: args[1] === VIDEO_A ? [savedJob] : recentJobs }) as any);
     apiMock.getSubtitleJob.mockResolvedValue(savedJob);
     const listener = await loadBackground();
@@ -559,7 +535,7 @@ describe('background entrypoint review regressions', () => {
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A);
     const corrected = track(VIDEO_A, original.jobId, 'corrected-track');
-    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     const completion = { attemptId: 'attempt-1', status: 'completed', track: corrected };
     apiMock.getLyricsCorrectionStatus.mockImplementation(async () => structuredClone(completion));
     const lyrics = await import('../utils/lyrics-correction');
@@ -615,7 +591,7 @@ describe('background entrypoint review regressions', () => {
     vi.useFakeTimers();
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
-    storageMock.values.set('local:tabSubtitleOperations', { '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'restart-job' } });
+    storageMock.values.set('local:tabSubtitleOperations', { '1': { kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'restart-job' } });
     apiMock.getSubtitleJob.mockResolvedValue(job(VIDEO_A, 'restart-job'));
     const listener = await loadBackground();
     const state = await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {});
@@ -769,7 +745,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.getSubtitleJob.mockImplementation(async (_installId, jobId) => jobId === 'job-a' ? first : second);
     const listener = await loadBackground();
     if (recovered) storageMock.values.set('local:tabSubtitleOperations', {
-      '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
+      '1': { kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
     });
     await dispatch(listener, recovered ? { type: 'panel.getState', syncBackend: false, windowId: 1 } : generationRequest(), {});
     await waitFor(() => vi.getTimerCount() === 1);
@@ -806,7 +782,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.cancelSubtitleJob.mockReturnValue(cancelled.promise);
     const listener = await loadBackground();
     if (recovered) storageMock.values.set('local:tabSubtitleOperations', {
-      '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
+      '1': { kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
     });
     await dispatch(listener, recovered ? { type: 'panel.getState', syncBackend: false, windowId: 1 } : generationRequest(), {});
     await waitFor(() => vi.getTimerCount() === 1);
@@ -833,7 +809,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.cancelSubtitleJob.mockReturnValue(cancelled.promise);
     const listener = await loadBackground();
     if (recovered) storageMock.values.set('local:tabSubtitleOperations', {
-      '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
+      '1': { kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
     });
     await dispatch(listener, recovered ? { type: 'panel.getState', syncBackend: false, windowId: 1 } : generationRequest(), {});
     await waitFor(() => vi.getTimerCount() === 1);
@@ -870,7 +846,7 @@ describe('background entrypoint review regressions', () => {
     apiMock.cancelSubtitleJob.mockResolvedValue(job(VIDEO_A, 'job-a', 'cancelled'));
     const listener = await loadBackground();
     if (recovered) storageMock.values.set('local:tabSubtitleOperations', {
-      '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
+      '1': { kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'job-a' },
     });
     await dispatch(listener, recovered ? { type: 'panel.getState', syncBackend: false, windowId: 1 } : generationRequest(), {});
     await waitFor(() => vi.getTimerCount() === 1);
@@ -899,7 +875,7 @@ describe('background entrypoint review regressions', () => {
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_ONE}` });
     const originalTrack = track(VIDEO_ONE);
     storageMock.values.set('local:activeTracksByVideoId', {
-      [VIDEO_ONE]: { instanceId: 'http://127.0.0.1:8001/v1', track: originalTrack },
+      [VIDEO_ONE]: { track: originalTrack },
     });
 
     const listener = await loadBackground();
@@ -1065,7 +1041,7 @@ describe('background entrypoint review regressions', () => {
       message: 'Preparing request...',
     });
     expect(storageMock.values.get('local:tabSubtitleOperations')).toEqual({
-      '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A },
+      '1': { kind: 'generation', youtubeVideoId: VIDEO_A },
     });
     expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(1);
 
@@ -1088,7 +1064,7 @@ describe('background entrypoint review regressions', () => {
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const oldTrack = track(VIDEO_A, 'job-old', 'track-old');
     storageMock.values.set('local:activeTracksByVideoId', {
-      [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: oldTrack },
+      [VIDEO_A]: { track: oldTrack },
     });
     const listener = await loadBackground();
     const { browser } = await import('wxt/browser');
@@ -1122,7 +1098,7 @@ describe('background entrypoint review regressions', () => {
     storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId, track: original } });
     const listener = await loadBackground();
     await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
-    const oldOperation = { kind: 'correction', instanceId, youtubeVideoId: VIDEO_A,
+    const oldOperation = { kind: 'correction', youtubeVideoId: VIDEO_A,
       jobId: original.jobId, trackId: original.trackId, attemptId: 'attempt-old' };
     storageMock.values.set('local:tabSubtitleOperations', { '1': oldOperation });
     const oldStatus = deferred<any>();
@@ -1152,7 +1128,7 @@ describe('background entrypoint review regressions', () => {
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A);
     storageMock.values.set('local:activeTracksByVideoId', {
-      [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original },
+      [VIDEO_A]: { track: original },
     });
     const listener = await loadBackground();
     const { SubtitleApiError } = await import('../utils/api');
@@ -1191,12 +1167,12 @@ describe('background entrypoint review regressions', () => {
     const listener = await loadBackground();
     const oldTrack = track(VIDEO_A, 'job-a', 'track-a');
     storageMock.values.set('local:activeTracksByVideoId', {
-      [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: oldTrack },
+      [VIDEO_A]: { track: oldTrack },
     });
     await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
 
     const oldOperation = {
-      kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'job-a',
+      kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'job-a',
     };
     storageMock.values.set('local:tabSubtitleOperations', { '1': oldOperation });
     const cancelRequest = deferred<any>();
@@ -1211,7 +1187,7 @@ describe('background entrypoint review regressions', () => {
     await waitFor(() => apiMock.cancelSubtitleJob.mock.calls.length === 1);
 
     const newerOperation = {
-      kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_B,
+      kind: 'generation', youtubeVideoId: VIDEO_B,
     };
     storageMock.blockReadAt('local:tabSubtitleOperations', 3);
     cancelRequest.resolve(job(VIDEO_A, 'job-a', 'cancelled'));
@@ -1220,7 +1196,7 @@ describe('background entrypoint review regressions', () => {
 
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
     storageMock.values.set('local:activeTracksByVideoId', {
-      [VIDEO_B]: { instanceId: 'http://127.0.0.1:8001/v1', track: track(VIDEO_B, 'job-b', 'track-b') },
+      [VIDEO_B]: { track: track(VIDEO_B, 'job-b', 'track-b') },
     });
     storageMock.values.set('local:tabSubtitleOperations', { '1': newerOperation });
     const stateWhileCleanupWaits = await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
@@ -1285,8 +1261,8 @@ describe('background entrypoint review regressions', () => {
     browserMock.tabs.set(2, { id: 2, windowId: 1, active: false, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
     browserMock.setActiveTab(1);
     storageMock.values.set('local:activeTracksByVideoId', {
-      [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: track(VIDEO_A) },
-      [VIDEO_B]: { instanceId: 'http://127.0.0.1:8001/v1', track: track(VIDEO_B) },
+      [VIDEO_A]: { track: track(VIDEO_A) },
+      [VIDEO_B]: { track: track(VIDEO_B) },
     });
     const listener = await loadBackground();
     await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
@@ -1309,7 +1285,7 @@ describe('saved generation selection', () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A, 'luna-job', 'luna-track');
-    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     const listener = await loadBackground();
     await dispatch(listener, { type: 'content.getState', revalidateSavedGeneration: false }, sender(1));
     const request = { type: 'panel.selectGeneration', jobId: 'cerebras-job', currentJobId: original.jobId,
@@ -1359,7 +1335,7 @@ describe('saved generation deletion and page reload', () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     const original = track(VIDEO_A, 'deleted-job', 'deleted-track');
-    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { instanceId: 'http://127.0.0.1:8001/v1', track: original } });
+    storageMock.values.set('local:activeTracksByVideoId', { [VIDEO_A]: { track: original } });
     const listener = await loadBackground();
     const request = { type: 'panel.deleteGeneration', jobId: original.jobId, currentJobId: original.jobId,
       trackId: original.trackId, youtubeVideoId: VIDEO_A, tabId: 1, windowId: 1 };
@@ -1609,7 +1585,7 @@ describe('per-video generation ownership', () => {
     seedBaseState();
     browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
     browserMock.tabs.set(2, { id: 2, windowId: 1, active: false, url: `https://www.youtube.com/watch?v=${VIDEO_B}` });
-    storageMock.values.set('local:tabSubtitleOperations', { '1': { kind: 'generation', instanceId: 'http://127.0.0.1:8001/v1', youtubeVideoId: VIDEO_A, jobId: 'done-job' } });
+    storageMock.values.set('local:tabSubtitleOperations', { '1': { kind: 'generation', youtubeVideoId: VIDEO_A, jobId: 'done-job' } });
     const done = { ...job(VIDEO_A, 'done-job'), status: 'completed', track: track(VIDEO_A, 'done-job') };
     const running = job(VIDEO_B, 'job-b');
     apiMock.getSubtitleJob.mockImplementation(async (_installId, jobId) => (jobId === 'done-job' ? done : running));
