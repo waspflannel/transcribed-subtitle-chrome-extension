@@ -1,0 +1,23 @@
+[
+  {
+    "videoId": "synthetic01",
+    "language": "eng",
+    "transcript": "Hello world.",
+    "tokens": [
+      "Hello",
+      "world"
+    ],
+    "translation": "Bonjour le monde."
+  },
+  {
+    "videoId": "synthetic02",
+    "language": "jpn",
+    "transcript": "私は猫です。",
+    "tokens": [
+      "私",
+      "は",
+      "猫",
+      "です"
+    ]
+  }
+]
