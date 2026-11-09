@@ -14,6 +14,7 @@ use App\Services\Audio\ScribeAudioChunker;
 use App\Services\Audio\SubtitleAudioWorkspace;
 use App\Services\Audio\TemporaryAudioFile;
 use App\Services\Audio\YouTubeAudioSource;
+use App\Services\Audio\YouTubeCreatorCaptions;
 use App\Services\InstanceSettings;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Text\SubtitleText;
@@ -93,6 +94,9 @@ class SubtitleGenerationPipeline
         $stage = 'acquiring-audio';
 
         try {
+            if ($job->use_creator_captions && ! $this->artifacts->hasArtifact($job, 'creator_captions')) {
+                $this->artifacts->putCreatorCaptions($job, app(YouTubeCreatorCaptions::class)->fetch($job));
+            }
             // A cached transcript for this video makes acquire, optimize, and
             // transcribe unnecessary -- roughly 45% of a job's wall time.
             $cached = $this->transcriptCache->find($job->youtube_video_id, $job->source_language,
@@ -433,6 +437,11 @@ class SubtitleGenerationPipeline
 
     private function publishTranscribedPrefix(int $subtitleJobId, string $runId): void
     {
+        $candidate = $this->loadRunningJob($subtitleJobId, $runId);
+        if ($candidate !== null && ($captions = $this->artifacts->creatorCaptions($candidate))
+            && (! empty($captions['text']) || ! empty($captions['deferred']))) {
+            return;
+        }
         DB::transaction(function () use ($subtitleJobId, $runId): void {
             $job = $this->lockRunningJob($subtitleJobId, $runId);
             if ($job === null || $job->stage !== 'transcribing') {
@@ -511,7 +520,7 @@ class SubtitleGenerationPipeline
                 jobId: $job->public_id,
                 runId: $job->run_id,
             );
-            $draftCues = $this->tracks->draftCues($transcript);
+            $draftCues = $this->captionCues($job, $transcript);
 
             $merged = DB::transaction(function () use ($subtitleJobId, $runId, $transcript, $draftCues, $durationSeconds, $transcribingStartedAtMs): bool {
                 $job = $this->lockRunningJob($subtitleJobId, $runId);
@@ -544,15 +553,43 @@ class SubtitleGenerationPipeline
         }
     }
 
-    /**
-     * Cache-hit continuation: keep acquisition recoverable until its short
-     * batch-queue continuation takes ownership of analysis dispatch.
-     * No transcription cost is recorded because no provider call happened.
-     */
+    /** Prefer manual text while retaining Scribe-derived timing slots. */
+    private function captionCues(SubtitleJob $job, TimestampedTranscript $transcript): array
+    {
+        $cues = $this->tracks->draftCues($transcript);
+        if (! $job->use_creator_captions) {
+            return $cues;
+        }
+        $captions = $this->artifacts->creatorCaptions($job);
+        if (! empty($captions['deferred'])) {
+            $captions = app(YouTubeCreatorCaptions::class)->fetch($job, $transcript->language);
+            $this->artifacts->putCreatorCaptions($job, $captions);
+        }
+        SubtitleJob::query()->whereKey($job->id)->where('run_id', $job->run_id)->where('status', 'running')->update(['transcript_source' => 'scribe']);
+        if (empty($captions['text']) || ($captions['language'] ?? null) !== $transcript->language) {
+            return $cues;
+        }
+        try {
+            if ($this->loadRunningJob($job->id, $job->run_id) === null) {
+                return $cues;
+            }
+            $aligned = app(LyricsCorrectionService::class)->alignCreatorCaptions($job, $cues, $captions['text'], $transcript->language);
+            if ($aligned !== []) {
+                SubtitleJob::query()->whereKey($job->id)->where('run_id', $job->run_id)->where('status', 'running')->update(['transcript_source' => 'creator_captions']);
+
+                return $aligned;
+            }
+        } catch (Throwable) {
+            Log::info('backend.creator_caption_alignment_failed', ['job_id' => $job->public_id]);
+        }
+
+        return $cues;
+    }
+
     private function continueWithCachedTranscript(SubtitleJob $job, CachedVideoTranscript $cached): void
     {
         $transcript = $this->transcriptCache->transcript($cached);
-        $draftCues = $this->tracks->draftCues($transcript);
+        $draftCues = $this->captionCues($job, $transcript);
 
         DB::transaction(function () use ($job, $cached, $transcript, $draftCues): void {
             $job = $this->lockRunningJob($job->id, $job->run_id);

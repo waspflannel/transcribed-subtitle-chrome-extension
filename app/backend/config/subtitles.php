@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'creator_captions' => (bool) env('SUBTITLE_CREATOR_CAPTIONS', true),
+    'translation_context' => [
+        'enabled' => (bool) env('SUBTITLE_FULL_TRANSCRIPT_CONTEXT', true),
+        'max_characters' => (int) env('SUBTITLE_FULL_TRANSCRIPT_MAX_CHARACTERS', 60000),
+    ],
     'rate_limits' => [
         'per_install_per_minute' => (int) env('SUBTITLE_RATE_LIMIT_PER_INSTALL_PER_MINUTE', 30),
         'per_ip_per_minute' => (int) env('SUBTITLE_RATE_LIMIT_PER_IP_PER_MINUTE', 120),

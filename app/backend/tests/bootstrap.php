@@ -16,6 +16,7 @@ if (! defined('SUBTITLE_TEST_STORAGE')) {
 
 foreach ([
     'APP_ENV' => 'testing',
+    'SUBTITLE_CREATOR_CAPTIONS' => 'false',
     'APP_KEY' => 'base64:'.base64_encode(str_repeat('t', 32)),
     'APP_CONFIG_CACHE' => SUBTITLE_TEST_STORAGE.'/config.php',
     'APP_ROUTES_CACHE' => SUBTITLE_TEST_STORAGE.'/routes.php',

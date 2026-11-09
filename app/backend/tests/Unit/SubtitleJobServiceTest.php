@@ -17,10 +17,14 @@ class SubtitleJobServiceTest extends TestCase
     public function test_current_processing_versions_preserve_all_feature_combinations(): void
     {
         $this->assertSame([
-            'scribe-v2-analysis-v19-on-demand',
-            'scribe-v2-analysis-v19-on-demand-romanized',
-            'scribe-v2-analysis-v19-on-demand-translated',
-            'scribe-v2-analysis-v19-on-demand-romanized-translated',
+            'scribe-v2-analysis-v20-on-demand-captions',
+            'scribe-v2-analysis-v20-on-demand-scribe',
+            'scribe-v2-analysis-v20-on-demand-captions-romanized',
+            'scribe-v2-analysis-v20-on-demand-scribe-romanized',
+            'scribe-v2-analysis-v20-on-demand-captions-translated',
+            'scribe-v2-analysis-v20-on-demand-scribe-translated',
+            'scribe-v2-analysis-v20-on-demand-captions-romanized-translated',
+            'scribe-v2-analysis-v20-on-demand-scribe-romanized-translated',
         ], SubtitleJobService::currentProcessingVersions());
     }
 }

@@ -50,7 +50,8 @@ class SubtitleJobService
         $versions = [];
 
         foreach (self::PROCESSING_FEATURE_SETS as [$includeRomanization, $includeTranslation]) {
-            $versions[] = self::processingVersionFor($includeRomanization, $includeTranslation);
+            $versions[] = self::processingVersionFor($includeRomanization, $includeTranslation, true);
+            $versions[] = self::processingVersionFor($includeRomanization, $includeTranslation, false);
         }
 
         return $versions;
@@ -59,9 +60,11 @@ class SubtitleJobService
     public static function processingVersionFor(
         bool $includeRomanization,
         bool $includeTranslation,
+        ?bool $creatorCaptions = null,
     ): string {
         return self::VERSION_PREFIX
             .'on-demand'
+            .(($creatorCaptions ?? config('subtitles.creator_captions', true)) ? '-captions' : '-scribe')
             .($includeRomanization ? '-romanized' : '')
             .($includeTranslation ? '-translated' : '');
     }
@@ -312,6 +315,8 @@ class SubtitleJobService
             'video_duration_seconds' => $payload['videoDurationSeconds'] ?? null,
             'source_language' => $payload['sourceLanguage'],
             'detected_source_language' => null,
+            'use_creator_captions' => (bool) config('subtitles.creator_captions', true),
+            'transcript_source' => 'scribe',
             'target_language' => $payload['targetLanguage'],
             'processing_version' => $processingVersion,
             'ai_provider' => $payload['aiProvider'],
@@ -369,6 +374,8 @@ class SubtitleJobService
             'ai_model' => $payload['aiModel'],
             'ai_fast_mode' => $payload['aiFastMode'],
             'detected_source_language' => null,
+            'use_creator_captions' => (bool) config('subtitles.creator_captions', true),
+            'transcript_source' => 'scribe',
             'include_romanization' => $includeRomanization,
             'include_translation' => $includeTranslation,
             'status' => 'running',

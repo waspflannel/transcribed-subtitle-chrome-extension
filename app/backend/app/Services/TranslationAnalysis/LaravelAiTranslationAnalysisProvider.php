@@ -13,6 +13,7 @@ use App\Services\Codex\CodexService;
 use App\Services\Languages\LanguageCatalog;
 use App\Services\Subtitles\ProviderAdmission;
 use App\Services\Subtitles\ProviderExceptionPolicy;
+use App\Services\Subtitles\SubtitleJobArtifactStore;
 use App\Services\Text\SubtitleText;
 use Closure;
 use Illuminate\Support\Arr;
@@ -42,6 +43,20 @@ class LaravelAiTranslationAnalysisProvider
 
         $selection ??= SubtitleModel::configured();
         $input = $this->analysisInput($batch, $allCues, $sourceLanguage, $targetLanguage, $includeTranslation, $includeRomanization);
+        if ($job !== null && config('subtitles.translation_context.enabled', true)) {
+            $artifacts = app(SubtitleJobArtifactStore::class);
+            if ($artifacts->hasArtifact($job, SubtitleJobArtifactStore::TRANSCRIPT)) {
+                $transcript = $artifacts->transcript($job);
+                $text = $job->transcript_source === 'creator_captions'
+                    ? ($artifacts->creatorCaptions($job)['text'] ?? '')
+                    : implode(' ', array_map(fn ($segment): string => $segment->text, $transcript->segments));
+                $limit = max(0, (int) config('subtitles.translation_context.max_characters', 60000));
+                if ($limit > 0) {
+                    $input = ['fullTranscript' => mb_substr($text, 0, $limit), ...$input];
+                }
+            }
+        }
+
         $output = $this->promptAgent(CueAnalysisAgent::class, $input, $selection, $validateOutput, $job);
         if (! $validateOutput) {
             return $this->uncheckedAnalysis($output, $batch, $includeTranslation, $includeRomanization);
