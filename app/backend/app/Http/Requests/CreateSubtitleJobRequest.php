@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Services\ClaudeCode\ClaudeCodeService;
+use App\Ai\SubtitleModel;
 use App\Services\Languages\LanguageCatalog;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -23,19 +23,13 @@ class CreateSubtitleJobRequest extends FormRequest
      */
     public function rules(): array
     {
-        $provider = $this->input('aiProvider', config('ai.default'));
-        $codex = $provider === 'codex';
-        $claude = $provider === 'claude';
-
         return [
             'youtubeVideoId' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{11}$/'],
             'youtubeUrl' => ['required', 'string', 'url', 'max:2048'],
             'videoDurationSeconds' => ['sometimes', 'integer', 'min:1'],
             'sourceLanguage' => ['required', 'string', Rule::in(LanguageCatalog::sourceLanguageCodes())],
             'targetLanguage' => ['required', 'string', Rule::in(LanguageCatalog::targetLanguageCodes())],
-            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex', 'claude'])],
-            'aiModel' => [Rule::requiredIf($codex || $claude), Rule::prohibitedIf(! $codex && ! $claude), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D', ...($claude ? [Rule::in(ClaudeCodeService::MODELS)] : [])],
-            'aiFastMode' => ['sometimes', 'boolean:strict', Rule::prohibitedIf(! $codex && $this->input('aiFastMode') !== false)],
+            ...SubtitleModel::requestRules($this->input('aiProvider', config('ai.default')), $this->input('aiModel'), $this->input('aiFastMode')),
             'includeRomanization' => ['required', 'boolean'],
             'includeTranslation' => ['required', 'boolean'],
             'forceRegenerate' => ['sometimes', 'boolean:strict'],
@@ -91,6 +85,9 @@ class CreateSubtitleJobRequest extends FormRequest
         return [
             function (Validator $validator): void {
                 $provider = $this->input('aiProvider', config('ai.default'));
+                if ($provider === 'anthropic' && blank(config('ai.providers.anthropic.key'))) {
+                    $validator->errors()->add('aiProvider', 'Add a Claude API key in Settings before using the Claude API.');
+                }
                 if (in_array($provider, ['openai', 'cerebras'], true)) {
                     $key = config("ai.providers.{$provider}.key");
                     $model = config("ai.providers.{$provider}.models.text.default");

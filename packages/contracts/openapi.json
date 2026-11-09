@@ -771,6 +771,145 @@
           }
         }
       }
+    },
+    "/v1/claude": {
+      "get": {
+        "operationId": "getClaudeAccount",
+        "summary": "Read Claude sign-in state and login progress.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public Claude connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/claude-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "disconnectClaudeAccount",
+        "summary": "Sign Claude out of this private instance.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public Claude connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/claude-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/claude/login": {
+      "post": {
+        "operationId": "loginClaudeAccount",
+        "summary": "Start Claude subscription OAuth sign-in (Claude Code CLI) on this private instance.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Public Claude connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/claude-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        }
+      }
+    },
+    "/v1/claude/login/code": {
+      "post": {
+        "operationId": "submitClaudeLoginCode",
+        "summary": "Finish Claude sign-in with the code shown on the Claude sign-in page.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ExtensionInstallId"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Public Claude connection state. OAuth credentials remain on the backend.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "./schemas/claude-account.schema.json"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "pattern": "^[A-Za-z0-9._~#-]+$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

@@ -101,7 +101,7 @@ class InstanceSettingsTest extends TestCase
             ->putJson('/v1/settings', ['providers' => ['typesafe' => ['apiKey' => 'never-save-this-key']]])
             ->assertUnprocessable()->assertDontSee('never-save-this-key');
         $this->assertDatabaseCount('instance_settings', 0);
-        $this->getJson('/v1/settings')->assertOk()->assertJsonCount(4, 'providers')->assertJsonMissingPath('providers.claude.model')
+        $this->getJson('/v1/settings')->assertOk()->assertJsonCount(5, 'providers')->assertJsonMissingPath('providers.claude.model')
             ->assertJsonMissingPath('providers.typesafe');
     }
 

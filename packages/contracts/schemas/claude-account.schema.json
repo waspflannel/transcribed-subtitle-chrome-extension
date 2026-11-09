@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transcribed-subtitle-extension.local/schemas/claude-account.schema.json",
+  "title": "ClaudeAccount",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "available",
+    "connected",
+    "email",
+    "login"
+  ],
+  "properties": {
+    "available": {
+      "type": "boolean"
+    },
+    "connected": {
+      "type": "boolean"
+    },
+    "email": {
+      "type": ["string", "null"],
+      "maxLength": 320
+    },
+    "login": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "awaiting_code",
+                "verifying",
+                "failed"
+              ]
+            },
+            "authUrl": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 4096,
+              "pattern": "^https://(?:claude\\.com|claude\\.ai)(?:[/?#][^\\s\\u0000-\\u001F\\u007F\\\\]*)?$"
+            }
+          }
+        }
+      ]
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    }
+  }
+}

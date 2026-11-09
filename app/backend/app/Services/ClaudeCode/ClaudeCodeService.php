@@ -17,7 +17,8 @@ class ClaudeCodeService
 {
     public const MINIMUM_VERSION = '2.1.280';
 
-    public const MODELS = ['opus', 'sonnet', 'haiku'];
+    /** Aliases resolve to the 5.5 models (MODEL_IDS); full IDs pick other models the subscription offers. */
+    public const MODELS = ['opus', 'sonnet', 'haiku', 'claude-fable-5-1', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5'];
 
     private const MODEL_IDS = [
         'ANTHROPIC_DEFAULT_OPUS_MODEL' => 'claude-opus-5-5',
@@ -48,11 +49,13 @@ class ClaudeCodeService
 
     public function prompt(SubtitleAgent $agent, array $input, SubtitleModel $selection): array
     {
-        $token = config('claude-code.token');
-        if (! is_string($token) || trim($token) === '') {
+        // A Claude sign-in (OAuth) wins; a pasted setup-token is the fallback.
+        $configDir = app(ClaudeAccountService::class)->activeDirectory();
+        $token = $configDir === null ? config('claude-code.token') : false;
+        if ($configDir === null && (! is_string($token) || trim($token) === '')) {
             throw self::failure(401);
         }
-        $configDir = rtrim((string) config('claude-code.config_dir'), '/\\');
+        $configDir ??= rtrim((string) config('claude-code.config_dir'), '/\\');
         File::ensureDirectoryExists($configDir, 0700);
 
         $factory = new JsonSchemaTypeFactory;
@@ -119,7 +122,7 @@ class ClaudeCodeService
     private static function failure(mixed $status): SubtitleProcessingException
     {
         if ($status === 401) {
-            return new SubtitleProcessingException('provider_not_configured', 'Add a valid Claude Code token in Settings before using Claude.', 422, ['provider' => 'claude']);
+            return new SubtitleProcessingException('provider_not_configured', 'Sign in with Claude (or add a Claude Code token) in Settings before using Claude.', 422, ['provider' => 'claude']);
         }
         if ($status === 429) {
             return SubtitleProcessingException::rateLimited('Claude is temporarily rate limited. Try again later.', ['provider' => 'claude']);

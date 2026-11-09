@@ -103,7 +103,7 @@ const apiMock = vi.hoisted(() => ({
   cancelSubtitleJob: vi.fn(),
   deleteSavedGeneration: vi.fn(),
   listSubtitleJobs: vi.fn(async () => ({ jobs: [] })),
-  getInstanceSettings: vi.fn(async () => ({ providers: { ...Object.fromEntries(['openai','cerebras','elevenlabs'].map(name => [name, { configured: true, model: 'test-model' }])), claude: { configured: true, available: true } } as Record<string, { configured: boolean; model?: string; available?: boolean }>, retentionDays: null })),
+  getInstanceSettings: vi.fn(async () => ({ providers: { ...Object.fromEntries(['openai','cerebras','elevenlabs'].map(name => [name, { configured: true, model: 'test-model' }])), claude: { configured: true, available: true }, anthropic: { configured: true } } as Record<string, { configured: boolean; model?: string; available?: boolean }>, retentionDays: null })),
 }));
 
 const browserMock = vi.hoisted(() => {

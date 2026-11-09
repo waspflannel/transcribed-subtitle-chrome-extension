@@ -98,10 +98,16 @@
                 <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
                   <option value="openai">OpenAI</option>
                   <option value="cerebras">Cerebras</option>
+                  <option value="anthropic">Claude API</option>
                 </select>
               </label>
               <p id="ai-luna-description" class="microcopy"><strong data-i18n="OpenAI:">OpenAI:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
               <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Cerebras:">Cerebras:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
+              <div data-claude-api-options hidden>
+                <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeApiModel" disabled></select></label>
+                <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" name="claudeApiFastMode" aria-describedby="claude-api-fast-help" disabled></label>
+                <p id="claude-api-fast-help" class="microcopy" data-i18n="Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.">Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.</p>
+              </div>
               </div>
               <div data-codex-options hidden>
                 <label class="field"><span data-i18n="Codex model">Codex model</span><select name="codexModel" disabled></select></label>
@@ -110,11 +116,7 @@
                 <p class="microcopy" data-codex-readiness role="status"></p>
               </div>
               <div data-claude-options hidden>
-                <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeModel" disabled>
-                  <option value="opus" data-i18n="Opus">Opus</option>
-                  <option value="sonnet" data-i18n="Sonnet">Sonnet</option>
-                  <option value="haiku" data-i18n="Haiku">Haiku</option>
-                </select></label>
+                <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeModel" disabled></select></label>
               </div>
               <p class="microcopy" data-ai-billing></p>
               <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
@@ -189,7 +191,15 @@
                       <label><input type="radio" name="lyricsAiSource" value="claude"><span data-i18n="Claude subscription">Claude subscription</span></label>
                     </fieldset>
                     <div data-lyrics-api-options hidden>
-                      <label class="row"><span class="row-key" data-i18n="AI model">AI model</span><select data-lyrics-ai-provider><option value="openai">OpenAI</option><option value="cerebras">Cerebras</option></select></label>
+                      <label class="row"><span class="row-key" data-i18n="AI model">AI model</span><select data-lyrics-ai-provider><option value="openai">OpenAI</option><option value="cerebras">Cerebras</option><option value="anthropic">Claude API</option></select></label>
+                      <div data-lyrics-claude-api-options hidden>
+                        <label class="field"><span data-i18n="Claude model">Claude model</span><select data-lyrics-claude-api-model></select></label>
+                        <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" data-lyrics-claude-api-fast aria-describedby="lyrics-claude-api-fast-help"></label>
+                        <p class="microcopy" id="lyrics-claude-api-fast-help" data-i18n="Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.">Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.</p>
+                      </div>
+                    </div>
+                    <div data-lyrics-claude-options hidden>
+                      <label class="field"><span data-i18n="Claude model">Claude model</span><select data-lyrics-claude-model></select></label>
                     </div>
                     <div data-lyrics-codex-options hidden>
                       <label class="field"><span data-i18n="Codex model">Codex model</span><select data-lyrics-ai-model aria-describedby="lyrics-ai-readiness"></select></label>
@@ -343,9 +353,25 @@
               <a class="btn-ghost" data-codex-auth-link target="_blank" rel="noopener noreferrer" data-i18n="Open ChatGPT sign-in">Open ChatGPT sign-in</a>
             </div>
             <div class="codex-actions">
-              <button type="button" class="btn-primary" data-codex-connect disabled data-i18n="Sign in with ChatGPT">Sign in with ChatGPT</button>
+              <button type="button" class="btn-primary" data-codex-connect disabled data-i18n="Sign in with Codex">Sign in with Codex</button>
               <button type="button" class="btn-ghost" data-codex-disconnect hidden data-i18n="Disconnect Codex">Disconnect Codex</button>
               <button type="button" class="btn-ghost" data-codex-refresh data-i18n="Refresh">Refresh</button>
+            </div>
+          </div>
+          <div class="card" data-claude-account>
+            <h2 data-i18n="Claude connection">Claude connection</h2>
+            <p class="microcopy" data-i18n="Sign in with your Claude subscription to use Claude for text analysis. Audio transcription still uses your ElevenLabs API key.">Sign in with your Claude subscription to use Claude for text analysis. Audio transcription still uses your ElevenLabs API key.</p>
+            <p role="status" aria-live="polite" data-claude-status></p>
+            <form data-claude-authorization hidden>
+              <p class="microcopy" data-i18n="Sign in on the Claude page, copy the code it shows, and paste it here.">Sign in on the Claude page, copy the code it shows, and paste it here.</p>
+              <a class="btn-ghost" data-claude-auth-link target="_blank" rel="noopener noreferrer" data-i18n="Open Claude sign-in">Open Claude sign-in</a>
+              <label class="field"><span data-i18n="Sign-in code">Sign-in code</span><input type="text" name="claudeCode" autocomplete="off" spellcheck="false" maxlength="4096" required></label>
+              <button type="submit" class="btn-primary" data-i18n="Submit code">Submit code</button>
+            </form>
+            <div class="codex-actions">
+              <button type="button" class="btn-primary" data-claude-connect disabled data-i18n="Sign in with Claude">Sign in with Claude</button>
+              <button type="button" class="btn-ghost" data-claude-disconnect hidden data-i18n="Disconnect Claude">Disconnect Claude</button>
+              <button type="button" class="btn-ghost" data-claude-refresh data-i18n="Refresh">Refresh</button>
             </div>
           </div>
           <form data-instance-settings-form class="instance-settings-form">

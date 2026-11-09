@@ -2,11 +2,10 @@
 
 namespace App\Http\Requests;
 
-use App\Services\ClaudeCode\ClaudeCodeService;
+use App\Ai\SubtitleModel;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class CorrectSubtitleLyricsRequest extends FormRequest
 {
@@ -20,14 +19,9 @@ class CorrectSubtitleLyricsRequest extends FormRequest
      */
     public function rules(): array
     {
-        $codex = $this->input('aiProvider') === 'codex';
-        $claude = $this->input('aiProvider') === 'claude';
-
         return [
             'expectedTrackId' => ['required', 'uuid'],
-            'aiProvider' => ['sometimes', 'string', Rule::in(['openai', 'cerebras', 'codex', 'claude'])],
-            'aiModel' => [Rule::requiredIf($codex || $claude), Rule::prohibitedIf(! $codex && ! $claude), 'string', 'max:128', 'regex:/\A[A-Za-z0-9][A-Za-z0-9._-]*\z/D', ...($claude ? [Rule::in(ClaudeCodeService::MODELS)] : [])],
-            'aiFastMode' => ['sometimes', 'boolean:strict', Rule::prohibitedIf(! $codex && $this->input('aiFastMode') !== false)],
+            ...SubtitleModel::requestRules($this->input('aiProvider'), $this->input('aiModel'), $this->input('aiFastMode')),
             'lyrics' => [
                 'bail', 'required', 'string', 'max:25000',
                 function (string $attribute, mixed $value, Closure $fail): void {

@@ -1,6 +1,6 @@
 import type { ExtensionSettings } from './settings-model';
 import type { YoutubePageInfo } from './youtube';
-import type { CodexAccount, InstanceSettings, UpdateInstanceSettings, LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
+import type { ClaudeAccount, CodexAccount, InstanceSettings, UpdateInstanceSettings, LyricsCorrectionStatus, PartialSubtitleCue, SubtitleJobHistoryItem, TrackResponse } from './contracts';
 
 export interface PageSnapshot {
   videoDurationSeconds?: number;
@@ -64,6 +64,8 @@ export interface PanelState {
   instanceSettingsError?: string;
   codexAccount?: CodexAccount;
   codexAccountError?: string;
+  claudeAccount?: ClaudeAccount;
+  claudeAccountError?: string;
   subtitleState: SubtitleState;
   jobHistory: SubtitleJobHistoryItem[];
   jobHistoryError?: string;
@@ -73,6 +75,8 @@ export interface PanelState {
 
 export type BackgroundRequest =
   | { type: 'panel.getCodexAccount' | 'panel.loginCodex' | 'panel.disconnectCodex' }
+  | { type: 'panel.getClaudeAccount' | 'panel.loginClaude' | 'panel.disconnectClaude' }
+  | { type: 'panel.submitClaudeCode'; code: string }
   | { type: 'panel.listGenerations'; youtubeVideoId: string; windowId?: number }
   | { type: 'panel.selectGeneration' | 'panel.deleteGeneration'; jobId: string; currentJobId: string; trackId: string; youtubeVideoId: string; tabId: number; windowId?: number }
   | {
@@ -184,7 +188,12 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
     case 'panel.getCodexAccount':
     case 'panel.loginCodex':
     case 'panel.disconnectCodex':
+    case 'panel.getClaudeAccount':
+    case 'panel.loginClaude':
+    case 'panel.disconnectClaude':
       return true;
+    case 'panel.submitClaudeCode':
+      return typeof value.code === 'string' && value.code.trim() !== '' && value.code.length <= 4096;
     case 'panel.getActiveCue':
       return isNonNegativeInteger(value.tabId) && hasString(value, 'youtubeVideoId') && hasString(value, 'trackId')
         && optionalNumber(value, 'windowId');
@@ -288,6 +297,10 @@ export function isBackgroundRequest(message: RuntimeMessage): message is Backgro
     case 'panel.getCodexAccount':
     case 'panel.loginCodex':
     case 'panel.disconnectCodex':
+    case 'panel.getClaudeAccount':
+    case 'panel.loginClaude':
+    case 'panel.disconnectClaude':
+    case 'panel.submitClaudeCode':
       return true;
     case 'content.getState':
     case 'content.updateSettings':
@@ -395,10 +408,11 @@ function optionalBoolean(value: Record<string, unknown>, key: string): boolean {
 
 function isLyricsAiSelection(value: Record<string, unknown>): boolean {
   if (!optionalBoolean(value, 'aiFastMode')) return false;
-  if (value.aiProvider === 'codex') {
-    return typeof value.aiModel === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.aiModel);
+  if (value.aiProvider === 'codex' || value.aiProvider === 'claude' || value.aiProvider === 'anthropic') {
+    return typeof value.aiModel === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value.aiModel)
+      && (value.aiProvider !== 'claude' || value.aiFastMode !== true);
   }
-  return (!('aiProvider' in value) || value.aiProvider === 'openai' || value.aiProvider === 'cerebras' || value.aiProvider === 'claude')
+  return (!('aiProvider' in value) || value.aiProvider === 'openai' || value.aiProvider === 'cerebras')
     && !('aiModel' in value) && value.aiFastMode !== true;
 }
 

@@ -1,4 +1,5 @@
 import type {
+  ClaudeAccount,
   CodexAccount,
   InstanceSettings,
   JobResponse,
@@ -121,10 +122,10 @@ export function guardLyricsCorrectionStatus(value: unknown): LyricsCorrectionSta
   oneOf(response, 'status', ['queued', 'running', 'completed', 'failed', 'cancelled']);
   requiredString(response, 'updatedAt');
   if (response.aiProvider !== undefined || response.aiModel !== undefined || response.aiFastMode !== undefined) {
-    oneOf(response, 'aiProvider', ['openai', 'cerebras', 'codex', 'claude']);
+    oneOf(response, 'aiProvider', ['openai', 'cerebras', 'codex', 'claude', 'anthropic']);
     requiredString(response, 'aiModel');
     requiredBoolean(response, 'aiFastMode');
-    if (response.aiProvider !== 'codex' && response.aiFastMode) throw invalid('Fast mode requires Codex.');
+    if (response.aiProvider !== 'codex' && response.aiProvider !== 'anthropic' && response.aiFastMode) throw invalid('Fast mode requires Codex or the Claude API.');
   }
 
   if (response.status === 'queued') oneOf(response, 'stage', ['queued']);
@@ -183,7 +184,7 @@ function guardJobCore(value: Record<string, unknown>): void {
   requiredString(value, 'sourceLanguage');
   optionalString(value, 'detectedSourceLanguage');
   requiredString(value, 'targetLanguage');
-  oneOf(value, 'aiProvider', ['openai', 'cerebras', 'codex', 'claude']);
+  oneOf(value, 'aiProvider', ['openai', 'cerebras', 'codex', 'claude', 'anthropic']);
   requiredString(value, 'aiModel');
   if (value.aiFastMode !== undefined) requiredBoolean(value, 'aiFastMode');
   requiredBoolean(value, 'includeRomanization');
@@ -330,13 +331,14 @@ export function guardInstanceSettings(value: unknown): InstanceSettings {
   const settings = record(value, 'instance settings');
   const providers = record(settings.providers, 'providers');
   if (Object.keys(settings).some(key => key !== 'providers' && key !== 'retentionDays')) throw invalid('Unexpected settings fields');
-  if (Object.keys(providers).some(key => !['openai', 'cerebras', 'elevenlabs', 'claude'].includes(key))) throw invalid('Unexpected provider');
-  for (const name of ['openai', 'cerebras', 'elevenlabs', 'claude']) {
+  const names = ['openai', 'cerebras', 'elevenlabs', 'claude', 'anthropic'];
+  if (Object.keys(providers).some(key => !names.includes(key))) throw invalid('Unexpected provider');
+  for (const name of names) {
     const provider = record(providers[name], name);
     requiredBoolean(provider, 'configured');
     if (name === 'claude') requiredBoolean(provider, 'available');
-    else requiredString(provider, 'model');
-    const allowed = name === 'claude' ? ['configured', 'available'] : ['configured', 'model'];
+    else if (name !== 'anthropic') requiredString(provider, 'model');
+    const allowed = name === 'claude' ? ['configured', 'available'] : name === 'anthropic' ? ['configured'] : ['configured', 'model'];
     if (Object.keys(provider).some(key => !allowed.includes(key))) throw invalid('Provider response contains unexpected fields');
   }
   if (settings.retentionDays !== null && (!Number.isInteger(settings.retentionDays) || Number(settings.retentionDays) < 1)) throw invalid('Invalid retention');
@@ -371,4 +373,25 @@ export function guardCodexAccount(value: unknown): CodexAccount {
     }
   }
   return account as unknown as CodexAccount;
+}
+
+export function guardClaudeAccount(value: unknown): ClaudeAccount {
+  const account = record(value, 'Claude account');
+  if (Object.keys(account).some(key => !['available', 'connected', 'email', 'login', 'error'].includes(key))) throw invalid('Unexpected Claude account fields');
+  requiredBoolean(account, 'available');
+  requiredBoolean(account, 'connected');
+  if (account.email !== null) requiredString(account, 'email');
+  optionalString(account, 'error');
+  if (account.login !== null) {
+    const login = record(account.login, 'Claude login');
+    oneOf(login, 'status', ['pending', 'awaiting_code', 'verifying', 'failed']);
+    optionalString(login, 'authUrl');
+    if (Object.keys(login).some(key => !['status', 'authUrl'].includes(key))) throw invalid('Unexpected Claude login fields');
+    if (typeof login.authUrl === 'string') {
+      if (login.authUrl.length > 4096 || /[\s\u0000-\u001f\u007f\\]/.test(login.authUrl)) throw invalid('Invalid Claude sign-in URL');
+      const url = new URL(login.authUrl);
+      if (url.protocol !== 'https:' || !['claude.com', 'claude.ai'].includes(url.hostname) || url.username || url.password || url.port) throw invalid('Invalid Claude sign-in URL');
+    }
+  }
+  return account as unknown as ClaudeAccount;
 }

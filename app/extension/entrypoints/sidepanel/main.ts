@@ -4,8 +4,9 @@ import { bindSavedGenerations } from './saved-generations';
 import { bindKnownLyrics } from './known-lyrics';
 import { bindInstanceSettings } from './instance-settings';
 import { bindCodexAccount } from './codex-account';
+import { bindClaudeAccount } from './claude-account';
 import { bindLyricsAiOptions, correctionAiLabel } from './lyrics-ai-options';
-import { guardCodexAccount } from '../../utils/api-response-guards';
+import { guardClaudeAccount, guardCodexAccount } from '../../utils/api-response-guards';
 
 import { browser } from 'wxt/browser';
 
@@ -21,7 +22,7 @@ import { isRuntimeMessage } from '../../utils/messages';
 import type { PanelRequest, PanelState } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
 import { escapeHtml } from '../../utils/html';
-import { aiProviderLabel, CLAUDE_MODELS, type ClaudeModel, DEFAULT_EXTENSION_SETTINGS, type ExtensionSettings } from '../../utils/settings-model';
+import { CLAUDE_API_MODELS, CLAUDE_FAST_MODELS, CLAUDE_MODELS, DEFAULT_EXTENSION_SETTINGS, isClaudeApiModel, isClaudeModel, type ExtensionSettings } from '../../utils/settings-model';
 import { renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
@@ -145,6 +146,12 @@ const codexFastModeInput = document.querySelector<HTMLInputElement>('input[name=
 const codexReadiness = document.querySelector<HTMLElement>('[data-codex-readiness]')!;
 const claudeOptions = document.querySelector<HTMLElement>('[data-claude-options]')!;
 const claudeModelSelect = document.querySelector<HTMLSelectElement>('select[name="claudeModel"]')!;
+const claudeApiOptions = document.querySelector<HTMLElement>('[data-claude-api-options]')!;
+const claudeApiModelSelect = document.querySelector<HTMLSelectElement>('select[name="claudeApiModel"]')!;
+const claudeApiFastModeInput = document.querySelector<HTMLInputElement>('input[name="claudeApiFastMode"]')!;
+for (const [select, models] of [[claudeModelSelect, CLAUDE_MODELS], [claudeApiModelSelect, CLAUDE_API_MODELS]] as const) {
+  for (const [value, label] of Object.entries(models)) select.append(Object.assign(document.createElement('option'), { value, textContent: label }));
+}
 const aiBilling = document.querySelector<HTMLElement>('[data-ai-billing]')!;
 interfaceLanguageSelect.innerHTML = '<option value="auto" data-i18n="Browser language">Browser language</option>'
   + Object.entries(INTERFACE_LOCALES).map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
@@ -254,11 +261,12 @@ const savedGenerations = bindSavedGenerations(
 
 aiProviderSelect.addEventListener('change', () => {
   const aiProvider = aiProviderSelect.value;
-  if (aiProvider === 'openai' || aiProvider === 'cerebras') void updateSettings({ aiProvider });
+  if (aiProvider === 'openai' || aiProvider === 'cerebras' || aiProvider === 'anthropic') void updateSettings({ aiProvider });
 });
 for (const input of aiSourceInputs) input.addEventListener('change', () => {
   if (!input.checked) return;
-  const aiProvider = input.value === 'codex' ? 'codex' : input.value === 'claude' ? 'claude' : aiProviderSelect.value === 'cerebras' ? 'cerebras' : 'openai';
+  const aiProvider = input.value === 'codex' ? 'codex' : input.value === 'claude' ? 'claude'
+    : aiProviderSelect.value === 'cerebras' || aiProviderSelect.value === 'anthropic' ? aiProviderSelect.value : 'openai';
   const codexModel = currentSettings?.codexModel || latestState?.codexAccount?.models[0]?.id || '';
   void updateSettings({ aiProvider, ...(aiProvider === 'codex' ? { codexModel } : {}) });
 });
@@ -269,8 +277,13 @@ codexModelSelect.addEventListener('change', () => {
 codexFastModeInput.addEventListener('change', () => void updateSettings({ codexFastMode: codexFastModeInput.checked }));
 claudeModelSelect.addEventListener('change', () => {
   const claudeModel = claudeModelSelect.value;
-  if (claudeModel in CLAUDE_MODELS) void updateSettings({ claudeModel: claudeModel as ClaudeModel });
+  if (isClaudeModel(claudeModel)) void updateSettings({ claudeModel });
 });
+claudeApiModelSelect.addEventListener('change', () => {
+  const claudeApiModel = claudeApiModelSelect.value;
+  if (isClaudeApiModel(claudeApiModel)) void updateSettings({ claudeApiModel, ...(!CLAUDE_FAST_MODELS.includes(claudeApiModel) ? { claudeApiFastMode: false } : {}) });
+});
+claudeApiFastModeInput.addEventListener('change', () => void updateSettings({ claudeApiFastMode: claudeApiFastModeInput.checked }));
 overlayVisibleInput.addEventListener('change', () => void updateSettings({ overlayVisible: overlayVisibleInput.checked }));
 overlayAttachedToVideoInput.addEventListener('change', () =>
   void updateSettings({ overlayAttachedToVideo: overlayAttachedToVideoInput.checked }),
@@ -321,6 +334,13 @@ const codexAccount = bindCodexAccount(document, async type => {
   return guardCodexAccount(response);
 }, account => {
   if (latestState) showPanelState({ ...latestState, codexAccount: account, codexAccountError: undefined });
+}, url => browser.tabs.create({ url }));
+const claudeAccount = bindClaudeAccount(document, async action => {
+  const response = await browser.runtime.sendMessage(action);
+  if (response?.ok === false) throw new Error(response.error);
+  return guardClaudeAccount(response);
+}, account => {
+  if (latestState) showPanelState({ ...latestState, claudeAccount: account, claudeAccountError: undefined });
 }, url => browser.tabs.create({ url }));
 let cueSnapshotRequest = 0;
 const transcriptView = bindTranscriptView({
@@ -923,6 +943,7 @@ function showPanelState(state: PanelState): void {
   savedGenerations.render(state);
   instanceSettings.render(state);
   codexAccount.render(state);
+  claudeAccount.render(state);
 
   if (previousInstanceId !== nextInstanceId) {
     correctionCancelError.hidden = true;
@@ -993,7 +1014,7 @@ function showPanelState(state: PanelState): void {
   renderLanguagePickers(settings);
   overlayVisibleInput.checked = settings.overlayVisible;
   overlayAttachedToVideoInput.checked = settings.overlayAttachedToVideo;
-  if (settings.aiProvider === 'openai' || settings.aiProvider === 'cerebras') aiProviderSelect.value = settings.aiProvider;
+  if (settings.aiProvider === 'openai' || settings.aiProvider === 'cerebras' || settings.aiProvider === 'anthropic') aiProviderSelect.value = settings.aiProvider;
   renderAiOptions(state);
   overlayPositionSelect.value = settings.overlayPosition;
   captionFontSizeSelect.value = settings.captionFontSize;
@@ -1212,6 +1233,9 @@ function renderAiOptions(state: PanelState): void {
   codexOptions.hidden = !codex;
   claudeOptions.hidden = source !== 'claude';
   claudeModelSelect.value = state.settings.claudeModel;
+  claudeApiOptions.hidden = state.settings.aiProvider !== 'anthropic';
+  claudeApiModelSelect.value = state.settings.claudeApiModel;
+  claudeApiFastModeInput.checked = state.settings.claudeApiFastMode && CLAUDE_FAST_MODELS.includes(state.settings.claudeApiModel);
   const models = state.codexAccount?.models ?? [];
   const optionsKey = JSON.stringify([interfaceLocale(), models]);
   if (optionsKey !== codexModelOptionsKey) {
@@ -1235,6 +1259,7 @@ function renderAiOptions(state: PanelState): void {
   aiBilling.textContent = codex
     ? t('Text analysis uses Codex credits. Audio transcription uses your ElevenLabs API key.')
     : source === 'claude' ? t('Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.')
+    : state.settings.aiProvider === 'anthropic' ? t('Text analysis uses your Claude API key. Audio transcription uses your ElevenLabs API key.')
     : t('Text analysis and audio transcription use your API keys.');
 }
 
@@ -1379,6 +1404,8 @@ function setSettingsDisabled(disabled: boolean): void {
   for (const input of aiSourceInputs) input.disabled = disabled;
   codexModelSelect.disabled = disabled || !latestState?.codexAccount?.connected;
   claudeModelSelect.disabled = disabled;
+  claudeApiModelSelect.disabled = disabled;
+  claudeApiFastModeInput.disabled = disabled || !CLAUDE_FAST_MODELS.includes(latestState?.settings.claudeApiModel ?? '');
   codexFastModeInput.disabled = disabled || !latestState?.codexAccount?.connected
     || (!latestState.settings.codexFastMode && !latestState.codexAccount.models.find(model => model.id === latestState?.settings.codexModel)?.supportsFastMode);
   overlayPositionSelect.disabled = disabled;

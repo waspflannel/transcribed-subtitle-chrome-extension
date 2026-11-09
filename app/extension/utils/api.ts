@@ -1,5 +1,6 @@
 import { t } from './i18n';
 import type {
+  ClaudeAccount,
   CodexAccount,
   InstanceSettings,
   UpdateInstanceSettings,
@@ -17,6 +18,7 @@ import type {
 } from './contracts';
 import { resolveBackendApiBaseUrl } from './api-config';
 import {
+  guardClaudeAccount,
   guardCodexAccount,
   guardInstanceSettings,
   guardJobResponse,
@@ -61,6 +63,22 @@ export class SubtitleApiClient {
 
   public async disconnectCodex(installId: string): Promise<CodexAccount> {
     return this.request('codex', installId, { method: 'DELETE', timeoutMs: 30000 }, guardCodexAccount);
+  }
+
+  public async getClaudeAccount(installId: string): Promise<ClaudeAccount> {
+    return this.request('claude', installId, { method: 'GET', timeoutMs: 30000 }, guardClaudeAccount);
+  }
+
+  public async loginClaude(installId: string): Promise<ClaudeAccount> {
+    return this.request('claude/login', installId, { method: 'POST', timeoutMs: 45000 }, guardClaudeAccount);
+  }
+
+  public async submitClaudeCode(installId: string, code: string): Promise<ClaudeAccount> {
+    return this.request('claude/login/code', installId, { method: 'POST', body: JSON.stringify({ code }), timeoutMs: 45000 }, guardClaudeAccount);
+  }
+
+  public async disconnectClaude(installId: string): Promise<ClaudeAccount> {
+    return this.request('claude', installId, { method: 'DELETE', timeoutMs: 30000 }, guardClaudeAccount);
   }
 
 

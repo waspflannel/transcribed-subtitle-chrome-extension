@@ -69,17 +69,46 @@ it('selects Claude with the generation page model, and blocks it until a token i
   state.instanceSettings = { providers: {
     openai: { configured: true, model: 'gpt-6-luna' }, cerebras: { configured: true, model: 'gpt-oss-120b' },
     elevenlabs: { configured: true, model: 'scribe_v2' }, claude: { configured: false, available: true },
+    anthropic: { configured: true },
   }, retentionDays: null };
   const controls = bindLyricsAiOptions(field('[data-lyrics-ai-options]'), vi.fn());
   controls.render({ ...state, settings: { ...state.settings, claudeModel: 'haiku' } }, false);
   field<HTMLInputElement>('input[name="lyricsAiSource"][value="claude"]').click();
   expect(controls.payload()).toEqual({ aiProvider: 'claude', aiModel: 'haiku' });
   expect(controls.ready()).toBe(false);
-  expect(field('[data-lyrics-ai-readiness]').textContent).toContain('Add a Claude Code token');
+  expect(field('[data-lyrics-ai-readiness]').textContent).toContain('Sign in with Claude');
   expect(field('[data-lyrics-api-options]').hidden).toBe(true);
   controls.render({ ...state, instanceSettings: { ...state.instanceSettings!, providers: { ...state.instanceSettings!.providers, claude: { configured: true, available: true } } } }, false);
   expect(controls.ready()).toBe(true);
   expect(correctionAiLabel({ aiProvider: 'claude', aiModel: 'sonnet', aiFastMode: false })).toBe('Claude · sonnet');
+  const model = field<HTMLSelectElement>('[data-lyrics-claude-model]');
+  model.value = 'claude-opus-5';
+  change(model);
+  expect(controls.payload()).toEqual({ aiProvider: 'claude', aiModel: 'claude-opus-5' });
+});
+
+it('selects the Claude API with its model and fast mode only on fast-capable models', () => {
+  const controls = bindLyricsAiOptions(field('[data-lyrics-ai-options]'), vi.fn());
+  controls.render({ ...state, instanceSettings: { providers: {
+    openai: { configured: true, model: 'gpt-6-luna' }, cerebras: { configured: true, model: 'gpt-oss-120b' },
+    elevenlabs: { configured: true, model: 'scribe_v2' }, claude: { configured: false, available: true }, anthropic: { configured: true },
+  }, retentionDays: null } }, false);
+  field<HTMLInputElement>('input[name="lyricsAiSource"][value="api"]').click();
+  const provider = field<HTMLSelectElement>('[data-lyrics-ai-provider]');
+  provider.value = 'anthropic';
+  change(provider);
+  expect(controls.payload()).toEqual({ aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiFastMode: false });
+  const fast = field<HTMLInputElement>('[data-lyrics-claude-api-fast]');
+  fast.checked = true;
+  change(fast);
+  expect(controls.payload()).toEqual({ aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiFastMode: true });
+  const model = field<HTMLSelectElement>('[data-lyrics-claude-api-model]');
+  model.value = 'claude-haiku-5-5';
+  change(model);
+  expect(controls.payload()).toEqual({ aiProvider: 'anthropic', aiModel: 'claude-haiku-5-5', aiFastMode: false });
+  expect(fast.disabled).toBe(true);
+  expect(controls.ready()).toBe(true);
+  expect(correctionAiLabel({ aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiFastMode: true })).toBe('Claude API · claude-opus-5-5 · Fast mode');
 });
 
 it('blocks disconnected, missing-model and unsupported-fast selections without silently choosing another provider', () => {

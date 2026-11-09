@@ -2,7 +2,7 @@
 import { expect, it, vi } from 'vitest';
 import markup from '../entrypoints/sidepanel/index.html?raw';
 import { bindInstanceSettings } from '../entrypoints/sidepanel/instance-settings';
-import { guardInstanceSettings } from '../utils/api-response-guards';
+import { guardClaudeAccount, guardInstanceSettings } from '../utils/api-response-guards';
 import { DEFAULT_EXTENSION_SETTINGS } from '../utils/settings-model';
 import type { InstanceSettings, UpdateInstanceSettings } from '../utils/contracts';
 import { SubtitleApiClient } from '../utils/api';
@@ -13,6 +13,7 @@ const settings: InstanceSettings = {
     cerebras: { configured: false, model: 'gpt-oss-120b' },
     elevenlabs: { configured: true, model: 'scribe_v2' },
     claude: { configured: false, available: false },
+    anthropic: { configured: false },
   },
   retentionDays: null,
 };
@@ -25,8 +26,8 @@ it('submits keys only to the backend, clears inputs, preserves drafts on refresh
   const state = { installId: 'install_test', backendUrl: 'http://127.0.0.1:8001/v1', settings: DEFAULT_EXTENSION_SETTINGS, instanceSettings: settings, subtitleState: { type: 'no-track' as const }, jobHistory: [] };
   view.render(state);
   const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
-  expect(form.querySelectorAll('[data-provider-fields] input')).toHaveLength(4);
-  expect(form.querySelector('[data-provider-fields]')?.closest('.card')?.querySelectorAll('input')).toHaveLength(4);
+  expect(form.querySelectorAll('[data-provider-fields] input')).toHaveLength(5);
+  expect(form.querySelector('[data-provider-fields]')?.closest('.card')?.querySelectorAll('input')).toHaveLength(5);
   expect(form.querySelectorAll('[data-provider-fields] fieldset')).toHaveLength(0);
   expect(form.querySelector('[name="openaiModel"]')).toBeNull();
   expect(form.querySelector('[data-provider-status="openai"]')?.textContent).toBe('✓');
@@ -92,4 +93,12 @@ it('uses anonymous settings endpoints and rejects any returned credential fields
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, apiKey: 'must-not-return' } } })).toThrow();
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, openai: { ...settings.providers.openai, available: true } } })).toThrow();
   expect(() => guardInstanceSettings({ ...settings, providers: { ...settings.providers, typesafe: { configured: false, model: 'retired' } } })).toThrow();
+});
+
+it('accepts Claude sign-in links only on Claude hosts', () => {
+  const account = { available: true, connected: false, email: null, login: { status: 'awaiting_code', authUrl: 'https://claude.com/cai/oauth/authorize?code=true' } };
+  expect(guardClaudeAccount(account).login?.authUrl).toContain('claude.com');
+  expect(() => guardClaudeAccount({ ...account, login: { status: 'awaiting_code', authUrl: 'https://evil.example/claude.com' } })).toThrow();
+  expect(() => guardClaudeAccount({ ...account, login: { status: 'awaiting_code', authUrl: 'http://claude.ai/oauth' } })).toThrow();
+  expect(() => guardClaudeAccount({ ...account, token: 'secret' })).toThrow();
 });

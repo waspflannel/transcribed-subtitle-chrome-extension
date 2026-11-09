@@ -21,6 +21,10 @@ describe('settings model', () => {
     expect(createExtensionSettingsFromPartial({ claudeModel: 'haiku' }).claudeModel).toBe('haiku');
     expect(createExtensionSettingsFromPartial({ claudeModel: 'claude-opus-4' as never }).claudeModel).toBe('sonnet');
     expect(aiProviderLabel('claude')).toBe('Claude');
+    expect(createExtensionSettingsFromPartial({ aiProvider: 'anthropic', claudeApiModel: 'claude-opus-4-8', claudeApiFastMode: true }))
+      .toMatchObject({ aiProvider: 'anthropic', claudeApiModel: 'claude-opus-4-8', claudeApiFastMode: true });
+    expect(createExtensionSettingsFromPartial({ claudeApiModel: 'toString' as never }).claudeApiModel).toBe('claude-opus-5-5');
+    expect(createExtensionSettingsFromPartial({ claudeModel: 'claude-fable-5-1' }).claudeModel).toBe('claude-fable-5-1');
   });
   it('keeps existing installs attached and saves only boolean movement preferences', () => {
     expect(createExtensionSettingsFromPartial(undefined).overlayAttachedToVideo).toBe(true);

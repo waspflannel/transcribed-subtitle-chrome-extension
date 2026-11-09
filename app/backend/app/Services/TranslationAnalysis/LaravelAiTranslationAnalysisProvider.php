@@ -351,6 +351,7 @@ class LaravelAiTranslationAnalysisProvider
                 return app(ProviderAdmission::class)->run($selection->provider, $job,
                     fn (): array => app(ClaudeCodeService::class)->prompt($agent, $input, $selection));
             }
+            $agent->fastMode = $selection->fastMode;
             $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => $agent->prompt(
                 json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 provider: $selection->provider,

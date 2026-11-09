@@ -246,7 +246,8 @@
         "openai",
         "cerebras",
         "codex",
-        "claude"
+        "claude",
+        "anthropic"
       ],
       "description": "The selected analysis provider stays pinned for this generation."
     },
@@ -255,12 +256,12 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
-      "description": "Required for Codex (a model from the connected account) and Claude (opus, sonnet or haiku); omitted for other providers."
+      "description": "Required for Codex (a model from the connected account), Claude subscription and Claude API (models listed below); omitted for other providers."
     },
     "aiFastMode": {
       "type": "boolean",
       "default": false,
-      "description": "Use Codex fast service tier. Omitted for API providers."
+      "description": "Codex fast service tier, or Claude API fast mode on Opus 5.5, Opus 5 and Opus 4.8. Omitted for other providers."
     }
   },
   "allOf": [
@@ -273,7 +274,8 @@
           "aiProvider": {
             "enum": [
               "codex",
-              "claude"
+              "claude",
+              "anthropic"
             ]
           }
         }
@@ -298,7 +300,10 @@
         ],
         "properties": {
           "aiProvider": {
-            "const": "codex"
+            "enum": [
+              "codex",
+              "anthropic"
+            ]
           }
         }
       },
@@ -327,7 +332,65 @@
             "enum": [
               "opus",
               "sonnet",
-              "haiku"
+              "haiku",
+              "claude-fable-5-1",
+              "claude-opus-5",
+              "claude-opus-4-8",
+              "claude-sonnet-5"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "aiProvider"
+        ],
+        "properties": {
+          "aiProvider": {
+            "const": "anthropic"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "aiModel": {
+            "enum": [
+              "claude-opus-5-5",
+              "claude-sonnet-5-5",
+              "claude-haiku-5-5",
+              "claude-fable-5-1",
+              "claude-opus-5",
+              "claude-opus-4-8",
+              "claude-sonnet-5"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "aiProvider",
+          "aiFastMode"
+        ],
+        "properties": {
+          "aiProvider": {
+            "const": "anthropic"
+          },
+          "aiFastMode": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "aiModel": {
+            "enum": [
+              "claude-opus-5-5",
+              "claude-opus-5",
+              "claude-opus-4-8"
             ]
           }
         }
