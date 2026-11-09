@@ -30,6 +30,8 @@ class SubtitleJob extends Model
         'include_romanization',
         'include_translation',
         'transcription_ingestion_mode',
+        'use_creator_captions',
+        'transcript_source',
         'transcription_options_hash',
         'status',
         'stage',
@@ -71,6 +73,7 @@ class SubtitleJob extends Model
             'expires_at' => 'immutable_datetime',
             'include_romanization' => 'boolean',
             'include_translation' => 'boolean',
+            'use_creator_captions' => 'boolean',
             'progress_percent' => 'integer',
             'video_duration_seconds' => 'integer',
         ];

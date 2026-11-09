@@ -49,6 +49,16 @@ class SubtitleJobArtifactStore
 
     public const PARTIAL_TRACK = 'partial_track';
 
+    public function putCreatorCaptions(SubtitleJob $job, ?array $captions): void
+    {
+        $this->put($job, 'creator_captions', $captions ?? []);
+    }
+
+    public function creatorCaptions(SubtitleJob $job): ?array
+    {
+        return $this->hasArtifact($job, 'creator_captions') ? $this->payload($job, 'creator_captions') : null;
+    }
+
     public function putTranscript(SubtitleJob $job, TimestampedTranscript $transcript): void
     {
         $this->put($job, self::TRANSCRIPT, [

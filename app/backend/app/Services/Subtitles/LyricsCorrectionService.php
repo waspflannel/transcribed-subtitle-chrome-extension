@@ -811,6 +811,18 @@ final class LyricsCorrectionService
         }
     }
 
+    public function alignCreatorCaptions(SubtitleJob $job, array $sourceCues, string $text, string $language): array
+    {
+        $parts = $this->lyricsParts($text);
+        $output = $this->promptAlignment([
+            'sourceLanguage' => $language,
+            'cues' => array_map(fn (array $cue): array => Arr::only($cue, ['cueId', 'index', 'startMs', 'endMs', 'sourceText']), $sourceCues),
+            'lyricsParts' => array_map(fn (string $text, int $index): array => ['index' => $index, 'text' => $text], $parts, array_keys($parts)),
+        ], SubtitleModel::forJob($job), $job);
+
+        return $this->cuesFromAlignment($sourceCues, $parts, $output, $job->run_id);
+    }
+
     private function alignedCues(
         SubtitleTrackLyricsCorrection $correction,
         SubtitleJob $job,
