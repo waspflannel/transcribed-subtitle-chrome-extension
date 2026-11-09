@@ -2347,6 +2347,8 @@ class SubtitleJobApiTest extends TestCase
         $this->withExtensionInstall($installId)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 1)->assertJsonCount(2, 'partialTrack.cues')
             ->assertJsonMissingPath('partialTrack.cues.0.translatedText')->assertJsonMissingPath('partialTrack.cues.0.tokens');
+        $this->withExtensionInstall($installId)->getJson($url.'?sinceRevision=1')->assertOk()->assertJsonMissingPath('partialTrack');
+        $this->withExtensionInstall($installId)->getJson($url.'?sinceRevision=-1')->assertUnprocessable();
         $this->artifacts()->putCueBatchResult($job, SubtitleJobArtifactStore::ANALYZED_CUES, 1, new CueEnrichmentResult([$cues[1]]));
         $this->withExtensionInstall($installId)->getJson($url)->assertOk()
             ->assertJsonPath('partialTrack.revision', 2)->assertJsonCount(2, 'partialTrack.cues')

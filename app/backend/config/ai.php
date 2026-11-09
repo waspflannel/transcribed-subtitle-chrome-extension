@@ -40,7 +40,7 @@ return [
             'key' => env('OPENAI_API_KEY'),
             'url' => env('OPENAI_URL'),
             'provider_options' => [
-                'reasoning' => ['effort' => env('OPENAI_REASONING_EFFORT', 'high')],
+                'reasoning' => ['effort' => env('OPENAI_REASONING_EFFORT', 'low')],
                 ...(env('OPENAI_FAST_MODE_ENABLED', true) ? ['service_tier' => 'fast'] : []),
             ],
             'models' => ['text' => ['default' => 'gpt-6-luna']],

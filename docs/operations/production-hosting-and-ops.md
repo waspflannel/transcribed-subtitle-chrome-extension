@@ -143,3 +143,7 @@ Use `subtitles:runtime`, `subtitles:trace`, `subtitles:slow` and `subtitles:metr
 Backup/restore scripts under `scripts/ops` remain available. Retain the matching application key separately. Release archives accept exact HTTPS or loopback HTTP origins and reject embedded secrets and broad permissions.
 
 Retired paid-beta procedures: [historical operations](../history/paid-beta-hosting-and-ops.md).
+
+### Review defaults
+
+New installations use `OPENAI_REASONING_EFFORT=low`, `SUBTITLE_CODEX_CONCURRENCY=3`, `SUBTITLE_CLAUDE_CONCURRENCY=3`, and `SUBTITLE_YOUTUBE_DIRECT_DOWNLOAD=true`. Existing environment overrides remain effective. Clear cached config and restart workers after changing them. Claude disconnect returns 409 while a prompt is active. Wait for it to finish and retry.

@@ -73,7 +73,7 @@ function Get-WorkerGroupsFromRuntime {
 
 function Get-RecordedRuntimeProcesses {
     if (-not (Test-Path -LiteralPath $PidPath)) { return @() }
-    try { return @(Get-Content -LiteralPath $PidPath -Raw | ConvertFrom-Json) }
+    try { $records = Get-Content -LiteralPath $PidPath -Raw | ConvertFrom-Json; return $records }
     catch { return @() }
 }
 

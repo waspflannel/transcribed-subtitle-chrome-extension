@@ -174,7 +174,13 @@ function pad(value: number): string {
 }
 
 function findActiveTextCue(textTrack: TextTrack): VTTCue | null {
-  const cue = textTrack.activeCues?.[0] ?? null;
+  let cue: TextTrackCue | null = null;
+  const active = textTrack.activeCues;
+  for (let index = 0; active && index < active.length; index += 1) {
+    const candidate = active[index];
+    if (candidate && 'text' in candidate && String(candidate.text).trim() !== ''
+      && (!cue || candidate.startTime >= cue.startTime)) cue = candidate;
+  }
 
   if (!cue || !('text' in cue)) {
     return null;

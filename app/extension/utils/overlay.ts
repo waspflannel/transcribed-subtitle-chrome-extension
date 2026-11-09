@@ -129,7 +129,7 @@ export class OverlayShell {
 
   public position(video = findActiveYoutubeVideo(this.documentRef), videoRect?: DOMRect): void {
     if (!this.host || !this.currentState) return;
-    this.host.style.display = this.currentState.settings.overlayVisible && video ? 'block' : 'none';
+    this.host.style.display = this.currentState.settings.overlayVisible && video && !video.closest('.ad-showing') ? 'block' : 'none';
     if (!this.currentState.settings.overlayVisible || !video) {
       this.endDrag();
       return;

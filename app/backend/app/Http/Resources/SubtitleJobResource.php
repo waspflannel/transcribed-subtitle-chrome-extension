@@ -70,7 +70,7 @@ class SubtitleJobResource extends JsonResource
 
         if ($status === 'running') {
             $partial = app(SubtitlePartialTrackAssembler::class)->assemble($this->resource);
-            if ($partial !== null) {
+            if ($partial !== null && (! $request->has('sinceRevision') || (int) $request->query('sinceRevision') !== $partial['revision'])) {
                 $resource['partialTrack'] = $partial;
             }
         }

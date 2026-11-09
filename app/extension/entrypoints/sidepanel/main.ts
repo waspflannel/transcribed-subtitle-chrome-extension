@@ -320,7 +320,7 @@ const timingControl = bindTimingOffsetControl({
 
 let backendRefreshInFlight = false;
 let backendPollTimer: ReturnType<typeof setTimeout> | undefined;
-const ACTIVE_POLL_INTERVAL_MS = 10_000;
+const ACTIVE_POLL_INTERVAL_MS = 30_000;
 const LYRICS_POLL_INTERVAL_MS = 2_000;
 let lastFullBackendRefresh = 0;
 const IDLE_POLL_INTERVAL_MS = 30_000;
@@ -384,7 +384,14 @@ void resolvePanelWindowId().then(attachTabListeners);
 
 function connectPanel(): void {
   try {
-    browser.runtime.connect({ name: 'panel' }).onDisconnect.addListener(() => {
+    const port = browser.runtime.connect({ name: 'panel' });
+    port.onMessage.addListener(message => {
+      if (message.type === 'background.subtitleStateChanged' && latestState && latestState.activeTabId === message.tabId) {
+        showPanelState({ ...latestState, subtitleState: message.subtitleState });
+        if (message.subtitleState.type !== 'loading') void refreshBackendState();
+      }
+    });
+    port.onDisconnect.addListener(() => {
       setTimeout(connectPanel, 1000);
     });
   } catch {
@@ -938,7 +945,6 @@ function showPanelState(state: PanelState): void {
   if (resetVideoLanguage) {
     sourceLanguageQuery = '';
     sourceLanguageSearchInput.value = '';
-    if (state.settings.sourceLanguage !== 'auto') void updateSettings({ sourceLanguage: 'auto' });
   }
   savedGenerations.render(state);
   instanceSettings.render(state);

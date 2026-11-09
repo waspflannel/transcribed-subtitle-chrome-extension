@@ -335,6 +335,10 @@ class LaravelAiTranslationAnalysisProvider
     private function promptAgent(string $agentClass, array $input, ?SubtitleModel $selection, bool $validateOutput = true, ?SubtitleJob $job = null): array
     {
         $selection ??= SubtitleModel::configured();
+        if ($job !== null) {
+            SubtitleJob::query()->whereKey($job->id)->where('run_id', $job->run_id)
+                ->where('status', 'running')->update(['updated_at' => now()]);
+        }
         try {
             $agent = $agentClass === CueAnalysisAgent::class
                 ? CueAnalysisAgent::make(

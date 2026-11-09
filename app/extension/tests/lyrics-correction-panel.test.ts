@@ -9,7 +9,7 @@ const transport = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 vi.mock('wxt/browser', () => ({ browser: {
   runtime: {
     sendMessage: transport.sendMessage,
-    connect: () => ({ onDisconnect: { addListener: vi.fn() } }),
+    connect: () => ({ onDisconnect: { addListener: vi.fn() }, onMessage: { addListener: vi.fn() } }),
     onMessage: { addListener: vi.fn() },
   },
   windows: { getCurrent: async () => ({ id: 1 }) },
@@ -86,7 +86,7 @@ it('shows a failure recovered on opening, preserves dismissal across navigation,
   expect(transport.sendMessage.mock.calls.filter(([request]) => request.type === 'panel.getState').at(-1)?.[0]).toMatchObject({
     type: 'panel.getState', syncBackend: false, syncLyricsCorrection: true,
   });
-  await vi.advanceTimersByTimeAsync(8000);
+  await vi.advanceTimersByTimeAsync(28000);
   expect(transport.sendMessage.mock.calls.filter(([request]) => request.type === 'panel.getState').at(-1)?.[0]).toMatchObject({ syncBackend: true });
   state.lyricsCorrection = { attemptId: 'attempt-3', status: 'completed', stage: 'completed', track, updatedAt: '2026-09-13T12:00:02Z' };
   await vi.advanceTimersByTimeAsync(2000);

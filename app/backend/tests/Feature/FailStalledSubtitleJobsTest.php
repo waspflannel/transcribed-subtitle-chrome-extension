@@ -13,6 +13,7 @@ use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
 use App\Models\SubtitleTrackLyricsCorrection;
 use App\Services\Audio\TemporaryAudioFile;
+use App\Services\Subtitles\SubtitlePipelineTelemetry;
 use App\Services\Subtitles\SubtitleQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -25,6 +26,15 @@ use Tests\TestCase;
 class FailStalledSubtitleJobsTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_batch_start_refreshes_heartbeat_without_changing_progress(): void
+    {
+        $job = SubtitleJob::factory()->create(['status' => 'running', 'stage' => 'tokenizing', 'progress_percent' => 79]);
+        $job->forceFill(['updated_at' => now()->subMinutes(10)])->saveQuietly();
+        app(SubtitlePipelineTelemetry::class)->recordStageStarted($job, 'tokenizing', 3);
+        $this->assertTrue($job->fresh()->updated_at->greaterThan(now()->subMinute()));
+        $this->assertSame(79, $job->fresh()->progress_percent);
+    }
 
     #[TestWith(['tokenizing'])]
     #[TestWith(['finalizing'])]

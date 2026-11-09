@@ -92,6 +92,7 @@ class SubtitleJobController extends Controller
 
     public function show(Request $request, string $jobId): JsonResponse
     {
+        $request->validate(['sinceRevision' => ['sometimes', 'integer', 'min:0']]);
         $job = SubtitleJob::query()
             ->with('track')
             ->where('public_id', $jobId)

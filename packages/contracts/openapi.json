@@ -184,6 +184,16 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "sinceRevision",
+            "in": "query",
+            "required": false,
+            "description": "Omit partialTrack when its revision equals this value. Status and completed tracks are always returned.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -344,7 +354,7 @@
         },
         "responses": {
           "202": {
-              "description": "Lyrics correction accepted for asynchronous processing. Optional AI selection overrides apply only to this correction; the response reports its pinned provider, model, and fast mode.",
+            "description": "Lyrics correction accepted for asynchronous processing. Optional AI selection overrides apply only to this correction; the response reports its pinned provider, model, and fast mode.",
             "content": {
               "application/json": {
                 "schema": {

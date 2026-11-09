@@ -187,6 +187,7 @@ vi.mock('../utils/api', () => ({
     }
     getInstanceSettings() { return apiMock.getInstanceSettings(); }
   },
+  SubtitleContractError: class extends TypeError {},
   SubtitleApiError: class MockSubtitleApiError extends Error {
     public override readonly name = 'SubtitleApiError';
     public constructor(
@@ -654,6 +655,22 @@ describe('background entrypoint review regressions', () => {
     expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['contract', 'network'])('stops %s failures instead of reconnecting forever', async kind => {
+    vi.useFakeTimers();
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    apiMock.createSubtitleJob.mockResolvedValue(job(VIDEO_A, 'job-poll'));
+    const { SubtitleContractError } = await import('../utils/api');
+    apiMock.getSubtitleJob.mockRejectedValue(kind === 'contract' ? new SubtitleContractError('Invalid response') : new TypeError('fetch failed'));
+    const listener = await loadBackground();
+    await dispatch(listener, generationRequest(), {});
+    await waitFor(() => vi.getTimerCount() > 0);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(kind === 'contract' ? 1 : 6);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(kind === 'contract' ? 1 : 6);
+  });
+
   it('backs off failed status requests, retains the preview, and stops on cancellation', async () => {
     vi.useFakeTimers();
     seedBaseState();
@@ -737,7 +754,7 @@ describe('background entrypoint review regressions', () => {
     await vi.advanceTimersByTimeAsync(999);
     expect(apiMock.getSubtitleJob).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-b');
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-b', undefined);
   });
 
   it.each([false, true])('retains interrupted work for recovery without slowing another tab (recovered: %s)', async (recovered) => {
@@ -766,7 +783,7 @@ describe('background entrypoint review regressions', () => {
     await waitFor(() => vi.getTimerCount() === 1);
     apiMock.getSubtitleJob.mockClear();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-b');
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-b', undefined);
 
     browserMock.setActiveTab(1);
     const resumed = await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {});
@@ -774,7 +791,7 @@ describe('background entrypoint review regressions', () => {
     await waitFor(() => vi.getTimerCount() === 2);
     apiMock.getSubtitleJob.mockClear();
     await vi.advanceTimersByTimeAsync(2000);
-    expect(apiMock.getSubtitleJob).toHaveBeenCalledWith(expect.any(String), 'job-a');
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledWith(expect.any(String), 'job-a', undefined);
     expect(apiMock.createSubtitleJob).toHaveBeenCalledTimes(recovered ? 1 : 2);
   });
 
@@ -834,7 +851,7 @@ describe('background entrypoint review regressions', () => {
     await waitFor(() => vi.getTimerCount() === 1);
     apiMock.getSubtitleJob.mockClear();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-b');
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-b', undefined);
 
     browserMock.setActiveTab(1);
     const resumed = await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {});
@@ -870,7 +887,7 @@ describe('background entrypoint review regressions', () => {
     await vi.advanceTimersByTimeAsync(0);
     apiMock.getSubtitleJob.mockClear();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-new');
+    expect(apiMock.getSubtitleJob).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'job-new', undefined);
     expect((storageMock.values.get('local:tabSubtitleOperations') as Record<string, any>)['1']).toMatchObject({ jobId: 'job-new' });
     const current = await dispatch(listener, { type: 'panel.getState', syncBackend: false, windowId: 1 }, {});
     expect(current.subtitleState).toMatchObject({ type: 'loading', jobId: 'job-new' });

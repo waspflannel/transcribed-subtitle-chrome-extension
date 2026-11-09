@@ -63,6 +63,15 @@ class ClaudeAccountTest extends TestCase
         $this->assertDirectoryDoesNotExist($this->dir.'/accounts/'.$attempt);
     }
 
+    public function test_disconnect_rejects_while_a_prompt_holds_the_runtime_lock(): void
+    {
+        $service = app(ClaudeAccountService::class);
+        $service->withRuntimeLock(false, function (): void {
+            $this->deleteJson('/v1/claude')->assertStatus(409);
+        });
+        $this->deleteJson('/v1/claude')->assertOk();
+    }
+
     public function test_a_wrong_code_fails_the_attempt_and_removes_its_directory(): void
     {
         $this->postJson('/v1/claude/login')->assertAccepted();

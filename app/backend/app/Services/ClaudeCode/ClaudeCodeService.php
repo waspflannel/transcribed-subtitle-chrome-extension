@@ -49,6 +49,11 @@ class ClaudeCodeService
 
     public function prompt(SubtitleAgent $agent, array $input, SubtitleModel $selection): array
     {
+        return app(ClaudeAccountService::class)->withRuntimeLock(false, fn (): array => $this->runPrompt($agent, $input, $selection));
+    }
+
+    private function runPrompt(SubtitleAgent $agent, array $input, SubtitleModel $selection): array
+    {
         // A Claude sign-in (OAuth) wins; a pasted setup-token is the fallback.
         $configDir = app(ClaudeAccountService::class)->activeDirectory();
         $token = $configDir === null ? config('claude-code.token') : false;

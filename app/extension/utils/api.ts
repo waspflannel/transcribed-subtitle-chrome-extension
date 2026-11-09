@@ -32,7 +32,9 @@ import {
 export const DEFAULT_BACKEND_API_BASE_URL = resolveBackendApiBaseUrl(import.meta.env.WXT_BACKEND_API_BASE_URL);
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 const JOB_HISTORY_TIMEOUT_MS = 2500;
-const SUBTITLE_JOB_POLL_TIMEOUT_MS = 4000;
+const SUBTITLE_JOB_POLL_TIMEOUT_MS = 30000;
+
+export class SubtitleContractError extends TypeError {}
 const LEARNING_TOKEN_TIMEOUT_MS = 25000;
 
 export class SubtitleApiError extends Error {
@@ -108,8 +110,8 @@ export class SubtitleApiClient {
     }, guardJobResponse);
   }
 
-  public async getSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
-    return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
+  public async getSubtitleJob(installId: string, jobId: string, sinceRevision?: number): Promise<JobResponse> {
+    return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}${sinceRevision === undefined ? "" : `?sinceRevision=${sinceRevision}`}`, installId, {
       method: 'GET',
       timeoutMs: SUBTITLE_JOB_POLL_TIMEOUT_MS,
     }, guardJobResponse);
@@ -242,10 +244,14 @@ export class SubtitleApiClient {
       }
 
       if (body === null) {
-        throw new TypeError(t("Backend returned invalid JSON."));
+        throw new SubtitleContractError(t("Backend returned invalid JSON."));
       }
 
-      return guardResponse(body);
+      try {
+        return guardResponse(body);
+      } catch {
+        throw new SubtitleContractError(t("Backend returned an invalid response. Update the extension and backend, then try again."));
+      }
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) {
         throw new TypeError(t("Backend request timed out."));
@@ -264,6 +270,8 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function publicSubtitleErrorMessage(error: unknown, provider?: JobResponse['aiProvider']): string {
+  if (error instanceof SubtitleContractError) return error.message;
+
   if (error instanceof SubtitleApiError) {
     if (provider === 'codex' && error.code === 'provider_not_configured') return t('Check your Codex connection and ElevenLabs API key in Settings.');
     if (provider === 'codex' && error.code === 'validation_failed') return t('Review the Codex model, fast mode, and video settings, then try again.');

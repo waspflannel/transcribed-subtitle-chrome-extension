@@ -130,15 +130,17 @@ class ClaudeAccountService
                 throw self::failure();
             }
             $email = is_string($account['email'] ?? null) && strlen($account['email']) <= 320 ? $account['email'] : null;
-            $previous = null;
-            $this->update($attempt, function (array $state) use ($attempt, $email, &$previous): array {
-                $previous = $state['active'] ?? null;
+            $this->withRuntimeLock(true, function () use ($attempt, $email): void {
+                $previous = null;
+                $this->update($attempt, function (array $state) use ($attempt, $email, &$previous): array {
+                    $previous = $state['active'] ?? null;
 
-                return ['active' => $attempt, 'email' => $email, 'login' => null];
+                    return ['active' => $attempt, 'email' => $email, 'login' => null];
+                });
+                if (is_string($previous) && $previous !== $attempt) {
+                    File::deleteDirectory($this->directory($previous));
+                }
             });
-            if (is_string($previous) && $previous !== $attempt) {
-                File::deleteDirectory($this->directory($previous));
-            }
         } catch (Throwable) {
             $this->failLogin($attempt);
         } finally {
@@ -163,23 +165,44 @@ class ClaudeAccountService
 
     public function disconnect(): array
     {
-        $previous = [];
-        $this->state(function (array $state) use (&$previous): array {
-            $previous = $state;
+        return $this->withRuntimeLock(true, function (): array {
+            $previous = [];
+            $this->state(function (array $state) use (&$previous): array {
+                $previous = $state;
 
-            return [];
-        });
-        foreach (array_filter([$previous['active'] ?? null, $previous['attempt'] ?? null]) as $attempt) {
-            $directory = $this->directory($attempt);
-            try {
-                (new Process([...(array) config('claude-code.command'), 'auth', 'logout'], $directory, $this->environment($directory), timeout: 30))->run();
-            } catch (Throwable) {
-                // Deleting the directory still removes the stored login.
+                return [];
+            });
+            foreach (array_filter([$previous['active'] ?? null, $previous['attempt'] ?? null]) as $attempt) {
+                $directory = $this->directory($attempt);
+                try {
+                    (new Process([...(array) config('claude-code.command'), 'auth', 'logout'], $directory, $this->environment($directory), timeout: 30))->run();
+                } catch (Throwable) {
+                    // Deleting the directory still removes the stored login.
+                }
+                File::deleteDirectory($directory);
             }
-            File::deleteDirectory($directory);
-        }
 
-        return $this->summary();
+            return $this->summary();
+        });
+    }
+
+    /** Shared locks protect CLI readers; account changes reject while a reader is active. */
+    public function withRuntimeLock(bool $exclusive, Closure $work): mixed
+    {
+        $handle = fopen($this->root().'/runtime.lock', 'c+');
+        if ($handle === false) {
+            throw self::failure();
+        }
+        if (! flock($handle, ($exclusive ? LOCK_EX : LOCK_SH) | LOCK_NB)) {
+            fclose($handle);
+            throw new SubtitleProcessingException('validation_failed', 'Claude is busy. Wait for active Claude work to finish, then try again.', 409);
+        }
+        try {
+            return $work();
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     /** Polls until $read returns a value; stops when the attempt is cancelled, expires or the CLI exits. */

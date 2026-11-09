@@ -8,7 +8,7 @@ import trackFixture from '../../../packages/contracts/fixtures/valid-track-respo
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(() => new Promise(() => {})),
-  connect: vi.fn(() => ({ onDisconnect: { addListener: vi.fn() } })),
+  connect: vi.fn(() => ({ onDisconnect: { addListener: vi.fn() }, onMessage: { addListener: vi.fn() } })),
   messages: vi.fn(),
   activated: vi.fn(),
   updated: vi.fn(),
@@ -177,7 +177,7 @@ it('cancels generation and saves the model selected for the next generation', as
   dom.window.close();
 });
 
-it('resets video language on panel startup and video changes, but preserves manual choices on ordinary refreshes', async () => {
+it('preserves the saved video language on startup, refresh and video changes', async () => {
   vi.resetModules();
   vi.useFakeTimers();
   const dom = new JSDOM(markup, { pretendToBeVisual: true });
@@ -200,8 +200,8 @@ it('resets video language on panel startup and video changes, but preserves manu
     dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
     await vi.advanceTimersByTimeAsync(0);
   };
-  expect(state.settings.sourceLanguage).toBe('auto');
-  expect(selected()).toContain('Auto');
+  expect(state.settings.sourceLanguage).toBe('jpn');
+  expect(selected()).toContain('Japanese');
   expect(dom.window.document.querySelector('[data-source-language-list]')?.getAttribute('aria-label')).toBe('Video language');
 
   dom.window.document.querySelector<HTMLButtonElement>('[data-source-language-list] [data-language-code="jpn"]')!.click();
@@ -230,8 +230,8 @@ it('resets video language on panel startup and video changes, but preserves manu
 
   state.pageStatus = { supported: true, videoId: 'M7lc1UVf-VE', url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE', mediaKind: 'video' };
   await refresh();
-  expect(state.settings.sourceLanguage).toBe('auto');
-  expect(selected()).toContain('Auto');
+  expect(state.settings.sourceLanguage).toBe('jpn');
+  expect(selected()).toContain('Japanese');
   expect(state.settings.targetLanguage).toBe('fra');
   dom.window.close();
 });
