@@ -109,10 +109,10 @@ if ($CommandArgs -contains 'subtitles:runtime-check') {
     Assert-Runtime (@($saved | Where-Object { $_.pid -eq 1001 -and $_.startedAtUtc -and $_.commandLine }).Count -eq 1) 'New process identity was not recorded.'
 
     Reset-Fixture
-    $envWriteTime = (Get-Item -LiteralPath $envPath).LastWriteTimeUtc
+    $envWriteTime = (Get-Item -Force -LiteralPath $envPath).LastWriteTimeUtc
     & (Join-Path $runtime 'start-local-backend-workers.ps1') -Php $fakePhp -SkipDocker -SkipMigrate -SkipBackend
     Assert-Runtime (($global:StoppedIds -join ',') -eq '19,20') 'Worker restart killed a backend, reused PID, legacy PID or unrelated queue.'
-    Assert-Runtime ((Get-Item -LiteralPath $envPath).LastWriteTimeUtc -eq $envWriteTime) 'Worker-only restart rewrote .env, triggering Laravel serve reload.'
+    Assert-Runtime ((Get-Item -Force -LiteralPath $envPath).LastWriteTimeUtc -eq $envWriteTime) 'Worker-only restart rewrote .env, triggering Laravel serve reload.'
 
     Reset-Fixture
     $rejected = $false
@@ -123,7 +123,7 @@ if ($CommandArgs -contains 'subtitles:runtime-check') {
         $rejected = $true
     }
     Assert-Runtime ($rejected -and $global:StoppedIds.Count -eq 0 -and $global:StartedIds.Count -eq 0) 'Worker-only launch changed the backend port.'
-    Assert-Runtime ((Get-Item -LiteralPath $envPath).LastWriteTimeUtc -eq $envWriteTime) 'Rejected profile change rewrote .env.'
+    Assert-Runtime ((Get-Item -Force -LiteralPath $envPath).LastWriteTimeUtc -eq $envWriteTime) 'Rejected profile change rewrote .env.'
 
     Reset-Fixture
     $global:ReusedOnStop = 10
