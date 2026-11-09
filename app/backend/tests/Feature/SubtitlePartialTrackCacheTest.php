@@ -17,7 +17,7 @@ class SubtitlePartialTrackCacheTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_unchanged_polls_read_only_the_lightweight_preview(): void
+    public function test_preview_reads_artifacts_without_locks_or_writes(): void
     {
         $job = SubtitleJob::factory()->create();
         $store = app(SubtitleJobArtifactStore::class);
@@ -37,8 +37,8 @@ class SubtitlePartialTrackCacheTest extends TestCase
             $this->assertSame($preview, $assembler->assemble($job));
             $queries = DB::getQueryLog();
             $this->assertCount(1, $queries);
-            $this->assertContains(SubtitleJobArtifactStore::PARTIAL_TRACK, $queries[0]['bindings']);
-            $this->assertStringStartsWith('select "payload"', $queries[0]['query']);
+            $this->assertNotContains(SubtitleJobArtifactStore::PARTIAL_TRACK, $queries[0]['bindings']);
+            $this->assertStringStartsWith('select *', $queries[0]['query']);
         } finally {
             DB::disableQueryLog();
         }

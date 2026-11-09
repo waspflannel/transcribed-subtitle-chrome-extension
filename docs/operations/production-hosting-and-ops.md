@@ -147,3 +147,11 @@ Retired paid-beta procedures: [historical operations](../history/paid-beta-hosti
 ### Review defaults
 
 New installations use `OPENAI_REASONING_EFFORT=low`, `SUBTITLE_CODEX_CONCURRENCY=3`, `SUBTITLE_CLAUDE_CONCURRENCY=3`, and `SUBTITLE_YOUTUBE_DIRECT_DOWNLOAD=true`. Existing environment overrides remain effective. Clear cached config and restart workers after changing them. Claude disconnect returns 409 while a prompt is active. Wait for it to finish and retry.
+
+## Status streams and generated validation
+
+GET `/v1/subtitle-jobs/{jobId}/events` accepts the same installation header as polling. Each `update` SSE event contains the existing JobResponse JSON. Streams last at most 20 seconds and close on terminal status. Disable proxy buffering. The extension reconnects and falls back to polling on transport failure. Contract errors remain terminal. Persisted operations recover after worker suspension; streams are never the durable job owner.
+
+Partial tracks are assembled from draft and analysis artifacts on read. Reads do not lock the job or store a preview. Revision, contiguous readyThroughMs and sinceRevision behavior stay the same.
+
+Contracts build generates standalone validators beside the types. The extension runs these without eval or runtime Ajv imports. Schema changes must rebuild both artifacts. No new environment settings are required.

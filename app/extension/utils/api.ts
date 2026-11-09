@@ -117,6 +117,41 @@ export class SubtitleApiClient {
     }, guardJobResponse);
   }
 
+  public async *streamSubtitleJob(installId: string, jobId: string): AsyncGenerator<JobResponse> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    try {
+      const response = await this.fetchImpl(`${this.baseUrl.replace(/\/$/, '')}/subtitle-jobs/${encodeURIComponent(jobId)}/events`, {
+        headers: { Accept: 'text/event-stream', 'X-Extension-Install-Id': installId }, signal: controller.signal,
+      });
+      if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream') || !response.body) throw new Error('Status stream unavailable');
+      reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream: true });
+        pending = pending.replace(/\r\n/g, '\n');
+        let end: number;
+        while ((end = pending.indexOf('\n\n')) !== -1) {
+          const event = pending.slice(0, end);
+          pending = pending.slice(end + 2);
+          const data = event.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
+          if (!data || data === '</stream>') continue;
+          try { yield guardJobResponse(JSON.parse(data)); }
+          catch { throw new SubtitleContractError('Backend returned an invalid status event.'); }
+        }
+        if (pending.length > 8_000_000) throw new SubtitleContractError('Status event exceeded the size limit.');
+      }
+    } finally {
+      clearTimeout(timeout);
+      controller.abort();
+      await reader?.cancel().catch(() => undefined);
+    }
+  }
+
   public async cancelSubtitleJob(installId: string, jobId: string): Promise<JobResponse> {
     return this.request<JobResponse>(`subtitle-jobs/${encodeURIComponent(jobId)}`, installId, {
       method: 'DELETE',

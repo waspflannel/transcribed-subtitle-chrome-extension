@@ -179,6 +179,7 @@ vi.mock('../utils/api', () => ({
     createSubtitleJob(...args: unknown[]) { return apiMock.createSubtitleJob(...args); }
     getLyricsCorrectionStatus(...args: unknown[]) { return apiMock.getLyricsCorrectionStatus(...args); }
     startLyricsCorrection(...args: unknown[]) { return apiMock.startLyricsCorrection(...args); }
+    async *streamSubtitleJob() { throw new Error('Stream unavailable in polling fixture'); }
     getSubtitleJob(...args: unknown[]) { return apiMock.getSubtitleJob(...args); }
     cancelSubtitleJob(...args: unknown[]) { return apiMock.cancelSubtitleJob(...args); }
     deleteSavedGeneration(...args: unknown[]) { return apiMock.deleteSavedGeneration(...args); }

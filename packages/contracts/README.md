@@ -25,3 +25,11 @@ npm run check
 - Provider responses, Eloquent models, and UI state must not replace these contracts.
 
 Job status accepts optional nonnegative integer `sinceRevision`. Responses omit `partialTrack` when its revision equals the supplied value. Callers retain their previous partial track. Status and completed tracks are always returned.
+
+## Status streams and generated validation
+
+GET `/v1/subtitle-jobs/{jobId}/events` accepts the same installation header as polling. Each `update` SSE event contains the existing JobResponse JSON. Streams last at most 20 seconds and close on terminal status. Disable proxy buffering. The extension reconnects and falls back to polling on transport failure. Contract errors remain terminal. Persisted operations recover after worker suspension; streams are never the durable job owner.
+
+Partial tracks are assembled from draft and analysis artifacts on read. Reads do not lock the job or store a preview. Revision, contiguous readyThroughMs and sinceRevision behavior stay the same.
+
+Contracts build generates standalone validators beside the types. The extension runs these without eval or runtime Ajv imports. Schema changes must rebuild both artifacts. No new environment settings are required.

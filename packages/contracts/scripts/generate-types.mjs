@@ -55,3 +55,5 @@ for (const schemaFile of schemaFiles) {
 const output = `${compiledTypes.join('\n\n')}\n`;
 await fs.writeFile(path.join(distDir, 'index.d.ts'), output, 'utf8');
 console.log('generated dist/index.d.ts');
+
+await import('./generate-validators.mjs');
