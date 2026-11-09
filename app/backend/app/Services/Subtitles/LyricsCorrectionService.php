@@ -435,7 +435,7 @@ final class LyricsCorrectionService
             'batch_index' => $batchIndex,
             'provider' => $selection?->provider,
             'model' => $selection?->model,
-            ...($selection?->provider === 'codex' ? ['fast_mode' => $selection->fastMode] : []),
+            ...(in_array($selection?->provider, ['codex', 'anthropic'], true) ? ['fast_mode' => $selection->fastMode] : []),
             'cue_count' => count($nextState['cues'] ?? []),
             'duration_ms' => (int) round((hrtime(true) - $startedAt) / 1_000_000),
         ]);
@@ -875,6 +875,7 @@ final class LyricsCorrectionService
                 return app(ProviderAdmission::class)->run($selection->provider, $job,
                     fn (): array => app(ClaudeCodeService::class)->prompt($agent, $input, $selection));
             }
+            $agent->fastMode = $selection->fastMode;
             $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => $agent->prompt(
                 json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 provider: $selection->provider,

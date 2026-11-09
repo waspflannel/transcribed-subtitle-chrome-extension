@@ -75,13 +75,26 @@
               "type": "boolean"
             }
           }
+        },
+        "anthropic": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "configured"
+          ],
+          "properties": {
+            "configured": {
+              "type": "boolean"
+            }
+          }
         }
       },
       "required": [
         "openai",
         "cerebras",
         "elevenlabs",
-        "claude"
+        "claude",
+        "anthropic"
       ]
     },
     "retentionDays": {

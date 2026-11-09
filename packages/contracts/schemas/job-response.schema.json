@@ -396,7 +396,8 @@
         "openai",
         "cerebras",
         "codex",
-        "claude"
+        "claude",
+        "anthropic"
       ],
       "description": "The selected analysis provider stays pinned for this generation."
     },
@@ -408,7 +409,7 @@
     },
     "partialTrack": {
       "$ref": "partial-track-response.schema.json",
-      "description": "Available source cues and completed annotations, delivered with running job status."
+      "description": "Growing partial track. Omitted when sinceRevision matches its revision."
     },
     "aiFastMode": {
       "type": "boolean",

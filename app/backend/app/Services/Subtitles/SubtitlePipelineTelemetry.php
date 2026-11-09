@@ -48,6 +48,9 @@ class SubtitlePipelineTelemetry
 
     public function recordStageStarted(SubtitleJob $job, string $stage, ?int $batchIndex = null, string $queueFamily = SubtitleQueue::FAMILY_GENERATION): void
     {
+        SubtitleJob::query()->whereKey($job->id)->where('run_id', $job->run_id)
+            ->where('status', 'running')->update(['updated_at' => now()]);
+
         $this->tracer->jobEvent($job, 'stage.started', $this->withBatchIndex([
             'stage' => $stage,
             'status' => $job->status,

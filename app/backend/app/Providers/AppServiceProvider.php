@@ -40,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(15)->by('codex-login-ip:'.$request->ip()),
         ]);
 
+        RateLimiter::for('claude-login', fn (Request $request): array => [
+            Limit::perMinute(10)->by('claude-login-install:'.$this->validatedInstallId($request, 'claude-login')),
+            Limit::perMinute(30)->by('claude-login-ip:'.$request->ip()),
+        ]);
+
         RateLimiter::for('subtitle-prefetch', fn (Request $request): array => [
             Limit::perMinute(6)->by('prefetch-install:'.$this->validatedInstallId($request, 'subtitle-prefetch')),
             Limit::perMinute(30)->by('prefetch-ip:'.$request->ip()),

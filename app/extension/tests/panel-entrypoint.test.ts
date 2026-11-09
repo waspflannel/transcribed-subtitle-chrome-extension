@@ -8,7 +8,7 @@ import trackFixture from '../../../packages/contracts/fixtures/valid-track-respo
 
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(() => new Promise(() => {})),
-  connect: vi.fn(() => ({ onDisconnect: { addListener: vi.fn() } })),
+  connect: vi.fn(() => ({ onDisconnect: { addListener: vi.fn() }, onMessage: { addListener: vi.fn() } })),
   messages: vi.fn(),
   activated: vi.fn(),
   updated: vi.fn(),
@@ -159,7 +159,7 @@ it('cancels generation and saves the model selected for the next generation', as
   await vi.advanceTimersByTimeAsync(0);
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.updateSettings', patch: { aiProvider: 'cerebras' } }));
   expect(selector.value).toBe('cerebras');
-  expect([...selector.options].map(option => option.value)).toEqual(['openai', 'cerebras']);
+  expect([...selector.options].map(option => option.value)).toEqual(['openai', 'cerebras', 'anthropic']);
 
   const attachInput = dom.window.document.querySelector<HTMLInputElement>('input[name="overlayAttachedToVideo"]')!;
   expect(attachInput.disabled).toBe(false);
@@ -177,7 +177,7 @@ it('cancels generation and saves the model selected for the next generation', as
   dom.window.close();
 });
 
-it('resets video language on panel startup and video changes, but preserves manual choices on ordinary refreshes', async () => {
+it('preserves the saved video language on startup, refresh and video changes', async () => {
   vi.resetModules();
   vi.useFakeTimers();
   const dom = new JSDOM(markup, { pretendToBeVisual: true });
@@ -200,8 +200,8 @@ it('resets video language on panel startup and video changes, but preserves manu
     dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));
     await vi.advanceTimersByTimeAsync(0);
   };
-  expect(state.settings.sourceLanguage).toBe('auto');
-  expect(selected()).toContain('Auto');
+  expect(state.settings.sourceLanguage).toBe('jpn');
+  expect(selected()).toContain('Japanese');
   expect(dom.window.document.querySelector('[data-source-language-list]')?.getAttribute('aria-label')).toBe('Video language');
 
   dom.window.document.querySelector<HTMLButtonElement>('[data-source-language-list] [data-language-code="jpn"]')!.click();
@@ -230,8 +230,8 @@ it('resets video language on panel startup and video changes, but preserves manu
 
   state.pageStatus = { supported: true, videoId: 'M7lc1UVf-VE', url: 'https://www.youtube.com/watch?v=M7lc1UVf-VE', mediaKind: 'video' };
   await refresh();
-  expect(state.settings.sourceLanguage).toBe('auto');
-  expect(selected()).toContain('Auto');
+  expect(state.settings.sourceLanguage).toBe('jpn');
+  expect(selected()).toContain('Japanese');
   expect(state.settings.targetLanguage).toBe('fra');
   dom.window.close();
 });
@@ -309,7 +309,7 @@ it('shows the Claude model picker for Claude billing and stores the chosen model
   expect(state.settings.aiProvider).toBe('claude');
   expect(claudeOptions.hidden).toBe(false);
   const model = dom.window.document.querySelector<HTMLSelectElement>('select[name="claudeModel"]')!;
-  expect([...model.options].map(option => option.value)).toEqual(['opus', 'sonnet', 'haiku']);
+  expect([...model.options].map(option => option.value)).toEqual(['opus', 'sonnet', 'haiku', 'claude-fable-5-1', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5']);
   expect(model.value).toBe('sonnet');
   model.value = 'haiku';
   model.dispatchEvent(new dom.window.Event('change'));
@@ -318,6 +318,44 @@ it('shows the Claude model picker for Claude billing and stores the chosen model
   dom.window.document.querySelector<HTMLInputElement>('input[name="aiSource"][value="codex"]')!.click();
   await vi.advanceTimersByTimeAsync(0);
   expect(claudeOptions.hidden).toBe(true);
+  dom.window.close();
+});
+
+it('shows the Claude API model picker with fast mode only for fast-capable models', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const dom = new JSDOM(markup);
+  stubPanelDom(dom);
+  let state: PanelState = {
+    installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS, backendUrl: 'http://localhost/v1',
+    subtitleState: { type: 'no-track' }, jobHistory: [],
+  };
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; patch?: Partial<PanelState['settings']> }) => {
+    if (request?.type === 'panel.updateSettings') state = { ...state, settings: { ...state.settings, ...request.patch } };
+    return structuredClone(state);
+  });
+  await import('../entrypoints/sidepanel/main');
+  await vi.advanceTimersByTimeAsync(0);
+  const document = dom.window.document;
+  const options = document.querySelector<HTMLElement>('[data-claude-api-options]')!;
+  expect(options.hidden).toBe(true);
+  const provider = document.querySelector<HTMLSelectElement>('select[name="aiProvider"]')!;
+  provider.value = 'anthropic';
+  provider.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.aiProvider).toBe('anthropic');
+  expect(options.hidden).toBe(false);
+  const fast = document.querySelector<HTMLInputElement>('input[name="claudeApiFastMode"]')!;
+  expect(fast.disabled).toBe(false);
+  fast.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings.claudeApiFastMode).toBe(true);
+  const model = document.querySelector<HTMLSelectElement>('select[name="claudeApiModel"]')!;
+  model.value = 'claude-sonnet-5-5';
+  model.dispatchEvent(new dom.window.Event('change'));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state.settings).toMatchObject({ claudeApiModel: 'claude-sonnet-5-5', claudeApiFastMode: false });
+  expect(fast.disabled).toBe(true);
   dom.window.close();
 });
 

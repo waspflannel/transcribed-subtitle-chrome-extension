@@ -23,10 +23,10 @@ class UpdateInstanceSettingsRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
-            'providers' => ['sometimes', 'array:openai,cerebras,elevenlabs,claude'],
+            'providers' => ['sometimes', 'array:openai,cerebras,elevenlabs,claude,anthropic'],
             'retentionDays' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:36500'],
         ];
-        foreach (['openai', 'cerebras', 'elevenlabs', 'claude'] as $provider) {
+        foreach (['openai', 'cerebras', 'elevenlabs', 'claude', 'anthropic'] as $provider) {
             $rules['providers.'.$provider] = ['sometimes', 'array:apiKey'];
             $rules['providers.'.$provider.'.apiKey'] = ['sometimes', 'nullable', 'string', 'max:4096', 'regex:/^[^\x00-\x1F\x7F]*$/'];
         }

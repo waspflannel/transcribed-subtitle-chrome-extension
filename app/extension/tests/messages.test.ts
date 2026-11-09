@@ -6,9 +6,11 @@ describe('runtime message validation', () => {
   it.each([
     [{ aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }, true],
     [{ aiProvider: 'cerebras' }, true],
-    [{ aiProvider: 'claude' }, true],
-    [{ aiProvider: 'claude', aiModel: 'sonnet' }, false],
-    [{ aiProvider: 'claude', aiFastMode: true }, false],
+    [{ aiProvider: 'claude', aiModel: 'sonnet' }, true],
+    [{ aiProvider: 'claude' }, false],
+    [{ aiProvider: 'claude', aiModel: 'sonnet', aiFastMode: true }, false],
+    [{ aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiFastMode: true }, true],
+    [{ aiProvider: 'anthropic' }, false],
     [{ aiProvider: 'codex' }, false],
     [{ aiProvider: 'codex', aiModel: '' }, false],
     [{ aiProvider: 'codex', aiModel: '../model' }, false],
@@ -22,6 +24,8 @@ describe('runtime message validation', () => {
   });
   it('accepts concrete extension messages with required payload fields', () => {
     expect(isRuntimeMessage({ type: 'content.getState' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.submitClaudeCode', code: 'abc#def' })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.submitClaudeCode', code: ' ' })).toBe(false);
     expect(isRuntimeMessage({ type: 'panel.getState', syncBackend: false })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.generateSubtitles', youtubeVideoId: 'dQw4w9WgXcQ', tabId: 1 })).toBe(true);
     expect(isRuntimeMessage({ type: 'panel.updateSettings', patch: { showTranslation: true } })).toBe(true);

@@ -9,6 +9,7 @@ const distDir = path.join(root, 'dist');
 
 const schemaFiles = [
   'codex-account.schema.json',
+  'claude-account.schema.json',
   'instance-settings.schema.json',
   'update-instance-settings.schema.json',
   'create-subtitle-job-request.schema.json',

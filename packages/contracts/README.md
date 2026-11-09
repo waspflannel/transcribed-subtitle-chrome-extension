@@ -23,3 +23,5 @@ npm run check
 - Laravel should validate extension-facing requests and responses against these schema shapes before exposing real endpoints.
 - The extension should consume generated TypeScript declarations from `dist/index.d.ts` once runtime API calls are introduced.
 - Provider responses, Eloquent models, and UI state must not replace these contracts.
+
+Job status accepts optional nonnegative integer `sinceRevision`. Responses omit `partialTrack` when its revision equals the supplied value. Callers retain their previous partial track. Status and completed tracks are always returned.

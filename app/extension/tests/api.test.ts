@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { INTERFACE_LOCALES, setInterfaceLocale } from '../utils/i18n';
 
 import { guardJobResponse } from '../utils/api-response-guards';
-import { SubtitleApiClient, SubtitleApiError, publicSubtitleErrorMessage } from '../utils/api';
+import { SubtitleApiClient, SubtitleContractError, SubtitleApiError, publicSubtitleErrorMessage } from '../utils/api';
 import type {
   CreateSubtitleJobRequest,
   JobResponse,
@@ -16,6 +16,14 @@ const installId = 'install_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 afterEach(() => setInterfaceLocale('en'));
 
 describe('SubtitleApiClient', () => {
+  it('distinguishes terminal contract errors from retryable network failures', async () => {
+    const invalid = new SubtitleApiClient('http://localhost/v1', async () => new Response('not json'));
+    await expect(invalid.getSubtitleJob(installId, 'job')).rejects.toBeInstanceOf(SubtitleContractError);
+    const network = new SubtitleApiClient('http://localhost/v1', async () => { throw new TypeError('fetch failed'); });
+    await expect(network.getSubtitleJob(installId, 'job')).rejects.not.toBeInstanceOf(SubtitleContractError);
+    expect(publicSubtitleErrorMessage(new SubtitleContractError('Update the backend.'))).toBe('Update the backend.');
+  });
+
   it('deletes a saved generation through the generation resource', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
     const client = new SubtitleApiClient('http://localhost:8000/v1', fetchMock as typeof fetch);
@@ -265,7 +273,7 @@ describe('SubtitleApiClient', () => {
   });
 
 
-  it('times out subtitle job polls with the 4s poll budget so a stalled poll fails fast', async () => {
+  it('times out subtitle job polls with a 30s budget for completed tracks', async () => {
     vi.useFakeTimers();
 
     try {
@@ -284,8 +292,8 @@ describe('SubtitleApiClient', () => {
       const request = client.getSubtitleJob(installId, '018f9e2f-0d8c-7500-8f38-9f4c5d1b3001');
       const assertion = expect(request).rejects.toThrow(TypeError);
 
-      // Poll budget is 4s; advancing just under it should not resolve the request.
-      await vi.advanceTimersByTimeAsync(3999);
+      // Poll budget is 30s; advancing just under it should not resolve the request.
+      await vi.advanceTimersByTimeAsync(29999);
 
       await vi.advanceTimersByTimeAsync(1);
 

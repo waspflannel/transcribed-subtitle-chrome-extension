@@ -2,7 +2,7 @@ import { t } from '../../utils/i18n';
 import type { PanelState } from '../../utils/messages';
 import type { UpdateInstanceSettings } from '../../utils/contracts';
 
-const providers = { openai: 'OpenAI', cerebras: 'Cerebras', elevenlabs: 'ElevenLabs', claude: 'Claude Code' } as const;
+const providers = { openai: 'OpenAI', cerebras: 'Cerebras', anthropic: 'Claude API', elevenlabs: 'ElevenLabs', claude: 'Claude Code' } as const;
 
 export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanceSettings) => Promise<boolean>): { render(state: PanelState): void } {
   const form = root.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;

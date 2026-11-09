@@ -112,7 +112,7 @@ class SubtitleWorkflowLogger
             'provider' => $job->ai_provider,
             'adapter' => SubtitleModel::adapter($job->ai_provider),
             'model' => $job->ai_model,
-            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
+            ...(in_array($job->ai_provider, ['codex', 'anthropic'], true) ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
             'source_language' => $job->source_language,
             'cue_count' => $cueCount,
         ]);
@@ -126,7 +126,7 @@ class SubtitleWorkflowLogger
             'provider' => $job->ai_provider,
             'adapter' => SubtitleModel::adapter($job->ai_provider),
             'model' => $job->ai_model,
-            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
+            ...(in_array($job->ai_provider, ['codex', 'anthropic'], true) ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
             'source_language' => $job->source_language,
             'cue_count' => count($enrichment->cues),
             'token_count' => $this->tokenCount($enrichment),
@@ -141,7 +141,7 @@ class SubtitleWorkflowLogger
             'provider' => $job->ai_provider,
             'adapter' => SubtitleModel::adapter($job->ai_provider),
             'model' => $job->ai_model,
-            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
+            ...(in_array($job->ai_provider, ['codex', 'anthropic'], true) ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
             'cue_count' => $cueCount,
         ]);
     }
@@ -154,7 +154,7 @@ class SubtitleWorkflowLogger
             'provider' => $job->ai_provider,
             'adapter' => SubtitleModel::adapter($job->ai_provider),
             'model' => $job->ai_model,
-            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
+            ...(in_array($job->ai_provider, ['codex', 'anthropic'], true) ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
             'source_language' => $job->source_language,
             'target_language' => $job->target_language,
             'cue_count' => $cueCount,

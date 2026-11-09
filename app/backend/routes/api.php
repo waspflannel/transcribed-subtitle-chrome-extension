@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ClaudeAccountController;
 use App\Http\Controllers\Api\CodexAccountController;
 use App\Http\Controllers\Api\InstanceSettingsController;
 use App\Http\Controllers\Api\LearningTokenController;
@@ -21,6 +22,15 @@ Route::prefix('v1')
             ->middleware('throttle:codex-login');
         Route::delete('/codex', [CodexAccountController::class, 'destroy'])
             ->middleware('throttle:codex-login');
+
+        Route::get('/claude', [ClaudeAccountController::class, 'show'])
+            ->middleware('throttle:subtitle-status-api');
+        Route::post('/claude/login', [ClaudeAccountController::class, 'login'])
+            ->middleware('throttle:claude-login');
+        Route::post('/claude/login/code', [ClaudeAccountController::class, 'code'])
+            ->middleware('throttle:claude-login');
+        Route::delete('/claude', [ClaudeAccountController::class, 'destroy'])
+            ->middleware('throttle:claude-login');
 
         Route::post('/subtitle-audio/prefetch', [SubtitleJobController::class, 'prefetchAudio'])
             ->middleware('throttle:subtitle-prefetch');

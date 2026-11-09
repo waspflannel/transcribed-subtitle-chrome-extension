@@ -80,6 +80,18 @@ for (const aiModel of ['opus', 'sonnet', 'haiku']) {
 assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'claude' }, 'Claude request without a model');
 assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'claude', aiModel: 'claude-opus-4' }, 'Claude request with an unknown model');
 assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'claude', aiModel: 'sonnet', aiFastMode: true }, 'Claude request with fast mode');
+for (const aiModel of ['claude-fable-5-1', 'claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-5']) {
+  if (!generationRequest({ ...generationFixture, aiProvider: 'claude', aiModel })) throw new Error(`Valid Claude model ${aiModel} rejected.`);
+}
+for (const aiModel of ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-fable-5-1']) {
+  if (!generationRequest({ ...generationFixture, aiProvider: 'anthropic', aiModel })) throw new Error(`Valid Claude API model ${aiModel} rejected.`);
+}
+for (const aiModel of ['claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8']) {
+  if (!generationRequest({ ...generationFixture, aiProvider: 'anthropic', aiModel, aiFastMode: true })) throw new Error(`Claude API fast mode on ${aiModel} rejected.`);
+}
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'anthropic' }, 'Claude API request without a model');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'anthropic', aiModel: 'sonnet' }, 'Claude API request with a subscription alias');
+assertInvalid(generationRequest, { ...generationFixture, aiProvider: 'anthropic', aiModel: 'claude-sonnet-5-5', aiFastMode: true }, 'Claude API fast mode on a model without it');
 for (const aiProvider of ['auto', 'hybrid', 'invalid', null, 1]) {
   if (generationRequest({ ...generationFixture, aiProvider })) throw new Error('Invalid AI provider accepted.');
 }
@@ -97,6 +109,14 @@ for (const authUrl of ['https://auth.openai.com/oauth/authorize?client_id=test',
 }
 for (const authUrl of ['https://example.com/sign-in', 'https://auth.openai.com:443/', 'https://user@auth.openai.com/', 'https://chatgpt.com\\@evil.com/', 'https://chatgpt.com/\n', 'https://chatgpt.com/'+ 'a'.repeat(4096)]) {
   assertInvalid(codexAccount, { ...account, login: { ...account.login, authUrl } }, 'untrusted OAuth URL');
+}
+const claudeAccount = ajv.getSchema('claude-account.schema.json');
+const claude = { available: true, connected: false, email: null, login: { status: 'awaiting_code', authUrl: 'https://claude.com/cai/oauth/authorize?code=true' } };
+if (!claudeAccount(claude)) throw new Error('Valid Claude account rejected.');
+if (!claudeAccount({ ...claude, connected: true, email: 'me@example.com', login: null })) throw new Error('Connected Claude account rejected.');
+assertInvalid(claudeAccount, { ...claude, accessToken: 'secret' }, 'Claude credential leak');
+for (const authUrl of ['https://example.com/sign-in', 'https://claude.com:443/', 'https://claude.com\\@evil.com/', 'https://claude.ai/\n']) {
+  assertInvalid(claudeAccount, { ...claude, login: { ...claude.login, authUrl } }, 'untrusted Claude OAuth URL');
 }
 assertInvalid(codexAccount, { ...account, login: { status: 'awaiting_authorization', verificationUrl: 'https://auth.openai.com/codex/device', userCode: 'ABCD-EFGH' } }, 'retired device login response');
 const unavailableTranslation = JSON.parse(fs.readFileSync(path.join(fixturesDir, 'valid-track-response.json'), 'utf8'));
@@ -130,10 +150,10 @@ assertInvalid(
 
 const lyricsCorrectionRequest = ajv.getSchema('lyrics-correction-request.schema.json');
 const correctionPayload = { expectedTrackId: '018f9e2f-0d8c-7500-8f38-9f4c5d1b3041', lyrics: 'First line' };
-for (const selection of [{}, { aiProvider: 'openai' }, { aiProvider: 'cerebras' }, { aiProvider: 'claude', aiModel: 'haiku' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }]) {
+for (const selection of [{}, { aiProvider: 'openai' }, { aiProvider: 'cerebras' }, { aiProvider: 'claude', aiModel: 'haiku' }, { aiProvider: 'anthropic', aiModel: 'claude-opus-5-5', aiFastMode: true }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true }]) {
   if (!lyricsCorrectionRequest({ ...correctionPayload, ...selection })) throw new Error(`Rejected valid correction selection: ${JSON.stringify(selection)}`);
 }
-for (const selection of [{ aiProvider: 'codex' }, { aiProvider: 'codex', aiModel: '../model' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: 'true' }, { aiProvider: 'openai', aiModel: 'gpt-codex' }, { aiProvider: 'cerebras', aiFastMode: true }, { aiProvider: 'claude' }, { aiProvider: 'claude', aiModel: 'gpt-codex' }, { aiModel: 'gpt-codex' }]) {
+for (const selection of [{ aiProvider: 'codex' }, { aiProvider: 'codex', aiModel: '../model' }, { aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: 'true' }, { aiProvider: 'openai', aiModel: 'gpt-codex' }, { aiProvider: 'cerebras', aiFastMode: true }, { aiProvider: 'claude' }, { aiProvider: 'claude', aiModel: 'gpt-codex' }, { aiProvider: 'anthropic' }, { aiProvider: 'anthropic', aiModel: 'claude-haiku-5-5', aiFastMode: true }, { aiModel: 'gpt-codex' }]) {
   assertInvalid(lyricsCorrectionRequest, { ...correctionPayload, ...selection }, `invalid correction selection ${JSON.stringify(selection)}`);
 }
 const correctionWithAi = { attemptId: correctionPayload.expectedTrackId, status: 'queued', stage: 'queued', updatedAt: '2026-10-07T12:00:00Z', aiProvider: 'codex', aiModel: 'gpt-codex', aiFastMode: true };
@@ -148,7 +168,7 @@ for (const allowPartial of [true, false, 'true', null]) {
 
 const instanceSettings = ajv.getSchema('instance-settings.schema.json');
 const updateSettings = ajv.getSchema('update-instance-settings.schema.json');
-const settings = { providers: { openai: { configured: true, model: 'm' }, cerebras: { configured: false, model: 'm' }, elevenlabs: { configured: true, model: 'm' }, claude: { configured: true, available: true } }, retentionDays: null };
+const settings = { providers: { openai: { configured: true, model: 'm' }, cerebras: { configured: false, model: 'm' }, elevenlabs: { configured: true, model: 'm' }, claude: { configured: true, available: true }, anthropic: { configured: false } }, retentionDays: null };
 if (!instanceSettings(settings)) throw new Error('Rejected valid instance settings');
 assertInvalid(instanceSettings, { ...settings, providers: { ...settings.providers, claude: { ...settings.providers.claude, apiKey: 'secret' } } }, 'Claude token leak');
 if (!updateSettings({ providers: { claude: { apiKey: 'tok' } } })) throw new Error('Rejected Claude token update');

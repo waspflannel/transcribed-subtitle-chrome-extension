@@ -62,14 +62,16 @@ Apply pending database migrations and rebuild/reload the extension when upgradin
 
 ### Claude Code subscription
 
-Install Claude Code CLI 2.1.280 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH. On any computer, run `claude setup-token`, then paste the token into **Settings → Claude Code**. The backend stores the token encrypted and never returns it.
+Install Claude Code CLI 2.1.280 or newer on the backend host, available to PHP HTTP processes and queue workers. Set `CLAUDE_BINARY` if it is not on their PATH.
 
-The model (`opus`, `sonnet`, `haiku`; default `sonnet`) is picked on the generation page, like the Codex model. The extension saves it and sends it with each job as `aiModel`, so every job keeps its own model. The backend pins these aliases to `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5` with `ANTHROPIC_DEFAULT_*_MODEL`, which also covers the CLI's own background Haiku calls. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
+**Sign in with Claude** (Settings) runs `claude auth login --claudeai` in a queued job, in its own directory under `storage/app/private/claude-code/accounts/`. The panel shows the sign-in link; after signing in, the Claude page shows a code that you paste into the panel. The backend writes it to the CLI, confirms with `claude auth status --json`, and from then on runs `claude -p` with that directory as `CLAUDE_CONFIG_DIR`. The CLI refreshes the login itself. **Disconnect Claude** runs `claude auth logout` and deletes the directory. The older path still works as a fallback: run `claude setup-token` on any computer and paste the token into **Settings → Provider settings**; it is stored encrypted and never returned.
+
+The model is picked on the generation page, like the Codex model: `opus`, `sonnet`, `haiku` (the 5.5 models), or `claude-fable-5-1`, `claude-opus-5`, `claude-opus-4-8`, `claude-sonnet-5`. The extension saves it and sends it with each job as `aiModel`, so every job keeps its own model. The backend pins these aliases to `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5` with `ANTHROPIC_DEFAULT_*_MODEL`, which also covers the CLI's own background Haiku calls. Fast mode is intentionally unsupported (the backend sets `CLAUDE_CODE_DISABLE_FAST_MODE=1`) because it bills paid usage credits on subscriptions.
 
 Each AI request starts one `claude -p` process with:
 
 - tools, MCP servers, settings files, skills and session saving turned off
-- working directory and `CLAUDE_CONFIG_DIR` set to `app/backend/storage/app/private/claude-code`
+- working directory and `CLAUDE_CONFIG_DIR` set to the signed-in account directory, or `app/backend/storage/app/private/claude-code` with a pasted token
 - no inherited environment variables except platform basics
 - `--effort low` (fixed, not a setting), and `CLAUDE_CODE_DISABLE_FAST_MODE=1` in the environment. It is a plain prompt-to-JSON call, like Codex. On Haiku 5.5 an 8-cue batch takes about 10s at `low`; `max` took about 70s and risks the 120s timeout.
 
@@ -78,6 +80,10 @@ No `ANTHROPIC_API_KEY` reaches the CLI, so requests never bill an API account. E
 A rejected token shows as "provider not configured". Spaces in a pasted token (from terminal line wraps) are removed on save. Rate limits come from your Claude subscription. Each call adds a few seconds of CLI startup, so large jobs are slower than API providers.
 
 This is for your own self-hosted instance with your own subscription. Do not offer it to other people as a way to use their Claude subscription.
+
+### Claude API
+
+Add an Anthropic API key in **Settings → Provider settings** (or `ANTHROPIC_API_KEY`). On the generation page choose **API keys → Claude API** and a model: `claude-opus-5-5` (default), `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-1`, `claude-opus-5`, `claude-opus-4-8` or `claude-sonnet-5`. Requests go through the Laravel AI SDK Anthropic gateway with native structured output. **Fast mode** (Opus 5.5, Opus 5 and Opus 4.8 only) adds `speed: "fast"` with the `fast-mode-2026-02-01` beta; it runs up to 2.5x faster and costs 2x. The job keeps its model and fast mode.
 
 ## Private access
 
@@ -100,8 +106,8 @@ The extension address is selected at build time; permissions cover only YouTube 
 | `SUBTITLE_GENERATION_WORKERS` | 9 |
 | `SUBTITLE_BATCH_WORKERS` | 22 |
 | `SUBTITLE_PROVIDER_GLOBAL_CONCURRENCY` | 30 calls per provider |
-| `SUBTITLE_CODEX_CONCURRENCY` | 3 Codex sessions (they share one login) |
-| `SUBTITLE_CLAUDE_CONCURRENCY` | 3 Claude Code processes |
+| `SUBTITLE_CODEX_CONCURRENCY` | 15 Codex sessions (they share one login) |
+| `SUBTITLE_CLAUDE_CONCURRENCY` | 15 Claude Code processes |
 | `SUBTITLE_AI_GLOBAL_RATE_LIMIT_PER_MINUTE` | 300 attempts per provider |
 | `SUBTITLE_BATCH_QUEUE_CONNECTION` | `redis-batch` |
 | `REDIS_QUEUE_RETRY_AFTER` / `SUBTITLE_WORKER_TIMEOUT_SECONDS` | 1380 / 1320 seconds (generation) |
@@ -137,3 +143,7 @@ Use `subtitles:runtime`, `subtitles:trace`, `subtitles:slow` and `subtitles:metr
 Backup/restore scripts under `scripts/ops` remain available. Retain the matching application key separately. Release archives accept exact HTTPS or loopback HTTP origins and reject embedded secrets and broad permissions.
 
 Retired paid-beta procedures: [historical operations](../history/paid-beta-hosting-and-ops.md).
+
+### Review defaults
+
+New installations use `OPENAI_REASONING_EFFORT=low`, `SUBTITLE_CODEX_CONCURRENCY=3`, `SUBTITLE_CLAUDE_CONCURRENCY=3`, and `SUBTITLE_YOUTUBE_DIRECT_DOWNLOAD=true`. Existing environment overrides remain effective. Clear cached config and restart workers after changing them. Claude disconnect returns 409 while a prompt is active. Wait for it to finish and retry.

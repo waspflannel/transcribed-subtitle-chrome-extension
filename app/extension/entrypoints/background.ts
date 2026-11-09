@@ -1,9 +1,9 @@
 import { browser, type Browser } from 'wxt/browser';
 
 import { getInstanceContext, type InstanceContext } from '../utils/instance-context';
-import { SubtitleApiClient, publicSubtitleErrorMessage, SubtitleApiError, DEFAULT_BACKEND_API_BASE_URL } from '../utils/api';
+import { SubtitleApiClient, SubtitleContractError, publicSubtitleErrorMessage, SubtitleApiError, DEFAULT_BACKEND_API_BASE_URL } from '../utils/api';
 import { clearRememberedTracks, clearTabOperation, clearTabOperationIfMatches, clearTabOperations, forgetRememberedTrack, getRememberedTrack, getTabOperation, rememberActiveTrack, setTabOperation, updateTabOperationIfMatches, type StoredTabOperation } from '../utils/active-tracks';
-import type { CodexAccount, InstanceSettings, JobResponse, LearningTokenResponse, LyricsCorrectionStatus, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
+import type { ClaudeAccount, CodexAccount, CreateSubtitleJobRequest, InstanceSettings, JobResponse, LearningTokenResponse, LyricsCorrectionStatus, SubtitleJobHistoryItem, TrackResponse } from '../utils/contracts';
 import {
   loadingMessageForStage,
   publicSubtitleJobFailureMessage,
@@ -29,7 +29,7 @@ import {
   updateExtensionSettings,
   waitForExtensionSettingsWrites,
 } from '../utils/settings';
-import type { ExtensionSettings } from '../utils/settings-model';
+import { CLAUDE_FAST_MODELS, type ExtensionSettings } from '../utils/settings-model';
 import { trackWithLearningToken } from '../utils/track-tokens';
 import { parseYoutubePage, type YoutubePageInfo } from '../utils/youtube';
 import {
@@ -61,8 +61,12 @@ let instanceSettingsError: string | undefined;
 let cachedCodexAccount: CodexAccount | undefined;
 let codexAccountError: string | undefined;
 let codexAccountVersion = 0;
+let cachedClaudeAccount: ClaudeAccount | undefined;
+let claudeAccountError: string | undefined;
+let claudeAccountVersion = 0;
 let audioPrefetch: { key: string; at: number } | undefined;
-const JOB_POLL_INTERVAL_MS = 5000;
+const JOB_POLL_INTERVAL_MS = 1000;
+const JOB_POLL_MAX_FAILURES = 6;
 const ACTIVE_JOB_POLL_INTERVAL_MS = 1000;
 type SupportedYoutubePageInfo = Extract<YoutubePageInfo, { supported: true }>;
 type PageSnapshotResponse = { ok: true; videoDurationSeconds?: number };
@@ -174,6 +178,24 @@ async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.
           ? publicSubtitleErrorMessage(error, 'codex') : 'Unable to load Codex. Check the backend and refresh.');
       });
       if (version === codexAccountVersion) { cachedCodexAccount = account; codexAccountError = undefined; }
+      return account;
+    }
+    case 'panel.getClaudeAccount':
+    case 'panel.loginClaude':
+    case 'panel.submitClaudeCode':
+    case 'panel.disconnectClaude': {
+      if (sender.tab) throw new Error('Claude sign-in can only be managed from the extension panel.');
+      const version = ++claudeAccountVersion;
+      const installId = await getOrCreateInstallId();
+      const response = message.type === 'panel.loginClaude' ? subtitleApi.loginClaude(installId)
+        : message.type === 'panel.submitClaudeCode' ? subtitleApi.submitClaudeCode(installId, message.code.trim())
+        : message.type === 'panel.disconnectClaude' ? subtitleApi.disconnectClaude(installId)
+        : subtitleApi.getClaudeAccount(installId);
+      const account = await response.catch(error => {
+        throw new Error(error instanceof SubtitleApiError || error instanceof TypeError
+          ? publicSubtitleErrorMessage(error, 'claude') : 'Unable to load Claude. Check the backend and refresh.');
+      });
+      if (version === claudeAccountVersion) { cachedClaudeAccount = account; claudeAccountError = undefined; }
       return account;
     }
     case 'content.getState':
@@ -631,8 +653,8 @@ async function generateSubtitlesFromPanel(youtubeVideoId: string, tabId: number,
         const model = account.models.find(model => model.id === settings.codexModel);
         if (!model) throw new Error('Select an available Codex model before generating subtitles.');
         if (settings.codexFastMode && !model.supportsFastMode) throw new Error('Fast mode is unavailable for this Codex model.');
-      } else if (settings.aiProvider === 'claude' && !providers.claude.available) {
-        throw new Error('Install Claude Code CLI 2.1.280 or newer on the backend.');
+      } else if (settings.aiProvider === 'claude') {
+        if (!providers.claude.available) throw new Error('Install Claude Code CLI 2.1.280 or newer on the backend.');
       } else if (!providers[settings.aiProvider].configured) {
         throw new SubtitleApiError('provider_not_configured', 'Add the required provider keys in Settings before generating subtitles.', 422);
       }
@@ -712,8 +734,7 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
-      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode }
-        : settings.aiProvider === 'claude' ? { aiModel: settings.claudeModel } : {}),
+      ...aiSelectionPayload(settings),
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -738,8 +759,7 @@ async function generateSubtitlesForTab(
       sourceLanguage: settings.sourceLanguage,
       targetLanguage: settings.targetLanguage,
       aiProvider: settings.aiProvider,
-      ...(settings.aiProvider === 'codex' ? { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode }
-        : settings.aiProvider === 'claude' ? { aiModel: settings.claudeModel } : {}),
+      ...aiSelectionPayload(settings),
       includeRomanization: settings.showRomanization,
       includeTranslation: settings.showTranslation,
     });
@@ -846,6 +866,8 @@ async function waitForCompletedSubtitleJob(
   operation: symbol,
 ): Promise<JobResponse | null> {
   let job = initialJob;
+  let failures = 0;
+  let publishedVersion: string | undefined;
   let partialTrack = (await getTabOperation(tabId))?.partialTrack;
   let jobPollInterval = job.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
 
@@ -865,6 +887,7 @@ async function waitForCompletedSubtitleJob(
       return null;
     }
 
+    let partialChanged = false;
     if (job.partialTrack) {
       const refreshedTrack: PartialSubtitleTrack = {
         ...job.partialTrack,
@@ -875,14 +898,7 @@ async function waitForCompletedSubtitleJob(
       if (revisionChanged && tabOperations.get(tabId) === operation) {
         jobPollInterval = ACTIVE_JOB_POLL_INTERVAL_MS;
         partialTrack = refreshedTrack;
-        if (!await isCurrentSession(session.sessionId)) return null;
-        const persistedOperation = await getTabOperation(tabId);
-        if (tabOperations.get(tabId) === operation && persistedOperation?.kind === 'generation'
-          && persistedOperation.instanceId === session.instanceId
-          && persistedOperation.youtubeVideoId === pageStatus.videoId
-          && persistedOperation.jobId === job.jobId) {
-          await updateTabOperationIfMatches(tabId, persistedOperation, { ...persistedOperation, partialTrack });
-        }
+        partialChanged = true;
       }
     }
 
@@ -890,7 +906,9 @@ async function waitForCompletedSubtitleJob(
 
     if (isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
 
-    if (await isCurrentSession(session.sessionId) && isCurrentLoadingState(tabId, pageStatus.videoId)) {
+    const version = JSON.stringify([job.status, job.stage, job.progressPercent, partialTrack?.revision]);
+    if (version !== publishedVersion && await isCurrentSession(session.sessionId) && isCurrentLoadingState(tabId, pageStatus.videoId)) {
+      publishedVersion = version;
       await publishSubtitleState(tabId, {
         type: 'loading',
         status: job.status,
@@ -908,19 +926,34 @@ async function waitForCompletedSubtitleJob(
       }, session.instanceId, session.sessionId);
     }
 
+    if (partialChanged) {
+      if (!await isCurrentSession(session.sessionId)) return null;
+      const persistedOperation = await getTabOperation(tabId);
+      if (tabOperations.get(tabId) === operation && persistedOperation?.kind === 'generation'
+        && persistedOperation.instanceId === session.instanceId
+        && persistedOperation.youtubeVideoId === pageStatus.videoId
+        && persistedOperation.jobId === job.jobId) {
+        await updateTabOperationIfMatches(tabId, persistedOperation, { ...persistedOperation, partialTrack });
+      }
+    }
+
     await delay(Math.max(jobPollInterval, minimumActivePollInterval()));
     if (tabOperations.get(tabId) !== operation || isGenerationCancellationClaim(tabId, job.jobId, operation)) return null;
     const refreshedSession = await getInstanceContext();
     if (!refreshedSession || refreshedSession.instanceId !== session.instanceId || refreshedSession.sessionId !== session.sessionId) return null;
 
     try {
-      const refreshedJob = await subtitleApi.getSubtitleJob(installId, job.jobId);
+      const refreshedJob = await subtitleApi.getSubtitleJob(installId, job.jobId, partialTrack?.revision);
+      failures = 0;
       jobPollInterval = refreshedJob.status === 'queued' ? JOB_POLL_INTERVAL_MS : ACTIVE_JOB_POLL_INTERVAL_MS;
       job = refreshedJob;
     } catch (error) {
-      jobPollInterval = JOB_POLL_INTERVAL_MS;
+      jobPollInterval = 5000;
+      publishedVersion = undefined;
 
-      if (error instanceof SubtitleApiError && error.code === 'not_found') {
+      if (error instanceof SubtitleContractError
+        || (error instanceof SubtitleApiError && error.status < 500 && error.status !== 429)
+        || ++failures >= JOB_POLL_MAX_FAILURES) {
         throw error;
       }
 
@@ -942,7 +975,7 @@ async function waitForCompletedSubtitleJob(
       continue;
     }
     if (job.jobId !== initialJob.jobId || job.youtubeVideoId !== pageStatus.videoId) {
-      throw new Error('Subtitle status did not match the requested job.');
+      throw new SubtitleContractError('Subtitle status did not match the requested job. Update the extension and backend, then try again.');
     }
   }
 
@@ -1697,24 +1730,41 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
     ? {}
     : await getPageSnapshotFromTab(activeTabId);
 
-  if (options.syncBackend || !cachedInstanceSettings) {
-    try {
-      cachedInstanceSettings = await subtitleApi.getInstanceSettings(installId);
-      instanceSettingsError = undefined;
-    } catch {
-      instanceSettingsError = 'Unable to load provider settings. Check that your backend is running.';
-    }
-  }
-  if (options.syncBackend || !cachedCodexAccount) {
-    const version = codexAccountVersion;
-    try {
-      const account = await subtitleApi.getCodexAccount(installId);
-      if (version === codexAccountVersion) { cachedCodexAccount = account; codexAccountError = undefined; }
-    } catch {
-      if (version === codexAccountVersion) codexAccountError = 'Unable to load Codex. Check the backend and refresh.';
-    }
-  }
-  const history = await getPanelJobHistory(installId, effectiveSession, options.syncBackend);
+  const [, , , history] = await Promise.all([
+    (async () => {
+      if (options.syncBackend || !cachedInstanceSettings) {
+        try {
+          cachedInstanceSettings = await subtitleApi.getInstanceSettings(installId);
+          instanceSettingsError = undefined;
+        } catch {
+          instanceSettingsError = 'Unable to load provider settings. Check that your backend is running.';
+        }
+      }
+    })(),
+    (async () => {
+      if (options.syncBackend || !cachedClaudeAccount) {
+        const version = claudeAccountVersion;
+        try {
+          const account = await subtitleApi.getClaudeAccount(installId);
+          if (version === claudeAccountVersion) { cachedClaudeAccount = account; claudeAccountError = undefined; }
+        } catch {
+          if (version === claudeAccountVersion) claudeAccountError = 'Unable to load Claude. Check the backend and refresh.';
+        }
+      }
+    })(),
+    (async () => {
+      if (options.syncBackend || !cachedCodexAccount) {
+        const version = codexAccountVersion;
+        try {
+          const account = await subtitleApi.getCodexAccount(installId);
+          if (version === codexAccountVersion) { cachedCodexAccount = account; codexAccountError = undefined; }
+        } catch {
+          if (version === codexAccountVersion) codexAccountError = 'Unable to load Codex. Check the backend and refresh.';
+        }
+      }
+    })(),
+    getPanelJobHistory(installId, effectiveSession, options.syncBackend),
+  ]);
   let backendRecoveryBlocked = await isSubtitleRecoveryBlocked();
 
   const localState =
@@ -2081,6 +2131,8 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
       instanceSettingsError,
       codexAccount: cachedCodexAccount,
       codexAccountError,
+      claudeAccount: cachedClaudeAccount,
+      claudeAccountError,
       subtitleState: DEFAULT_SUBTITLE_STATE,
       jobHistory: [],
       lyricsCorrection: null,
@@ -2109,6 +2161,8 @@ async function getPanelState(options: { syncBackend: boolean; syncLyricsCorrecti
       instanceSettingsError,
       codexAccount: cachedCodexAccount,
       codexAccountError,
+      claudeAccount: cachedClaudeAccount,
+      claudeAccountError,
     subtitleState,
     jobHistory: history.jobs,
     jobHistoryError: history.error,
@@ -2360,6 +2414,10 @@ async function publishSubtitleState(tabId: number, subtitleState: SubtitleState,
 
   if (sessionId !== undefined && !await isCurrentSession(sessionId)) return;
 
+  for (const port of panelPorts) {
+    try { port.postMessage({ type: 'background.subtitleStateChanged', tabId, subtitleState }); } catch { panelPorts.delete(port); }
+  }
+
   await sendTabMessage(tabId, {
     type: 'background.subtitleStateChanged',
     subtitleState,
@@ -2403,6 +2461,7 @@ function ensureRecoveredGenerationMonitor(
 
   void (async () => {
     let job = initialJob;
+    let failures = 0;
 
     while (tabOperations.get(tabId) === operation && !job) {
       const currentSession = await getInstanceContext();
@@ -2414,12 +2473,14 @@ function ensureRecoveredGenerationMonitor(
         job = await subtitleApi.getSubtitleJob(installId, persisted.jobId);
       } catch (error) {
 
-        if (error instanceof SubtitleApiError && error.code === 'not_found') {
+        if (error instanceof SubtitleContractError
+          || (error instanceof SubtitleApiError && error.status < 500 && error.status !== 429)
+          || ++failures >= JOB_POLL_MAX_FAILURES) {
           terminal = true;
           throw error;
         }
 
-        await delay(JOB_POLL_INTERVAL_MS);
+        await delay(5000);
       }
     }
 
@@ -2519,4 +2580,13 @@ async function isCurrentSession(sessionId: string): Promise<boolean> {
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled background request: ${JSON.stringify(value)}`);
+}
+
+function aiSelectionPayload(settings: ExtensionSettings): Pick<CreateSubtitleJobRequest, 'aiModel' | 'aiFastMode'> {
+  if (settings.aiProvider === 'codex') return { aiModel: settings.codexModel, aiFastMode: settings.codexFastMode };
+  if (settings.aiProvider === 'claude') return { aiModel: settings.claudeModel };
+  if (settings.aiProvider === 'anthropic') {
+    return { aiModel: settings.claudeApiModel, ...(CLAUDE_FAST_MODELS.includes(settings.claudeApiModel) ? { aiFastMode: settings.claudeApiFastMode } : {}) };
+  }
+  return {};
 }

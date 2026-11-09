@@ -134,7 +134,7 @@ class AiAgentInstructionTest extends TestCase
         Http::assertSentCount(4);
         Http::assertNotSent(fn (Request $request): bool => $request['model'] !== 'gpt-6-luna'
             || $request['service_tier'] !== 'fast'
-            || $request['reasoning']['effort'] !== 'high');
+            || $request['reasoning']['effort'] !== 'low');
         Log::shouldHaveReceived('info')->times(4)->with('backend.openai_response_received', \Mockery::on(function (array $context): bool {
             $this->assertSame('fast', $context['requested_service_tier']);
             $this->assertSame('priority', $context['served_service_tier']);
@@ -172,7 +172,7 @@ class AiAgentInstructionTest extends TestCase
 
         foreach ($agentClasses as $agentClass) {
             $this->assertSame(
-                ['reasoning' => ['effort' => 'high'], 'service_tier' => 'fast'],
+                ['reasoning' => ['effort' => 'low'], 'service_tier' => 'fast'],
                 (new $agentClass)->providerOptions(Lab::OpenAI),
             );
         }

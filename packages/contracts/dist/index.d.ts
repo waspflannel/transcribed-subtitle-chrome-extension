@@ -14,6 +14,18 @@ export interface CodexAccount {
   error?: string;
 }
 
+// Source: schemas/claude-account.schema.json
+export interface ClaudeAccount {
+  available: boolean;
+  connected: boolean;
+  email: string | null;
+  login: null | {
+    status: 'pending' | 'awaiting_code' | 'verifying' | 'failed';
+    authUrl?: string;
+  };
+  error?: string;
+}
+
 // Source: schemas/instance-settings.schema.json
 export interface InstanceSettings {
   providers: {
@@ -33,6 +45,9 @@ export interface InstanceSettings {
       configured: boolean;
       available: boolean;
     };
+    anthropic: {
+      configured: boolean;
+    };
   };
   retentionDays: number | null;
 }
@@ -50,6 +65,9 @@ export interface UpdateInstanceSettings {
       apiKey?: string | null;
     };
     claude?: {
+      apiKey?: string | null;
+    };
+    anthropic?: {
       apiKey?: string | null;
     };
   };
@@ -282,13 +300,13 @@ export type CreateSubtitleJobRequest = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+  aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
   /**
-   * Required for Codex (a model from the connected account) and Claude (opus, sonnet or haiku); omitted for other providers.
+   * Required for Codex (a model from the connected account), Claude subscription and Claude API (models listed below); omitted for other providers.
    */
   aiModel?: string;
   /**
-   * Use Codex fast service tier. Omitted for API providers.
+   * Codex fast service tier, or Claude API fast mode on Opus 5.5, Opus 5 and Opus 4.8. Omitted for other providers.
    */
   aiFastMode?: boolean;
 };
@@ -325,13 +343,13 @@ export type LyricsCorrectionRequest = {
   /**
    * Optional provider override for this correction only. Omit all AI fields to inherit the generation’s saved provider, model, and fast mode.
    */
-  aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+  aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
   /**
-   * Required for Codex (a model from the connected account) and Claude (opus, sonnet or haiku); omitted for other providers.
+   * Required for Codex (a model from the connected account), Claude subscription and Claude API (models listed below); omitted for other providers.
    */
   aiModel?: string;
   /**
-   * Use Codex fast service tier. Omitted for API providers.
+   * Codex fast service tier, or Claude API fast mode on Opus 5.5, Opus 5 and Opus 4.8. Omitted for other providers.
    */
   aiFastMode?: boolean;
 };
@@ -342,7 +360,7 @@ export type LyricsCorrectionRequest = {
  */
 export type LyricsCorrectionStatus =
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -351,7 +369,7 @@ export type LyricsCorrectionStatus =
       updatedAt: string;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -360,7 +378,7 @@ export type LyricsCorrectionStatus =
       updatedAt: string;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -370,7 +388,7 @@ export type LyricsCorrectionStatus =
       track: TrackResponse;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -381,7 +399,7 @@ export type LyricsCorrectionStatus =
       message: string;
     }
   | {
-      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude';
+      aiProvider?: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
       aiModel?: string;
       aiFastMode?: boolean;
       attemptId: string;
@@ -745,7 +763,7 @@ export type JobResponse = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'openai' | 'cerebras' | 'codex' | 'claude';
+  aiProvider: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
   /**
    * Exact text model saved on this job.
    */
@@ -1103,7 +1121,7 @@ export type SubtitleJobHistoryItem = {
   /**
    * The selected analysis provider stays pinned for this generation.
    */
-  aiProvider: 'openai' | 'cerebras' | 'codex' | 'claude';
+  aiProvider: 'openai' | 'cerebras' | 'codex' | 'claude' | 'anthropic';
   /**
    * Exact text model saved on this job.
    */

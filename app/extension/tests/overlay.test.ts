@@ -521,6 +521,22 @@ describe('free overlay movement', () => {
     shell.unmount();
   });
 
+  it('hides during ads and restores the overlay afterwards', () => {
+    const { shell, video, detached, host } = mount();
+    const player = document.createElement('div');
+    video.parentElement!.append(player);
+    player.append(video);
+    shell.update(detached, video);
+    expect(host.style.display).toBe('block');
+    player.classList.add('ad-showing');
+    shell.position(video);
+    expect(host.style.display).toBe('none');
+    player.classList.remove('ad-showing');
+    shell.position(video);
+    expect(host.style.display).toBe('block');
+    shell.unmount();
+  });
+
   it('keeps study controls clickable and stops dragging when hidden or unmounted', () => {
     const { shell, video, detached, host, handle, pointer } = mount();
     shell.update(detached, video);

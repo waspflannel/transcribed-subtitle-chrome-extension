@@ -1,5 +1,5 @@
 import { t } from '../../../utils/i18n';
-import { aiProviderLabel } from '../../../utils/settings-model';
+import { aiSelectionLabel } from '../../../utils/settings-model';
 import { escapeHtml } from '../../../utils/html';
 import { groupJobHistoryByMediaKind, jobHistoryMediaKind } from '../../../utils/job-history-media';
 import { languageLabel } from '../../../utils/languages';
@@ -54,7 +54,7 @@ function jobHistoryItemHtml(job: PanelState['jobHistory'][number], state: PanelS
   const telemetry = publicJobTelemetry(job);
   const progress = generationProgress(job);
   const meta = [
-    `${aiProviderLabel(job.aiProvider)}${job.aiProvider === 'codex' || job.aiProvider === 'claude' ? '' : ' API'} · ${job.aiModel}`,
+    aiSelectionLabel(job.aiProvider, job.aiModel),
     job.aiFastMode ? t('Fast mode') : null,
     `${languageLabel(job.sourceLanguage)} → ${languageLabel(job.targetLanguage)}`,
     job.detectedSourceLanguage ? t('detected {language}', { language: languageLabel(job.detectedSourceLanguage) }) : null,

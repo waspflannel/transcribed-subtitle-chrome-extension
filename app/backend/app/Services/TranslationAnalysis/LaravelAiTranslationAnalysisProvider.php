@@ -335,6 +335,10 @@ class LaravelAiTranslationAnalysisProvider
     private function promptAgent(string $agentClass, array $input, ?SubtitleModel $selection, bool $validateOutput = true, ?SubtitleJob $job = null): array
     {
         $selection ??= SubtitleModel::configured();
+        if ($job !== null) {
+            SubtitleJob::query()->whereKey($job->id)->where('run_id', $job->run_id)
+                ->where('status', 'running')->update(['updated_at' => now()]);
+        }
         try {
             $agent = $agentClass === CueAnalysisAgent::class
                 ? CueAnalysisAgent::make(
@@ -351,6 +355,7 @@ class LaravelAiTranslationAnalysisProvider
                 return app(ProviderAdmission::class)->run($selection->provider, $job,
                     fn (): array => app(ClaudeCodeService::class)->prompt($agent, $input, $selection));
             }
+            $agent->fastMode = $selection->fastMode;
             $response = app(ProviderAdmission::class)->run($selection->provider, $job, fn () => $agent->prompt(
                 json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                 provider: $selection->provider,

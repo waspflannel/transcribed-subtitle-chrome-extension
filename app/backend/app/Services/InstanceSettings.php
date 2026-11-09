@@ -6,6 +6,7 @@ use App\Exceptions\SubtitleProcessingException;
 use App\Models\InstanceSetting;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleTrack;
+use App\Services\ClaudeCode\ClaudeAccountService;
 use App\Services\ClaudeCode\ClaudeCodeService;
 use App\Services\Codex\CodexService;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,8 @@ class InstanceSettings
     private const PROVIDERS = [
         'openai' => ['key' => 'ai.providers.openai.key', 'model' => 'ai.providers.openai.models.text.default'],
         'cerebras' => ['key' => 'ai.providers.cerebras.key', 'model' => 'ai.providers.cerebras.models.text.default'],
+        // Claude API: each job carries its own model.
+        'anthropic' => ['key' => 'ai.providers.anthropic.key'],
         'elevenlabs' => ['key' => 'ai.providers.eleven.key', 'model' => 'ai.providers.eleven.models.transcription.default'],
         // Each Claude job carries its own model, like Codex.
         'claude' => ['key' => 'claude-code.token'],
@@ -50,6 +53,8 @@ class InstanceSettings
             }
         }
         $providers['claude']['available'] = ClaudeCodeService::available();
+        // A Claude sign-in counts the same as a pasted setup-token.
+        $providers['claude']['configured'] = $providers['claude']['configured'] || app(ClaudeAccountService::class)->connected();
 
         return ['providers' => $providers, 'retentionDays' => $this->retentionDays()];
     }
@@ -97,11 +102,18 @@ class InstanceSettings
 
             return;
         }
+        if ($provider === 'claude' && app(ClaudeAccountService::class)->connected()) {
+            if (! ClaudeCodeService::available()) {
+                throw new SubtitleProcessingException('provider_not_configured', 'Install Claude Code CLI '.ClaudeCodeService::MINIMUM_VERSION.' or newer on the backend and set CLAUDE_BINARY.', 422);
+            }
+
+            return;
+        }
         $this->apply();
         $provider = $provider === 'eleven' ? 'elevenlabs' : $provider;
         $paths = self::PROVIDERS[$provider] ?? null;
         if ($paths === null || blank(config($paths['key'])) || (isset($paths['model']) && blank(config($paths['model'])))) {
-            throw new SubtitleProcessingException('provider_not_configured', 'Configure the '.$provider.' API key in Settings before generating.', 422);
+            throw new SubtitleProcessingException('provider_not_configured', 'Configure the '.($provider === 'anthropic' ? 'Claude' : $provider).' API key in Settings before generating.', 422);
         }
         if ($provider === 'claude' && ! ClaudeCodeService::available()) {
             throw new SubtitleProcessingException('provider_not_configured', 'Install Claude Code CLI '.ClaudeCodeService::MINIMUM_VERSION.' or newer on the backend and set CLAUDE_BINARY.', 422);

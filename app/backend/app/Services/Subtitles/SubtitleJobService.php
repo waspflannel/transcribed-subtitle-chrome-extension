@@ -91,7 +91,7 @@ class SubtitleJobService
             $payload['youtubeVideoId'], $payload['sourceLanguage'], $payload['targetLanguage'],
             $processingVersion, $payload['transcriptionOptionsHash'],
             $payload['aiProvider'], $payload['aiModel'],
-            ...($selection->provider === 'codex' ? [$selection->fastMode] : []),
+            ...(in_array($selection->provider, ['codex', 'anthropic'], true) ? [$selection->fastMode] : []),
         ], JSON_THROW_ON_ERROR));
         $dispatchState = self::DISPATCH_STATE_REUSED;
 
@@ -337,7 +337,7 @@ class SubtitleJobService
             'queue' => SubtitleQueue::generationName(),
             'provider' => $job->ai_provider,
             'model' => $job->ai_model,
-            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
+            ...(in_array($job->ai_provider, ['codex', 'anthropic'], true) ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
         ]);
 
         return $job;
@@ -391,7 +391,7 @@ class SubtitleJobService
             'queue' => SubtitleQueue::generationName(),
             'provider' => $job->ai_provider,
             'model' => $job->ai_model,
-            ...($job->ai_provider === 'codex' ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
+            ...(in_array($job->ai_provider, ['codex', 'anthropic'], true) ? ['fast_mode' => (bool) $job->ai_fast_mode] : []),
         ]);
     }
 

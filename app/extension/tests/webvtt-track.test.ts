@@ -52,6 +52,23 @@ describe('bindWebVttTrackToVideo', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-track');
   });
 
+  it('selects the latest starting cue when cues overlap', () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const video = new FakeVideoElement();
+    const onCueChange = vi.fn();
+    const track = trackResponse();
+    track.cues.push({ ...track.cues[0], cueId: 'cue-0002', startMs: 1000 });
+    const cleanup = bindWebVttTrackToVideo({ video: video as unknown as HTMLVideoElement, track, onCueChange });
+    video.appendedTrack!.track.activeCues = new FakeCueList([
+      new FakeTextCue(0.5, 2.1, 'earlier', 'cue-0001'),
+      new FakeTextCue(1, 2.1, 'later', 'cue-0002'),
+    ]);
+    video.appendedTrack!.track.dispatchEvent(new Event('cuechange'));
+    expect(onCueChange).toHaveBeenLastCalledWith({ activeCue: track.cues[1] });
+    cleanup();
+  });
+
   it('notifies the logger after the track loads', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-track');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
