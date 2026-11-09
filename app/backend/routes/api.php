@@ -32,8 +32,6 @@ Route::prefix('v1')
         Route::delete('/claude', [ClaudeAccountController::class, 'destroy'])
             ->middleware('throttle:claude-login');
 
-        Route::post('/subtitle-audio/prefetch', [SubtitleJobController::class, 'prefetchAudio'])
-            ->middleware('throttle:subtitle-prefetch');
         Route::get('/subtitle-jobs', [SubtitleJobController::class, 'index'])
             ->name('subtitle-jobs.index')
             ->middleware('throttle:subtitle-status-api');

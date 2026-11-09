@@ -59,7 +59,6 @@ class ProgressiveSubtitlePipelineTest extends TestCase
             'subtitles.enrichment.first_batch_seconds' => 10,
             'subtitles.enrichment.batch_seconds' => 30,
             'subtitles.enrichment.balanced_batches' => true,
-            'subtitles.costs.elevenlabs_scribe_microusd_per_minute' => 1000,
         ]);
         Bus::fake();
         Http::preventStrayRequests();

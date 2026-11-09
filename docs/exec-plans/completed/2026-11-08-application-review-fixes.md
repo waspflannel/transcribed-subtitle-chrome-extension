@@ -21,3 +21,5 @@ Deliver five ordered PRs: correctness and latency; generated validation and part
 
 - Regression coverage: terminal contract errors, six-failure retry bound, overlap selection, ads, saved source language, revision omission, Claude runtime locking and unchanged-progress heartbeats.
 - Runtime harness exposed a PowerShell 5.1 nested-array issue in PID record reading. Assign parsed JSON before returning it; existing process ownership tests pass.
+
+Completed in PR #23, merge 0357ea02. Remaining review work has separate plans.

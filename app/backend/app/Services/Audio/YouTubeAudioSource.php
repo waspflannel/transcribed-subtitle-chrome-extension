@@ -5,8 +5,6 @@ namespace App\Services\Audio;
 use App\Exceptions\SubtitleProcessingException;
 use App\Support\ChildProcessEnvironment;
 use Illuminate\Contracts\Process\ProcessResult;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -15,35 +13,13 @@ use Throwable;
 
 class YouTubeAudioSource
 {
-    /** Window + metadata (60s) + direct (60s) + download (600s) stays inside AcquireSubtitleAudio's 900s. */
-    private const CACHED_MEDIA_RETRY_WINDOW_SECONDS = 60;
-
     public function acquire(string $youtubeUrl, string $workDirectory, ?string $videoId = null): TemporaryAudioFile
     {
         File::ensureDirectoryExists($workDirectory, 0700);
 
         try {
-            $cached = $this->prefetchedMetadata($videoId);
-            if ($cached !== null) {
-                $durationSeconds = $this->durationSeconds($cached);
-                $metadata = $cached;
-            } else {
-                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl);
-            }
-            Log::info('backend.youtube_metadata_reused', ['hit' => $cached !== null]);
-            $startedAt = now();
-            try {
-                $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
-            } catch (SubtitleProcessingException $exception) {
-                // Retry only fast failures (stale cached media): a full second attempt
-                // after a slow one would outlive the acquisition job and skip cleanup.
-                if ($cached === null || $startedAt->diffInSeconds(now()) > self::CACHED_MEDIA_RETRY_WINDOW_SECONDS) {
-                    throw $exception;
-                }
-                Cache::forget($this->prefetchKey($videoId));
-                [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl);
-                $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
-            }
+            [$metadata, $durationSeconds] = $this->validatedMetadata($youtubeUrl);
+            $realPath = $this->directAudio($workDirectory, $metadata) ?? $this->downloadAudio($workDirectory, $metadata);
             $sizeBytes = File::size($realPath);
 
             if ($sizeBytes < 1) {
@@ -68,56 +44,6 @@ class YouTubeAudioSource
                 context: ['exception' => $exception::class],
                 previous: $exception,
             );
-        }
-    }
-
-    public function prefetch(string $videoId): void
-    {
-        if (! config('subtitles.youtube.metadata_prefetch', false)) {
-            return;
-        }
-        $key = $this->prefetchKey($videoId);
-        if ($this->prefetchedMetadata($videoId) !== null) {
-            return;
-        }
-        try {
-            $metadata = $this->metadata('https://www.youtube.com/watch?v='.$videoId, 8);
-            $this->assertSupportedVideo($metadata);
-            $this->durationSeconds($metadata);
-            if (($metadata['id'] ?? null) !== $videoId) {
-                return;
-            }
-            Cache::put($key, Crypt::encryptString(json_encode($metadata, JSON_THROW_ON_ERROR)), 60);
-        } catch (Throwable) {
-            Log::info('backend.youtube_prefetch_failed');
-        }
-    }
-
-    private function prefetchKey(string $videoId): string
-    {
-        return 'youtube-prefetch:v2:'.$videoId;
-    }
-
-    private function prefetchedMetadata(?string $videoId): ?array
-    {
-        if (! config('subtitles.youtube.metadata_prefetch', false) || $videoId === null) {
-            return null;
-        }
-        try {
-            $encrypted = Cache::get($this->prefetchKey($videoId));
-            if (! is_string($encrypted)) {
-                return null;
-            }
-            $metadata = json_decode(Crypt::decryptString($encrypted), true, flags: JSON_THROW_ON_ERROR);
-            if (! is_array($metadata) || ($metadata['id'] ?? null) !== $videoId) {
-                return null;
-            }
-            $this->assertSupportedVideo($metadata);
-            $this->durationSeconds($metadata);
-
-            return $metadata;
-        } catch (Throwable) {
-            return null;
         }
     }
 

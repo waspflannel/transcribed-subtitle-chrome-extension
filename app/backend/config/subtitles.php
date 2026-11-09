@@ -30,23 +30,8 @@ return [
         'event_retention_days' => (int) env('SUBTITLE_TRACE_EVENT_RETENTION_DAYS', 30),
     ],
 
-    'costs' => [
-        'elevenlabs_scribe_microusd_per_minute' => (int) env('ELEVENLABS_SCRIBE_MICROUSD_PER_MINUTE', 0),
-        'cerebras_alignment_microusd_per_call' => (int) env('CEREBRAS_ALIGNMENT_MICROUSD_PER_CALL', 0),
-        'cerebras_tokenization_microusd_per_cue' => (int) env('CEREBRAS_TOKENIZATION_MICROUSD_PER_CUE', 0),
-        'cerebras_translation_microusd_per_cue' => (int) env('CEREBRAS_TRANSLATION_MICROUSD_PER_CUE', 0),
-        'cerebras_romanization_microusd_per_cue' => (int) env('CEREBRAS_ROMANIZATION_MICROUSD_PER_CUE', 0),
-        'cerebras_enrichment_microusd_per_cue' => (int) env('CEREBRAS_ENRICHMENT_MICROUSD_PER_CUE', 0),
-        'openai_alignment_microusd_per_call' => (int) env('OPENAI_ALIGNMENT_MICROUSD_PER_CALL', 0),
-        'openai_tokenization_microusd_per_cue' => (int) env('OPENAI_TOKENIZATION_MICROUSD_PER_CUE', 0),
-        'openai_translation_microusd_per_cue' => (int) env('OPENAI_TRANSLATION_MICROUSD_PER_CUE', 0),
-        'openai_romanization_microusd_per_cue' => (int) env('OPENAI_ROMANIZATION_MICROUSD_PER_CUE', 0),
-        'openai_enrichment_microusd_per_cue' => (int) env('OPENAI_ENRICHMENT_MICROUSD_PER_CUE', 0),
-    ],
-
     'youtube' => [
         'direct_download' => (bool) env('SUBTITLE_YOUTUBE_DIRECT_DOWNLOAD', true),
-        'metadata_prefetch' => (bool) env('SUBTITLE_YOUTUBE_METADATA_PREFETCH', false),
         'binary' => env('YOUTUBE_AUDIO_BINARY', 'yt-dlp'),
         'metadata_timeout_seconds' => (int) env('YOUTUBE_METADATA_TIMEOUT_SECONDS', 60),
         'download_timeout_seconds' => (int) env('YOUTUBE_AUDIO_DOWNLOAD_TIMEOUT_SECONDS', 600),

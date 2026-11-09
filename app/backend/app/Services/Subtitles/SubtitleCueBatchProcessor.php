@@ -17,7 +17,6 @@ class SubtitleCueBatchProcessor
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly SubtitleJobFailureHandler $failureHandler,
         private readonly SubtitlePipelineTelemetry $telemetry,
-        private readonly SubtitleProviderCostRecorder $costs,
     ) {}
 
     public function analyzeCueBatch(int $subtitleJobId, int $batchIndex, string $runId, ?int $queuedAtMs = null): void
@@ -54,7 +53,7 @@ class SubtitleCueBatchProcessor
                 return;
             }
 
-            DB::transaction(function () use ($job, $batchIndex, $result, $includeTranslation, $includeRomanization, $startedAtMs): void {
+            DB::transaction(function () use ($job, $batchIndex, $result, $startedAtMs): void {
                 $job = SubtitleJobLock::current($job->id, $job->run_id);
                 if ($job === null || $job->status !== 'running' || $job->hasReadyTrack()) {
                     return;
@@ -66,7 +65,6 @@ class SubtitleCueBatchProcessor
                 if ($batchIndex === 0) {
                     $this->telemetry->recordFirstAnnotatedCueAvailable($job, $result->cues[array_key_last($result->cues)]['endMs']);
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($result->cues), $includeTranslation, $includeRomanization);
                 $this->telemetry->recordStageCompleted($job, 'tokenizing', $startedAtMs, $batchIndex);
             }, attempts: 5);
         } catch (Throwable $exception) {

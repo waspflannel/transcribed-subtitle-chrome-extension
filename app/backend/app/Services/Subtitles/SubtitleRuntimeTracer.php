@@ -2,29 +2,14 @@
 
 namespace App\Services\Subtitles;
 
-use App\Exceptions\SubtitleProcessingException;
-use App\Jobs\AcquireSubtitleAudio;
-use App\Jobs\AnalyzeSubtitleCueBatch;
-use App\Jobs\MergeSubtitleTranscript;
-use App\Jobs\OptimizeSubtitleAudio;
-use App\Jobs\PrepareSubtitleCuesAfterAnalysisBatches;
-use App\Jobs\TranscribeSubtitleAudioChunk;
 use App\Models\SubtitleJob;
 use App\Models\SubtitleJobEvent;
-use App\Services\Audio\TemporaryAudioFile;
-use Illuminate\Queue\Events\JobFailed;
-use Illuminate\Queue\Events\JobProcessed;
-use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class SubtitleRuntimeTracer
 {
-    /**
-     * @var array<string, int>
-     */
-    private static array $queueStartedAtMs = [];
-
     /**
      * @var array<int, string>
      */
@@ -88,18 +73,6 @@ class SubtitleRuntimeTracer
     /**
      * @var array<int, class-string>
      */
-    private const QUEUED_SUBTITLE_JOB_CLASSES = [
-        AcquireSubtitleAudio::class,
-        OptimizeSubtitleAudio::class,
-        TranscribeSubtitleAudioChunk::class,
-        MergeSubtitleTranscript::class,
-        PrepareSubtitleCuesAfterAnalysisBatches::class,
-        AnalyzeSubtitleCueBatch::class,
-    ];
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
     public function record(
         ?SubtitleJob $job,
         string $event,
@@ -126,7 +99,7 @@ class SubtitleRuntimeTracer
         }
 
         try {
-            SubtitleJobEvent::query()->create($row);
+            DB::transaction(fn () => SubtitleJobEvent::query()->create($row));
         } catch (Throwable $exception) {
             Log::warning('backend.subtitle_trace_persistence_failed', [
                 'event' => $event,
@@ -175,70 +148,6 @@ class SubtitleRuntimeTracer
         $this->jobEvent($job, $event, $context, $level, $logName);
     }
 
-    public function queueJobProcessing(JobProcessing $event): void
-    {
-        $context = $this->queueContext($event->connectionName, $event->job);
-
-        if ($context === null) {
-            return;
-        }
-
-        self::$queueStartedAtMs[$this->queueRuntimeKey($context)] = $this->currentTimeMs();
-
-        $this->jobEventById(
-            (int) $context['subtitle_job_id'],
-            'queue.processing',
-            $context,
-            logName: 'backend.queue_job_processing',
-        );
-    }
-
-    public function queueJobProcessed(JobProcessed $event): void
-    {
-        $context = $this->queueContext($event->connectionName, $event->job);
-
-        if ($context === null) {
-            return;
-        }
-
-        $runtimeKey = $this->queueRuntimeKey($context);
-        $context['duration_ms'] = $this->durationMs(self::$queueStartedAtMs[$runtimeKey] ?? null);
-        unset(self::$queueStartedAtMs[$runtimeKey]);
-
-        $this->jobEventById(
-            (int) $context['subtitle_job_id'],
-            'queue.processed',
-            $context,
-            logName: 'backend.queue_job_processed',
-        );
-    }
-
-    public function queueJobFailed(JobFailed $event): void
-    {
-        $context = $this->queueContext($event->connectionName, $event->job);
-
-        if ($context === null) {
-            return;
-        }
-
-        $runtimeKey = $this->queueRuntimeKey($context);
-        $context['duration_ms'] = $this->durationMs(self::$queueStartedAtMs[$runtimeKey] ?? null);
-        $previous = $event->exception->getPrevious();
-        $context['exception'] = $event->exception::class;
-        $context['previous_exception'] = $event->exception instanceof SubtitleProcessingException
-            ? ($event->exception->context['cause_exception'] ?? null)
-            : ($previous !== null ? $previous::class : null);
-        unset(self::$queueStartedAtMs[$runtimeKey]);
-
-        $this->jobEventById(
-            (int) $context['subtitle_job_id'],
-            'queue.failed',
-            $context,
-            'error',
-            'backend.queue_job_failed',
-        );
-    }
-
     /**
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>
@@ -258,77 +167,6 @@ class SubtitleRuntimeTracer
         }
 
         return $safe;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function queueContext(string $connectionName, mixed $queueJob): ?array
-    {
-        $payload = method_exists($queueJob, 'payload') ? $queueJob->payload() : [];
-        $queue = method_exists($queueJob, 'getQueue') ? $queueJob->getQueue() : null;
-        $queueName = is_string($queue) && $queue !== '' ? $queue : SubtitleQueue::generationName();
-        $queueFamily = SubtitleQueue::familyForQueue($queueName);
-
-        if ($queueFamily === null) {
-            return null;
-        }
-
-        $command = $this->payloadCommand($payload);
-
-        if (! is_object($command) || ! property_exists($command, 'subtitleJobId')) {
-            return null;
-        }
-
-        if (! property_exists($command, 'runId') || ! is_string($command->runId)) {
-            return null;
-        }
-
-        return [
-            'subtitle_job_id' => (int) $command->subtitleJobId,
-            'run_id' => $command->runId,
-            'batch_index' => property_exists($command, 'batchIndex') && is_int($command->batchIndex) ? $command->batchIndex : null,
-            'laravel_batch_id' => property_exists($command, 'batchId') && is_string($command->batchId) ? $command->batchId : null,
-            'laravel_job_uuid' => is_string($payload['uuid'] ?? null) ? $payload['uuid'] : null,
-            'job_class' => $command::class,
-            'queue_connection' => $connectionName,
-            'queue' => $queueName,
-            'queue_family' => $queueFamily,
-            'attempt' => method_exists($queueJob, 'attempts') ? $queueJob->attempts() : null,
-            'worker_pid' => getmypid() ?: null,
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function payloadCommand(array $payload): mixed
-    {
-        $serialized = $payload['data']['command'] ?? null;
-        $commandName = $payload['data']['commandName'] ?? $payload['displayName'] ?? null;
-
-        if (
-            ! is_string($serialized)
-            || ! is_string($commandName)
-            || ! in_array($commandName, self::QUEUED_SUBTITLE_JOB_CLASSES, true)
-        ) {
-            return null;
-        }
-
-        try {
-            // Audio stage jobs carry their source file as a typed property.
-            return unserialize($serialized, ['allowed_classes' => [...self::QUEUED_SUBTITLE_JOB_CLASSES, TemporaryAudioFile::class]]);
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $context
-     */
-    private function queueRuntimeKey(array $context): string
-    {
-        return (string) ($context['laravel_job_uuid'] ?? spl_object_id((object) $context));
     }
 
     /**
@@ -358,19 +196,5 @@ class SubtitleRuntimeTracer
     private function stringValue(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    private function currentTimeMs(): int
-    {
-        return (int) floor(microtime(true) * 1000);
-    }
-
-    private function durationMs(?int $startedAtMs): ?int
-    {
-        if ($startedAtMs === null) {
-            return null;
-        }
-
-        return max(0, $this->currentTimeMs() - $startedAtMs);
     }
 }

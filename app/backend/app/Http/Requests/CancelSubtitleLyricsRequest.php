@@ -16,5 +16,4 @@ class CancelSubtitleLyricsRequest extends FormRequest
             'attemptId' => ['required', 'uuid'],
         ];
     }
-
 }

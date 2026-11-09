@@ -221,7 +221,6 @@ class SubtitleWorkflowLogger
             'youtube_video_id' => $job->youtube_video_id,
             'duration_ms' => $durationMs,
             'processing_version' => $job->processing_version,
-            'estimated_provider_cost_microusd' => $job->estimated_provider_cost_microusd,
         ]);
     }
 

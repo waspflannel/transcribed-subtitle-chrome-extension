@@ -792,11 +792,11 @@ async function sendPanelRequest(
   const canApply = (): boolean => canApplyPanelResponse(panelRequestState, kind, ordering.version, ordering.startedDuringMutation);
 
   try {
-    let response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
+    let response: PanelResponse | undefined = await browser.runtime.sendMessage(requestWithWindow);
 
     if (!response && request.type === 'panel.getState') {
       await new Promise((resolve) => setTimeout(resolve, 150));
-      response = (await browser.runtime.sendMessage(requestWithWindow)) as PanelResponse | undefined;
+      response = await browser.runtime.sendMessage(requestWithWindow);
     }
 
     if (!response) {

@@ -3,14 +3,11 @@
 namespace App\Providers;
 
 use App\Services\InstanceSettings;
-use App\Services\Subtitles\SubtitleRuntimeTracer;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Events\ResponseReceived;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Queue\Events\JobFailed;
-use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -115,16 +112,9 @@ class AppServiceProvider extends ServiceProvider
     {
         Queue::before(function (JobProcessing $event): void {
             app(InstanceSettings::class)->apply();
-            app(SubtitleRuntimeTracer::class)->queueJobProcessing($event);
+
         });
 
-        Queue::after(function (JobProcessed $event): void {
-            app(SubtitleRuntimeTracer::class)->queueJobProcessed($event);
-        });
-
-        Queue::failing(function (JobFailed $event): void {
-            app(SubtitleRuntimeTracer::class)->queueJobFailed($event);
-        });
     }
 
     private function validatedInstallId(Request $request, string $limiterName): string

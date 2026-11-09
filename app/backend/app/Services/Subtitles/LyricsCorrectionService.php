@@ -35,7 +35,6 @@ final class LyricsCorrectionService
     public function __construct(
         private readonly SubtitleJobArtifactStore $artifacts,
         private readonly LaravelAiTranslationAnalysisProvider $translationAnalysis,
-        private readonly SubtitleProviderCostRecorder $costs,
         private readonly LearningTokenOutputValidator $tokenValidator,
     ) {}
 
@@ -330,7 +329,6 @@ final class LyricsCorrectionService
                 'translating' => $this->translationRequested($job),
                 'romanizing' => $this->romanizationRequested($job, [$updatedCue]),
             ])) as $stage) {
-                $this->costs->recordCueBatch($job, $stage, 1, requiredStatus: 'completed');
             }
 
             return $track->fresh(['job']);
@@ -734,7 +732,6 @@ final class LyricsCorrectionService
                 if (in_array($batchIndex, $state['completedBatches'], true)) {
                     return null;
                 }
-                $this->costs->recordAnalyzedCueBatch($job, count($nextState['cues']), $this->translationRequested($job), $this->romanizationRequested($job, $nextState['cues']), requiredStatus: 'completed', selection: SubtitleModel::forCorrection($locked));
                 // Merge only this result into current state, preserving other workers' results.
                 $this->mergeIntoPositions($state['cues'], $nextState['cues'], $state['batchPlan'][$batchIndex]);
                 $state['completedBatches'][] = $batchIndex;
@@ -835,7 +832,6 @@ final class LyricsCorrectionService
         $this->ensureCorrectionCurrent($correction);
         $selection = SubtitleModel::forCorrection($correction);
         $output = $this->promptAlignment($input, $selection, $job);
-        $this->costs->recordCorrectionAlignment($job, $selection);
         $this->ensureCorrectionCurrent($correction);
 
         return $this->cuesFromAlignment($sourceCues, $parts, $output, $attemptId);

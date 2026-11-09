@@ -293,47 +293,7 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 }
 
 export function isBackgroundRequest(message: RuntimeMessage): message is BackgroundRequest {
-  switch (message.type) {
-    case 'panel.getCodexAccount':
-    case 'panel.loginCodex':
-    case 'panel.disconnectCodex':
-    case 'panel.getClaudeAccount':
-    case 'panel.loginClaude':
-    case 'panel.disconnectClaude':
-    case 'panel.submitClaudeCode':
-      return true;
-    case 'content.getState':
-    case 'content.updateSettings':
-    case 'content.enrichLearningToken':
-    case 'content.activeCueChanged':
-    case 'content.focusPanelTranscript':
-    case 'panel.listGenerations':
-    case 'panel.selectGeneration':
-    case 'panel.deleteGeneration':
-    case 'panel.getState':
-    case 'panel.updateSettings':
-    case 'panel.generateSubtitles':
-    case 'panel.cancelSubtitleJob':
-    case 'panel.submitLyricsCorrection':
-    case 'panel.cancelLyricsCorrection':
-    case 'panel.quickFixToken':
-    case 'panel.saveInstanceSettings':
-    case 'panel.clearLocalState':
-    case 'panel.seekToCue':
-      return true;
-    case 'panel.getActiveCue':
-      return true;
-    case 'background.getActiveCue':
-      return false;
-
-    case 'background.getPageSnapshot':
-    case 'background.settingsChanged':
-    case 'background.subtitleStateChanged':
-    case 'background.activeCueChanged':
-    case 'background.seekToCue':
-    case 'background.focusTranscript':
-      return false;
-  }
+  return !message.type.startsWith('background.');
 }
 
 function isSubtitleStateValue(value: unknown): value is SubtitleState {

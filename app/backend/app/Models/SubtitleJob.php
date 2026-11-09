@@ -34,7 +34,6 @@ class SubtitleJob extends Model
         'status',
         'stage',
         'progress_percent',
-        'estimated_provider_cost_microusd',
         'error_code',
         'error_message',
         'install_id',
@@ -70,7 +69,6 @@ class SubtitleJob extends Model
         return [
             'ai_fast_mode' => 'boolean',
             'expires_at' => 'immutable_datetime',
-            'estimated_provider_cost_microusd' => 'integer',
             'include_romanization' => 'boolean',
             'include_translation' => 'boolean',
             'progress_percent' => 'integer',

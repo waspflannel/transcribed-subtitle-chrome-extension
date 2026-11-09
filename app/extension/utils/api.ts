@@ -93,13 +93,6 @@ export class SubtitleApiClient {
     return this.request('settings', installId, { method: 'PUT', body: JSON.stringify(patch) }, guardInstanceSettings);
   }
 
-  public async prefetchSubtitleAudio(installId: string, youtubeVideoId: string): Promise<{ ok: true }> {
-    return this.request('subtitle-audio/prefetch', installId, {
-      method: 'POST', body: JSON.stringify({ youtubeVideoId }),
-    }, guardOkResponse);
-  }
-
-
   public async createSubtitleJob(
     installId: string,
     payload: CreateSubtitleJobRequest,
