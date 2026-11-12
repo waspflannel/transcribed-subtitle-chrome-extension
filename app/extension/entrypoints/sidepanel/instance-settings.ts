@@ -2,7 +2,10 @@ import { t } from '../../utils/i18n';
 import type { PanelState } from '../../utils/messages';
 import type { UpdateInstanceSettings } from '../../utils/contracts';
 
-const providers = { openai: 'OpenAI', cerebras: 'Cerebras', anthropic: 'Claude API', elevenlabs: 'ElevenLabs', claude: 'Claude Code' } as const;
+const providers = { elevenlabs: 'ElevenLabs', openai: 'OpenAI', cerebras: 'Cerebras', anthropic: 'Claude API', claude: 'Claude Code' } as const;
+const roles: Record<keyof typeof providers, string> = {
+  elevenlabs: 'Audio transcription', openai: 'Text analysis', cerebras: 'Text analysis', anthropic: 'Text analysis', claude: 'Subscription token',
+};
 
 export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanceSettings) => Promise<boolean>): { render(state: PanelState): void } {
   const form = root.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
@@ -14,13 +17,19 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
   let loadError: string | undefined;
   const dirty = new Set<string>();
   const removed = new Set<string>();
-  for (const [name, label] of Object.entries(providers)) {
-    const row = root.createElement('div');
-    row.className = 'provider-field';
-    row.innerHTML = `<label class="field" for="${name}Key"><span class="provider-heading">${label}<span data-provider-status="${name}" role="status">—</span></span></label>
-      <input id="${name}Key" type="password" name="${name}Key" autocomplete="new-password" maxlength="4096">
-      <button type="button" class="provider-remove" name="${name}Clear" aria-pressed="false" data-i18n="Remove saved key">${t('Remove saved key')}</button>`;
-    const remove = row.querySelector<HTMLButtonElement>('button')!;
+  for (const [name, label] of Object.entries(providers) as Array<[keyof typeof providers, string]>) {
+    // One expandable row per provider: status in the summary, key field inside.
+    const row = root.createElement('details');
+    row.className = 'prow provider-field';
+    row.innerHTML = `<summary class="row"><span class="row-key"><b>${label}</b><small data-i18n="${roles[name]}">${t(roles[name])}</small></span><span class="spacer"></span>
+        <span class="row-status"><span data-provider-status="${name}" role="img">—</span><span data-provider-label="${name}"></span></span><span class="chev" data-icon="chevron" aria-hidden="true"></span></summary>
+      <div class="prow-body">
+        <label class="field" for="${name}Key"><span data-i18n="API key">${t('API key')}</span></label>
+        <input id="${name}Key" type="password" name="${name}Key" autocomplete="new-password" maxlength="4096">
+        <div class="hstack"><button type="submit" class="btn sm" data-i18n="Save key">${t('Save key')}</button>
+          <button type="button" class="btn sm danger provider-remove" name="${name}Clear" aria-pressed="false" data-i18n="Remove saved key">${t('Remove saved key')}</button></div>
+      </div>`;
+    const remove = row.querySelector<HTMLButtonElement>('.provider-remove')!;
     remove.setAttribute('aria-label', `${t('Remove saved key')}: ${label}`);
     remove.addEventListener('click', () => {
       if (removed.has(name)) removed.delete(name);
@@ -61,7 +70,7 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       if (await save(patch)) {
         dirty.clear();
         removed.clear();
-        for (const remove of fields.querySelectorAll('button')) remove.setAttribute('aria-pressed', 'false');
+        for (const remove of fields.querySelectorAll('.provider-remove')) remove.setAttribute('aria-pressed', 'false');
         status.textContent = t('Settings saved.');
       } else status.textContent = t('Could not save settings. Re-enter keys to try again.');
     } finally {
@@ -84,6 +93,7 @@ export function bindInstanceSettings(root: Document, save: (patch: UpdateInstanc
       const configured = settings.providers[name].configured;
       indicator.textContent = configured ? '✓' : '✕';
       indicator.dataset.configured = String(configured);
+      fields.querySelector<HTMLElement>(`[data-provider-label="${name}"]`)!.textContent = configured ? t('Key set') : t('No key');
       indicator.setAttribute('aria-label', configured ? t('Configured') : t('Not configured'));
       indicator.title = configured ? t('Configured') : t('Not configured');
     }

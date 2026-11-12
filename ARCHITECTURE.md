@@ -76,7 +76,7 @@ Contracts
 ## Product Runtime Shape
 
 ```text
-Chrome extension (Watch / Study / History / Settings)
+Chrome extension (Watch / History / Settings)
   -> private Laravel /v1 API (installation ID, no account)
   -> Postgres jobs, saved tracks and encrypted instance settings
   -> Redis subtitle-generation workers (default 9)

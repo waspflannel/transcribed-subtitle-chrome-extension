@@ -27,7 +27,8 @@ it('submits keys only to the backend, clears inputs, preserves drafts on refresh
   view.render(state);
   const form = document.querySelector<HTMLFormElement>('[data-instance-settings-form]')!;
   expect(form.querySelectorAll('[data-provider-fields] input')).toHaveLength(5);
-  expect(form.querySelector('[data-provider-fields]')?.closest('.card')?.querySelectorAll('input')).toHaveLength(5);
+  expect(form.querySelectorAll('details.provider-field')).toHaveLength(5);
+  expect(form.querySelector('[data-provider-label="cerebras"]')?.textContent).toBe('No key');
   expect(form.querySelectorAll('[data-provider-fields] fieldset')).toHaveLength(0);
   expect(form.querySelector('[name="openaiModel"]')).toBeNull();
   expect(form.querySelector('[data-provider-status="openai"]')?.textContent).toBe('✓');

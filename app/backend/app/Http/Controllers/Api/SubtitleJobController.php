@@ -126,10 +126,10 @@ class SubtitleJobController extends Controller
     {
         $job = SubtitleJob::query()
             ->where('public_id', $jobId)
-            ->where('status', 'completed')
+            ->whereIn('status', SubtitleJobService::TERMINAL_STATUSES)
             ->firstOrFail();
 
-        abort_unless($subtitleJobs->delete($job, completedOnly: true), 404);
+        abort_unless($subtitleJobs->delete($job, terminalOnly: true), 404);
 
         return response()->json(['ok' => true]);
     }

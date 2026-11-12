@@ -11,6 +11,7 @@ import { parseYoutubePage,type YoutubePageInfo } from '../youtube';
 import { cancelLyricsCorrectionFromPanel,enrichLearningTokenFromContent,quickFixTokenFromPanel,submitLyricsCorrectionFromPanel,tombstoneLyricsCorrectionState } from './corrections';
 import { changeSavedGenerationFromPanel,clearCancelledGenerationState,ensureRecoveredGenerationMonitor,generateSubtitlesFromPanel,isGenerationInFlight,resolveCompletedSubtitleJob } from './generation';
 import { clearLocalStateFromPanel,getPanelJobHistory,getPanelState,updateSettingsFromContent,updateSettingsFromPanel } from './panel';
+import { flushJobDeletes,isPendingDelete,scheduleJobDeletes,undoJobDeletes } from './pending-deletes';
 import { runtime,type PageSnapshotResponse,type SupportedYoutubePageInfo } from './runtime';
 
 export async function handleRuntimeMessage(message: BackgroundRequest, sender: Browser.runtime.MessageSender): Promise<unknown> {
@@ -85,7 +86,8 @@ export async function handleRuntimeMessage(message: BackgroundRequest, sender: B
             const state = tab?.id !== undefined && page.supported && page.videoId === message.youtubeVideoId
                 ? await getSubtitleStateForPage(tab.id, page, session.sessionId) : undefined;
             const installId = await getOrCreateInstallId();
-            const response = await runtime.subtitleApi.listSubtitleJobs(installId, message.youtubeVideoId);
+            const listed = await runtime.subtitleApi.listSubtitleJobs(installId, message.youtubeVideoId);
+            const response = { ...listed, jobs: listed.jobs.filter(job => !isPendingDelete(job.jobId)) };
             if (!await isCurrentSession(session.sessionId))
                 throw new Error('Your backend changed. Refresh the panel.');
             if (tab?.id !== undefined && page.supported && state?.type === 'ready'
@@ -109,6 +111,15 @@ export async function handleRuntimeMessage(message: BackgroundRequest, sender: B
         case 'panel.selectGeneration':
         case 'panel.deleteGeneration':
             return changeSavedGenerationFromPanel(message);
+        case 'panel.deleteJobs':
+            scheduleJobDeletes(message.jobs);
+            return getPanelState({ syncBackend: false, windowId: message.windowId });
+        case 'panel.undoDeleteJobs':
+            undoJobDeletes(message.jobIds);
+            return getPanelState({ syncBackend: false, windowId: message.windowId });
+        case 'panel.flushDeletes':
+            await flushJobDeletes();
+            return getPanelState({ syncBackend: false, windowId: message.windowId });
         case 'panel.generateSubtitles':
             return generateSubtitlesFromPanel(message.youtubeVideoId, message.tabId, message.windowId);
         case 'panel.cancelSubtitleJob':

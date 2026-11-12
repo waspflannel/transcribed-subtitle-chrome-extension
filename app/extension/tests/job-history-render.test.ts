@@ -86,7 +86,9 @@ describe('renderJobHistory links', () => {
       expect(link.target).toBe('_blank');
       expect(link.rel).toContain('noopener');
     }
-    expect(jobsList.querySelector('button, form, [data-action]')).toBeNull();
+    // Failed jobs can be deleted, but never retried or cancelled from History.
+    expect(jobsList.querySelector('form, [data-action]')).toBeNull();
+    expect(jobsList.querySelectorAll('[data-job-delete]')).toHaveLength(2);
     expect(jobsList.textContent).toContain('OpenAI');
     expect(jobsList.textContent).not.toContain('Cerebras');
     expect(jobsList.textContent).not.toContain('Retry');

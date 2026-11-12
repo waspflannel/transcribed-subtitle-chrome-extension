@@ -11,7 +11,16 @@ function isKnownLyrics(value: unknown): value is KnownLyrics {
     && typeof entry.lyrics === 'string' && !!entry.lyrics.trim() && entry.lyrics.length <= 25000;
 }
 
-export function bindKnownLyrics(root: Document): void {
+export interface KnownLyricsOptions {
+  /** Show the Known Lyrics sheet. Defaults to un-hiding it in place. */
+  open?: (panel: HTMLElement, invoker: HTMLElement) => void;
+  /** Put saved lyrics into Lyric correction. Adds a "Use in correction" button. */
+  onUse?: (lyrics: string) => void;
+  /** A delete happened; `restore` puts the entry back (for Undo). */
+  onDeleted?: (title: string, restore: () => Promise<void>) => void;
+}
+
+export function bindKnownLyrics(root: Document, options: KnownLyricsOptions = {}): void {
   const form = root.querySelector<HTMLFormElement>('[data-known-lyrics-form]')!;
   const title = form.elements.namedItem('title') as HTMLInputElement;
   const lyrics = form.elements.namedItem('lyrics') as HTMLTextAreaElement;
@@ -43,7 +52,7 @@ export function bindKnownLyrics(root: Document): void {
       for (const [key, entry] of Object.entries(stored)) {
         if (!key.startsWith(prefix) || !isKnownLyrics(entry)) continue;
         const card = root.createElement('article');
-        card.className = 'card known-lyrics-entry';
+        card.className = 'known-lyrics-entry';
         const details = root.createElement('details');
         details.dataset.key = key;
         details.open = expanded.has(key);
@@ -52,11 +61,20 @@ export function bindKnownLyrics(root: Document): void {
         const preview = root.createElement('pre');
         preview.textContent = entry.lyrics;
         const actions = root.createElement('div');
-        actions.className = 'transcript-actions';
+        actions.className = 'known-actions';
+        if (options.onUse) {
+          const use = root.createElement('button');
+          use.type = 'button';
+          use.className = 'btn sm';
+          use.dataset.i18n = 'Use in correction';
+          use.textContent = t('Use in correction');
+          use.addEventListener('click', () => options.onUse?.(entry.lyrics));
+          actions.append(use);
+        }
         for (const action of ['Copy', 'Delete'] as const) {
           const button = root.createElement('button');
           button.type = 'button';
-          button.className = 'btn-ghost';
+          button.className = action === 'Delete' ? 'btn sm danger' : 'btn sm';
           button.dataset.i18n = action;
           button.textContent = t(action);
           button.addEventListener('click', async () => {
@@ -67,9 +85,18 @@ export function bindKnownLyrics(root: Document): void {
                 announce('Lyrics copied.', true);
               } else {
                 await browser.storage.local.remove(key);
-                announce('Lyrics deleted.', true);
-                await refresh();
-                (list.querySelector('summary') ?? create.querySelector('summary'))?.focus();
+                card.classList.add('leaving');
+                if (options.onDeleted) {
+                  options.onDeleted(entry.title, async () => {
+                    await browser.storage.local.set({ [key]: entry });
+                    await refresh();
+                  });
+                } else {
+                  announce('Lyrics deleted.', true);
+                }
+                setTimeout(() => {
+                  void refresh().then(() => (list.querySelector('summary') ?? create.querySelector('summary'))?.focus());
+                }, 260);
               }
             } catch {
               if (action === 'Copy') details.open = true;
@@ -121,12 +148,13 @@ export function bindKnownLyrics(root: Document): void {
     }
   });
 
-  const toggle = root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!;
   const panel = root.querySelector<HTMLElement>('#panel-known-lyrics')!;
-  toggle.addEventListener('click', () => {
-    announce('');
-    panel.hidden = !panel.hidden;
-    toggle.setAttribute('aria-expanded', String(!panel.hidden));
-    if (!panel.hidden) void refresh();
-  });
+  for (const toggle of root.querySelectorAll<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')) {
+    toggle.addEventListener('click', () => {
+      announce('');
+      if (options.open) options.open(panel, toggle);
+      else panel.hidden = false;
+      void refresh();
+    });
+  }
 }

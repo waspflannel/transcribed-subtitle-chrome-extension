@@ -215,12 +215,15 @@ class SubtitleJobService
         return $job;
     }
 
-    public function delete(SubtitleJob $job, bool $completedOnly = false): bool
+    public const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
+
+    /** With $terminalOnly, queued and running jobs are refused so deletion never races a worker. */
+    public function delete(SubtitleJob $job, bool $terminalOnly = false): bool
     {
-        return DB::transaction(function () use ($job, $completedOnly): bool {
+        return DB::transaction(function () use ($job, $terminalOnly): bool {
             $current = SubtitleJobLock::current($job->id);
 
-            if ($current === null || ($completedOnly && $current->status !== 'completed')) {
+            if ($current === null || ($terminalOnly && ! in_array($current->status, self::TERMINAL_STATUSES, true))) {
                 return false;
             }
 

@@ -6,9 +6,11 @@ import { getInstanceContext,type InstanceContext } from '../instance-context';
 import { DEFAULT_SUBTITLE_STATE,type PanelState } from '../messages';
 import { clearLocalExtensionState,getExtensionSettings,getOrCreateInstallId,isSubtitleRecoveryBlocked,setSubtitleRecoveryBlocked,updateExtensionSettings,waitForExtensionSettingsWrites,} from '../settings';
 import { type ExtensionSettings } from '../settings-model';
-import { parseYoutubePage } from '../youtube';
+import { parseYoutubePage,type YoutubePageInfo } from '../youtube';
+import { clearVideoTitles,getVideoTitles,rememberVideoTitle } from '../video-titles';
 import { resetLyricsCorrectionStatesForSession,syncLyricsCorrection } from './corrections';
 import { ensureRecoveredGenerationMonitor,isCurrentGenerationRecovery,isGenerationInFlight,resolveCompletedSubtitleJob } from './generation';
+import { isPendingDelete } from './pending-deletes';
 import { runtime } from './runtime';
 import { getActiveTab,getPageSnapshotFromTab,getSubtitleStateForPage,isCurrentSession,isSubtitleStateForVideo,publishSubtitleState,savedTrackRecoveryJobs,sendTabMessage } from './state';
 
@@ -43,7 +45,7 @@ export async function clearLocalStateFromPanel(windowId?: number): Promise<Panel
     if (resetVersion !== runtime.localStateResetVersion) {
         return getPanelState({ syncBackend: false, windowId });
     }
-    await clearRememberedTracks();
+    await Promise.all([clearRememberedTracks(), clearVideoTitles()]);
     if (resetVersion !== runtime.localStateResetVersion) {
         return getPanelState({ syncBackend: false, windowId });
     }
@@ -434,9 +436,20 @@ export async function getPanelState(options: {
         subtitleState,
         jobHistory: history.jobs,
         jobHistoryError: history.error,
+        videoTitles: await panelVideoTitles(pageStatus, activeTab?.title),
         lyricsCorrection,
         lyricsCorrectionSyncError: activeTabId !== null ? runtime.tabLyricsCorrectionStates.get(activeTabId)?.syncError : undefined,
     };
+}
+
+async function panelVideoTitles(pageStatus: YoutubePageInfo | undefined, title: string | undefined): Promise<Record<string, string>> {
+    try {
+        if (pageStatus?.supported) await rememberVideoTitle(pageStatus.videoId, title);
+        return await getVideoTitles();
+    }
+    catch {
+        return {};
+    }
 }
 
 export async function getPanelJobHistory(installId: string, session: InstanceContext | null, syncBackend: boolean): Promise<{
@@ -447,7 +460,7 @@ export async function getPanelJobHistory(installId: string, session: InstanceCon
         return { jobs: [] };
     const matches = runtime.cachedPanelJobHistorySessionId === session.sessionId;
     if (!syncBackend)
-        return matches ? { jobs: runtime.cachedPanelJobHistory, error: runtime.cachedPanelJobHistoryError } : { jobs: [] };
+        return matches ? { jobs: runtime.cachedPanelJobHistory.filter(job => !isPendingDelete(job.jobId)), error: runtime.cachedPanelJobHistoryError } : { jobs: [] };
     try {
         const response = await runtime.subtitleApi.listSubtitleJobs(installId);
         if (!await isCurrentSession(session.sessionId))
@@ -459,5 +472,6 @@ export async function getPanelJobHistory(installId: string, session: InstanceCon
     catch {
         runtime.cachedPanelJobHistoryError = 'Unable to load backend job history.';
     }
-    return { jobs: matches || runtime.cachedPanelJobHistorySessionId === session.sessionId ? runtime.cachedPanelJobHistory : [], error: runtime.cachedPanelJobHistoryError };
+    const jobs = matches || runtime.cachedPanelJobHistorySessionId === session.sessionId ? runtime.cachedPanelJobHistory : [];
+    return { jobs: jobs.filter(job => !isPendingDelete(job.jobId)), error: runtime.cachedPanelJobHistoryError };
 }

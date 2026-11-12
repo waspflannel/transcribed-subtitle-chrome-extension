@@ -85,9 +85,7 @@ class SubtitleGenerationDeletionTest extends TestCase
 
     #[TestWith(['queued'])]
     #[TestWith(['running'])]
-    #[TestWith(['failed'])]
-    #[TestWith(['cancelled'])]
-    public function test_generation_deletion_does_not_cancel_or_delete_noncompleted_jobs(string $status): void
+    public function test_generation_deletion_does_not_cancel_or_delete_active_jobs(string $status): void
     {
         $job = SubtitleJob::factory()->create(['status' => $status]);
         $this->withExtensionInstall('install_'.str_repeat('a', 32));
@@ -97,12 +95,25 @@ class SubtitleGenerationDeletionTest extends TestCase
         $this->assertSame($status, $job->fresh()->status);
     }
 
-    public function test_generation_deletion_rechecks_completed_status_under_the_job_lock(): void
+    #[TestWith(['failed'])]
+    #[TestWith(['cancelled'])]
+    public function test_generation_deletion_removes_failed_and_cancelled_jobs_from_history(string $status): void
+    {
+        $job = SubtitleJob::factory()->create(['status' => $status]);
+        $this->withExtensionInstall('install_'.str_repeat('a', 32));
+
+        $this->deleteJson('/v1/subtitle-generations/'.$job->public_id)->assertOk()->assertExactJson(['ok' => true]);
+
+        $this->assertModelMissing($job);
+        $this->getJson('/v1/subtitle-jobs')->assertOk()->assertJsonCount(0, 'jobs');
+    }
+
+    public function test_generation_deletion_rechecks_terminal_status_under_the_job_lock(): void
     {
         $job = SubtitleJob::factory()->create(['status' => 'completed']);
         SubtitleJob::query()->whereKey($job->id)->update(['status' => 'running']);
 
-        $this->assertFalse(app(SubtitleJobService::class)->delete($job, completedOnly: true));
+        $this->assertFalse(app(SubtitleJobService::class)->delete($job, terminalOnly: true));
         $this->assertSame('running', $job->fresh()->status);
     }
 }
