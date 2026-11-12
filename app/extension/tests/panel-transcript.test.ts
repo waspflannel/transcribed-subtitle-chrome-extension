@@ -41,9 +41,10 @@ describe('panelTranscriptListHtml', () => {
     expect(html).toContain('hola');
     expect(html).toContain('goodbye');
     expect(html).toContain('aria-current="true"');
-    expect(html).toContain('data-transcript-action="jump"');
+    expect(html).toContain('data-transcript-action="replay"');
+    expect(html).toContain('tabindex="0"');
     expect(html).toContain('data-transcript-action="copy"');
-    expect(html).not.toContain('data-transcript-action="replay"');
+    expect(html).not.toContain('data-transcript-action="jump"');
   });
   it('tags source and translation lines with their languages', () => {
     const languages = { source: 'ja', target: 'en' };

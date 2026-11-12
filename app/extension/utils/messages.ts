@@ -52,6 +52,17 @@ export type SubtitleState =
 
 export const DEFAULT_SUBTITLE_STATE: SubtitleState = { type: 'no-track' };
 
+/** How long a delete can be undone before the background sends it to the backend. */
+export const UNDO_DELETE_MS = 6000;
+
+/** A job waiting out its undo window. `tabId` + `trackId` mark a track still shown in that tab. */
+export interface PendingJobDelete {
+  jobId: string;
+  youtubeVideoId: string;
+  trackId?: string;
+  tabId?: number;
+}
+
 export interface PanelState {
   installId: string;
   settings: ExtensionSettings;
@@ -69,6 +80,8 @@ export interface PanelState {
   subtitleState: SubtitleState;
   jobHistory: SubtitleJobHistoryItem[];
   jobHistoryError?: string;
+  /** Page titles the panel has seen, by YouTube video ID, so History can show titles. */
+  videoTitles?: Record<string, string>;
   lyricsCorrection?: LyricsCorrectionStatus | null;
   lyricsCorrectionSyncError?: string;
 }
@@ -79,6 +92,9 @@ export type BackgroundRequest =
   | { type: 'panel.submitClaudeCode'; code: string }
   | { type: 'panel.listGenerations'; youtubeVideoId: string; windowId?: number }
   | { type: 'panel.selectGeneration' | 'panel.deleteGeneration'; jobId: string; currentJobId: string; trackId: string; youtubeVideoId: string; tabId: number; windowId?: number }
+  | { type: 'panel.deleteJobs'; jobs: PendingJobDelete[]; windowId?: number }
+  | { type: 'panel.undoDeleteJobs'; jobIds: string[]; windowId?: number }
+  | { type: 'panel.flushDeletes'; windowId?: number }
   | {
       type: 'content.getState';
       revalidateSavedGeneration?: boolean;
@@ -246,6 +262,16 @@ export function isRuntimeMessage(value: unknown): value is RuntimeMessage {
 
     case 'panel.listGenerations':
       return hasString(value, 'youtubeVideoId') && optionalNumber(value, 'windowId');
+    case 'panel.deleteJobs':
+      return Array.isArray(value.jobs) && value.jobs.length > 0 && value.jobs.length <= 100
+        && value.jobs.every(job => isRecord(job) && hasString(job, 'jobId') && hasString(job, 'youtubeVideoId')
+          && optionalString(job, 'trackId') && (job.tabId === undefined || isNonNegativeInteger(job.tabId)))
+        && optionalNumber(value, 'windowId');
+    case 'panel.undoDeleteJobs':
+      return Array.isArray(value.jobIds) && value.jobIds.length <= 100
+        && value.jobIds.every(id => typeof id === 'string' && id !== '') && optionalNumber(value, 'windowId');
+    case 'panel.flushDeletes':
+      return optionalNumber(value, 'windowId');
     case 'panel.selectGeneration':
     case 'panel.deleteGeneration':
       return hasString(value, 'jobId') && hasString(value, 'currentJobId') && hasString(value, 'trackId')

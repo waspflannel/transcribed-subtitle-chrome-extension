@@ -97,10 +97,16 @@ describe('bindTranscriptView setActiveCue', () => {
     });
     view.setData('vid', cues, DEFAULT_EXTENSION_SETTINGS);
 
-    document.querySelector<HTMLButtonElement>('[data-cue-id="c2"][data-transcript-action="jump"]')!.click();
+    // The whole row seeks; the replay button replays.
+    document.querySelector<HTMLElement>('[data-cue-id="c2"] .cbody')!.click();
 
     expect(onSeekToCue).toHaveBeenCalledWith('c2', 'jump');
     expect(document.querySelector('[data-cue-id="c2"]')?.classList.contains('on')).toBe(true);
+
+    document.querySelector<HTMLButtonElement>('[data-cue-id="c1"][data-transcript-action="replay"]')!.click();
+    expect(onSeekToCue).toHaveBeenLastCalledWith('c1', 'replay');
+    document.querySelector<HTMLElement>('.cue[data-cue-id="c2"]')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(onSeekToCue).toHaveBeenLastCalledWith('c2', 'jump');
   });
 
   it('toggles the .on class on exactly the right row without rebuilding', () => {

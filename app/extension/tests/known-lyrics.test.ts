@@ -88,20 +88,39 @@ it('keeps saved lyrics on copy/delete failures and allows retry after load failu
   expect(Object.keys(stored)).toHaveLength(1);
 });
 
-it('opens beside lyric correction only inside the completed transcript toolbar and closes without losing drafts', async () => {
+it('opens as a sheet from the tools menu and from lyric correction without losing drafts', async () => {
   const view = open(); await flush();
-  expect([...view.root.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(['Watch', 'Study', 'History', 'Settings']);
-  const toggle = view.root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!;
-  expect(toggle.previousElementSibling?.getAttribute('data-action')).toBe('toggle-lyrics-edit');
-  expect(toggle.closest('.ready-toolbar')?.closest('[data-watch-ready]')).not.toBeNull();
-  expect(view.root.querySelector('#panel-known-lyrics')!.closest('.ready-toolbar')).not.toBeNull();
+  expect([...view.root.querySelectorAll('[role="tab"]')].map(tab => tab.textContent)).toEqual(['Watch', 'History', 'Settings']);
+  const toggles = [...view.root.querySelectorAll<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')];
+  expect(toggles).toHaveLength(2);
+  expect(toggles[0]!.closest('[data-lyrics-correction-form]')).not.toBeNull();
+  expect(toggles[1]!.closest('[data-tools-menu]')).not.toBeNull();
+  const sheet = view.root.querySelector<HTMLElement>('#panel-known-lyrics')!;
+  expect(sheet.classList.contains('sheet')).toBe(true);
+  expect(sheet.hidden).toBe(false);
   view.lyrics.value = 'Unfinished draft';
-  toggle.click();
-  expect(toggle.getAttribute('aria-expanded')).toBe('false');
-  expect(view.root.querySelector<HTMLElement>('#panel-known-lyrics')!.hidden).toBe(true);
-  toggle.click(); await flush();
-  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+  toggles[1]!.click(); await flush();
+  expect(sheet.hidden).toBe(false);
   expect(view.lyrics.value).toBe('Unfinished draft');
+});
+
+it('offers Use in correction and an undo for deletes when the panel provides them', async () => {
+  stored = { 'knownLyrics:one': { title: 'Song', lyrics: 'Words' } };
+  const dom = new JSDOM(markup);
+  windows.push(dom);
+  const root = dom.window.document;
+  const onUse = vi.fn();
+  let restore: (() => Promise<void>) | undefined;
+  bindKnownLyrics(root, { onUse, onDeleted: (_title, undo) => { restore = undo; } });
+  root.querySelector<HTMLButtonElement>('[data-action="toggle-known-lyrics"]')!.click(); await flush();
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>('.known-lyrics-entry button')];
+  expect(buttons.map(button => button.textContent)).toEqual(['Use in correction', 'Copy', 'Delete']);
+  buttons[0]!.click();
+  expect(onUse).toHaveBeenCalledWith('Words');
+  buttons[2]!.click(); await flush();
+  expect(stored).toEqual({});
+  await restore!();
+  expect(Object.values(stored)).toEqual([{ title: 'Song', lyrics: 'Words' }]);
 });
 
 it('starts with compact entries and a collapsed form, then collapses the form after saving', async () => {

@@ -1603,3 +1603,39 @@ describe('per-video generation ownership', () => {
     expect(apiMock.getSubtitleJob).toHaveBeenCalledTimes(10);
   });
 });
+
+describe('undoable deletes', () => {
+  it('hides a scheduled delete from history, restores it on undo, and deletes it on flush', async () => {
+    seedBaseState();
+    browserMock.tabs.set(1, { id: 1, windowId: 1, active: true, url: `https://www.youtube.com/watch?v=${VIDEO_A}` });
+    const failed = job(VIDEO_A, 'failed-job', 'cancelled'); // Cancelled jobs can now be deleted too.
+    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [failed] } as any);
+    const listener = await loadBackground();
+    const history = async () => (await dispatch(listener, { type: 'panel.getState', syncBackend: true, windowId: 1 }, {})).jobHistory
+      .map((item: { jobId: string }) => item.jobId);
+    expect(await history()).toEqual(['failed-job']);
+
+    const remove = { type: 'panel.deleteJobs', jobs: [{ jobId: 'failed-job', youtubeVideoId: VIDEO_A }], windowId: 1 };
+    expect((await dispatch(listener, remove, {})).jobHistory).toEqual([]);
+    expect(await history()).toEqual([]);
+    expect(apiMock.deleteSavedGeneration).not.toHaveBeenCalled();
+
+    await dispatch(listener, { type: 'panel.undoDeleteJobs', jobIds: ['failed-job'], windowId: 1 }, {});
+    expect(await history()).toEqual(['failed-job']);
+
+    await dispatch(listener, remove, {});
+    await dispatch(listener, { type: 'panel.flushDeletes', windowId: 1 }, {});
+    expect(apiMock.deleteSavedGeneration).toHaveBeenCalledExactlyOnceWith(expect.any(String), 'failed-job');
+    apiMock.listSubtitleJobs.mockResolvedValue({ jobs: [] } as any);
+    expect(await history()).toEqual([]);
+  });
+
+  it('rejects malformed delete requests', async () => {
+    const { isRuntimeMessage } = await import('../utils/messages');
+    expect(isRuntimeMessage({ type: 'panel.deleteJobs', jobs: [] })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.deleteJobs', jobs: [{ jobId: 'a' }] })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.deleteJobs', jobs: [{ jobId: 'a', youtubeVideoId: 'v', tabId: -1 }] })).toBe(false);
+    expect(isRuntimeMessage({ type: 'panel.deleteJobs', jobs: [{ jobId: 'a', youtubeVideoId: 'v', trackId: 't', tabId: 1 }] })).toBe(true);
+    expect(isRuntimeMessage({ type: 'panel.undoDeleteJobs', jobIds: [''] })).toBe(false);
+  });
+});

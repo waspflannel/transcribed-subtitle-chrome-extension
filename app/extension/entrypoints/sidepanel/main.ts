@@ -6,6 +6,11 @@ import { bindInstanceSettings } from './instance-settings';
 import { bindCodexAccount } from './codex-account';
 import { bindClaudeAccount } from './claude-account';
 import { bindLyricsAiOptions, correctionAiLabel } from './lyrics-ai-options';
+import { hydrateIcons } from '../../utils/panel/icons';
+import { bindSheets } from './sheets';
+import { bindToast } from './toast';
+import { closeMenu, openMenu } from './menus';
+import { modelText, pairText } from './saved-generations';
 import { guardClaudeAccount, guardCodexAccount } from '../../utils/api-response-guards';
 
 import { browser } from 'wxt/browser';
@@ -18,15 +23,15 @@ import {
   languageLabel,
   languageTag,
 } from '../../utils/languages';
-import { isRuntimeMessage } from '../../utils/messages';
-import type { PanelRequest, PanelState } from '../../utils/messages';
+import { DEFAULT_SUBTITLE_STATE, isRuntimeMessage, UNDO_DELETE_MS } from '../../utils/messages';
+import type { PanelRequest, PanelState, PendingJobDelete } from '../../utils/messages';
 import { generationProgress } from '../../utils/panel-progress';
 import { escapeHtml } from '../../utils/html';
-import { CLAUDE_API_MODELS, CLAUDE_FAST_MODELS, CLAUDE_MODELS, DEFAULT_EXTENSION_SETTINGS, isClaudeApiModel, isClaudeModel, type ExtensionSettings } from '../../utils/settings-model';
-import { renderJobHistory } from './render/job-history';
+import { aiSelectionLabel, CLAUDE_API_MODELS, CLAUDE_FAST_MODELS, CLAUDE_MODELS, DEFAULT_EXTENSION_SETTINGS, isClaudeApiModel, isClaudeModel, type ExtensionSettings } from '../../utils/settings-model';
+import { isDeletableJob, renderJobHistory } from './render/job-history';
 import { renderLanguagePicker } from './render/language-picker';
 import { shortcutHelpHtml } from './render/shortcuts';
-import { setupTabs, showTab } from './tabs';
+import { onTabShown, setupTabs, showTab } from './tabs';
 import { bindTimingOffsetControl } from './timing-control';
 import { bindTranscriptView } from './transcript-view';
 import {
@@ -37,7 +42,7 @@ import {
 } from './view-model';
 import { getPanelDom } from './dom';
 import { canApplyLyricsCorrection, lyricsCharacterCount, lyricsValidationError, lyricsCorrectionProgress, LYRICS_CORRECTION_STAGES, QUICK_FIX_CHARACTER_LIMIT } from '../../utils/lyrics-correction';
-import type { LyricsCorrectionStatus } from '../../utils/contracts';
+import type { LyricsCorrectionStatus, SubtitleJobHistoryItem } from '../../utils/contracts';
 import {
   beginPanelRequest,
   canApplyPanelResponse,
@@ -63,7 +68,6 @@ const {
   transcriptList,
   transcriptStatus,
   collapseButton,
-  nowPlayingEyebrow,
   nowPlayingTitle,
   nowPlayingMeta,
   statusBanner,
@@ -88,14 +92,7 @@ const {
   cancelLyricsConfirmationButton,
   cancelLyricsCorrectionButton,
   cancelGenerationButton,
-  quickFixStatus,
-  toggleLanguagesButton,
-  languageExpand,
   toggleSetupButton,
-  pairSourceCode,
-  pairSourceName,
-  pairTargetCode,
-  pairTargetName,
   generateButton,
   generateNote,
   clearStateButton,
@@ -107,10 +104,6 @@ const {
   sourceLanguageList,
   targetLanguageList,
   aiProviderSelect,
-  overlayPositionSelect,
-  captionFontSizeSelect,
-  captionDensitySelect,
-  captionContrastThemeSelect,
   overlayVisibleInput,
   overlayAttachedToVideoInput,
   showRomanizationInput,
@@ -135,6 +128,42 @@ const {
   jobsError,
   settingsLanguageSummary,
   shortcutHelpList,
+  screenHead,
+  screenTitle,
+  languageSummary,
+  aiSummary,
+  aiSummarySettings,
+  trackButton,
+  trackPair,
+  trackModel,
+  trackMenu,
+  toolsButton,
+  toolsMenu,
+  deleteCurrentButton,
+  deleteCurrentLabel,
+  searchBox,
+  searchToggle,
+  timingButton,
+  timingMenu,
+  timingOffsetLarge,
+  captionContrastInput,
+  settingSegments,
+  lyricsConfirmationBox,
+  lyricsAiReadinessInline,
+  toast: toastElement,
+  confirmDialog,
+  tabInk,
+  scroll,
+  historySelectButton,
+  historySelectAllButton,
+  historyDeleteButton,
+  historyDeleteLabel,
+  historyBulk,
+  historyCount,
+  history: historyView,
+  sheetLanguages,
+  sheetAi,
+  sheetLyricsAi,
 } = getPanelDom();
 
 const interfaceLanguageSelect = document.querySelector<HTMLSelectElement>('[data-interface-language]')!;
@@ -161,7 +190,16 @@ interfaceLanguageSelect.addEventListener('change', () => {
 });
 setInterfaceLocale('auto');
 localizeDocument(document);
+hydrateIcons(document);
 let appliedInterfaceLocale = interfaceLocale();
+const sheets = bindSheets(document, scroll);
+const toast = bindToast(toastElement);
+const sheetsByName: Record<string, HTMLElement> = { languages: sheetLanguages, ai: sheetAi, 'lyrics-ai': sheetLyricsAi };
+/* Jobs waiting out their undo window. The panel hides them right away. */
+const pendingDeletes = new Set<string>();
+let settling: Promise<unknown> = Promise.resolve();
+let historySelecting = false;
+const historySelected = new Set<string>();
 
 let currentSettings: ExtensionSettings | null = null;
 let latestState: PanelState | null = null;
@@ -184,14 +222,12 @@ let lastProgressAnnouncement: string | null = null;
 let codexModelOptionsKey = '';
 
 /* Watch opens on the transcript; whole-track tasks each occupy one screen. */
-let languagesExpanded = false;
 let watchScreen: 'transcript' | 'replace' | 'generate' | 'progress' = 'transcript';
 let lastWatchVideoId: string | null = null;
 let lyricsReplaceConfirm = false;
 const dismissedCorrectionAttempts = new Set<string>();
 let quickFixSelection: { cueId: string; tokenIndex: number; text: string } | null = null;
 let quickFixError: { message: string; code?: string; reason?: string } | null = null;
-let quickFixNotice: string | null = null;
 
 collapseButton.addEventListener('click', () => {
   window.close();
@@ -205,9 +241,13 @@ lyricsCorrectionTextarea.addEventListener('input', () => {
 });
 function openWatchScreen(screen: typeof watchScreen): void {
   if (quickFixRequestBusy || lyricsCorrectionRequestBusy) return;
+  closeMenu(toolsMenu);
+  sheets.closeAll();
+  showTab(tabButtons, panels, 'watch');
   watchScreen = screen;
   if (latestState) showPanelState(latestState);
-  if (screen === 'transcript') transcriptSearch.focus({ preventScroll: true });
+  scroll.scrollTop = 0;
+  if (screen === 'transcript') trackButton.focus({ preventScroll: true });
   else backTranscriptButton.focus({ preventScroll: true });
 }
 toggleLyricsEditButton.addEventListener('click', () => openWatchScreen('replace'));
@@ -230,34 +270,125 @@ jobsList.addEventListener('click', (event) => {
   const target = event.target instanceof Element ? event.target : null;
   const button = target?.closest<HTMLButtonElement>('[data-action="cancel-generation"]');
 
-  if (button) void cancelGeneration(button);
+  if (button) {
+    void cancelGeneration(button);
+    return;
+  }
+  const remove = target?.closest<HTMLElement>('[data-job-delete]');
+  const removeJob = remove && latestState?.jobHistory.find(job => job.jobId === remove.dataset.jobDelete);
+  if (removeJob) {
+    void leaveRows([removeJob.jobId]).then(() => deleteJobs([removeJob], t('Deleted from history'),
+      latestState?.videoTitles?.[removeJob.youtubeVideoId] ?? removeJob.youtubeVideoId));
+    return;
+  }
+  // In select mode the whole card toggles; links and buttons keep their own job.
+  const item = historySelecting ? target?.closest<HTMLElement>('.job-item') : null;
+  const job = item && latestState?.jobHistory.find(candidate => candidate.jobId === item.dataset.jobId);
+  if (!item || !job || !isDeletableJob(job) || target?.closest('a, button')) return;
+  const checkbox = target?.closest<HTMLInputElement>('input[data-job-select]');
+  const selected = checkbox ? checkbox.checked : !historySelected.has(job.jobId);
+  if (selected) historySelected.add(job.jobId);
+  else historySelected.delete(job.jobId);
+  renderHistory();
+  jobsList.querySelector<HTMLElement>(`[data-job-select="${CSS.escape(job.jobId)}"]`)?.focus({ preventScroll: true });
 });
-clearStateButton.addEventListener('click', () => void clearLocalState());
-toggleLanguagesButton.addEventListener('click', () => {
-  setLanguagesExpanded(!languagesExpanded);
+clearStateButton.addEventListener('click', () => {
+  confirmAction(t('Clear local state'), t('Removes this browser’s settings, remembered tracks and Known Lyrics. Saved tracks on your backend stay.'), t('Clear'), () => void clearLocalState());
 });
 toggleSetupButton.addEventListener('click', () => openWatchScreen('generate'));
+document.addEventListener('click', (event) => {
+  const opener = (event.target as Element)?.closest?.<HTMLElement>('[data-action="open-sheet"]');
+  const sheet = opener ? sheetsByName[opener.dataset.sheet ?? ''] : undefined;
+  if (opener && sheet && !(opener as HTMLButtonElement).disabled) sheets.open(sheet, opener);
+});
+trackButton.addEventListener('click', () => openMenu(trackMenu, trackButton));
+toolsButton.addEventListener('click', () => openMenu(toolsMenu, toolsButton));
+toolsMenu.addEventListener('click', (event) => {
+  if ((event.target as Element)?.closest('button')) closeMenu(toolsMenu);
+});
+deleteCurrentButton.addEventListener('click', () => {
+  const track = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track : null;
+  if (!track) return;
+  const job = savedGenerations.jobs().find(item => item.jobId === track.jobId)
+    ?? latestState?.jobHistory.find(item => item.jobId === track.jobId);
+  void deleteJobs([job ?? { jobId: track.jobId, youtubeVideoId: track.youtubeVideoId, trackId: track.trackId }],
+    t('Track deleted'), job ? `${pairText(job)} · ${modelText(job)}` : undefined);
+});
+timingButton.addEventListener('click', () => openMenu(timingMenu, timingButton));
+searchToggle.addEventListener('click', () => setSearchOpen(searchBox.hidden));
+transcriptSearch.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    setSearchOpen(false);
+  }
+});
+for (const segment of settingSegments) {
+  segment.addEventListener('click', (event) => {
+    const button = (event.target as Element)?.closest<HTMLButtonElement>('button[data-value]');
+    const value = button?.dataset.value;
+    if (!button || button.disabled || !value) return;
+    for (const option of segment.querySelectorAll('button')) option.setAttribute('aria-pressed', String(option === button));
+    const setting = segment.dataset.setting;
+    if (setting === 'overlayPosition' && (value === 'bottom' || value === 'top' || value === 'compact')) void updateSettings({ overlayPosition: value });
+    if (setting === 'captionFontSize' && (value === 'small' || value === 'medium' || value === 'large')) void updateSettings({ captionFontSize: value });
+    if (setting === 'captionDensity' && (value === 'compact' || value === 'comfortable')) void updateSettings({ captionDensity: value });
+  });
+}
+captionContrastInput.addEventListener('change', () => void updateSettings({ captionContrastTheme: captionContrastInput.checked ? 'high' : 'default' }));
+historySelectButton.addEventListener('click', () => {
+  historySelecting = !historySelecting;
+  historySelected.clear();
+  renderHistory();
+});
+historySelectAllButton.addEventListener('click', () => {
+  const deletable = (latestState?.jobHistory ?? []).filter(isDeletableJob);
+  if (deletable.every(job => historySelected.has(job.jobId))) historySelected.clear();
+  else for (const job of deletable) historySelected.add(job.jobId);
+  renderHistory();
+});
+historyDeleteButton.addEventListener('click', () => {
+  const jobs = (latestState?.jobHistory ?? []).filter(job => historySelected.has(job.jobId));
+  if (!jobs.length) return;
+  historySelecting = false;
+  historySelected.clear();
+  void leaveRows(jobs.map(job => job.jobId)).then(() => deleteJobs(jobs,
+    jobs.length === 1 ? t('Deleted from history') : t('{count} items deleted', { count: jobs.length })));
+});
+onTabShown((tab, previous) => {
+  const order = tabButtons.map(button => button.dataset.tab);
+  scroll.dataset.dir = previous && previous !== tab ? (order.indexOf(tab) > order.indexOf(previous) ? 'forward' : 'back') : '';
+  sheets.closeAll();
+  placeTabInk();
+  if (tab !== 'history' && historySelecting) {
+    historySelecting = false;
+    historySelected.clear();
+    renderHistory();
+  }
+});
+if (typeof ResizeObserver === 'function') new ResizeObserver(placeTabInk).observe(tabButtons[0]!.parentElement!);
 sourceLanguageSearchInput.addEventListener('input', handleSourceLanguageSearch);
 targetLanguageSearchInput.addEventListener('input', handleTargetLanguageSearch);
 sourceLanguageList.addEventListener('click', handleSourceLanguageClick);
 targetLanguageList.addEventListener('click', handleTargetLanguageClick);
-overlayPositionSelect.addEventListener('change', handleOverlayPositionChange);
-captionFontSizeSelect.addEventListener('change', handleCaptionFontSizeChange);
-captionDensitySelect.addEventListener('change', handleCaptionDensityChange);
-captionContrastThemeSelect.addEventListener('change', handleCaptionContrastThemeChange);
 const lyricsAiOptions = bindLyricsAiOptions(document.querySelector<HTMLElement>('[data-lyrics-ai-options]')!, () => {
   lyricsReplaceConfirm = false;
   renderLyricsEditState();
 });
-const savedGenerations = bindSavedGenerations(
-  document.querySelector<HTMLSelectElement>('[data-generation-select]')!,
-  document.querySelector<HTMLElement>('[data-generation-status]')!,
-  document.querySelector<HTMLButtonElement>('[data-generation-refresh]')!,
-  request => sendPanelRequest(request, 'generation-selection', 'mutation'),
-  () => panelWindowId,
-  showPanelState,
-  jobs => lyricsAiOptions.setSavedJobs(jobs),
-);
+const savedGenerations = bindSavedGenerations({
+  button: trackButton,
+  pairLabel: trackPair,
+  modelLabel: trackModel,
+  menu: trackMenu,
+  status: document.querySelector<HTMLElement>('[data-generation-status]')!,
+  selectGeneration: request => sendPanelRequest(request, 'generation-selection', 'mutation'),
+  windowId: () => panelWindowId,
+  applyPanelState: showPanelState,
+  onJobsLoaded: jobs => lyricsAiOptions.setSavedJobs(jobs),
+  onDelete: job => void deleteJobs([job], t('Track deleted'), `${pairText(job)} · ${modelText(job)}`),
+  onGenerateNew: () => openWatchScreen('generate'),
+  onSwitching: busy => transcriptList.setAttribute('aria-busy', String(busy)),
+  hiddenJobIds: () => pendingDeletes,
+});
 
 aiProviderSelect.addEventListener('change', () => {
   const aiProvider = aiProviderSelect.value;
@@ -314,6 +445,7 @@ const timingControl = bindTimingOffsetControl({
   rangeInput: timingOffsetRangeInput,
   numberInput: timingOffsetNumberInput,
   output: timingOffsetOutput,
+  extraOutput: timingOffsetLarge,
   resetButton: resetTimingButton,
   onCommit: (subtitleTimingOffsetSeconds) => updateSettings({ subtitleTimingOffsetSeconds }),
 });
@@ -326,7 +458,20 @@ let lastFullBackendRefresh = 0;
 const IDLE_POLL_INTERVAL_MS = 30_000;
 
 setupTabs(tabButtons, panels);
-bindKnownLyrics(document);
+bindKnownLyrics(document, {
+  open: (panel, invoker) => {
+    closeMenu(toolsMenu);
+    sheets.open(panel, invoker);
+  },
+  onUse: (lyrics) => {
+    sheets.closeAll();
+    if (watchScreen !== 'replace') openWatchScreen('replace');
+    lyricsCorrectionTextarea.value = lyrics;
+    lyricsCorrectionTextarea.dispatchEvent(new Event('input'));
+    lyricsCorrectionTextarea.focus({ preventScroll: true });
+  },
+  onDeleted: (title, restore) => toast.show({ message: t('Lyrics deleted.'), detail: title, undo: { ms: UNDO_DELETE_MS, run: restore } }),
+});
 const instanceSettings = bindInstanceSettings(document, patch => sendPanelRequest({ type: 'panel.saveInstanceSettings', patch }, 'settings', 'mutation'));
 const codexAccount = bindCodexAccount(document, async type => {
   const response = await browser.runtime.sendMessage({ type });
@@ -366,8 +511,9 @@ const transcriptView = bindTranscriptView({
   onQuickFixCancel: () => {
     clearQuickFixSelection();
     renderLyricsEditState();
-    transcriptSearch.focus({ preventScroll: true });
+    transcriptView.focus();
   },
+  onNotice: (message, kind) => toast.show({ message, kind }),
 });
 renderShortcutHelp();
 void loadPanelState();
@@ -414,6 +560,7 @@ browser.runtime.onMessage.addListener((message) => {
   } else if (message.type === 'background.focusTranscript') {
     if (panelWindowId !== undefined && message.windowId !== panelWindowId) return false;
     showTab(tabButtons, panels, 'watch');
+    sheets.closeAll();
     transcriptView.focus();
   }
   return false;
@@ -652,7 +799,6 @@ function selectQuickFixToken(cueId: string, tokenIndex: number): void {
 
   quickFixSelection = { cueId, tokenIndex, text: token.text };
   quickFixError = null;
-  quickFixNotice = null;
   renderLyricsEditState();
 }
 
@@ -695,13 +841,13 @@ async function submitQuickFix(cueId: string, tokenIndex: number, text: string): 
 
   if (applied) {
     clearQuickFixSelection();
-    quickFixNotice = t("Saved.");
-    transcriptSearch.focus({ preventScroll: true });
+    toast.show({ message: t("Saved."), detail: t("Updates this line’s translation, pronunciation, and word cards.") });
+    transcriptView.focus();
   } else if (quickFixError?.code === 'lyrics_correction_in_progress' && quickFixError.reason === 'stale_track') {
     clearQuickFixSelection();
-    quickFixNotice = t("The subtitles changed — the latest version is loaded.");
+    toast.show({ message: t("The subtitles changed — the latest version is loaded.") });
     void refreshBackendState();
-    transcriptSearch.focus({ preventScroll: true });
+    transcriptView.focus();
   } else {
     transcriptView.setQuickFixError(quickFixError?.message ?? t("Could not save. Try again."));
   }
@@ -741,6 +887,10 @@ function renderLyricsEditState(): void {
   /* Replace all: Continue reveals the inline warning and swaps the footer
      actions; the pasted text stays visible while confirming. */
   lyricsConfirmation.hidden = !lyricsReplaceConfirm;
+  lyricsConfirmationBox.hidden = !lyricsReplaceConfirm;
+  const readiness = document.querySelector<HTMLElement>('[data-lyrics-ai-readiness]');
+  lyricsAiReadinessInline.textContent = readiness?.hidden ? '' : readiness?.textContent ?? '';
+  lyricsAiReadinessInline.hidden = !lyricsAiReadinessInline.textContent;
   lyricsConfirmation.textContent = t("This replaces the entire transcript and has no undo. Your current subtitles stay active until the replacement succeeds.");
   lyricsCorrectionButton.hidden = lyricsReplaceConfirm;
   confirmLyricsCorrectionButton.hidden = !lyricsReplaceConfirm;
@@ -750,8 +900,8 @@ function renderLyricsEditState(): void {
   lyricsCorrectionTextarea.disabled = lyricsCorrectionRequestBusy;
   confirmLyricsCorrectionButton.disabled = lyricsCorrectionRequestBusy || !lyricsAiOptions.ready() || !canApplyLyricsCorrection(lyricsCorrectionTextarea.value, latestState?.lyricsCorrection);
 
-  quickFixStatus.textContent = quickFixNotice ?? '';
   transcriptView.setQuickFixMode(quickActive);
+  deleteCurrentButton.disabled = !ready || activeCorrection || lyricsCorrectionRequestBusy || quickFixRequestBusy;
   transcriptView.setQuickFixEditing(quickActive ? quickFixSelection : null);
   renderLyricsCorrectionInput();
   cancelLyricsCorrectionButton.hidden = !activeCorrection;
@@ -846,38 +996,6 @@ async function sendPanelRequest(
   }
 }
 
-function handleOverlayPositionChange(): void {
-  const { value } = overlayPositionSelect;
-
-  if (value === 'bottom' || value === 'top' || value === 'compact') {
-    void updateSettings({ overlayPosition: value });
-  }
-}
-
-function handleCaptionFontSizeChange(): void {
-  const { value } = captionFontSizeSelect;
-
-  if (value === 'small' || value === 'medium' || value === 'large') {
-    void updateSettings({ captionFontSize: value });
-  }
-}
-
-function handleCaptionDensityChange(): void {
-  const { value } = captionDensitySelect;
-
-  if (value === 'compact' || value === 'comfortable') {
-    void updateSettings({ captionDensity: value });
-  }
-}
-
-function handleCaptionContrastThemeChange(): void {
-  const { value } = captionContrastThemeSelect;
-
-  if (value === 'default' || value === 'high') {
-    void updateSettings({ captionContrastTheme: value });
-  }
-}
-
 function handleSourceLanguageSearch(): void {
   sourceLanguageQuery = sourceLanguageSearchInput.value;
   renderLanguagePickers(currentSettings);
@@ -915,20 +1033,14 @@ function languageButtonCode(event: MouseEvent): string | null {
   return button?.dataset.languageCode ?? null;
 }
 
-function setLanguagesExpanded(expanded: boolean): void {
-  languagesExpanded = expanded;
-  languageExpand.hidden = !expanded;
-  toggleLanguagesButton.textContent = expanded ? t("Done") : t("Change");
-  toggleLanguagesButton.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-}
-
-function showPanelState(state: PanelState): void {
+function showPanelState(incoming: PanelState): void {
+  const state = withoutPendingDeletes(incoming);
   setInterfaceLocale(state.settings.interfaceLocale);
   if (appliedInterfaceLocale !== interfaceLocale()) {
     localizeDocument(document);
     appliedInterfaceLocale = interfaceLocale();
     lastProgressAnnouncement = null;
-    setLanguagesExpanded(languagesExpanded);
+    placeTabInk();
   }
   interfaceLanguageSelect.value = state.settings.interfaceLocale;
   renderShortcutHelp();
@@ -971,17 +1083,16 @@ function showPanelState(state: PanelState): void {
     lastWatchVideoId = watchVideoId;
     generationCancelFeedback = null;
     watchScreen = 'transcript';
-    setLanguagesExpanded(false);
+    sheets.closeAll();
+    setSearchOpen(false);
     lyricsCorrectionTextarea.value = '';
     clearQuickFixSelection();
-    quickFixNotice = null;
     lyricsReplaceConfirm = false;
   } else if (previousCorrectionStatus !== 'completed' && state.lyricsCorrection?.status === 'completed') {
     lyricsCorrectionTextarea.value = '';
     lyricsReplaceConfirm = false;
   } else if (nextTrackId !== previousTrackId) {
     clearQuickFixSelection();
-    quickFixNotice = null;
     lyricsCorrectionTextarea.value = '';
     /* A refreshed track invalidates the old replacement confirmation. */
     lyricsReplaceConfirm = false;
@@ -1006,7 +1117,7 @@ function showPanelState(state: PanelState): void {
     cueSnapshotRequest += 1;
     transcriptView.setData(null, [], settings);
   }
-  renderJobHistory(state, { jobsList, jobsError, cancellationBusy: generationCancellationRequestBusy });
+  renderHistory();
 
   renderSettingsSummary(settings);
 
@@ -1022,10 +1133,8 @@ function showPanelState(state: PanelState): void {
   overlayAttachedToVideoInput.checked = settings.overlayAttachedToVideo;
   if (settings.aiProvider === 'openai' || settings.aiProvider === 'cerebras' || settings.aiProvider === 'anthropic') aiProviderSelect.value = settings.aiProvider;
   renderAiOptions(state);
-  overlayPositionSelect.value = settings.overlayPosition;
-  captionFontSizeSelect.value = settings.captionFontSize;
-  captionDensitySelect.value = settings.captionDensity;
-  captionContrastThemeSelect.value = settings.captionContrastTheme;
+  renderSegments(settings);
+  captionContrastInput.checked = settings.captionContrastTheme === 'high';
   showRomanizationInput.checked = settings.showRomanization;
   showTranslationInput.checked = settings.showTranslation;
   showGlossInput.checked = settings.showGloss;
@@ -1037,11 +1146,9 @@ function showPanelState(state: PanelState): void {
   timingControl.showTimingOffset(settings.subtitleTimingOffsetSeconds);
   setSettingsDisabled(false);
 
-  nowPlayingEyebrow.textContent = supported ? t("Now playing") : t("No video");
   nowPlayingTitle.textContent = nowPlayingTitleLabel(state);
-  nowPlayingMeta.textContent = supported
-    ? `${videoDurationLabel(state)} · ${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)}`
-    : '';
+  nowPlayingMeta.textContent = supported ? videoDurationLabel(state) : '';
+  hydrateIcons(document);
 
   if (!hasAppliedDefaultView) {
     hasAppliedDefaultView = true;
@@ -1083,37 +1190,42 @@ function renderLyricsCorrectionState(state: PanelState): void {
 
   correctionTerminalStatus.hidden = false;
   if (correction.status === 'completed') {
-    correctionTerminalStatus.className = 'status-banner correction-status success';
+    correctionTerminalStatus.className = 'dock-card correction-status success';
     correctionTerminalMessage.textContent = t("Lyrics replaced — the transcript is up to date.");
     return;
   }
 
-  correctionTerminalStatus.className = 'status-banner correction-status';
+  correctionTerminalStatus.className = 'dock-card correction-status error';
   correctionTerminalMessage.textContent = correction.status === 'cancelled'
     ? t("Replacement cancelled. Your current subtitles are unchanged.")
     : t(correction.message || '') || t("Replacement failed. Your current subtitles are unchanged.");
 }
 
 function showStatusBanner(state: PanelState): void {
+  if (generationCancelFeedback?.kind === 'success') {
+    toast.show({ message: t(generationCancelFeedback.message), detail: t('Work already sent to providers may still be billed.') });
+    generationCancelFeedback = null;
+  }
+
   if (generationCancelFeedback) {
-    statusBanner.hidden = false;
-    statusBanner.className = `status-banner${generationCancelFeedback.kind === 'success' ? ' success' : ''}`;
-    statusBanner.textContent = t(generationCancelFeedback.message);
+    setStatusBanner(t(generationCancelFeedback.message));
 
     return;
   }
 
   if (state.subtitleState.type === 'error') {
-    statusBanner.hidden = false;
-    statusBanner.className = 'status-banner';
-    statusBanner.textContent = t(state.subtitleState.message || "") || t("Generation failed.");
+    setStatusBanner(t(state.subtitleState.message || "") || t("Generation failed."));
 
     return;
   }
 
-  statusBanner.hidden = true;
-  statusBanner.className = 'status-banner';
-  statusBanner.textContent = '';
+  setStatusBanner(null);
+}
+
+function setStatusBanner(message: string | null): void {
+  statusBanner.hidden = message === null;
+  statusBanner.className = 'dock-card error';
+  if (statusBanner.textContent !== (message ?? '')) statusBanner.textContent = message ?? '';
 }
 
 async function pullActiveCue(state: PanelState): Promise<void> {
@@ -1151,6 +1263,12 @@ function showWatchState(state: PanelState, supported: boolean): void {
   watchUnsupported.hidden = supported;
   watchSetup.hidden = !supported || loading || (ready && watchScreen !== 'generate');
   if (watchScreen === 'progress' && !loading && !correctionRunning) watchScreen = 'transcript';
+  screenHead.hidden = !ready || watchScreen === 'transcript';
+  const screenName = watchScreen === 'generate' ? "Generate again" : watchScreen === 'replace' ? "Lyric correction" : "Replacing lyrics";
+  if (screenTitle.dataset.i18n !== screenName || screenTitle.textContent !== t(screenName)) {
+    screenTitle.dataset.i18n = screenName;
+    screenTitle.textContent = t(screenName);
+  }
   progressContainer.hidden = (!loading && !correctionRunning) || (ready && watchScreen !== 'progress');
   progressSummary.hidden = !ready || !correctionRunning || watchScreen !== 'transcript';
   progressSummaryLabel.textContent = correctionRunning ? t("Updating lyrics…") : '';
@@ -1159,7 +1277,6 @@ function showWatchState(state: PanelState, supported: boolean): void {
   readyToolbar.hidden = watchScreen !== 'transcript' || partial;
   transcriptList.hidden = watchScreen !== 'transcript';
   transcriptStatus.hidden = watchScreen !== 'transcript';
-  quickFixStatus.hidden = watchScreen !== 'transcript';
   watchReady.hidden = !ready && !partial;
   cancelGenerationButton.hidden = !generationInProgress;
   cancelGenerationButton.disabled = generationCancellationRequestBusy || !canCancelGeneration;
@@ -1262,6 +1379,9 @@ function renderAiOptions(state: PanelState): void {
   codexFastModeInput.checked = state.settings.codexFastMode;
   codexReadiness.textContent = !state.codexAccount?.connected ? t('Connect Codex in Settings before generating subtitles.')
     : !models.some(model => model.id === state.settings.codexModel) ? t('Select an available Codex model before generating subtitles.') : '';
+  const summary = generationAiLabel(state);
+  aiSummary.textContent = summary;
+  aiSummarySettings.textContent = summary;
   aiBilling.textContent = codex
     ? t('Text analysis uses Codex credits. Audio transcription uses your ElevenLabs API key.')
     : source === 'claude' ? t('Text analysis uses your Claude subscription. Audio transcription uses your ElevenLabs API key.')
@@ -1270,10 +1390,168 @@ function renderAiOptions(state: PanelState): void {
 }
 
 function renderLanguagePair(settings: ExtensionSettings | null): void {
-  pairSourceCode.textContent = settings?.sourceLanguage ?? '';
-  pairSourceName.textContent = settings ? languageLabel(settings.sourceLanguage) : '—';
-  pairTargetCode.textContent = settings?.targetLanguage ?? '';
-  pairTargetName.textContent = settings ? languageLabel(settings.targetLanguage) : '—';
+  languageSummary.textContent = settings ? `${languageLabel(settings.sourceLanguage)} → ${languageLabel(settings.targetLanguage)}` : '—';
+}
+
+/** "OpenAI API · gpt-6-luna" for the setting that the next generation will use. */
+function generationAiLabel(state: PanelState): string {
+  const settings = state.settings;
+  const fast = (on: boolean): string => on ? ` · ${t('Fast mode')}` : '';
+  switch (settings.aiProvider) {
+    case 'codex':
+      return settings.codexModel ? `${aiSelectionLabel('codex', settings.codexModel)}${fast(settings.codexFastMode)}` : t('Codex credits');
+    case 'claude':
+      return aiSelectionLabel('claude', CLAUDE_MODELS[settings.claudeModel] ?? settings.claudeModel);
+    case 'anthropic':
+      return `${aiSelectionLabel('anthropic', CLAUDE_API_MODELS[settings.claudeApiModel] ?? settings.claudeApiModel)}${fast(settings.claudeApiFastMode && CLAUDE_FAST_MODELS.includes(settings.claudeApiModel))}`;
+    default: {
+      const model = state.instanceSettings?.providers[settings.aiProvider]?.model;
+      return model ? aiSelectionLabel(settings.aiProvider, model) : aiSelectionLabel(settings.aiProvider, '').replace(/ · $/, '');
+    }
+  }
+}
+
+function renderSegments(settings: ExtensionSettings): void {
+  const values: Record<string, string> = {
+    overlayPosition: settings.overlayPosition, captionFontSize: settings.captionFontSize, captionDensity: settings.captionDensity,
+  };
+  for (const segment of settingSegments) {
+    for (const button of segment.querySelectorAll<HTMLButtonElement>('button[data-value]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.value === values[segment.dataset.setting ?? '']));
+    }
+  }
+}
+
+function setSearchOpen(open: boolean): void {
+  searchBox.hidden = !open;
+  readyToolbar.classList.toggle('searching', open);
+  searchToggle.setAttribute('aria-expanded', String(open));
+  searchToggle.dataset.icon = open ? 'close' : 'search';
+  searchToggle.replaceChildren();
+  hydrateIcons(searchToggle.parentElement!);
+  if (open) transcriptSearch.focus({ preventScroll: true });
+  else if (transcriptSearch.value) {
+    transcriptSearch.value = '';
+    transcriptSearch.dispatchEvent(new Event('input'));
+  }
+}
+
+function placeTabInk(): void {
+  const active = tabButtons.find(button => button.getAttribute('aria-selected') === 'true');
+  if (!active) return;
+  tabInk.style.width = `${active.offsetWidth}px`;
+  tabInk.style.transform = `translateX(${active.offsetLeft}px)`;
+}
+
+function confirmAction(title: string, copy: string, okLabel: string, run: () => void): void {
+  const titleElement = confirmDialog.querySelector<HTMLElement>('[data-confirm-title]')!;
+  const copyElement = confirmDialog.querySelector<HTMLElement>('[data-confirm-copy]')!;
+  const ok = confirmDialog.querySelector<HTMLButtonElement>('[data-confirm-ok]')!;
+  titleElement.textContent = title;
+  copyElement.textContent = copy;
+  ok.textContent = okLabel;
+  confirmDialog.onclick = (event) => {
+    const button = (event.target as Element)?.closest<HTMLElement>('[data-confirm]');
+    if (!button) return;
+    confirmDialog.close();
+    if (button.dataset.confirm === 'ok') run();
+  };
+  if (typeof confirmDialog.showModal === 'function') confirmDialog.showModal();
+  else run();
+}
+
+/** Hide jobs that are waiting out their undo window. A hidden current track reads as "no track". */
+function withoutPendingDeletes(state: PanelState): PanelState {
+  if (pendingDeletes.size === 0) return state;
+  const hideTrack = state.subtitleState.type === 'ready' && pendingDeletes.has(state.subtitleState.track.jobId);
+  return {
+    ...state,
+    jobHistory: state.jobHistory.filter(job => !pendingDeletes.has(job.jobId)),
+    subtitleState: hideTrack ? DEFAULT_SUBTITLE_STATE : state.subtitleState,
+  };
+}
+
+type DeletableJob = Pick<SubtitleJobHistoryItem, 'jobId' | 'youtubeVideoId'> & { trackId?: string };
+
+/*
+ * Delete now, undo for UNDO_DELETE_MS. The background holds the real DELETE until the
+ * countdown ends, so closing the panel still deletes. A track that is showing switches
+ * to the next saved track first; with none left, Watch returns to setup.
+ */
+async function deleteJobs(jobs: DeletableJob[], message: string, detail?: string): Promise<void> {
+  const state = latestState;
+  if (!state || jobs.length === 0) return;
+  toast.dismiss(); // Settle any earlier undo window before starting a new one.
+  await settling;
+  const track = state.subtitleState.type === 'ready' ? state.subtitleState.track : null;
+  const deletingCurrent = track !== null && jobs.some(job => job.jobId === track.jobId);
+  for (const job of jobs) pendingDeletes.add(job.jobId);
+  let switched: { from: string; to: string } | null = null;
+  if (deletingCurrent && track && state.activeTabId !== undefined) {
+    const next = savedGenerations.jobs().find(job => !pendingDeletes.has(job.jobId));
+    if (next && await sendPanelRequest({ type: 'panel.selectGeneration', jobId: next.jobId, currentJobId: track.jobId,
+      trackId: track.trackId, youtubeVideoId: track.youtubeVideoId, tabId: state.activeTabId }, 'settings', 'mutation')) {
+      switched = { from: track.jobId, to: next.jobId };
+    }
+  }
+  if (latestState) showPanelState(latestState);
+  const payload: PendingJobDelete[] = jobs.map(job => {
+    const showing = deletingCurrent && !switched && track?.jobId === job.jobId && state.activeTabId !== undefined;
+    return {
+      jobId: job.jobId,
+      youtubeVideoId: job.youtubeVideoId,
+      ...(showing ? { trackId: track!.trackId, tabId: state.activeTabId } : job.trackId ? { trackId: job.trackId } : {}),
+    };
+  });
+  if (!await sendPanelRequest({ type: 'panel.deleteJobs', jobs: payload }, 'settings', 'mutation')) {
+    for (const job of jobs) pendingDeletes.delete(job.jobId);
+    if (latestState) showPanelState(latestState);
+    return;
+  }
+  const jobIds = jobs.map(job => job.jobId);
+  toast.show({
+    message,
+    detail,
+    undo: {
+      ms: UNDO_DELETE_MS,
+      run: async () => {
+        for (const jobId of jobIds) pendingDeletes.delete(jobId);
+        await sendPanelRequest({ type: 'panel.undoDeleteJobs', jobIds }, 'settings', 'mutation');
+        const now = latestState?.subtitleState.type === 'ready' ? latestState.subtitleState.track : null;
+        if (switched && now?.jobId === switched.to && latestState?.activeTabId !== undefined) {
+          await sendPanelRequest({ type: 'panel.selectGeneration', jobId: switched.from, currentJobId: now.jobId,
+            trackId: now.trackId, youtubeVideoId: now.youtubeVideoId, tabId: latestState.activeTabId }, 'settings', 'mutation');
+        }
+        await sendPanelRequest({ type: 'panel.getState', syncBackend: true }, 'settings');
+        void savedGenerations.refresh();
+      },
+    },
+    onSettle: () => {
+      settling = browser.runtime.sendMessage({ type: 'panel.flushDeletes', ...(typeof panelWindowId === 'number' ? { windowId: panelWindowId } : {}) }).catch(() => {});
+    },
+  });
+  // ponytail: ids stay hidden for this panel session; a failed background delete shows again on reopen.
+}
+
+function renderHistory(): void {
+  const state = latestState;
+  historyView.classList.toggle('selecting', historySelecting);
+  historySelectButton.textContent = historySelecting ? t('Done') : t('Select');
+  historySelectButton.setAttribute('aria-pressed', String(historySelecting));
+  historySelectButton.hidden = !state?.jobHistory.some(isDeletableJob);
+  historyBulk.hidden = !historySelecting;
+  historyCount.textContent = t('{count} selected', { count: historySelected.size });
+  historyDeleteLabel.textContent = historySelected.size ? t('Delete {count}', { count: historySelected.size }) : t('Delete');
+  historyDeleteButton.disabled = historySelected.size === 0;
+  if (!state) return;
+  renderJobHistory(state, { jobsList, jobsError, cancellationBusy: generationCancellationRequestBusy },
+    { selecting: historySelecting, selected: historySelected, hidden: pendingDeletes });
+}
+
+/** Collapse rows before their data goes away, so the list closes smoothly. */
+function leaveRows(jobIds: readonly string[]): Promise<void> {
+  for (const jobId of jobIds) jobsList.querySelector(`[data-job-row="${CSS.escape(jobId)}"]`)?.classList.add('leaving');
+  return new Promise(resolve => setTimeout(resolve, 260));
 }
 
 function renderLanguagePickers(settings: ExtensionSettings | null): void {
@@ -1302,6 +1580,8 @@ function renderSettingsSummary(settings: ExtensionSettings): void {
 }
 
 function renderShortcutHelp(): void {
+  if (shortcutHelpList.dataset.locale === interfaceLocale()) return;
+  shortcutHelpList.dataset.locale = interfaceLocale();
   shortcutHelpList.innerHTML = shortcutHelpHtml();
 }
 
@@ -1311,11 +1591,7 @@ function showError(error: unknown): void {
   latestState = null;
   currentSettings = null;
   generationCancelFeedback = null;
-  statusBanner.hidden = false;
-  statusBanner.className = 'status-banner';
-  statusBanner.textContent =
-    typeof error === 'string' ? error : error instanceof Error ? error.message : t("Unable to load extension state");
-  nowPlayingEyebrow.textContent = t("No video");
+  setStatusBanner(typeof error === 'string' ? error : error instanceof Error ? error.message : t("Unable to load extension state"));
   nowPlayingTitle.textContent = t("Open a YouTube video");
   nowPlayingMeta.textContent = '';
   watchUnsupported.hidden = false;
@@ -1323,6 +1599,7 @@ function showError(error: unknown): void {
   progressContainer.hidden = true;
   progressSummary.hidden = true;
   backTranscriptButton.hidden = true;
+  screenHead.hidden = true;
   watchReady.hidden = true;
   jobsList.innerHTML = `<p class="empty-state">${escapeHtml(t("Unable to load jobs."))}</p>`;
   renderLanguagePair(null);
@@ -1334,10 +1611,8 @@ function showError(error: unknown): void {
   generateNote.textContent = '';
   overlayVisibleInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayVisible;
   overlayAttachedToVideoInput.checked = DEFAULT_EXTENSION_SETTINGS.overlayAttachedToVideo;
-  overlayPositionSelect.value = DEFAULT_EXTENSION_SETTINGS.overlayPosition;
-  captionFontSizeSelect.value = DEFAULT_EXTENSION_SETTINGS.captionFontSize;
-  captionDensitySelect.value = DEFAULT_EXTENSION_SETTINGS.captionDensity;
-  captionContrastThemeSelect.value = DEFAULT_EXTENSION_SETTINGS.captionContrastTheme;
+  renderSegments(DEFAULT_EXTENSION_SETTINGS);
+  captionContrastInput.checked = DEFAULT_EXTENSION_SETTINGS.captionContrastTheme === 'high';
   keyboardShortcutsEnabledInput.checked = DEFAULT_EXTENSION_SETTINGS.keyboardShortcutsEnabled;
   timingControl.showTimingOffset(0);
   setSettingsDisabled(true);
@@ -1357,8 +1632,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
 
 
   if (errorTarget === 'settings') {
-    statusBanner.hidden = false;
-    statusBanner.textContent = t(message);
+    toast.show({ message: t(message), kind: 'error' });
 
     return;
   }
@@ -1385,9 +1659,7 @@ function showRequestError(error: unknown, errorTarget: RequestErrorTarget, error
 
   if (errorTarget === 'generation-cancel' || errorTarget === 'generation-start') {
     generationCancelFeedback = { kind: 'error', message };
-    statusBanner.hidden = false;
-    statusBanner.className = 'status-banner';
-    statusBanner.textContent = t(message);
+    setStatusBanner(t(message));
 
     return;
   }
@@ -1414,10 +1686,8 @@ function setSettingsDisabled(disabled: boolean): void {
   claudeApiFastModeInput.disabled = disabled || !CLAUDE_FAST_MODELS.includes(latestState?.settings.claudeApiModel ?? '');
   codexFastModeInput.disabled = disabled || !latestState?.codexAccount?.connected
     || (!latestState.settings.codexFastMode && !latestState.codexAccount.models.find(model => model.id === latestState?.settings.codexModel)?.supportsFastMode);
-  overlayPositionSelect.disabled = disabled;
-  captionFontSizeSelect.disabled = disabled;
-  captionDensitySelect.disabled = disabled;
-  captionContrastThemeSelect.disabled = disabled;
+  for (const button of settingSegments.flatMap(segment => [...segment.querySelectorAll('button')])) button.disabled = disabled;
+  captionContrastInput.disabled = disabled;
   showRomanizationInput.disabled = disabled;
   showTranslationInput.disabled = disabled;
   showGlossInput.disabled = disabled;

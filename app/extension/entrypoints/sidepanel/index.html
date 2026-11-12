@@ -8,391 +8,505 @@
     <div id="app" class="panel">
       <nav class="tab-bar" aria-label="Sections" role="tablist" data-i18n-aria-label="Sections">
         <button class="tab" type="button" data-tab="watch" id="tab-watch" role="tab" aria-selected="true" aria-controls="panel-watch" data-i18n="Watch">Watch</button>
-        <button class="tab" type="button" data-tab="study" id="tab-study" role="tab" aria-selected="false" aria-controls="panel-study" data-i18n="Study">Study</button>
         <button class="tab" type="button" data-tab="history" id="tab-history" role="tab" aria-selected="false" aria-controls="panel-history" data-i18n="History">History</button>
         <button class="tab" type="button" data-tab="settings" id="tab-settings" role="tab" aria-selected="false" aria-controls="panel-settings" data-i18n="Settings">Settings</button>
+        <button class="icon-btn tab-collapse" type="button" data-action="collapse-panel" title="Hide panel" aria-label="Hide panel" data-i18n-title="Hide panel" data-i18n-aria-label="Hide panel" data-icon="collapse"></button>
+        <span class="tab-ink" data-tab-ink aria-hidden="true"></span>
       </nav>
 
-      <label class="interface-language"><span data-i18n="Interface language">Interface language</span><select data-interface-language aria-label="Interface language" data-i18n-aria-label="Interface language"></select></label>
-
-      <header class="np">
-        <div class="np-text">
-          <div class="ey" data-now-playing-eyebrow="" data-i18n="Now playing">Now playing</div>
-          <div class="title" data-now-playing-title="">—</div>
-          <div class="meta" data-now-playing-meta=""></div>
-        </div>
-        <button class="np-collapse" type="button" data-action="collapse-panel" title="Hide panel" aria-label="Hide panel" data-i18n-title="Hide panel" data-i18n-aria-label="Hide panel">»</button>
-      </header>
-
-      <main class="scroll">
+      <main class="scroll" data-scroll>
         <!-- ============================= WATCH ============================= -->
-        <section class="view" data-panel="watch" id="panel-watch" role="tabpanel" aria-labelledby="tab-watch" tabindex="0">
-          <p class="status-banner" data-status="" role="status" aria-live="polite" hidden="" data-i18n="Loading">Loading</p>
+        <section class="view" data-panel="watch" id="panel-watch" role="tabpanel" aria-labelledby="tab-watch" tabindex="-1">
+          <header class="np" data-now-playing>
+            <h1 class="np-title" data-now-playing-title="">—</h1>
+            <p class="meta" data-now-playing-meta=""></p>
+          </header>
 
           <!-- No supported video on the active tab. -->
-          <div class="card empty-card" data-watch-unsupported="" hidden="">
+          <div class="empty screen" data-watch-unsupported="" hidden="">
+            <span class="empty-glyph" data-icon="tv" aria-hidden="true"></span>
             <p class="empty-title" data-i18n="No video here">No video here</p>
-            <p class="empty-copy" data-i18n="Open a public YouTube video or Short in this window and the panel picks it up automatically.">Open a public YouTube video or Short in this window and the panel picks it up automatically.</p>
+            <p class="copy" data-i18n="Open a public YouTube video or Short in this window and the panel picks it up automatically.">Open a public YouTube video or Short in this window and the panel picks it up automatically.</p>
           </div>
 
-
-          <button type="button" class="link-button watch-back" data-action="back-transcript" hidden="" data-i18n="← Back to transcript">← Back to transcript</button>
-
-          <!-- Setup: languages, layers, generate. -->
-          <div class="watch-setup" data-watch-setup="" hidden="">
-            <h2 data-i18n="Generate subtitles">Generate subtitles</h2>
-            <div class="card">
-              <p class="card-label" data-i18n="Languages">Languages</p>
-              <div class="pair-row">
-                <div class="pair" data-language-pair="">
-                  <span class="pair-lang"><span class="pair-code" data-pair-source-code=""></span><span class="pair-name" data-pair-source-name="">—</span></span>
-                  <span class="pair-arrow" aria-hidden="true">→</span>
-                  <span class="pair-lang"><span class="pair-code" data-pair-target-code=""></span><span class="pair-name" data-pair-target-name="">—</span></span>
-                </div>
-                <button type="button" class="link-button" data-action="toggle-languages" aria-expanded="false" data-i18n="Change">Change</button>
-              </div>
-              <div class="language-expand" data-language-expand="" hidden="">
-                <div class="language-picker" data-language-picker="source">
-                  <label class="field">
-                    <span data-i18n="Video language">Video language</span>
-                    <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled="" data-i18n-placeholder="Search languages">
-                  </label>
-                  <div class="selected-language" data-source-language-selected=""></div>
-                  <div class="language-options" data-source-language-list="" role="listbox" aria-label="Video language" data-i18n-aria-label="Video language"></div>
-                </div>
-                <div class="language-picker" data-language-picker="target">
-                  <label class="field">
-                    <span data-i18n="Translation language">Translation language</span>
-                    <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled="" data-i18n-placeholder="Search languages">
-                  </label>
-                  <div class="selected-language" data-target-language-selected=""></div>
-                  <div class="language-options" data-target-language-list="" role="listbox" aria-label="Translation language" data-i18n-aria-label="Translation language"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="card">
-              <p class="card-label" data-i18n="Layers">Layers</p>
-              <div class="chips">
-                <label class="chip">
-                  <input type="checkbox" name="showTranslation" disabled="">
-                  <span data-i18n="Translation">Translation</span>
-                </label>
-                <label class="chip">
-                  <input type="checkbox" name="showRomanization" disabled="">
-                  <span data-i18n="Romanization">Romanization</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="card">
-              <fieldset class="ai-source-picker">
-                <legend class="card-label" data-i18n="AI billing">AI billing</legend>
-                <label><input type="radio" name="aiSource" value="api" checked disabled><span data-i18n="API keys">API keys</span></label>
-                <label><input type="radio" name="aiSource" value="codex" disabled><span data-i18n="Codex credits">Codex credits</span></label>
-                <label><input type="radio" name="aiSource" value="claude" disabled><span data-i18n="Claude subscription">Claude subscription</span></label>
-              </fieldset>
-              <div data-api-options>
-              <label class="row">
-                <span class="row-key" data-i18n="AI model">AI model</span>
-                <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
-                  <option value="openai">OpenAI</option>
-                  <option value="cerebras">Cerebras</option>
-                  <option value="anthropic">Claude API</option>
-                </select>
-              </label>
-              <p id="ai-luna-description" class="microcopy"><strong data-i18n="OpenAI:">OpenAI:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
-              <p id="ai-cerebras-description" class="microcopy"><strong data-i18n="Cerebras:">Cerebras:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
-              <div data-claude-api-options hidden>
-                <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeApiModel" disabled></select></label>
-                <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" name="claudeApiFastMode" aria-describedby="claude-api-fast-help" disabled></label>
-                <p id="claude-api-fast-help" class="microcopy" data-i18n="Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.">Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.</p>
-              </div>
-              </div>
-              <div data-codex-options hidden>
-                <label class="field"><span data-i18n="Codex model">Codex model</span><select name="codexModel" disabled></select></label>
-                <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" name="codexFastMode" aria-describedby="codex-fast-help" disabled></label>
-                <p id="codex-fast-help" class="microcopy" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</p>
-                <p class="microcopy" data-codex-readiness role="status"></p>
-              </div>
-              <div data-claude-options hidden>
-                <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeModel" disabled></select></label>
-              </div>
-              <p class="microcopy" data-ai-billing></p>
-              <p id="ai-provider-help" class="microcopy" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
-            </div>
-
-            <button type="button" class="btn-primary" data-action="generate" disabled="" data-i18n="Generate subtitles">Generate subtitles</button>
-            <p class="microcopy" data-generate-note=""></p>
+          <!-- Generate again / Lyric correction / progress open as screens with a Back header. -->
+          <div class="screen-head" data-screen-head hidden="">
+            <button type="button" class="icon-btn" data-action="back-transcript" aria-label="Back to transcript" title="Back to transcript" data-i18n-aria-label="Back to transcript" data-i18n-title="Back to transcript" data-icon="back"></button>
+            <h2 data-screen-title></h2>
           </div>
 
-          <!-- Generating / replacing: one progress surface with named stages. -->
-          <p class="status-banner" data-correction-sync-error="" role="status" hidden=""></p>
-          <div class="progress-summary" data-progress-summary="" hidden=""><span data-progress-summary-label="" role="status"></span><button type="button" class="link-button" data-action="view-progress" data-i18n="View progress">View progress</button></div>
-          <div class="card" data-progress="" hidden="">
-            <p class="card-label" id="progress-label" data-progress-label="" data-i18n="Generating">Generating</p>
-            <p class="pct"><span data-progress-percent="" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span><small data-progress-activity="" aria-live="polite" data-i18n="standard queue">standard queue</small></p>
+          <!-- Setup: three summary rows and one button. -->
+          <div class="watch-setup screen" data-watch-setup="" hidden="">
+            <div class="rows">
+              <button type="button" class="row link-row" data-action="open-sheet" data-sheet="languages">
+                <span class="row-key" data-i18n="Languages">Languages</span>
+                <span class="row-value" data-language-summary>—</span>
+                <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+              </button>
+              <div class="row">
+                <span class="row-key" data-i18n="Show">Show</span>
+                <span class="chips">
+                  <label class="chip"><input type="checkbox" name="showTranslation" disabled=""><span class="chip-check" data-icon="check" aria-hidden="true"></span><span data-i18n="Translation">Translation</span></label>
+                  <label class="chip"><input type="checkbox" name="showRomanization" disabled=""><span class="chip-check" data-icon="check" aria-hidden="true"></span><span data-i18n="Romanization">Romanization</span></label>
+                </span>
+              </div>
+              <button type="button" class="row link-row" data-action="open-sheet" data-sheet="ai">
+                <span class="row-key" data-i18n="AI">AI</span>
+                <span class="row-value" data-ai-summary>—</span>
+                <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+            <div class="setup-go">
+              <button type="button" class="btn-primary go" data-action="generate" disabled="" data-i18n="Generate subtitles">Generate subtitles</button>
+              <p class="note" data-ai-billing></p>
+              <p class="note warn" data-generate-note=""></p>
+            </div>
+          </div>
+
+          <!-- Generating / replacing: one progress card. -->
+          <div class="progress-summary" data-progress-summary="" hidden="">
+            <span class="pulse" aria-hidden="true"></span>
+            <span data-progress-summary-label="" role="status"></span>
+            <button type="button" class="link-button" data-action="view-progress" data-i18n="View progress">View progress</button>
+          </div>
+          <div class="progress screen" data-progress="" hidden="">
+            <div class="progress-top">
+              <p class="progress-label" id="progress-label" data-progress-label="" data-i18n="Generating">Generating</p>
+              <span class="pct" data-progress-percent="" role="progressbar" aria-labelledby="progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</span>
+            </div>
             <div class="progress-bar" aria-hidden="true"><span data-progress-bar=""></span></div>
+            <p class="progress-activity"><span class="pulse" aria-hidden="true"></span><span data-progress-activity="" aria-live="polite" data-i18n="standard queue">standard queue</span></p>
             <ol class="stages" data-progress-stages="" aria-label="Generation stages" data-i18n-aria-label="Generation stages"></ol>
-            <p class="microcopy" data-progress-copy="" data-i18n="Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.">Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
-            <p class="microcopy" data-correction-cancel-error="" role="alert" hidden=""></p>
-            <button type="button" class="btn-ghost" data-action="cancel-lyrics-correction" hidden="" data-i18n="Cancel replacement">Cancel replacement</button>
-            <button type="button" class="btn-ghost" data-action="cancel-generation" hidden="" data-i18n="Cancel generation">Cancel generation</button>
+            <p class="meta" data-progress-copy="" data-i18n="Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.">Subtitles appear on the video as each batch finishes. You can close this panel — generation keeps going.</p>
+            <p class="error-copy" data-correction-cancel-error="" role="alert" hidden=""></p>
+            <div class="progress-actions">
+              <button type="button" class="btn" data-action="cancel-lyrics-correction" hidden="" data-i18n="Cancel replacement">Cancel replacement</button>
+              <button type="button" class="btn" data-action="cancel-generation" hidden="" data-i18n="Cancel generation">Cancel generation</button>
+            </div>
+          </div>
+
+          <!-- Lyric correction screen. -->
+          <div class="lyrics-screen screen" data-lyrics-edit-panel="" hidden="">
+            <div data-lyrics-replace-panel="">
+              <form class="lyrics-correction-form stack" data-lyrics-correction-form="">
+                <p id="lyrics-paste-instructions" class="copy" data-i18n="Paste the full lyrics for this version of the song, in order. Include repeats. Leave out tags like [Chorus].">Paste the full lyrics for this version of the song, in order. Include repeats. Leave out tags like [Chorus].</p>
+                <details class="tips">
+                  <summary><span data-icon="chevron" aria-hidden="true"></span><span data-i18n="What happens next">What happens next</span></summary>
+                  <p id="lyrics-paste-warning" class="copy" data-i18n="This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.</p>
+                </details>
+                <label class="field">
+                  <span data-i18n="Lyrics">Lyrics</span>
+                  <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea="" rows="8" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error" data-i18n-placeholder="Paste the full lyrics without section tags"></textarea>
+                </label>
+                <div class="hstack">
+                  <span class="meta" id="lyrics-correction-count" data-lyrics-correction-count="" data-i18n="0 / 25,000 characters">0 / 25,000 characters</span>
+                  <span class="spacer"></span>
+                  <button type="button" class="btn sm" data-action="toggle-known-lyrics" aria-controls="panel-known-lyrics"><span data-icon="book" aria-hidden="true"></span><span data-i18n="Known Lyrics">Known Lyrics</span></button>
+                </div>
+                <div class="rows flush">
+                  <button type="button" class="row link-row" data-action="open-sheet" data-sheet="lyrics-ai">
+                    <span class="row-key" data-i18n="AI">AI</span>
+                    <span class="row-value" data-lyrics-ai-summary></span>
+                    <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+                  </button>
+                </div>
+                <p class="error-copy" id="lyrics-ai-readiness-inline" data-lyrics-ai-readiness-inline hidden></p>
+                <p id="lyrics-correction-error" class="error-copy" data-lyrics-correction-error="" role="status" aria-live="polite" hidden=""></p>
+                <div class="confirm-box" data-lyrics-confirmation-box hidden="">
+                  <p class="lyrics-confirm" data-lyrics-confirmation="" role="status" aria-live="polite"></p>
+                  <div class="hstack">
+                    <button type="button" class="btn danger-solid" data-action="confirm-lyrics-correction" hidden="" data-i18n="Replace entire track">Replace entire track</button>
+                    <button type="button" class="btn" data-action="cancel-lyrics-confirmation" hidden="" data-i18n="Cancel">Cancel</button>
+                  </div>
+                </div>
+                <button type="submit" class="btn-primary" data-action="apply-lyrics-correction" data-i18n="Continue">Continue</button>
+                <p id="lyrics-correction-help" class="error-copy" data-lyrics-correction-status="" role="status" aria-live="polite"></p>
+              </form>
+            </div>
           </div>
 
           <!-- Ready: the transcript is the landing state. -->
-          <div class="watch-ready" data-watch-ready="" hidden="">
-              <label class="generation-picker"><span data-i18n="Saved generation">
-                Saved generation
-                </span><select data-generation-select="" aria-describedby="generation-status" disabled=""></select>
-              </label>
-              <p id="generation-status" class="microcopy" data-generation-status="" role="status"></p>
-              <button type="button" class="link-button" data-generation-refresh="" data-i18n="Refresh saved generations">Refresh saved generations</button>
-
-            <div class="ready-toolbar">
-              <div class="transcript-actions">
-                <button type="button" class="btn-ghost" data-action="toggle-setup" data-i18n="Generate again">Generate again</button>
-                <button type="button" class="btn-ghost" data-action="toggle-lyrics-edit" data-i18n="Lyric correction">Lyric correction</button>
-                <button type="button" class="btn-ghost" data-action="toggle-known-lyrics" aria-expanded="false" aria-controls="panel-known-lyrics" data-i18n="Known Lyrics">Known Lyrics</button>
+          <div class="watch-ready screen" data-watch-ready="" hidden="">
+            <div class="sticky ready-toolbar">
+              <div class="toolbar">
+                <button type="button" class="track-btn" data-action="track-menu" aria-haspopup="menu" aria-expanded="false" aria-describedby="generation-status" aria-label="Saved tracks" data-i18n-aria-label="Saved tracks">
+                  <b data-track-pair>—</b><span class="track-sub" data-track-model></span><span data-icon="down" aria-hidden="true"></span>
+                </button>
+                <label class="searchbox" data-search-box hidden>
+                  <span data-icon="search" aria-hidden="true"></span>
+                  <input type="search" data-transcript-search="" placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" data-i18n-aria-label="Search transcript" data-i18n-placeholder="Search transcript…">
+                </label>
+                <button type="button" class="icon-btn" data-action="toggle-search" aria-label="Search transcript" title="Search transcript" aria-expanded="false" data-i18n-aria-label="Search transcript" data-i18n-title="Search transcript" data-icon="search"></button>
+                <button type="button" class="icon-btn" data-action="tools-menu" aria-haspopup="menu" aria-expanded="false" aria-label="More tools" title="More tools" data-i18n-aria-label="More tools" data-i18n-title="More tools" data-icon="more"></button>
               </div>
-              <section id="panel-known-lyrics" aria-labelledby="known-lyrics-heading" hidden>
-                <h2 id="known-lyrics-heading" data-i18n="Known Lyrics">Known Lyrics</h2>
-                <p class="card-copy" data-i18n="Save lyrics in this browser. Copy them into Lyric correction whenever you need them.">Save lyrics in this browser. Copy them into Lyric correction whenever you need them.</p>
-                <details class="card known-lyrics-create" data-known-lyrics-create>
-                  <summary data-i18n="Add lyrics">Add lyrics</summary>
-                  <form class="lyrics-correction-form" data-known-lyrics-form>
-                    <label class="field"><span data-i18n="Song title">Song title</span><input type="text" name="title" maxlength="200" required></label>
-                    <label class="field"><span data-i18n="Lyrics">Lyrics</span><textarea name="lyrics" rows="8" maxlength="25000" required></textarea></label>
-                    <button class="btn-primary" type="submit" data-i18n="Save lyrics">Save lyrics</button>
-                  </form>
-                </details>
-                <p data-known-lyrics-status role="status" aria-live="polite"></p>
-                <div data-known-lyrics-list></div>
-              </section>
-              <label class="search-field">
-                <input type="search" data-transcript-search="" placeholder="Search transcript…" autocomplete="off" aria-label="Search transcript" data-i18n-aria-label="Search transcript" data-i18n-placeholder="Search transcript…">
-              </label>
-            </div>
-            <div class="status-banner correction-status" data-correction-terminal-status="" role="status" aria-live="polite" hidden="">
-              <span data-correction-terminal-message=""></span>
-              <button type="button" class="status-banner-close" data-action="dismiss-correction-status" aria-label="Dismiss replacement status" data-i18n-aria-label="Dismiss replacement status">×</button>
-            </div>
-            <div class="card" data-lyrics-edit-panel="" hidden="">
-              <h2 data-i18n="Replace full lyrics">Replace full lyrics</h2>
-              <div data-lyrics-replace-panel="">
-                <form class="lyrics-correction-form" data-lyrics-correction-form="">
-                  <p id="lyrics-paste-instructions" class="card-copy" data-i18n="For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.">For best results, paste the full lyrics for this version of the song, in order. Include repeated verses and choruses, and remove tags such as [Chorus], [Verse], and [Bridge]. Paste only the words that are sung.</p>
-                  <p id="lyrics-paste-warning" class="microcopy" data-i18n="This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.">This replaces the entire transcript. Wrong, incomplete, or nonsense lyrics can put words at the wrong times. If that happens, use Generate again to create fresh subtitles.</p>
-                  <div data-lyrics-ai-options>
-                    <fieldset class="ai-source-picker">
-                      <legend class="card-label" data-i18n="AI billing">AI billing</legend>
-                      <label><input type="radio" name="lyricsAiSource" value="api"><span data-i18n="API keys">API keys</span></label>
-                      <label><input type="radio" name="lyricsAiSource" value="codex"><span data-i18n="Codex credits">Codex credits</span></label>
-                      <label><input type="radio" name="lyricsAiSource" value="claude"><span data-i18n="Claude subscription">Claude subscription</span></label>
-                    </fieldset>
-                    <div data-lyrics-api-options hidden>
-                      <label class="row"><span class="row-key" data-i18n="AI model">AI model</span><select data-lyrics-ai-provider><option value="openai">OpenAI</option><option value="cerebras">Cerebras</option><option value="anthropic">Claude API</option></select></label>
-                      <div data-lyrics-claude-api-options hidden>
-                        <label class="field"><span data-i18n="Claude model">Claude model</span><select data-lyrics-claude-api-model></select></label>
-                        <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" data-lyrics-claude-api-fast aria-describedby="lyrics-claude-api-fast-help"></label>
-                        <p class="microcopy" id="lyrics-claude-api-fast-help" data-i18n="Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.">Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.</p>
-                      </div>
-                    </div>
-                    <div data-lyrics-claude-options hidden>
-                      <label class="field"><span data-i18n="Claude model">Claude model</span><select data-lyrics-claude-model></select></label>
-                    </div>
-                    <div data-lyrics-codex-options hidden>
-                      <label class="field"><span data-i18n="Codex model">Codex model</span><select data-lyrics-ai-model aria-describedby="lyrics-ai-readiness"></select></label>
-                      <label class="row"><span class="row-key" data-i18n="Fast mode">Fast mode</span><input type="checkbox" class="switch" data-lyrics-ai-fast aria-describedby="lyrics-ai-fast-help"></label>
-                      <p class="microcopy" id="lyrics-ai-fast-help" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</p>
-                    </div>
-                    <p class="microcopy" data-lyrics-ai-summary></p>
-                    <p class="microcopy" data-i18n="This choice applies only to this lyrics correction.">This choice applies only to this lyrics correction.</p>
-                    <p class="microcopy" id="lyrics-ai-readiness" data-lyrics-ai-readiness role="status" hidden></p>
-                  </div>
-                  <label class="field">
-                    <span data-i18n="Lyrics">Lyrics</span>
-                    <textarea id="lyrics-correction-textarea" data-lyrics-correction-textarea="" rows="6" placeholder="Paste the full lyrics without section tags" aria-describedby="lyrics-paste-instructions lyrics-paste-warning lyrics-correction-help lyrics-correction-count lyrics-correction-error" data-i18n-placeholder="Paste the full lyrics without section tags"></textarea>
-                  </label>
-                  <p id="lyrics-correction-error" class="microcopy" data-lyrics-correction-error="" role="status" aria-live="polite" hidden=""></p>
-                  <p class="lyrics-confirm" data-lyrics-confirmation="" hidden="" role="status" aria-live="polite"></p>
-                  <div class="lyrics-correction-footer">
-                    <span id="lyrics-correction-count" data-lyrics-correction-count="" data-i18n="0 / 25,000 characters">0 / 25,000 characters</span>
-                    <span class="lyrics-correction-actions">
-                      <button type="submit" class="btn-primary" data-action="apply-lyrics-correction" data-i18n="Continue">Continue</button>
-                      <button type="button" class="btn-primary" data-action="confirm-lyrics-correction" hidden="" data-i18n="Replace entire track">Replace entire track</button>
-                      <button type="button" class="btn-ghost" data-action="cancel-lyrics-confirmation" hidden="" data-i18n="Cancel">Cancel</button>
-                    </span>
-                  </div>
-                  <p id="lyrics-correction-help" class="microcopy" data-lyrics-correction-status="" role="status" aria-live="polite"></p>
-                </form>
+              <div class="studybar" role="group" aria-label="Blur on video" data-i18n-aria-label="Blur on video">
+                <span class="micro" data-i18n="Blur">Blur</span>
+                <label class="chip sm"><input type="checkbox" name="blurSourceWords" disabled=""><span class="chip-check" data-icon="check" aria-hidden="true"></span><span data-i18n="Words">Words</span></label>
+                <label class="chip sm" data-blur-romanization-chip><input type="checkbox" name="blurRomanization" disabled=""><span class="chip-check" data-icon="check" aria-hidden="true"></span><span data-i18n="Romaji">Romaji</span></label>
+                <label class="chip sm"><input type="checkbox" name="blurTranslation" disabled=""><span class="chip-check" data-icon="check" aria-hidden="true"></span><span data-i18n="Translation">Translation</span></label>
+                <span class="spacer"></span>
+                <button type="button" class="chip sm mono" data-action="timing-menu" aria-haspopup="dialog" aria-expanded="false" aria-label="Subtitle timing" title="Subtitle timing" data-i18n-aria-label="Subtitle timing" data-i18n-title="Subtitle timing"><span data-icon="clock" aria-hidden="true"></span><output data-timing-offset="">+0.0s</output></button>
               </div>
             </div>
-            <p class="microcopy" data-quick-fix-status="" role="status" aria-live="polite"></p>
+            <p id="generation-status" class="sr-only" data-generation-status="" role="status"></p>
             <div class="transcript-list" data-transcript-list="" role="list" aria-label="Generated cues" data-i18n-aria-label="Generated cues"></div>
             <p class="transcript-status" data-transcript-status="" role="status" aria-live="polite"></p>
           </div>
         </section>
 
-        <!-- ============================= STUDY ============================= -->
-        <section class="view" data-panel="study" id="panel-study" role="tabpanel" aria-labelledby="tab-study" tabindex="0">
-          <div class="card">
-            <p class="card-label" data-i18n="Caption display">Caption display</p>
+        <!-- ============================ HISTORY ============================ -->
+        <section class="view" data-panel="history" id="panel-history" role="tabpanel" aria-labelledby="tab-history" tabindex="-1" hidden="">
+          <div class="history" data-history>
+            <div class="view-head">
+              <h1 class="view-title" data-i18n="History">History</h1>
+              <button type="button" class="btn sm" data-action="history-select" aria-pressed="false" data-i18n="Select">Select</button>
+            </div>
+            <p class="error-copy pad" data-jobs-error="" hidden=""></p>
+            <div class="jobs-list" data-jobs-list=""></div>
+            <div class="bulk-bar" data-history-bulk hidden="">
+              <button type="button" class="btn sm" data-action="history-select-all" data-i18n="Select all">Select all</button>
+              <span class="bulk-count" data-history-count role="status"></span>
+              <button type="button" class="btn sm danger-solid" data-action="history-delete" disabled=""><span data-icon="trash" aria-hidden="true"></span><span data-history-delete-label data-i18n="Delete">Delete</span></button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================ SETTINGS =========================== -->
+        <section class="view" data-panel="settings" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" tabindex="-1" hidden="">
+          <div class="group">
+            <h2 class="group-label" data-i18n="AI providers">AI providers</h2>
+            <form id="instance-settings" data-instance-settings-form class="instance-settings-form">
+              <div class="rows" data-provider-fields></div>
+              <p class="meta pad" data-i18n="Keys are saved on your backend. Provider usage is billed to your keys.">Keys are saved on your backend. Provider usage is billed to your keys.</p>
+              <p class="pad status-line" role="status" aria-live="polite" data-instance-settings-status></p>
+            </form>
+            <div class="rows">
+              <details class="prow" data-codex-account>
+                <summary class="row">
+                  <span class="row-key"><b data-i18n="Codex">Codex</b><small data-i18n="ChatGPT sign-in">ChatGPT sign-in</small></span>
+                  <span class="spacer"></span>
+                  <span class="row-status" data-codex-badge></span>
+                  <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="prow-body">
+                  <p class="copy" data-i18n="Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.">Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.</p>
+                  <p class="status-line" role="status" aria-live="polite" data-codex-status></p>
+                  <div class="stack" data-codex-authorization hidden>
+                    <p class="copy" data-i18n="Finish signing in in the browser tab, then return here. If no tab opened, use the link below.">Finish signing in in the browser tab, then return here. If no tab opened, use the link below.</p>
+                    <a class="btn sm" data-codex-auth-link target="_blank" rel="noopener noreferrer" data-i18n="Open ChatGPT sign-in">Open ChatGPT sign-in</a>
+                  </div>
+                  <div class="hstack">
+                    <button type="button" class="btn sm" data-codex-connect disabled data-i18n="Sign in with Codex">Sign in with Codex</button>
+                    <button type="button" class="btn sm danger" data-codex-disconnect hidden data-i18n="Disconnect Codex">Disconnect Codex</button>
+                    <button type="button" class="btn sm" data-codex-refresh data-i18n="Refresh">Refresh</button>
+                  </div>
+                </div>
+              </details>
+              <details class="prow" data-claude-account>
+                <summary class="row">
+                  <span class="row-key"><b data-i18n="Claude subscription">Claude subscription</b><small data-i18n="Claude sign-in">Claude sign-in</small></span>
+                  <span class="spacer"></span>
+                  <span class="row-status" data-claude-badge></span>
+                  <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="prow-body">
+                  <p class="copy" data-i18n="Sign in with your Claude subscription to use Claude for text analysis. Audio transcription still uses your ElevenLabs API key.">Sign in with your Claude subscription to use Claude for text analysis. Audio transcription still uses your ElevenLabs API key.</p>
+                  <p class="status-line" role="status" aria-live="polite" data-claude-status></p>
+                  <form class="stack" data-claude-authorization hidden>
+                    <p class="copy" data-i18n="Sign in on the Claude page, copy the code it shows, and paste it here.">Sign in on the Claude page, copy the code it shows, and paste it here.</p>
+                    <a class="btn sm" data-claude-auth-link target="_blank" rel="noopener noreferrer" data-i18n="Open Claude sign-in">Open Claude sign-in</a>
+                    <label class="field"><span data-i18n="Sign-in code">Sign-in code</span><input type="text" name="claudeCode" autocomplete="off" spellcheck="false" maxlength="4096" required></label>
+                    <div class="hstack"><button type="submit" class="btn sm" data-i18n="Submit code">Submit code</button></div>
+                  </form>
+                  <div class="hstack">
+                    <button type="button" class="btn sm" data-claude-connect disabled data-i18n="Sign in with Claude">Sign in with Claude</button>
+                    <button type="button" class="btn sm danger" data-claude-disconnect hidden data-i18n="Disconnect Claude">Disconnect Claude</button>
+                    <button type="button" class="btn sm" data-claude-refresh data-i18n="Refresh">Refresh</button>
+                  </div>
+                </div>
+              </details>
+              <button type="button" class="row link-row" data-action="open-sheet" data-sheet="ai">
+                <span class="row-key"><b data-i18n="AI for new videos">AI for new videos</b></span>
+                <span class="row-value" data-ai-summary-settings>—</span>
+                <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="group">
+            <h2 class="group-label" data-i18n="Storage">Storage</h2>
             <div class="rows">
               <label class="row">
-                <span class="row-key" data-i18n="Show overlay">Show overlay</span>
+                <span class="row-key grow"><b data-i18n="Delete saved tracks after days (blank keeps forever)">Delete saved tracks after days (blank keeps forever)</b><small data-i18n="Applies to existing and future tracks from their generation date.">Applies to existing and future tracks from their generation date.</small></span>
+                <input class="num" type="number" min="1" max="36500" step="1" name="retentionDays" form="instance-settings" placeholder="∞">
+              </label>
+              <div class="row">
+                <span class="spacer"></span>
+                <button type="submit" class="btn sm" form="instance-settings" data-i18n="Save settings">Save settings</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="group">
+            <h2 class="group-label" data-i18n="Captions on the video">Captions on the video</h2>
+            <div class="rows">
+              <label class="row">
+                <span class="row-key grow"><b data-i18n="Show overlay">Show overlay</b></span>
                 <input type="checkbox" class="switch" name="overlayVisible" disabled="">
               </label>
               <label class="row">
-                <span class="row-key" data-i18n="Attach subtitles to video">Attach subtitles to video</span>
+                <span class="row-key grow"><b data-i18n="Attach subtitles to video">Attach subtitles to video</b><small id="overlay-movement-help" data-i18n="Uncheck to drag subtitles around the page. Check again to snap them back to the video.">Uncheck to drag subtitles around the page. Check again to snap them back to the video.</small></span>
                 <input type="checkbox" class="switch" name="overlayAttachedToVideo" aria-describedby="overlay-movement-help" disabled="">
               </label>
+              <div class="row">
+                <span class="row-key grow"><b data-i18n="Position">Position</b></span>
+                <span class="seg" role="group" aria-label="Position" data-i18n-aria-label="Position" data-setting="overlayPosition">
+                  <button type="button" data-value="bottom" aria-pressed="false" data-i18n="Bottom">Bottom</button>
+                  <button type="button" data-value="top" aria-pressed="false" data-i18n="Top">Top</button>
+                  <button type="button" data-value="compact" aria-pressed="false" data-i18n="Compact">Compact</button>
+                </span>
+              </div>
+              <div class="row">
+                <span class="row-key grow"><b data-i18n="Caption size">Caption size</b></span>
+                <span class="seg" role="group" aria-label="Caption size" data-i18n-aria-label="Caption size" data-setting="captionFontSize">
+                  <button type="button" data-value="small" aria-pressed="false" aria-label="Small" data-i18n-aria-label="Small">S</button>
+                  <button type="button" data-value="medium" aria-pressed="false" aria-label="Medium" data-i18n-aria-label="Medium">M</button>
+                  <button type="button" data-value="large" aria-pressed="false" aria-label="Large" data-i18n-aria-label="Large">L</button>
+                </span>
+              </div>
+              <div class="row">
+                <span class="row-key grow"><b data-i18n="Density">Density</b></span>
+                <span class="seg" role="group" aria-label="Density" data-i18n-aria-label="Density" data-setting="captionDensity">
+                  <button type="button" data-value="comfortable" aria-pressed="false" data-i18n="Comfortable">Comfortable</button>
+                  <button type="button" data-value="compact" aria-pressed="false" data-i18n="Compact">Compact</button>
+                </span>
+              </div>
               <label class="row">
-                <span class="row-key" data-i18n="Position">Position</span>
-                <select name="overlayPosition" disabled="">
-                  <option value="bottom" data-i18n="Bottom">Bottom</option>
-                  <option value="top" data-i18n="Top">Top</option>
-                  <option value="compact" data-i18n="Compact">Compact</option>
-                </select>
+                <span class="row-key grow"><b data-i18n="High contrast">High contrast</b></span>
+                <input type="checkbox" class="switch" name="captionContrastHigh" disabled="">
               </label>
               <label class="row">
-                <span class="row-key" data-i18n="Caption size">Caption size</span>
-                <select name="captionFontSize" disabled="">
-                  <option value="small" data-i18n="Small">Small</option>
-                  <option value="medium" data-i18n="Medium">Medium</option>
-                  <option value="large" data-i18n="Large">Large</option>
-                </select>
-              </label>
-              <label class="row">
-                <span class="row-key" data-i18n="Density">Density</span>
-                <select name="captionDensity" disabled="">
-                  <option value="comfortable" data-i18n="Comfortable">Comfortable</option>
-                  <option value="compact" data-i18n="Compact">Compact</option>
-                </select>
-              </label>
-              <label class="row">
-                <span class="row-key" data-i18n="Contrast">Contrast</span>
-                <select name="captionContrastTheme" disabled="">
-                  <option value="default" data-i18n="Default">Default</option>
-                  <option value="high" data-i18n="High contrast">High contrast</option>
-                </select>
-              </label>
-              <label class="row">
-                <span class="row-key" data-i18n="Word gloss">Word gloss</span>
+                <span class="row-key grow"><b data-i18n="Word gloss">Word gloss</b></span>
                 <input type="checkbox" class="switch" name="showGloss" disabled="">
               </label>
             </div>
-            <p class="microcopy" id="overlay-movement-help" data-i18n="Uncheck to drag subtitles around the page. Check again to snap them back to the video.">Uncheck to drag subtitles around the page. Check again to snap them back to the video.</p>
-            <div class="timing">
-              <span class="timing-label" data-i18n="Timing">Timing</span>
-              <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled="" aria-label="Subtitle timing offset" data-i18n-aria-label="Subtitle timing offset">
-              <input type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled="" aria-label="Subtitle timing offset seconds" data-i18n-aria-label="Subtitle timing offset seconds">
-              <output data-timing-offset="">0.0s</output>
-              <button type="button" class="link-button" data-action="reset-timing" disabled="" data-i18n="Reset">Reset</button>
-            </div>
           </div>
 
-          <div class="card">
-            <p class="card-label" data-i18n="Active recall">Active recall</p>
+          <div class="group">
+            <h2 class="group-label" data-i18n="Study">Study</h2>
             <div class="rows">
               <label class="row">
-                <span class="row-key" data-i18n="Blur source words">Blur source words</span>
-                <input type="checkbox" class="switch" name="blurSourceWords" disabled="">
-              </label>
-              <label class="row">
-                <span class="row-key" data-i18n="Blur romanization">Blur romanization</span>
-                <input type="checkbox" class="switch" name="blurRomanization" disabled="">
-              </label>
-              <label class="row">
-                <span class="row-key" data-i18n="Blur translation">Blur translation</span>
-                <input type="checkbox" class="switch" name="blurTranslation" disabled="">
-              </label>
-              <label class="row">
-                <span class="row-key" data-i18n="Pause video on word hover">Pause video on word hover</span>
+                <span class="row-key grow"><b data-i18n="Pause video on word hover">Pause video on word hover</b></span>
                 <input type="checkbox" class="switch" name="pauseOnWordHover" disabled="">
               </label>
-            </div>
-          </div>
-
-          <div class="card">
-            <p class="card-label" data-i18n="Keyboard shortcuts">Keyboard shortcuts</p>
-            <div class="rows">
               <label class="row">
-                <span class="row-key" data-i18n="Shortcuts enabled">Shortcuts enabled</span>
+                <span class="row-key grow"><b data-i18n="Shortcuts enabled">Shortcuts enabled</b></span>
                 <input type="checkbox" class="switch" name="keyboardShortcutsEnabled" disabled="">
               </label>
+              <details class="prow">
+                <summary class="row"><span class="row-key grow"><b data-i18n="Keyboard shortcuts">Keyboard shortcuts</b></span><span class="chev" data-icon="chevron" aria-hidden="true"></span></summary>
+                <div class="prow-body shortcut-list" data-shortcut-help="" aria-label="Keyboard shortcuts" data-i18n-aria-label="Keyboard shortcuts"></div>
+              </details>
             </div>
-            <div class="shortcut-list" data-shortcut-help="" aria-label="Keyboard shortcuts" data-i18n-aria-label="Keyboard shortcuts"></div>
           </div>
 
-          <div class="card">
-            <p class="card-label" data-i18n="This device">This device</p>
+          <div class="group">
+            <h2 class="group-label" data-i18n="Language">Language</h2>
             <div class="rows">
-              <div class="row">
-                <span class="row-key" data-i18n="Language defaults">Language defaults</span>
+              <label class="row">
+                <span class="row-key grow"><b data-i18n="Interface language">Interface language</b></span>
+                <select class="inline-select" data-interface-language aria-label="Interface language" data-i18n-aria-label="Interface language"></select>
+              </label>
+              <button type="button" class="row link-row" data-action="open-sheet" data-sheet="languages">
+                <span class="row-key"><b data-i18n="Language defaults">Language defaults</b></span>
                 <span class="row-value" data-settings-language-summary="" data-i18n="Loading">Loading</span>
-              </div>
+                <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+              </button>
             </div>
-            <button type="button" class="btn-ghost danger" data-action="clear-state" disabled="" data-i18n="Clear local state">Clear local state</button>
           </div>
-        </section>
 
-        <!-- ============================ HISTORY ============================ -->
-        <section class="view" data-panel="history" id="panel-history" role="tabpanel" aria-labelledby="tab-history" tabindex="0">
-          <div class="jobs-list" data-jobs-list=""></div>
-          <p class="jobs-error" data-jobs-error="" hidden=""></p>
-        </section>
+          <div class="group">
+            <h2 class="group-label" data-i18n="This device">This device</h2>
+            <div class="rows">
+              <button type="button" class="row link-row danger-row" data-action="clear-state" disabled="">
+                <span class="row-key grow"><b data-i18n="Clear local state">Clear local state</b></span>
+                <span class="chev" data-icon="chevron" aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
 
-        <section class="view" data-panel="settings" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" tabindex="0">
-          <div class="card" data-codex-account>
-            <h2 data-i18n="Codex connection">Codex connection</h2>
-            <p class="microcopy" data-i18n="Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.">Sign in with ChatGPT to use Codex for text analysis. Audio transcription still uses your ElevenLabs API key.</p>
-            <p role="status" aria-live="polite" data-codex-status></p>
-            <div data-codex-authorization hidden>
-              <p class="microcopy" data-i18n="Finish signing in in the browser tab, then return here. If no tab opened, use the link below.">Finish signing in in the browser tab, then return here. If no tab opened, use the link below.</p>
-              <a class="btn-ghost" data-codex-auth-link target="_blank" rel="noopener noreferrer" data-i18n="Open ChatGPT sign-in">Open ChatGPT sign-in</a>
+          <div class="group">
+            <h2 class="group-label" data-i18n="Backend address">Backend address</h2>
+            <div class="rows">
+              <div class="row"><code class="mono-value" data-backend-url></code></div>
             </div>
-            <div class="codex-actions">
-              <button type="button" class="btn-primary" data-codex-connect disabled data-i18n="Sign in with Codex">Sign in with Codex</button>
-              <button type="button" class="btn-ghost" data-codex-disconnect hidden data-i18n="Disconnect Codex">Disconnect Codex</button>
-              <button type="button" class="btn-ghost" data-codex-refresh data-i18n="Refresh">Refresh</button>
-            </div>
+            <p class="meta pad" data-i18n="To use another server, build the extension with its backend address.">To use another server, build the extension with its backend address.</p>
           </div>
-          <div class="card" data-claude-account>
-            <h2 data-i18n="Claude connection">Claude connection</h2>
-            <p class="microcopy" data-i18n="Sign in with your Claude subscription to use Claude for text analysis. Audio transcription still uses your ElevenLabs API key.">Sign in with your Claude subscription to use Claude for text analysis. Audio transcription still uses your ElevenLabs API key.</p>
-            <p role="status" aria-live="polite" data-claude-status></p>
-            <form data-claude-authorization hidden>
-              <p class="microcopy" data-i18n="Sign in on the Claude page, copy the code it shows, and paste it here.">Sign in on the Claude page, copy the code it shows, and paste it here.</p>
-              <a class="btn-ghost" data-claude-auth-link target="_blank" rel="noopener noreferrer" data-i18n="Open Claude sign-in">Open Claude sign-in</a>
-              <label class="field"><span data-i18n="Sign-in code">Sign-in code</span><input type="text" name="claudeCode" autocomplete="off" spellcheck="false" maxlength="4096" required></label>
-              <button type="submit" class="btn-primary" data-i18n="Submit code">Submit code</button>
-            </form>
-            <div class="codex-actions">
-              <button type="button" class="btn-primary" data-claude-connect disabled data-i18n="Sign in with Claude">Sign in with Claude</button>
-              <button type="button" class="btn-ghost" data-claude-disconnect hidden data-i18n="Disconnect Claude">Disconnect Claude</button>
-              <button type="button" class="btn-ghost" data-claude-refresh data-i18n="Refresh">Refresh</button>
-            </div>
-          </div>
-          <form data-instance-settings-form class="instance-settings-form">
-            <div class="card">
-              <h2 data-i18n="Provider settings">Provider settings</h2>
-              <p class="microcopy" data-i18n="Keys are saved on your backend. Provider usage is billed to your keys.">Keys are saved on your backend. Provider usage is billed to your keys.</p>
-              <div data-provider-fields></div>
-              <button type="submit" class="btn-primary" data-i18n="Set">Set</button>
-              <p role="status" aria-live="polite" data-instance-settings-status></p>
-            </div>
-            <div class="card">
-              <label class="field"><span data-i18n="Delete saved tracks after days (blank keeps forever)">Delete saved tracks after days (blank keeps forever)</span><input type="number" min="1" max="36500" step="1" name="retentionDays"></label>
-              <p class="microcopy" data-i18n="Applies to existing and future tracks from their generation date.">Applies to existing and future tracks from their generation date.</p>
-              <button type="submit" class="btn-ghost" data-i18n="Save settings">Save settings</button>
-            </div>
-          </form>
-          <div class="card"><p class="card-label" data-i18n="Backend address">Backend address</p><code data-backend-url></code><p class="microcopy" data-i18n="To use another server, build the extension with its backend address.">To use another server, build the extension with its backend address.</p></div>
         </section>
       </main>
+
+      <!-- ============================= SHEETS ============================= -->
+      <section class="sheet" data-sheet-panel="languages" role="dialog" aria-modal="false" aria-labelledby="sheet-languages-title" hidden="">
+        <div class="sheet-head">
+          <button type="button" class="icon-btn" data-action="close-sheet" aria-label="Back" title="Back" data-i18n-aria-label="Back" data-i18n-title="Back" data-icon="back"></button>
+          <h2 id="sheet-languages-title" data-i18n="Languages">Languages</h2>
+        </div>
+        <div class="sheet-body">
+          <div class="language-picker" data-language-picker="source">
+            <label class="field">
+              <span data-i18n="Video language">Video language</span>
+              <input type="search" name="sourceLanguageSearch" placeholder="Search languages" autocomplete="off" disabled="" data-i18n-placeholder="Search languages">
+            </label>
+            <div class="selected-language" data-source-language-selected=""></div>
+            <div class="language-options" data-source-language-list="" role="listbox" aria-label="Video language" data-i18n-aria-label="Video language"></div>
+          </div>
+          <div class="language-picker" data-language-picker="target">
+            <label class="field">
+              <span data-i18n="Translation language">Translation language</span>
+              <input type="search" name="targetLanguageSearch" placeholder="Search languages" autocomplete="off" disabled="" data-i18n-placeholder="Search languages">
+            </label>
+            <div class="selected-language" data-target-language-selected=""></div>
+            <div class="language-options" data-target-language-list="" role="listbox" aria-label="Translation language" data-i18n-aria-label="Translation language"></div>
+          </div>
+          <button type="button" class="btn-primary" data-action="close-sheet" data-i18n="Done">Done</button>
+        </div>
+      </section>
+
+      <section class="sheet" data-sheet-panel="ai" role="dialog" aria-modal="false" aria-labelledby="sheet-ai-title" hidden="">
+        <div class="sheet-head">
+          <button type="button" class="icon-btn" data-action="close-sheet" aria-label="Back" title="Back" data-i18n-aria-label="Back" data-i18n-title="Back" data-icon="back"></button>
+          <h2 id="sheet-ai-title" data-i18n="AI">AI</h2>
+        </div>
+        <div class="sheet-body">
+          <fieldset class="ai-source-picker seg full">
+            <legend class="field-label" data-i18n="Pay with">Pay with</legend>
+            <label><input type="radio" name="aiSource" value="api" checked disabled><span data-i18n="API keys">API keys</span></label>
+            <label><input type="radio" name="aiSource" value="codex" disabled><span data-i18n="Codex credits">Codex credits</span></label>
+            <label><input type="radio" name="aiSource" value="claude" disabled><span data-i18n="Claude subscription">Claude subscription</span></label>
+          </fieldset>
+          <div class="stack" data-api-options>
+            <label class="field">
+              <span data-i18n="AI model">AI model</span>
+              <select name="aiProvider" aria-describedby="ai-luna-description ai-cerebras-description ai-provider-help" disabled="">
+                <option value="openai">OpenAI</option>
+                <option value="cerebras">Cerebras</option>
+                <option value="anthropic">Claude API</option>
+              </select>
+            </label>
+            <p id="ai-luna-description" class="copy"><strong data-i18n="OpenAI:">OpenAI:</strong><span data-i18n="Smarter, but slower. Recommended for languages that use non-Latin scripts."> Smarter, but slower. Recommended for languages that use non-Latin scripts.</span></p>
+            <p id="ai-cerebras-description" class="copy"><strong data-i18n="Cerebras:">Cerebras:</strong><span data-i18n="Blazing fast, but less capable with non-Latin text. Best for Latin-script languages."> Blazing fast, but less capable with non-Latin text. Best for Latin-script languages.</span></p>
+            <div class="stack" data-claude-api-options hidden>
+              <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeApiModel" disabled></select></label>
+              <label class="row inline-row"><span class="row-key grow"><b data-i18n="Fast mode">Fast mode</b><small id="claude-api-fast-help" data-i18n="Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.">Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.</small></span><input type="checkbox" class="switch" name="claudeApiFastMode" aria-describedby="claude-api-fast-help" disabled></label>
+            </div>
+          </div>
+          <div class="stack" data-codex-options hidden>
+            <label class="field"><span data-i18n="Codex model">Codex model</span><select name="codexModel" disabled></select></label>
+            <label class="row inline-row"><span class="row-key grow"><b data-i18n="Fast mode">Fast mode</b><small id="codex-fast-help" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</small></span><input type="checkbox" class="switch" name="codexFastMode" aria-describedby="codex-fast-help" disabled></label>
+            <p class="error-copy" data-codex-readiness role="status"></p>
+          </div>
+          <div class="stack" data-claude-options hidden>
+            <label class="field"><span data-i18n="Claude model">Claude model</span><select name="claudeModel" disabled></select></label>
+          </div>
+          <p id="ai-provider-help" class="meta" data-i18n="Applies to your next generation. Running jobs keep their selected model.">Applies to your next generation. Running jobs keep their selected model.</p>
+          <button type="button" class="btn-primary" data-action="close-sheet" data-i18n="Done">Done</button>
+        </div>
+      </section>
+
+      <section class="sheet" data-sheet-panel="lyrics-ai" role="dialog" aria-modal="false" aria-labelledby="sheet-lyrics-ai-title" hidden="">
+        <div class="sheet-head">
+          <button type="button" class="icon-btn" data-action="close-sheet" aria-label="Back" title="Back" data-i18n-aria-label="Back" data-i18n-title="Back" data-icon="back"></button>
+          <h2 id="sheet-lyrics-ai-title" data-i18n="AI for lyric correction">AI for lyric correction</h2>
+        </div>
+        <div class="sheet-body" data-lyrics-ai-options>
+          <fieldset class="ai-source-picker seg full">
+            <legend class="field-label" data-i18n="Pay with">Pay with</legend>
+            <label><input type="radio" name="lyricsAiSource" value="api"><span data-i18n="API keys">API keys</span></label>
+            <label><input type="radio" name="lyricsAiSource" value="codex"><span data-i18n="Codex credits">Codex credits</span></label>
+            <label><input type="radio" name="lyricsAiSource" value="claude"><span data-i18n="Claude subscription">Claude subscription</span></label>
+          </fieldset>
+          <div class="stack" data-lyrics-api-options hidden>
+            <label class="field"><span data-i18n="AI model">AI model</span><select data-lyrics-ai-provider><option value="openai">OpenAI</option><option value="cerebras">Cerebras</option><option value="anthropic">Claude API</option></select></label>
+            <div class="stack" data-lyrics-claude-api-options hidden>
+              <label class="field"><span data-i18n="Claude model">Claude model</span><select data-lyrics-claude-api-model></select></label>
+              <label class="row inline-row"><span class="row-key grow"><b data-i18n="Fast mode">Fast mode</b><small id="lyrics-claude-api-fast-help" data-i18n="Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.">Fast mode answers faster and costs twice as much. Only Opus 5.5, Opus 5 and Opus 4.8 support it.</small></span><input type="checkbox" class="switch" data-lyrics-claude-api-fast aria-describedby="lyrics-claude-api-fast-help"></label>
+            </div>
+          </div>
+          <div class="stack" data-lyrics-claude-options hidden>
+            <label class="field"><span data-i18n="Claude model">Claude model</span><select data-lyrics-claude-model></select></label>
+          </div>
+          <div class="stack" data-lyrics-codex-options hidden>
+            <label class="field"><span data-i18n="Codex model">Codex model</span><select data-lyrics-ai-model aria-describedby="lyrics-ai-readiness"></select></label>
+            <label class="row inline-row"><span class="row-key grow"><b data-i18n="Fast mode">Fast mode</b><small id="lyrics-ai-fast-help" data-i18n="Fast mode uses more Codex credits when supported by the model.">Fast mode uses more Codex credits when supported by the model.</small></span><input type="checkbox" class="switch" data-lyrics-ai-fast aria-describedby="lyrics-ai-fast-help"></label>
+          </div>
+          <p class="meta" data-i18n="This choice applies only to this lyrics correction.">This choice applies only to this lyrics correction.</p>
+          <p class="error-copy" id="lyrics-ai-readiness" data-lyrics-ai-readiness role="status" hidden></p>
+          <button type="button" class="btn-primary" data-action="close-sheet" data-i18n="Done">Done</button>
+        </div>
+      </section>
+
+      <section class="sheet" id="panel-known-lyrics" data-sheet-panel="known" role="dialog" aria-modal="false" aria-labelledby="known-lyrics-heading" hidden="">
+        <div class="sheet-head">
+          <button type="button" class="icon-btn" data-action="close-sheet" aria-label="Back" title="Back" data-i18n-aria-label="Back" data-i18n-title="Back" data-icon="back"></button>
+          <h2 id="known-lyrics-heading" data-i18n="Known Lyrics">Known Lyrics</h2>
+        </div>
+        <div class="sheet-body flush">
+          <p class="copy pad" data-i18n="Save lyrics in this browser. Copy them into Lyric correction whenever you need them.">Save lyrics in this browser. Copy them into Lyric correction whenever you need them.</p>
+          <div class="rows">
+            <details class="prow known-lyrics-create" data-known-lyrics-create>
+              <summary class="row"><span class="row-key grow"><b><span data-icon="plus" aria-hidden="true"></span> <span data-i18n="Add lyrics">Add lyrics</span></b></span><span class="chev" data-icon="chevron" aria-hidden="true"></span></summary>
+              <form class="prow-body lyrics-correction-form stack" data-known-lyrics-form>
+                <label class="field"><span data-i18n="Song title">Song title</span><input type="text" name="title" maxlength="200" required></label>
+                <label class="field"><span data-i18n="Lyrics">Lyrics</span><textarea name="lyrics" rows="8" maxlength="25000" required></textarea></label>
+                <div class="hstack"><button class="btn" type="submit" data-i18n="Save lyrics">Save lyrics</button></div>
+              </form>
+            </details>
+          </div>
+          <p class="status-line pad" data-known-lyrics-status role="status" aria-live="polite"></p>
+          <div class="known-list" data-known-lyrics-list></div>
+        </div>
+      </section>
+
+      <!-- ============================= MENUS ============================== -->
+      <div class="pop" id="track-menu" data-track-menu popover role="menu" aria-label="Saved tracks" data-i18n-aria-label="Saved tracks"></div>
+      <div class="pop" id="tools-menu" data-tools-menu popover role="menu" aria-label="More tools" data-i18n-aria-label="More tools">
+        <button type="button" class="mi" role="menuitem" data-action="toggle-lyrics-edit"><span data-icon="music" aria-hidden="true"></span><span class="mi-text"><span data-i18n="Lyric correction">Lyric correction</span><small data-i18n="Replace the words with real lyrics">Replace the words with real lyrics</small></span></button>
+        <button type="button" class="mi" role="menuitem" data-action="toggle-known-lyrics" aria-controls="panel-known-lyrics"><span data-icon="book" aria-hidden="true"></span><span class="mi-text"><span data-i18n="Known Lyrics">Known Lyrics</span><small data-i18n="Lyrics saved in this browser">Lyrics saved in this browser</small></span></button>
+        <button type="button" class="mi" role="menuitem" data-action="toggle-setup"><span data-icon="spark" aria-hidden="true"></span><span class="mi-text"><span data-i18n="Generate again">Generate again</span><small data-i18n="New languages or AI">New languages or AI</small></span></button>
+        <hr>
+        <button type="button" class="mi danger" role="menuitem" data-action="delete-current"><span data-icon="trash" aria-hidden="true"></span><span class="mi-text"><span data-i18n="Delete this track">Delete this track</span><small data-delete-current-label></small></span></button>
+      </div>
+      <div class="pop timing-pop" id="timing-menu" data-timing-menu popover role="dialog" aria-label="Subtitle timing" data-i18n-aria-label="Subtitle timing">
+        <p class="micro" data-i18n="Timing">Timing</p>
+        <output class="timing-value" data-timing-offset-large>+0.0s</output>
+        <input type="range" name="subtitleTimingOffsetSeconds" min="-10" max="10" step="0.1" disabled="" aria-label="Subtitle timing offset" data-i18n-aria-label="Subtitle timing offset">
+        <div class="hstack">
+          <input class="num" type="number" name="subtitleTimingOffsetNumber" min="-10" max="10" step="0.1" disabled="" aria-label="Subtitle timing offset seconds" data-i18n-aria-label="Subtitle timing offset seconds">
+          <span class="spacer"></span>
+          <button type="button" class="btn sm" data-action="reset-timing" disabled="" data-i18n="Reset">Reset</button>
+        </div>
+        <p class="meta" data-i18n="Use this if subtitles show early or late.">Use this if subtitles show early or late.</p>
+      </div>
+
+      <!-- One fixed place for status. It overlays the bottom and never pushes content. -->
+      <div class="dock" data-dock>
+        <div class="dock-card error" data-status="" role="status" aria-live="polite" hidden=""></div>
+        <p class="dock-card" data-correction-sync-error="" role="status" hidden=""></p>
+        <div class="dock-card correction-status" data-correction-terminal-status="" role="status" aria-live="polite" hidden="">
+          <span class="dock-msg" data-correction-terminal-message=""></span>
+          <button type="button" class="icon-btn sm" data-action="dismiss-correction-status" aria-label="Dismiss replacement status" data-i18n-aria-label="Dismiss replacement status" data-icon="close"></button>
+        </div>
+        <div class="dock-card toast" data-toast role="status" aria-live="polite" hidden=""></div>
+      </div>
     </div>
+
+    <dialog class="confirm-dialog" data-confirm-dialog aria-labelledby="confirm-title" aria-describedby="confirm-copy">
+      <h3 id="confirm-title" data-confirm-title></h3>
+      <p id="confirm-copy" class="copy" data-confirm-copy></p>
+      <div class="hstack end">
+        <button type="button" class="btn" data-confirm="cancel" data-i18n="Cancel">Cancel</button>
+        <button type="button" class="btn danger-solid" data-confirm="ok" data-confirm-ok></button>
+      </div>
+    </dialog>
     <script type="module" src="./main.ts"></script>
-
-
 </body></html>

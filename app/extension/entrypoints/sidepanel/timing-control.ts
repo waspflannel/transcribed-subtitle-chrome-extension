@@ -10,13 +10,20 @@ export function bindTimingOffsetControl(options: {
   rangeInput: HTMLInputElement;
   numberInput: HTMLInputElement;
   output: HTMLOutputElement;
+  /** A second display of the same value, such as the large readout in the timing menu. */
+  extraOutput?: HTMLOutputElement;
   resetButton: HTMLButtonElement;
   onCommit: (value: number) => void | Promise<void>;
 }): TimingOffsetControl {
   let commitTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+  const show = (value: number): number => {
+    const normalized = showTimingOffsetValue(options.rangeInput, options.numberInput, options.output, value);
+    if (options.extraOutput) options.extraOutput.value = options.extraOutput.textContent = options.output.value;
+    return normalized;
+  };
 
   const commit = (value: number) => {
-    const normalized = showTimingOffsetValue(options.rangeInput, options.numberInput, options.output, value);
+    const normalized = show(value);
 
     if (commitTimer !== undefined) {
       globalThis.clearTimeout(commitTimer);
@@ -27,7 +34,7 @@ export function bindTimingOffsetControl(options: {
   };
 
   const scheduleCommit = (value: number) => {
-    const normalized = showTimingOffsetValue(options.rangeInput, options.numberInput, options.output, value);
+    const normalized = show(value);
 
     if (commitTimer !== undefined) {
       globalThis.clearTimeout(commitTimer);
@@ -45,7 +52,7 @@ export function bindTimingOffsetControl(options: {
 
   return {
     showTimingOffset(value: number): void {
-      showTimingOffsetValue(options.rangeInput, options.numberInput, options.output, value);
+      show(value);
     },
   };
 }

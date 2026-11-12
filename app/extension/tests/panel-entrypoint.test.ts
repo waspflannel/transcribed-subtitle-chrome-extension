@@ -426,36 +426,52 @@ it.each(['read', 'mutation'])('keeps the newer %s rendered when an earlier backe
   dom.window.close();
 });
 
-it('does not repeat a completed deletion whose reply is missing', async () => {
+it.each([false, true])('deletes the shown track with one click and undo restores it (other saved track: %s)', async (hasOther) => {
   vi.resetModules();
   vi.useFakeTimers();
   const dom = new JSDOM(markup);
   stubPanelDom(dom);
-  vi.spyOn(dom.window, 'confirm').mockReturnValue(true);
   const track = { ...trackFixture, expiresAt: null } as TrackResponse;
-  const state: PanelState = { installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS,
+  const other = { ...track, jobId: 'other-job', trackId: 'other-track' } as TrackResponse;
+  const otherJob = { jobId: other.jobId, trackId: other.trackId, youtubeVideoId: track.youtubeVideoId, status: 'completed',
+    sourceLanguage: 'auto', targetLanguage: 'eng', aiProvider: 'openai', aiModel: 'gpt-6-luna' };
+  let shown = track;
+  const state = (): PanelState => ({ installId: 'install_test', settings: DEFAULT_EXTENSION_SETTINGS,
     activeTabId: 1, backendUrl: 'http://localhost/v1', jobHistory: [],
     pageStatus: { supported: true, videoId: track.youtubeVideoId,
       url: `https://www.youtube.com/watch?v=${track.youtubeVideoId}`, mediaKind: 'video' },
-    subtitleState: { type: 'ready', track } };
-  let deletes = 0;
-  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string }) => {
-    if (request?.type === 'panel.listGenerations') return { jobs: [] };
+    subtitleState: { type: 'ready', track: shown } });
+  mocks.sendMessage.mockReset().mockImplementation(async (request?: { type?: string; jobId?: string }) => {
+    if (request?.type === 'panel.listGenerations') return { jobs: hasOther ? [otherJob] : [] };
     if (request?.type === 'panel.getActiveCue') return { ok: false };
-    if (request?.type === 'panel.deleteGeneration') {
-      deletes += 1;
-      return undefined; // The deletion completed, but its acknowledgement did not arrive.
-    }
-    return structuredClone(state);
+    if (request?.type === 'panel.selectGeneration') shown = request.jobId === other.jobId ? other : track;
+    return structuredClone(state());
   });
   await import('../entrypoints/sidepanel/main');
   await vi.advanceTimersByTimeAsync(0);
-  const select = dom.window.document.querySelector<HTMLSelectElement>('[data-generation-select]')!;
-  expect(select.disabled).toBe(false);
-  select.value = 'delete-current-generation';
-  select.dispatchEvent(new dom.window.Event('change'));
-  await vi.advanceTimersByTimeAsync(200);
-  expect(deletes).toBe(1);
-  expect(dom.window.document.querySelector('[data-generation-status]')?.textContent).toContain('background did not respond');
+  const document = dom.window.document;
+  const remove = document.querySelector<HTMLButtonElement>('[data-action="delete-current"]')!;
+  expect(remove.disabled).toBe(false);
+  remove.click();
+  await vi.advanceTimersByTimeAsync(0);
+
+  const calls = (mocks.sendMessage.mock.calls as unknown as Array<[{ type: string; jobs?: unknown }]>).map(([request]) => request);
+  // A shown track with nothing to switch to is unloaded by the background when the delete commits.
+  expect(calls.find(request => request.type === 'panel.deleteJobs')?.jobs).toEqual([hasOther
+    ? { jobId: track.jobId, youtubeVideoId: track.youtubeVideoId, trackId: track.trackId }
+    : { jobId: track.jobId, youtubeVideoId: track.youtubeVideoId, trackId: track.trackId, tabId: 1 }]);
+  expect(calls.some(request => request.type === 'panel.selectGeneration')).toBe(hasOther);
+  expect(calls.some(request => request.type === 'panel.deleteGeneration')).toBe(false);
+  expect(document.querySelector<HTMLElement>('[data-watch-setup]')!.hidden).toBe(hasOther);
+  const toast = document.querySelector<HTMLElement>('[data-toast]')!;
+  expect(toast.hidden).toBe(false);
+  expect(toast.textContent).toContain('Track deleted');
+
+  toast.querySelector<HTMLButtonElement>('[data-toast-action="undo"]')!.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'panel.undoDeleteJobs', jobIds: [track.jobId] }));
+  expect(shown).toBe(track);
+  expect(document.querySelector<HTMLElement>('[data-watch-ready]')!.hidden).toBe(false);
+  expect(document.querySelector<HTMLElement>('[data-watch-setup]')!.hidden).toBe(true);
   dom.window.close();
 });

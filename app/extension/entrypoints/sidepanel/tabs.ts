@@ -1,3 +1,11 @@
+type TabListener = (tabName: string, previous: string | null) => void;
+const listeners = new Set<TabListener>();
+
+/** Called after every tab change, for the sliding underline and the slide direction. */
+export function onTabShown(listener: TabListener): void {
+  listeners.add(listener);
+}
+
 export function setupTabs(tabButtons: readonly HTMLButtonElement[], panels: readonly HTMLElement[]): void {
   const activeTab = tabButtons.find((button) => button.classList.contains('active'))?.dataset.tab
     ?? tabButtons[0]?.dataset.tab
@@ -16,6 +24,7 @@ export function showTab(
   panels: readonly HTMLElement[],
   tabName: string,
 ): void {
+  const previous = tabButtons.find(button => button.getAttribute('aria-selected') === 'true')?.dataset.tab ?? null;
   for (const button of tabButtons) {
     const active = button.dataset.tab === tabName;
 
@@ -30,6 +39,7 @@ export function showTab(
     panel.classList.toggle('active', active);
     panel.hidden = !active;
   }
+  for (const listener of listeners) listener(tabName, previous);
 }
 
 function handleTabKeydown(

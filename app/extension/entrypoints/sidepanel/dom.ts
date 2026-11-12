@@ -10,10 +10,8 @@ export interface PanelDom {
   transcriptList: HTMLElement;
   transcriptStatus: HTMLElement;
   collapseButton: HTMLButtonElement;
-  nowPlayingEyebrow: HTMLElement;
   nowPlayingTitle: HTMLElement;
   nowPlayingMeta: HTMLElement;
-  statusBanner: HTMLElement;
   watchUnsupported: HTMLElement;
   watchSetup: HTMLElement;
   watchReady: HTMLElement;
@@ -35,15 +33,8 @@ export interface PanelDom {
   cancelLyricsConfirmationButton: HTMLButtonElement;
   cancelLyricsCorrectionButton: HTMLButtonElement;
   cancelGenerationButton: HTMLButtonElement;
-  quickFixStatus: HTMLElement;
   progressCopy: HTMLElement;
-  toggleLanguagesButton: HTMLButtonElement;
-  languageExpand: HTMLElement;
   toggleSetupButton: HTMLButtonElement;
-  pairSourceCode: HTMLElement;
-  pairSourceName: HTMLElement;
-  pairTargetCode: HTMLElement;
-  pairTargetName: HTMLElement;
   generateButton: HTMLButtonElement;
   generateNote: HTMLElement;
   clearStateButton: HTMLButtonElement;
@@ -55,10 +46,6 @@ export interface PanelDom {
   sourceLanguageList: HTMLElement;
   targetLanguageList: HTMLElement;
   aiProviderSelect: HTMLSelectElement;
-  overlayPositionSelect: HTMLSelectElement;
-  captionFontSizeSelect: HTMLSelectElement;
-  captionDensitySelect: HTMLSelectElement;
-  captionContrastThemeSelect: HTMLSelectElement;
   overlayVisibleInput: HTMLInputElement;
   overlayAttachedToVideoInput: HTMLInputElement;
   showRomanizationInput: HTMLInputElement;
@@ -82,6 +69,45 @@ export interface PanelDom {
   jobsError: HTMLElement;
   settingsLanguageSummary: HTMLElement;
   shortcutHelpList: HTMLElement;
+  statusBanner: HTMLElement;
+  screenHead: HTMLElement;
+  screenTitle: HTMLElement;
+  languageSummary: HTMLElement;
+  aiSummary: HTMLElement;
+  aiSummarySettings: HTMLElement;
+  trackButton: HTMLButtonElement;
+  trackPair: HTMLElement;
+  trackModel: HTMLElement;
+  trackMenu: HTMLElement;
+  toolsButton: HTMLButtonElement;
+  toolsMenu: HTMLElement;
+  deleteCurrentButton: HTMLButtonElement;
+  deleteCurrentLabel: HTMLElement;
+  searchBox: HTMLElement;
+  searchToggle: HTMLButtonElement;
+  timingButton: HTMLButtonElement;
+  timingMenu: HTMLElement;
+  timingOffsetLarge: HTMLOutputElement;
+  captionContrastInput: HTMLInputElement;
+  settingSegments: HTMLElement[];
+  blurRomanizationChip: HTMLElement;
+  lyricsConfirmationBox: HTMLElement;
+  lyricsAiSummary: HTMLElement;
+  lyricsAiReadinessInline: HTMLElement;
+  toast: HTMLElement;
+  confirmDialog: HTMLDialogElement;
+  tabInk: HTMLElement;
+  scroll: HTMLElement;
+  historySelectButton: HTMLButtonElement;
+  historySelectAllButton: HTMLButtonElement;
+  historyDeleteButton: HTMLButtonElement;
+  historyDeleteLabel: HTMLElement;
+  historyBulk: HTMLElement;
+  historyCount: HTMLElement;
+  history: HTMLElement;
+  sheetLanguages: HTMLElement;
+  sheetAi: HTMLElement;
+  sheetLyricsAi: HTMLElement;
 }
 
 export function getPanelDom(root: ParentNode = document): PanelDom {
@@ -97,10 +123,8 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     transcriptList: query<HTMLElement>(root, '[data-transcript-list]', HTMLElement),
     transcriptStatus: query<HTMLElement>(root, '[data-transcript-status]', HTMLElement),
     collapseButton: query(root, '[data-action="collapse-panel"]', HTMLButtonElement),
-    nowPlayingEyebrow: query(root, '[data-now-playing-eyebrow]', HTMLElement),
     nowPlayingTitle: query(root, '[data-now-playing-title]', HTMLElement),
     nowPlayingMeta: query(root, '[data-now-playing-meta]', HTMLElement),
-    statusBanner: query(root, '[data-status]', HTMLElement),
     watchUnsupported: query(root, '[data-watch-unsupported]', HTMLElement),
     watchSetup: query(root, '[data-watch-setup]', HTMLElement),
     watchReady: query(root, '[data-watch-ready]', HTMLElement),
@@ -122,14 +146,7 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     cancelLyricsConfirmationButton: query(root, '[data-action="cancel-lyrics-confirmation"]', HTMLButtonElement),
     cancelLyricsCorrectionButton: query(root, '[data-action="cancel-lyrics-correction"]', HTMLButtonElement),
     cancelGenerationButton: query(root, '[data-action="cancel-generation"]', HTMLButtonElement),
-    quickFixStatus: query(root, '[data-quick-fix-status]', HTMLElement),
-    toggleLanguagesButton: query(root, '[data-action="toggle-languages"]', HTMLButtonElement),
-    languageExpand: query(root, '[data-language-expand]', HTMLElement),
     toggleSetupButton: query(root, '[data-action="toggle-setup"]', HTMLButtonElement),
-    pairSourceCode: query(root, '[data-pair-source-code]', HTMLElement),
-    pairSourceName: query(root, '[data-pair-source-name]', HTMLElement),
-    pairTargetCode: query(root, '[data-pair-target-code]', HTMLElement),
-    pairTargetName: query(root, '[data-pair-target-name]', HTMLElement),
     generateButton: query(root, '[data-action="generate"]', HTMLButtonElement),
     generateNote: query(root, '[data-generate-note]', HTMLElement),
     clearStateButton: query(root, '[data-action="clear-state"]', HTMLButtonElement),
@@ -141,10 +158,6 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     sourceLanguageList: query(root, '[data-source-language-list]', HTMLElement),
     targetLanguageList: query(root, '[data-target-language-list]', HTMLElement),
     aiProviderSelect: query(root, 'select[name="aiProvider"]', HTMLSelectElement),
-    overlayPositionSelect: query(root, 'select[name="overlayPosition"]', HTMLSelectElement),
-    captionFontSizeSelect: query(root, 'select[name="captionFontSize"]', HTMLSelectElement),
-    captionDensitySelect: query(root, 'select[name="captionDensity"]', HTMLSelectElement),
-    captionContrastThemeSelect: query(root, 'select[name="captionContrastTheme"]', HTMLSelectElement),
     overlayVisibleInput: query(root, 'input[name="overlayVisible"]', HTMLInputElement),
     overlayAttachedToVideoInput: query(root, 'input[name="overlayAttachedToVideo"]', HTMLInputElement),
     showRomanizationInput: query(root, 'input[name="showRomanization"]', HTMLInputElement),
@@ -169,6 +182,45 @@ export function getPanelDom(root: ParentNode = document): PanelDom {
     jobsError: query(root, '[data-jobs-error]', HTMLElement),
     settingsLanguageSummary: query(root, '[data-settings-language-summary]', HTMLElement),
     shortcutHelpList: query(root, '[data-shortcut-help]', HTMLElement),
+    statusBanner: query(root, '[data-status]', HTMLElement),
+    screenHead: query(root, '[data-screen-head]', HTMLElement),
+    screenTitle: query(root, '[data-screen-title]', HTMLElement),
+    languageSummary: query(root, '[data-language-summary]', HTMLElement),
+    aiSummary: query(root, '[data-ai-summary]', HTMLElement),
+    aiSummarySettings: query(root, '[data-ai-summary-settings]', HTMLElement),
+    trackButton: query(root, '[data-action="track-menu"]', HTMLButtonElement),
+    trackPair: query(root, '[data-track-pair]', HTMLElement),
+    trackModel: query(root, '[data-track-model]', HTMLElement),
+    trackMenu: query(root, '[data-track-menu]', HTMLElement),
+    toolsButton: query(root, '[data-action="tools-menu"]', HTMLButtonElement),
+    toolsMenu: query(root, '[data-tools-menu]', HTMLElement),
+    deleteCurrentButton: query(root, '[data-action="delete-current"]', HTMLButtonElement),
+    deleteCurrentLabel: query(root, '[data-delete-current-label]', HTMLElement),
+    searchBox: query(root, '[data-search-box]', HTMLElement),
+    searchToggle: query(root, '[data-action="toggle-search"]', HTMLButtonElement),
+    timingButton: query(root, '[data-action="timing-menu"]', HTMLButtonElement),
+    timingMenu: query(root, '[data-timing-menu]', HTMLElement),
+    timingOffsetLarge: query(root, '[data-timing-offset-large]', HTMLOutputElement),
+    captionContrastInput: query(root, 'input[name="captionContrastHigh"]', HTMLInputElement),
+    settingSegments: queryAll<HTMLElement>(root, '.seg[data-setting]'),
+    blurRomanizationChip: query(root, '[data-blur-romanization-chip]', HTMLElement),
+    lyricsConfirmationBox: query(root, '[data-lyrics-confirmation-box]', HTMLElement),
+    lyricsAiSummary: query(root, '[data-lyrics-ai-summary]', HTMLElement),
+    lyricsAiReadinessInline: query(root, '[data-lyrics-ai-readiness-inline]', HTMLElement),
+    toast: query(root, '[data-toast]', HTMLElement),
+    confirmDialog: query(root, '[data-confirm-dialog]', HTMLDialogElement),
+    tabInk: query(root, '[data-tab-ink]', HTMLElement),
+    scroll: query(root, '[data-scroll]', HTMLElement),
+    historySelectButton: query(root, '[data-action="history-select"]', HTMLButtonElement),
+    historySelectAllButton: query(root, '[data-action="history-select-all"]', HTMLButtonElement),
+    historyDeleteButton: query(root, '[data-action="history-delete"]', HTMLButtonElement),
+    historyDeleteLabel: query(root, '[data-history-delete-label]', HTMLElement),
+    historyBulk: query(root, '[data-history-bulk]', HTMLElement),
+    historyCount: query(root, '[data-history-count]', HTMLElement),
+    history: query(root, '[data-history]', HTMLElement),
+    sheetLanguages: query(root, '[data-sheet-panel="languages"]', HTMLElement),
+    sheetAi: query(root, '[data-sheet-panel="ai"]', HTMLElement),
+    sheetLyricsAi: query(root, '[data-sheet-panel="lyrics-ai"]', HTMLElement),
   };
 }
 

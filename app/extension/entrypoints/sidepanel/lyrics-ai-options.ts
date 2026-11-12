@@ -25,7 +25,8 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
   for (const [select, models] of [[claudeModel, CLAUDE_MODELS], [claudeApiModel, CLAUDE_API_MODELS]] as const) {
     for (const [value, label] of Object.entries(models)) select.append(Object.assign(root.ownerDocument.createElement('option'), { value, textContent: label }));
   }
-  const summary = root.querySelector<HTMLElement>('[data-lyrics-ai-summary]')!;
+  // The summary sits on the AI row of the correction form; the options live in their own sheet.
+  const summary = root.ownerDocument.querySelector<HTMLElement>('[data-lyrics-ai-summary]')!;
   const readiness = root.querySelector<HTMLElement>('[data-lyrics-ai-readiness]')!;
   let latest: PanelState | null = null;
   let context = '';
@@ -73,8 +74,9 @@ export function bindLyricsAiOptions(root: HTMLElement, onChange: () => void) {
     const optionsKey = JSON.stringify([interfaceLocale(), models]);
     if (optionsKey !== modelOptionsKey) {
       modelOptionsKey = optionsKey;
-      model.replaceChildren(new Option(t('Select a Codex model'), ''));
-      for (const item of models) model.add(new Option(item.name === item.id ? item.id : `${item.name} (${item.id})`, item.id));
+      const option = (label: string, value: string) => Object.assign(root.ownerDocument.createElement('option'), { textContent: label, value });
+      model.replaceChildren(option(t('Select a Codex model'), ''));
+      for (const item of models) model.add(option(item.name === item.id ? item.id : `${item.name} (${item.id})`, item.id));
     }
     model.value = codex ? selection?.aiModel ?? '' : '';
     model.disabled = busy || !latest?.codexAccount?.connected;

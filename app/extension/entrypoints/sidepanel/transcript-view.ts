@@ -19,6 +19,8 @@ export function bindTranscriptView(dom: {
   onQuickFixSelect?: (cueId: string, tokenIndex: number) => void;
   onQuickFixSave?: (cueId: string, tokenIndex: number, value: string) => void;
   onQuickFixCancel?: () => void;
+  /** Short confirmations such as "Copied" go to the panel's status dock. */
+  onNotice?: (message: string, kind?: 'error') => void;
 }) {
   let cues: readonly SubtitleCue[] = [];
   let cueContentSignature = '';
@@ -39,6 +41,8 @@ export function bindTranscriptView(dom: {
   let quickFixBusy = false;
   let quickFixError: string | null = null;
   let focusQuickFixEditor = false;
+  let renderedPartialCount = 0;
+  let freshTimer: ReturnType<typeof setTimeout> | undefined;
 
   function editingKey(): string | null {
     return quickFixEditing ? `${quickFixEditing.cueId}:${quickFixEditing.tokenIndex}` : null;
@@ -98,6 +102,14 @@ export function bindTranscriptView(dom: {
           : null,
       });
     hydrateQuickFixEditor();
+    // Preview cues that just arrived fade in; rows already on screen stay still.
+    const rows = dom.transcriptList.querySelectorAll('.cue');
+    if (partial && !dom.transcriptSearch.value) {
+      for (const row of [...rows].slice(renderedPartialCount)) if (renderedPartialCount > 0) row.classList.add('arrived');
+      renderedPartialCount = rows.length;
+    } else if (!partial) {
+      renderedPartialCount = 0;
+    }
     const input = quickFixInputElement();
     if (input && editorSelection) {
       input.focus({ preventScroll: true });
@@ -175,14 +187,22 @@ export function bindTranscriptView(dom: {
     nextRow.setAttribute('aria-current', 'true');
   }
 
-  function ackButton(button: HTMLButtonElement, label?: string): void {
+  function ackButton(button: HTMLButtonElement): void {
     button.classList.add('acted');
     window.setTimeout(() => button.classList.remove('acted'), 300);
-    if (label) {
-      if (button.dataset.label === undefined) button.dataset.label = button.textContent ?? '';
-      button.textContent = label;
-      window.setTimeout(() => { button.textContent = button.dataset.label ?? ''; }, 1000);
-    }
+  }
+
+  /** New track: let the rows fade in once. */
+  function markFresh(): void {
+    clearTimeout(freshTimer);
+    dom.transcriptList.classList.add('fresh');
+    freshTimer = setTimeout(() => dom.transcriptList.classList.remove('fresh'), 600);
+  }
+
+  function seekRow(cueId: string, mode: 'jump' | 'replay'): void {
+    activeCueId = cueId;
+    applyActiveCue(cueId);
+    if (youtubeVideoId) dom.onSeekToCue?.(cueId, mode);
   }
 
   dom.transcriptSearch.addEventListener('input', () => {
@@ -194,9 +214,17 @@ export function bindTranscriptView(dom: {
     });
   });
   dom.transcriptList.addEventListener('click', (event) => {
-    const button = (event.target as Element)?.closest<HTMLButtonElement>('[data-transcript-action]');
+    const target = event.target as Element;
+    const button = target?.closest<HTMLButtonElement>('[data-transcript-action]');
     const cueId = button?.dataset.cueId;
-    if (!button) return;
+    if (!button) {
+      // The whole row seeks, except inside the word editor or while editing that line.
+      const row = target?.closest<HTMLElement>('.cue[data-cue-id]');
+      if (row && !partial && !row.classList.contains('editing') && !target.closest('input, textarea, a, .tok-editor')) {
+        seekRow(row.dataset.cueId!, 'jump');
+      }
+      return;
+    }
     const action = button.dataset.transcriptAction;
     if (quickFixBusy && action?.startsWith('quick-fix-')) return;
     if (action === 'quick-fix-line' && cueId) {
@@ -223,19 +251,18 @@ export function bindTranscriptView(dom: {
       return;
     }
     if (!cueId) return;
-    if (action === 'jump') {
-      activeCueId = cueId;
-      applyActiveCue(cueId);
-      if (youtubeVideoId) dom.onSeekToCue?.(cueId, 'jump');
+    if (action === 'jump' || action === 'replay') {
+      seekRow(cueId, action);
       ackButton(button);
     } else if (action === 'copy') {
       const text = (partial ? partialCues : cues).find((c) => c.cueId === cueId)?.sourceText;
+      const fail = () => dom.onNotice?.(t("Could not copy. Select the text and copy it manually."), 'error');
       if (text && navigator.clipboard) {
         void navigator.clipboard.writeText(text)
-          .then(() => ackButton(button, t("Copied")))
-          .catch(() => ackButton(button, t("Failed")));
+          .then(() => { ackButton(button); dom.onNotice?.(t("Copied")); })
+          .catch(fail);
       } else {
-        ackButton(button, t("Failed"));
+        fail();
       }
     }
   });
@@ -249,6 +276,12 @@ export function bindTranscriptView(dom: {
   });
 
   dom.transcriptList.addEventListener('keydown', (event) => {
+    const row = event.target as HTMLElement;
+    if ((event.key === 'Enter' || event.key === ' ') && row.matches?.('.cue[data-cue-id]') && !partial) {
+      event.preventDefault();
+      seekRow(row.dataset.cueId!, 'jump');
+      return;
+    }
     const input = (event.target as Element)?.closest<HTMLInputElement>('[data-quick-fix-input]');
     if (!input) return;
     if (quickFixBusy) return;
@@ -267,6 +300,7 @@ export function bindTranscriptView(dom: {
       const signature = JSON.stringify(nextCues);
       if (partial || signature !== cueContentSignature) searchableText = nextCues.map(transcriptSearchText);
       if (signature !== cueContentSignature) cueRevision += 1;
+      if (nextCues.length > 0 && (partial || nextCues[0]?.cueId !== cues[0]?.cueId || nextYoutubeVideoId !== youtubeVideoId)) markFresh();
       cueContentSignature = signature;
       youtubeVideoId = nextYoutubeVideoId; cues = nextCues; partialCues = []; partial = false; settings = nextSettings; languages = nextLanguages; render();
     },
@@ -308,7 +342,10 @@ export function bindTranscriptView(dom: {
       quickFixError = message;
       updateQuickFixEditor();
     },
-    focus() { dom.transcriptSearch.focus(); },
+    focus() {
+      const row = dom.transcriptList.querySelector<HTMLElement>('.cue.on') ?? dom.transcriptList.querySelector<HTMLElement>('.cue');
+      (row ?? dom.transcriptList).focus({ preventScroll: true });
+    },
   };
 }
 
