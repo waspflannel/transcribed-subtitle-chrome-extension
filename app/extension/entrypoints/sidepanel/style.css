@@ -680,7 +680,8 @@ details[open]::details-content { block-size: auto; }
 .gen-mark { color: var(--accent-bright); display: inline-flex; width: 18px; }
 .menu-status { color: var(--faint); font-size: 12.5px; padding: 6px 10px; }
 .menu-status:empty { display: none; }
-.timing-pop { display: grid; gap: 10px; padding: 14px; width: 280px; }
+.timing-pop { gap: 10px; padding: 14px; width: 280px; }
+.timing-pop:popover-open { display: grid; }
 .timing-value { font-family: var(--mono); font-size: 22px; font-variant-numeric: tabular-nums; text-align: center; }
 
 /* ============================== History ============================== */
